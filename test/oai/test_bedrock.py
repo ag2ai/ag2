@@ -1285,6 +1285,7 @@ class TestBedrockStructuredOutputIntegration:
                 "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
             )
 
+    @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_pydantic_structured_output(self):
         """Test creating and running an agent with Pydantic structured output."""
@@ -1393,6 +1394,7 @@ class TestBedrockStructuredOutputIntegration:
             ]
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
 
+    @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_dict_schema_structured_output(self):
         """Test creating and running an agent with dict schema structured output."""
@@ -1504,6 +1506,229 @@ class TestBedrockStructuredOutputIntegration:
                 tc for tc in tool_calls if tc.get("function", {}).get("name") == "__structured_output"
             ]
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
+
+
+# Integration tests for Bedrock additionalModelRequestFields
+@pytest.mark.integration
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+class TestBedrockAdditionalModelRequestFieldsIntegration:
+    """Integration tests for Bedrock additionalModelRequestFields with real API calls."""
+
+    def setup_method(self):
+        """Setup method run before each test."""
+        import os
+        from pathlib import Path
+
+        try:
+            import dotenv
+
+            # Load environment variables from .env file
+            env_file = Path(__file__).parent.parent.parent / ".env"
+            if env_file.exists():
+                dotenv.load_dotenv(env_file)
+        except ImportError:
+            pass
+
+        # Check for AWS credentials - at least region should be set
+        # AWS credentials can come from env vars, IAM role, or AWS profile
+        if not os.getenv("AWS_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
+            pytest.skip(
+                "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
+            )
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_thinking_configuration(self):
+        """Test creating and running an agent with thinking configuration via additionalModelRequestFields."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Get AWS configuration from environment - check both standard and notebook variable names
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        # Try notebook format first, then standard AWS format
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        # Use notebook's model format if BEDROCK_MODEL is set, otherwise default to notebook's example
+        # Note: thinking configuration requires models that support it (e.g., Claude 3.7 Sonnet)
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Thinking configuration
+        thinking_config = {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        }
+
+        # Create LLM config with thinking configuration via additionalModelRequestFields
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": aws_access_key,
+                "aws_secret_key": aws_secret_key,
+                "aws_profile_name": aws_profile,
+                "max_tokens": 4096,  # max_tokens must be greater than thinking budget
+                "additionalModelRequestFields": {"thinking": thinking_config},
+            },
+        )
+
+        # Create agent with thinking capability
+        reasoning_agent = ConversableAgent(
+            name="reasoning_assistant",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant that reasons through problems step by step.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a problem that benefits from reasoning
+        result = reasoning_agent.run(
+            message="Compare and contrast JavaScript and TypeScript. Provide a detailed analysis.",
+            max_turns=3,
+        )
+        result.process()
+
+        # Verify the response is received
+        assert result is not None
+        assert len(result.messages) > 0
+
+        # Find the assistant message
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+        # Verify the content is not empty (thinking tokens are consumed but not shown in response)
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_thinking_and_custom_fields(self):
+        """Test creating and running an agent with thinking configuration and other custom fields in additionalModelRequestFields."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Create LLM config with thinking and other additional fields
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": aws_access_key,
+                "aws_secret_key": aws_secret_key,
+                "aws_profile_name": aws_profile,
+                "max_tokens": 4096,
+                "additionalModelRequestFields": {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": 512,  # Smaller budget for faster test
+                    },
+                },
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="test_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a simple question
+        result = agent.run(
+            message="What is 2 + 2?",
+            max_turns=2,
+        )
+        result.process()
+
+        # Verify the response
+        assert result is not None
+        assert len(result.messages) > 0
+
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_bedrock_llm_config_entry_with_additional_model_request_fields_integration(self):
+        """Test BedrockLLMConfigEntry with additionalModelRequestFields in an integration scenario."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockLLMConfigEntry
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Create BedrockLLMConfigEntry with additionalModelRequestFields
+        thinking_config = {
+            "type": "enabled",
+            "budget_tokens": 512,
+        }
+
+        bedrock_config_entry = BedrockLLMConfigEntry(
+            model=model,
+            aws_region=aws_region,
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
+            aws_profile_name=aws_profile,
+            max_tokens=4096,
+            additionalModelRequestFields={"thinking": thinking_config},
+        )
+
+        # Create LLMConfig from the entry
+        llm_config = LLMConfig(bedrock_config_entry)
+
+        # Create agent
+        agent = ConversableAgent(
+            name="config_entry_test_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent
+        result = agent.run(
+            message="What is the capital of France?",
+            max_turns=2,
+        )
+        result.process()
+
+        # Verify the response
+        assert result is not None
+        assert len(result.messages) > 0
+
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
 
 
 # Test additionalModelRequestFields parsing
