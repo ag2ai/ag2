@@ -1,9 +1,9 @@
 import asyncio
-from autogen import ConversableAgent, LLMConfig
-import os
 import random
+
 from dotenv import load_dotenv
 
+from autogen import ConversableAgent, LLMConfig
 from autogen.instrumentation import instrument_agent, setup_instrumentation
 
 load_dotenv()
@@ -11,10 +11,12 @@ load_dotenv()
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-})
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+    }
+)
 
 # Define the system message for our finance bot
 finance_system_message = """
@@ -44,22 +46,22 @@ human = ConversableAgent(
 VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
 MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
 
+
 def generate_transaction():
     amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
     vendor = random.choice(VENDORS)
     memo = random.choice(MEMOS)
     return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
 
+
 # Generate 3 random transactions
 transactions = [generate_transaction() for _ in range(3)]
 
 # Format the initial message
-initial_prompt = (
-    
-)
+initial_prompt = ()
+
 
 async def run_hitl(prompt: str) -> str:
-
     # Start the conversation from the human agent
     response = await human.a_run(
         recipient=finance_bot,
@@ -77,8 +79,8 @@ if __name__ == "__main__":
 
     code = asyncio.run(
         run_hitl(
-            "Please process the following transactions one at a time:\n\n" +
-            "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+            "Please process the following transactions one at a time:\n\n"
+            + "\n".join([f"{i + 1}. {tx}" for i, tx in enumerate(transactions)])
         )
     )
 

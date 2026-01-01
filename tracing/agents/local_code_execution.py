@@ -1,10 +1,12 @@
 import asyncio
 import tempfile
+
+from dotenv import load_dotenv
+
 from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
 from autogen.instrumentation import instrument_agent, setup_instrumentation
 from autogen.llm_config.config import LLMConfig
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -51,10 +53,12 @@ Reply 'TERMINATE' in the end when everything is done.
 """
 
 # Configure the LLM
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-})
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+    }
+)
 
 # Create an agent with code executor configuration.
 code_executor_agent = ConversableAgent(
@@ -71,6 +75,7 @@ code_writer_agent = ConversableAgent(
     code_execution_config=False,  # Turn off code execution for this agent.
 )
 
+
 async def run_code_execution(prompt: str) -> str:
     # Start the conversation from the code writer agent
     chat_result = code_writer_agent.initiate_chat(
@@ -80,15 +85,12 @@ async def run_code_execution(prompt: str) -> str:
 
     return chat_result
 
+
 if __name__ == "__main__":
     tracer = setup_instrumentation("local-code-execution", "http://127.0.0.1:14317")
     instrument_agent(code_executor_agent, tracer)
     instrument_agent(code_writer_agent, tracer)
 
-    code = asyncio.run(
-        run_code_execution(
-            "Write Python code to calculate the 14th Fibonacci number."
-        )
-    )
+    code = asyncio.run(run_code_execution("Write Python code to calculate the 14th Fibonacci number."))
 
     print(code)
