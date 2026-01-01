@@ -72,12 +72,14 @@ instrument_a2a_server(server, tracer)
 
 | Span Type | Operation | Instrumented Method |
 |-----------|-----------|---------------------|
-| `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `a_run_chat`, `a_resume` |
+| `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `run_chat`, `a_run_chat`, `a_resume` |
 | `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
 | `tool` | `execute_tool` | `execute_function`, `a_execute_function` |
-| `speaker_selection` | `speaker_selection` | `a_auto_select_speaker` |
+| `speaker_selection` | `speaker_selection` | `a_auto_select_speaker`, `_auto_select_speaker` |
 | `human_input` | `await_human_input` | `get_human_input`, `a_get_human_input` |
 | `code_execution` | `execute_code` | `_generate_code_execution_reply_using_executor` |
+
+**Note**: The `run()` and `a_run()` methods on `ConversableAgent` internally call `initiate_chat`/`a_initiate_chat`, so their traces appear as conversation spans. Similarly, `run_group_chat()`/`a_run_group_chat()` call `initiate_group_chat()`/`a_initiate_group_chat()` which trace via the agent's `initiate_chat`.
 
 ## Semantic Conventions
 
@@ -130,14 +132,26 @@ docker-compose up -d
 ### Run Examples
 
 ```bash
-# Simple two-agent conversation
+# Sync two-agent conversation using initiate_chat()
+python -m tracing.agents.local_initiate_chat
+
+# Async two-agent conversation using a_initiate_chat()
 python -m tracing.agents.local_agents
 
-# Group chat with tools
+# Single-agent with tools using run()
+python -m tracing.agents.local_run
+
+# Single-agent with tools using a_run()
+python -m tracing.agents.local_tools
+
+# Group chat using a_initiate_group_chat() with pattern
 python -m tracing.agents.group_chat
 
-# Local tools example
-python -m tracing.agents.local_tools
+# Group chat using run_group_chat() (requires human input)
+python -m tracing.agents.local_run_group_chat
+
+# Group chat using a_run_group_chat() (requires human input)
+python -m tracing.agents.local_a_run_group_chat
 
 # Human-in-the-loop example
 python -m tracing.agents.local_hitl

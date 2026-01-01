@@ -442,6 +442,37 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
         agent.a_resume = a_resume_traced
 
+    # Instrument `run_chat` as a conversation span (GroupChatManager, sync)
+    if hasattr(agent, "run_chat"):
+        old_run_chat = agent.run_chat
+
+        def run_chat_traced(
+            messages: list[dict[str, Any]] | None = None,
+            sender: Agent | None = None,
+            config: Any = None,  # GroupChat
+            **kwargs: Any,
+        ) -> Any:
+            with tracer.start_as_current_span(f"conversation {agent.name}") as span:
+                span.set_attribute("ag2.span.type", SpanType.CONVERSATION.value)
+                span.set_attribute("gen_ai.operation.name", "conversation")
+                span.set_attribute("gen_ai.agent.name", agent.name)
+
+                # Capture input messages
+                if messages:
+                    otel_input = messages_to_otel(messages)
+                    span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
+
+                result = old_run_chat(messages=messages, sender=sender, config=config, **kwargs)
+
+                # Capture output messages from groupchat
+                if config and hasattr(config, "messages") and config.messages:
+                    otel_output = messages_to_otel(config.messages)
+                    span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
+
+                return result
+
+        agent.run_chat = run_chat_traced
+
     # Instrument `a_run_chat` as a conversation span (GroupChatManager)
     if hasattr(agent, "a_run_chat"):
         old_a_run_chat = agent.a_run_chat
