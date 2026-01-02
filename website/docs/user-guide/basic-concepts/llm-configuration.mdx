@@ -37,21 +37,23 @@ Here are the different ways to create an LLM configuration in AG2:
 
 The simplest approach is to directly specify the model provider, model name, and authentication:
 
-```python hl_lines="4-17"
+```python hl_lines="4-13"
 import os
 from autogen import LLMConfig
 
 llm_config = LLMConfig(
-    {
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ["OPENAI_API_KEY"]
-    },
-    {
-        "api_type": "openai",
-        "model": "gpt-5",
-        "api_key": os.environ["OPENAI_API_KEY"]
-    }
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        },
+        {
+            "api_type": "openai",
+            "model": "gpt-5",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        }
+    ]
 )
 ```
 
@@ -63,11 +65,13 @@ For more advanced scenarios, especially when you want to set up fallback models,
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",                      # The provider
-    "model": "gpt-5-nano",                    # The specific model
-    "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
-})
+llm_config = LLMConfig(config_list=[
+    {
+        "api_type": "openai",                     # The provider
+        "model": "gpt-5-nano",                   # The specific model
+        "api_key": os.environ["OPENAI_API_KEY"]  # Authentication
+    }
+])
 ```
 
 AG2's LLM configuration offers additional methods to create an LLM configuration, allowing you to specify multiple LLMs for fallback support and filtering them per agent. See the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive) for more details.
@@ -88,6 +92,34 @@ AG2's LLM configuration offers additional methods to create an LLM configuration
          ```bash
         setx OPENAI_API_KEY "YOUR_API_KEY"
         ```
+
+## Amazon Bedrock: Advanced Configuration
+
+Amazon Bedrock models support advanced, model-specific features that are not part of general AG2 config. AG2 exposes the `additionalModelRequestFields` parameter, which allows you to send such advanced options directly to Bedrock. This is especially important for enabling features like Anthropic Claude's "thinking configuration" or other provider/model-specific experimental options.
+
+You use this by including the key in your config_list dictionary for Bedrock, for example:
+
+```python
+llm_config = LLMConfig(config_list=[
+    {
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "additionalModelRequestFields": {
+            # Example: Claude thinking configuration
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 1024,  # Must be < max_tokens and at least 1024 tokens
+            },
+        },
+        "max_tokens": 4096,
+    }
+])
+```
+
+All fields in `additionalModelRequestFields` are passed through to Bedrock as-is, so you can use this to access new features as they are released. Refer to the [Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) for exact model capabilities and feature requirements.
 
 ## Integrating LLM Configuration with Agents
 
@@ -134,12 +166,14 @@ from autogen import LLMConfig
 import os
 
 # Basic configuration using environment variable
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-    "api_key": os.environ["OPENAI_API_KEY"],
-    "temperature": 0.2  # Lower temperature for more consistent financial analysis
-})
+llm_config = LLMConfig(config_list=[
+    {
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ["OPENAI_API_KEY"],
+        "temperature": 0.2  # Lower temperature for more consistent financial analysis
+    }
+])
 ```
 
 **Code walkthrough**:
@@ -153,3 +187,4 @@ This configuration gives our financial compliance assistant the right balance of
 ## Next Steps
 
 Now that you've got the brains sorted for your AG2 agents, it's time to give them a body! Head over to [ConversableAgent](/docs/user-guide/basic-concepts/conversable-agent) to create actual thinking agents powered by your LLM configuration.
+ 
