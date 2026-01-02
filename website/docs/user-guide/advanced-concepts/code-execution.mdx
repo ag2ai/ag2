@@ -455,7 +455,7 @@ code_executor_agent = ConversableAgent(
 # Test execution
 task = """
 Run this Python code:
-```python
+\`\`\`python
 import pandas as pd
 import numpy as np
 
@@ -474,7 +474,7 @@ return {
     "x_mean": round(data['x'].mean(), 2),
     "y_mean": round(data['y'].mean(), 2)
 }
-```
+\`\`\`
 """
 
 reply = code_executor_agent.generate_reply(messages=[{"role": "user", "content": task}])
