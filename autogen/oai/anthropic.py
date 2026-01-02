@@ -186,10 +186,7 @@ def supports_native_structured_outputs(model: str) -> bool:
         return True
 
     # Support future Opus 4.x versions
-    if model.startswith("claude-opus-4"):
-        return True
-
-    return False
+    return bool(model.startswith("claude-opus-4"))
 
 
 def has_beta_messages_api() -> bool:
@@ -265,9 +262,7 @@ def _is_text_block(content: Any) -> bool:
     """
     if type(content) == TextBlock:
         return True
-    if BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock:
-        return True
-    return False
+    return BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock
 
 
 def _is_tool_use_block(content: Any) -> bool:
@@ -288,10 +283,7 @@ def _is_tool_use_block(content: Any) -> bool:
         return True
 
     # Fallback: check by name if type comparison fails
-    if content_type_name in ("ToolUseBlock", "BetaToolUseBlock"):
-        return True
-
-    return False
+    return content_type_name in ("ToolUseBlock", "BetaToolUseBlock")
 
 
 def _is_thinking_block(content: Any) -> bool:
@@ -310,10 +302,7 @@ def _is_thinking_block(content: Any) -> bool:
         return True
 
     # Fallback: check by name if type comparison fails
-    if content_type_name == "ThinkingBlock":
-        return True
-
-    return False
+    return content_type_name == "ThinkingBlock"
 
 
 def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:

@@ -1228,7 +1228,7 @@ class TestGeminiClient:
         ]
 
         # Second create call - thought_signature should still be available
-        response2 = gemini_client.create({
+        gemini_client.create({
             "model": "gemini-3-flash",
             "messages": messages,
             "tools": [
