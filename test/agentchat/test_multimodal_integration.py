@@ -753,7 +753,7 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
 
     # Test that response objects are properly configured (if agents attribute exists)
     if hasattr(response2, "agents"):
-        assert response2.agents == [], "Initial agents list should be empty (gets populated later)"
+        assert len(response2.agents) > 0, "Agents list should be populated"
 
     # Wait for processing
     time.sleep(2)
