@@ -172,3 +172,47 @@ def get_model_name(agent: Any) -> str | None:
 
     first_config = config_list[0]
     return getattr(first_config, "model", None) or first_config.get("model")
+
+
+def get_provider_from_config_list(config_list: list[dict[str, Any]]) -> str | None:
+    """Extract provider name from a wrapper's config list.
+
+    Returns the OTEL-standard provider name based on the first config's api_type,
+    or "openai" as the default if no api_type is specified.
+    """
+    if not config_list:
+        return "openai"  # Default provider
+    first = config_list[0]
+    api_type = first.get("api_type") if isinstance(first, dict) else getattr(first, "api_type", None)
+    if not api_type:
+        return "openai"
+    return API_TYPE_TO_PROVIDER.get(api_type, api_type)
+
+
+def get_model_from_config_list(config_list: list[dict[str, Any]]) -> str | None:
+    """Extract model name from a wrapper's config list.
+
+    Returns the model name from the first config entry, or None if not found.
+    """
+    if not config_list:
+        return None
+    first = config_list[0]
+    return first.get("model") if isinstance(first, dict) else getattr(first, "model", None)
+
+
+def set_llm_request_params(span: Any, config: dict[str, Any]) -> None:
+    """Set optional LLM request parameters on a span.
+
+    Captures temperature, max_tokens, top_p, frequency_penalty, and presence_penalty
+    if they are present in the config.
+    """
+    params = [
+        ("temperature", "gen_ai.request.temperature"),
+        ("max_tokens", "gen_ai.request.max_tokens"),
+        ("top_p", "gen_ai.request.top_p"),
+        ("frequency_penalty", "gen_ai.request.frequency_penalty"),
+        ("presence_penalty", "gen_ai.request.presence_penalty"),
+    ]
+    for key, attr in params:
+        if key in config and config[key] is not None:
+            span.set_attribute(attr, config[key])

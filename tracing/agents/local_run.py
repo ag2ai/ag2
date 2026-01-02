@@ -6,7 +6,7 @@ from typing import Annotated
 from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.instrumentation import instrument_agent, setup_instrumentation
+from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 
@@ -43,6 +43,7 @@ calculator = ConversableAgent(
 def main():
     """Run using sync run() method in single-agent mode."""
     tracer = setup_instrumentation("local-run", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_agent(calculator, tracer)
 
     # Use sync run() in single-agent mode (creates temporary executor)

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
-from autogen.instrumentation import instrument_agent, setup_instrumentation
+from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 from autogen.llm_config.config import LLMConfig
 
 load_dotenv()
@@ -88,6 +88,7 @@ async def run_code_execution(prompt: str) -> str:
 
 if __name__ == "__main__":
     tracer = setup_instrumentation("local-code-execution", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_agent(code_executor_agent, tracer)
     instrument_agent(code_writer_agent, tracer)
 

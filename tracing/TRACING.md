@@ -13,10 +13,12 @@ AG2 tracing uses **OpenTelemetry** to provide distributed tracing of multi-agent
 │  initiate_chats (multi-chat workflow)                           │
 │    └── conversation (initiate_chat / a_initiate_chat)           │
 │          ├── invoke_agent (generate_reply / a_generate_reply)   │
+│          │     ├── chat (LLM API call)                          │
 │          │     ├── execute_tool (execute_function)              │
 │          │     ├── execute_code (code execution)                │
 │          │     └── speaker_selection (a_auto_select_speaker)    │
 │          │           └── invoke_agent (internal speaker)        │
+│          │                 └── chat (LLM API call)              │
 │          └── await_human_input (get_human_input)                │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -51,7 +53,26 @@ from autogen.instrumentation import instrument_agent
 instrument_agent(my_agent, tracer)
 ```
 
-### 3. Pattern Instrumentation (`instrument_pattern`)
+### 3. LLM Instrumentation (`instrument_llm_wrapper`)
+Instruments `OpenAIWrapper.create()` to emit `chat` spans for each LLM API call:
+
+```python
+from autogen.instrumentation import instrument_llm_wrapper
+
+instrument_llm_wrapper(tracer)
+
+# Or with message capture enabled (for debugging)
+instrument_llm_wrapper(tracer, capture_messages=True)
+```
+
+This captures:
+- Provider name (`gen_ai.provider.name`)
+- Model name (`gen_ai.request.model`, `gen_ai.response.model`)
+- Token usage (`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`)
+- Request parameters (temperature, max_tokens, etc.)
+- Finish reasons and cost
+
+### 4. Pattern Instrumentation (`instrument_pattern`)
 For group chats, instruments the pattern which auto-instruments all agents and the GroupChatManager:
 
 ```python
@@ -60,7 +81,7 @@ from autogen.instrumentation import instrument_pattern
 instrument_pattern(pattern, tracer)
 ```
 
-### 4. Multi-Chat Instrumentation (`instrument_chats`)
+### 5. Multi-Chat Instrumentation (`instrument_chats`)
 For sequential/parallel multi-chat workflows using `initiate_chats` or `a_initiate_chats`:
 
 ```python
@@ -77,7 +98,7 @@ results = agent.initiate_chats([
 
 This creates a parent `initiate_chats` span that groups all child conversation spans together.
 
-### 5. A2A Server Instrumentation (`instrument_a2a_server`)
+### 6. A2A Server Instrumentation (`instrument_a2a_server`)
 For remote agents using A2A protocol, adds middleware to extract trace context from incoming requests:
 
 ```python
@@ -93,6 +114,7 @@ instrument_a2a_server(server, tracer)
 | `multi_conversation` | `initiate_chats` | `initiate_chats`, `a_initiate_chats` |
 | `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `run_chat`, `a_run_chat`, `a_resume` |
 | `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
+| `llm` | `chat` | `OpenAIWrapper.create` |
 | `tool` | `execute_tool` | `execute_function`, `a_execute_function` |
 | `speaker_selection` | `speaker_selection` | `a_auto_select_speaker`, `_auto_select_speaker` |
 | `human_input` | `await_human_input` | `get_human_input`, `a_get_human_input` |
@@ -322,7 +344,6 @@ All instrumentation supports both sync and async methods where applicable.
 
 ## Future Work
 
-- [ ] LLM invocation spans (`gen_ai.operation.name: chat`)
+- [x] LLM invocation spans (`gen_ai.operation.name: chat`) - Implemented via `instrument_llm_wrapper()`
 - [ ] Handoff spans
-- [ ] Configurable attribute capture (opt-in/opt-out for sensitive data)
 - [ ] Span events for streaming responses

@@ -4,7 +4,7 @@ import random
 from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.instrumentation import instrument_agent, setup_instrumentation
+from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 
@@ -74,6 +74,7 @@ async def run_hitl(prompt: str) -> str:
 
 if __name__ == "__main__":
     tracer = setup_instrumentation("local-hitl", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_agent(human, tracer)
     instrument_agent(finance_bot, tracer)
 

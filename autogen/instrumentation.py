@@ -5,6 +5,8 @@
 # Based on OpenTelemetry GenAI semantic conventions
 # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
 
+import asyncio
+import functools
 import json
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
@@ -12,6 +14,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from a2a.utils.telemetry import SpanKind
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -33,12 +36,19 @@ from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.patterns.pattern import Pattern
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
+from autogen.io import IOStream
+from autogen.oai import client as oai_client_module
+from autogen.oai.client import OpenAIWrapper
 from autogen.tracing.utils import (
     aggregate_usage,
+    get_model_from_config_list,
     get_model_name,
+    get_provider_from_config_list,
     get_provider_name,
+    message_to_otel,
     messages_to_otel,
     reply_to_otel_message,
+    set_llm_request_params,
 )
 from autogen.version import __version__ as AG2_VERSION  # noqa: N812
 
@@ -52,7 +62,7 @@ class SpanType(Enum):
     CONVERSATION = "conversation"  # Initiate Chat / Run Chat
     MULTI_CONVERSATION = "multi_conversation"  # Initiate Chats (sequential/parallel)
     AGENT = "agent"  # Agent's Generate Reply (invoke_agent)
-    LLM = "llm"  # LLM Invocation (TODO)
+    LLM = "llm"  # LLM Invocation (chat completion)
     TOOL = "tool"  # Tool Execution (execute_tool)
     HANDOFF = "handoff"  # Handoff (TODO)
     SPEAKER_SELECTION = "speaker_selection"  # Group Chat Speaker Selection
@@ -340,6 +350,70 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 return reply
 
         agent.generate_reply = generate_traced_reply
+
+    # Instrument `a_generate_oai_reply` to propagate context to executor thread
+    # Critical because a_generate_oai_reply uses run_in_executor which
+    # creates a new thread that doesn't inherit OpenTelemetry context so
+    # will create new traces instead of being a child span.
+    if hasattr(agent, "a_generate_oai_reply"):
+
+        async def a_generate_oai_reply_with_context(
+            messages: list[dict[str, Any]] | None = None,
+            sender: Agent | None = None,
+            config: Any | None = None,
+            **kwargs: Any,
+        ) -> tuple[bool, str | dict[str, Any] | None]:
+            # Capture current OpenTelemetry context BEFORE run_in_executor
+            current_context = otel_context.get_current()
+
+            iostream = IOStream.get_default()
+
+            def _generate_oai_reply_with_context(
+                self_agent: Any,
+                captured_context: Context,
+                iostream: IOStream,
+                *args: Any,
+                **kw: Any,
+            ) -> tuple[bool, str | dict[str, Any] | None]:
+                # Attach the captured context in this thread
+                token = otel_context.attach(captured_context)
+                try:
+                    with IOStream.set_default(iostream):
+                        return self_agent.generate_oai_reply(*args, **kw)
+                finally:
+                    otel_context.detach(token)
+
+            return await asyncio.get_event_loop().run_in_executor(
+                None,
+                functools.partial(
+                    _generate_oai_reply_with_context,
+                    self_agent=agent,
+                    captured_context=current_context,
+                    iostream=iostream,
+                    messages=messages,
+                    sender=sender,
+                    config=config,
+                    **kwargs,
+                ),
+            )
+
+        agent.a_generate_oai_reply = a_generate_oai_reply_with_context
+
+        # Also update the reply function in _reply_func_list
+        for i, reply_func_entry in enumerate(agent._reply_func_list):
+            func = reply_func_entry.get("reply_func")
+            if getattr(func, "__name__", None) == "a_generate_oai_reply":
+                # Create a wrapper that matches the expected signature (self, messages, sender, config)
+                async def a_generate_oai_reply_func_with_context(
+                    self_agent: Any,
+                    messages: list[dict[str, Any]] | None = None,
+                    sender: Agent | None = None,
+                    config: Any | None = None,
+                ) -> tuple[bool, str | dict[str, Any] | None]:
+                    return await self_agent.a_generate_oai_reply(messages, sender, config)
+
+                agent._reply_func_list[i]["reply_func"] = a_generate_oai_reply_func_with_context
+                break
 
     # Instrument `a_initiate_chat` as a conversation span
     if hasattr(agent, "a_initiate_chat"):
@@ -890,3 +964,123 @@ def instrument_chats(tracer: Tracer) -> None:
     # Patch in all locations where a_initiate_chats may have been imported
     chat_module.a_initiate_chats = a_initiate_chats_traced
     conversable_agent_module.a_initiate_chats = a_initiate_chats_traced
+
+
+def _set_llm_response_attributes(span: Any, response: Any, capture_messages: bool = False) -> None:
+    """Set LLM response attributes on a span.
+
+    Captures response model, token usage, finish reasons, and cost.
+    Optionally captures output messages if capture_messages is True.
+    """
+    # Response model (may differ from request)
+    if hasattr(response, "model") and response.model:
+        span.set_attribute("gen_ai.response.model", response.model)
+
+    # Token usage
+    if hasattr(response, "usage") and response.usage:
+        if hasattr(response.usage, "prompt_tokens") and response.usage.prompt_tokens is not None:
+            span.set_attribute("gen_ai.usage.input_tokens", response.usage.prompt_tokens)
+        if hasattr(response.usage, "completion_tokens"):
+            span.set_attribute("gen_ai.usage.output_tokens", response.usage.completion_tokens or 0)
+
+    # Finish reasons
+    if hasattr(response, "choices") and response.choices:
+        reasons = [str(c.finish_reason) for c in response.choices if hasattr(c, "finish_reason") and c.finish_reason]
+        if reasons:
+            span.set_attribute("gen_ai.response.finish_reasons", json.dumps(reasons))
+
+    # Cost (AG2-specific)
+    if hasattr(response, "cost") and response.cost is not None:
+        span.set_attribute("gen_ai.usage.cost", response.cost)
+
+    # Output messages (opt-in)
+    if capture_messages and hasattr(response, "choices") and response.choices:
+        output_msgs = []
+        for choice in response.choices:
+            if hasattr(choice, "message") and choice.message:
+                msg: dict[str, Any] = {"role": "assistant", "content": getattr(choice.message, "content", "") or ""}
+                if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                    msg["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                        for tc in choice.message.tool_calls
+                    ]
+                output_msgs.append(message_to_otel(msg))
+        if output_msgs:
+            span.set_attribute("gen_ai.output.messages", json.dumps(output_msgs))
+
+
+def instrument_llm_wrapper(tracer: Tracer, capture_messages: bool = False) -> None:
+    """Instrument OpenAIWrapper.create() to emit LLM spans.
+
+    This creates 'chat' spans for each LLM API call, capturing:
+    - Provider name (openai, anthropic, etc.)
+    - Model name (gpt-4, claude-3, etc.)
+    - Token usage (input/output)
+    - Response metadata (finish reasons, cost)
+
+    LLM spans automatically become children of agent invoke spans via
+    OpenTelemetry's context propagation.
+
+    Args:
+        tracer: The OpenTelemetry tracer
+        capture_messages: If True, capture input/output messages in span attributes.
+            Default is False since messages may contain sensitive data.
+
+    Usage:
+        from autogen.instrumentation import setup_instrumentation, instrument_llm_wrapper
+
+        tracer = setup_instrumentation("my-service")
+        instrument_llm_wrapper(tracer)
+
+        # Or with message capture enabled (for debugging)
+        instrument_llm_wrapper(tracer, capture_messages=True)
+    """
+    original_create = OpenAIWrapper.create
+
+    def traced_create(self: OpenAIWrapper, **config: Any) -> Any:
+        # Get model from config or wrapper's config_list
+        model = config.get("model") or get_model_from_config_list(self._config_list)
+        span_name = f"chat {model}" if model else "chat"
+
+        with tracer.start_as_current_span(span_name, kind=SpanKind.CLIENT) as span:
+            # Required attributes
+            span.set_attribute("ag2.span.type", SpanType.LLM.value)
+            span.set_attribute("gen_ai.operation.name", "chat")
+
+            # Provider and model
+            provider = get_provider_from_config_list(self._config_list)
+            if provider:
+                span.set_attribute("gen_ai.provider.name", provider)
+            if model:
+                span.set_attribute("gen_ai.request.model", model)
+
+            # Agent name (from extra_kwargs passed by ConversableAgent)
+            agent = config.get("agent")
+            if agent and hasattr(agent, "name"):
+                span.set_attribute("gen_ai.agent.name", agent.name)
+
+            # Request parameters
+            set_llm_request_params(span, config)
+
+            # Input messages (opt-in)
+            if capture_messages and "messages" in config:
+                otel_msgs = messages_to_otel(config["messages"])
+                span.set_attribute("gen_ai.input.messages", json.dumps(otel_msgs))
+
+            try:
+                response = original_create(self, **config)
+            except Exception as e:
+                span.set_attribute("error.type", type(e).__name__)
+                raise
+
+            # Response attributes
+            _set_llm_response_attributes(span, response, capture_messages)
+
+            return response
+
+    # Apply the patch to OpenAIWrapper.create
+    OpenAIWrapper.create = traced_create
+    oai_client_module.OpenAIWrapper.create = traced_create

@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.instrumentation import instrument_agent, instrument_chats, setup_instrumentation
+from autogen.instrumentation import instrument_agent, instrument_chats, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 
@@ -64,6 +64,7 @@ teacher = ConversableAgent(
 def main():
     """Run sequential chats using initiate_chats."""
     tracer = setup_instrumentation("local-initiate-chats", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
 
     # Instrument the initiate_chats function (adds parent span)
     instrument_chats(tracer)

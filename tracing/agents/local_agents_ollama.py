@@ -1,5 +1,4 @@
 import asyncio
-import os
 
 from dotenv import load_dotenv
 
@@ -8,9 +7,14 @@ from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, se
 
 load_dotenv()
 
+# llm_config = LLMConfig(
+#     model="gpt-4o-mini",
+#     api_key=os.getenv("OPENAI_API_KEY"),
+# )
+
 llm_config = LLMConfig(
-    model="gpt-4o-mini",
-    api_key=os.getenv("OPENAI_API_KEY"),
+    model="devstral-small-2",
+    api_type="ollama",
 )
 
 PYTHON_REVIEW_PROMPT = (
@@ -72,8 +76,8 @@ async def generate_code(prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    tracer = setup_instrumentation("local-agents", "http://127.0.0.1:14317")
-    instrument_llm_wrapper(tracer)  # Trace LLM API calls
+    tracer = setup_instrumentation("local-agents-ollama", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_agent(review_agent, tracer)
     instrument_agent(code_agent, tracer)
 

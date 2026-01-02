@@ -30,11 +30,18 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | `gen_ai.conversation.max_turns` | | ✅ | Maximum turns configured for conversation |
 | `gen_ai.conversation.turns` | | ✅ | Actual number of turns in conversation |
 | `gen_ai.conversation.resumed` | | ✅ | Indicates a resumed conversation |
+| **LLM Request Attributes** ||||
+| `gen_ai.request.temperature` | ✅ | | Sampling temperature (on LLM spans) |
+| `gen_ai.request.max_tokens` | ✅ | | Maximum tokens to generate (on LLM spans) |
+| `gen_ai.request.top_p` | ✅ | | Top-p (nucleus) sampling parameter (on LLM spans) |
+| `gen_ai.request.frequency_penalty` | ✅ | | Frequency penalty setting (on LLM spans) |
+| `gen_ai.request.presence_penalty` | ✅ | | Presence penalty setting (on LLM spans) |
 | **Usage Attributes** ||||
 | `gen_ai.usage.input_tokens` | ✅ | | Number of input tokens consumed |
 | `gen_ai.usage.output_tokens` | ✅ | | Number of output tokens generated |
 | `gen_ai.usage.cost` | | ✅ | Total cost of the operation |
 | `gen_ai.response.model` | ✅ | | Model used for the response |
+| `gen_ai.response.finish_reasons` | ✅ | | JSON array of reasons generation stopped (on LLM spans) |
 | **Tool Attributes** ||||
 | `gen_ai.tool.name` | ✅ | | Name of the tool being executed |
 | `gen_ai.tool.type` | ✅ | | Type of tool (e.g., `function`) |
@@ -71,7 +78,7 @@ AG2 uses the following span types (via `ag2.span.type`):
 | `speaker_selection` | `speaker_selection` | Group chat speaker selection (`a_auto_select_speaker`, `_auto_select_speaker`) |
 | `human_input` | `await_human_input` | Human-in-the-loop input (`get_human_input`, `a_get_human_input`) |
 | `code_execution` | `execute_code` | Code block execution (`_generate_code_execution_reply_using_executor`) |
-| `llm` | `chat` | LLM invocation (TODO) |
+| `llm` | `chat` | LLM invocation (`OpenAIWrapper.create`) |
 | `handoff` | `handoff` | Agent handoff (TODO) |
 
 ## Notes

@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.instrumentation import instrument_agent, setup_instrumentation
+from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 
@@ -34,6 +34,7 @@ user_proxy = ConversableAgent(
 def main():
     """Run a sync two-agent chat using initiate_chat."""
     tracer = setup_instrumentation("local-initiate-chat", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_agent(assistant, tracer)
     instrument_agent(user_proxy, tracer)
 

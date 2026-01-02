@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import a_run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.instrumentation import instrument_pattern, setup_instrumentation
+from autogen.instrumentation import instrument_llm_wrapper, instrument_pattern, setup_instrumentation
 
 load_dotenv()
 
@@ -44,6 +44,7 @@ pattern = AutoPattern(
 async def main():
     """Run using async a_run_group_chat function."""
     tracer = setup_instrumentation("local-a-run-group-chat", "http://127.0.0.1:14317")
+    instrument_llm_wrapper(tracer)
     instrument_pattern(pattern, tracer)
 
     # Use async a_run_group_chat
