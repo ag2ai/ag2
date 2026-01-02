@@ -188,6 +188,107 @@ python -m tracing.agents.local_code_execution
 2. Go to Explore → Select Tempo data source
 3. Search by service name or trace ID
 
+## Exporting to ClickHouse
+
+The tracing stack includes an OpenTelemetry Collector that can export traces to ClickHouse (including ClickHouse Cloud) for analytics and long-term storage.
+
+### Architecture
+
+```
+AG2 App (OTLP gRPC :14317)
+         │
+         ▼
+┌─────────────────────┐
+│  OTel Collector     │
+│  (receives OTLP)    │
+└─────────────────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+ClickHouse  Tempo
+  Cloud     (local)
+```
+
+### Setup
+
+1. **Create a `.env` file** in the `tracing/` directory with your ClickHouse credentials:
+
+```bash
+CLICKHOUSE_HOST=your-instance.clickhouse.cloud
+CLICKHOUSE_PORT=8443
+CLICKHOUSE_USER=default
+CLICKHOUSE_PASSWORD=your-password
+CLICKHOUSE_DATABASE=default
+```
+
+2. **Start the stack**:
+
+```bash
+cd tracing
+docker-compose up -d
+```
+
+The OTel Collector will automatically:
+- Create the `otel_traces` table in ClickHouse if it doesn't exist
+- Export traces to both ClickHouse and local Tempo simultaneously
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `CLICKHOUSE_HOST` | ClickHouse server hostname | `abc123.us-west-2.aws.clickhouse.cloud` |
+| `CLICKHOUSE_PORT` | HTTPS port (usually 8443 for Cloud) | `8443` |
+| `CLICKHOUSE_USER` | Database username | `default` |
+| `CLICKHOUSE_PASSWORD` | Database password | `your-password` |
+| `CLICKHOUSE_DATABASE` | Target database | `default` |
+
+### Querying Traces in ClickHouse
+
+```sql
+-- List recent traces
+SELECT Timestamp, SpanName, ServiceName, SpanAttributes
+FROM otel_traces
+ORDER BY Timestamp DESC
+LIMIT 10;
+
+-- Find traces by service name
+SELECT * FROM otel_traces
+WHERE ServiceName = 'my-agent-service'
+ORDER BY Timestamp DESC;
+
+-- Get conversation IDs
+SELECT
+    Timestamp,
+    SpanName,
+    SpanAttributes['gen_ai.conversation.id'] as conversation_id
+FROM otel_traces
+WHERE SpanName LIKE 'conversation%'
+ORDER BY Timestamp DESC;
+
+-- Analyze token usage
+SELECT
+    ServiceName,
+    sum(toFloat64OrZero(SpanAttributes['gen_ai.usage.input_tokens'])) as total_input_tokens,
+    sum(toFloat64OrZero(SpanAttributes['gen_ai.usage.output_tokens'])) as total_output_tokens,
+    sum(toFloat64OrZero(SpanAttributes['gen_ai.usage.cost'])) as total_cost
+FROM otel_traces
+WHERE SpanAttributes['ag2.span.type'] = 'conversation'
+GROUP BY ServiceName;
+```
+
+### Disabling ClickHouse Export
+
+To export only to local Tempo, edit `otel-collector-config.yaml` and remove `clickhouse` from the exporters:
+
+```yaml
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo]  # Remove clickhouse
+```
+
 ## Distributed Tracing (A2A)
 
 For remote agents using A2A protocol, trace context is automatically propagated via W3C Trace Context headers:
