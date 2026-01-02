@@ -12,7 +12,7 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(config_list=[{"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]}])
 ```
 
 <Warning>
@@ -33,6 +33,7 @@ Different tasks may require different models, and the `config_list` allows speci
 
 <Tabs>
   <Tab title="OpenAI">
+
 - `api_type` (str, required): The model provider
 - `model` (str, required): The identifier of the model to be used, such as 'gpt-5', 'gpt-5-nano'.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
@@ -49,8 +50,9 @@ Different tasks may require different models, and the `config_list` allows speci
       }
     ]
     ```
-  </Tab>
-  <Tab title="Azure OpenAI">
+
+</Tab>
+<Tab title="Azure OpenAI">
 - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `api_type`: `azure`
@@ -70,8 +72,8 @@ Different tasks may require different models, and the `config_list` allows speci
       }
     ]
     ```
-  </Tab>
-  <Tab title="Other OpenAI compatible">
+</Tab>
+<Tab title="Other OpenAI compatible">
 - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
@@ -87,7 +89,7 @@ Different tasks may require different models, and the `config_list` allows speci
       }
     ]
     ```
-  </Tab>
+</Tab>
 </Tabs>
 
 <Tip>
@@ -168,12 +170,12 @@ When filtering the `config_list`, you can pass a single tag or multiple tags. A 
 ```python
 # Single tag
 filter_dict = {"tags": "llama"}
-llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
 assert len(llm_config.config_list) == 1
 
 # Multiple tags
 filter_dict = {"tags": ["llama", "another_tag"]}
-llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
 ```
 
 ### Adding http client in llm_config for proxy
@@ -192,11 +194,16 @@ class MyHttpClient(httpx.Client):
     def __deepcopy__(self, memo):
         return self
 
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "my-gpt-5-deployment",
-    "api_key": "",
-}, http_client=MyHttpClient(proxy="http://localhost:8030"))
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "my-gpt-5-deployment",
+            "api_key": "",
+        }
+    ],
+    http_client=MyHttpClient(proxy="http://localhost:8030")
+)
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
@@ -277,14 +284,16 @@ Here is an example configuration:
 ```
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={
-    "model": "gpt-4",
-    "base_url": "YOUR_BASE_URL",
-    "api_type": "azure",
-    "api_version": "2025-01-01",
-    "max_tokens": 1000,
-    "azure_ad_token_provider": "DEFAULT"
-})
+llm_config = LLMConfig(config_list=[
+    {
+        "model": "gpt-4",
+        "base_url": "YOUR_BASE_URL",
+        "api_type": "azure",
+        "api_version": "2025-01-01",
+        "max_tokens": 1000,
+        "azure_ad_token_provider": "DEFAULT"
+    }
+])
 ```
 
 For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
@@ -326,27 +335,59 @@ It is also possible to passthrough parameters through to the OpenAI client. Para
 
 This is commonly used for things like `temperature`, or `timeout`.
 
+#### Advanced: Bedrock additionalModelRequestFields passthrough
+
+For Amazon Bedrock models in AG2, you can now use the `additionalModelRequestFields` parameter (added as a config key in your `config_list` dictionary) to supply advanced, model-specific options directly to Bedrock. This allows you to leverage provider-specific or experimental features—such as Anthropic Claude's "thinking" mode, or other custom Bedrock features—not exposed via standard AG2 keys.
+
+Example usage for Claude's thinking mode on Bedrock:
+
+```python
+from autogen import LLMConfig
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "bedrock",
+            "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+            "aws_region": "us-east-1",
+            "aws_access_key": "[YOUR_ACCESS_KEY]",
+            "aws_secret_key": "[YOUR_SECRET_KEY]",
+            "max_tokens": 4096,
+            "additionalModelRequestFields": {
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 1024,  # Must be <= max_tokens, see Bedrock docs
+                },
+            },
+        }
+    ]
+)
+```
+
+All fields in `additionalModelRequestFields` are sent through to the Bedrock API as-is. Only use options your model/provider supports (see the [Bedrock user-guide](/docs/user-guide/models/amazon-bedrock) or [Bedrock's documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html)). For a complete advanced demonstration, see the [Bedrock additionalModelRequestFields example notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_bedrock_addtional_model_request_field_example.ipynb).
+
 ## Example
 
 ```python
 from autogen import LLMConfig
 
 llm_config = LLMConfig(
-    {
-        "model": "my-gpt-5-deployment",
-        "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
-        "api_type": "azure",
-        "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
-        "api_version": "2024-02-01",
-    },
-    {
-        "api_type": "openai",
-        "model": "llama-7B",
-        "base_url": "http://127.0.0.1:8080",
-        "api_type": "openai",
-    },
-    temperature = 0.9,
-    timeout = 300,
+    config_list=[
+        {
+            "model": "my-gpt-5-deployment",
+            "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
+            "api_type": "azure",
+            "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
+            "api_version": "2024-02-01",
+        },
+        {
+            "api_type": "openai",
+            "model": "llama-7B",
+            "base_url": "http://127.0.0.1:8080",
+            "api_type": "openai",
+        }
+    ],
+    temperature=0.9,
+    timeout=300,
 )
 ```
 
@@ -358,3 +399,5 @@ llm_config = LLMConfig(
 - [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
 See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.
+ 
+  
