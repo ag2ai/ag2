@@ -33,7 +33,13 @@ from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.patterns.pattern import Pattern
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
-from autogen.tracing.utils import aggregate_usage, messages_to_otel, reply_to_otel_message
+from autogen.tracing.utils import (
+    aggregate_usage,
+    get_model_name,
+    get_provider_name,
+    messages_to_otel,
+    reply_to_otel_message,
+)
 from autogen.version import __version__ as AG2_VERSION  # noqa: N812
 
 OTEL_SCHEMA = "https://opentelemetry.io/schemas/1.11.0"
@@ -275,6 +281,14 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
             span.set_attribute("gen_ai.operation.name", "invoke_agent")
             span.set_attribute("gen_ai.agent.name", agent.name)
 
+            # Set provider and model from agent's LLM config
+            provider = get_provider_name(agent)
+            if provider:
+                span.set_attribute("gen_ai.provider.name", provider)
+            model = get_model_name(agent)
+            if model:
+                span.set_attribute("gen_ai.request.model", model)
+
             # Capture input messages
             if messages:
                 otel_input = messages_to_otel(messages)
@@ -305,6 +319,14 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 span.set_attribute("gen_ai.operation.name", "invoke_agent")
                 span.set_attribute("gen_ai.agent.name", agent.name)
 
+                # Set provider and model from agent's LLM config
+                provider = get_provider_name(agent)
+                if provider:
+                    span.set_attribute("gen_ai.provider.name", provider)
+                model = get_model_name(agent)
+                if model:
+                    span.set_attribute("gen_ai.request.model", model)
+
                 if messages:
                     otel_input = messages_to_otel(messages)
                     span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
@@ -334,6 +356,16 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.span.type", SpanType.CONVERSATION.value)
                 span.set_attribute("gen_ai.operation.name", "conversation")
                 span.set_attribute("gen_ai.agent.name", agent.name)
+
+                # Set provider and model from recipient's LLM config (first positional arg)
+                if args:
+                    recipient = args[0]
+                    provider = get_provider_name(recipient)
+                    if provider:
+                        span.set_attribute("gen_ai.provider.name", provider)
+                    model = get_model_name(recipient)
+                    if model:
+                        span.set_attribute("gen_ai.request.model", model)
 
                 if max_turns:
                     span.set_attribute("gen_ai.conversation.max_turns", max_turns)
@@ -390,6 +422,16 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.span.type", SpanType.CONVERSATION.value)
                 span.set_attribute("gen_ai.operation.name", "conversation")
                 span.set_attribute("gen_ai.agent.name", agent.name)
+
+                # Set provider and model from recipient's LLM config (first positional arg)
+                if args:
+                    recipient = args[0]
+                    provider = get_provider_name(recipient)
+                    if provider:
+                        span.set_attribute("gen_ai.provider.name", provider)
+                    model = get_model_name(recipient)
+                    if model:
+                        span.set_attribute("gen_ai.request.model", model)
 
                 if max_turns:
                     span.set_attribute("gen_ai.conversation.max_turns", max_turns)

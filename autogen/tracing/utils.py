@@ -117,3 +117,58 @@ def aggregate_usage(usage_by_model: dict[str, dict[str, Any]]) -> tuple[str, int
     output_tokens = sum(d.get("completion_tokens", 0) for d in usage_by_model.values())
 
     return model_str, input_tokens, output_tokens
+
+
+# Mapping from AG2 api_type to OTEL gen_ai.provider.name
+# See: https://opentelemetry.io/docs/specs/semconv/attributes-registry/gen-ai/
+API_TYPE_TO_PROVIDER = {
+    "openai": "openai",
+    "azure": "azure.ai.openai",
+    "anthropic": "anthropic",
+    "bedrock": "aws.bedrock",
+    "mistral": "mistral_ai",
+    "groq": "groq",
+    "cohere": "cohere",
+    "deepseek": "deepseek",
+    "together": "together",  # Not in OTEL spec, but common
+    "ollama": "ollama",  # Not in OTEL spec, but common
+    "cerebras": "cerebras",  # Not in OTEL spec, but common
+}
+
+
+def get_provider_name(agent: Any) -> str | None:
+    """Extract the provider name from an agent's LLM config.
+
+    Returns the OTEL-standard provider name based on the agent's api_type,
+    or None if no LLM config is present.
+    """
+    if not hasattr(agent, "llm_config") or not agent.llm_config:
+        return None
+
+    config_list = getattr(agent.llm_config, "config_list", None)
+    if not config_list:
+        return None
+
+    # Get api_type from first config entry
+    first_config = config_list[0]
+    api_type = getattr(first_config, "api_type", None) or first_config.get("api_type")
+    if not api_type:
+        return None
+
+    return API_TYPE_TO_PROVIDER.get(api_type, api_type)
+
+
+def get_model_name(agent: Any) -> str | None:
+    """Extract the model name from an agent's LLM config.
+
+    Returns the configured model name, or None if no LLM config is present.
+    """
+    if not hasattr(agent, "llm_config") or not agent.llm_config:
+        return None
+
+    config_list = getattr(agent.llm_config, "config_list", None)
+    if not config_list:
+        return None
+
+    first_config = config_list[0]
+    return getattr(first_config, "model", None) or first_config.get("model")

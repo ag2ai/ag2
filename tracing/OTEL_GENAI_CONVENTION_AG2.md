@@ -15,6 +15,8 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | **Core Attributes** ||||
 | `gen_ai.operation.name` | ✅ | | Operation being performed (`invoke_agent`, `execute_tool`, `conversation`) |
 | `gen_ai.agent.name` | ✅ | | Human-readable name of the GenAI agent |
+| `gen_ai.provider.name` | ✅ | | LLM provider (`openai`, `anthropic`, `azure.ai.openai`, `aws.bedrock`, etc.) |
+| `gen_ai.request.model` | ✅ | | Model configured in agent's LLM config (set with provider on conversation/agent spans) |
 | `gen_ai.agent.remote` | | ✅ | Indicates the agent is a remote A2A agent |
 | `server.address` | ✅ | | URL of the remote agent server (standard OTEL attribute) |
 | `error.type` | ✅ | | Error class if operation failed (standard OTEL attribute) |
@@ -76,5 +78,6 @@ AG2 uses the following span types (via `ag2.span.type`):
 
 - Attributes marked as **OTEL Standard** follow the [OpenTelemetry GenAI Semantic Convention](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
 - Attributes marked as **AG2 Custom** are extensions specific to AG2's multi-agent framework.
+- `gen_ai.provider.name` and `gen_ai.request.model` are always set together on spans where the agent has an LLM config.
 - `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` are opt-in attributes that may contain sensitive information.
 - Message attributes (`gen_ai.input.messages`, `gen_ai.output.messages`) follow the OTEL message format with `role` and `parts` structure.
