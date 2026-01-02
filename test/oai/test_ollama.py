@@ -11,7 +11,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.ollama import OllamaClient, OllamaLLMConfigEntry, response_to_tool_call
 
 
@@ -489,3 +489,299 @@ def test_extract_json_response_params(ollama_client):
 
     assert isinstance(ollama_params["format"], dict)
     assert ollama_params["format"] == converted_dict
+
+
+# Add this import at the top with other imports
+from autogen.agentchat.conversable_agent import ConversableAgent
+
+# Add these tests after the existing response_format tests (around line 492)
+
+
+# Test agent_config response_format functionality
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_config_response_format(ollama_client):
+    """Test that agent_config response_format takes precedence over params response_format."""
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"steps": [], "final_answer": "test"}'},
+            "created_at": "mock_response_id_123",  # Add this
+            "prompt_eval_count": 0,  # Add this
+            "eval_count": 0,  # Add this
+        }
+        # Remove "done": True - it's not used
+        ollama_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning, not the dict in params)
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    # MathReasoning schema should have steps and final_answer properties
+    format_schema = ollama_params["format"]
+    assert "properties" in format_schema
+    assert "steps" in format_schema["properties"]
+    assert "final_answer" in format_schema["properties"]
+    assert "name" not in format_schema["properties"]  # Not the simple dict from params
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_config_response_format_overrides_client_format(ollama_client):
+    """Test that agent_config response_format takes precedence over client._response_format (from llm_config)."""
+    # Set client response_format (simulating it being set from llm_config)
+    ollama_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"steps": [], "final_answer": "test"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning), not client._response_format
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert "properties" in format_schema
+    assert "steps" in format_schema["properties"]
+    assert "final_answer" in format_schema["properties"]
+    assert "age" not in format_schema["properties"]  # Not the client._response_format schema
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_config_response_format_overrides_params_and_client_format(ollama_client):
+    """Test that agent_config response_format takes precedence over both params and client._response_format."""
+    # Set client response_format (from llm_config)
+    ollama_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Both params and client have response_format, but agent should override both
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"steps": [], "final_answer": "test"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning), not params or client._response_format
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert "properties" in format_schema
+    assert "steps" in format_schema["properties"]
+    assert "final_answer" in format_schema["properties"]
+    assert "age" not in format_schema["properties"]  # Not client._response_format
+    assert "name" not in format_schema["properties"]  # Not params response_format
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_no_response_format_falls_back_to_params(ollama_client):
+    """Test that when agent has no response_format, it falls back to params response_format."""
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "response_format": dict_schema,
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from params
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"name": "John", "age": 30}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify params response_format was used (dict_schema, not MathReasoning)
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert format_schema == dict_schema
+    assert "name" in format_schema["properties"]
+    assert "age" in format_schema["properties"]
+    assert "steps" not in format_schema["properties"]  # Not MathReasoning
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_no_response_format_falls_back_to_client_format(ollama_client):
+    """Test that when agent has no response_format and params has none, it falls back to client._response_format."""
+    # Set client response_format (from llm_config)
+    ollama_client._response_format = MathReasoning
+
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from client._response_format
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"steps": [], "final_answer": "test"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify client._response_format was used (MathReasoning)
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert "properties" in format_schema
+    assert "steps" in format_schema["properties"]
+    assert "final_answer" in format_schema["properties"]
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_with_agent_response_format_none_ignores_agent(ollama_client):
+    """Test that when agent.response_format is None, it's ignored and falls back to params."""
+    # Create real agent with response_format=None
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = None
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "response_format": dict_schema,
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from params (agent.response_format=None should be ignored)
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"name": "John"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify params response_format was used (agent.response_format=None should be ignored)
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert format_schema == dict_schema
+    assert "name" in format_schema["properties"]
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_create_without_agent_uses_params_response_format(ollama_client):
+    """Test that when no agent is provided, params response_format is used (existing behavior)."""
+    dict_schema = {
+        "type": "object",
+        "properties": {"email": {"type": "string"}},
+        "required": ["email"],
+    }
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "response_format": dict_schema,
+        # No agent parameter
+    }
+
+    # Call create to set _response_format from params
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"email": "test@example.com"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify params response_format was used
+    ollama_params = ollama_client.parse_params({"model": "llama3.1:8b"})
+    assert "format" in ollama_params
+    format_schema = ollama_params["format"]
+    assert format_schema == dict_schema
+    assert "email" in format_schema["properties"]
+
+
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+@patch("autogen.oai.ollama.agent_config_parser")
+def test_agent_config_parser_called_with_agent(mock_parser, ollama_client):
+    """Test that agent_config_parser is called when agent is provided."""
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock agent_config_parser to return expected format
+    mock_parser.return_value = {"response_format": MathReasoning}
+
+    params = {
+        "model": "llama3.1:8b",
+        "messages": [{"role": "user", "content": "Test message"}],  # Add this
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create
+    with patch("autogen.oai.ollama.ollama") as mock_ollama:
+        mock_ollama.chat.return_value = {
+            "message": {"content": '{"steps": [], "final_answer": "test"}'},
+            "created_at": "mock_response_id_123",
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+        }
+        ollama_client.create(params)
+
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)

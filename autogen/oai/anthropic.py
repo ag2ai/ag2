@@ -85,6 +85,7 @@ from typing_extensions import Unpack
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 
 logger = logging.getLogger(__name__)
 from .client_utils import FormatterProtocol, validate_parameter
@@ -751,9 +752,17 @@ class AnthropicClient:
         Returns:
             ChatCompletion object compatible with OpenAI format
         """
+        agent_config = params.pop("agent_config", None)
         model = params.get("model")
-        response_format = params.get("response_format") or self._response_format
-
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
+        response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
+        )
         # Route to appropriate implementation based on model and response_format
         if response_format:
             self._response_format = response_format

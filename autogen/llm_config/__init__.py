@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .client import ModelClient
-from .config import LLMConfig
+from .config import AgentConfig, LLMConfig
 
 __all__ = (
+    "AgentConfig",
     "LLMConfig",
     "ModelClient",
 )

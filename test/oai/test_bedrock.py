@@ -9,8 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 from autogen.oai.oai_models import ChatCompletionMessageToolCall
 
@@ -1505,3 +1506,622 @@ class TestBedrockStructuredOutputIntegration:
                 tc for tc in tool_calls if tc.get("function", {}).get("name") == "__structured_output"
             ]
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
+
+
+# Test agent_config response_format functionality
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_config_response_format(bedrock_client: BedrockClient):
+    """Test that agent_config response_format takes precedence over params response_format."""
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning, not the dict in params)
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    assert "tools" in tool_config
+
+    # Check that the tool is for MathReasoning (should have steps and final_answer)
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's MathReasoning schema, not the simple dict from params
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "steps" in properties  # MathReasoning has steps
+    assert "final_answer" in properties  # MathReasoning has final_answer
+    assert "name" not in properties  # Not the simple dict from params
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_config_response_format_overrides_client_format(bedrock_client: BedrockClient):
+    """Test that agent_config response_format takes precedence over client._response_format (from llm_config)."""
+    # Set client response_format (simulating it being set from llm_config)
+    bedrock_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning), not client._response_format
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's MathReasoning (has steps and final_answer), not the age schema
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "steps" in properties
+    assert "final_answer" in properties
+    assert "age" not in properties  # Not the client._response_format schema
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_config_response_format_overrides_params_and_client_format(bedrock_client: BedrockClient):
+    """Test that agent_config response_format takes precedence over both params and client._response_format."""
+    # Set client response_format (from llm_config)
+    bedrock_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    # Both params and client have response_format, but agent should override both
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning), not params or client._response_format
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's MathReasoning
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "steps" in properties
+    assert "final_answer" in properties
+    assert "age" not in properties  # Not client._response_format
+    assert "name" not in properties  # Not params response_format
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_config_response_format_and_user_tools(bedrock_client: BedrockClient):
+    """Test that agent_config response_format works correctly with user-provided tools."""
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    user_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get weather information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
+            },
+        }
+    ]
+
+    params = {
+        "messages": [{"role": "user", "content": "Get weather and format response"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "tools": user_tools,
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify both structured output tool and user tool are present
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+
+    # Should have both tools
+    assert len(tools) == 2, f"Expected 2 tools, got {len(tools)}"
+
+    # Check for structured output tool
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+
+    # Check for user tool
+    user_tool = next((t for t in tools if t.get("toolSpec", {}).get("name") == "get_weather"), None)
+    assert user_tool is not None
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_no_response_format_falls_back_to_params(bedrock_client: BedrockClient):
+    """Test that when agent has no response_format, it falls back to params response_format."""
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {"name": "John", "age": 30},
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "messages": [{"role": "user", "content": "Create a profile"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": dict_schema,
+        "agent": agent,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify params response_format was used (dict_schema, not MathReasoning)
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's the dict_schema (has name and age), not MathReasoning
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "name" in properties
+    assert "age" in properties
+    assert "steps" not in properties  # Not MathReasoning
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_no_response_format_falls_back_to_client_format(bedrock_client: BedrockClient):
+    """Test that when agent has no response_format and params has none, it falls back to client._response_format."""
+    # Set client response_format (from llm_config)
+    bedrock_client._response_format = MathReasoning
+
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify client._response_format was used (MathReasoning)
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's MathReasoning
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "steps" in properties
+    assert "final_answer" in properties
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_with_agent_response_format_none_ignores_agent(bedrock_client: BedrockClient):
+    """Test that when agent.response_format is None, it's ignored and falls back to params."""
+    # Create real agent with response_format=None
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = None
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {"name": "John"},
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "messages": [{"role": "user", "content": "Create a profile"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": dict_schema,
+        "agent": agent,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify params response_format was used (agent.response_format=None should be ignored)
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's the dict_schema from params
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "name" in properties
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_without_agent_uses_params_response_format(bedrock_client: BedrockClient):
+    """Test that when no agent is provided, params response_format is used (existing behavior)."""
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {"email": "test@example.com"},
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"email": {"type": "string"}},
+        "required": ["email"],
+    }
+
+    params = {
+        "messages": [{"role": "user", "content": "Create contact"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": dict_schema,
+        # No agent parameter
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify params response_format was used
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert call_args is not None, "converse should have been called"
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    tools = tool_config["tools"]
+    structured_output_tool = next(
+        (t for t in tools if t.get("toolSpec", {}).get("name") == "__structured_output"), None
+    )
+    assert structured_output_tool is not None
+    # Verify it's the dict_schema from params
+    tool_spec = structured_output_tool["toolSpec"]
+    input_schema = tool_spec.get("inputSchema", {})
+    json_schema = input_schema.get("json", {})
+    properties = json_schema.get("properties", {})
+    assert "email" in properties
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@patch("autogen.oai.bedrock.agent_config_parser")
+def test_agent_config_parser_called_with_agent(mock_parser, bedrock_client: BedrockClient):
+    """Test that agent_config_parser is called when agent is provided."""
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock agent_config_parser to return expected format
+    mock_parser.return_value = {"response_format": MathReasoning}
+
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result"}],
+                                "final_answer": "Answer",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "agent_config": agent.agent_config,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@patch("autogen.oai.bedrock.agent_config_parser")
+def test_agent_config_parser_not_called_without_agent(mock_parser, bedrock_client: BedrockClient):
+    """Test that agent_config_parser is not called when agent is not provided."""
+    # Mock bedrock_runtime
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    mock_response = {
+        "stopReason": "finished",
+        "output": {"message": {"content": [{"text": "Response"}]}},
+        "usage": {"inputTokens": 50, "outputTokens": 20, "totalTokens": 70},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Hello"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        # No agent parameter
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify agent_config_parser was not called
+    mock_parser.assert_not_called()

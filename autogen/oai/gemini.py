@@ -60,6 +60,7 @@ from typing_extensions import Unpack
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
@@ -244,6 +245,9 @@ class GeminiClient:
         }
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
         # When running in async context via run_in_executor from ConversableAgent.a_generate_oai_reply,
         # this method runs in a new thread that doesn't have an event loop by default. The Google Genai
         # client requires an event loop even for synchronous operations, so we need to ensure one exists.
@@ -297,6 +301,14 @@ class GeminiClient:
             thinking_budget=thinking_budget,
             thinking_level=thinking_level,
         )
+        self._response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
+        )
+        params["response_format"] = self._response_format
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -322,16 +334,15 @@ class GeminiClient:
         # If response_format exists, we want structured outputs
         # Based on
         # https://ai.google.dev/gemini-api/docs/structured-output?lang=python#supply-schema-in-config
-        if params.get("response_format"):
-            self._response_format = params.get("response_format")
+        if self._response_format is not None:
             generation_config["response_mime_type"] = "application/json"
 
-            response_format_schema_raw = params.get("response_format")
+            response_format_schema_raw = self._response_format
 
             if isinstance(response_format_schema_raw, dict):
                 response_schema = resolve_json_references(response_format_schema_raw)
             else:
-                response_schema = resolve_json_references(params.get("response_format").model_json_schema())
+                response_schema = resolve_json_references(self._response_format.model_json_schema())
             if "$defs" in response_schema:
                 response_schema.pop("$defs")
             generation_config["response_schema"] = response_schema

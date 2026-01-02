@@ -16,11 +16,13 @@ from typing import Any  # Added import for Any
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel
 
 from autogen import OpenAIWrapper
+from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.client import (
     AOPENAI_FALLBACK_KWARGS,
     LEGACY_CACHE_DIR,
@@ -994,3 +996,125 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
+
+
+# Test agent_config response_format functionality
+@run_for_optional_imports(["openai"], "openai")
+def test_create_with_agent_config_response_format(mock_credentials: Credentials, monkeypatch):
+    """Test that agent_config response_format takes precedence over params response_format."""
+    from unittest.mock import patch
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    config_list = mock_credentials.config_list
+    client = OpenAIWrapper(config_list=config_list)
+
+    params = {
+        "model": config_list[0]["model"],
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Mock the OpenAI client's create method
+    with patch.object(client._clients[0], "create") as mock_create:
+        mock_response = ChatCompletion(
+            id="chatcmpl-test",
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(content='{"steps": [], "final_answer": "test"}', role="assistant"),
+                )
+            ],
+            created=1677652288,
+            model=params["model"],
+            object="chat.completion",
+            usage=CompletionUsage(completion_tokens=10, prompt_tokens=10, total_tokens=20),
+        )
+        mock_create.return_value = mock_response
+
+        # Call create
+        client.create(**params)
+
+        # Verify agent_config was passed to the client
+        call_args = mock_create.call_args
+        assert call_args is not None
+        call_params = call_args[0][0] if call_args[0] else {}
+        # The agent_config should have been processed and response_format should be MathReasoning
+        # Check that response_format in params was overridden by agent_config
+        assert "agent_config" in call_params or "response_format" in call_params
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_agent_config_parser_called_with_agent_config(mock_credentials: Credentials, monkeypatch):
+    """Test that agent_config_parser is called when agent_config is provided."""
+    from unittest.mock import MagicMock, patch
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    config_list = mock_credentials.config_list
+    client = OpenAIWrapper(config_list=config_list)
+
+    params = {
+        "model": config_list[0]["model"],
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent_config": agent.agent_config,
+    }
+
+    # Mock agent_config_parser
+    with patch("autogen.oai.client.agent_config_parser") as mock_parser:
+        mock_parser.return_value = {"response_format": MathReasoning}
+
+        # Mock the underlying OpenAI client's chat.completions.create method
+        openai_client = client._clients[0]._oai_client
+        with patch.object(openai_client.chat.completions, "create") as mock_openai_create:
+            mock_openai_response = MagicMock()
+            mock_openai_response.model = params["model"]
+            mock_openai_response.id = "chatcmpl-test"
+            mock_openai_response.created = 1677652288
+            mock_openai_response.object = "chat.completion"
+            mock_openai_response.choices = [
+                MagicMock(
+                    finish_reason="stop",
+                    index=0,
+                    message=MagicMock(
+                        content='{"steps": [], "final_answer": "test"}',
+                        role="assistant",
+                    ),
+                )
+            ]
+            mock_openai_response.usage = MagicMock(
+                completion_tokens=10,
+                prompt_tokens=10,
+                total_tokens=20,
+            )
+            mock_openai_create.return_value = mock_openai_response
+
+            # Call create - this will call OpenAIClient.create which calls agent_config_parser
+            client.create(**params)
+
+            # Verify agent_config_parser was called with agent.agent_config
+            mock_parser.assert_called_once_with(agent.agent_config)

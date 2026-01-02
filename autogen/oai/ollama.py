@@ -25,6 +25,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import logging
 import random
 import re
 import time
@@ -35,6 +36,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -42,6 +44,9 @@ with optional_import_block():
     import ollama
     from fix_busted_json import repair_json
     from ollama import Client
+
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaEntryDict(LLMConfigEntryDict, total=False):
@@ -227,8 +232,19 @@ class OllamaClient:
 
     @require_optional_import(["ollama", "fix_busted_json"], "ollama")
     def create(self, params: dict) -> ChatCompletion:
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
         messages = params.get("messages", [])
 
+        self._response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
+        )
+        params["response_format"] = self._response_format
         # Are tools involved in this conversation?
         self._tools_in_conversation = "tools" in params
 
@@ -509,7 +525,14 @@ class OllamaClient:
             del ollama_messages[-1]
 
         # Ensure the last message is a user / system message, if not, add a user message
-        if ollama_messages[-1]["role"] != "user" and ollama_messages[-1]["role"] != "system":
+        if (
+            len(ollama_messages) > 0
+            and ollama_messages[-1]["role"] != "user"
+            and ollama_messages[-1]["role"] != "system"
+        ):
+            ollama_messages.append({"role": "user", "content": "Please continue."})
+        elif len(ollama_messages) == 0:
+            # If no messages, add a default user message
             ollama_messages.append({"role": "user", "content": "Please continue."})
 
         return ollama_messages
@@ -538,7 +561,12 @@ class OllamaClient:
 
 def _format_json_response(response: Any, original_answer: str) -> str:
     """Formats the JSON response for structured outputs using the format method if it exists."""
-    return response.format() if isinstance(response, FormatterProtocol) else original_answer
+    if isinstance(response, str):
+        return response
+    elif isinstance(response, FormatterProtocol):
+        return response.format()
+    else:
+        return original_answer
 
 
 @require_optional_import("fix_busted_json", "ollama")

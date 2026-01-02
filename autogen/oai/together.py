@@ -35,11 +35,13 @@ import time
 import warnings
 from typing import Any, Literal
 
+from PIL.Image import logger
 from pydantic import Field
 from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -177,6 +179,9 @@ class TogetherClient:
 
     @require_optional_import("together", "together")
     def create(self, params: dict) -> ChatCompletion:
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
         messages = params.get("messages", [])
 
         # Convert AG2 messages to Together.AI messages
