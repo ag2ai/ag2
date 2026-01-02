@@ -1,6 +1,20 @@
 version: "3"
 
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "14317:4317"   # OTLP gRPC (AG2 sends here)
+      - "14318:4318"   # OTLP HTTP
+    env_file:
+      - .env
+    depends_on:
+      - tempo
+
   tempo:
     image: grafana/tempo:2.8.1
     command: [ "-config.file=/etc/tempo.yaml" ]
@@ -9,8 +23,7 @@ services:
     ports:
       - "14268:14268"  # jaeger ingest
       - "3200:3200"   # tempo
-      - "14317:4317"  # otlp grpc
-      - "14318:4318"  # otlp http
+      # OTLP ports now handled by otel-collector
 
   grafana:
     image: grafana/grafana:latest

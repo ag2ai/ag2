@@ -353,6 +353,7 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
                 result = await old_a_initiate_chat(*args, max_turns=max_turns, message=message, **kwargs)
 
+                span.set_attribute("gen_ai.conversation.id", str(result.chat_id))
                 span.set_attribute("gen_ai.conversation.turns", len(result.chat_history))
 
                 # Capture output messages (full chat history)
@@ -407,6 +408,7 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
                 result = old_initiate_chat(*args, max_turns=max_turns, message=message, **kwargs)
 
+                span.set_attribute("gen_ai.conversation.id", str(result.chat_id))
                 span.set_attribute("gen_ai.conversation.turns", len(result.chat_history))
 
                 if result.chat_history:
@@ -789,6 +791,10 @@ def instrument_chats(tracer: Tracer) -> None:
 
             results = old_initiate_chats(chat_queue)
 
+            # Capture chat IDs
+            chat_ids = [str(r.chat_id) for r in results if hasattr(r, "chat_id")]
+            span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
+
             # Capture summaries
             summaries = [r.summary for r in results if hasattr(r, "summary")]
             span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
@@ -828,6 +834,10 @@ def instrument_chats(tracer: Tracer) -> None:
                 span.set_attribute("ag2.chats.prerequisites", json.dumps(prerequisites))
 
             results = await old_a_initiate_chats(chat_queue)
+
+            # Capture chat IDs (results is a dict for async version)
+            chat_ids = [str(r.chat_id) for r in results.values() if hasattr(r, "chat_id")]
+            span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
 
             # Capture summaries (results is a dict for async version)
             summaries = [r.summary for r in results.values() if hasattr(r, "summary")]

@@ -24,7 +24,7 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | `gen_ai.input.messages` | ✅ | | Input messages to the agent (JSON array) |
 | `gen_ai.output.messages` | ✅ | | Output messages from the agent (JSON array) |
 | **Conversation Attributes** ||||
-| `gen_ai.conversation.id` | ✅ | | Unique conversation/session identifier (not yet implemented) |
+| `gen_ai.conversation.id` | ✅ | | Unique conversation/session identifier (AG2 ChatResult.chat_id) |
 | `gen_ai.conversation.max_turns` | | ✅ | Maximum turns configured for conversation |
 | `gen_ai.conversation.turns` | | ✅ | Actual number of turns in conversation |
 | `gen_ai.conversation.resumed` | | ✅ | Indicates a resumed conversation |
@@ -52,6 +52,7 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | `ag2.chats.count` | | ✅ | Number of chats in initiate_chats workflow |
 | `ag2.chats.mode` | | ✅ | Execution mode (`sequential` or `parallel`) |
 | `ag2.chats.recipients` | | ✅ | JSON list of recipient agent names |
+| `ag2.chats.ids` | | ✅ | JSON list of chat IDs (ChatResult.chat_id) |
 | `ag2.chats.summaries` | | ✅ | JSON list of chat summaries after completion |
 | `ag2.chats.prerequisites` | | ✅ | JSON map of chat dependencies (async parallel mode) |
 
