@@ -54,7 +54,7 @@ ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 @export_module("autogen")
 class AgentConfig(BaseModel):
     response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
-    api_type: str | None = None
+    api_type: Literal["openai", "responses"] | None = None
 
     model_config = ConfigDict(extra="allow")
 

@@ -31,7 +31,7 @@ from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredErr
 from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
-from autogen.oai.client import OpenAILLMConfigEntry
+from autogen.oai.client import OpenAILLMConfigEntry, OpenAIResponsesLLMConfigEntry
 from autogen.tools.tool import Tool
 from test.credentials import Credentials
 from test.marks import credentials_all_llms
@@ -2245,3 +2245,93 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+def test_interoperate_llm_config():
+    """Test _interoperate_llm_config method with various scenarios."""
+    from autogen.llm_config import AgentConfig
+
+    # Test 1: agent_config is None - should return llm_config unchanged
+    agent = ConversableAgent("agent1", llm_config=False)
+    agent.agent_config = None
+    llm_config = LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="test"))
+    original_api_type = llm_config.config_list[0].api_type
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    assert llm_config.config_list[0].api_type == original_api_type
+
+    # Test 2: agent_config.api_type is None - should return llm_config unchanged
+    agent.agent_config = AgentConfig(api_type=None)
+    llm_config = LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="test"))
+    original_api_type = llm_config.config_list[0].api_type
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    assert llm_config.config_list[0].api_type == original_api_type
+
+    # Test 3: agent_config exists with api_type="openai" and config_list contains dicts
+    agent.agent_config = AgentConfig(api_type="openai")
+    # Create LLMConfig with dict entries (legacy format)
+    llm_config_dict = LLMConfig({"model": "gpt-3", "api_key": "test"})
+
+    result = agent._interoperate_llm_config(llm_config_dict)
+    assert result is llm_config_dict
+    # Check that dict entries got updated
+    for config in llm_config_dict.config_list:
+        if isinstance(config, dict):
+            assert config["api_type"] == "openai"
+
+    # Test 4: agent_config exists with api_type="openai" and config_list contains LLMConfigEntry objects
+    agent.agent_config = AgentConfig(api_type="openai")
+    llm_config = LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="test"))
+    original_api_type = llm_config.config_list[0].api_type
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    # Check that LLMConfigEntry objects got updated (or remain correct if already matching)
+    assert llm_config.config_list[0].api_type == "openai"
+    # Note: original_api_type is already "openai" for OpenAILLMConfigEntry, so no change occurs
+    assert llm_config.config_list[0].api_type == original_api_type
+
+    # Test 5: agent_config exists with api_type="responses" and config_list contains mixed types
+    agent.agent_config = AgentConfig(api_type="responses")
+    llm_config = LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="test"), {"model": "gpt-4", "api_key": "test2"})
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    # Check that all entries got updated
+    for config in llm_config.config_list:
+        if isinstance(config, dict):
+            assert config["api_type"] == "responses"
+        elif hasattr(config, "api_type"):
+            # For typed entries, api_type is fixed by the type, but interoperability sets it
+            # OpenAILLMConfigEntry has api_type="openai" which is fixed, so it won't change to "responses"
+            # But dict entries should be updated
+            pass
+
+    # Test 6: agent_config exists with api_type="responses" and config_list contains dict entries
+    agent.agent_config = AgentConfig(api_type="responses")
+    # Create LLMConfig with dict entries to test api_type update
+    llm_config = LLMConfig({"model": "gpt-3", "api_key": "test"})
+    original_api_type = llm_config.config_list[0].get("api_type")
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    # Check that dict entries got updated to "responses"
+    assert llm_config.config_list[0]["api_type"] == "responses"
+    if original_api_type is not None:
+        assert llm_config.config_list[0]["api_type"] != original_api_type
+
+    # Test 7: agent_config exists with api_type="openai" and config_list contains OpenAIResponsesLLMConfigEntry
+    agent.agent_config = AgentConfig(api_type="openai")
+    llm_config = LLMConfig(OpenAIResponsesLLMConfigEntry(model="gpt-3", api_key="test"))
+    original_api_type = llm_config.config_list[0].api_type
+
+    result = agent._interoperate_llm_config(llm_config)
+    assert result is llm_config
+    # The interoperability method sets api_type from agent_config, even for typed entries
+    # Note: This changes the api_type from "responses" to "openai" despite the Literal type constraint
+    assert llm_config.config_list[0].api_type == "openai"  # Changed by interoperability
+    assert original_api_type == "responses"  # Was originally "responses"
+    assert llm_config.config_list[0].api_type != original_api_type  # Confirms it changed
