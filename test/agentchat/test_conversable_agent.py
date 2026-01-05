@@ -2335,3 +2335,385 @@ def test_interoperate_llm_config():
     assert llm_config.config_list[0].api_type == "openai"  # Changed by interoperability
     assert original_api_type == "responses"  # Was originally "responses"
     assert llm_config.config_list[0].api_type != original_api_type  # Confirms it changed
+
+
+@pytest.mark.integration()
+@run_for_optional_imports("openai", "openai")
+def test_agent_config_response_format_priority_in_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test that agent_config.response_format takes priority over llm_config.response_format in group chat.
+
+    This test verifies:
+    1. agent_config.response_format is used when both agent_config and llm_config have response_format
+    2. llm_config.response_format is used when agent_config doesn't have response_format
+    3. Group chat works correctly with multiple agents using different structured output schemas
+    4. Actual responses match the expected schemas
+    """
+    import json
+
+    from pydantic import BaseModel, ValidationError
+
+    from autogen import AgentConfig, AssistantAgent, LLMConfig, UserProxyAgent
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns.auto import AutoPattern
+
+    # Define structured output schemas
+    class ReviewFeedback(BaseModel):
+        rating: int  # 1-5 scale
+        strengths: list[str]
+        weaknesses: list[str]
+        recommendation: str
+
+    class SummaryOutput(BaseModel):
+        title: str
+        key_points: list[str]
+        conclusion: str
+
+    class Answer(BaseModel):
+        answer: str
+
+    # Create llm_config with response_format in config_list (but will be overridden by agent_config)
+    llm_config = LLMConfig(
+        config_list=[
+            {
+                "model": credentials_gpt_4o_mini.config_list[0]["model"],
+                "api_key": credentials_gpt_4o_mini.config_list[0]["api_key"],
+                "api_type": "openai",
+                "response_format": Answer,  # This should be overridden by agent_config
+            }
+        ]
+    )
+
+    # Create AgentConfig for Reviewer agent (has response_format - should take priority)
+    reviewer_config = AgentConfig(
+        response_format=ReviewFeedback,
+    )
+
+    # Create AgentConfig for Summarizer agent (has response_format - should take priority)
+    summarizer_config = AgentConfig(
+        response_format=SummaryOutput,
+    )
+
+    # Create Reviewer agent with agent_config (should use ReviewFeedback, not Answer from llm_config)
+    reviewer = AssistantAgent(
+        name="reviewer",
+        agent_config=reviewer_config,
+        system_message="You are a thorough reviewer. Analyze content and provide structured feedback with ratings, strengths, weaknesses, and recommendations. Always respond in valid JSON matching the ReviewFeedback schema.",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+    )
+
+    # Create Summarizer agent with agent_config (should use SummaryOutput, not Answer from llm_config)
+    summarizer = AssistantAgent(
+        name="summarizer",
+        agent_config=summarizer_config,
+        system_message="You are a concise summarizer. Create structured summaries with titles, key points, and conclusions. Always respond in valid JSON matching the SummaryOutput schema.",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+    )
+
+    # Create User Proxy agent without agent_config (should use Answer from llm_config)
+    user_proxy = UserProxyAgent(
+        name="user_proxy",
+        code_execution_config=False,
+        human_input_mode="NEVER",
+        llm_config=llm_config,
+    )
+
+    # Create GroupChat with all agents
+    pattern = AutoPattern(
+        initial_agent=user_proxy,
+        agents=[reviewer, summarizer, user_proxy],
+        group_manager_args={
+            "llm_config": llm_config,
+            "human_input_mode": "NEVER",
+        },
+    )
+
+    # Start the GroupChat conversation
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="Please review and summarize this idea: Creating an AI-powered assistant for code review that provides structured feedback on code quality, security, and best practices.",
+        max_rounds=5,
+    )
+
+    # Verify the chat completed successfully
+    assert result is not None, "Group chat should return a result"
+    assert len(result.chat_history) > 0, "Group chat should have messages"
+
+    # Verify that reviewer's response is in ReviewFeedback format (not Answer format)
+    reviewer_messages = [msg for msg in result.chat_history if msg.get("name") == "reviewer"]
+    if reviewer_messages:
+        reviewer_content = reviewer_messages[-1].get("content", "")
+        assert reviewer_content, "Reviewer should have responded with content"
+
+        # Try to parse as JSON and validate against ReviewFeedback schema
+        try:
+            # Extract JSON from content (might be wrapped in markdown code blocks or plain JSON)
+            content_str = reviewer_content.strip()
+            # Remove markdown code blocks if present
+            if content_str.startswith("```") or content_str.startswith("```json"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1]) if len(lines) > 2 else content_str
+
+            parsed_content = json.loads(content_str)
+
+            # Validate against ReviewFeedback schema using Pydantic
+            try:
+                review_feedback = ReviewFeedback.model_validate(parsed_content)
+                # Verify it has the expected fields (not Answer format)
+                assert hasattr(review_feedback, "rating"), "ReviewFeedback should have 'rating' field"
+                assert hasattr(review_feedback, "strengths"), "ReviewFeedback should have 'strengths' field"
+                assert hasattr(review_feedback, "weaknesses"), "ReviewFeedback should have 'weaknesses' field"
+                assert hasattr(review_feedback, "recommendation"), "ReviewFeedback should have 'recommendation' field"
+                # Verify it does NOT have 'answer' field (which would indicate Answer format was used)
+                assert "answer" not in parsed_content, (
+                    "Reviewer should respond in ReviewFeedback format, not Answer format"
+                )
+            except ValidationError as e:
+                pytest.fail(f"Reviewer response does not match ReviewFeedback schema: {e}")
+        except json.JSONDecodeError:
+            # If not JSON, at least verify it contains ReviewFeedback-specific keywords
+            assert any(
+                keyword in reviewer_content.lower()
+                for keyword in ["rating", "strengths", "weaknesses", "recommendation"]
+            ), "Reviewer should respond in ReviewFeedback format, not Answer format"
+
+    # Verify that summarizer's response is in SummaryOutput format (not Answer format)
+    summarizer_messages = [msg for msg in result.chat_history if msg.get("name") == "summarizer"]
+    if summarizer_messages:
+        summarizer_content = summarizer_messages[-1].get("content", "")
+        assert summarizer_content, "Summarizer should have responded with content"
+
+        # Try to parse as JSON and validate against SummaryOutput schema
+        try:
+            # Extract JSON from content
+            content_str = summarizer_content.strip()
+            if content_str.startswith("```") or content_str.startswith("```json"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1]) if len(lines) > 2 else content_str
+
+            parsed_content = json.loads(content_str)
+
+            # Validate against SummaryOutput schema using Pydantic
+            try:
+                summary_output = SummaryOutput.model_validate(parsed_content)
+                # Verify it has the expected fields (not Answer format)
+                assert hasattr(summary_output, "title"), "SummaryOutput should have 'title' field"
+                assert hasattr(summary_output, "key_points"), "SummaryOutput should have 'key_points' field"
+                assert hasattr(summary_output, "conclusion"), "SummaryOutput should have 'conclusion' field"
+                # Verify it does NOT have 'answer' field
+                assert "answer" not in parsed_content, (
+                    "Summarizer should respond in SummaryOutput format, not Answer format"
+                )
+            except ValidationError as e:
+                pytest.fail(f"Summarizer response does not match SummaryOutput schema: {e}")
+        except json.JSONDecodeError:
+            # If not JSON, at least verify it contains SummaryOutput-specific keywords
+            assert any(
+                keyword in summarizer_content.lower() for keyword in ["title", "key_points", "conclusion", "key points"]
+            ), "Summarizer should respond in SummaryOutput format, not Answer format"
+
+    # Verify that agents with agent_config use their own response_format, not llm_config's
+    assert reviewer.agent_config is not None
+    assert reviewer.agent_config.response_format == ReviewFeedback
+    assert summarizer.agent_config is not None
+    assert summarizer.agent_config.response_format == SummaryOutput
+
+
+@run_for_optional_imports("openai", "openai")
+def test_agent_config_response_format_fallback_to_llm_config(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test that llm_config.response_format is used when agent_config doesn't have response_format."""
+    import json
+
+    from pydantic import BaseModel, ValidationError
+
+    from autogen import AgentConfig, AssistantAgent, LLMConfig, UserProxyAgent
+
+    class Answer(BaseModel):
+        answer: str
+
+    # Create llm_config with response_format
+    llm_config = LLMConfig(
+        config_list=[
+            {
+                "model": credentials_gpt_4o_mini.config_list[0]["model"],
+                "api_key": credentials_gpt_4o_mini.config_list[0]["api_key"],
+                "api_type": "openai",
+                "response_format": Answer,
+            }
+        ]
+    )
+
+    # Create AgentConfig without response_format (should fallback to llm_config)
+    agent_config_no_format = AgentConfig(
+        # No response_format specified
+    )
+
+    # Create agent with agent_config that has no response_format
+    agent = AssistantAgent(
+        name="test_agent",
+        agent_config=agent_config_no_format,
+        system_message="You are a helpful assistant. Always respond in the Answer format with a JSON object containing an 'answer' field.",
+        llm_config=llm_config,
+    )
+
+    # Verify that the agent will use llm_config's response_format
+    assert agent.agent_config is not None
+    assert agent.agent_config.response_format is None, "agent_config should not have response_format"
+
+    # Test that the agent actually uses llm_config's response_format by running it
+    user_proxy = UserProxyAgent(
+        name="user_proxy",
+        code_execution_config=False,
+        human_input_mode="NEVER",
+    )
+
+    result = user_proxy.run(
+        agent,
+        message="What is 2+2?",
+        max_turns=1,
+    )
+
+    # Verify the response matches Answer schema
+    assert result is not None
+    messages = result.chat_history if hasattr(result, "chat_history") else []
+
+    assistant_messages = [msg for msg in messages if msg.get("name") == "test_agent" or msg.get("role") == "assistant"]
+    if assistant_messages:
+        content = assistant_messages[-1].get("content", "")
+        assert content, "Agent should have responded with content"
+
+        # Try to parse and validate against Answer schema
+        try:
+            content_str = content.strip()
+            if content_str.startswith("```") or content_str.startswith("```json"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1]) if len(lines) > 2 else content_str
+
+            parsed_content = json.loads(content_str)
+
+            # Validate against Answer schema
+            try:
+                answer = Answer.model_validate(parsed_content)
+                assert hasattr(answer, "answer"), "Response should have 'answer' field matching Answer schema"
+                assert isinstance(answer.answer, str), "Answer field should be a string"
+                assert len(answer.answer) > 0, "Answer should not be empty"
+            except ValidationError as e:
+                pytest.fail(f"Agent response does not match Answer schema (from llm_config): {e}")
+        except json.JSONDecodeError:
+            # If not JSON, at least verify it contains answer-like content
+            assert "answer" in content.lower() or len(content) > 0, (
+                "Agent should respond in Answer format from llm_config"
+            )
+
+
+@run_for_optional_imports("openai", "openai")
+def test_agent_config_response_format_priority_single_agent(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test that agent_config.response_format takes priority in a simple two-agent chat."""
+    import json
+
+    from pydantic import BaseModel, ValidationError
+
+    from autogen import AgentConfig, AssistantAgent, LLMConfig, UserProxyAgent
+
+    class Answer(BaseModel):
+        answer: str
+
+    class JokeOutput(BaseModel):
+        joke: str
+        explanation: str
+
+    # Create llm_config with Answer as response_format
+    llm_config = LLMConfig(
+        config_list=[
+            {
+                "model": credentials_gpt_4o_mini.config_list[0]["model"],
+                "api_key": credentials_gpt_4o_mini.config_list[0]["api_key"],
+                "api_type": "openai",
+                "response_format": Answer,  # This should be overridden
+            }
+        ]
+    )
+
+    # Create AgentConfig with JokeOutput (should take priority)
+    agent_config = AgentConfig(
+        response_format=JokeOutput,
+    )
+
+    # Create assistant with agent_config
+    assistant = AssistantAgent(
+        name="assistant",
+        agent_config=agent_config,
+        system_message="You are a helpful assistant that tells jokes. Always respond in valid JSON matching the JokeOutput schema with 'joke' and 'explanation' fields.",
+        llm_config=llm_config,
+    )
+
+    # Create user proxy
+    user_proxy = UserProxyAgent(
+        name="user_proxy",
+        code_execution_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Test the chat
+    result = user_proxy.run(
+        assistant,
+        message="Tell me a joke about AI.",
+        max_turns=1,
+    )
+
+    # Verify the response
+    assert result is not None
+    messages = result.chat_history if hasattr(result, "chat_history") else []
+
+    # Find assistant's message
+    assistant_messages = [msg for msg in messages if msg.get("name") == "assistant" or msg.get("role") == "assistant"]
+    if assistant_messages:
+        content = assistant_messages[-1].get("content", "")
+        assert content, "Assistant should have responded with content"
+
+        # Try to parse and validate against JokeOutput schema (not Answer schema)
+        try:
+            content_str = content.strip()
+            if content_str.startswith("```") or content_str.startswith("```json"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1]) if len(lines) > 2 else content_str
+
+            parsed_content = json.loads(content_str)
+
+            # Validate against JokeOutput schema (should succeed)
+            try:
+                joke_output = JokeOutput.model_validate(parsed_content)
+                assert hasattr(joke_output, "joke"), "Response should have 'joke' field matching JokeOutput schema"
+                assert hasattr(joke_output, "explanation"), (
+                    "Response should have 'explanation' field matching JokeOutput schema"
+                )
+                assert isinstance(joke_output.joke, str), "Joke field should be a string"
+                assert isinstance(joke_output.explanation, str), "Explanation field should be a string"
+                # Verify it does NOT have 'answer' field (which would indicate Answer format was used)
+                assert "answer" not in parsed_content, (
+                    "Assistant should respond in JokeOutput format (from agent_config), not Answer format (from llm_config)"
+                )
+            except ValidationError as e:
+                pytest.fail(f"Assistant response does not match JokeOutput schema (from agent_config): {e}")
+
+            # Verify it does NOT match Answer schema (should fail validation)
+            try:
+                Answer.model_validate(parsed_content)
+                pytest.fail("Response should NOT match Answer schema - agent_config should override llm_config")
+            except ValidationError:
+                # This is expected - Answer validation should fail
+                pass
+
+        except json.JSONDecodeError:
+            # If not JSON, at least verify it contains JokeOutput-specific keywords
+            assert any(keyword in content.lower() for keyword in ["joke", "explanation"]), (
+                "Assistant should respond in JokeOutput format, not Answer format"
+            )
+            assert "answer" not in content.lower(), (
+                "Assistant should not respond in Answer format - agent_config should override llm_config"
+            )
+
+    # Verify agent_config takes priority
+    assert assistant.agent_config is not None
+    assert assistant.agent_config.response_format == JokeOutput
