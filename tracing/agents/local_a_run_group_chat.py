@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import a_run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.instrumentation import instrument_llm_wrapper, instrument_pattern, setup_instrumentation
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern, setup_instrumentation
 
 load_dotenv()
 

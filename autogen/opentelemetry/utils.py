@@ -6,6 +6,10 @@ import json
 from contextlib import suppress
 from typing import Any
 
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
+TRACE_PROPAGATOR = TraceContextTextMapPropagator()
+
 
 def message_to_otel(message: dict[str, Any]) -> dict[str, Any]:
     """Convert an AG2/OpenAI message to OTEL GenAI semantic convention format.

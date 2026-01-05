@@ -3,7 +3,7 @@ import asyncio
 from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aAgentServer
-from autogen.instrumentation import instrument_a2a_server, setup_instrumentation
+from autogen.opentelemetry import instrument_a2a_server, setup_instrumentation
 
 load_dotenv()
 

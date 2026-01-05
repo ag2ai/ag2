@@ -7,7 +7,10 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aRemoteAgent
 from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.instrumentation import instrument_pattern, setup_instrumentation
+from autogen.opentelemetry import (
+    instrument_pattern,
+    setup_instrumentation,
+)
 
 load_dotenv()
 

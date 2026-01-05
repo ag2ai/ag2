@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 
 from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
-from autogen.instrumentation import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 from autogen.llm_config.config import LLMConfig
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper, setup_instrumentation
 
 load_dotenv()
 

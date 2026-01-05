@@ -1,283 +1,58 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Based on OpenTelemetry GenAI semantic conventions
-# https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
 
 import asyncio
 import functools
 import json
-from collections.abc import Generator, Sequence
+from collections.abc import Generator
 from contextlib import contextmanager
-from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
-from a2a.utils.telemetry import SpanKind
 from opentelemetry import context as otel_context
-from opentelemetry import trace
 from opentelemetry.context import Context
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Attributes, Resource
-from opentelemetry.sdk.trace import Tracer, TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import Decision, Sampler, SamplingResult
-from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from opentelemetry.trace import Tracer
 
-from autogen import ConversableAgent
-from autogen.a2a import A2aAgentServer
 from autogen.agentchat import Agent
-from autogen.agentchat import chat as chat_module
-from autogen.agentchat import conversable_agent as conversable_agent_module
-from autogen.agentchat.group import ContextVariables
-from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
-from autogen.agentchat.group.patterns.pattern import Pattern
-from autogen.agentchat.group.targets.transition_target import TransitionTarget
-from autogen.agentchat.groupchat import GroupChat, GroupChatManager
+from autogen.doc_utils import export_module
 from autogen.io import IOStream
-from autogen.oai import client as oai_client_module
-from autogen.oai.client import OpenAIWrapper
-from autogen.tracing.utils import (
+from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.utils import (
+    TRACE_PROPAGATOR,
     aggregate_usage,
-    get_model_from_config_list,
     get_model_name,
-    get_provider_from_config_list,
     get_provider_name,
-    message_to_otel,
     messages_to_otel,
     reply_to_otel_message,
-    set_llm_request_params,
 )
-from autogen.version import __version__ as AG2_VERSION  # noqa: N812
-
-OTEL_SCHEMA = "https://opentelemetry.io/schemas/1.11.0"
-INSTRUMENTING_MODULE_NAME = "opentelemetry.instrumentation.ag2"
-INSTRUMENTING_LIBRARY_VERSION = AG2_VERSION
 
 
-# Span types for AG2 instrumentation
-class SpanType(Enum):
-    CONVERSATION = "conversation"  # Initiate Chat / Run Chat
-    MULTI_CONVERSATION = "multi_conversation"  # Initiate Chats (sequential/parallel)
-    AGENT = "agent"  # Agent's Generate Reply (invoke_agent)
-    LLM = "llm"  # LLM Invocation (chat completion)
-    TOOL = "tool"  # Tool Execution (execute_tool)
-    HANDOFF = "handoff"  # Handoff (TODO)
-    SPEAKER_SELECTION = "speaker_selection"  # Group Chat Speaker Selection
-    HUMAN_INPUT = "human_input"  # Human-in-the-loop input (await_human_input)
-    CODE_EXECUTION = "code_execution"  # Code execution (execute_code_blocks)
-
-
-_TRACE_PROPAGATOR = TraceContextTextMapPropagator()
-
-
-class DropNoiseSampler(Sampler):
-    def should_sample(
-        self,
-        parent_context: Optional["Context"],
-        trace_id: int,
-        name: str,
-        kind: SpanKind | None = None,
-        attributes: Attributes = None,
-        links: Sequence["trace.Link"] | None = None,
-        trace_state: trace.TraceState | None = None,
-    ) -> "SamplingResult":
-        decision = Decision.RECORD_ONLY if name.startswith("a2a.") else Decision.RECORD_AND_SAMPLE
-        return SamplingResult(decision, attributes=None, trace_state=trace_state)
-
-    def get_description(self) -> str:
-        return "Drop a2a.server noisy spans"
-
-
-def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4317") -> Tracer:
-    resource = Resource.create(attributes={"service.name": service_name})
-    tracer_provider = TracerProvider(
-        resource=resource,
-        # sampler=DropNoiseSampler(),
-    )
-    exporter = OTLPSpanExporter(endpoint=endpoint)
-    processor = BatchSpanProcessor(exporter)
-    tracer_provider.add_span_processor(processor)
-    trace.set_tracer_provider(tracer_provider)
-
-    return tracer_provider.get_tracer(
-        instrumenting_module_name=INSTRUMENTING_MODULE_NAME,
-        instrumenting_library_version=INSTRUMENTING_LIBRARY_VERSION,
-        schema_url=OTEL_SCHEMA,
-    )
-
-
-def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentServer:
-    class OTELMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            span_context = _TRACE_PROPAGATOR.extract(request.headers)
-            with tracer.start_as_current_span("a2a-execution", context=span_context):
-                return await call_next(request)
-
-    server.add_middleware(OTELMiddleware)
-
-    instrument_agent(server.agent, tracer)
-    return server
-
-
-def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
-    old_prepare_group_chat = pattern.prepare_group_chat
-
-    def prepare_group_chat_traced(
-        max_rounds: int,
-        *args: Any,
-        **kwargs: Any,
-    ) -> tuple[
-        list["ConversableAgent"],
-        list["ConversableAgent"],
-        Optional["ConversableAgent"],
-        ContextVariables,
-        "ConversableAgent",
-        TransitionTarget,
-        "GroupToolExecutor",
-        "GroupChat",
-        "GroupChatManager",
-        list[dict[str, Any]],
-        "ConversableAgent",
-        list[str],
-        list["Agent"],
-    ]:
-        (
-            agents,
-            wrapped_agents,
-            user_agent,
-            context_variables,
-            initial_agent,
-            group_after_work,
-            tool_executor,
-            groupchat,
-            manager,
-            processed_messages,
-            last_agent,
-            group_agent_names,
-            temp_user_list,
-        ) = old_prepare_group_chat(max_rounds, *args, **kwargs)
-
-        for agent in groupchat.agents:
-            instrument_agent(agent, tracer)
-
-        instrument_agent(manager, tracer)
-        instrument_groupchat(groupchat, tracer)
-
-        # IMPORTANT: register_reply() in GroupChatManager.__init__ creates a shallow copy of groupchat
-        # (via copy.copy). We need to also instrument that copy which is stored in manager._reply_func_list
-        # so that we can trace the "auto" speaker selection internal chats.
-        for reply_func_entry in manager._reply_func_list:
-            config = reply_func_entry.get("config")
-            if isinstance(config, GroupChat) and config is not groupchat:
-                instrument_groupchat(config, tracer)
-
-        return (
-            agents,
-            wrapped_agents,
-            user_agent,
-            context_variables,
-            initial_agent,
-            group_after_work,
-            tool_executor,
-            groupchat,
-            manager,
-            processed_messages,
-            last_agent,
-            group_agent_names,
-            temp_user_list,
-        )
-
-    pattern.prepare_group_chat = prepare_group_chat_traced
-
-    return pattern
-
-
-def instrument_groupchat(groupchat: GroupChat, tracer: Tracer) -> GroupChat:
-    """Instrument GroupChat's speaker selection to trace internal agent chats."""
-
-    # Wrap _create_internal_agents to instrument temporary agents for auto speaker selection
-    old_create_internal_agents = groupchat._create_internal_agents
-
-    def create_internal_agents_traced(
-        agents: list[Agent],
-        max_attempts: int,
-        messages: list[dict[str, Any]],
-        validate_speaker_name: Any,
-        selector: ConversableAgent | None = None,
-    ) -> tuple[ConversableAgent, ConversableAgent]:
-        checking_agent, speaker_selection_agent = old_create_internal_agents(
-            agents, max_attempts, messages, validate_speaker_name, selector
-        )
-        # Instrument the temporary agents so their chats are traced
-        instrument_agent(checking_agent, tracer)
-        instrument_agent(speaker_selection_agent, tracer)
-        return checking_agent, speaker_selection_agent
-
-    groupchat._create_internal_agents = create_internal_agents_traced
-
-    # Wrap a_auto_select_speaker with a parent span
-    old_a_auto_select_speaker = groupchat.a_auto_select_speaker
-
-    async def a_auto_select_speaker_traced(
-        last_speaker: Agent,
-        selector: ConversableAgent,
-        messages: list[dict[str, Any]] | None,
-        agents: list[Agent] | None,
-    ) -> Agent:
-        with tracer.start_as_current_span("speaker_selection") as span:
-            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
-            span.set_attribute("gen_ai.operation.name", "speaker_selection")
-
-            # Record candidate agents
-            candidate_agents = agents if agents is not None else groupchat.agents
-            span.set_attribute(
-                "ag2.speaker_selection.candidates",
-                json.dumps([a.name for a in candidate_agents]),
-            )
-
-            result = await old_a_auto_select_speaker(last_speaker, selector, messages, agents)
-
-            # Record selected speaker
-            span.set_attribute("ag2.speaker_selection.selected", result.name)
-            return result
-
-    groupchat.a_auto_select_speaker = a_auto_select_speaker_traced
-
-    # Wrap _auto_select_speaker (sync version) with a parent span
-    old_auto_select_speaker = groupchat._auto_select_speaker
-
-    def auto_select_speaker_traced(
-        last_speaker: Agent,
-        selector: ConversableAgent,
-        messages: list[dict[str, Any]] | None,
-        agents: list[Agent] | None,
-    ) -> Agent:
-        with tracer.start_as_current_span("speaker_selection") as span:
-            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
-            span.set_attribute("gen_ai.operation.name", "speaker_selection")
-
-            # Record candidate agents
-            candidate_agents = agents if agents is not None else groupchat.agents
-            span.set_attribute(
-                "ag2.speaker_selection.candidates",
-                json.dumps([a.name for a in candidate_agents]),
-            )
-
-            result = old_auto_select_speaker(last_speaker, selector, messages, agents)
-
-            # Record selected speaker
-            span.set_attribute("ag2.speaker_selection.selected", result.name)
-            return result
-
-    groupchat._auto_select_speaker = auto_select_speaker_traced
-
-    return groupchat
-
-
+@export_module("autogen.opentelemetry")
 def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
+    """Instrument an agent with OpenTelemetry tracing.
+
+    Instruments various agent methods to emit OpenTelemetry spans for:
+    - Agent invocations (generate_reply, a_generate_reply)
+    - Conversations (initiate_chat, a_initiate_chat, resume)
+    - Tool execution (execute_function, a_execute_function)
+    - Code execution
+    - Human input requests
+    - Remote agent calls
+
+    Args:
+        agent: The agent instance to instrument.
+        tracer: The OpenTelemetry tracer to use for creating spans.
+
+    Returns:
+        The instrumented agent instance (same object, modified in place).
+
+    Usage:
+        from autogen.opentelemetry import setup_instrumentation, instrument_agent
+
+        tracer = setup_instrumentation("my-service")
+        agent = AssistantAgent("assistant")
+        instrument_agent(agent, tracer)
+    """
     # Instrument `a_generate_reply` as an invoke_agent span
     old_a_generate_reply = agent.a_generate_reply
 
@@ -631,7 +406,7 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
         def httpx_client_factory_traced():
             httpx_client = old_httpx_client_factory()
-            _TRACE_PROPAGATOR.inject(httpx_client.headers)
+            TRACE_PROPAGATOR.inject(httpx_client.headers)
             return httpx_client
 
         agent._httpx_client_factory = httpx_client_factory_traced
@@ -868,219 +643,3 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
             agent._reply_func_list[original_code_exec_index]["reply_func"] = generate_code_execution_reply_traced
 
     return agent
-
-
-def instrument_chats(tracer: Tracer) -> None:
-    """Instrument the standalone initiate_chats and a_initiate_chats functions.
-
-    This adds a parent span that groups all sequential/parallel chats together,
-    making it easy to trace multi-agent workflows.
-
-    Usage:
-        from autogen.instrumentation import instrument_chats, setup_instrumentation
-
-        tracer = setup_instrumentation("my-service")
-        instrument_chats(tracer)
-
-        # Now initiate_chats calls will be traced with a parent span
-        from autogen import initiate_chats
-        results = initiate_chats(chat_queue)
-    """
-    # Instrument sync initiate_chats
-    old_initiate_chats = chat_module.initiate_chats
-
-    def initiate_chats_traced(chat_queue: list[dict[str, Any]]) -> list:
-        with tracer.start_as_current_span("initiate_chats") as span:
-            span.set_attribute("ag2.span.type", SpanType.MULTI_CONVERSATION.value)
-            span.set_attribute("gen_ai.operation.name", "initiate_chats")
-            span.set_attribute("ag2.chats.count", len(chat_queue))
-            span.set_attribute("ag2.chats.mode", "sequential")
-
-            # Capture recipient names
-            recipients = [
-                chat_info.get("recipient", {}).name
-                if hasattr(chat_info.get("recipient"), "name")
-                else str(chat_info.get("recipient"))
-                for chat_info in chat_queue
-            ]
-            span.set_attribute("ag2.chats.recipients", json.dumps(recipients))
-
-            results = old_initiate_chats(chat_queue)
-
-            # Capture chat IDs
-            chat_ids = [str(r.chat_id) for r in results if hasattr(r, "chat_id")]
-            span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
-
-            # Capture summaries
-            summaries = [r.summary for r in results if hasattr(r, "summary")]
-            span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
-
-            return results
-
-    # Patch in all locations where initiate_chats may have been imported
-    chat_module.initiate_chats = initiate_chats_traced
-    conversable_agent_module.initiate_chats = initiate_chats_traced
-
-    # Instrument async a_initiate_chats
-    old_a_initiate_chats = chat_module.a_initiate_chats
-
-    async def a_initiate_chats_traced(chat_queue: list[dict[str, Any]]) -> dict:
-        with tracer.start_as_current_span("initiate_chats") as span:
-            span.set_attribute("ag2.span.type", SpanType.MULTI_CONVERSATION.value)
-            span.set_attribute("gen_ai.operation.name", "initiate_chats")
-            span.set_attribute("ag2.chats.count", len(chat_queue))
-            span.set_attribute("ag2.chats.mode", "parallel")
-
-            # Capture recipient names
-            recipients = [
-                chat_info.get("recipient", {}).name
-                if hasattr(chat_info.get("recipient"), "name")
-                else str(chat_info.get("recipient"))
-                for chat_info in chat_queue
-            ]
-            span.set_attribute("ag2.chats.recipients", json.dumps(recipients))
-
-            # Capture prerequisites if any
-            has_prerequisites = any("prerequisites" in chat_info for chat_info in chat_queue)
-            if has_prerequisites:
-                prerequisites = {
-                    chat_info.get("chat_id", i): chat_info.get("prerequisites", [])
-                    for i, chat_info in enumerate(chat_queue)
-                }
-                span.set_attribute("ag2.chats.prerequisites", json.dumps(prerequisites))
-
-            results = await old_a_initiate_chats(chat_queue)
-
-            # Capture chat IDs (results is a dict for async version)
-            chat_ids = [str(r.chat_id) for r in results.values() if hasattr(r, "chat_id")]
-            span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
-
-            # Capture summaries (results is a dict for async version)
-            summaries = [r.summary for r in results.values() if hasattr(r, "summary")]
-            span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
-
-            return results
-
-    # Patch in all locations where a_initiate_chats may have been imported
-    chat_module.a_initiate_chats = a_initiate_chats_traced
-    conversable_agent_module.a_initiate_chats = a_initiate_chats_traced
-
-
-def _set_llm_response_attributes(span: Any, response: Any, capture_messages: bool = False) -> None:
-    """Set LLM response attributes on a span.
-
-    Captures response model, token usage, finish reasons, and cost.
-    Optionally captures output messages if capture_messages is True.
-    """
-    # Response model (may differ from request)
-    if hasattr(response, "model") and response.model:
-        span.set_attribute("gen_ai.response.model", response.model)
-
-    # Token usage
-    if hasattr(response, "usage") and response.usage:
-        if hasattr(response.usage, "prompt_tokens") and response.usage.prompt_tokens is not None:
-            span.set_attribute("gen_ai.usage.input_tokens", response.usage.prompt_tokens)
-        if hasattr(response.usage, "completion_tokens"):
-            span.set_attribute("gen_ai.usage.output_tokens", response.usage.completion_tokens or 0)
-
-    # Finish reasons
-    if hasattr(response, "choices") and response.choices:
-        reasons = [str(c.finish_reason) for c in response.choices if hasattr(c, "finish_reason") and c.finish_reason]
-        if reasons:
-            span.set_attribute("gen_ai.response.finish_reasons", json.dumps(reasons))
-
-    # Cost (AG2-specific)
-    if hasattr(response, "cost") and response.cost is not None:
-        span.set_attribute("gen_ai.usage.cost", response.cost)
-
-    # Output messages (opt-in)
-    if capture_messages and hasattr(response, "choices") and response.choices:
-        output_msgs = []
-        for choice in response.choices:
-            if hasattr(choice, "message") and choice.message:
-                msg: dict[str, Any] = {"role": "assistant", "content": getattr(choice.message, "content", "") or ""}
-                if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
-                    msg["tool_calls"] = [
-                        {
-                            "id": tc.id,
-                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                        }
-                        for tc in choice.message.tool_calls
-                    ]
-                output_msgs.append(message_to_otel(msg))
-        if output_msgs:
-            span.set_attribute("gen_ai.output.messages", json.dumps(output_msgs))
-
-
-def instrument_llm_wrapper(tracer: Tracer, capture_messages: bool = False) -> None:
-    """Instrument OpenAIWrapper.create() to emit LLM spans.
-
-    This creates 'chat' spans for each LLM API call, capturing:
-    - Provider name (openai, anthropic, etc.)
-    - Model name (gpt-4, claude-3, etc.)
-    - Token usage (input/output)
-    - Response metadata (finish reasons, cost)
-
-    LLM spans automatically become children of agent invoke spans via
-    OpenTelemetry's context propagation.
-
-    Args:
-        tracer: The OpenTelemetry tracer
-        capture_messages: If True, capture input/output messages in span attributes.
-            Default is False since messages may contain sensitive data.
-
-    Usage:
-        from autogen.instrumentation import setup_instrumentation, instrument_llm_wrapper
-
-        tracer = setup_instrumentation("my-service")
-        instrument_llm_wrapper(tracer)
-
-        # Or with message capture enabled (for debugging)
-        instrument_llm_wrapper(tracer, capture_messages=True)
-    """
-    original_create = OpenAIWrapper.create
-
-    def traced_create(self: OpenAIWrapper, **config: Any) -> Any:
-        # Get model from config or wrapper's config_list
-        model = config.get("model") or get_model_from_config_list(self._config_list)
-        span_name = f"chat {model}" if model else "chat"
-
-        with tracer.start_as_current_span(span_name, kind=SpanKind.CLIENT) as span:
-            # Required attributes
-            span.set_attribute("ag2.span.type", SpanType.LLM.value)
-            span.set_attribute("gen_ai.operation.name", "chat")
-
-            # Provider and model
-            provider = get_provider_from_config_list(self._config_list)
-            if provider:
-                span.set_attribute("gen_ai.provider.name", provider)
-            if model:
-                span.set_attribute("gen_ai.request.model", model)
-
-            # Agent name (from extra_kwargs passed by ConversableAgent)
-            agent = config.get("agent")
-            if agent and hasattr(agent, "name"):
-                span.set_attribute("gen_ai.agent.name", agent.name)
-
-            # Request parameters
-            set_llm_request_params(span, config)
-
-            # Input messages (opt-in)
-            if capture_messages and "messages" in config:
-                otel_msgs = messages_to_otel(config["messages"])
-                span.set_attribute("gen_ai.input.messages", json.dumps(otel_msgs))
-
-            try:
-                response = original_create(self, **config)
-            except Exception as e:
-                span.set_attribute("error.type", type(e).__name__)
-                raise
-
-            # Response attributes
-            _set_llm_response_attributes(span, response, capture_messages)
-
-            return response
-
-    # Apply the patch to OpenAIWrapper.create
-    OpenAIWrapper.create = traced_create
-    oai_client_module.OpenAIWrapper.create = traced_create
