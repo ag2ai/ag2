@@ -2164,7 +2164,7 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
-        logger.info(f"Messages: {self.client}")
+        # logger.info(f"Messages: {self.client}")
         client = self.client if config is None else config
         if client is None:
             return False, None
