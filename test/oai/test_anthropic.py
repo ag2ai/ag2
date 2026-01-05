@@ -1609,10 +1609,7 @@ def test_real_tools_with_structured_output_beta_api(credentials_anthropic_claude
     content = final_response.choices[0].message.content
 
     # Parse and validate structured output
-    if isinstance(content, str):
-        result = MathResult.model_validate_json(content)
-    else:
-        result = MathResult.model_validate(content)
+    result = MathResult.model_validate_json(content) if isinstance(content, str) else MathResult.model_validate(content)
 
     # Verify structured output has required fields
     assert result.steps, "Should have steps"
