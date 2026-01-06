@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Protocol
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -23,14 +23,10 @@ class ResponseMessage(AgentBusMessage):
     input_required: str | None = None
 
 
-class RemoteService(Protocol):
-    """Interface to make AgentBus compatible with non AG2 systems."""
-
-    name: str
-
-    async def __call__(self, state: RequestMessage) -> ResponseMessage | None:
-        """Executable that consumes Conversation State and returns a new state."""
-        ...
+class ServiceResponse(BaseModel):
+    message: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    input_required: str | None = None
 
 
 def get_tool_names(tools: list[dict[str, Any]]) -> set[str]:

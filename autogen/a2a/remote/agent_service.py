@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from collections.abc import AsyncGenerator
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
@@ -15,20 +16,21 @@ from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, Te
 from autogen.events.base_event import BaseEvent
 from autogen.io.base import AsyncIOStreamProtocol
 
-from .protocol import RemoteService, RequestMessage, ResponseMessage, get_tool_names
+from .protocol import RequestMessage, ServiceResponse, get_tool_names
 
 
-class AgentService(RemoteService):
+class AgentService:
     def __init__(self, agent: ConversableAgent) -> None:
         self.name = agent.name
         self.agent = agent
 
-    async def __call__(self, state: RequestMessage) -> ResponseMessage | None:
+    async def __call__(self, state: RequestMessage) -> AsyncGenerator[ServiceResponse, None]:
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
             _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role="assistant")
-            return ResponseMessage(messages=[out_message], context=state.context)
+            yield ServiceResponse(message=out_message, context=state.context)
+            return
 
         context_variables = ContextVariables(state.context)
         tool_executor = self._make_tool_executor(context_variables)
@@ -39,12 +41,15 @@ class AgentService(RemoteService):
 
             stream = HITLStream()
             await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
+
             if stream.is_input_required:
-                return ResponseMessage(
-                    messages=local_history,
+                for message in local_history:
+                    yield ServiceResponse(message=message)
+                yield ServiceResponse(
                     context=context_variables.data or None,
                     input_required=stream.input_prompt,
                 )
+                return
 
             reply = await self.agent.a_generate_reply(
                 messages,
@@ -85,22 +90,25 @@ class AgentService(RemoteService):
                 local_history.append(out_message)
 
             if return_to_user:
-                return ResponseMessage(
-                    messages=local_history,
+                for message in local_history:
+                    yield ServiceResponse(message=message)
+                yield ServiceResponse(
                     context=context_variables.data or None,
                     input_required="Please, provide additional information:\n",
                 )
+                return
 
             if not should_continue:
                 break
 
         if not local_history:
-            return None
+            return
 
-        return ResponseMessage(
-            messages=local_history,
-            context=context_variables.data or None,
-        )
+        for message in local_history:
+            yield ServiceResponse(
+                message=message,
+                context=context_variables.data or None,
+            )
 
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str

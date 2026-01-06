@@ -125,51 +125,48 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
     )
 
 
-def response_message_to_a2a(
-    result: ResponseMessage | None,
-    context_id: str | None,
-    task_id: str | None,
-) -> tuple[Artifact | None, list[Message], Message | None]:
-    if not result:
-        return (
-            new_artifact(
-                name="result",
-                parts=[],
-                description=None,
-            ),
-            [],
-            None,
-        )
-
-    message_history = [
-        new_agent_parts_message(
-            parts=[message_to_part(m) for m in result.messages],
-            context_id=context_id,
-            task_id=task_id,
-        ),
-    ]
-
-    if result.input_required is not None:
-        input_message = new_agent_text_message(
-            text=result.input_required,
-            context_id=context_id,
-            task_id=task_id,
-        )
-        if result.context:
-            input_message.metadata = {CONTEXT_KEY: result.context}
-
-        return None, message_history, input_message
-
+def make_artifact(
+    message: dict[str, Any] | None,
+    context: dict[str, Any] | None = None,
+) -> Artifact:
     artifact = new_artifact(
         name="result",
-        parts=[message_to_part(result.messages[-1])],
+        parts=[message_to_part(message)] if message else [],
         description=None,
     )
 
-    if result.context:
-        artifact.metadata = {CONTEXT_KEY: result.context}
+    if context:
+        artifact.metadata = {CONTEXT_KEY: context}
 
-    return artifact, message_history, None
+    return artifact
+
+
+def make_working_message(
+    message: dict[str, Any] | None,
+    context_id: str,
+    task_id: str,
+) -> Message:
+    return new_agent_parts_message(
+        parts=[message_to_part(message)] if message else [],
+        context_id=context_id,
+        task_id=task_id,
+    )
+
+
+def make_input_required_message(
+    text: str,
+    context_id: str,
+    task_id: str,
+    context: dict[str, Any] | None = None,
+) -> Message:
+    message = new_agent_text_message(
+        text=text,
+        context_id=context_id,
+        task_id=task_id,
+    )
+    if context:
+        message.metadata = {CONTEXT_KEY: context}
+    return message
 
 
 def message_to_part(message: dict[str, Any]) -> Part:

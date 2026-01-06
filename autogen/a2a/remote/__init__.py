@@ -10,7 +10,7 @@ except ImportError as e:
 from .agent_service import AgentService
 from .errors import RemoteAgentError, RemoteAgentNotFoundError
 from .httpx_client_factory import ClientFactory, EmptyClientFactory, HttpxClientFactory
-from .protocol import RequestMessage, ResponseMessage
+from .protocol import RequestMessage, ResponseMessage, ServiceResponse
 
 __all__ = (
     "AgentService",
@@ -21,4 +21,5 @@ __all__ = (
     "RemoteAgentNotFoundError",
     "RequestMessage",
     "ResponseMessage",
+    "ServiceResponse",
 )
