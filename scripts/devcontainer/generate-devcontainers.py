@@ -10,7 +10,7 @@ from pathlib import Path
 from jinja2 import Template
 
 # List of python versions to generate devcontainer files for
-PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13"]
+PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 # Default python version for the main devcontainer
 DEFAULT = "3.10"
 
