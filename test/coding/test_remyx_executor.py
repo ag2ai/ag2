@@ -221,6 +221,67 @@ class TestRemyxCodeExecutor:
 
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
+    def test_build_system_message_default(self, mock_parent_init, mock_get_asset):
+        """Test _build_system_message with default parameters."""
+        mock_asset = Mock()
+        mock_asset.arxiv_id = "2010.11929v2"
+        mock_asset.has_docker = True
+        mock_asset.docker_image = "remyxai/2010.11929v2:latest"
+        mock_asset.to_dict.return_value = {
+            "arxiv_id": "2010.11929v2",
+            "title": "Test Paper",
+            "environment_vars": [],
+        }
+        mock_get_asset.return_value = mock_asset
+        mock_parent_init.return_value = None
+
+        executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
+        system_message = executor._build_system_message()
+
+        assert "Test Paper" in system_message
+        assert "Your Mission:" in system_message
+        assert "Phase 1: Understanding" in system_message
+        assert "Important Guidelines:" in system_message
+
+    @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
+    @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
+    def test_build_system_message_with_custom_goal(self, mock_parent_init, mock_get_asset):
+        """Test _build_system_message with custom goal."""
+        mock_asset = Mock()
+        mock_asset.arxiv_id = "2010.11929v2"
+        mock_asset.has_docker = True
+        mock_asset.docker_image = "remyxai/2010.11929v2:latest"
+        mock_asset.to_dict.return_value = {"arxiv_id": "2010.11929v2", "environment_vars": []}
+        mock_get_asset.return_value = mock_asset
+        mock_parent_init.return_value = None
+
+        executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
+        system_message = executor._build_system_message(goal="Run all benchmarks")
+
+        assert "Run all benchmarks" in system_message
+        assert "Phase 1: Understanding" not in system_message
+
+    @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
+    @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
+    def test_build_system_message_with_system_message(self, mock_parent_init, mock_get_asset):
+        """Test _build_system_message with additional system message."""
+        mock_asset = Mock()
+        mock_asset.arxiv_id = "2010.11929v2"
+        mock_asset.has_docker = True
+        mock_asset.docker_image = "remyxai/2010.11929v2:latest"
+        mock_asset.to_dict.return_value = {"arxiv_id": "2010.11929v2", "environment_vars": []}
+        mock_get_asset.return_value = mock_asset
+        mock_parent_init.return_value = None
+
+        executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
+        additional_message = "Keep responses concise. Use GPU when available."
+        result = executor._build_system_message(system_message=additional_message)
+
+        assert "Keep responses concise" in result
+        assert "Use GPU when available" in result
+
+    @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
+    @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     def test_repr_with_arxiv_id(self, mock_parent_init, mock_get_asset):
         """Test __repr__ with arxiv_id."""
         mock_asset = Mock()
@@ -279,6 +340,41 @@ class TestRemyxCodeExecutor:
 
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
+    @patch("autogen.ConversableAgent")
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})
+    def test_create_agents_with_system_message(self, mock_agent, mock_parent_init, mock_get_asset):
+        """Test create_agents method with additional system message."""
+        mock_asset = Mock()
+        mock_asset.arxiv_id = "2010.11929v2"
+        mock_asset.has_docker = True
+        mock_asset.docker_image = "remyxai/2010.11929v2:latest"
+        mock_asset.to_dict.return_value = {
+            "arxiv_id": "2010.11929v2",
+            "title": "Test Paper",
+            "environment_vars": [],
+        }
+        mock_get_asset.return_value = mock_asset
+        mock_parent_init.return_value = None
+
+        executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
+
+        mock_executor_agent = Mock()
+        mock_writer_agent = Mock()
+        mock_agent.side_effect = [mock_executor_agent, mock_writer_agent]
+
+        executor_agent, writer_agent = executor.create_agents(
+            goal="Test goal",
+            llm_model="gpt-4o",
+            human_input_mode="NEVER",
+            system_message="Output results as JSON",
+        )
+
+        # Verify system message was passed to writer agent
+        writer_call_kwargs = mock_agent.call_args_list[1][1]
+        assert "Output results as JSON" in writer_call_kwargs["system_message"]
+
+    @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
+    @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     def test_format_chat_result(self, mock_parent_init, mock_get_asset):
         """Test format_chat_result static method."""
         mock_asset = Mock()
@@ -306,6 +402,23 @@ class TestRemyxCodeExecutor:
         assert "Chat ID: test_chat_123" in formatted
         assert "Cost: $0.0123" in formatted
         assert "Test summary" in formatted
+
+    def test_format_chat_result_from_utils(self):
+        """Test format_chat_result utility function directly."""
+        from autogen.coding.utils import format_chat_result
+
+        mock_result = Mock()
+        mock_result.chat_history = [
+            {"name": "agent1", "content": "Hello"},
+        ]
+        mock_result.chat_id = "utils_test_123"
+        mock_result.summary = "Utils test"
+        mock_result.cost = {"usage_including_cached_inference": {"total_cost": 0.05}}
+
+        formatted = format_chat_result(mock_result)
+
+        assert "Exploration Session Summary" in formatted
+        assert "utils_test_123" in formatted
 
 
 @pytest.mark.skipif(not _has_remyx, reason="Remyx dependencies not installed")

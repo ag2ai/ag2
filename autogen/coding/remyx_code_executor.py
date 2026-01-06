@@ -31,11 +31,50 @@ try:
     from remyxai.api.search import get_asset as remyxai_get_asset
     from remyxai.client.search import SearchClient as RemyxSearchClient
 except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.debug("Remyx dependencies not available: remyxai package not installed. Install with: pip install ag2[remyx]")
     Asset = None
     RemyxSearchClient = None
     remyxai_get_asset = None
 
 logger = logging.getLogger(__name__)
+
+# Default exploration goal - used as default parameter value
+DEFAULT_EXPLORATION_GOAL = """Perform an interactive exploration of this research paper:
+**Phase 1: Understanding** (2-3 turns)
+1. Examine the directory structure
+2. Read README and identify key files
+3. Understand the paper's implementation
+**Phase 2: Experimentation** (3-5 turns)
+4. Run a minimal working example
+5. Experiment with different parameters
+6. Generate visualizations if applicable
+**Phase 3: Analysis** (2-3 turns)
+7. Explain key implementation details
+8. Answer any questions about the code
+9. Suggest possible modifications/experiments
+Work step-by-step. Wait for human guidance between phases.
+Type TERMINATE when exploration is complete."""
+
+# Default system message guidelines
+DEFAULT_SYSTEM_GUIDELINES = """**Important Guidelines:**
+- Repository is at /app with all dependencies installed
+- Execute ONE command at a time - don't rush
+- Use absolute paths starting with /app
+- Be conversational and explain your actions
+- If you encounter errors, debug step-by-step
+- Wait for human feedback before major actions (if interactive mode)
+- Focus on lightweight demos unless instructed otherwise
+- You can install additional packages if needed
+**What You Can Do:**
+✓ Read and analyze code
+✓ Execute Python/bash commands
+✓ Modify code for experiments
+✓ Generate plots and visualizations
+✓ Install additional dependencies
+✓ Answer questions about implementation
+✓ Suggest improvements or experiments
+Begin by exploring the repository structure to understand what's available."""
 
 
 @export_module("autogen.coding")
@@ -276,29 +315,64 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
 
         return context
 
+    def _build_system_message(
+        self,
+        goal: str = DEFAULT_EXPLORATION_GOAL,
+        system_message: str | None = None,
+    ) -> str:
+        """
+        Build the full system message for exploration agents.
+
+        Args:
+            goal: The exploration goal/mission.
+            system_message: Optional additional system message content to append.
+                Useful for domain-specific guidance, prompt grounding, or output examples.
+
+        Returns:
+            The complete system message.
+        """
+        paper_context = self.get_paper_context()
+
+        base_message = f"""{paper_context}
+**Your Mission:**
+{goal}
+{DEFAULT_SYSTEM_GUIDELINES}"""
+
+        if system_message:
+            base_message = f"{base_message}\n\n{system_message}"
+
+        return base_message
+
     def explore(
         self,
-        goal: str | None = None,
+        goal: str = DEFAULT_EXPLORATION_GOAL,
         interactive: bool = True,
         llm_model: str = "gpt-4o",
         llm_config: dict[str, Any] | None = None,
         max_turns: int | None = None,
         verbose: bool = True,
+        system_message: str | None = None,
     ) -> Any:
         """
         Explore this research paper interactively with AI agents.
         This is the recommended way to understand and experiment with research code.
         Creates a 2-agent system where one agent proposes experiments and another
         executes them in the paper's Docker environment.
+
         Args:
-            goal: Optional custom exploration goal. If None, uses a default exploration plan.
+            goal: Exploration goal/mission. Defaults to a comprehensive multi-phase exploration plan.
             interactive: If True, pauses for human guidance at each step. If False, runs automatically.
             llm_model: The LLM model to use for the exploring agent. Default is "gpt-4o". Ignored if llm_config provided.
             llm_config: Full LLM config dict. If None, creates default OpenAI config with llm_model.
             max_turns: Maximum number of conversation turns. If None, continues until termination.
-            verbose: If True, prints session header and summary. If False, runs quietly.
+            verbose: If True, logs session header and summary. If False, runs quietly.
+            system_message: Optional additional system message content to append.
+                Useful for domain-specific guidance, prompt grounding, output format examples,
+                or accommodating smaller models (e.g., with Ollama).
+
         Returns:
             The chat result from the exploration session.
+
         Example:
             >>> # Interactive exploration (recommended for learning)
             >>> executor = RemyxCodeExecutor(arxiv_id="2508.06434v1")
@@ -319,51 +393,16 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
             ...         "api_type": "google",
             ...     }
             ... )
+            >>> # Custom system message for smaller models or domain-specific needs
+            >>> result = executor.explore(
+            ...     system_message="Keep responses concise. Focus only on the main training loop.",
+            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"}
+            ... )
         """
         from autogen import ConversableAgent
 
-        # Default exploration goal
-        default_goal = """Perform an interactive exploration of this research paper:
-**Phase 1: Understanding** (2-3 turns)
-1. Examine the directory structure
-2. Read README and identify key files
-3. Understand the paper's implementation
-**Phase 2: Experimentation** (3-5 turns)
-4. Run a minimal working example
-5. Experiment with different parameters
-6. Generate visualizations if applicable
-**Phase 3: Analysis** (2-3 turns)
-7. Explain key implementation details
-8. Answer any questions about the code
-9. Suggest possible modifications/experiments
-Work step-by-step. Wait for human guidance between phases.
-Type TERMINATE when exploration is complete."""
-
-        # Get paper context
-        paper_context = self.get_paper_context()
-
-        # Create system message for writer agent
-        system_message = f"""{paper_context}
-**Your Mission:**
-{goal or default_goal}
-**Important Guidelines:**
-- Repository is at /app with all dependencies installed
-- Execute ONE command at a time - don't rush
-- Use absolute paths starting with /app
-- Be conversational and explain your actions
-- If you encounter errors, debug step-by-step
-- Wait for human feedback before major actions (if interactive mode)
-- Focus on lightweight demos unless instructed otherwise
-- You can install additional packages if needed
-**What You Can Do:**
-✓ Read and analyze code
-✓ Execute Python/bash commands
-✓ Modify code for experiments
-✓ Generate plots and visualizations
-✓ Install additional dependencies
-✓ Answer questions about implementation
-✓ Suggest improvements or experiments
-Begin by exploring the repository structure to understand what's available."""
+        # Build system message with optional additional content
+        full_system_message = self._build_system_message(goal=goal, system_message=system_message)
 
         # Create executor agent (no LLM)
         executor_agent = ConversableAgent(
@@ -384,30 +423,29 @@ Begin by exploring the repository structure to understand what's available."""
         # Create writer agent (has LLM)
         writer_agent = ConversableAgent(
             "research_explorer",
-            system_message=system_message,
+            system_message=full_system_message,
             llm_config=llm_config,
             code_execution_config=False,
             max_consecutive_auto_reply=50,
             human_input_mode="ALWAYS" if interactive else "NEVER",
         )
 
-        # Print session header
+        # Log session header
         if verbose:
-            print("=" * 80)
-            print("🔬 Interactive Research Exploration Session")
-            print("=" * 80)
-            print(f"📄 Paper: {self.arxiv_id or 'Custom image'}")
+            logger.info("=" * 80)
+            logger.info("🔬 Interactive Research Exploration Session")
+            logger.info("=" * 80)
+            logger.info(f"📄 Paper: {self.arxiv_id or 'Custom image'}")
 
             if interactive:
-                print("\n💬 INTERACTIVE MODE")
-                print("   - Press ENTER to continue")
-                print("   - Type guidance/questions")
-                print("   - Type 'exit' to end")
+                logger.info("💬 INTERACTIVE MODE")
+                logger.info("   - Press ENTER to continue")
+                logger.info("   - Type guidance/questions")
+                logger.info("   - Type 'exit' to end")
             else:
-                print("\n🤖 AUTOMATED MODE")
+                logger.info("🤖 AUTOMATED MODE")
 
-            print("=" * 80)
-            print()
+            logger.info("=" * 80)
 
         # Start exploration
         result = executor_agent.initiate_chat(
@@ -416,71 +454,68 @@ Begin by exploring the repository structure to understand what's available."""
             max_turns=max_turns,
         )
 
-        # Print summary
+        # Log summary
         if verbose:
-            print("\n" + "=" * 80)
-            print("✅ Exploration Complete!")
-            print("=" * 80)
-            print("\n📊 Session Summary:")
-            print(f"   • Total messages: {len(result.chat_history)}")
-            print(f"   • Cost: ${result.cost['usage_including_cached_inference']['total_cost']:.4f}")
+            logger.info("=" * 80)
+            logger.info("✅ Exploration Complete!")
+            logger.info("=" * 80)
+            logger.info("📊 Session Summary:")
+            logger.info(f"   • Total messages: {len(result.chat_history)}")
+            logger.info(f"   • Cost: ${result.cost['usage_including_cached_inference']['total_cost']:.4f}")
 
             if result.summary:
-                print("\n💬 Final Status:")
-                # Print first 200 chars of summary
+                logger.info("💬 Final Status:")
+                # Log first 200 chars of summary
                 summary_preview = result.summary[:200] + "..." if len(result.summary) > 200 else result.summary
-                print(f"   {summary_preview}")
+                logger.info(f"   {summary_preview}")
 
-            print("\n💾 Full chat history available in returned object")
-            print("   Access with: result.chat_history")
-            print("=" * 80)
+            logger.info("💾 Full chat history available in returned object")
+            logger.info("   Access with: result.chat_history")
+            logger.info("=" * 80)
 
         return result
 
     def create_agents(
         self,
-        goal: str | None = None,
+        goal: str = DEFAULT_EXPLORATION_GOAL,
         llm_model: str = "gpt-4o-mini",
         llm_config: dict[str, Any] | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
+        system_message: str | None = None,
     ) -> tuple[Any, Any]:
         """
         Create the 2-agent system without starting exploration.
         Use this if you want more control over the exploration process.
         Most users should use the simpler `explore()` method instead.
+
         Args:
-            goal: Optional custom exploration goal.
+            goal: Exploration goal/mission. Defaults to a comprehensive multi-phase exploration plan.
             llm_model: The LLM model to use. Ignored if llm_config provided.
             llm_config: Full LLM config dict. If None, creates default OpenAI config with llm_model.
             human_input_mode: "ALWAYS" for interactive, "NEVER" for automated.
+            system_message: Optional additional system message content to append.
+                Useful for domain-specific guidance, prompt grounding, output format examples,
+                or accommodating smaller models (e.g., with Ollama).
+
         Returns:
             Tuple of (executor_agent, writer_agent)
+
         Example:
             >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
             >>> executor_agent, writer_agent = executor.create_agents()
             >>> # Customize the chat further
             >>> result = executor_agent.initiate_chat(writer_agent, message="Custom starting message", max_turns=10)
+
+            >>> # With custom system message for domain-specific needs
+            >>> executor_agent, writer_agent = executor.create_agents(
+            ...     system_message="Focus on the data preprocessing pipeline. Output results as JSON.",
+            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"}
+            ... )
         """
         from autogen import ConversableAgent
 
-        # Default goal
-        default_goal = """Explore this research paper interactively.
-Work step-by-step, explain your actions, and wait for guidance."""
-
-        # Get paper context
-        paper_context = self.get_paper_context()
-
-        # Create system message
-        system_message = f"""{paper_context}
-**Your Mission:**
-{goal or default_goal}
-**Guidelines:**
-- Repository is at /app with all dependencies installed
-- Execute ONE command at a time
-- Use absolute paths starting with /app
-- Be conversational and explain your actions
-- Debug step-by-step if errors occur
-Begin by exploring the repository structure."""
+        # Build system message with optional additional content
+        full_system_message = self._build_system_message(goal=goal, system_message=system_message)
 
         # Create executor agent
         executor_agent = ConversableAgent(
@@ -501,7 +536,7 @@ Begin by exploring the repository structure."""
         # Create writer agent
         writer_agent = ConversableAgent(
             "research_explorer",
-            system_message=system_message,
+            system_message=full_system_message,
             llm_config=llm_config,
             code_execution_config=False,
             max_consecutive_auto_reply=50,
@@ -521,7 +556,8 @@ Begin by exploring the repository structure."""
         """
         Format a ChatResult object into a readable summary.
 
-        Useful for displaying exploration results later.
+        .. deprecated::
+            Use `from autogen.coding.utils import format_chat_result` instead.
 
         Args:
             result: The ChatResult object from explore() or initiate_chat()
@@ -533,36 +569,6 @@ Begin by exploring the repository structure."""
             >>> result = executor.explore(verbose=False)
             >>> print(RemyxCodeExecutor.format_chat_result(result))
         """
-        lines = []
-        lines.append("=" * 80)
-        lines.append("📊 Exploration Session Summary")
-        lines.append("=" * 80)
+        from .utils import format_chat_result as _format_chat_result
 
-        # Basic stats
-        lines.append(f"\n• Total messages: {len(result.chat_history)}")
-        lines.append(f"• Chat ID: {result.chat_id}")
-
-        # Cost info
-        if hasattr(result, "cost") and result.cost:
-            total_cost = (result.cost or {}).get("usage_including_cached_inference", {}).get("total_cost", 0)
-            lines.append(f"• Cost: ${total_cost:.4f}")
-
-        # Summary
-        if result.summary:
-            lines.append("\n💬 Final Status:")
-            summary_preview = result.summary[:300] + "..." if len(result.summary) > 300 else result.summary
-            for line in summary_preview.split("\n"):
-                lines.append(f"   {line}")
-
-        # Last few messages
-        lines.append("\n📝 Last 3 messages:")
-        for msg in result.chat_history[-3:]:
-            role = msg.get("name", msg.get("role", "unknown"))
-            content_preview = msg.get("content", "")[:100]
-            if len(msg.get("content", "")) > 100:
-                content_preview += "..."
-            lines.append(f"   [{role}]: {content_preview}")
-
-        lines.append("\n" + "=" * 80)
-
-        return "\n".join(lines)
+        return _format_chat_result(result)
