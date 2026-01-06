@@ -40,24 +40,19 @@ class AgentService:
             messages = state.messages + local_history
 
             stream = HITLStream()
+            # check HITL required
             await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
             if stream.is_input_required:
                 yield ServiceResponse(
-                    context=context_variables.data or None,
                     input_required=stream.input_prompt,
+                    context=context_variables.data or None,
                 )
                 return
 
-            reply = await self.agent.a_generate_reply(
-                messages,
-                exclude=(
-                    ConversableAgent.check_termination_and_human_reply,
-                    ConversableAgent.a_check_termination_and_human_reply,
-                    ConversableAgent.generate_oai_reply,
-                    ConversableAgent.a_generate_oai_reply,
-                ),
-            )
+            # check code execution
+            _, reply = self.agent.generate_code_execution_reply(messages)
 
+            # generate LLM reply
             if not reply:
                 _, reply = await self.agent.a_generate_oai_reply(
                     messages,
@@ -77,8 +72,10 @@ class AgentService:
 
             called_tools = get_tool_names(out_message.get("tool_calls", []))
             if state.client_tool_names.intersection(called_tools):
-                break  # return client tool execution command back to client
+                # if AI called a client tool, return the tool execution command back to client
+                break
 
+            # execute local tools
             tool_result, updated_context_variables, return_to_user = self._try_execute_local_tool(
                 tool_executor, out_message
             )
