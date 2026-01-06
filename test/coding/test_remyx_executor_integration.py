@@ -413,7 +413,9 @@ class TestRemyxGroupChatIntegration:
         full_system_message = writer_call_kwargs["system_message"]
 
         # Assert system message content is included with regex
-        assert re.search(r"Focus only on the attention mechanism", full_system_message), "Expected system message content"
+        assert re.search(r"Focus only on the attention mechanism", full_system_message), (
+            "Expected system message content"
+        )
         assert re.search(r"Output all findings as JSON", full_system_message), "Expected JSON output instruction"
 
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
@@ -431,8 +433,14 @@ class TestRemyxGroupChatIntegration:
         mock_chat_result = Mock()
         mock_chat_result.chat_history = [
             {"role": "user", "content": "Let's begin exploring this research paper."},
-            {"role": "assistant", "content": "I'll start by examining the directory structure. ```bash\nls -la /app\n```"},
-            {"role": "user", "content": "total 48\ndrwxr-xr-x 5 root root 4096 Jan 1 00:00 .\n-rw-r--r-- 1 root root 1234 Jan 1 00:00 train.py"},
+            {
+                "role": "assistant",
+                "content": "I'll start by examining the directory structure. ```bash\nls -la /app\n```",
+            },
+            {
+                "role": "user",
+                "content": "total 48\ndrwxr-xr-x 5 root root 4096 Jan 1 00:00 .\n-rw-r--r-- 1 root root 1234 Jan 1 00:00 train.py",
+            },
             {"role": "assistant", "content": "I can see the Vision Transformer implementation. TERMINATE"},
         ]
         mock_chat_result.summary = "Explored the Vision Transformer repository structure."
@@ -466,7 +474,6 @@ class TestRemyxGroupChatIntegration:
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     def test_groupchat_default_goal(self, mock_parent_init, mock_get_asset, mock_asset):
         """Test that the default exploration goal is used correctly."""
-        from autogen.coding.remyx_code_executor import DEFAULT_EXPLORATION_GOAL
 
         mock_get_asset.return_value = mock_asset
         mock_parent_init.return_value = None
@@ -511,8 +518,9 @@ class TestRemyxGroupChatIntegration:
         assert re.search(r"What You Can Do:", full_system_message), "Expected capabilities section"
 
         # Verify additional system message is appended
-        assert re.search(r"Use GPU acceleration when available", full_system_message), \
+        assert re.search(r"Use GPU acceleration when available", full_system_message), (
             "Expected additional system message content"
+        )
 
 
 @pytest.mark.skipif(not _has_remyx, reason="Remyx dependencies not installed")

@@ -55,6 +55,7 @@ def silence_pip(code: str, lang: str) -> str:
             lines[i] = line.replace(match.group(0), match.group(0) + " -qqq")
     return "\n".join(lines)
 
+
 def format_chat_result(result: Any) -> str:
     """
     Format a ChatResult object into a readable summary.
@@ -105,4 +106,3 @@ def format_chat_result(result: Any) -> str:
     lines.append("\n" + "=" * 80)
 
     return "\n".join(lines)
-

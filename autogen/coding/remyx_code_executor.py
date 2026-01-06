@@ -32,7 +32,9 @@ try:
     from remyxai.client.search import SearchClient as RemyxSearchClient
 except ImportError:
     logger = logging.getLogger(__name__)
-    logger.debug("Remyx dependencies not available: remyxai package not installed. Install with: pip install ag2[remyx]")
+    logger.debug(
+        "Remyx dependencies not available: remyxai package not installed. Install with: pip install ag2[remyx]"
+    )
     Asset = None
     RemyxSearchClient = None
     remyxai_get_asset = None
@@ -396,7 +398,7 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
             >>> # Custom system message for smaller models or domain-specific needs
             >>> result = executor.explore(
             ...     system_message="Keep responses concise. Focus only on the main training loop.",
-            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"}
+            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"},
             ... )
         """
         from autogen import ConversableAgent
@@ -509,7 +511,7 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
             >>> # With custom system message for domain-specific needs
             >>> executor_agent, writer_agent = executor.create_agents(
             ...     system_message="Focus on the data preprocessing pipeline. Output results as JSON.",
-            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"}
+            ...     llm_config={"model": "llama3.2", "api_base": "http://localhost:11434/v1"},
             ... )
         """
         from autogen import ConversableAgent
