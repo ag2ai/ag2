@@ -11,6 +11,10 @@
 # ParallelAgentRunner
 /autogen/agentchat/run_parallel_agents.py @priyansh4320
 /test/agentchat/test_run_parallel_agents.py @priyansh4320
+
+# observability
+/website/docs/user-guide/observability/ @priyansh4320
+
 # GPT 5.1 Apply Patch Tool
 /autogen/tools/experimental/apply_patch/ @priyansh4320
 /test/tools/experimental/apply_patch/ @priyansh4320

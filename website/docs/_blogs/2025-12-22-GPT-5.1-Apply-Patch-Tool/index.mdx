@@ -1,0 +1,634 @@
+---
+title: "GPT-5.1 Apply Patch Tool: Automated Code Editing in AG2"
+authors: [priyansh4320]
+tags: [GPT-5.1, Apply Patch, Code Editing, Responses API, Tools]
+---
+
+
+AG2 now supports the **apply_patch** tool (from GPT-5.1 onward) through OpenAI's Responses API, enabling agents to create, update, and delete files using structured diffs. This integration brings precise, controlled file operations directly into your agent workflows.
+
+This article explores how to use apply_patch in AG2, with practical examples for automated code editing, project scaffolding, and multi-file refactoring.
+
+## What is Apply Patch?
+
+The `apply_patch` tool is a built-in capability in GPT-5.1 and above models that enables agents to perform structured file operations using unified diff format. Unlike traditional code generation approaches where agents output raw code blocks that you must manually integrate, apply_patch provides a standardized interface for file modifications that can be directly applied to your codebase.
+
+The tool handles three core operations:
+- **create_file**: Generate new files with specified content
+- **update_file**: Modify existing files using unified diff format
+- **delete_file**: Remove files from the workspace
+
+**Why Apply Patch Matters:**
+
+Traditional agent-based code generation often requires manual intervention—you receive code blocks, review them, and manually integrate changes. Apply patch transforms this workflow by enabling agents to:
+- Make precise, targeted changes using diff format
+- Handle multi-file operations in a single interaction
+- Provide structured, reviewable changes before application
+- Support iterative refinement through feedback loops
+
+**When to use Apply Patch:**
+
+Use apply_patch when you need:
+- **Multi-file refactoring**: Renaming symbols, extracting helpers, or reorganizing modules across multiple files
+- **Project scaffolding**: Generating complete project structures with multiple files and directories
+- **Iterative code improvement**: Making incremental changes based on feedback or test results
+- **Automated code fixes**: Applying structured fixes to codebases based on linter output or error messages
+- **Documentation and test generation**: Creating test files, fixtures, and documentation alongside code changes
+
+Don't use apply_patch for simple, single-file code generation where direct code output is sufficient—standard AG2 code generation patterns are more efficient for that.
+
+Note: AG2's apply_patch implementation integrates with OpenAI's Responses API. For protocol-level details, see [OpenAI's Apply Patch documentation](https://platform.openai.com/docs/guides/tools-apply-patch).
+
+## Understanding the Diff Format
+
+Before diving into implementation, it's crucial to understand how apply_patch represents changes. The tool uses unified diff format, which provides a clear, line-by-line representation of modifications.
+
+Here's a simple example:
+
+```diff
+@@ -1,3 +1,3 @@
+ def hello():
+-    print("World")
++    print("Hello, World")
+     return True
+```
+
+This diff shows:
+- `@@ -1,3 +1,3 @@`: The hunk header indicating the change spans lines 1-3 in both old and new versions
+- Lines prefixed with `-`: Content to remove
+- Lines prefixed with `+`: Content to add
+- Lines without prefix: Context lines that remain unchanged
+
+GPT-5.1 automatically generates these diffs when using the apply_patch tool, ensuring changes are precise and reviewable before application.
+
+## Basic Setup and Configuration
+
+Getting started with apply_patch in AG2 is straightforward. You need GPT-5.1 or any model above 5.1 access and AG2 installed with OpenAI support.
+
+### Installation
+
+```bash
+pip install ag2[openai]
+```
+
+### Configuration
+
+Configure your LLM to use the Responses API with GPT-5.1 or above models and enable the apply_patch tool:
+
+```python
+import os
+from dotenv import load_dotenv
+from autogen import ConversableAgent, LLMConfig
+
+load_dotenv()
+
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["apply_patch"],
+    },
+)
+```
+
+The key configuration here is `"built_in_tools": ["apply_patch"]`, which enables the tool for your agent. When specified, AG2 automatically registers the apply_patch tool handler, so you don't need to manually create editors or patch tools.
+
+### Creating Your First Agent
+
+Create a coding assistant agent that can use apply_patch:
+
+```python
+coding_agent = ConversableAgent(
+    name="coding_assistant",
+    llm_config=llm_config,
+    system_message="""You are a helpful coding assistant. You can create, edit, and delete files
+    using the apply_patch tool. When making changes, always use the apply_patch tool rather than
+    writing raw code blocks. Be precise with your file operations and explain what you're doing.""",
+)
+```
+
+That's it, The agent is now ready to use apply_patch. The tool is automatically available when you specify it in `built_in_tools`.
+
+## Creating Projects with Apply Patch
+
+Let's explore practical examples, starting with project creation.
+
+### Example 1: Simple Project Scaffolding
+
+Create a new Python project structure:
+
+```python
+result = coding_agent.run(
+    message="""
+    Create a new Python project folder called 'calculator' with the following structure:
+    1. Create a main.py file with a Calculator class that has methods for add, subtract, multiply, and divide
+    """,
+    max_turns=2,
+    clear_history=True,
+).process()
+```
+
+The agent will use apply_patch to create the necessary files with the specified structure. This demonstrates how apply_patch enables multi-step file operations in a single interaction.
+
+### Example 2: Complete Application Structure
+
+Create a more complex application with multiple files:
+
+```python
+result = coding_agent.run(
+    message="""
+    Create a FastAPI application with the following structure:
+    1. Create app/main.py with a FastAPI app and a simple /health endpoint
+    2. Create app/__init__.py
+    3. Create app/requirements.txt with fastapi and uvicorn
+    4. Create a app/README.md with setup and run instructions
+    5. Create app/.gitignore file for Python projects
+    """,
+    max_turns=2,
+    clear_history=True,
+).process()
+```
+
+This example shows apply_patch's strength in handling complex, multi-file project generation. The agent creates the entire application structure in one go, with proper file organization and dependencies.
+
+## Workspace Directory Configuration
+
+AG2's apply_patch integration supports dedicated workspace directories, providing better organization and isolation for your projects.
+
+### Setting Up a Workspace
+
+Specify a workspace directory directly in your LLM configuration:
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["apply_patch"],
+        "workspace_dir": "./my_project_folder",  # Root project directory
+    },
+)
+
+coding_agent = ConversableAgent(
+    name="coding_assistant",
+    llm_config=llm_config,
+    system_message="""You are a helpful coding assistant...""",
+)
+```
+
+When you specify `workspace_dir`, all file operations are relative to this directory. This provides:
+- **Project isolation**: Each workspace is self-contained
+- **Path safety**: Operations are scoped to the workspace
+- **Easy cleanup**: Delete the workspace directory to remove all generated files
+
+### Using Workspace Directory
+
+Once configured, use the agent to create files within the workspace:
+
+```python
+result = coding_agent.run(
+    message="""
+    Create app.py in the workspace directory,
+    create a app.yaml file,
+    create a app.sh file,
+    create a folder /tests,
+    create tests/test_app.py
+    """,
+    max_turns=2,
+).process()
+```
+
+All files are created relative to `./my_project_folder`, keeping your project organized and isolated.
+
+## Security with Allowed Paths
+
+For production use, you'll want to restrict file operations to specific directories. AG2's apply_patch supports `allowed_paths`, a security feature that limits where files can be created, updated, or deleted.
+
+### Understanding Allowed Paths
+
+The `allowed_paths` configuration accepts glob-style patterns with `**` for recursive matching. This works for both local filesystem and cloud storage paths.
+
+**Pattern Examples:**
+- `["**"]` - Allow all paths (default, use with caution)
+- `["src/**"]` - Allow all files in `src/` and subdirectories
+- `["tests/**", "src/**"]` - Allow paths in multiple directories
+- `["*.py"]` - Allow Python files in root directory only
+
+### Configuring Allowed Paths
+
+Set up path restrictions in your LLM configuration:
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["apply_patch"],
+        "workspace_dir": "./my_project_folder",
+        "allowed_paths": ["src/**", "tests/**"],  # Only allow operations in these paths
+    },
+)
+
+coding_agent = ConversableAgent(
+    name="coding_assistant",
+    llm_config=llm_config,
+    system_message="""You are a helpful coding assistant...""",
+)
+```
+
+### Testing Path Restrictions
+
+Verify that path restrictions work correctly:
+
+**Test 1: Allowed path (should succeed)**
+
+```python
+result1 = coding_agent.run(
+    message="Create src/main.py with a simple hello world function",
+    max_turns=2,
+).process()
+```
+
+This succeeds because `src/main.py` matches the `src/**` pattern.
+
+**Test 2: Disallowed path (should fail)**
+
+```python
+result2 = coding_agent.run(
+    message="Create config/settings.json in the config directory (outside of src/ and tests/)",
+    max_turns=2,
+).process()
+```
+
+This fails because `config/settings.json` doesn't match any allowed pattern. The agent will report that the path is not allowed.
+
+**Test 3: Root-level file (should fail)**
+
+```python
+result3 = coding_agent.run(
+    message="Create a file called root_file.py in the root of the workspace (not in src/ or tests/)",
+    max_turns=2,
+).process()
+```
+
+This also fails because root-level files don't match the `src/**` or `tests/**` patterns.
+
+### Security Best Practices
+
+When using allowed_paths:
+1. **Start restrictive**: Begin with specific directories and expand as needed
+2. **Use workspace_dir**: Combine with workspace_dir for better isolation
+3. **Review patterns**: Test your patterns to ensure they match intended paths
+4. **Document restrictions**: Make path restrictions clear in your system messages
+
+## Asynchronous Patch Operations
+
+For better performance with multiple file operations, AG2 supports asynchronous patch application. This is particularly useful when creating or updating many files simultaneously.
+
+### Enabling Async Patches
+
+Use `apply_patch_async` instead of `apply_patch`:
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["apply_patch_async"],  # Use async version
+        "workspace_dir": "./my_project_folder",
+    },
+)
+
+coding_agent = ConversableAgent(
+    name="coding_assistant",
+    llm_config=llm_config,
+    system_message="""You are a helpful coding assistant...""",
+)
+```
+
+### Using Async Patches
+
+Async patches work the same way from the agent's perspective, but file operations are performed asynchronously:
+
+```python
+result = coding_agent.initiate_chat(
+    recipient=coding_agent,
+    message="""
+    use apply_patch tool to create a project test_project with the following structure:
+    - create a project.py file
+    - create a tests folder
+    - create a tests/test_main.py file
+    """,
+    max_turns=3,
+)
+```
+
+The async implementation uses `aiofiles` for non-blocking I/O, which can significantly improve performance when handling multiple files. Note that `aiofiles` must be installed separately:
+
+```bash
+pip install aiofiles
+```
+
+### When to Use Async
+
+Use async patches when:
+- Creating or updating many files in a single operation
+- Working with large files that might block I/O
+- Building applications that need to remain responsive during file operations
+- Processing batch operations on multiple files
+
+For simple, single-file operations, the synchronous `apply_patch` is sufficient and simpler.
+
+## Implementation Patterns
+
+### Pattern 1: Iterative Code Improvement
+
+Apply patch excels at iterative refinement. Start with initial code, then refine based on feedback:
+
+```python
+# Initial creation
+result1 = coding_agent.run(
+    message="Create a simple calculator class with basic operations",
+    max_turns=2,
+).process()
+
+# Refinement based on requirements
+result2 = coding_agent.run(
+    message="Add error handling and input validation to the calculator",
+    max_turns=2,
+).process()
+
+# Further refinement
+result3 = coding_agent.run(
+    message="Add logging and type hints to all methods",
+    max_turns=2,
+).process()
+```
+
+Each iteration builds on the previous state, with apply_patch making precise, targeted changes.
+
+### Pattern 2: Multi-Agent Collaboration
+
+Combine apply_patch with multiple agents for complex workflows:
+
+```python
+# Code generator agent
+coder = ConversableAgent(
+    name="Coder",
+    llm_config=llm_config,
+    system_message="Generate code using apply_patch",
+)
+
+# Reviewer agent
+reviewer = ConversableAgent(
+    name="Reviewer",
+    llm_config=llm_config,
+    system_message="Review code and suggest improvements",
+)
+
+# Generate code
+result = coder.run(
+    message="Create a REST API with CRUD operations",
+    max_turns=2,
+).process()
+
+# Review and improve
+improved = reviewer.run(
+    message=f"Review the generated code and suggest improvements: {result.summary}",
+    max_turns=2,
+).process()
+```
+
+The reviewer can use apply_patch to directly implement suggested improvements.
+
+### Pattern 3: Test-Driven Development
+
+Generate tests first, then implement code:
+
+```python
+# Create test file
+result1 = coding_agent.run(
+    message="Create tests/test_calculator.py with comprehensive test cases for a Calculator class",
+    max_turns=2,
+).process()
+
+# Implement the class to pass tests
+result2 = coding_agent.run(
+    message="Create src/calculator.py with a Calculator class that passes all tests in tests/test_calculator.py",
+    max_turns=2,
+).process()
+```
+
+Apply patch makes it easy to maintain consistency between tests and implementation.
+
+## Best Practices
+
+### 1. Start with Clear Instructions
+
+Provide detailed requirements for what you want to create or modify:
+
+```python
+# Good: Specific and detailed
+message = """
+Create a FastAPI application with:
+1. A /health endpoint that returns {'status': 'ok'}
+2. A /users endpoint with GET and POST methods
+3. Proper error handling and status codes
+4. A requirements.txt with fastapi and uvicorn
+"""
+
+# Less ideal: Vague
+message = "Create a web app"
+```
+
+### 2. Review Changes Before Production
+
+Always review files created or modified by the agent before using them in production. Apply patch provides structured diffs that are easy to review, but human oversight is still important.
+
+### 3. Use Workspace Directories
+
+Isolate projects using workspace directories:
+
+```python
+# Each project gets its own workspace
+project_a_config = LLMConfig(..., workspace_dir="./project_a")
+project_b_config = LLMConfig(..., workspace_dir="./project_b")
+```
+
+This prevents accidental cross-project modifications and makes cleanup easier.
+
+### 4. Implement Path Restrictions
+
+Use allowed_paths in production to prevent unauthorized file operations:
+
+```python
+# Restrict to specific directories
+allowed_paths = ["src/**", "tests/**", "docs/**"]
+```
+
+### 5. Iterative Development
+
+Break complex tasks into smaller steps:
+
+```python
+# Step 1: Create basic structure
+result1 = coding_agent.run(message="Create project structure", max_turns=2)
+
+# Step 2: Add core functionality
+result2 = coding_agent.run(message="Implement core features", max_turns=2)
+
+# Step 3: Add tests
+result3 = coding_agent.run(message="Add comprehensive tests", max_turns=2)
+```
+
+Verify each step before proceeding to the next.
+
+### 6. Handle Errors Gracefully
+
+The agent can fix bugs, but review error messages carefully:
+
+```python
+try:
+    result = coding_agent.run(message="...", max_turns=2).process()
+except Exception as e:
+    # Review the error and provide feedback
+    result = coding_agent.run(
+        message=f"Fix the error: {str(e)}",
+        max_turns=2
+    ).process()
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**1. File Not Found Errors**
+
+Ensure file paths are correct relative to the workspace directory:
+
+```python
+# If workspace_dir is "./my_project"
+# Use: "src/main.py" not "/src/main.py" or "./src/main.py"
+```
+
+**2. Permission Errors**
+
+Ensure the agent has write permissions to the workspace directory:
+
+```python
+import os
+os.chmod("./my_project_folder", 0o755)  # Ensure write permissions
+```
+
+**3. Path Restriction Errors**
+
+If operations fail with path restriction errors, check your `allowed_paths` patterns:
+
+```python
+# Test your patterns
+from pathlib import PurePath
+pattern = "src/**"
+test_path = "src/main.py"
+print(PurePath(test_path).match(pattern))  # Should be True
+```
+
+**4. API Errors**
+
+Verify your OpenAI API key has access to GPT-5.1:
+
+```python
+import openai
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Test API access
+```
+
+**5. Async Import Errors**
+
+If using async patches, ensure `aiofiles` is installed:
+
+pip install aiofiles
+
+### Getting Help
+
+For more information:
+- [AG2 Documentation](https://docs.ag2.ai)
+- [OpenAI Responses API Documentation](https://platform.openai.com/docs/api-reference/responses)
+- [OpenAI Apply Patch Guide](https://platform.openai.com/docs/guides/tools-apply-patch)
+- [GitHub Issues](https://github.com/AG2ai/ag2/issues)
+
+## Advanced Configuration
+
+### Custom Patch Editors
+
+For advanced use cases, you can implement custom `PatchEditor` protocols:
+
+```python
+from autogen.tools.experimental.apply_patch import PatchEditor
+
+class CloudStorageEditor(PatchEditor):
+    """Custom editor for cloud storage backends."""
+
+    def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        # Implement cloud storage file creation
+        ...
+
+    async def a_create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        # Implement async cloud storage file creation
+        ...
+
+    # Implement other required methods...
+```
+
+This enables integration with cloud storage, databases, or other custom backends.
+
+### Approval Workflows
+
+Implement approval workflows for sensitive operations:
+
+```python
+from autogen.tools.experimental.apply_patch import ApplyPatchTool, WorkspaceEditor
+
+def approval_callback(ctx: dict, item: dict) -> dict:
+    """Custom approval logic."""
+    path = item.get("path", "")
+    if "config" in path or "secrets" in path:
+        return {"approve": False, "reason": "Config files require manual review"}
+    return {"approve": True}
+
+editor = WorkspaceEditor(workspace_dir="./project")
+patch_tool = ApplyPatchTool(
+    editor=editor,
+    needs_approval=True,
+    on_approval=approval_callback,
+)
+```
+
+## Getting Started
+
+1. **Install AG2 with OpenAI support**:
+   ```bash
+   pip install ag2[openai]
+   ```
+
+2. **Get GPT-5.1 access**: Ensure your OpenAI API key has access to GPT-5.1
+
+3. **Try the examples**: Start with simple file creation, then move to more complex multi-file operations
+
+4. **Review the documentation**: [OpenAI Apply Patch Guide](https://platform.openai.com/docs/guides/tools-apply-patch)
+
+5. **Experiment**: Build your own workflows combining apply_patch with other AG2 features
+
+## Additional Resources
+
+- [AG2 Tools Documentation](https://docs.ag2.ai/latest/docs/user-guide/tools/)
+- [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses)
+- [OpenAI Apply Patch Tool](https://platform.openai.com/docs/guides/tools-apply-patch)
+- [Example Notebook](https://github.com/AG2ai/ag2/tree/main/notebook/agentchat_gpt5.1_apply_patch_example.ipynb)
+
+---
+
+The apply_patch tool represents a significant step forward in agent-based code generation, providing structured, reviewable, and precise file operations. By integrating this capability into AG2, we enable more sophisticated and reliable automated code editing workflows. Start experimenting with apply_patch today and discover new possibilities for agent-driven development.
