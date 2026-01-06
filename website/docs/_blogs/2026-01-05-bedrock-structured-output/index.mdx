@@ -552,7 +552,7 @@ except Exception as e:
 Check that your system message guides the model:
 
 ```python
-system_message = """You are a helpful assistant. 
+system_message = """You are a helpful assistant.
 Always provide responses in the exact format specified by the structured output schema.
 Ensure all required fields are present and correctly formatted."""
 ```
@@ -616,7 +616,7 @@ print(json.dumps(tool, indent=2))
    ```python
    import os
    from dotenv import load_dotenv
-   
+
    load_dotenv()
    # Set AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, AWS_REGION
    ```
@@ -624,7 +624,7 @@ print(json.dumps(tool, indent=2))
 
    ```python
    from pydantic import BaseModel
-   
+
    class MyResponse(BaseModel):
        field1: str
        field2: int
@@ -633,7 +633,7 @@ print(json.dumps(tool, indent=2))
 
    ```python
    from autogen import LLMConfig
-   
+
    llm_config = LLMConfig(
        config_list={
            "api_type": "bedrock",
@@ -649,16 +649,16 @@ print(json.dumps(tool, indent=2))
 
    ```python
    from autogen import ConversableAgent
-   
+
    agent = ConversableAgent(
        name="my_agent",
        llm_config=llm_config,
        system_message="You are a helpful assistant.",
    )
-   
+
    result = agent.run(message="Your query here").process()
    ```
-   
+
 6. **Review the documentation**: [AG2 Bedrock Documentation](https://docs.ag2.ai)
 
 ## Additional Resources
