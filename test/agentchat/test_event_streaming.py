@@ -551,6 +551,12 @@ def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
     assert response.last_speaker in ["tech_agent", "general_agent", "triage_agent"]
     assert isinstance(response.cost, Cost)
 
+    # Verify agents are correctly passed to the response
+    expected_agents = [triage_agent, tech_agent, general_agent, user]
+    assert len(response.agents) == len(expected_agents), "Response should contain all pattern agents plus user_agent"
+    for agent in expected_agents:
+        assert agent in response.agents, f"Agent {agent.name} should be in response.agents"
+
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
@@ -601,3 +607,9 @@ async def test_run_group_chat_async(credentials_gpt_4o_mini: Credentials):
     assert len(await response.messages) > 0, "Messages should not be empty"
     assert await response.last_speaker in ["tech_agent", "general_agent", "triage_agent"]
     assert isinstance(await response.cost, Cost)
+
+    # Verify agents are correctly passed to the response
+    expected_agents = [triage_agent, tech_agent, general_agent, user]
+    assert len(response.agents) == len(expected_agents), "Response should contain all pattern agents plus user_agent"
+    for agent in expected_agents:
+        assert agent in response.agents, f"Agent {agent.name} should be in response.agents"

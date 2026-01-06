@@ -186,10 +186,7 @@ def supports_native_structured_outputs(model: str) -> bool:
         return True
 
     # Support future Opus 4.x versions
-    if model.startswith("claude-opus-4"):
-        return True
-
-    return False
+    return bool(model.startswith("claude-opus-4"))
 
 
 def has_beta_messages_api() -> bool:
@@ -265,9 +262,7 @@ def _is_text_block(content: Any) -> bool:
     """
     if type(content) == TextBlock:
         return True
-    if BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock:
-        return True
-    return False
+    return BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock
 
 
 def _is_tool_use_block(content: Any) -> bool:
@@ -288,10 +283,7 @@ def _is_tool_use_block(content: Any) -> bool:
         return True
 
     # Fallback: check by name if type comparison fails
-    if content_type_name in ("ToolUseBlock", "BetaToolUseBlock"):
-        return True
-
-    return False
+    return content_type_name in ("ToolUseBlock", "BetaToolUseBlock")
 
 
 def _is_thinking_block(content: Any) -> bool:
@@ -310,10 +302,7 @@ def _is_thinking_block(content: Any) -> bool:
         return True
 
     # Fallback: check by name if type comparison fails
-    if content_type_name == "ThinkingBlock":
-        return True
-
-    return False
+    return content_type_name == "ThinkingBlock"
 
 
 def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:
@@ -544,6 +533,13 @@ class AnthropicClient:
         params_copy = params.copy()
         if "functions" in params_copy:
             tools_configs = params_copy.pop("functions")
+            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
+            params_copy["tools"] = tools_configs
+        elif "tools" in params_copy:
+            # Convert OpenAI tool format to Anthropic format
+            # OpenAI format: {"type": "function", "function": {...}}
+            # Anthropic format: {"name": "...", "description": "...", "input_schema": {...}}
+            tools_configs = self.convert_tools_to_functions(params_copy.pop("tools"))
             tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
             params_copy["tools"] = tools_configs
 
@@ -783,11 +779,6 @@ class AnthropicClient:
 
     def _create_standard(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a standard completion without structured outputs."""
-        # Convert tools to functions format if needed
-        if "tools" in params:
-            converted_functions = self.convert_tools_to_functions(params["tools"])
-            params["functions"] = params.get("functions", []) + converted_functions
-
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
 
@@ -903,11 +894,6 @@ class AnthropicClient:
         Returns:
             ChatCompletion with JSON output extracted from tags
         """
-        # Convert tools to functions format if needed
-        if "tools" in params:
-            converted_functions = self.convert_tools_to_functions(params["tools"])
-            params["functions"] = params.get("functions", []) + converted_functions
-
         # Add response format instructions to system message before message conversion
         self._add_response_format_to_system(params)
 

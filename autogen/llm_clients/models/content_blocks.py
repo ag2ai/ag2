@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 # ============================================================================
 # Content Type Enum
@@ -59,9 +60,7 @@ class BaseContent(BaseModel):
     # Extension point for unknown fields
     extra: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        # Allow extra fields to be stored in model
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     def get_text(self) -> str:
         """Extract text representation of content block.
