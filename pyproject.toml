@@ -531,7 +531,6 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
-    "autogen/remote",
     "autogen/a2a",
     "autogen/testing",
     "website/*.py",

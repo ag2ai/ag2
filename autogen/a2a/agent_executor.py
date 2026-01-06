@@ -13,8 +13,8 @@ from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
-from autogen.remote.agent_service import AgentService
 
+from .remote import AgentService
 from .utils import request_message_from_a2a, response_message_to_a2a
 
 

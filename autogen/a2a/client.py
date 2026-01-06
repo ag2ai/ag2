@@ -22,10 +22,9 @@ from autogen.doc_utils import export_module
 from autogen.events.agent_events import TerminationEvent
 from autogen.io.base import IOStream
 from autogen.oai.client import OpenAIWrapper
-from autogen.remote.httpx_client_factory import ClientFactory, EmptyClientFactory
-from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 from .errors import A2aAgentNotFoundError, A2aClientError
+from .remote import ClientFactory, EmptyClientFactory, RequestMessage, ResponseMessage
 from .utils import (
     request_message_to_a2a,
     response_message_from_a2a_message,
