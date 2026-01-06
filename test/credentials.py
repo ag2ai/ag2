@@ -176,6 +176,7 @@ def get_credentials_from_env_vars(
         config_list.append({**openai_config, "model": "gpt-4o-realtime-preview", "tags": ["gpt-4o-realtime"]})
         config_list.append({**openai_config, "model": "o1-mini", "tags": ["o1-mini"]})
         config_list.append({**openai_config, "model": "o1", "tags": ["o1"]})
+        config_list.append({**openai_config, "model": "o4-mini", "tags": ["o4-mini"]})
 
     # Azure OpenAI configuration
     azure_base = os.getenv("AZURE_OPENAI_API_BASE")
@@ -216,13 +217,13 @@ def get_credentials_from_env_vars(
     anthropic_config = build_config_from_env(
         api_type="anthropic",
         env_var_name="ANTHROPIC_API_KEY",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
     )
     if anthropic_config:
         config_list.append({**anthropic_config, "tags": ["anthropic-claude-sonnet"]})
         config_list.append({
             **anthropic_config,
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-5-20250929",
             "tags": ["anthropic-claude-sonnet"],
         })
         config_list.append({**anthropic_config, "model": "claude-3-opus-20240229", "tags": ["anthropic-claude-opus"]})

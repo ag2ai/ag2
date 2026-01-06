@@ -83,6 +83,14 @@ def content_str(content: str | list[UserMessageTextContentPart | UserMessageImag
             rst.append("<image>")
         elif item["type"] in ["function", "tool_call", "tool_calls"]:
             rst.append("<function>" if "name" not in item else f"<function: {item['name']}>")
+        elif item["type"] == "apply_patch_call":
+            # Handle apply_patch_call type
+            operation = item.get("operation", {})
+            operation_type = operation.get("type", "unknown_operation")
+            path = operation.get("path", "unknown_path")
+            status = item.get("status", "unknown_status")
+            diff = operation.get("diff", "unknown_diff")
+            rst.append(f"<apply_patch_call: {operation_type} on {path} (status: {status}) diff: {diff}>")
         else:
             raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
     return "\n".join(rst)

@@ -35,14 +35,17 @@ else:
 
 from ..llm_config.client import ModelClient
 from .models import (
+    AudioContent,
     CitationContent,
     GenericContent,
+    ImageContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
     UserRoleEnum,
+    VideoContent,
     normalize_role,
 )
 
@@ -143,10 +146,16 @@ class OpenAICompletionsClient(ModelClient):
         Returns:
             UnifiedResponse with reasoning blocks, citations, and all content preserved
         """
+        # Make a copy of params to avoid mutating the original
+        params = params.copy()
+
         # Merge default response_format if not already in params
         if self._default_response_format is not None and "response_format" not in params:
-            params = params.copy()
             params["response_format"] = self._default_response_format
+
+        # Process reasoning model parameters (o1/o3 models)
+        if self._is_reasoning_model(params.get("model")):
+            self._process_reasoning_model_params(params)
 
         # Check if response_format is a Pydantic BaseModel
         response_format = params.get("response_format")
@@ -182,6 +191,96 @@ class OpenAICompletionsClient(ModelClient):
             return inspect.isclass(obj) and issubclass(obj, BaseModel)
         except (ImportError, TypeError):
             return False
+
+    def _is_reasoning_model(self, model: str | None) -> bool:
+        """
+        Check if model is an o1/o3 reasoning model.
+
+        Args:
+            model: Model name to check
+
+        Returns:
+            True if model is an o1 or o3 reasoning model
+        """
+        if not model:
+            return False
+        return model.startswith(("o1", "o3"))
+
+    def _process_reasoning_model_params(self, params: dict[str, Any]) -> None:
+        """
+        Process parameters for o1/o3 reasoning models.
+
+        Reasoning models have special requirements and limitations:
+        https://platform.openai.com/docs/guides/reasoning#limitations
+
+        This method:
+        1. Removes unsupported parameters (temperature, top_p, etc.)
+        2. Converts max_tokens to max_completion_tokens
+        3. Converts system messages to user messages for older o1 models
+        4. Blocks tools for o1 models (they don't support function calling)
+        5. Blocks streaming (not supported by o1 models)
+
+        Args:
+            params: Request parameters dict (modified in place)
+        """
+        import warnings
+
+        model_name = params.get("model", "unknown")
+
+        # 1. Remove unsupported parameters
+        unsupported_params = [
+            "temperature",
+            "top_p",
+            "frequency_penalty",
+            "presence_penalty",
+            "logprobs",
+            "top_logprobs",
+            "logit_bias",
+        ]
+        for param in unsupported_params:
+            if param in params:
+                warnings.warn(
+                    f"`{param}` is not supported with {model_name} model and will be ignored.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                params.pop(param)
+
+        # 2. Replace max_tokens with max_completion_tokens
+        # Reasoning tokens are now factored in, max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
+        # 3. Convert system messages to user messages (for older o1 models)
+        # Newer o1 models (like o1-2024-12-17) support system messages
+        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+
+        if "messages" in params and system_not_allowed:
+            # o1-mini/o1-preview don't support role='system' messages
+            # Replace with user messages prepended with "System message: "
+            for msg in params["messages"]:
+                if isinstance(msg, dict) and msg.get("role") == "system":
+                    msg["role"] = "user"
+                    msg["content"] = f"System message: {msg['content']}"
+
+        # 4. Block tools for o1 models (they don't support function calling)
+        if "tools" in params:
+            if params["tools"]:
+                warnings.warn(
+                    f"Tools/function calling is not supported with {model_name} model and will be removed.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            params.pop("tools")
+
+        # 5. Block streaming for o1 models
+        if params.get("stream", False):
+            warnings.warn(
+                f"The {model_name} model does not support streaming. Setting stream=False.",
+                UserWarning,
+                stacklevel=3,
+            )
+            params["stream"] = False
 
     def _transform_response(self, openai_response: Any, model: str, use_parse: bool = False) -> UnifiedResponse:
         """
@@ -429,16 +528,105 @@ class OpenAICompletionsClient(ModelClient):
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:  # type: ignore[override]
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:  # type: ignore[override]
         """
-        Retrieve text content from response messages.
+        Retrieve messages from response in OpenAI-compatible format.
 
-        Implements ModelClient.message_retrieval() but accepts UnifiedResponse via duck typing.
+        Returns list of strings for text-only messages, or list of dicts when
+        tool calls, function calls, or complex content is present.
+
+        This matches the behavior of the legacy OpenAIClient which returns:
+        - Strings for simple text responses
+        - ChatCompletionMessage objects (as dicts) when tool_calls/function_call present
+
+        The returned dicts follow OpenAI's ChatCompletion message format:
+        {
+            "role": "assistant",
+            "content": "text content or None",
+            "tool_calls": [{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}],
+            "name": "agent_name" (optional)
+        }
 
         Args:
             response: UnifiedResponse from create()
 
         Returns:
-            List of text strings from message content blocks
+            List of strings (for text-only) OR list of message dicts (for tool calls/complex content)
         """
-        return [msg.get_text() for msg in response.messages]
+        result: list[str] | list[dict[str, Any]] = []
+
+        for msg in response.messages:
+            # Check for tool calls
+            tool_calls = msg.get_tool_calls()
+
+            # Check for complex/multimodal content that needs dict format
+            has_complex_content = any(
+                isinstance(block, (ImageContent, AudioContent, VideoContent)) for block in msg.content
+            )
+
+            if tool_calls or has_complex_content:
+                # Return OpenAI-compatible dict format
+                message_dict: dict[str, Any] = {
+                    "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
+                    "content": msg.get_text() or None,
+                }
+
+                # Add optional fields
+                if msg.name:
+                    message_dict["name"] = msg.name
+
+                # Add tool calls in OpenAI format
+                if tool_calls:
+                    message_dict["tool_calls"] = [
+                        {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                        for tc in tool_calls
+                    ]
+
+                # Handle multimodal content - convert to OpenAI content array format
+                if has_complex_content:
+                    message_dict["content"] = self._convert_to_openai_content_array(msg)
+
+                result.append(message_dict)
+            else:
+                # Simple text content - return string
+                result.append(msg.get_text())
+
+        return result
+
+    def _convert_to_openai_content_array(self, msg: UnifiedMessage) -> list[dict[str, Any]]:
+        """
+        Convert UnifiedMessage content blocks to OpenAI content array format.
+
+        This handles multimodal content (text, images, audio, video) and converts
+        it to the format expected by OpenAI's API for input messages.
+
+        Args:
+            msg: UnifiedMessage with content blocks
+
+        Returns:
+            List of content dicts in OpenAI format
+        """
+        content_array = []
+
+        for block in msg.content:
+            if isinstance(block, TextContent):
+                content_array.append({"type": "text", "text": block.text})
+            elif isinstance(block, ImageContent):
+                # OpenAI image format
+                image_url = block.url or f"data:{block.mime_type or 'image/jpeg'};base64,{block.data}"
+                content_array.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_url, "detail": block.detail or "auto"},
+                })
+            elif isinstance(block, AudioContent):
+                # OpenAI doesn't have standard audio input format yet
+                # Fall back to text representation
+                content_array.append({"type": "text", "text": block.get_text()})
+            elif isinstance(block, VideoContent):
+                # OpenAI doesn't have standard video input format yet
+                # Fall back to text representation
+                content_array.append({"type": "text", "text": block.get_text()})
+            # Skip ToolCallContent, ReasoningContent - handled separately in message_dict
+
+        # If no content blocks were converted, return text fallback
+        return content_array if content_array else [{"type": "text", "text": msg.get_text()}]
