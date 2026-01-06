@@ -41,10 +41,7 @@ class AgentService:
 
             stream = HITLStream()
             await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
-
             if stream.is_input_required:
-                for message in local_history:
-                    yield ServiceResponse(message=message)
                 yield ServiceResponse(
                     context=context_variables.data or None,
                     input_required=stream.input_prompt,
@@ -70,6 +67,10 @@ class AgentService:
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
                 local_history.append(out_message)
+                yield ServiceResponse(
+                    message=out_message,
+                    context=context_variables.data or None,
+                )
             if not should_continue:
                 break
             out_message = cast(dict[str, Any], out_message)
@@ -88,27 +89,20 @@ class AgentService:
             should_continue, out_message = self._add_message_to_local_history(tool_result, role="tool")
             if out_message:
                 local_history.append(out_message)
+                yield ServiceResponse(
+                    message=out_message,
+                    context=context_variables.data or None,
+                )
 
             if return_to_user:
-                for message in local_history:
-                    yield ServiceResponse(message=message)
                 yield ServiceResponse(
-                    context=context_variables.data or None,
                     input_required="Please, provide additional information:\n",
+                    context=context_variables.data or None,
                 )
                 return
 
             if not should_continue:
                 break
-
-        if not local_history:
-            return
-
-        for message in local_history:
-            yield ServiceResponse(
-                message=message,
-                context=context_variables.data or None,
-            )
 
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str
