@@ -33,6 +33,7 @@ from ..llm_config import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
+from .agent_config_handler import agent_config_parser
 from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
@@ -199,6 +200,10 @@ if not logger.handlers:
     _ch = logging.StreamHandler(stream=sys.stdout)
     _ch.setFormatter(logging_formatter)
     logger.addHandler(_ch)
+
+import logging
+
+logger = logging.getLogger("ag2.event.processor")
 
 LEGACY_DEFAULT_CACHE_SEED = 41
 LEGACY_CACHE_DIR = ".cache"
@@ -493,9 +498,32 @@ class OpenAIClient:
         Returns:
             The completion.
         """
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         iostream = IOStream.get_default()
 
-        is_structured_output = self.response_format is not None or "response_format" in params
+        # Priority: agent_config.response_format > llm_config.response_format (params)
+        # This logic correctly implements:
+        # 1. If response_format in llm_config but NOT in agent_config → use llm_config
+        # 2. If response_format NOT in llm_config but IN agent_config → use agent_config
+        # 3. If in BOTH → use agent_config (agent_config takes priority)
+        agent_config_response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else None
+        )
+        llm_config_response_format = params.get("response_format")
+
+        # Set response_format with proper priority: agent_config > llm_config
+        self.response_format = (
+            agent_config_response_format if agent_config_response_format is not None else llm_config_response_format
+        )
+        params["response_format"] = self.response_format
+
+        # Fix: Only enable structured output when we actually have a response_format
+        is_structured_output = self.response_format is not None
 
         if is_structured_output:
 
@@ -504,24 +532,26 @@ class OpenAIClient:
                     kwargs.pop("stream")
                     kwargs.pop("stream_options", None)
 
-                if (
-                    isinstance(kwargs["response_format"], dict)
-                    and kwargs["response_format"].get("type") != "json_object"
-                ):
+                # Get response_format from kwargs (which comes from params)
+                response_format_value = kwargs.get("response_format")
+
+                if response_format_value is None:
+                    # Should not happen if is_structured_output is True, but guard against it
+                    kwargs.pop("response_format", None)
+                elif isinstance(response_format_value, dict) and response_format_value.get("type") != "json_object":
                     kwargs["response_format"] = {
                         "type": "json_schema",
                         "json_schema": {
                             "schema": _ensure_strict_json_schema(
-                                kwargs["response_format"], path=(), root=kwargs["response_format"]
+                                response_format_value, path=(), root=response_format_value
                             ),
                             "name": "response_format",
                             "strict": True,
                         },
                     }
                 else:
-                    kwargs["response_format"] = type_to_response_format_param(
-                        self.response_format or params["response_format"]
-                    )
+                    # Convert Pydantic model or other types to OpenAI's response_format format
+                    kwargs["response_format"] = type_to_response_format_param(response_format_value)
 
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
@@ -1176,7 +1206,8 @@ class OpenAIWrapper:
             cache = extra_kwargs.get("cache")
             filter_func = extra_kwargs.get("filter_func")
             context = extra_kwargs.get("context")
-            agent = extra_kwargs.get("agent")
+            agent = extra_kwargs.get("agent", None)
+
             price = extra_kwargs.get("price", None)
             if isinstance(price, list):
                 price = tuple(price)
@@ -1259,6 +1290,9 @@ class OpenAIWrapper:
                             return response
                         continue  # filter is not passed; try the next config
             try:
+                # Add agent to params if provided (for downstream use)
+                if agent is not None:
+                    params["agent_config"] = agent.agent_config
                 request_ts = get_current_ts()
                 response = client.create(params)
             except Exception as e:

@@ -31,7 +31,7 @@ from .exception_utils import (
     SenderRequiredError,
     UndefinedNextAgentError,
 )
-from .llm_config import LLMConfig, ModelClient
+from .llm_config import AgentConfig, LLMConfig, ModelClient
 from .oai import (
     Cache,
     OpenAIWrapper,
@@ -54,6 +54,7 @@ __all__ = [
     "DEFAULT_MODEL",
     "FAST_MODEL",
     "Agent",
+    "AgentConfig",
     "AgentNameConflictError",
     "AssistantAgent",
     "Cache",

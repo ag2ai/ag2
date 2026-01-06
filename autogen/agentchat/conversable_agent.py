@@ -70,7 +70,7 @@ from ..io.run_response import (
     RunResponseProtocol,
 )
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
-from ..llm_config import LLMConfig
+from ..llm_config import AgentConfig, LLMConfig
 from ..llm_config.client import ModelClient
 from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
@@ -94,7 +94,7 @@ if TYPE_CHECKING:
     from .group.on_context_condition import OnContextCondition
 __all__ = ("ConversableAgent",)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ag2.event.processor")
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -170,6 +170,7 @@ class ConversableAgent(LLMAgent):
         silent: bool | None = None,
         context_variables: Optional["ContextVariables"] = None,
         functions: list[Callable[..., Any]] | Callable[..., Any] = None,
+        agent_config: AgentConfig | None = None,
         update_agent_state_before_reply: list[Callable | UpdateSystemMessage]
         | Callable
         | UpdateSystemMessage
@@ -231,10 +232,11 @@ class ConversableAgent(LLMAgent):
         15) update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.\n
         16) handoffs (Handoffs): Handoffs object containing all handoff transition conditions.\n
         """
+        # self.response_format = response_format if response_format is not None else None
+        self.agent_config = agent_config if agent_config is not None else None
         self.handoffs = handoffs if handoffs is not None else Handoffs()
         self.input_guardrails: list[Guardrail] = []
         self.output_guardrails: list[Guardrail] = []
-
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
         code_execution_config = (
@@ -266,7 +268,11 @@ class ConversableAgent(LLMAgent):
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive/#adding-http-client-in-llm_config-for-proxy"
                 ) from e
-
+        llm_config = (
+            self._interoperate_llm_config(llm_config if isinstance(llm_config, LLMConfig) else None)
+            if agent_config is not None and agent_config.api_type is not None
+            else llm_config
+        )
         self.llm_config = self._validate_llm_config(llm_config)
         self.client = self._create_client(self.llm_config)
         self._validate_name(name)
@@ -444,6 +450,16 @@ class ConversableAgent(LLMAgent):
 
         # Register the function
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
+
+    def _interoperate_llm_config(self, llm_config: LLMConfig) -> LLMConfig | None:
+        """Interoperate the llm_config with the agent_config"""
+        if self.agent_config is not None and self.agent_config.api_type is not None:
+            for config in llm_config.config_list:
+                if isinstance(config, dict):
+                    config["api_type"] = self.agent_config.api_type
+                elif hasattr(config, "api_type"):
+                    config.api_type = self.agent_config.api_type
+        return llm_config
 
     def _register_update_agent_state_before_reply(
         self, functions: list[Callable[..., Any]] | Callable[..., Any] | None
@@ -2471,6 +2487,7 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
+        # logger.info(f"Messages: {self.client}")
         client = self.client if config is None else config
         if client is None:
             return False, None

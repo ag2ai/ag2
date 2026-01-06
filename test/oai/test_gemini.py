@@ -13,8 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
+from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:
@@ -480,6 +481,470 @@ class TestGeminiClient:
         ):
             gemini_client._convert_json_response(no_json_response)
 
+
+# Test agent_config response_format functionality (outside TestGeminiClient class)
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_config_response_format():
+    """Test that agent_config response_format takes precedence over params response_format."""
+    # Create client directly (not using fixture)
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"steps": [], "final_answer": "test"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning, not the dict in params)
+    assert gemini_client._response_format == MathReasoning
+    # Verify it's MathReasoning schema, not the simple dict from params
+    assert hasattr(gemini_client._response_format, "model_json_schema")
+    schema = gemini_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "name" not in schema["properties"]  # Not the simple dict from params
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_config_response_format_overrides_client_format():
+    """Test that agent_config response_format takes precedence over client._response_format (from llm_config)."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (simulating it being set from llm_config)
+    gemini_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"steps": [], "final_answer": "test"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning), not client._response_format
+    assert gemini_client._response_format == MathReasoning
+    assert hasattr(gemini_client._response_format, "model_json_schema")
+    schema = gemini_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "age" not in schema["properties"]  # Not the client._response_format schema
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_config_response_format_overrides_params_and_client_format():
+    """Test that agent_config response_format takes precedence over both params and client._response_format."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (from llm_config)
+    gemini_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Both params and client have response_format, but agent should override both
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from agent_config
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"steps": [], "final_answer": "test"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify it's MathReasoning
+    assert gemini_client._response_format == MathReasoning
+    schema = gemini_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "age" not in schema["properties"]  # Not client._response_format
+    assert "name" not in schema["properties"]  # Not params response_format
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_no_response_format_falls_back_to_params():
+    """Test that when agent has no response_format, it falls back to params response_format."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from params
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"name": "John", "age": 30}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert gemini_client._response_format == dict_schema
+    assert isinstance(gemini_client._response_format, dict)
+    assert "name" in gemini_client._response_format["properties"]
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_no_response_format_falls_back_to_client_format():
+    """Test that when agent has no response_format and params has none, it falls back to client._response_format."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (from llm_config)
+    gemini_client._response_format = MathReasoning
+
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from client._response_format
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"steps": [], "final_answer": "test"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify it's MathReasoning (has steps and final_answer), not the age schema
+    assert gemini_client._response_format == MathReasoning
+    schema = gemini_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_with_agent_response_format_none_ignores_agent():
+    """Test that when agent.response_format is None, it's ignored and falls back to params."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Create real agent with response_format=None
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = None
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create to set _response_format from params (agent.response_format=None should be ignored)
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"name": "John"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert gemini_client._response_format == dict_schema
+    assert isinstance(gemini_client._response_format, dict)
+    assert "name" in gemini_client._response_format["properties"]
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+def test_create_without_agent_uses_params_response_format():
+    """Test that when no agent is provided, params response_format is used (existing behavior)."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"email": {"type": "string"}},
+        "required": ["email"],
+    }
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        # No agent parameter
+    }
+
+    # Call create to set _response_format from params
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"email": "test@example.com"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert gemini_client._response_format == dict_schema
+    assert isinstance(gemini_client._response_format, dict)
+    assert "email" in gemini_client._response_format["properties"]
+
+
+@run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
+@patch("autogen.oai.gemini.agent_config_parser")
+def test_agent_config_parser_called_with_agent(mock_parser):
+    """Test that agent_config_parser is called when agent is provided."""
+    # Create client directly
+    system_message = ["You are a helpful AI assistant."]
+    gemini_client = GeminiClient(api_key="fake_api_key", system_message=system_message)
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    # Mock agent_config_parser to return expected format
+    mock_parser.return_value = {"response_format": MathReasoning}
+
+    params = {
+        "model": "gemini-pro",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create
+    with patch("autogen.oai.gemini.genai.Client") as mock_generative_client:
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"steps": [], "final_answer": "test"}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create(params)
+
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)
+
     @pytest.fixture
     def nested_function_parameters(self) -> dict[str, Any]:
         return {
@@ -743,246 +1208,6 @@ class TestGeminiClient:
     @patch("autogen.oai.gemini.GenerateContentConfig")
     def test_generation_config_with_seed(self, mock_generate_content_config, mock_generative_client, gemini_client):
         """Test that seed parameter is properly passed to generation config"""
-        # Mock setup
-        mock_chat = MagicMock()
-        mock_generative_client.return_value.chats.create.return_value = mock_chat
-
-        mock_text_part = MagicMock()
-        mock_text_part.text = "Test response"
-        mock_text_part.function_call = None
-
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 10
-        mock_usage_metadata.candidates_token_count = 5
-
-        mock_candidate = MagicMock()
-        mock_candidate.content.parts = [mock_text_part]
-
-        mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response.usage_metadata = mock_usage_metadata
-        mock_response.candidates = [mock_candidate]
-
-        mock_chat.send_message.return_value = mock_response
-
-        # Call create with seed parameter
-        gemini_client.create({
-            "model": "gemini-pro",
-            "messages": [{"content": "Hello", "role": "user"}],
-            "seed": 42,
-            "temperature": 0.7,
-            "max_tokens": 100,
-            "top_p": 0.9,
-            "top_k": 5,
-        })
-
-        # Verify GenerateContentConfig was called with correct parameters
-        mock_generate_content_config.assert_called_once()
-        call_kwargs = mock_generate_content_config.call_args.kwargs
-
-        # Check that generation config parameters are correctly mapped
-        assert call_kwargs["seed"] == 42, "Seed parameter should be passed to generation config"
-        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
-        assert call_kwargs["max_output_tokens"] == 100, "max_tokens should be mapped to max_output_tokens"
-        assert call_kwargs["top_p"] == 0.9, "top_p parameter should be passed to generation config"
-        assert call_kwargs["top_k"] == 5, "top_k parameter should be passed to generation config"
-
-    @patch("autogen.oai.gemini.genai.Client")
-    @patch("autogen.oai.gemini.GenerateContentConfig")
-    @patch("autogen.oai.gemini.ThinkingConfig")
-    def test_generation_config_with_thinking_config(
-        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
-    ):
-        """Test that thinking parameters are properly passed to generation config"""
-        mock_chat = MagicMock()
-        mock_generative_client.return_value.chats.create.return_value = mock_chat
-
-        mock_text_part = MagicMock()
-        mock_text_part.text = "Thoughtful response"
-        mock_text_part.function_call = None
-
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 12
-        mock_usage_metadata.candidates_token_count = 6
-
-        mock_candidate = MagicMock()
-        mock_candidate.content.parts = [mock_text_part]
-
-        mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response.usage_metadata = mock_usage_metadata
-        mock_response.candidates = [mock_candidate]
-
-        mock_chat.send_message.return_value = mock_response
-
-        gemini_client.create({
-            "model": "gemini-pro",
-            "messages": [{"content": "Hello", "role": "user"}],
-            "include_thoughts": True,
-            "thinking_budget": 1024,
-            "thinking_level": "High",
-        })
-
-        mock_thinking_config.assert_called_once_with(
-            include_thoughts=True,
-            thinking_budget=1024,
-            thinking_level="High",
-        )
-
-        config_kwargs = mock_generate_content_config.call_args.kwargs
-        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
-            "thinking_config should be passed to GenerateContentConfig"
-        )
-
-    @patch("autogen.oai.gemini.genai.Client")
-    @patch("autogen.oai.gemini.GenerateContentConfig")
-    @patch("autogen.oai.gemini.ThinkingConfig")
-    def test_generation_config_with_default_thinking_config(
-        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
-    ):
-        """Test that a default ThinkingConfig is created and passed when no thinking params are provided"""
-        mock_chat = MagicMock()
-        mock_generative_client.return_value.chats.create.return_value = mock_chat
-
-        mock_text_part = MagicMock()
-        mock_text_part.text = "Response"
-        mock_text_part.function_call = None
-
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 5
-        mock_usage_metadata.candidates_token_count = 3
-
-        mock_candidate = MagicMock()
-        mock_candidate.content.parts = [mock_text_part]
-
-        mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response.usage_metadata = mock_usage_metadata
-        mock_response.candidates = [mock_candidate]
-
-        mock_chat.send_message.return_value = mock_response
-
-        # Call create without thinking params
-        gemini_client.create({
-            "model": "gemini-pro",
-            "messages": [{"content": "Hello", "role": "user"}],
-        })
-
-        mock_thinking_config.assert_called_once_with(
-            include_thoughts=None,
-            thinking_budget=None,
-            thinking_level=None,
-        )
-
-        config_kwargs = mock_generate_content_config.call_args.kwargs
-        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
-            "default thinking_config should still be passed to GenerateContentConfig"
-        )
-
-    @pytest.mark.parametrize(
-        "kwargs,expected",
-        [
-            ({"include_thoughts": True}, {"include_thoughts": True, "thinking_budget": None, "thinking_level": None}),
-            ({"thinking_budget": 256}, {"include_thoughts": None, "thinking_budget": 256, "thinking_level": None}),
-            ({"thinking_level": "High"}, {"include_thoughts": None, "thinking_budget": None, "thinking_level": "High"}),
-            (
-                {"include_thoughts": False, "thinking_budget": 512},
-                {"include_thoughts": False, "thinking_budget": 512, "thinking_level": None},
-            ),
-            (
-                {"include_thoughts": True, "thinking_level": "Low"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Low"},
-            ),
-            (
-                {"thinking_budget": 1024, "thinking_level": "High"},
-                {"include_thoughts": None, "thinking_budget": 1024, "thinking_level": "High"},
-            ),
-            (
-                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
-                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
-            ),
-            # Test "Medium" thinking level
-            (
-                {"thinking_level": "Medium"},
-                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Medium"},
-            ),
-            (
-                {"include_thoughts": True, "thinking_level": "Medium"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Medium"},
-            ),
-            (
-                {"thinking_budget": 512, "thinking_level": "Medium"},
-                {"include_thoughts": None, "thinking_budget": 512, "thinking_level": "Medium"},
-            ),
-            # Test "Minimal" thinking level
-            (
-                {"thinking_level": "Minimal"},
-                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Minimal"},
-            ),
-            (
-                {"include_thoughts": True, "thinking_level": "Minimal"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Minimal"},
-            ),
-            (
-                {"thinking_budget": 128, "thinking_level": "Minimal"},
-                {"include_thoughts": None, "thinking_budget": 128, "thinking_level": "Minimal"},
-            ),
-        ],
-    )
-    @patch("autogen.oai.gemini.genai.Client")
-    @patch("autogen.oai.gemini.GenerateContentConfig")
-    @patch("autogen.oai.gemini.ThinkingConfig")
-    def test_generation_config_thinking_param_variants(
-        self,
-        mock_thinking_config,
-        mock_generate_content_config,
-        mock_generative_client,
-        gemini_client,
-        kwargs,
-        expected,
-    ):
-        """Test individual and combined thinking params are passed through to ThinkingConfig and GenerateContentConfig"""
-        mock_chat = MagicMock()
-        mock_generative_client.return_value.chats.create.return_value = mock_chat
-
-        mock_text_part = MagicMock()
-        mock_text_part.text = "Response"
-        mock_text_part.function_call = None
-
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 5
-        mock_usage_metadata.candidates_token_count = 3
-
-        mock_candidate = MagicMock()
-        mock_candidate.content.parts = [mock_text_part]
-
-        mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response.usage_metadata = mock_usage_metadata
-        mock_response.candidates = [mock_candidate]
-
-        mock_chat.send_message.return_value = mock_response
-
-        params = {
-            "model": "gemini-pro",
-            "messages": [{"content": "Hello", "role": "user"}],
-            **kwargs,
-        }
-        gemini_client.create(params)
-
-        mock_thinking_config.assert_called_once_with(
-            include_thoughts=expected["include_thoughts"],
-            thinking_budget=expected["thinking_budget"],
-            thinking_level=expected["thinking_level"],
-        )
-
-        config_kwargs = mock_generate_content_config.call_args.kwargs
-        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
-            "thinking_config should be passed to GenerateContentConfig"
-        )
-
-    @patch("autogen.oai.gemini.GenerativeModel")
-    @patch("autogen.oai.gemini.GenerationConfig")
-    def test_vertexai_generation_config_with_seed(
-        self, mock_generation_config, mock_generative_model, gemini_client_with_credentials
-    ):
-        """Test that seed parameter is properly passed to VertexAI generation config"""
         # Mock setup
         mock_chat = MagicMock()
         mock_model = MagicMock()

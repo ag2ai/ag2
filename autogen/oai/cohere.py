@@ -43,6 +43,7 @@ from autogen.oai.client_utils import FormatterProtocol, logging_formatter, valid
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -154,10 +155,8 @@ class CohereClient:
         )
 
         # Handle structured output response format from Pydantic model
-        if "response_format" in params and params["response_format"] is not None:
-            self._response_format = params.get("response_format")
-
-            response_format = params["response_format"]
+        if self._response_format is not None:
+            response_format = self._response_format
 
             # Check if it's a Pydantic model
             if hasattr(response_format, "model_json_schema"):
@@ -241,14 +240,22 @@ class CohereClient:
 
     @require_optional_import("cohere", "cohere")
     def create(self, params: dict) -> ChatCompletion:
+        agent_config = params.pop("agent_config", None)
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "AG2"
         cohere_tool_names = set()
         tool_calls_modified_ids = set()
-
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
         # Parse parameters to the Cohere API's parameters
         cohere_params = self.parse_params(params)
-
+        self._response_format = (
+            agent_config["response_format"]
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config["response_format"] is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
+        )
         cohere_params["messages"] = messages
 
         if "tools" in params:
