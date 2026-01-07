@@ -483,7 +483,7 @@ class BedrockClient:
             request_args["inferenceConfig"] = base_params
 
         if len(additional_params) > 0:
-            request_args["additional_model_request_fields"] = additional_params
+            request_args["additionalModelRequestFields"] = additional_params
 
         if self._supports_system_prompts:
             request_args["system"] = system_messages
