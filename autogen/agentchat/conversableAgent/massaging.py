@@ -30,7 +30,11 @@ class MessagingMixin:
             return dict(message)
 
     def _append_oai_message(
-        self: "ConversableAgentBase", message: dict[str, Any] | str, role, conversation_id: Agent, is_sending: bool
+        self: "ConversableAgentBase",
+        message: dict[str, Any] | str,
+        conversation_id: Agent,
+        role: str = "assistant",
+        name: str | None = None,
     ) -> bool:
         """Append a message to the ChatCompletion conversation.
 
@@ -41,20 +45,26 @@ class MessagingMixin:
 
         Args:
             message (dict or str): message to be appended to the ChatCompletion conversation.
-            role (str): role of the message, can be "assistant" or "function".
             conversation_id (Agent): id of the conversation, should be the recipient or sender.
-            is_sending (bool): If the agent (aka self) is sending to the conversation_id agent, otherwise receiving.
+            role (str): role of the message, can be "assistant" or "function".
+            name (str | None): name of the message author, can be the name of the agent. If not provided, the name of the current agent will be used.
 
         Returns:
             bool: whether the message is appended to the ChatCompletion conversation.
         """
+        from ...code_utils import content_str
+
         message = self._message_to_dict(message)
         # create oai message to be appended to the oai conversation that can be passed to oai directly.
         oai_message = {
             k: message[k]
-            for k in ("content", "function_call", "tool_calls", "tool_responses", "tool_call_id", "name", "context")
+            for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
             if k in message and message[k] is not None
         }
+
+        if tools := message.get("tool_calls"):  # check for [], None and missed key
+            oai_message["tool_calls"] = tools
+
         if "content" not in oai_message:
             if "function_call" in oai_message or "tool_calls" in oai_message:
                 oai_message["content"] = None  # if only function_call is provided, content will be set to None.
@@ -65,7 +75,12 @@ class MessagingMixin:
             oai_message["role"] = message.get("role")
             if "tool_responses" in oai_message:
                 for tool_response in oai_message["tool_responses"]:
-                    tool_response["content"] = str(tool_response["content"])
+                    content_value = tool_response.get("content")
+                    tool_response["content"] = (
+                        content_str(content_value)
+                        if isinstance(content_value, (str, list)) or content_value is None
+                        else str(content_value)
+                    )
         elif "override_role" in message:
             # If we have a direction to override the role then set the
             # role accordingly. Used to customise the role for the
@@ -78,10 +93,7 @@ class MessagingMixin:
             oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
         elif "name" not in oai_message:
             # If we don't have a name field, append it
-            if is_sending:
-                oai_message["name"] = self.name
-            else:
-                oai_message["name"] = conversation_id.name
+            oai_message["name"] = name
 
         self._oai_messages[conversation_id].append(oai_message)
 
@@ -136,7 +148,7 @@ class MessagingMixin:
         message = self._process_message_before_send(message, recipient, self._is_silent(self, silent))
         # When the agent composes and sends the message, the role of the message is "assistant"
         # unless it's "function".
-        valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
+        valid = self._append_oai_message(message, recipient, role="assistant", name=self.name)
         if valid:
             recipient.receive(message, self, request_reply, silent)
         else:
@@ -184,7 +196,7 @@ class MessagingMixin:
         message = self._process_message_before_send(message, recipient, self._is_silent(self, silent))
         # When the agent composes and sends the message, the role of the message is "assistant"
         # unless it's "function".
-        valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
+        valid = self._append_oai_message(message, recipient, role="assistant", name=self.name)
         if valid:
             await recipient.a_receive(message, self, request_reply, silent)
         else:
@@ -205,7 +217,7 @@ class MessagingMixin:
         self: "ConversableAgentBase", message: dict[str, Any] | str, sender: Agent, silent: bool
     ):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
-        valid = self._append_oai_message(message, "user", sender, is_sending=False)
+        valid = self._append_oai_message(message, sender, role="user", name=sender.name)
         if logging_enabled():
             log_event(self, "received_message", message=message, sender=sender.name, valid=valid)
 
