@@ -444,6 +444,38 @@ class HooksAndRegistryMixin:
 
         return processed_response
 
+    def _process_llm_input(self: "ConversableAgentBase", messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Process messages before sending to LLM through registered hooks."""
+        hook_list = self.hook_lists["safeguard_llm_inputs"]
+
+        # If no hooks registered, allow the messages through
+        if len(hook_list) == 0:
+            return messages
+
+        # Process through each hook
+        processed_messages = messages
+        for hook in hook_list:
+            processed_messages = hook(processed_messages)
+            if processed_messages is None:
+                return None
+
+        return processed_messages
+
+    def _process_llm_output(self: "ConversableAgentBase", response: str | dict[str, Any]) -> str | dict[str, Any]:
+        """Process LLM response through registered hooks"""
+        hook_list = self.hook_lists["safeguard_llm_outputs"]
+
+        # If no hooks registered, return original response
+        if len(hook_list) == 0:
+            return response
+
+        # Process through each hook
+        processed_response = response
+        for hook in hook_list:
+            processed_response = hook(processed_response)
+
+        return processed_response
+
     def _process_human_input(self: "ConversableAgentBase", human_input: str) -> str | None:
         """Process human input through registered hooks."""
         hook_list = self.hook_lists["safeguard_human_inputs"]
