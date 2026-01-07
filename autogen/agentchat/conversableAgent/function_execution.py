@@ -15,6 +15,7 @@ from ...events.agent_events import (
     ExecuteFunctionEvent,
     ExecutedFunctionEvent,
 )
+from ...fast_depends.utils import is_coroutine_callable
 from ...io.base import IOStream
 from ...llm_config import LLMConfig
 from ...oai.client import OpenAIWrapper
@@ -104,6 +105,11 @@ class FunctionExecutionMixin:
                 )
                 try:
                     content = func(**arguments)
+                    if inspect.isawaitable(content):
+                        async def _await_result(awaitable):
+                            return await awaitable
+
+                        content = self._run_async_in_thread(_await_result(content))
                     is_exec_success = True
                 except Exception as e:
                     content = f"Error: {e}"
@@ -235,7 +241,7 @@ class FunctionExecutionMixin:
             call_id = message.get("id", None)
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
-            if inspect.iscoroutinefunction(func):
+            if is_coroutine_callable(func):
                 coro = self.a_execute_function(func_call, call_id=call_id)
                 _, func_return = self._run_async_in_thread(coro)
             else:
@@ -264,7 +270,7 @@ class FunctionExecutionMixin:
             func_call = message["function_call"]
             func_name = func_call.get("name", "")
             func = self._function_map.get(func_name, None)
-            if func and inspect.iscoroutinefunction(func):
+            if func and is_coroutine_callable(func):
                 _, func_return = await self.a_execute_function(func_call, call_id=call_id)
             else:
                 _, func_return = self.execute_function(func_call, call_id=call_id)
@@ -290,14 +296,30 @@ class FunctionExecutionMixin:
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
             function_call = tool_call.get("function", {})
+            function_name = function_call.get("name", "")
+            # Special case for __structured_output
+            if function_name == "__structured_output":
+                return True, function_call.get("arguments", {})
+            
+            # Hook: Process tool input before execution
+            processed_call = self._process_tool_input(function_call)
+            if processed_call is None:
+                raise ValueError("safeguard_tool_inputs hook returned None")
+
             tool_call_id = tool_call.get("id", None)
-            func = self._function_map.get(function_call.get("name", None), None)
-            if inspect.iscoroutinefunction(func):
-                coro = self.a_execute_function(function_call, call_id=tool_call_id)
+            func = self._function_map.get(processed_call.get("name", None), None)
+            if is_coroutine_callable(func):
+                coro = self.a_execute_function(processed_call, call_id=tool_call_id)
                 _, func_return = self._run_async_in_thread(coro)
             else:
-                _, func_return = self.execute_function(function_call, call_id=tool_call_id)
-            content = func_return.get("content", "")
+                _, func_return = self.execute_function(processed_call, call_id=tool_call_id)
+
+            # Hook: Process tool output before returning
+            processed_return = self._process_tool_output(func_return)
+            if processed_return is None:
+                raise ValueError("safeguard_tool_outputs hook returned None")
+
+            content = processed_return.get("content", "")
             if content is None:
                 content = ""
 
@@ -326,11 +348,31 @@ class FunctionExecutionMixin:
     async def _a_execute_tool_call(self: "ConversableAgentBase", tool_call):
         tool_call_id = tool_call["id"]
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
+        function_name = function_call.get("name", "")
+        # Special case for __structured_output
+        if function_name == "__structured_output":
+            return {
+                "tool_call_id": tool_call_id,
+                "role": "tool",
+                "content": function_call.get("arguments", {}),
+            }
+        
+        # Hook: Process tool input before execution
+        processed_call = self._process_tool_input(function_call)
+        if processed_call is None:
+            raise ValueError("safeguard_tool_inputs hook returned None")
+        
+        _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
+        
+        # Hook: Process tool output before returning
+        processed_return = self._process_tool_output(func_return)
+        if processed_return is None:
+            raise ValueError("safeguard_tool_outputs hook returned None")
+        
         return {
             "tool_call_id": tool_call_id,
             "role": "tool",
-            "content": func_return.get("content", ""),
+            "content": processed_return.get("content", ""),
         }
 
     async def a_generate_tool_calls_reply(

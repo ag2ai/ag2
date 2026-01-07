@@ -412,6 +412,38 @@ class HooksAndRegistryMixin:
         """
         self.client.register_model_client(model_client_cls, **kwargs)
 
+    def _process_tool_input(self: "ConversableAgentBase", tool_input: dict[str, Any]) -> dict[str, Any] | None:
+        """Process tool input through registered hooks."""
+        hook_list = self.hook_lists["safeguard_tool_inputs"]
+
+        # If no hooks are registered, allow the tool input
+        if len(hook_list) == 0:
+            return tool_input
+
+        # Process through each hook
+        processed_input = tool_input
+        for hook in hook_list:
+            processed_input = hook(processed_input)
+            if processed_input is None:
+                return None
+
+        return processed_input
+
+    def _process_tool_output(self: "ConversableAgentBase", response: dict[str, Any]) -> dict[str, Any]:
+        """Process tool output through registered hooks"""
+        hook_list = self.hook_lists["safeguard_tool_outputs"]
+
+        # If no hooks are registered, return original response
+        if len(hook_list) == 0:
+            return response
+
+        # Process through each hook
+        processed_response = response
+        for hook in hook_list:
+            processed_response = hook(processed_response)
+
+        return processed_response
+
     def _process_human_input(self: "ConversableAgentBase", human_input: str) -> str | None:
         """Process human input through registered hooks."""
         hook_list = self.hook_lists["safeguard_human_inputs"]
