@@ -3,11 +3,16 @@
 import os
 
 from dotenv import load_dotenv
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern, setup_instrumentation
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern
 
 load_dotenv()
 
@@ -42,9 +47,15 @@ pattern = AutoPattern(
 
 def main():
     """Run using sync run_group_chat function."""
-    tracer = setup_instrumentation("local-run-group-chat", "http://127.0.0.1:14317")
-    instrument_llm_wrapper(tracer)
-    instrument_pattern(pattern, tracer)
+    resource = Resource.create(attributes={"service.name": "local-run-group-chat"})
+    tracer_provider = TracerProvider(resource=resource)
+    exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:14317")
+    processor = BatchSpanProcessor(exporter)
+    tracer_provider.add_span_processor(processor)
+    trace.set_tracer_provider(tracer_provider)
+
+    instrument_llm_wrapper(tracer_provider=tracer_provider)
+    instrument_pattern(pattern, tracer_provider=tracer_provider)
 
     # Use sync run_group_chat
     response = run_group_chat(

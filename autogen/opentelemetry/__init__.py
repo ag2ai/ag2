@@ -12,7 +12,6 @@ from .instrumentators import (
     instrument_llm_wrapper,
     instrument_pattern,
 )
-from .setup import setup_instrumentation
 
 __all__ = (
     "instrument_a2a_server",
@@ -20,5 +19,4 @@ __all__ = (
     "instrument_chats",
     "instrument_llm_wrapper",
     "instrument_pattern",
-    "setup_instrumentation",
 )

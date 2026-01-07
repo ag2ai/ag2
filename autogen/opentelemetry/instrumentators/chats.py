@@ -5,31 +5,44 @@
 import json
 from typing import Any
 
-from opentelemetry.sdk.trace import Tracer
+from opentelemetry.sdk.trace import TracerProvider
 
 from autogen.agentchat import chat as chat_module
 from autogen.agentchat import conversable_agent as conversable_agent_module
 from autogen.doc_utils import export_module
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.setup import get_tracer
 
 
 @export_module("autogen.opentelemetry")
-def instrument_chats(tracer: Tracer) -> None:
+def instrument_chats(*, tracer_provider: TracerProvider) -> None:
     """Instrument the standalone initiate_chats and a_initiate_chats functions.
 
     This adds a parent span that groups all sequential/parallel chats together,
     making it easy to trace multi-agent workflows.
 
     Usage:
-        from autogen.instrumentation import instrument_chats, setup_instrumentation
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from autogen.instrumentation import instrument_chats
 
-        tracer = setup_instrumentation("my-service")
-        instrument_chats(tracer)
+        resource = Resource.create(attributes={"service.name": "my-service"})
+        tracer_provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")
+        processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(processor)
+        trace.set_tracer_provider(tracer_provider)
+
+        instrument_chats(tracer_provider=tracer_provider)
 
         # Now initiate_chats calls will be traced with a parent span
         from autogen import initiate_chats
         results = initiate_chats(chat_queue)
     """
+    tracer = get_tracer(tracer_provider)
     # Instrument sync initiate_chats
     old_initiate_chats = chat_module.initiate_chats
 

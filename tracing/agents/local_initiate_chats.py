@@ -3,9 +3,14 @@
 import os
 
 from dotenv import load_dotenv
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.opentelemetry import instrument_agent, instrument_chats, instrument_llm_wrapper, setup_instrumentation
+from autogen.opentelemetry import instrument_agent, instrument_chats, instrument_llm_wrapper
 
 load_dotenv()
 
@@ -63,17 +68,22 @@ teacher = ConversableAgent(
 
 def main():
     """Run sequential chats using initiate_chats."""
-    tracer = setup_instrumentation("local-initiate-chats", "http://127.0.0.1:14317")
-    instrument_llm_wrapper(tracer)
+    resource = Resource.create(attributes={"service.name": "local-initiate-chats"})
+    tracer_provider = TracerProvider(resource=resource)
+    exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:14317")
+    processor = BatchSpanProcessor(exporter)
+    tracer_provider.add_span_processor(processor)
+    trace.set_tracer_provider(tracer_provider)
+    instrument_llm_wrapper(tracer_provider=tracer_provider)
 
     # Instrument the initiate_chats function (adds parent span)
-    instrument_chats(tracer)
+    instrument_chats(tracer_provider=tracer_provider)
 
     # Instrument all agents
-    instrument_agent(teacher, tracer)
-    instrument_agent(lesson_curriculum, tracer)
-    instrument_agent(lesson_planner, tracer)
-    instrument_agent(lesson_formatter, tracer)
+    instrument_agent(teacher, tracer_provider=tracer_provider)
+    instrument_agent(lesson_curriculum, tracer_provider=tracer_provider)
+    instrument_agent(lesson_planner, tracer_provider=tracer_provider)
+    instrument_agent(lesson_formatter, tracer_provider=tracer_provider)
 
     # Run sequential chats
     chat_results = teacher.initiate_chats([

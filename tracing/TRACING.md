@@ -25,16 +25,22 @@ AG2 tracing uses **OpenTelemetry** to provide distributed tracing of multi-agent
 
 ## Key Components
 
-### 1. Setup (`setup_instrumentation`)
-Creates and configures the OpenTelemetry tracer with OTLP exporter:
+### 1. Setup (Tracer Provider)
+Create and configure the OpenTelemetry tracer provider with OTLP exporter:
 
 ```python
-from autogen.instrumentation import setup_instrumentation
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-tracer = setup_instrumentation(
-    service_name="my-agent-service",
-    endpoint="http://127.0.0.1:4317"  # OTLP gRPC endpoint
-)
+resource = Resource.create(attributes={"service.name": "my-agent-service"})
+tracer_provider = TracerProvider(resource=resource)
+exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")  # OTLP gRPC endpoint
+processor = BatchSpanProcessor(exporter)
+tracer_provider.add_span_processor(processor)
+trace.set_tracer_provider(tracer_provider)
 ```
 
 ### 2. Agent Instrumentation (`instrument_agent`)
@@ -50,7 +56,7 @@ Wraps agent methods to emit spans:
 ```python
 from autogen.instrumentation import instrument_agent
 
-instrument_agent(my_agent, tracer)
+instrument_agent(my_agent, tracer_provider=tracer_provider)
 ```
 
 ### 3. LLM Instrumentation (`instrument_llm_wrapper`)
@@ -59,10 +65,10 @@ Instruments `OpenAIWrapper.create()` to emit `chat` spans for each LLM API call:
 ```python
 from autogen.instrumentation import instrument_llm_wrapper
 
-instrument_llm_wrapper(tracer)
+instrument_llm_wrapper(tracer_provider=tracer_provider)
 
 # Or with message capture enabled (for debugging)
-instrument_llm_wrapper(tracer, capture_messages=True)
+instrument_llm_wrapper(tracer_provider=tracer_provider, capture_messages=True)
 ```
 
 This captures:
@@ -78,7 +84,7 @@ For group chats, instruments the pattern which auto-instruments all agents and t
 ```python
 from autogen.instrumentation import instrument_pattern
 
-instrument_pattern(pattern, tracer)
+instrument_pattern(pattern, tracer_provider=tracer_provider)
 ```
 
 ### 5. Multi-Chat Instrumentation (`instrument_chats`)
@@ -87,7 +93,7 @@ For sequential/parallel multi-chat workflows using `initiate_chats` or `a_initia
 ```python
 from autogen.instrumentation import instrument_chats
 
-instrument_chats(tracer)
+instrument_chats(tracer_provider=tracer_provider)
 
 # Now initiate_chats calls are traced with a parent span
 results = agent.initiate_chats([
@@ -104,7 +110,7 @@ For remote agents using A2A protocol, adds middleware to extract trace context f
 ```python
 from autogen.instrumentation import instrument_a2a_server
 
-instrument_a2a_server(server, tracer)
+instrument_a2a_server(server, tracer_provider=tracer_provider)
 ```
 
 ## Span Types

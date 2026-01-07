@@ -11,12 +11,13 @@ from typing import Any
 
 from opentelemetry import context as otel_context
 from opentelemetry.context import Context
-from opentelemetry.trace import Tracer
+from opentelemetry.sdk.trace import TracerProvider
 
 from autogen.agentchat import Agent
 from autogen.doc_utils import export_module
 from autogen.io import IOStream
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.setup import get_tracer
 from autogen.opentelemetry.utils import (
     TRACE_PROPAGATOR,
     aggregate_usage,
@@ -28,7 +29,7 @@ from autogen.opentelemetry.utils import (
 
 
 @export_module("autogen.opentelemetry")
-def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
+def instrument_agent(agent: Agent, *, tracer_provider: TracerProvider) -> Agent:
     """Instrument an agent with OpenTelemetry tracing.
 
     Instruments various agent methods to emit OpenTelemetry spans for:
@@ -41,18 +42,30 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
     Args:
         agent: The agent instance to instrument.
-        tracer: The OpenTelemetry tracer to use for creating spans.
+        tracer_provider: The OpenTelemetry tracer provider to use for creating spans.
 
     Returns:
         The instrumented agent instance (same object, modified in place).
 
     Usage:
-        from autogen.opentelemetry import setup_instrumentation, instrument_agent
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from autogen.opentelemetry import instrument_agent
 
-        tracer = setup_instrumentation("my-service")
+        resource = Resource.create(attributes={"service.name": "my-service"})
+        tracer_provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")
+        processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(processor)
+        trace.set_tracer_provider(tracer_provider)
+
         agent = AssistantAgent("assistant")
-        instrument_agent(agent, tracer)
+        instrument_agent(agent, tracer_provider=tracer_provider)
     """
+    tracer = get_tracer(tracer_provider)
     # Instrument `a_generate_reply` as an invoke_agent span
     old_a_generate_reply = agent.a_generate_reply
 

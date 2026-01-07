@@ -5,7 +5,7 @@
 import json
 from typing import Any, Optional
 
-from opentelemetry.trace import Tracer
+from opentelemetry.sdk.trace import TracerProvider
 
 from autogen import ConversableAgent
 from autogen.agentchat import Agent
@@ -16,12 +16,13 @@ from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.doc_utils import export_module
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.setup import get_tracer
 
 from .agent import instrument_agent
 
 
 @export_module("autogen.opentelemetry")
-def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
+def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> Pattern:
     """Instrument a Pattern with OpenTelemetry tracing.
 
     Instruments the pattern's prepare_group_chat method to automatically
@@ -29,18 +30,30 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
 
     Args:
         pattern: The pattern instance to instrument.
-        tracer: The OpenTelemetry tracer to use for creating spans.
+        tracer_provider: The OpenTelemetry tracer provider to use for creating spans.
 
     Returns:
         The instrumented pattern instance (same object, modified in place).
 
     Usage:
-        from autogen.opentelemetry import setup_instrumentation, instrument_pattern
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from autogen.opentelemetry import instrument_pattern
 
-        tracer = setup_instrumentation("my-service")
+        resource = Resource.create(attributes={"service.name": "my-service"})
+        tracer_provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")
+        processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(processor)
+        trace.set_tracer_provider(tracer_provider)
+
         pattern = SomePattern()
-        instrument_pattern(pattern, tracer)
+        instrument_pattern(pattern, tracer_provider=tracer_provider)
     """
+    tracer = get_tracer(tracer_provider)
     old_prepare_group_chat = pattern.prepare_group_chat
 
     def prepare_group_chat_traced(
@@ -79,10 +92,10 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
         ) = old_prepare_group_chat(max_rounds, *args, **kwargs)
 
         for agent in groupchat.agents:
-            instrument_agent(agent, tracer)
+            instrument_agent(agent, tracer_provider=tracer_provider)
 
-        instrument_agent(manager, tracer)
-        instrument_groupchat(groupchat, tracer)
+        instrument_agent(manager, tracer_provider=tracer_provider)
+        instrument_groupchat(groupchat, tracer_provider=tracer_provider)
 
         # IMPORTANT: register_reply() in GroupChatManager.__init__ creates a shallow copy of groupchat
         # (via copy.copy). We need to also instrument that copy which is stored in manager._reply_func_list
@@ -90,7 +103,7 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
         for reply_func_entry in manager._reply_func_list:
             config = reply_func_entry.get("config")
             if isinstance(config, GroupChat) and config is not groupchat:
-                instrument_groupchat(config, tracer)
+                instrument_groupchat(config, tracer_provider=tracer_provider)
 
         return (
             agents,
@@ -113,7 +126,8 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
     return pattern
 
 
-def instrument_groupchat(groupchat: GroupChat, tracer: Tracer) -> GroupChat:
+def instrument_groupchat(groupchat: GroupChat, *, tracer_provider: TracerProvider) -> GroupChat:
+    tracer = get_tracer(tracer_provider)
     # Wrap _create_internal_agents to instrument temporary agents for auto speaker selection
     old_create_internal_agents = groupchat._create_internal_agents
 
@@ -128,8 +142,8 @@ def instrument_groupchat(groupchat: GroupChat, tracer: Tracer) -> GroupChat:
             agents, max_attempts, messages, validate_speaker_name, selector
         )
         # Instrument the temporary agents so their chats are traced
-        instrument_agent(checking_agent, tracer)
-        instrument_agent(speaker_selection_agent, tracer)
+        instrument_agent(checking_agent, tracer_provider=tracer_provider)
+        instrument_agent(speaker_selection_agent, tracer_provider=tracer_provider)
         return checking_agent, speaker_selection_agent
 
     groupchat._create_internal_agents = create_internal_agents_traced

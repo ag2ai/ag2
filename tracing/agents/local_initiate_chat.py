@@ -3,9 +3,14 @@
 import os
 
 from dotenv import load_dotenv
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper, setup_instrumentation
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
 
 load_dotenv()
 
@@ -33,10 +38,15 @@ user_proxy = ConversableAgent(
 
 def main():
     """Run a sync two-agent chat using initiate_chat."""
-    tracer = setup_instrumentation("local-initiate-chat", "http://127.0.0.1:14317")
-    instrument_llm_wrapper(tracer)
-    instrument_agent(assistant, tracer)
-    instrument_agent(user_proxy, tracer)
+    resource = Resource.create(attributes={"service.name": "local-initiate-chat"})
+    tracer_provider = TracerProvider(resource=resource)
+    exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:14317")
+    processor = BatchSpanProcessor(exporter)
+    tracer_provider.add_span_processor(processor)
+    trace.set_tracer_provider(tracer_provider)
+    instrument_llm_wrapper(tracer_provider=tracer_provider)
+    instrument_agent(assistant, tracer_provider=tracer_provider)
+    instrument_agent(user_proxy, tracer_provider=tracer_provider)
 
     # Use sync initiate_chat
     chat_result = user_proxy.initiate_chat(

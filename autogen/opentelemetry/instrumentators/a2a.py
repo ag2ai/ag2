@@ -2,19 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from opentelemetry.trace import Tracer
+from opentelemetry.sdk.trace import TracerProvider
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from autogen.a2a import A2aAgentServer
 from autogen.doc_utils import export_module
+from autogen.opentelemetry.setup import get_tracer
 from autogen.opentelemetry.utils import TRACE_PROPAGATOR
 
 from .agent import instrument_agent
 
 
 @export_module("autogen.opentelemetry")
-def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentServer:
+def instrument_a2a_server(server: A2aAgentServer, *, tracer_provider: TracerProvider) -> A2aAgentServer:
     """Instrument an A2A server with OpenTelemetry tracing.
 
     Adds OpenTelemetry middleware to the server to trace incoming requests and
@@ -22,18 +23,30 @@ def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentSer
 
     Args:
         server: The A2A agent server to instrument.
-        tracer: The OpenTelemetry tracer to use for creating spans.
+        tracer_provider: The OpenTelemetry tracer provider to use for creating spans.
 
     Returns:
         The instrumented server instance.
 
     Usage:
-        from autogen.opentelemetry import setup_instrumentation, instrument_a2a_server
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from autogen.opentelemetry import instrument_a2a_server
 
-        tracer = setup_instrumentation("my-service")
+        resource = Resource.create(attributes={"service.name": "my-service"})
+        tracer_provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")
+        processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(processor)
+        trace.set_tracer_provider(tracer_provider)
+
         server = A2aAgentServer(agent)
-        instrument_a2a_server(server, tracer)
+        instrument_a2a_server(server, tracer_provider=tracer_provider)
     """
+    tracer = get_tracer(tracer_provider)
 
     class OTELMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
@@ -43,5 +56,5 @@ def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentSer
 
     server.add_middleware(OTELMiddleware)
 
-    instrument_agent(server.agent, tracer)
+    instrument_agent(server.agent, tracer_provider=tracer_provider)
     return server

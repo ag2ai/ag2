@@ -2,11 +2,16 @@ import asyncio
 import tempfile
 
 from dotenv import load_dotenv
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
 from autogen.llm_config.config import LLMConfig
-from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper, setup_instrumentation
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
 
 load_dotenv()
 
@@ -87,10 +92,15 @@ async def run_code_execution(prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    tracer = setup_instrumentation("local-code-execution", "http://127.0.0.1:14317")
-    instrument_llm_wrapper(tracer)
-    instrument_agent(code_executor_agent, tracer)
-    instrument_agent(code_writer_agent, tracer)
+    resource = Resource.create(attributes={"service.name": "local-code-execution"})
+    tracer_provider = TracerProvider(resource=resource)
+    exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:14317")
+    processor = BatchSpanProcessor(exporter)
+    tracer_provider.add_span_processor(processor)
+    trace.set_tracer_provider(tracer_provider)
+    instrument_llm_wrapper(tracer_provider=tracer_provider)
+    instrument_agent(code_executor_agent, tracer_provider=tracer_provider)
+    instrument_agent(code_writer_agent, tracer_provider=tracer_provider)
 
     code = asyncio.run(run_code_execution("Write Python code to calculate the 14th Fibonacci number."))
 

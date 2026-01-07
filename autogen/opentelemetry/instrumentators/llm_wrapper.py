@@ -6,12 +6,13 @@ import json
 from typing import Any
 
 from a2a.utils.telemetry import SpanKind
-from opentelemetry.trace import Tracer
+from opentelemetry.sdk.trace import TracerProvider
 
 from autogen.doc_utils import export_module
 from autogen.oai import client as oai_client_module
 from autogen.oai.client import OpenAIWrapper
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.setup import get_tracer
 from autogen.opentelemetry.utils import (
     get_model_from_config_list,
     get_provider_from_config_list,
@@ -22,7 +23,7 @@ from autogen.opentelemetry.utils import (
 
 
 @export_module("autogen.opentelemetry")
-def instrument_llm_wrapper(tracer: Tracer, capture_messages: bool = False) -> None:
+def instrument_llm_wrapper(*, tracer_provider: TracerProvider, capture_messages: bool = False) -> None:
     """Instrument OpenAIWrapper.create() to emit LLM spans.
 
     This creates 'chat' spans for each LLM API call, capturing:
@@ -35,19 +36,31 @@ def instrument_llm_wrapper(tracer: Tracer, capture_messages: bool = False) -> No
     OpenTelemetry's context propagation.
 
     Args:
-        tracer: The OpenTelemetry tracer
+        tracer_provider: The OpenTelemetry tracer provider
         capture_messages: If True, capture input/output messages in span attributes.
             Default is False since messages may contain sensitive data.
 
     Usage:
-        from autogen.instrumentation import setup_instrumentation, instrument_llm_wrapper
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from autogen.instrumentation import instrument_llm_wrapper
 
-        tracer = setup_instrumentation("my-service")
-        instrument_llm_wrapper(tracer)
+        resource = Resource.create(attributes={"service.name": "my-service"})
+        tracer_provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint="http://127.0.0.1:4317")
+        processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(processor)
+        trace.set_tracer_provider(tracer_provider)
+
+        instrument_llm_wrapper(tracer_provider=tracer_provider)
 
         # Or with message capture enabled (for debugging)
-        instrument_llm_wrapper(tracer, capture_messages=True)
+        instrument_llm_wrapper(tracer_provider=tracer_provider, capture_messages=True)
     """
+    tracer = get_tracer(tracer_provider)
     original_create = OpenAIWrapper.create
 
     def traced_create(self: OpenAIWrapper, **config: Any) -> Any:
