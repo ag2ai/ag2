@@ -1511,7 +1511,7 @@ class TestBedrockStructuredOutputIntegration:
 # Integration tests for Bedrock additional_model_request_fields
 @pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-class TestBedrockadditional_model_request_fieldsIntegration:
+class TestBedrockAdditionalModelRequestFieldsIntegration:
     """Integration tests for Bedrock additional_model_request_fields with real API calls."""
 
     def setup_method(self):
