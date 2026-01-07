@@ -55,6 +55,37 @@ class ConversableAgent(
     `run_code`, and `execute_function` methods respectively. \n
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize ConversableAgent with default reply handlers."""
+        # Call parent __init__ which sets up all base state
+        super().__init__(*args, **kwargs)
+        
+        # Now that all mixins are available, register default reply handlers
+        self._register_default_reply_handlers()
+
+    def _register_default_reply_handlers(self) -> None:
+        """Register default reply handlers after mixins are applied."""
+        # Register OAI reply handlers
+        self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
+        self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
+        
+        # Register code execution reply handlers (if enabled)
+        if self._code_execution_config is not False:
+            if self._code_execution_config.get("executor") is not None:
+                self.register_reply([Agent, None], ConversableAgent._generate_code_execution_reply_using_executor)
+            else:
+                self.register_reply([Agent, None], ConversableAgent.generate_code_execution_reply)
+        
+        # Register tool and function call handlers
+        self.register_reply([Agent, None], ConversableAgent.generate_tool_calls_reply)
+        self.register_reply([Agent, None], ConversableAgent.a_generate_tool_calls_reply, ignore_async_in_sync_chat=True)
+        self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
+        self.register_reply([Agent, None], ConversableAgent.a_generate_function_call_reply, ignore_async_in_sync_chat=True)
+        
+        # Register termination and human reply handlers
+        self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
+        self.register_reply([Agent, None], ConversableAgent.a_check_termination_and_human_reply, ignore_async_in_sync_chat=True)
+
     def get_chat_results(self, chat_index: int | None = None) -> list[ChatResult] | ChatResult:
         """A summary from the finished chats of particular agents."""
         if chat_index is not None:

@@ -155,6 +155,12 @@ class ConversableAgentBase(LLMAgent):
             "process_all_messages_before_reply": [],
             "process_message_before_send": [],
             "update_agent_state": [],
+            # Safeguard hooks for monitoring agent interactions
+            "safeguard_tool_inputs": [],  # Hook for processing tool inputs before execution
+            "safeguard_tool_outputs": [],  # Hook for processing tool outputs after execution
+            "safeguard_llm_inputs": [],  # Hook for processing LLM inputs before sending
+            "safeguard_llm_outputs": [],  # Hook for processing LLM outputs after receiving
+            "safeguard_human_inputs": [],  # Hook for processing human inputs
         }
 
         # Associate agent update state hooks
