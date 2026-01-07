@@ -106,6 +106,7 @@ class FunctionExecutionMixin:
                 try:
                     content = func(**arguments)
                     if inspect.isawaitable(content):
+
                         async def _await_result(awaitable):
                             return await awaitable
 
@@ -300,7 +301,7 @@ class FunctionExecutionMixin:
             # Special case for __structured_output
             if function_name == "__structured_output":
                 return True, function_call.get("arguments", {})
-            
+
             # Hook: Process tool input before execution
             processed_call = self._process_tool_input(function_call)
             if processed_call is None:
@@ -356,19 +357,19 @@ class FunctionExecutionMixin:
                 "role": "tool",
                 "content": function_call.get("arguments", {}),
             }
-        
+
         # Hook: Process tool input before execution
         processed_call = self._process_tool_input(function_call)
         if processed_call is None:
             raise ValueError("safeguard_tool_inputs hook returned None")
-        
+
         _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
-        
+
         # Hook: Process tool output before returning
         processed_return = self._process_tool_output(func_return)
         if processed_return is None:
             raise ValueError("safeguard_tool_outputs hook returned None")
-        
+
         return {
             "tool_call_id": tool_call_id,
             "role": "tool",

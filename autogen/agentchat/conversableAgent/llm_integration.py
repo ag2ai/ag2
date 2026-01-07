@@ -36,23 +36,23 @@ class LLMIntegrationMixin:
             return False, None
         if messages is None:
             messages = self._oai_messages[sender]
-        
+
         # Process messages before sending to LLM, hook point for llm input monitoring
         processed_messages = self._process_llm_input(self._oai_system_message + messages)
         if processed_messages is None:
             return True, {"content": "LLM call blocked by safeguard", "role": "assistant"}
-        
+
         extracted_response = self._generate_oai_reply_from_client(
             client, processed_messages, self.client_cache, **kwargs
         )
-        
+
         # Process LLM response
         if extracted_response is not None:
             processed_extracted_response = self._process_llm_output(extracted_response)
             if processed_extracted_response is None:
                 raise ValueError("safeguard_llm_outputs hook returned None")
             extracted_response = processed_extracted_response
-        
+
         return (False, None) if extracted_response is None else (True, extracted_response)
 
     def _generate_oai_reply_from_client(
