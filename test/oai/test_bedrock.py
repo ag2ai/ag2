@@ -4,6 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1299,15 +1300,12 @@ class TestBedrockStructuredOutputIntegration:
         has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
 
         # If no explicit credentials, check if boto3 is available (might use IAM role)
-        if not has_explicit_creds:
-            try:
-                import boto3
-                # If boto3 is available, we might be able to use IAM role
-                # We'll proceed and let the test fail if credentials are actually missing
-            except ImportError:
-                pytest.skip(
-                    "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
-                )
+        # If boto3 is available, we might be able to use IAM role
+        # We'll proceed and let the test fail if credentials are actually missing
+        if not has_explicit_creds and importlib.util.find_spec("boto3") is None:
+            pytest.skip(
+                "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
+            )
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_pydantic_structured_output(self):
@@ -1681,7 +1679,7 @@ def test_bedrock_client_retry_config_with_none_values():
     # 2. Skip None values in retry_config (modify bedrock.py)
     # For now, this test should expect an error or be removed
     with pytest.raises(TypeError, match="not supported between instances of 'NoneType' and 'int'"):
-        client = BedrockClient(
+        BedrockClient(
             aws_region="us-east-1",
             total_max_attempts=None,
             max_attempts=None,
@@ -1729,15 +1727,12 @@ class TestBedrockRetryConfigIntegration:
         has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
 
         # If no explicit credentials, check if boto3 is available (might use IAM role)
-        if not has_explicit_creds:
-            try:
-                import boto3
-                # If boto3 is available, we might be able to use IAM role
-                # We'll proceed and let the test fail if credentials are actually missing
-            except ImportError:
-                pytest.skip(
-                    "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
-                )
+        # If boto3 is available, we might be able to use IAM role
+        # We'll proceed and let the test fail if credentials are actually missing
+        if not has_explicit_creds and importlib.util.find_spec("boto3") is None:
+            pytest.skip(
+                "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
+            )
 
     def _get_aws_config(self):
         """Helper method to get AWS configuration from environment."""
