@@ -112,6 +112,7 @@ def test_bedrock_llm_config_entry_str():
 
 # Test initialization and configuration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
     BedrockClient(aws_region="us-east-1")
@@ -1541,7 +1542,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
 
         # Check for AWS credentials - at least region should be set
         # AWS credentials can come from env vars, IAM role, or AWS profile
-        if not os.getenv("AWS_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
         aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
         aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -1591,11 +1591,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
             },
         )
 
-        # Create agent with thinking capability
-        reasoning_agent = ConversableAgent(
-            name="reasoning_assistant",
-            llm_config=llm_config,
-            system_message="You are a helpful assistant that reasons through problems step by step.",
         # Skip if no credentials are available (access key/secret key, profile, or IAM role)
         # Check for explicit credentials first
         has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
@@ -1607,6 +1602,13 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
             pytest.skip(
                 "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
             )
+
+        # Create agent with thinking capability
+        reasoning_agent = ConversableAgent(
+            name="reasoning_assistant",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant that reasons through problems step by step.",
+        )
 
     def _get_aws_config(self):
         """Helper method to get AWS configuration from environment."""
@@ -1658,7 +1660,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         )
 
         # Run the agent with a problem that benefits from reasoning
-        result = reasoning_agent.run(
+        result = agent.run(
             message="Compare and contrast JavaScript and TypeScript. Provide a detailed analysis.",
             max_turns=3,
         )
@@ -1710,26 +1712,39 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
                         "budget_tokens": 512,  # Smaller budget for faster test
                     },
                 },
-        # Verify the client has default retry config
-        # Access the client through the agent's client wrapper
-        client = agent.client._clients[0]
-        assert isinstance(client, BedrockClient)
-        assert client._total_max_attempts == 5
-        assert client._max_attempts == 5
-        assert client._mode == "standard"
-        assert client._retry_config["total_max_attempts"] == 5
-        assert client._retry_config.get("max_attempts", client._max_attempts) == 5
-        assert client._retry_config["mode"] == "standard"
+            },
+        )
 
-        # Test that the agent can make a successful call
+        # Create agent with thinking capability
+        agent = ConversableAgent(
+            name="thinking_custom_fields_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant that reasons through problems step by step.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a problem that benefits from reasoning
         result = agent.run(
-            message="What is 2 + 2?",
-            max_turns=1,
+            message="Compare and contrast JavaScript and TypeScript. Provide a detailed analysis.",
+            max_turns=3,
         )
         result.process()
 
+        # Verify the response is received
         assert result is not None
         assert len(result.messages) > 0
+
+        # Find the assistant message
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+        # Verify the content is not empty (thinking tokens are consumed but not shown in response)
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_custom_total_max_attempts(self):
@@ -1804,7 +1819,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
 
         # Create agent
         agent = ConversableAgent(
-            name="test_agent",
             name="legacy_mode_agent",
             llm_config=llm_config,
             system_message="You are a helpful assistant.",
@@ -1869,6 +1883,12 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         # Create agent
         agent = ConversableAgent(
             name="config_entry_test_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
         # Verify the client has legacy mode config
         client = agent.client._clients[0]
         assert isinstance(client, BedrockClient)
@@ -2230,6 +2250,9 @@ def test_bedrock_llm_config_entry_with_additional_model_request_fields():
         "tags": [],
         "supports_system_prompts": True,
         "additional_model_request_fields": {"thinking": thinking_config},
+        "total_max_attempts": 5,
+        "max_attempts": 5,
+        "mode": "standard",
     }
 
     actual = bedrock_llm_config.model_dump()
@@ -2258,21 +2281,6 @@ def test_parsing_params_additional_model_request_fields_with_none_values(bedrock
     assert "thinking" in additional_params
     assert additional_params["thinking"] is None
     assert additional_params["valid_field"] == "valid_value"
-        # Verify the client has fast-fail config
-        client = agent.client._clients[0]
-        assert isinstance(client, BedrockClient)
-        assert client._total_max_attempts == 2
-        assert client._mode == "standard"
-        assert client._retry_config["total_max_attempts"] == 2
-
-        # Test that the agent can make a successful call
-        result = agent.run(
-            message="What is 4 + 4?",
-            max_turns=1,
-        )
-        result.process()
-
-        assert result is not None
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_rate_limit_optimized_configuration(self):
