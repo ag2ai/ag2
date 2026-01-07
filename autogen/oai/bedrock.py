@@ -66,6 +66,9 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     supports_system_prompts: bool
     price: list[float] | None
     timeout: int | None
+    total_max_attempts: int | None
+    max_attempts: int | None
+    mode: Literal["standard", "adaptive", "legacy"]
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -84,6 +87,9 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     supports_system_prompts: bool = True
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     timeout: int | None = None
+    total_max_attempts: int | None = 5
+    max_attempts: int | None = 5
+    mode: Literal["standard", "adaptive", "legacy"] = "standard"
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -109,7 +115,14 @@ class BedrockClient:
         self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._aws_profile_name = kwargs.get("aws_profile_name")
         self._timeout = kwargs.get("timeout")
-
+        self._total_max_attempts = kwargs.get("total_max_attempts", 5)
+        self._max_attempts = kwargs.get("max_attempts", 5)
+        self._mode = kwargs.get("mode", "standard")
+        self._retry_config = {
+            "total_max_attempts": self._total_max_attempts,
+            "max_attempts": self._max_attempts,
+            "mode": self._mode,
+        }
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")
 
@@ -120,7 +133,7 @@ class BedrockClient:
         bedrock_config = Config(
             region_name=self._aws_region,
             signature_version="v4",
-            retries={"max_attempts": self._retries, "mode": "standard"},
+            retries=self._retry_config,
             read_timeout=self._timeout,
         )
 
