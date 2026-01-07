@@ -1633,7 +1633,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         """Test that default retry configuration works correctly."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
@@ -1799,7 +1798,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         """Test legacy retry mode configuration."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
@@ -2057,7 +2055,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         """Test fast-fail configuration with minimal retries."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
