@@ -111,14 +111,14 @@ Example:
 
 ### Advanced: additionalModelRequestFields
 
-Amazon Bedrock models often offer advanced, model-specific features that are not part of general AG2 config. AG2 now supports the `additionalModelRequestFields` parameter, which allows you to send these advanced options directly to Bedrock.
+Amazon Bedrock models often offer advanced, model-specific features that are not part of general AG2 config. AG2 now supports the `additional_model_request_fields` parameter, which allows you to send these advanced options directly to Bedrock.
 
 Typical use cases include (but are not limited to):
 - Anthropic Claude's *thinking configuration* (enables internal reasoning phases)
 - Model provider experimental or proprietary features
 
 **How to use:**
-- Add `"additionalModelRequestFields": { ... }` to the config/dictionary you pass to AG2, filling in with the provider/model's supported fields as needed.
+- Add `"additional_model_request_fields": { ... }` to the config/dictionary you pass to AG2, filling in with the provider/model's supported fields as needed.
 
 For example, to enable Claude's 'thinking' mode:
 ```python
@@ -128,7 +128,7 @@ llm_config_bedrock = autogen.LLMConfig(config_list={
         "aws_region": "us-east-1",
         "aws_access_key": "[FILL THIS IN]",
         "aws_secret_key": "[FILL THIS IN]",
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             # Claude thinking configuration example
             "thinking": {
                 "type": "enabled",
@@ -140,7 +140,7 @@ llm_config_bedrock = autogen.LLMConfig(config_list={
 )
 ```
 
-Refer to [the Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) to discover which features are supported by your chosen model. AG2 will pass all fields in `additionalModelRequestFields` through to Bedrock as-is;
+Refer to [the Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) to discover which features are supported by your chosen model. AG2 will pass all fields in `additional_model_request_fields` through to Bedrock as-is;
 
 ## Using within an AWS Lambda function
 

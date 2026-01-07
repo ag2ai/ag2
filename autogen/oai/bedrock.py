@@ -66,7 +66,7 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     supports_system_prompts: bool
     price: list[float] | None
     timeout: int | None
-    additionalModelRequestFields: dict[str, Any] | None
+    additional_model_request_fields: dict[str, Any] | None
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -85,7 +85,7 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     supports_system_prompts: bool = True
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     timeout: int | None = None
-    additionalModelRequestFields: dict[str, Any] | None = None
+    additional_model_request_fields: dict[str, Any] | None = None
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -432,8 +432,8 @@ class BedrockClient:
                     params, param_name, suitable_types, False, None, None, None
                 )
 
-        if "additionalModelRequestFields" in params and isinstance(params["additionalModelRequestFields"], dict):
-            additional_model_fields = params["additionalModelRequestFields"]
+        if "additional_model_request_fields" in params and isinstance(params["additional_model_request_fields"], dict):
+            additional_model_fields = params["additional_model_request_fields"]
             for key, value in additional_model_fields.items():
                 if key not in config_only_fields:
                     additional_params[key] = value
@@ -483,7 +483,7 @@ class BedrockClient:
             request_args["inferenceConfig"] = base_params
 
         if len(additional_params) > 0:
-            request_args["additionalModelRequestFields"] = additional_params
+            request_args["additional_model_request_fields"] = additional_params
 
         if self._supports_system_prompts:
             request_args["system"] = system_messages

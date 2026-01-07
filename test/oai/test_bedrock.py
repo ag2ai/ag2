@@ -1508,11 +1508,11 @@ class TestBedrockStructuredOutputIntegration:
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
 
 
-# Integration tests for Bedrock additionalModelRequestFields
+# Integration tests for Bedrock additional_model_request_fields
 @pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-class TestBedrockAdditionalModelRequestFieldsIntegration:
-    """Integration tests for Bedrock additionalModelRequestFields with real API calls."""
+class TestBedrockadditional_model_request_fieldsIntegration:
+    """Integration tests for Bedrock additional_model_request_fields with real API calls."""
 
     def setup_method(self):
         """Setup method run before each test."""
@@ -1539,7 +1539,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
     @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_thinking_configuration(self):
-        """Test creating and running an agent with thinking configuration via additionalModelRequestFields."""
+        """Test creating and running an agent with thinking configuration via additional_model_request_fields."""
         import os
 
         from autogen import ConversableAgent, LLMConfig
@@ -1560,7 +1560,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
             "budget_tokens": 1024,
         }
 
-        # Create LLM config with thinking configuration via additionalModelRequestFields
+        # Create LLM config with thinking configuration via additional_model_request_fields
         llm_config = LLMConfig(
             config_list={
                 "api_type": "bedrock",
@@ -1570,7 +1570,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
                 "aws_secret_key": aws_secret_key,
                 "aws_profile_name": aws_profile,
                 "max_tokens": 4096,  # max_tokens must be greater than thinking budget
-                "additionalModelRequestFields": {"thinking": thinking_config},
+                "additional_model_request_fields": {"thinking": thinking_config},
             },
         )
 
@@ -1608,7 +1608,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
     @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_thinking_and_custom_fields(self):
-        """Test creating and running an agent with thinking configuration and other custom fields in additionalModelRequestFields."""
+        """Test creating and running an agent with thinking configuration and other custom fields in additional_model_request_fields."""
         import os
 
         from autogen import ConversableAgent, LLMConfig
@@ -1630,7 +1630,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
                 "aws_secret_key": aws_secret_key,
                 "aws_profile_name": aws_profile,
                 "max_tokens": 4096,
-                "additionalModelRequestFields": {
+                "additional_model_request_fields": {
                     "thinking": {
                         "type": "enabled",
                         "budget_tokens": 512,  # Smaller budget for faster test
@@ -1670,7 +1670,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
     @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_bedrock_llm_config_entry_with_additional_model_request_fields_integration(self):
-        """Test BedrockLLMConfigEntry with additionalModelRequestFields in an integration scenario."""
+        """Test BedrockLLMConfigEntry with additional_model_request_fields in an integration scenario."""
         import os
 
         from autogen import ConversableAgent, LLMConfig
@@ -1683,7 +1683,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         aws_profile = os.getenv("AWS_PROFILE")
         model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
 
-        # Create BedrockLLMConfigEntry with additionalModelRequestFields
+        # Create BedrockLLMConfigEntry with additional_model_request_fields
         thinking_config = {
             "type": "enabled",
             "budget_tokens": 512,
@@ -1696,7 +1696,7 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
             aws_secret_key=aws_secret_key,
             aws_profile_name=aws_profile,
             max_tokens=4096,
-            additionalModelRequestFields={"thinking": thinking_config},
+            additional_model_request_fields={"thinking": thinking_config},
         )
 
         # Create LLMConfig from the entry
@@ -1731,15 +1731,15 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         assert len(content.strip()) > 0, "Response content should not be empty"
 
 
-# Test additionalModelRequestFields parsing
+# Test additional_model_request_fields parsing
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params_with_additional_model_request_fields(bedrock_client: BedrockClient):
-    """Test that additionalModelRequestFields are correctly parsed and added to additional_params."""
+    """Test that additional_model_request_fields are correctly parsed and added to additional_params."""
     # Test with thinking configuration (main use case)
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
         "temperature": 0.8,
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             "thinking": {
                 "type": "enabled",
                 "budget_tokens": 1024,
@@ -1755,10 +1755,10 @@ def test_parsing_params_with_additional_model_request_fields(bedrock_client: Bed
         },
     }
 
-    # Test with multiple fields in additionalModelRequestFields
+    # Test with multiple fields in additional_model_request_fields
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             "thinking": {
                 "type": "enabled",
                 "budget_tokens": 512,
@@ -1787,7 +1787,7 @@ def test_parsing_params_with_additional_model_request_fields(bedrock_client: Bed
     # Test that config_only_fields are excluded from additional_params
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             "thinking": {"type": "enabled", "budget_tokens": 1024},
             "api_type": "should_be_excluded",
             "model": "should_be_excluded",
@@ -1806,21 +1806,21 @@ def test_parsing_params_with_additional_model_request_fields(bedrock_client: Bed
     assert "tools" not in additional_params
     assert "response_format" not in additional_params
 
-    # Test with empty additionalModelRequestFields dict
+    # Test with empty additional_model_request_fields dict
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": {},
+        "additional_model_request_fields": {},
     })
 
     assert base_params == {}
     assert additional_params == {}
 
-    # Test that additionalModelRequestFields merges with other additional params like seed
+    # Test that additional_model_request_fields merges with other additional params like seed
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
         "seed": 42,
         "top_k": 10,
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             "thinking": {"type": "enabled", "budget_tokens": 1024},
         },
     })
@@ -1835,28 +1835,28 @@ def test_parsing_params_with_additional_model_request_fields(bedrock_client: Bed
         },
     }
 
-    # Test with None additionalModelRequestFields (should be ignored)
+    # Test with None additional_model_request_fields (should be ignored)
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": None,
+        "additional_model_request_fields": None,
     })
 
     assert base_params == {}
     assert additional_params == {}
 
-    # Test with non-dict additionalModelRequestFields (should be ignored)
+    # Test with non-dict additional_model_request_fields (should be ignored)
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": "not_a_dict",
+        "additional_model_request_fields": "not_a_dict",
     })
 
     assert base_params == {}
     assert additional_params == {}
 
 
-# Test BedrockLLMConfigEntry with additionalModelRequestFields
+# Test BedrockLLMConfigEntry with additional_model_request_fields
 def test_bedrock_llm_config_entry_with_additional_model_request_fields():
-    """Test BedrockLLMConfigEntry accepts additionalModelRequestFields."""
+    """Test BedrockLLMConfigEntry accepts additional_model_request_fields."""
     thinking_config = {
         "type": "enabled",
         "budget_tokens": 1024,
@@ -1865,7 +1865,7 @@ def test_bedrock_llm_config_entry_with_additional_model_request_fields():
     bedrock_llm_config = BedrockLLMConfigEntry(
         model="anthropic.claude-3-7-sonnet-20250219-v1:0",
         aws_region="us-east-1",
-        additionalModelRequestFields={"thinking": thinking_config},
+        additional_model_request_fields={"thinking": thinking_config},
         temperature=0.8,
     )
 
@@ -1876,7 +1876,7 @@ def test_bedrock_llm_config_entry_with_additional_model_request_fields():
         "temperature": 0.8,
         "tags": [],
         "supports_system_prompts": True,
-        "additionalModelRequestFields": {"thinking": thinking_config},
+        "additional_model_request_fields": {"thinking": thinking_config},
     }
 
     actual = bedrock_llm_config.model_dump()
@@ -1886,16 +1886,16 @@ def test_bedrock_llm_config_entry_with_additional_model_request_fields():
     llm_config = LLMConfig(bedrock_llm_config)
     config_list = llm_config.model_dump()["config_list"]
     assert len(config_list) == 1
-    assert config_list[0]["additionalModelRequestFields"] == {"thinking": thinking_config}
+    assert config_list[0]["additional_model_request_fields"] == {"thinking": thinking_config}
 
 
-# Test edge case: additionalModelRequestFields with None value
+# Test edge case: additional_model_request_fields with None value
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params_additional_model_request_fields_with_none_values(bedrock_client: BedrockClient):
-    """Test that None values in additionalModelRequestFields are handled correctly."""
+    """Test that None values in additional_model_request_fields are handled correctly."""
     base_params, additional_params = bedrock_client.parse_params({
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "additionalModelRequestFields": {
+        "additional_model_request_fields": {
             "thinking": None,
             "valid_field": "valid_value",
         },
