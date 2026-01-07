@@ -90,38 +90,6 @@ Different tasks may require different models, and the `config_list` allows speci
     ]
     ```
 </Tab>
-  <Tab title="Amazon Bedrock">
-
-- `api_type` (str, required): Must be set to 'bedrock'
-- `model` (str, required): The model id, such as 'anthropic.claude-3-7-sonnet-20250219-v1:0'
-- `aws_region` (str, required): The AWS region (e.g., 'us-east-1')
-- `aws_access_key`, `aws_secret_key`, `aws_session_token`, `aws_profile_name` (str, optional): AWS credentials as needed
-- `max_tokens`, `temperature`, and standard model parameters as supported by Bedrock
-- `tags` (List[str], optional): Tags for filtering
-- `additionalModelRequestFields` (dict, optional): Used to pass provider/model-specific advanced parameters directly to Bedrock. This is especially useful for enabling advanced features like Claude's "thinking configuration" or experimental model options.
-
-    Example (with advanced fields):
-    ```python
-    llm_config = LLMConfig(config_list=[
-      {
-        "api_type": "bedrock",
-        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "aws_region": "us-east-1",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "additionalModelRequestFields": {
-            # Claude thinking configuration example
-            "thinking": {
-                "type": "enabled",
-                "budget_tokens": 1024,  # Must be < max_tokens and at least 1024 tokens
-            },
-        },
-        "max_tokens": 4096,
-      }
-    ])
-    ```
-    Consult the [Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) for which models support which advanced features. AG2 will pass through any fields in `additionalModelRequestFields` to Bedrock.
-</Tab>
 </Tabs>
 
 <Tip>
@@ -366,6 +334,30 @@ Besides the `config_list`, there are other parameters that can be used to config
 It is also possible to passthrough parameters through to the OpenAI client. Parameters that correspond to the [`OpenAI` client](https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/_client.py#L67) or the [`OpenAI` completions create API](https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/resources/completions.py#L35) can be supplied.
 
 This is commonly used for things like `temperature`, or `timeout`.
+
+### Passing Advanced/Provider-Specific Fields (e.g., for Amazon Bedrock)
+
+Some providers (such as Amazon Bedrock) support advanced, model-specific configuration fields that are not part of AG2's standard LLM config. To enable these options, you can provide them via the `additional_model_request_fields` parameter in your config dictionary. All fields provided in this dictionary will be passed through directly to the model provider's API. For instance, Amazon Bedrock models (including Anthropic Claude) may support features such as "thinking" configuration, experimental toggles, or other proprietary capabilities using this option.
+
+Example usage with Amazon Bedrock (using Claude's thinking configuration):
+```python
+llm_config = LLMConfig(config_list={
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "additional_model_request_fields": {
+        # Claude thinking configuration example
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 1024,  # Must be < max_tokens and above or equal to 1024 tokens
+        },
+    },
+    "max_tokens": 4096,
+})
+```
+Check the provider's official documentation for which advanced fields are available and supported for a given model, and ensure that the supplied fields are valid.
 
 ## Example
 
