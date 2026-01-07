@@ -4,7 +4,6 @@
 
 import asyncio
 import copy
-import inspect
 import logging
 from collections.abc import Container
 from inspect import iscoroutine
