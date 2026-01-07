@@ -411,3 +411,20 @@ class HooksAndRegistryMixin:
             **kwargs: The kwargs for the custom client class to be initialized with
         """
         self.client.register_model_client(model_client_cls, **kwargs)
+
+    def _process_human_input(self: "ConversableAgentBase", human_input: str) -> str | None:
+        """Process human input through registered hooks."""
+        hook_list = self.hook_lists["safeguard_human_inputs"]
+
+        # If no hooks registered, allow the input through
+        if len(hook_list) == 0:
+            return human_input
+
+        # Process through each hook
+        processed_input = human_input
+        for hook in hook_list:
+            processed_input = hook(processed_input)
+            if processed_input is None:
+                return None
+
+        return processed_input

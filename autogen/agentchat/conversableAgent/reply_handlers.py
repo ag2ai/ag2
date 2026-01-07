@@ -6,6 +6,8 @@ import asyncio
 import copy
 import inspect
 import logging
+from collections.abc import Container
+from inspect import iscoroutine
 from typing import TYPE_CHECKING, Any, Optional
 
 from ...events.agent_events import (
@@ -15,7 +17,7 @@ from ...events.agent_events import (
 )
 from ...exception_utils import SenderRequiredError
 from ...fast_depends.utils import is_coroutine_callable
-from ...io.base import IOStream
+from ...io.base import AsyncIOStreamProtocol, AsyncInputStream, IOStream, IOStreamProtocol, InputStream
 from ...runtime_logging import log_event, logging_enabled
 from ..agent import Agent
 
@@ -96,7 +98,7 @@ class ReplyHandlersMixin:
                 "config": copy.copy(config),
                 "init_config": config,
                 "reset_config": reset_config,
-                "ignore_async_in_sync_chat": ignore_async_in_sync_chat and inspect.iscoroutinefunction(reply_func),
+                "ignore_async_in_sync_chat": ignore_async_in_sync_chat and is_coroutine_callable(reply_func),
             },
         )
 
@@ -121,7 +123,7 @@ class ReplyHandlersMixin:
             f["reply_func"] for f in self._reply_func_list if not f.get("ignore_async_in_sync_chat", False)
         }
 
-        async_reply_functions = [f for f in reply_functions if inspect.iscoroutinefunction(f)]
+        async_reply_functions = [f for f in reply_functions if is_coroutine_callable(f)]
         if async_reply_functions:
             msg = (
                 "Async reply functions can only be used with ConversableAgent.a_initiate_chat(). The following async reply functions are found: "
@@ -134,7 +136,7 @@ class ReplyHandlersMixin:
         self: "ConversableAgentBase",
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
+        exclude: Container[Any] = (),
     ) -> str | dict[str, Any] | None:
         """Reply based on the conversation history and the sender.
 
@@ -156,8 +158,7 @@ class ReplyHandlersMixin:
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
-                - exclude (List[callable]): A list of reply functions to exclude from
+            exclude: A list of reply functions to exclude from
                 the reply generation process. Functions in this list will be skipped even if
                 they would normally be triggered.
 
@@ -185,9 +186,9 @@ class ReplyHandlersMixin:
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
-            if "exclude" in kwargs and reply_func in kwargs["exclude"]:
+            if reply_func in exclude:
                 continue
-            if inspect.iscoroutinefunction(reply_func):
+            if is_coroutine_callable(reply_func):
                 continue
             if self._match_trigger(reply_func_tuple["trigger"], sender):
                 final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
@@ -208,7 +209,7 @@ class ReplyHandlersMixin:
         self: "ConversableAgentBase",
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
+        exclude: Container[Any] = (),
     ) -> str | dict[str, Any] | None:
         """(async) Reply based on the conversation history and the sender.
 
@@ -230,8 +231,7 @@ class ReplyHandlersMixin:
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
-                - exclude (List[callable]): A list of reply functions to exclude from
+            exclude: A list of reply functions to exclude from
                 the reply generation process. Functions in this list will be skipped even if
                 they would normally be triggered.
 
@@ -259,11 +259,11 @@ class ReplyHandlersMixin:
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
-            if "exclude" in kwargs and reply_func in kwargs["exclude"]:
+            if reply_func in exclude:
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):
-                if inspect.iscoroutinefunction(reply_func):
+                if is_coroutine_callable(reply_func):
                     final, reply = await reply_func(
                         self, messages=messages, sender=sender, config=reply_func_tuple["config"]
                     )
@@ -309,50 +309,70 @@ class ReplyHandlersMixin:
         else:
             raise ValueError(f"Unsupported trigger type: {type(trigger)}")
 
-    def get_human_input(self: "ConversableAgentBase", prompt: str) -> str:
+    def get_human_input(
+        self: "ConversableAgentBase",
+        prompt: str,
+        *,
+        iostream: InputStream | None = None,
+    ) -> str:
         """Get human input.
 
         Override this method to customize the way to get human input.
 
         Args:
             prompt (str): prompt for the human input.
-
+            iostream (Optional[InputStream]): The InputStream object to use for sending messages.
         Returns:
             str: human input.
         """
-        iostream = IOStream.get_default()
-
+        iostream = iostream or IOStream.get_default()
         reply = iostream.input(prompt)
-        self._human_input.append(reply)
-        return reply
+        # Process the human input through hooks
+        processed_reply = self._process_human_input("" if not isinstance(reply, str) and iscoroutine(reply) else reply)
+        if processed_reply is None:
+            raise ValueError("safeguard_human_inputs hook returned None")
 
-    async def a_get_human_input(self: "ConversableAgentBase", prompt: str) -> str:
+        self._human_input.append(processed_reply)
+        return processed_reply
+
+    async def a_get_human_input(
+        self: "ConversableAgentBase",
+        prompt: str,
+        *,
+        iostream: AsyncInputStream | None = None,
+    ) -> str:
         """(Async) Get human input.
 
         Override this method to customize the way to get human input.
 
         Args:
             prompt (str): prompt for the human input.
-
+            iostream (Optional[AsyncInputStream]): The AsyncInputStream object to use for sending messages.
         Returns:
             str: human input.
         """
 
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
         input_func = iostream.input
 
         if is_coroutine_callable(input_func):
             reply = await input_func(prompt)
         else:
             reply = await asyncio.to_thread(input_func, prompt)
-        self._human_input.append(reply)
-        return reply
+        # Process the human input through hooks
+        processed_reply = self._process_human_input(reply)
+        if processed_reply is None:
+            raise ValueError("safeguard_human_inputs hook returned None")
+
+        self._human_input.append(processed_reply)
+        return processed_reply
 
     def check_termination_and_human_reply(
         self: "ConversableAgentBase",
         messages: list[dict[str, Any]] | None = None,
         sender: Agent | None = None,
         config: Any | None = None,
+        iostream: IOStreamProtocol | None = None,
     ) -> tuple[bool, str | None]:
         """Check if the conversation should be terminated, and if human reply is provided.
 
@@ -366,12 +386,13 @@ class ReplyHandlersMixin:
             messages: A list of message dictionaries, representing the conversation history.
             sender: The agent object representing the sender of the message.
             config: Configuration object, defaults to the current instance if not provided.
+            iostream (Optional[IOStreamProtocol]): The IOStream object to use for sending messages.
 
         Returns:
             A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
 
         if config is None:
             config = self
@@ -390,7 +411,8 @@ class ReplyHandlersMixin:
         sender_name = "the sender" if sender is None else sender.name
         if self.human_input_mode == "ALWAYS":
             reply = self.get_human_input(
-                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: "
+                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: ",
+                iostream=iostream,
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -411,7 +433,8 @@ class ReplyHandlersMixin:
                     reply = self.get_human_input(
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                         if terminate
-                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: "
+                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -430,7 +453,8 @@ class ReplyHandlersMixin:
                 else:
                     # self.human_input_mode == "TERMINATE":
                     reply = self.get_human_input(
-                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
+                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
 
@@ -497,6 +521,7 @@ class ReplyHandlersMixin:
         messages: list[dict[str, Any]] | None = None,
         sender: Agent | None = None,
         config: Any | None = None,
+        iostream: AsyncIOStreamProtocol | None = None,
     ) -> tuple[bool, str | None]:
         """(async) Check if the conversation should be terminated, and if human reply is provided.
 
@@ -510,12 +535,13 @@ class ReplyHandlersMixin:
             messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
             sender (Optional[Agent]): The agent object representing the sender of the message.
             config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
+            iostream (Optional[AsyncIOStreamProtocol]): The AsyncIOStreamProtocol object to use for sending messages.
 
         Returns:
             Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
 
         if config is None:
             config = self
@@ -530,7 +556,8 @@ class ReplyHandlersMixin:
         sender_name = "the sender" if sender is None else sender.name
         if self.human_input_mode == "ALWAYS":
             reply = await self.a_get_human_input(
-                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: "
+                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: ",
+                iostream=iostream,
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -551,7 +578,8 @@ class ReplyHandlersMixin:
                     reply = await self.a_get_human_input(
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                         if terminate
-                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: "
+                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -570,7 +598,8 @@ class ReplyHandlersMixin:
                 else:
                     # self.human_input_mode == "TERMINATE":
                     reply = await self.a_get_human_input(
-                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
+                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
 
