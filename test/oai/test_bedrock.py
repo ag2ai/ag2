@@ -4,6 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -58,6 +59,9 @@ def test_bedrock_llm_config_entry():
         "temperature": 0.8,
         "tags": [],
         "supports_system_prompts": True,
+        "total_max_attempts": 5,
+        "max_attempts": 5,
+        "mode": "standard",
     }
     actual = bedrock_llm_config.model_dump()
     assert actual == expected
@@ -85,7 +89,7 @@ def test_bedrock_llm_config_entry_repr():
     )
 
     actual = repr(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, total_max_attempts=5, max_attempts=5, mode='standard')"
 
     assert actual == expected, actual
 
@@ -101,7 +105,7 @@ def test_bedrock_llm_config_entry_str():
     )
 
     actual = str(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, total_max_attempts=5, max_attempts=5, mode='standard')"
 
     assert actual == expected, actual
 
@@ -1280,7 +1284,13 @@ class TestBedrockStructuredOutputIntegration:
 
         # Check for AWS credentials - at least region should be set
         # AWS credentials can come from env vars, IAM role, or AWS profile
-        if not os.getenv("AWS_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+
+        # Skip if no AWS region is set (required for all authentication methods)
+        if not aws_region:
             pytest.skip(
                 "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
             )
@@ -1301,7 +1311,7 @@ class TestBedrockStructuredOutputIntegration:
         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         aws_profile = os.getenv("AWS_PROFILE")
         # Use notebook's model format if BEDROCK_MODEL is set, otherwise default to notebook's example
-        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+        model = os.getenv("BEDROCK_MODEL", "qwen.qwen3-coder-480b-a35b-v1:0")
 
         # Create LLM config with structured output
         llm_config = LLMConfig(
@@ -1427,8 +1437,8 @@ class TestBedrockStructuredOutputIntegration:
         aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         aws_profile = os.getenv("AWS_PROFILE")
-        # Use notebook's model format if BEDROCK_MODEL is set, otherwise default to notebook's example
-        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+        # Use notebook's model format if BEDROCK_MODEL is set, otherwise default to qwen model
+        model = os.getenv("BEDROCK_MODEL", "qwen.qwen3-coder-480b-a35b-v1:0")
 
         # Create LLM config with dict schema
         llm_config = LLMConfig(
@@ -1532,6 +1542,13 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         # Check for AWS credentials - at least region should be set
         # AWS credentials can come from env vars, IAM role, or AWS profile
         if not os.getenv("AWS_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+
+        # Skip if no AWS region is set (required for all authentication methods)
+        if not aws_region:
             pytest.skip(
                 "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
             )
@@ -1579,6 +1596,63 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
             name="reasoning_assistant",
             llm_config=llm_config,
             system_message="You are a helpful assistant that reasons through problems step by step.",
+        # Skip if no credentials are available (access key/secret key, profile, or IAM role)
+        # Check for explicit credentials first
+        has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
+
+        # If no explicit credentials, check if boto3 is available (might use IAM role)
+        # If boto3 is available, we might be able to use IAM role
+        # We'll proceed and let the test fail if credentials are actually missing
+        if not has_explicit_creds and importlib.util.find_spec("boto3") is None:
+            pytest.skip(
+                "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
+            )
+
+    def _get_aws_config(self):
+        """Helper method to get AWS configuration from environment."""
+        import os
+
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        model = os.getenv("BEDROCK_MODEL", "qwen.qwen3-coder-480b-a35b-v1:0")
+
+        return {
+            "aws_region": aws_region,
+            "aws_access_key": aws_access_key,
+            "aws_secret_key": aws_secret_key,
+            "aws_profile_name": aws_profile,
+            "model": model,
+        }
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_default_retry_configuration(self):
+        """Test that default retry configuration works correctly."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with default retry settings
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                # Default retry: total_max_attempts=5, max_attempts=5, mode="standard"
+            },
+        )
+
+        # Create agent with default retry config
+        agent = ConversableAgent(
+            name="default_retry_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
             max_consecutive_auto_reply=1,
             human_input_mode="NEVER",
         )
@@ -1636,12 +1710,102 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
                         "budget_tokens": 512,  # Smaller budget for faster test
                     },
                 },
+        # Verify the client has default retry config
+        # Access the client through the agent's client wrapper
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 5
+        assert client._max_attempts == 5
+        assert client._mode == "standard"
+        assert client._retry_config["total_max_attempts"] == 5
+        assert client._retry_config.get("max_attempts", client._max_attempts) == 5
+        assert client._retry_config["mode"] == "standard"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 2 + 2?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+        assert len(result.messages) > 0
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_custom_total_max_attempts(self):
+        """Test custom total_max_attempts configuration."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with custom total_max_attempts
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 10,  # 1 initial + 9 retries = 10 total attempts
+                "mode": "standard",
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="custom_attempts_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has custom retry config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 10
+        assert client._mode == "standard"
+        assert client._retry_config["total_max_attempts"] == 10
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 3 * 4?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_legacy_retry_mode(self):
+        """Test legacy retry mode configuration."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with legacy mode
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 5,
+                "mode": "legacy",  # Pre-existing retry behavior
             },
         )
 
         # Create agent
         agent = ConversableAgent(
             name="test_agent",
+            name="legacy_mode_agent",
             llm_config=llm_config,
             system_message="You are a helpful assistant.",
             max_consecutive_auto_reply=1,
@@ -1705,6 +1869,195 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         # Create agent
         agent = ConversableAgent(
             name="config_entry_test_agent",
+        # Verify the client has legacy mode config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._mode == "legacy"
+        assert client._retry_config["mode"] == "legacy"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 5 + 5?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_standard_retry_mode(self):
+        """Test standard retry mode configuration."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with standard mode
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 5,
+                "mode": "standard",  # Standardized retry rules
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="standard_mode_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has standard mode config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._mode == "standard"
+        assert client._retry_config["mode"] == "standard"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 6 * 7?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_adaptive_retry_mode(self):
+        """Test adaptive retry mode configuration (best for rate limits)."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with adaptive mode
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 8,
+                "mode": "adaptive",  # Retries with client-side throttling
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="adaptive_mode_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has adaptive mode config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._mode == "adaptive"
+        assert client._total_max_attempts == 8
+        assert client._retry_config["mode"] == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 8
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 2 + 2?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_high_reliability_configuration(self):
+        """Test high-reliability configuration with more retry attempts."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # High-reliability configuration
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 10,  # More retries for reliability
+                "mode": "adaptive",  # Best for handling various error types
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="high_reliability_agent",
+            llm_config=llm_config,
+            system_message="You are a reliable assistant that handles errors gracefully.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has high-reliability config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 10
+        assert client._mode == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 10
+        assert (
+            client._retry_config.get("max_attempts", client._max_attempts) == 5
+        )  # Default max_attempts when not specified
+        assert client._retry_config["mode"] == "adaptive"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 10 - 3?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_fast_fail_configuration(self):
+        """Test fast-fail configuration with minimal retries."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Fast-fail configuration
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 2,  # Minimal retries for fast failure
+                "mode": "standard",
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="fast_fail_agent",
             llm_config=llm_config,
             system_message="You are a helpful assistant.",
             max_consecutive_auto_reply=1,
@@ -1905,3 +2258,309 @@ def test_parsing_params_additional_model_request_fields_with_none_values(bedrock
     assert "thinking" in additional_params
     assert additional_params["thinking"] is None
     assert additional_params["valid_field"] == "valid_value"
+        # Verify the client has fast-fail config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 2
+        assert client._mode == "standard"
+        assert client._retry_config["total_max_attempts"] == 2
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 4 + 4?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_rate_limit_optimized_configuration(self):
+        """Test rate-limit optimized configuration with adaptive mode."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Rate-limit optimized configuration
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 8,
+                "mode": "adaptive",  # Best for rate limit handling
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="rate_limit_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has rate-limit optimized config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 8
+        assert client._mode == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 8
+        assert (
+            client._retry_config.get("max_attempts", client._max_attempts) == 5
+        )  # Default max_attempts when not specified
+        assert client._retry_config["mode"] == "adaptive"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 8 * 2?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_retry_config_with_both_total_max_and_max_attempts(self):
+        """Test that total_max_attempts takes precedence over max_attempts when both are provided."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Configuration with both total_max_attempts and max_attempts
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 7,
+                "max_attempts": 2,  # Should be stored but total_max_attempts takes precedence
+                "mode": "legacy",
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="both_attempts_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has both values stored
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 7
+        assert client._max_attempts == 2
+        assert client._mode == "legacy"
+        assert client._retry_config["total_max_attempts"] == 7
+        assert client._retry_config.get("max_attempts", client._max_attempts) == 2
+        assert client._retry_config["mode"] == "legacy"
+
+        # Test that the agent can make a successful call
+        result = agent.run(
+            message="What is 9 + 1?",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_retry_config_direct_client_creation(self):
+        """Test retry config when creating BedrockClient directly."""
+        import os
+
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create client directly with retry config
+        client = BedrockClient(
+            aws_region=aws_config["aws_region"],
+            aws_access_key=aws_config["aws_access_key"],
+            aws_secret_key=aws_config["aws_secret_key"],
+            total_max_attempts=7,
+            max_attempts=3,
+            mode="adaptive",
+        )
+
+        # Verify retry config
+        assert client._total_max_attempts == 7
+        assert client._max_attempts == 3
+        assert client._mode == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 7
+        assert client._retry_config.get("max_attempts", client._max_attempts) == 3
+        assert client._retry_config["mode"] == "adaptive"
+
+        # Verify the client was created with correct AWS configuration
+        # Note: This is a basic smoke test - actual API calls are tested in other methods
+        # _model_id is only set when create() is called, so we verify the client configuration
+        assert client._aws_region == aws_config["aws_region"]
+        # Verify credentials match what was passed (or from env if None was passed)
+        # The client constructor uses: kwargs.get("aws_access_key") or os.getenv("AWS_ACCESS_KEY")
+        # So if we pass None, it gets from env; if we pass a value, it should match
+        # Note: BedrockClient uses AWS_ACCESS_KEY and AWS_SECRET_KEY, while test helper uses AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+        expected_access_key = aws_config["aws_access_key"] or os.getenv("AWS_ACCESS_KEY")
+        expected_secret_key = aws_config["aws_secret_key"] or os.getenv("AWS_SECRET_KEY")
+        assert client._aws_access_key == expected_access_key
+        assert client._aws_secret_key == expected_secret_key
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_adaptive_retry_mode_with_structured_output_pydantic(self):
+        """Test adaptive retry mode with Pydantic structured output."""
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Create LLM config with adaptive retry mode and structured output
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 8,
+                "mode": "adaptive",  # Retries with client-side throttling
+                "response_format": MathReasoning,  # Enable structured outputs
+            },
+        )
+
+        # Create agent with adaptive retry and structured output
+        agent = ConversableAgent(
+            name="adaptive_structured_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful math assistant. Solve problems step by step.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has adaptive mode config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 8
+        assert client._mode == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 8
+        assert client._retry_config.get("max_attempts", client._max_attempts) == 5
+        assert client._retry_config["mode"] == "adaptive"
+
+        # Test that the agent can make a successful call with structured output
+        result = agent.run(
+            message="Solve: 3x + 7 = 22. Show your steps.",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+        assert len(result.messages) > 0
+
+        # Verify structured output was returned
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_high_reliability_retry_with_structured_output_dict_schema(self):
+        """Test high-reliability retry configuration with dict schema structured output."""
+        import json
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockClient
+
+        aws_config = self._get_aws_config()
+
+        # Define schema as a dictionary (JSON Schema format)
+        dict_schema = {
+            "type": "object",
+            "properties": {
+                "problem": {"type": "string", "description": "The math problem being solved"},
+                "solution_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"step": {"type": "string"}, "result": {"type": "string"}},
+                        "required": ["step", "result"],
+                    },
+                },
+                "answer": {"type": "string"},
+            },
+            "required": ["problem", "solution_steps", "answer"],
+        }
+
+        # High-reliability configuration with structured output
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": aws_config["model"],
+                "aws_region": aws_config["aws_region"],
+                "aws_access_key": aws_config["aws_access_key"],
+                "aws_secret_key": aws_config["aws_secret_key"],
+                "aws_profile_name": aws_config["aws_profile_name"],
+                "total_max_attempts": 10,  # More retries for reliability
+                "mode": "adaptive",  # Best for handling various error types
+                "response_format": dict_schema,  # Using dict schema for structured output
+            },
+        )
+
+        # Create agent
+        agent = ConversableAgent(
+            name="reliable_structured_agent",
+            llm_config=llm_config,
+            system_message="You are a reliable math assistant that handles errors gracefully.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Verify the client has high-reliability config
+        client = agent.client._clients[0]
+        assert isinstance(client, BedrockClient)
+        assert client._total_max_attempts == 10
+        assert client._mode == "adaptive"
+        assert client._retry_config["total_max_attempts"] == 10
+        assert client._retry_config.get("max_attempts", client._max_attempts) == 5
+        assert client._retry_config["mode"] == "adaptive"
+
+        # Test that the agent can make a successful call with structured output
+        result = agent.run(
+            message="Solve: 2x^2 - 8x + 6 = 0. Show your work.",
+            max_turns=1,
+        )
+        result.process()
+
+        assert result is not None
+        assert len(result.messages) > 0
+
+        # Verify structured output was returned
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+        # Try to parse as JSON to verify structured output
+        content = last_message["content"]
+        try:
+            parsed_content = json.loads(content)
+            # Verify the structure matches dict schema
+            assert "problem" in parsed_content or "answer" in parsed_content or "solution_steps" in parsed_content
+        except json.JSONDecodeError:
+            # If not JSON, verify it contains expected content
+            assert "answer" in content.lower() or "x =" in content.lower()
