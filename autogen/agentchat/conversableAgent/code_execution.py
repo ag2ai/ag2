@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from ...code_utils import (
     PYTHON_VARIANTS,
+    UNKNOWN,
     execute_code,
     extract_code,
     infer_lang,
@@ -111,7 +112,7 @@ class CodeExecutionMixin:
             if not message["content"]:
                 continue
             code_blocks = extract_code(message["content"])
-            if len(code_blocks) == 1 and code_blocks[0][0] == "UNKNOWN":
+            if len(code_blocks) == 1 and code_blocks[0][0] == UNKNOWN:
                 continue
 
             # found code blocks, execute code and push "last_n_messages" back
