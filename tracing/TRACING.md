@@ -91,9 +91,9 @@ instrument_pattern(pattern, tracer_provider=tracer_provider)
 For sequential/parallel multi-chat workflows using `initiate_chats` or `a_initiate_chats`:
 
 ```python
-from autogen.instrumentation import instrument_chats
+from autogen.instrumentation import instrument_agent
 
-instrument_chats(tracer_provider=tracer_provider)
+agent = instrument_agent(agent, tracer_provider=tracer_provider)
 
 # Now initiate_chats calls are traced with a parent span
 results = agent.initiate_chats([

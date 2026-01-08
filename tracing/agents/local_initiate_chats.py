@@ -10,7 +10,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.opentelemetry import instrument_agent, instrument_chats, instrument_llm_wrapper
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
 
 load_dotenv()
 
@@ -75,9 +75,6 @@ def main():
     tracer_provider.add_span_processor(processor)
     trace.set_tracer_provider(tracer_provider)
     instrument_llm_wrapper(tracer_provider=tracer_provider)
-
-    # Instrument the initiate_chats function (adds parent span)
-    instrument_chats(tracer_provider=tracer_provider)
 
     # Instrument all agents
     instrument_agent(teacher, tracer_provider=tracer_provider)

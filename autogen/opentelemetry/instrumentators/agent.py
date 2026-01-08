@@ -27,6 +27,8 @@ from autogen.opentelemetry.utils import (
     reply_to_otel_message,
 )
 
+from .agent_instrumentators import instrument_chats
+
 
 @export_module("autogen.opentelemetry")
 def instrument_agent(agent: Agent, *, tracer_provider: TracerProvider) -> Agent:
@@ -66,6 +68,9 @@ def instrument_agent(agent: Agent, *, tracer_provider: TracerProvider) -> Agent:
         instrument_agent(agent, tracer_provider=tracer_provider)
     """
     tracer = get_tracer(tracer_provider)
+
+    agent = instrument_chats(agent, tracer=tracer)
+
     # Instrument `a_generate_reply` as an invoke_agent span
     old_a_generate_reply = agent.a_generate_reply
 
