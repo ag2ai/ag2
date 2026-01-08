@@ -3,8 +3,6 @@ title: "A2A Server Setup"
 description: "Learn how to set up and configure A2A agent servers for distributed communication."
 ---
 
-# A2A Server Setup
-
 The A2A server allows you to expose your AG2 agents as web services that can be accessed by remote clients. This guide covers everything you need to know about setting up and configuring A2A servers.
 
 ## Simple Server Setup
@@ -44,7 +42,7 @@ uvicorn server:server --host 0.0.0.0 --port 8000
 
 ### Remote Tools execution details
 
-AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and the result processed by the remote agent, with a final result returned to the client.
+AG2 has a great feature - <a href="/docs/user-guide/advanced-concepts/tools" className="internal-link">Tools</a>. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and the result processed by the remote agent, with a final result returned to the client.
 
 ```python title="remote.py" linenums="1" hl_lines="17-23"
 from datetime import datetime
@@ -179,8 +177,8 @@ server = A2aAgentServer(agent).build()
 
 Additionally, remote agents support AG2's Group Chat features without needing any additional configuration:
 
-- [Context Variables](/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/){.internal-link}
-- [Guardrails](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/){.internal-link}
+- <a href="/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/" className="internal-link">Context Variables</a>
+- <a href="/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/" className="internal-link">Guardrails</a>
 
 Just use these features with your remote `ConversableAgent` agent, wrap it in `A2aAgentServer`, and let the magic happen!
 
@@ -242,11 +240,11 @@ general_agent = A2aRemoteAgent(
 
 ## Advanced A2A Configuration
 
-AG2 doesn't limit A2A to a default implementation. You can specify any and all parts of the server that you need. To enable this, we provide a way to use the native [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to fully customize your server.
+AG2 doesn't limit A2A to a default implementation. You can specify any and all parts of the server that you need. To enable this, we provide a way to use the native <a href="https://github.com/a2aproject/a2a-python" className="external-link" target="_blank" rel="noopener noreferrer">A2A python sdk</a> to fully customize your server.
 
 ### Agent Card
 
-The Agent Card describes your agent's capabilities and is [automatically discovered by clients](https://a2a-protocol.org/latest/topics/agent-discovery/){.external-link target="_blank"}.
+The Agent Card describes your agent's capabilities and is <a href="https://a2a-protocol.org/latest/topics/agent-discovery/" className="external-link" target="_blank" rel="noopener noreferrer">automatically discovered by clients</a>.
 
 To configure an Agent Card, you can use the `agent_card` and `extended_agent_card` parameters.
 
@@ -323,4 +321,4 @@ app = A2AFastAPIApplication(
 ).build()
 ```
 
-Please refer to the [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} documentation for more details on how to use it.
+Please refer to the <a href="https://github.com/a2aproject/a2a-python" className="external-link" target="_blank" rel="noopener noreferrer">A2A python sdk</a> documentation for more details on how to use it.

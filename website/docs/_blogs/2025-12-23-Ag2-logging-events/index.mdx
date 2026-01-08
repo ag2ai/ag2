@@ -1,0 +1,522 @@
+---
+title: "AG2 Event Logging: Standardized Observability with Python Logging"
+authors: [priyansh4320]
+tags: [Logging, Observability, Python, Events, Debugging]
+---
+
+![AG2 Event Logging](img/observability.png)
+
+AG2 now integrates with Python's standard `logging` module for event output, giving you full control over how agent events are captured, formatted, and processed. This integration brings enterprise-grade observability directly into your agent workflows.
+
+This article explores how to configure and customize AG2 event logging, with practical examples for testing, monitoring, and production deployments.
+
+{/* more */}
+
+## What is AG2 Event Logging?
+
+AG2 event logging provides a standardized way to capture and process events from agent interactions. All event output flows through the `ag2.event.processor` logger, which uses Python's standard `logging` module under the hood.
+
+
+**Key Features:**
+
+- **Standard Python Logging**: Leverages the familiar `logging` module you already know
+- **Centralized Configuration**: Configure once at application startup, affects all AG2 components
+- **Flexible Handlers**: Use any Python logging handler (file, stream, HTTP, database, etc.)
+- **Custom Formatters**: Structure output as JSON, plain text, or any custom format
+- **Powerful Filters**: Selectively log events based on content, level, or custom criteria
+- **Backwards Compatible**: Default behavior unchanged if no custom configuration is provided
+
+**Why This Matters:**
+
+Traditional logging approaches often require custom integration code for each component. AG2's event logging provides a unified interface that works consistently across all agent types, conversation patterns, and execution modes. Whether you're debugging a single-agent workflow or monitoring a complex multi-agent system, the same logging configuration applies.
+
+**When to Use Custom Event Logging:**
+
+Use custom event logging when you need:
+- **Testing and Validation**: Capture event output to verify agent behavior in automated tests
+- **Production Monitoring**: Send events to monitoring systems, log aggregation services, or databases
+- **Debugging**: Filter and format events to focus on specific issues or agent interactions
+- **Compliance and Auditing**: Maintain detailed logs of agent decisions and actions
+- **Performance Analysis**: Track event timing and frequency for optimization
+
+Don't use custom logging for simple development workflows—the default console output is sufficient for that.
+
+## Understanding the Event Logger
+
+All AG2 events flow through a single logger instance: `ag2.event.processor`. This logger follows Python's standard logging hierarchy and can be configured using any standard logging mechanism.
+
+The logger emits events at the `INFO` level by default, capturing:
+- Agent initialization and configuration
+- Message exchanges between agents
+- Tool and function calls
+- Conversation state changes
+- Termination conditions
+
+## Basic Setup
+
+The simplest way to customize event logging is to configure the logger before creating any agents:
+
+```python
+import logging
+import io
+
+# Get the AG2 event logger
+logger = logging.getLogger("ag2.event.processor")
+
+# Create a custom handler (e.g., StringIO for testing)
+log_stream = io.StringIO()
+handler = logging.StreamHandler(log_stream)
+handler.setFormatter(logging.Formatter("%(message)s"))
+
+# Replace default handlers
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+This configuration:
+- Replaces all default handlers with your custom handler
+- Sets the log level to `INFO` (you can use `DEBUG`, `WARNING`, `ERROR`, etc.)
+- Prevents propagation to parent loggers with `propagate = False`
+
+## Custom Formatters
+
+One of the most powerful features is the ability to use custom formatters. This enables structured logging, JSON output, or any format your monitoring system requires.
+
+### JSON Formatter Example
+
+For structured logging that integrates with log aggregation systems:
+```python
+import logging
+import json
+
+logger = logging.getLogger("ag2.event.processor")
+
+# JSON formatter example
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "message": record.getMessage(),
+            "level": record.levelname,
+            "timestamp": record.created
+        })
+
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+This formatter outputs each event as a JSON object, making it easy to parse and process with tools like Elasticsearch, Splunk, or custom monitoring dashboards.
+
+### Timestamped Formatter
+
+Add timestamps for better traceability:
+```python
+import logging
+
+logger = logging.getLogger("ag2.event.processor")
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+## Practical Examples
+
+### Example 1: Capturing Events for Testing
+
+One of the most common use cases is capturing event output in automated tests:
+```python
+import logging
+import io
+from autogen import AssistantAgent, UserProxyAgent
+
+# Setup logger to capture output
+logger = logging.getLogger("ag2.event.processor")
+log_stream = io.StringIO()
+handler = logging.StreamHandler(log_stream)
+handler.setFormatter(logging.Formatter("%(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+# Create agents and run chat
+assistant = AssistantAgent("assistant", llm_config=your_llm_config)
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+user_proxy.initiate_chat(assistant, message="Hello!")
+
+# Retrieve captured output
+output = log_stream.getvalue()
+print(output)  # Contains all event messages
+
+# Assert on specific events
+assert "TERMINATING RUN" in output
+```
+
+This pattern is invaluable for:
+- Verifying agent behavior in CI/CD pipelines
+- Regression testing after code changes
+- Validating conversation flows
+- Performance benchmarking
+
+### Example 2: File-Based Logging
+
+For production deployments, you might want to log events to files:
+```python
+import logging
+from logging.handlers import RotatingFileHandler
+
+logger = logging.getLogger("ag2.event.processor")
+
+# Create rotating file handler (max 10MB per file, keep 5 backups)
+file_handler = RotatingFileHandler(
+    "ag2_events.log",
+    maxBytes=10*1024*1024,
+    backupCount=5
+)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.handlers = [file_handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+This configuration automatically rotates log files when they reach 10MB, keeping the last 5 files for historical analysis.
+
+### Example 3: Multiple Handlers
+
+You can use multiple handlers simultaneously for different purposes:
+```python
+import logging
+import sys
+from logging.handlers import RotatingFileHandler
+
+logger = logging.getLogger("ag2.event.processor")
+
+# Console handler for immediate feedback
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter("%(message)s"))
+console_handler.setLevel(logging.INFO)
+
+# File handler for persistent storage
+file_handler = RotatingFileHandler("ag2_events.log", maxBytes=10*1024*1024, backupCount=5)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+file_handler.setLevel(logging.DEBUG)
+
+# Apply both handlers
+logger.handlers = [console_handler, file_handler]
+logger.setLevel(logging.DEBUG)
+logger.propagate = False
+```
+
+This setup provides:
+- Immediate console output for development
+- Detailed file logs for analysis
+- Different log levels for each handler
+
+## Advanced: Custom Filters
+
+Filters allow you to selectively log events based on custom criteria. This is powerful for focusing on specific types of events or reducing log volume.
+
+### Filtering by Event Content
+
+Only log termination events:
+```python
+import logging
+
+class EventFilter(logging.Filter):
+    def filter(self, record):
+        # Only log termination events
+        return "TERMINATING RUN" in record.getMessage()
+
+logger = logging.getLogger("ag2.event.processor")
+handler = logging.StreamHandler()
+handler.addFilter(EventFilter())
+handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+### Filtering by Agent Name
+
+Log events only from specific agents:
+
+```python
+import logging
+
+class AgentNameFilter(logging.Filter):
+    def __init__(self, agent_name):
+        super().__init__()
+        self.agent_name = agent_name
+
+    def filter(self, record):
+        message = record.getMessage()
+        return self.agent_name in message
+
+logger = logging.getLogger("ag2.event.processor")
+handler = logging.StreamHandler()
+handler.addFilter(AgentNameFilter("assistant"))
+handler.setFormatter(logging.Formatter("%(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+### Combining Filters
+You can combine multiple filters using logical operations:
+```python
+import logging
+
+class MultiEventFilter(logging.Filter):
+    def filter(self, record):
+        message = record.getMessage()
+        # Log if message contains any of these keywords
+        keywords = ["TERMINATING", "ERROR", "EXCEPTION"]
+        return any(keyword in message for keyword in keywords)
+
+logger = logging.getLogger("ag2.event.processor")
+handler = logging.StreamHandler()
+handler.addFilter(MultiEventFilter())
+handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+## Integration Patterns
+
+### Pattern 1: Testing Workflow
+
+A common pattern for testing agent workflows:
+```python
+import logging
+import io
+import pytest
+from autogen import AssistantAgent, UserProxyAgent
+
+@pytest.fixture
+def event_logger():
+    """Setup event logger for test capture."""
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    return logger, log_stream
+
+def test_agent_conversation(event_logger):
+    logger, log_stream = event_logger
+
+    assistant = AssistantAgent("assistant", llm_config=test_config)
+    user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+    user_proxy.initiate_chat(assistant, message="Test message")
+
+    output = log_stream.getvalue()
+    assert "TERMINATING RUN" in output
+    assert "assistant" in output.lower()
+```
+
+### Pattern 2: Production Monitoring
+
+For production deployments with external monitoring:
+```python
+import logging
+from logging.handlers import HTTPHandler, RotatingFileHandler
+
+logger = logging.getLogger("ag2.event.processor")
+
+# File handler for local storage
+file_handler = RotatingFileHandler("ag2_events.log", maxBytes=10*1024*1024, backupCount=5)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+
+# HTTP handler for remote monitoring (example)
+# http_handler = HTTPHandler("monitoring.example.com", "/logs", method="POST")
+# http_handler.setFormatter(JSONFormatter())
+
+logger.handlers = [file_handler]  # Add http_handler for remote logging
+logger.setLevel(logging.INFO)
+logger.propagate = False
+```
+
+### Pattern 3: Development vs Production
+
+Use environment-based configuration:
+```python
+import logging
+import os
+
+logger = logging.getLogger("ag2.event.processor")
+
+if os.getenv("ENVIRONMENT") == "production":
+    # Production: File logging with rotation
+    handler = RotatingFileHandler("ag2_events.log", maxBytes=10*1024*1024, backupCount=5)
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.setLevel(logging.INFO)
+else:
+    # Development: Console logging
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.setLevel(logging.DEBUG)
+
+logger.handlers = [handler]
+logger.propagate = False
+```
+
+## Best Practices
+
+### 1. Configure Early
+
+Configure the logger before creating any agents:
+
+```python
+# ✅ Good: Configure before agent creation
+logger = logging.getLogger("ag2.event.processor")
+# ... configure logger ...
+assistant = AssistantAgent("assistant", llm_config=config)
+
+# ❌ Bad: Configure after agent creation
+assistant = AssistantAgent("assistant", llm_config=config)
+logger = logging.getLogger("ag2.event.processor")
+# ... configure logger ... (may miss initial events)
+```
+
+### 2. Use Appropriate Log Levels
+
+Choose log levels that match your use case:
+
+```python
+# Development: DEBUG for detailed information
+logger.setLevel(logging.DEBUG)
+
+# Production: INFO for normal operation
+logger.setLevel(logging.INFO)
+
+# Troubleshooting: WARNING or ERROR for critical issues only
+logger.setLevel(logging.WARNING)
+```
+
+### 3. Prevent Propagation
+
+Set `propagate = False` to avoid duplicate logs from parent loggers:
+
+```python
+logger.propagate = False  # Prevents logs from appearing in root logger
+```
+### 4. Use Structured Formats for Production
+
+For production systems, use structured formats (JSON) that are easy to parse:
+
+```python
+# Structured format for log aggregation systems
+handler.setFormatter(JSONFormatter())
+```
+### 5. Implement Log Rotation
+
+For file-based logging, always use rotation to prevent disk space issues:
+```python
+from logging.handlers import RotatingFileHandler
+
+handler = RotatingFileHandler(
+    "ag2_events.log",
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5  # Keep 5 backup files
+)
+```
+
+### 6. Test Your Configuration
+
+Verify your logging configuration works as expected:
+
+```python
+logger = logging.getLogger("ag2.event.processor")
+# ... configure logger ...
+
+# Test that it's working
+logger.info("Test message")
+# Verify output appears as expected
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**1. No Events Appearing**
+
+Ensure the logger is configured before agent creation and that the log level is appropriate:
+
+```python
+logger = logging.getLogger("ag2.event.processor")
+logger.setLevel(logging.INFO)  # Make sure level is not too high
+logger.propagate = False
+```
+
+**2. Duplicate Logs**
+
+Set `propagate = False` to prevent logs from appearing in parent loggers:
+
+```python
+logger.propagate = False
+```
+
+**3. Missing Initial Events**
+
+Configure the logger before creating agents to capture all events from the start.
+
+**4. Performance Issues**
+
+Use filters to reduce log volume in high-throughput scenarios:
+
+```python
+handler.addFilter(EventFilter())  # Only log relevant events
+```
+
+## Benefits Summary
+
+- **Centralized Configuration**: Configure once at app startup, affects all AG2 packages
+- **Standard Python Logging**: Use any logging handler, formatter, or filter from Python's ecosystem
+- **Backwards Compatible**: Default behavior unchanged if no custom configuration is provided
+- **Testable**: Easy to capture and verify event output in automated tests
+- **Production Ready**: Integrate with monitoring systems, log aggregation, and alerting tools
+- **Flexible**: Support multiple handlers, custom formatters, and sophisticated filtering
+
+## Getting Started
+
+1. **Import logging module**:
+   ```python
+   import logging
+   ```
+
+2. **Get the AG2 event logger**:
+   ```python
+   logger = logging.getLogger("ag2.event.processor")
+   ```
+
+3. **Configure your handler and formatter**:
+   ```python
+   handler = logging.StreamHandler()
+   handler.setFormatter(logging.Formatter("%(message)s"))
+   logger.handlers = [handler]
+   logger.setLevel(logging.INFO)
+   logger.propagate = False
+   ```
+
+4. **Create and use agents** - events will flow through your configured logger
+
+5. **Review the documentation**: [Event Logging Setup](https://docs.ag2.ai/latest/docs/user-guide/misc/logging_events)
+
+## Additional Resources
+
+- [AG2 Event Logging Documentation](https://docs.ag2.ai/latest/docs/user-guide/misc/logging_events)
+- [Python Logging Module Documentation](https://docs.python.org/3/library/logging.html)
+- [Logging Best Practices](https://docs.python.org/3/howto/logging.html)
+
+---
+
+AG2's event logging integration with Python's standard logging module provides a powerful, flexible foundation for observability. Whether you're debugging agent interactions, monitoring production systems, or building comprehensive test suites, the same familiar logging APIs give you complete control over event capture and processing. Start customizing your event logging today and unlock new possibilities for agent observability.
