@@ -71,6 +71,7 @@ async def main():
     processor = BatchSpanProcessor(exporter)
     tracer_provider.add_span_processor(processor)
     trace.set_tracer_provider(tracer_provider)
+
     instrument_llm_wrapper(tracer_provider=tracer_provider)
     instrument_pattern(pattern, tracer_provider=tracer_provider)
 

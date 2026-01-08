@@ -63,6 +63,9 @@ def instrument_llm_wrapper(*, tracer_provider: TracerProvider, capture_messages:
     tracer = get_tracer(tracer_provider)
     original_create = OpenAIWrapper.create
 
+    if hasattr(original_create, "__otel_wrapped__"):
+        return
+
     def traced_create(self: OpenAIWrapper, **config: Any) -> Any:
         # Get model from config or wrapper's config_list
         model = config.get("model") or get_model_from_config_list(self._config_list)
@@ -103,6 +106,8 @@ def instrument_llm_wrapper(*, tracer_provider: TracerProvider, capture_messages:
             _set_llm_response_attributes(span, response, capture_messages)
 
             return response
+
+    traced_create.__otel_wrapped__ = True
 
     # Apply the patch to OpenAIWrapper.create
     OpenAIWrapper.create = traced_create

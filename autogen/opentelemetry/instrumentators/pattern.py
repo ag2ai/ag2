@@ -54,6 +54,8 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
         instrument_pattern(pattern, tracer_provider=tracer_provider)
     """
     old_prepare_group_chat = pattern.prepare_group_chat
+    if hasattr(old_prepare_group_chat, "__otel_wrapped__"):
+        return pattern
 
     def prepare_group_chat_traced(
         max_rounds: int,
@@ -90,11 +92,10 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
             temp_user_list,
         ) = old_prepare_group_chat(max_rounds, *args, **kwargs)
 
-        for agent in groupchat.agents:
-            instrument_agent(agent, tracer_provider=tracer_provider)
+        groupchat.agents = [instrument_agent(agent, tracer_provider=tracer_provider) for agent in groupchat.agents]
 
-        instrument_agent(manager, tracer_provider=tracer_provider)
-        instrument_groupchat(groupchat, tracer_provider=tracer_provider)
+        manager = instrument_agent(manager, tracer_provider=tracer_provider)
+        groupchat = instrument_groupchat(groupchat, tracer_provider=tracer_provider)
 
         # IMPORTANT: register_reply() in GroupChatManager.__init__ creates a shallow copy of groupchat
         # (via copy.copy). We need to also instrument that copy which is stored in manager._reply_func_list
@@ -102,7 +103,7 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
         for reply_func_entry in manager._reply_func_list:
             config = reply_func_entry.get("config")
             if isinstance(config, GroupChat) and config is not groupchat:
-                instrument_groupchat(config, tracer_provider=tracer_provider)
+                groupchat = instrument_groupchat(config, tracer_provider=tracer_provider)
 
         return (
             agents,
@@ -120,6 +121,7 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
             temp_user_list,
         )
 
+    prepare_group_chat_traced.__otel_wrapped__ = True
     pattern.prepare_group_chat = prepare_group_chat_traced
 
     return pattern
@@ -128,79 +130,85 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
 def instrument_groupchat(groupchat: GroupChat, *, tracer_provider: TracerProvider) -> GroupChat:
     tracer = get_tracer(tracer_provider)
     # Wrap _create_internal_agents to instrument temporary agents for auto speaker selection
-    old_create_internal_agents = groupchat._create_internal_agents
+    if not hasattr(groupchat._create_internal_agents, "__otel_wrapped__"):
+        old_create_internal_agents = groupchat._create_internal_agents
 
-    def create_internal_agents_traced(
-        agents: list[Agent],
-        max_attempts: int,
-        messages: list[dict[str, Any]],
-        validate_speaker_name: Any,
-        selector: ConversableAgent | None = None,
-    ) -> tuple[ConversableAgent, ConversableAgent]:
-        checking_agent, speaker_selection_agent = old_create_internal_agents(
-            agents, max_attempts, messages, validate_speaker_name, selector
-        )
-        # Instrument the temporary agents so their chats are traced
-        instrument_agent(checking_agent, tracer_provider=tracer_provider)
-        instrument_agent(speaker_selection_agent, tracer_provider=tracer_provider)
-        return checking_agent, speaker_selection_agent
+        def create_internal_agents_traced(
+            agents: list[Agent],
+            max_attempts: int,
+            messages: list[dict[str, Any]],
+            validate_speaker_name: Any,
+            selector: ConversableAgent | None = None,
+        ) -> tuple[ConversableAgent, ConversableAgent]:
+            checking_agent, speaker_selection_agent = old_create_internal_agents(
+                agents, max_attempts, messages, validate_speaker_name, selector
+            )
+            # Instrument the temporary agents so their chats are traced
+            checking_agent = instrument_agent(checking_agent, tracer_provider=tracer_provider)
+            speaker_selection_agent = instrument_agent(speaker_selection_agent, tracer_provider=tracer_provider)
+            return checking_agent, speaker_selection_agent
 
-    groupchat._create_internal_agents = create_internal_agents_traced
+        create_internal_agents_traced.__otel_wrapped__ = True
+        groupchat._create_internal_agents = create_internal_agents_traced
 
     # Wrap a_auto_select_speaker with a parent span
-    old_a_auto_select_speaker = groupchat.a_auto_select_speaker
+    if not hasattr(groupchat.a_auto_select_speaker, "__otel_wrapped__"):
+        old_a_auto_select_speaker = groupchat.a_auto_select_speaker
 
-    async def a_auto_select_speaker_traced(
-        last_speaker: Agent,
-        selector: ConversableAgent,
-        messages: list[dict[str, Any]] | None,
-        agents: list[Agent] | None,
-    ) -> Agent:
-        with tracer.start_as_current_span("speaker_selection") as span:
-            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
-            span.set_attribute("gen_ai.operation.name", "speaker_selection")
+        async def a_auto_select_speaker_traced(
+            last_speaker: Agent,
+            selector: ConversableAgent,
+            messages: list[dict[str, Any]] | None,
+            agents: list[Agent] | None,
+        ) -> Agent:
+            with tracer.start_as_current_span("speaker_selection") as span:
+                span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
+                span.set_attribute("gen_ai.operation.name", "speaker_selection")
 
-            # Record candidate agents
-            candidate_agents = agents if agents is not None else groupchat.agents
-            span.set_attribute(
-                "ag2.speaker_selection.candidates",
-                json.dumps([a.name for a in candidate_agents]),
-            )
+                # Record candidate agents
+                candidate_agents = agents if agents is not None else groupchat.agents
+                span.set_attribute(
+                    "ag2.speaker_selection.candidates",
+                    json.dumps([a.name for a in candidate_agents]),
+                )
 
-            result = await old_a_auto_select_speaker(last_speaker, selector, messages, agents)
+                result = await old_a_auto_select_speaker(last_speaker, selector, messages, agents)
 
-            # Record selected speaker
-            span.set_attribute("ag2.speaker_selection.selected", result.name)
-            return result
+                # Record selected speaker
+                span.set_attribute("ag2.speaker_selection.selected", result.name)
+                return result
 
-    groupchat.a_auto_select_speaker = a_auto_select_speaker_traced
+        a_auto_select_speaker_traced.__otel_wrapped__ = True
+        groupchat.a_auto_select_speaker = a_auto_select_speaker_traced
 
     # Wrap _auto_select_speaker (sync version) with a parent span
-    old_auto_select_speaker = groupchat._auto_select_speaker
+    if not hasattr(groupchat._auto_select_speaker, "__otel_wrapped__"):
+        old_auto_select_speaker = groupchat._auto_select_speaker
 
-    def auto_select_speaker_traced(
-        last_speaker: Agent,
-        selector: ConversableAgent,
-        messages: list[dict[str, Any]] | None,
-        agents: list[Agent] | None,
-    ) -> Agent:
-        with tracer.start_as_current_span("speaker_selection") as span:
-            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
-            span.set_attribute("gen_ai.operation.name", "speaker_selection")
+        def auto_select_speaker_traced(
+            last_speaker: Agent,
+            selector: ConversableAgent,
+            messages: list[dict[str, Any]] | None,
+            agents: list[Agent] | None,
+        ) -> Agent:
+            with tracer.start_as_current_span("speaker_selection") as span:
+                span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
+                span.set_attribute("gen_ai.operation.name", "speaker_selection")
 
-            # Record candidate agents
-            candidate_agents = agents if agents is not None else groupchat.agents
-            span.set_attribute(
-                "ag2.speaker_selection.candidates",
-                json.dumps([a.name for a in candidate_agents]),
-            )
+                # Record candidate agents
+                candidate_agents = agents if agents is not None else groupchat.agents
+                span.set_attribute(
+                    "ag2.speaker_selection.candidates",
+                    json.dumps([a.name for a in candidate_agents]),
+                )
 
-            result = old_auto_select_speaker(last_speaker, selector, messages, agents)
+                result = old_auto_select_speaker(last_speaker, selector, messages, agents)
 
-            # Record selected speaker
-            span.set_attribute("ag2.speaker_selection.selected", result.name)
-            return result
+                # Record selected speaker
+                span.set_attribute("ag2.speaker_selection.selected", result.name)
+                return result
 
-    groupchat._auto_select_speaker = auto_select_speaker_traced
+        auto_select_speaker_traced.__otel_wrapped__ = True
+        groupchat._auto_select_speaker = auto_select_speaker_traced
 
     return groupchat

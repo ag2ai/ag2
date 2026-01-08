@@ -48,6 +48,9 @@ def instrument_a2a_server(server: A2aAgentServer, *, tracer_provider: TracerProv
     """
     tracer = get_tracer(tracer_provider)
 
+    if getattr(server, "__otel_instrumented__", False):
+        return server
+
     class OTELMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             span_context = TRACE_PROPAGATOR.extract(request.headers)
@@ -56,5 +59,6 @@ def instrument_a2a_server(server: A2aAgentServer, *, tracer_provider: TracerProv
 
     server.add_middleware(OTELMiddleware)
 
-    instrument_agent(server.agent, tracer_provider=tracer_provider)
+    server.agent = instrument_agent(server.agent, tracer_provider=tracer_provider)
+    server.__otel_instrumented__ = True
     return server

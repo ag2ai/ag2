@@ -8,7 +8,6 @@
 from .instrumentators import (
     instrument_a2a_server,
     instrument_agent,
-    instrument_chats,
     instrument_llm_wrapper,
     instrument_pattern,
 )
@@ -16,7 +15,6 @@ from .instrumentators import (
 __all__ = (
     "instrument_a2a_server",
     "instrument_agent",
-    "instrument_chats",
     "instrument_llm_wrapper",
     "instrument_pattern",
 )
