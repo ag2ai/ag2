@@ -53,7 +53,6 @@ def instrument_pattern(pattern: Pattern, *, tracer_provider: TracerProvider) -> 
         pattern = SomePattern()
         instrument_pattern(pattern, tracer_provider=tracer_provider)
     """
-    tracer = get_tracer(tracer_provider)
     old_prepare_group_chat = pattern.prepare_group_chat
 
     def prepare_group_chat_traced(
