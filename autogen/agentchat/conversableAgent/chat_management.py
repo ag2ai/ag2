@@ -3,27 +3,44 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import copy
+import functools
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 from ...cache.cache import AbstractCache, Cache
 from ...events.agent_events import (
     ErrorEvent,
+    PostCarryoverProcessingEvent,
     RunCompletionEvent,
     TerminationEvent,
 )
 from ...exception_utils import InvalidCarryOverTypeError
+from ...fast_depends.utils import is_coroutine_callable
 from ...io.base import IOStream
-from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ...io.run_response import (
+    AsyncRunIterResponse,
+    AsyncRunResponse,
+    AsyncRunResponseProtocol,
+    RunIterResponse,
+    RunResponse,
+    RunResponseProtocol,
+)
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ...tools import Tool
 from ..agent import Agent
 from ..chat import (
     ChatResult,
     _post_process_carryover_item,
+    _validate_recipients,
+    a_initiate_chats,
+    initiate_chats,
 )
 from ..utils import consolidate_chat_info, gather_usage_summary
+
+if TYPE_CHECKING:
+    from ...events.base_event import BaseEvent
 
 if TYPE_CHECKING:
     from .base import ConversableAgentBase
@@ -724,6 +741,48 @@ class ChatManagementMixin:
             config: The LLM configuration
             trim_n_messages: The number of latest messages to trim from the messages list
         """
+        def concat_carryover(chat_message: str, carryover_message: str | list[dict[str, Any]]) -> str:
+            """Concatenate the carryover message to the chat message."""
+            prefix = f"{chat_message}\n" if chat_message else ""
+            if isinstance(carryover_message, str):
+                content = carryover_message
+            elif isinstance(carryover_message, list):
+                content = "\n".join(
+                    msg["content"] for msg in carryover_message if "content" in msg and msg["content"] is not None
+                )
+            else:
+                raise ValueError("Carryover message must be a string or a list of dictionaries")
+            return f"{prefix}Context:\n{content}"
+
+        carryover_config = chat["carryover_config"]
+        if "summary_method" not in carryover_config:
+            raise ValueError("Carryover configuration must contain a 'summary_method' key")
+        carryover_summary_method = carryover_config["summary_method"]
+        carryover_summary_args = carryover_config.get("summary_args") or {}
+        chat_message = ""
+        message = chat.get("message")
+        if message:
+            chat_message = message(recipient, messages, sender, config) if callable(message) else message
+        content_messages = copy.deepcopy(messages)
+        content_messages = content_messages[:-trim_n_messages]
+
+        if carryover_summary_method == "all":
+            carry_over_message = concat_carryover(chat_message, content_messages)
+        elif carryover_summary_method == "last_msg":
+            carry_over_message = concat_carryover(chat_message, content_messages[-1]["content"])
+        elif carryover_summary_method == "reflection_with_llm":
+            chat["recipient"]._oai_messages[sender] = content_messages
+            carry_over_message_llm = ChatManagementMixin._reflection_with_llm_as_summary(
+                sender=sender,
+                recipient=chat["recipient"],
+                summary_args=carryover_summary_args,
+            )
+            recipient._oai_messages[sender] = []
+            carry_over_message = concat_carryover(chat_message, carry_over_message_llm)
+        elif isinstance(carryover_summary_method, Callable):
+            carry_over_message_result = carryover_summary_method(recipient, content_messages, carryover_summary_args)
+            carry_over_message = concat_carryover(chat_message, carry_over_message_result)
+        chat["message"] = carry_over_message
 
     def _process_carryover(self: "ConversableAgentBase", content: str, kwargs: dict) -> str:
         # Makes sure there's a carryover
@@ -740,3 +799,440 @@ class ChatManagementMixin:
                 "Carryover should be a string or a list of strings. Not adding carryover to the message."
             )
         return content
+
+    def run_iter(
+        self: "ConversableAgentBase",
+        recipient: Optional["ConversableAgentBase"] = None,
+        clear_history: bool = True,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = None,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
+        yield_on: Sequence[type["BaseEvent"]] | None = None,
+        **kwargs: Any,
+    ) -> RunIterResponse:
+        """Run a chat with iterator-based stepped execution."""
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
+        agents = [self, recipient] if recipient else [self]
+
+        def create_thread(iostream: ThreadIOStream) -> threading.Thread:
+            if recipient is None:
+                def initiate_chat() -> None:
+                    with (
+                        IOStream.set_default(iostream),
+                        self._create_or_get_executor(
+                            executor_kwargs=executor_kwargs,
+                            tools=tools,
+                            agent_name="user",
+                            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                        ) as executor,
+                    ):
+                        try:
+                            if msg_to == "agent":
+                                chat_result = executor.initiate_chat(
+                                    self,
+                                    message=message,
+                                    clear_history=clear_history,
+                                    max_turns=max_turns,
+                                    summary_method=summary_method,
+                                )
+                            else:
+                                chat_result = self.initiate_chat(
+                                    executor,
+                                    message=message,
+                                    clear_history=clear_history,
+                                    max_turns=max_turns,
+                                    summary_method=summary_method,
+                                )
+                            IOStream.get_default().send(
+                                RunCompletionEvent(
+                                    history=chat_result.chat_history,
+                                    summary=chat_result.summary,
+                                    cost=chat_result.cost,
+                                    last_speaker=self.name,
+                                )
+                            )
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+            else:
+                def initiate_chat() -> None:
+                    with IOStream.set_default(iostream):
+                        try:
+                            chat_result = self.initiate_chat(
+                                recipient,
+                                clear_history=clear_history,
+                                silent=silent,
+                                cache=cache,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                                summary_args=summary_args,
+                                message=message,
+                                **kwargs,
+                            )
+                            _last_speaker = (
+                                recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                            )
+                            if hasattr(recipient, "last_speaker"):
+                                _last_speaker = recipient.last_speaker
+                            IOStream.get_default().send(
+                                RunCompletionEvent(
+                                    history=chat_result.chat_history,
+                                    summary=chat_result.summary,
+                                    cost=chat_result.cost,
+                                    last_speaker=_last_speaker.name,
+                                )
+                            )
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+            return threading.Thread(target=initiate_chat, daemon=True)
+
+        return RunIterResponse(
+            start_thread_func=create_thread,
+            yield_on=yield_on,
+            agents=agents,
+        )
+
+    def a_run_iter(
+        self: "ConversableAgentBase",
+        recipient: Optional["ConversableAgentBase"] = None,
+        clear_history: bool = True,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = None,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
+        yield_on: Sequence[type["BaseEvent"]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncRunIterResponse:
+        """Async version of run_iter() for async contexts."""
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
+        agents = [self, recipient] if recipient else [self]
+
+        def create_thread(iostream: ThreadIOStream) -> threading.Thread:
+            if recipient is None:
+                async def async_initiate_chat() -> None:
+                    with (
+                        IOStream.set_default(iostream),
+                        self._create_or_get_executor(
+                            executor_kwargs=executor_kwargs,
+                            tools=tools,
+                            agent_name="user",
+                            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                        ) as executor,
+                    ):
+                        if msg_to == "agent":
+                            chat_result = await executor.a_initiate_chat(
+                                self,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+                        else:
+                            chat_result = await self.a_initiate_chat(
+                                executor,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+                        iostream.send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=self.name,
+                            )
+                        )
+
+                def run_in_thread() -> None:
+                    with IOStream.set_default(iostream):
+                        try:
+                            asyncio.run(async_initiate_chat())
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+            else:
+                async def async_initiate_chat() -> None:
+                    chat_result = await self.a_initiate_chat(
+                        recipient,
+                        clear_history=clear_history,
+                        silent=silent,
+                        cache=cache,
+                        max_turns=max_turns,
+                        summary_method=summary_method,
+                        summary_args=summary_args,
+                        message=message,
+                        **kwargs,
+                    )
+                    last_speaker = recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                    if hasattr(recipient, "last_speaker"):
+                        last_speaker = recipient.last_speaker
+                    iostream.send(
+                        RunCompletionEvent(
+                            history=chat_result.chat_history,
+                            summary=chat_result.summary,
+                            cost=chat_result.cost,
+                            last_speaker=last_speaker.name,
+                        )
+                    )
+
+                def run_in_thread() -> None:
+                    with IOStream.set_default(iostream):
+                        try:
+                            asyncio.run(async_initiate_chat())
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+            return threading.Thread(target=run_in_thread, daemon=True)
+
+        return AsyncRunIterResponse(
+            start_thread_func=create_thread,
+            yield_on=yield_on,
+            agents=agents,
+        )
+
+    def initiate_chats(self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
+        """(Experimental) Initiate chats with multiple agents."""
+        _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+        self._finished_chats = initiate_chats(_chat_queue)
+        return self._finished_chats
+
+    async def a_initiate_chats(self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
+        _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+        self._finished_chats = await a_initiate_chats(_chat_queue)
+        return self._finished_chats
+
+    def sequential_run(
+        self: "ConversableAgentBase",
+        chat_queue: list[dict[str, Any]],
+    ) -> list[RunResponseProtocol]:
+        """(Experimental) Initiate chats with multiple agents sequentially."""
+        iostreams = [ThreadIOStream() for _ in range(len(chat_queue))]
+        responses = [RunResponse(iostream, agents=[]) for iostream in iostreams]
+
+        def _initiate_chats(
+            iostreams: list[ThreadIOStream] = iostreams,
+            responses: list[RunResponseProtocol] = responses,
+        ) -> None:
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+                        if not chat_info.get("silent", False):
+                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+                        sender = chat_info["sender"]
+                        chat_res = sender.initiate_chat(**chat_info)
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_res.chat_history,
+                                summary=chat_res.summary,
+                                cost=chat_res.cost,
+                                last_speaker=(self if chat_res.chat_history[-1]["name"] == self.name else sender).name,
+                            )
+                        )
+                        finished_chats.append(chat_res)
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(target=_initiate_chats, daemon=True).start()
+        return responses
+
+    async def a_sequential_run(
+        self: "ConversableAgentBase",
+        chat_queue: list[dict[str, Any]],
+    ) -> list[AsyncRunResponseProtocol]:
+        """(Experimental) Initiate chats with multiple agents sequentially."""
+        iostreams = [AsyncThreadIOStream() for _ in range(len(chat_queue))]
+        responses = [AsyncRunResponse(iostream, agents=[]) for iostream in iostreams]
+
+        async def _a_initiate_chats(
+            iostreams: list[AsyncThreadIOStream] = iostreams,
+            responses: list[AsyncRunResponseProtocol] = responses,
+        ) -> None:
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+                        if not chat_info.get("silent", False):
+                            iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
+                        sender = chat_info["sender"]
+                        chat_res = await sender.a_initiate_chat(**chat_info)
+                        iostream.send(
+                            RunCompletionEvent(
+                                history=chat_res.chat_history,
+                                summary=chat_res.summary,
+                                cost=chat_res.cost,
+                                last_speaker=(self if chat_res.chat_history[-1]["name"] == self.name else sender).name,
+                            )
+                        )
+                        finished_chats.append(chat_res)
+            except Exception as e:
+                iostream.send(ErrorEvent(error=e))
+
+        asyncio.create_task(_a_initiate_chats())
+        return responses
+
+    def _check_chat_queue_for_sender(self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Check the chat queue and add the "sender" key if it's missing."""
+        chat_queue_with_sender = []
+        for chat_info in chat_queue:
+            if chat_info.get("sender") is None:
+                chat_info["sender"] = self
+            chat_queue_with_sender.append(chat_info)
+        return chat_queue_with_sender
+
+    @staticmethod
+    def _process_chat_queue_carryover(
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: str | Callable[..., Any],
+        sender: Agent,
+        config: Any,
+        trim_messages: int = 2,
+    ) -> tuple[bool, str | None]:
+        """Process carryover configuration for the first chat in the queue."""
+        restore_chat_queue_message = False
+        original_chat_queue_message = None
+        if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
+            if "message" in chat_queue[0]:
+                restore_chat_queue_message = True
+                original_chat_queue_message = chat_queue[0]["message"]
+            ChatManagementMixin._process_nested_chat_carryover(
+                chat=chat_queue[0],
+                recipient=recipient,
+                messages=messages,
+                sender=sender,
+                config=config,
+                trim_n_messages=trim_messages,
+            )
+        return restore_chat_queue_message, original_chat_queue_message
+
+    @staticmethod
+    def _summary_from_nested_chats(
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: list[dict[str, Any]] | None,
+        sender: Agent,
+        config: Any,
+    ) -> tuple[bool, str | None]:
+        """A simple chat reply function that initiates nested chats and returns summary."""
+        restore_chat_queue_message, original_chat_queue_message = ChatManagementMixin._process_chat_queue_carryover(
+            chat_queue, recipient, messages, sender, config
+        )
+        chat_to_run = ChatManagementMixin._get_chats_to_run(chat_queue, recipient, messages, sender, config)
+        if not chat_to_run:
+            return True, None
+        res = initiate_chats(chat_to_run)
+        if restore_chat_queue_message:
+            chat_queue[0]["message"] = original_chat_queue_message
+        return True, res[-1].summary
+
+    @staticmethod
+    async def _a_summary_from_nested_chats(
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: list[dict[str, Any]] | None,
+        sender: Agent,
+        config: Any,
+    ) -> tuple[bool, str | None]:
+        """Async version of _summary_from_nested_chats."""
+        restore_chat_queue_message, original_chat_queue_message = ChatManagementMixin._process_chat_queue_carryover(
+            chat_queue, recipient, messages, sender, config
+        )
+        chat_to_run = ChatManagementMixin._get_chats_to_run(chat_queue, recipient, messages, sender, config)
+        if not chat_to_run:
+            return True, None
+        res = await a_initiate_chats(chat_to_run)
+        index_of_last_chat = chat_to_run[-1]["chat_id"]
+        if restore_chat_queue_message:
+            chat_queue[0]["message"] = original_chat_queue_message
+        return True, res[index_of_last_chat].summary
+
+    def register_nested_chats(
+        self: "ConversableAgentBase",
+        chat_queue: list[dict[str, Any]],
+        trigger: type[Agent] | str | Agent | Callable[[Agent], bool] | list,
+        reply_func_from_nested_chats: str | Callable[..., Any] = "summary_from_nested_chats",
+        position: int = 2,
+        use_async: bool | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Register a nested chat reply function."""
+        if use_async:
+            for chat in chat_queue:
+                if chat.get("chat_id") is None:
+                    raise ValueError("chat_id is required for async nested chats")
+        if use_async:
+            if reply_func_from_nested_chats == "summary_from_nested_chats":
+                reply_func_from_nested_chats = self._a_summary_from_nested_chats
+            if not callable(reply_func_from_nested_chats) or not is_coroutine_callable(reply_func_from_nested_chats):
+                raise ValueError("reply_func_from_nested_chats must be a callable and a coroutine")
+            async def wrapped_reply_func(recipient, messages=None, sender=None, config=None):
+                return await reply_func_from_nested_chats(chat_queue, recipient, messages, sender, config)
+        else:
+            if reply_func_from_nested_chats == "summary_from_nested_chats":
+                reply_func_from_nested_chats = self._summary_from_nested_chats
+            if not callable(reply_func_from_nested_chats):
+                raise ValueError("reply_func_from_nested_chats must be a callable")
+            def wrapped_reply_func(recipient, messages=None, sender=None, config=None):
+                return reply_func_from_nested_chats(chat_queue, recipient, messages, sender, config)
+        functools.update_wrapper(wrapped_reply_func, reply_func_from_nested_chats)
+        self.register_reply(
+            trigger,
+            wrapped_reply_func,
+            position,
+            kwargs.get("config"),
+            kwargs.get("reset_config"),
+            ignore_async_in_sync_chat=(
+                not use_async if use_async is not None else kwargs.get("ignore_async_in_sync_chat")
+            ),
+        )
+
+    def get_chat_results(self: "ConversableAgentBase", chat_index: int | None = None) -> list[ChatResult] | ChatResult:
+        """A summary from the finished chats of particular agents."""
+        if chat_index is not None:
+            return self._finished_chats[chat_index]
+        else:
+            return self._finished_chats

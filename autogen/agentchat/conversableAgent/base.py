@@ -18,6 +18,7 @@ from ...oai.client import OpenAIWrapper
 from ...runtime_logging import log_new_agent, logging_enabled
 from ...tools import Tool
 from ..agent import Agent, LLMAgent
+from ..chat import ChatResult
 from .types import UpdateSystemMessage
 
 if TYPE_CHECKING:
@@ -130,6 +131,7 @@ class ConversableAgentBase(LLMAgent):
         self._reply_func_list = []
         self._human_input = []
         self.reply_at_receive = defaultdict(bool)
+        self._finished_chats: list[ChatResult] = []
 
         self.context_variables = context_variables if context_variables is not None else ContextVariables()
 
