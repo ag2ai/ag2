@@ -56,54 +56,19 @@ class ConversableUtilsMixin:
         and the recipient's termination condition.
 
         Args:
-            recipient (ConversableAgentBase): The agent to check for termination condition.
+            recipient (ConversableAgent): The agent to check for termination condition.
             message (dict[str, Any]): The message dictionary to evaluate for termination.
 
         Returns:
             bool: True if the chat should be terminated, False otherwise.
         """
+        content = message.get("content")
         return (
             isinstance(recipient, ConversableAgentBase)
-            and isinstance(message.get("content"), str)
+            and content is not None
             and hasattr(recipient, "_is_termination_msg")
             and recipient._is_termination_msg(message)
         )
-
-    @staticmethod
-    def _get_chats_to_run(
-        chat_queue: list[dict[str, Any]],
-        recipient: "Agent",
-        messages: list[dict[str, Any]] | None,
-        sender: "Agent",
-        config: Any,
-    ) -> list[dict[str, Any]]:
-        """A simple chat reply function.
-        This function initiate one or a sequence of chats between the "recipient" and the agents in the
-        chat_queue.
-
-        It extracts and returns a summary from the nested chat based on the "summary_method" in each chat in chat_queue.
-
-        Returns:
-            Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
-        """
-        last_msg = messages[-1].get("content")
-        chat_to_run = []
-        for i, c in enumerate(chat_queue):
-            current_c = c.copy()
-            if current_c.get("sender") is None:
-                current_c["sender"] = recipient
-            message = current_c.get("message")
-            # If message is not provided in chat_queue, we by default use the last message from the original chat history as the first message in this nested chat (for the first chat in the chat queue).
-            # NOTE: This setting is prone to change.
-            if message is None and i == 0:
-                message = last_msg
-            if callable(message):
-                message = message(recipient, messages, sender, config)
-            # We only run chat that has a valid message. NOTE: This is prone to change depending on applications.
-            if message:
-                current_c["message"] = message
-                chat_to_run.append(current_c)
-        return chat_to_run
 
     def _check_chat_queue_for_sender(
         self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]

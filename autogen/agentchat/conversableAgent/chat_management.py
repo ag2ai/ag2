@@ -64,27 +64,6 @@ class ChatManagementMixin:
         if prepare_recipient:
             recipient._prepare_chat(self, clear_history, False, reply_at_receive)
 
-    def _should_terminate_chat(
-        self: "ConversableAgentBase", recipient: "ConversableAgentBase", message: dict[str, Any]
-    ) -> bool:
-        """
-        Determines whether the chat should be terminated based on the message content
-        and the recipient's termination condition.
-
-        Args:
-            recipient (ConversableAgent): The agent to check for termination condition.
-            message (dict[str, Any]): The message dictionary to evaluate for termination.
-
-        Returns:
-            bool: True if the chat should be terminated, False otherwise.
-        """
-        return (
-            isinstance(recipient, type(self))
-            and isinstance(message.get("content"), str)
-            and hasattr(recipient, "_is_termination_msg")
-            and recipient._is_termination_msg(message)
-        )
-
     def initiate_chat(
         self: "ConversableAgentBase",
         recipient: "ConversableAgentBase",
@@ -92,7 +71,7 @@ class ChatManagementMixin:
         silent: bool | None = False,
         cache: AbstractCache | None = None,
         max_turns: int | None = None,
-        summary_method: str | Callable[..., Any] | None = "last_msg",
+        summary_method: str | Callable[..., Any] | None = None,
         summary_args: dict[str, Any] | None = {},
         message: dict[str, Any] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
@@ -187,6 +166,8 @@ class ChatManagementMixin:
         Returns:
             ChatResult: an ChatResult object.
         """
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
         iostream = IOStream.get_default()
 
         cache = Cache.get_current_cache(cache)
@@ -254,7 +235,7 @@ class ChatManagementMixin:
         silent: bool | None = False,
         cache: AbstractCache | None = None,
         max_turns: int | None = None,
-        summary_method: str | Callable[..., Any] | None = "last_msg",
+        summary_method: str | Callable[..., Any] | None = None,
         summary_args: dict[str, Any] | None = {},
         message: dict[str, Any] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
@@ -263,6 +244,8 @@ class ChatManagementMixin:
         msg_to: str | None = "agent",
         **kwargs: Any,
     ) -> RunResponseProtocol:
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
         iostream = ThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = RunResponse(iostream, agents=agents)
@@ -364,7 +347,7 @@ class ChatManagementMixin:
         silent: bool | None = False,
         cache: AbstractCache | None = None,
         max_turns: int | None = None,
-        summary_method: str | Callable[..., Any] | None = "last_msg",
+        summary_method: str | Callable[..., Any] | None = None,
         summary_args: dict[str, Any] | None = {},
         message: str | Callable[..., Any] | None = None,
         **kwargs: Any,
@@ -380,6 +363,8 @@ class ChatManagementMixin:
         Returns:
             ChatResult: an ChatResult object.
         """
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
         iostream = IOStream.get_default()
 
         _chat_info = locals().copy()
@@ -442,7 +427,7 @@ class ChatManagementMixin:
         silent: bool | None = False,
         cache: AbstractCache | None = None,
         max_turns: int | None = None,
-        summary_method: str | Callable[..., Any] | None = "last_msg",
+        summary_method: str | Callable[..., Any] | None = None,
         summary_args: dict[str, Any] | None = {},
         message: dict[str, Any] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
@@ -451,6 +436,8 @@ class ChatManagementMixin:
         msg_to: str | None = "agent",
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
+        if summary_method is None:
+            summary_method = self.DEFAULT_SUMMARY_METHOD
         iostream = AsyncThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = AsyncRunResponse(iostream, agents=agents)
