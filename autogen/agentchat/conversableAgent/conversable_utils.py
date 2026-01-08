@@ -130,6 +130,71 @@ class ConversableUtilsMixin:
 
         return [{"type": "text", "text": self._process_carryover("", kwargs)}] + content
 
+    def generate_init_message(
+        self: "ConversableAgentBase", message: dict[str, Any] | str | None, **kwargs: Any
+    ) -> str | dict[str, Any]:
+        """Generate the initial message for the agent.
+        If message is None, input() will be called to get the initial message.
+
+        Args:
+            message (str or None): the message to be processed.
+            **kwargs: any additional information. It has the following reserved fields:
+                "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string.
+                    If provided, we will combine this carryover with the "message" content when generating the initial chat
+                    message.
+
+        Returns:
+            str or dict: the processed message.
+        """
+        if message is None:
+            message = self.get_human_input(">")
+
+        return self._handle_carryover(message, kwargs)
+
+    def _handle_carryover(
+        self: "ConversableAgentBase", message: str | dict[str, Any], kwargs: dict
+    ) -> str | dict[str, Any]:
+        if not kwargs.get("carryover"):
+            return message
+
+        if isinstance(message, str):
+            return self._process_carryover(message, kwargs)
+
+        elif isinstance(message, dict):
+            if isinstance(message.get("content"), str):
+                # Makes sure the original message is not mutated
+                message = message.copy()
+                message["content"] = self._process_carryover(message["content"], kwargs)
+            elif isinstance(message.get("content"), list):
+                # Makes sure the original message is not mutated
+                message = message.copy()
+                message["content"] = self._process_multimodal_carryover(message["content"], kwargs)
+        else:
+            raise InvalidCarryOverTypeError("Carryover should be a string or a list of strings.")
+
+        return message
+
+    async def a_generate_init_message(
+        self: "ConversableAgentBase", message: dict[str, Any] | str | None, **kwargs: Any
+    ) -> str | dict[str, Any]:
+        """Generate the initial message for the agent.
+        If message is None, input() will be called to get the initial message.
+
+        Args:
+            message (str or None): the message to be processed.
+            **kwargs: any additional information. It has the following reserved fields:
+                "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string.
+                    If provided, we will combine this carryover with the "message" content when generating the initial chat
+                    message.
+
+        Returns:
+            str or dict: the processed message.
+        """
+        if message is None:
+            message = await self.a_get_human_input(">")
+
+        return self._handle_carryover(message, kwargs)
+
     @staticmethod
     def _create_tool_if_needed(
         func_or_tool: F | Tool,
