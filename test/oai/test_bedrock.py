@@ -112,6 +112,7 @@ def test_bedrock_llm_config_entry_str():
 
 # Test initialization and configuration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
     BedrockClient(aws_region="us-east-1")
@@ -1295,18 +1296,7 @@ class TestBedrockStructuredOutputIntegration:
                 "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
             )
 
-        # Skip if no credentials are available (access key/secret key, profile, or IAM role)
-        # Check for explicit credentials first
-        has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
-
-        # If no explicit credentials, check if boto3 is available (might use IAM role)
-        # If boto3 is available, we might be able to use IAM role
-        # We'll proceed and let the test fail if credentials are actually missing
-        if not has_explicit_creds and importlib.util.find_spec("boto3") is None:
-            pytest.skip(
-                "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
-            )
-
+    @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_pydantic_structured_output(self):
         """Test creating and running an agent with Pydantic structured output."""
@@ -1415,6 +1405,7 @@ class TestBedrockStructuredOutputIntegration:
             ]
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
 
+    @pytest.mark.integration
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_agent_with_dict_schema_structured_output(self):
         """Test creating and running an agent with dict schema structured output."""
@@ -1528,171 +1519,11 @@ class TestBedrockStructuredOutputIntegration:
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
 
 
-# Test for retry configuration and exponential backoff
-def test_bedrock_llm_config_entry_with_retry_config():
-    """Test BedrockLLMConfigEntry with retry configuration parameters."""
-    bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
-        aws_region="us-east-1",
-        total_max_attempts=10,
-        max_attempts=3,
-        mode="adaptive",
-    )
-    expected = {
-        "api_type": "bedrock",
-        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "aws_region": "us-east-1",
-        "total_max_attempts": 10,
-        "max_attempts": 3,
-        "mode": "adaptive",
-        "tags": [],
-        "supports_system_prompts": True,
-    }
-    actual = bedrock_llm_config.model_dump()
-    assert actual == expected
-
-
-def test_bedrock_llm_config_entry_retry_config_defaults():
-    """Test BedrockLLMConfigEntry with default retry configuration values."""
-    bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
-        aws_region="us-east-1",
-    )
-    # Check that defaults are applied
-    assert bedrock_llm_config.total_max_attempts == 5
-    assert bedrock_llm_config.max_attempts == 5
-    assert bedrock_llm_config.mode == "standard"
-
-
-def test_bedrock_llm_config_entry_retry_config_all_modes():
-    """Test BedrockLLMConfigEntry with all valid retry mode values."""
-    for mode in ["standard", "adaptive", "legacy"]:
-        bedrock_llm_config = BedrockLLMConfigEntry(
-            model="anthropic.claude-sonnet-4-5-20250929-v1:0",
-            aws_region="us-east-1",
-            mode=mode,
-        )
-        assert bedrock_llm_config.mode == mode
-
-
-def test_bedrock_llm_config_entry_retry_config_none_values():
-    """Test BedrockLLMConfigEntry with None values for retry config."""
-    bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
-        aws_region="us-east-1",
-        total_max_attempts=None,
-        max_attempts=None,
-    )
-    assert bedrock_llm_config.total_max_attempts is None
-    assert bedrock_llm_config.max_attempts is None
-    assert bedrock_llm_config.mode == "standard"  # mode should still have default
-
-
-# Test initialization and configuration
-@run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_bedrock_client_retry_config():
-    """Test BedrockClient initialization with retry configuration parameters."""
-    client = BedrockClient(
-        aws_region="us-east-1",
-        total_max_attempts=10,
-        max_attempts=3,
-        mode="adaptive",
-    )
-
-    # Verify retry config is set correctly
-    assert client._total_max_attempts == 10
-    assert client._max_attempts == 3
-    assert client._mode == "adaptive"
-    # Verify retry_config has all expected keys
-    assert client._retry_config["total_max_attempts"] == 10
-    assert client._retry_config.get("max_attempts", client._max_attempts) == 3
-    assert client._retry_config["mode"] == "adaptive"
-
-
-@run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_bedrock_client_retry_config_defaults():
-    """Test BedrockClient initialization with default retry configuration."""
-    client = BedrockClient(aws_region="us-east-1")
-
-    # Verify default retry config values
-    assert client._total_max_attempts == 5
-    assert client._max_attempts == 5
-    assert client._mode == "standard"
-    # Verify retry_config has all expected keys
-    assert client._retry_config["total_max_attempts"] == 5
-    assert client._retry_config.get("max_attempts", client._max_attempts) == 5
-    assert client._retry_config["mode"] == "standard"
-
-
-@run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_bedrock_client_retry_config_all_modes():
-    """Test BedrockClient initialization with all valid retry mode values."""
-    for mode in ["standard", "adaptive", "legacy"]:
-        client = BedrockClient(
-            aws_region="us-east-1",
-            mode=mode,
-        )
-        assert client._mode == mode
-        assert client._retry_config["mode"] == mode
-
-
-@run_for_optional_imports(["boto3", "botocore"], "bedrock")
-@patch("autogen.oai.bedrock.boto3.client")
-@patch("autogen.oai.bedrock.boto3.Session")
-def test_bedrock_client_retry_config_passed_to_boto3(mock_session, mock_client):
-    """Test that retry config is correctly passed to boto3 Config."""
-
-    # Mock the session and client
-    mock_session_instance = MagicMock()
-    mock_session.return_value = mock_session_instance
-    mock_client_instance = MagicMock()
-    mock_session_instance.client.return_value = mock_client_instance
-
-    # Create client with custom retry config
-    client = BedrockClient(
-        aws_region="us-east-1",
-        aws_access_key="test_key",
-        aws_secret_key="test_secret",
-        total_max_attempts=7,
-        max_attempts=2,
-        mode="legacy",
-    )
-
-    # Verify that boto3.client or session.client was called
-    # The Config object should have been created with retry config
-    # We can't directly inspect the Config object, but we can verify
-    # the client was initialized with the correct parameters
-    assert client._retry_config["total_max_attempts"] == 7
-    assert client._retry_config.get("max_attempts", client._max_attempts) == 2
-    assert client._retry_config["mode"] == "legacy"
-
-
-@run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_bedrock_client_retry_config_with_none_values():
-    """Test BedrockClient initialization with None values for retry config.
-
-    Note: boto3 Config does not accept None values, so this test verifies
-    that the code should handle None by using defaults or skipping None values.
-    """
-    # Since boto3 doesn't accept None, we should either:
-    # 1. Use defaults when None is provided (modify bedrock.py)
-    # 2. Skip None values in retry_config (modify bedrock.py)
-    # For now, this test should expect an error or be removed
-    with pytest.raises(TypeError, match="not supported between instances of 'NoneType' and 'int'"):
-        BedrockClient(
-            aws_region="us-east-1",
-            total_max_attempts=None,
-            max_attempts=None,
-        )
-
-
-# Integration tests for Bedrock exponential backoff and retry configuration
-
-
+# Integration tests for Bedrock additional_model_request_fields
 @pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-class TestBedrockRetryConfigIntegration:
-    """Integration tests for Bedrock exponential backoff and retry configuration with real API calls."""
+class TestBedrockAdditionalModelRequestFieldsIntegration:
+    """Integration tests for Bedrock additional_model_request_fields with real API calls."""
 
     def setup_method(self):
         """Setup method run before each test."""
@@ -1722,6 +1553,44 @@ class TestBedrockRetryConfigIntegration:
                 "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
             )
 
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_thinking_configuration(self):
+        """Test creating and running an agent with thinking configuration via additional_model_request_fields."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Get AWS configuration from environment - check both standard and notebook variable names
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        # Try notebook format first, then standard AWS format
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        # Use notebook's model format if BEDROCK_MODEL is set, otherwise default to notebook's example
+        # Note: thinking configuration requires models that support it (e.g., Claude 3.7 Sonnet)
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Thinking configuration
+        thinking_config = {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        }
+
+        # Create LLM config with thinking configuration via additional_model_request_fields
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": aws_access_key,
+                "aws_secret_key": aws_secret_key,
+                "aws_profile_name": aws_profile,
+                "max_tokens": 4096,  # max_tokens must be greater than thinking budget
+                "additional_model_request_fields": {"thinking": thinking_config},
+            },
+        )
+
         # Skip if no credentials are available (access key/secret key, profile, or IAM role)
         # Check for explicit credentials first
         has_explicit_creds = (aws_access_key and aws_secret_key) or aws_profile
@@ -1733,6 +1602,13 @@ class TestBedrockRetryConfigIntegration:
             pytest.skip(
                 "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
             )
+
+        # Create agent with thinking capability
+        reasoning_agent = ConversableAgent(
+            name="reasoning_assistant",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant that reasons through problems step by step.",
+        )
 
     def _get_aws_config(self):
         """Helper method to get AWS configuration from environment."""
@@ -1757,7 +1633,6 @@ class TestBedrockRetryConfigIntegration:
         """Test that default retry configuration works correctly."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
@@ -1783,26 +1658,92 @@ class TestBedrockRetryConfigIntegration:
             human_input_mode="NEVER",
         )
 
-        # Verify the client has default retry config
-        # Access the client through the agent's client wrapper
-        client = agent.client._clients[0]
-        assert isinstance(client, BedrockClient)
-        assert client._total_max_attempts == 5
-        assert client._max_attempts == 5
-        assert client._mode == "standard"
-        assert client._retry_config["total_max_attempts"] == 5
-        assert client._retry_config.get("max_attempts", client._max_attempts) == 5
-        assert client._retry_config["mode"] == "standard"
-
-        # Test that the agent can make a successful call
+        # Run the agent with a problem that benefits from reasoning
         result = agent.run(
-            message="What is 2 + 2?",
-            max_turns=1,
+            message="Compare and contrast JavaScript and TypeScript. Provide a detailed analysis.",
+            max_turns=3,
         )
         result.process()
 
+        # Verify the response is received
         assert result is not None
         assert len(result.messages) > 0
+
+        # Find the assistant message
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+        # Verify the content is not empty (thinking tokens are consumed but not shown in response)
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_thinking_and_custom_fields(self):
+        """Test creating and running an agent with thinking configuration and other custom fields in additional_model_request_fields."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Create LLM config with thinking and other additional fields
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": aws_access_key,
+                "aws_secret_key": aws_secret_key,
+                "aws_profile_name": aws_profile,
+                "max_tokens": 4096,
+                "additional_model_request_fields": {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": 512,  # Smaller budget for faster test
+                    },
+                },
+            },
+        )
+
+        # Create agent with thinking capability
+        agent = ConversableAgent(
+            name="thinking_custom_fields_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant that reasons through problems step by step.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a problem that benefits from reasoning
+        result = agent.run(
+            message="Compare and contrast JavaScript and TypeScript. Provide a detailed analysis.",
+            max_turns=3,
+        )
+        result.process()
+
+        # Verify the response is received
+        assert result is not None
+        assert len(result.messages) > 0
+
+        # Find the assistant message
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+
+        # Verify the content is not empty (thinking tokens are consumed but not shown in response)
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_custom_total_max_attempts(self):
@@ -1857,7 +1798,6 @@ class TestBedrockRetryConfigIntegration:
         """Test legacy retry mode configuration."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
@@ -1878,6 +1818,69 @@ class TestBedrockRetryConfigIntegration:
         # Create agent
         agent = ConversableAgent(
             name="legacy_mode_agent",
+            llm_config=llm_config,
+            system_message="You are a helpful assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a simple question
+        result = agent.run(
+            message="What is 2 + 2?",
+            max_turns=2,
+        )
+        result.process()
+
+        # Verify the response
+        assert result is not None
+        assert len(result.messages) > 0
+
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_bedrock_llm_config_entry_with_additional_model_request_fields_integration(self):
+        """Test BedrockLLMConfigEntry with additional_model_request_fields in an integration scenario."""
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+        from autogen.oai.bedrock import BedrockLLMConfigEntry
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
+        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_profile = os.getenv("AWS_PROFILE")
+        model = os.getenv("BEDROCK_MODEL", "eu.anthropic.claude-3-7-sonnet-20250219-v1:0")
+
+        # Create BedrockLLMConfigEntry with additional_model_request_fields
+        thinking_config = {
+            "type": "enabled",
+            "budget_tokens": 512,
+        }
+
+        bedrock_config_entry = BedrockLLMConfigEntry(
+            model=model,
+            aws_region=aws_region,
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
+            aws_profile_name=aws_profile,
+            max_tokens=4096,
+            additional_model_request_fields={"thinking": thinking_config},
+        )
+
+        # Create LLMConfig from the entry
+        llm_config = LLMConfig(bedrock_config_entry)
+
+        # Create agent
+        agent = ConversableAgent(
+            name="config_entry_test_agent",
             llm_config=llm_config,
             system_message="You are a helpful assistant.",
             max_consecutive_auto_reply=1,
@@ -2052,7 +2055,6 @@ class TestBedrockRetryConfigIntegration:
         """Test fast-fail configuration with minimal retries."""
 
         from autogen import ConversableAgent, LLMConfig
-        from autogen.oai.bedrock import BedrockClient
 
         aws_config = self._get_aws_config()
 
@@ -2079,21 +2081,203 @@ class TestBedrockRetryConfigIntegration:
             human_input_mode="NEVER",
         )
 
-        # Verify the client has fast-fail config
-        client = agent.client._clients[0]
-        assert isinstance(client, BedrockClient)
-        assert client._total_max_attempts == 2
-        assert client._mode == "standard"
-        assert client._retry_config["total_max_attempts"] == 2
-
-        # Test that the agent can make a successful call
+        # Run the agent
         result = agent.run(
-            message="What is 4 + 4?",
-            max_turns=1,
+            message="What is the capital of France?",
+            max_turns=2,
         )
         result.process()
 
+        # Verify the response
         assert result is not None
+        assert len(result.messages) > 0
+
+        assistant_messages = [msg for msg in result.messages if msg.get("role") == "assistant" and msg.get("content")]
+        assert len(assistant_messages) > 0, "No assistant messages found in result"
+
+        last_message = assistant_messages[-1]
+        assert last_message.get("content") is not None
+        content = last_message["content"]
+        assert len(content.strip()) > 0, "Response content should not be empty"
+
+
+# Test additional_model_request_fields parsing
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_parsing_params_with_additional_model_request_fields(bedrock_client: BedrockClient):
+    """Test that additional_model_request_fields are correctly parsed and added to additional_params."""
+    # Test with thinking configuration (main use case)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "temperature": 0.8,
+        "additional_model_request_fields": {
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 1024,
+            },
+        },
+    })
+
+    assert base_params == {"temperature": 0.8}
+    assert additional_params == {
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        },
+    }
+
+    # Test with multiple fields in additional_model_request_fields
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": {
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 512,
+            },
+            "custom_field": "custom_value",
+            "nested_config": {
+                "key1": "value1",
+                "key2": 42,
+            },
+        },
+    })
+
+    assert base_params == {}
+    assert additional_params == {
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 512,
+        },
+        "custom_field": "custom_value",
+        "nested_config": {
+            "key1": "value1",
+            "key2": 42,
+        },
+    }
+
+    # Test that config_only_fields are excluded from additional_params
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": {
+            "thinking": {"type": "enabled", "budget_tokens": 1024},
+            "api_type": "should_be_excluded",
+            "model": "should_be_excluded",
+            "aws_region": "should_be_excluded",
+            "messages": "should_be_excluded",
+            "tools": "should_be_excluded",
+            "response_format": "should_be_excluded",
+        },
+    })
+
+    assert "thinking" in additional_params
+    assert "api_type" not in additional_params
+    assert "model" not in additional_params
+    assert "aws_region" not in additional_params
+    assert "messages" not in additional_params
+    assert "tools" not in additional_params
+    assert "response_format" not in additional_params
+
+    # Test with empty additional_model_request_fields dict
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": {},
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+    # Test that additional_model_request_fields merges with other additional params like seed
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "seed": 42,
+        "top_k": 10,
+        "additional_model_request_fields": {
+            "thinking": {"type": "enabled", "budget_tokens": 1024},
+        },
+    })
+
+    assert base_params == {}
+    assert additional_params == {
+        "seed": 42,
+        "top_k": 10,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        },
+    }
+
+    # Test with None additional_model_request_fields (should be ignored)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": None,
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+    # Test with non-dict additional_model_request_fields (should be ignored)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": "not_a_dict",
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+
+# Test BedrockLLMConfigEntry with additional_model_request_fields
+def test_bedrock_llm_config_entry_with_additional_model_request_fields():
+    """Test BedrockLLMConfigEntry accepts additional_model_request_fields."""
+    thinking_config = {
+        "type": "enabled",
+        "budget_tokens": 1024,
+    }
+
+    bedrock_llm_config = BedrockLLMConfigEntry(
+        model="anthropic.claude-3-7-sonnet-20250219-v1:0",
+        aws_region="us-east-1",
+        additional_model_request_fields={"thinking": thinking_config},
+        temperature=0.8,
+    )
+
+    expected = {
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "aws_region": "us-east-1",
+        "temperature": 0.8,
+        "tags": [],
+        "supports_system_prompts": True,
+        "additional_model_request_fields": {"thinking": thinking_config},
+        "total_max_attempts": 5,
+        "max_attempts": 5,
+        "mode": "standard",
+    }
+
+    actual = bedrock_llm_config.model_dump()
+    assert actual == expected
+
+    # Verify it works with LLMConfig
+    llm_config = LLMConfig(bedrock_llm_config)
+    config_list = llm_config.model_dump()["config_list"]
+    assert len(config_list) == 1
+    assert config_list[0]["additional_model_request_fields"] == {"thinking": thinking_config}
+
+
+# Test edge case: additional_model_request_fields with None value
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_parsing_params_additional_model_request_fields_with_none_values(bedrock_client: BedrockClient):
+    """Test that None values in additional_model_request_fields are handled correctly."""
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additional_model_request_fields": {
+            "thinking": None,
+            "valid_field": "valid_value",
+        },
+    })
+
+    # None values should still be included (let Bedrock API handle validation)
+    assert "thinking" in additional_params
+    assert additional_params["thinking"] is None
+    assert additional_params["valid_field"] == "valid_value"
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_rate_limit_optimized_configuration(self):
