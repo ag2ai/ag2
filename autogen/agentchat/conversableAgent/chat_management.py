@@ -741,6 +741,7 @@ class ChatManagementMixin:
             config: The LLM configuration
             trim_n_messages: The number of latest messages to trim from the messages list
         """
+
         def concat_carryover(chat_message: str, carryover_message: str | list[dict[str, Any]]) -> str:
             """Concatenate the carryover message to the chat message."""
             prefix = f"{chat_message}\n" if chat_message else ""
@@ -824,6 +825,7 @@ class ChatManagementMixin:
 
         def create_thread(iostream: ThreadIOStream) -> threading.Thread:
             if recipient is None:
+
                 def initiate_chat() -> None:
                     with (
                         IOStream.set_default(iostream),
@@ -861,7 +863,9 @@ class ChatManagementMixin:
                             )
                         except Exception as e:
                             iostream.send(ErrorEvent(error=e))
+
             else:
+
                 def initiate_chat() -> None:
                     with IOStream.set_default(iostream):
                         try:
@@ -891,6 +895,7 @@ class ChatManagementMixin:
                             )
                         except Exception as e:
                             iostream.send(ErrorEvent(error=e))
+
             return threading.Thread(target=initiate_chat, daemon=True)
 
         return RunIterResponse(
@@ -923,6 +928,7 @@ class ChatManagementMixin:
 
         def create_thread(iostream: ThreadIOStream) -> threading.Thread:
             if recipient is None:
+
                 async def async_initiate_chat() -> None:
                     with (
                         IOStream.set_default(iostream),
@@ -964,7 +970,9 @@ class ChatManagementMixin:
                             asyncio.run(async_initiate_chat())
                         except Exception as e:
                             iostream.send(ErrorEvent(error=e))
+
             else:
+
                 async def async_initiate_chat() -> None:
                     chat_result = await self.a_initiate_chat(
                         recipient,
@@ -995,6 +1003,7 @@ class ChatManagementMixin:
                             asyncio.run(async_initiate_chat())
                         except Exception as e:
                             iostream.send(ErrorEvent(error=e))
+
             return threading.Thread(target=run_in_thread, daemon=True)
 
         return AsyncRunIterResponse(
@@ -1114,7 +1123,9 @@ class ChatManagementMixin:
         asyncio.create_task(_a_initiate_chats())
         return responses
 
-    def _check_chat_queue_for_sender(self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _check_chat_queue_for_sender(
+        self: "ConversableAgentBase", chat_queue: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Check the chat queue and add the "sender" key if it's missing."""
         chat_queue_with_sender = []
         for chat_info in chat_queue:
@@ -1209,15 +1220,19 @@ class ChatManagementMixin:
                 reply_func_from_nested_chats = self._a_summary_from_nested_chats
             if not callable(reply_func_from_nested_chats) or not is_coroutine_callable(reply_func_from_nested_chats):
                 raise ValueError("reply_func_from_nested_chats must be a callable and a coroutine")
+
             async def wrapped_reply_func(recipient, messages=None, sender=None, config=None):
                 return await reply_func_from_nested_chats(chat_queue, recipient, messages, sender, config)
+
         else:
             if reply_func_from_nested_chats == "summary_from_nested_chats":
                 reply_func_from_nested_chats = self._summary_from_nested_chats
             if not callable(reply_func_from_nested_chats):
                 raise ValueError("reply_func_from_nested_chats must be a callable")
+
             def wrapped_reply_func(recipient, messages=None, sender=None, config=None):
                 return reply_func_from_nested_chats(chat_queue, recipient, messages, sender, config)
+
         functools.update_wrapper(wrapped_reply_func, reply_func_from_nested_chats)
         self.register_reply(
             trigger,
