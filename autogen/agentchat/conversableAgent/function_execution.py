@@ -587,24 +587,6 @@ class FunctionExecutionMixin:
 
         return wrapped_func
 
-    @staticmethod
-    def _create_tool_if_needed(
-        func_or_tool,
-        name: str | None,
-        description: str | None,
-    ) -> Tool:
-        if isinstance(func_or_tool, Tool):
-            tool: Tool = func_or_tool
-            # create new tool object if name or description is not None
-            if name or description:
-                tool = Tool(func_or_tool=tool, name=name, description=description)
-        elif inspect.isfunction(func_or_tool):
-            function: Callable[..., Any] = func_or_tool
-            tool = Tool(func_or_tool=function, name=name, description=description)
-        else:
-            raise TypeError(f"'func_or_tool' must be a function or a Tool object, got '{type(func_or_tool)}' instead.")
-        return tool
-
     def register_for_llm(
         self: "ConversableAgentBase",
         *,
