@@ -207,21 +207,6 @@ class FunctionExecutionMixin:
             "content": content,
         }
 
-    def _run_async_in_thread(self: "ConversableAgentBase", coro):
-        """Run an async coroutine in a separate thread with its own event loop."""
-        result = {}
-
-        def runner():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result["value"] = loop.run_until_complete(coro)
-            loop.close()
-
-        t = threading.Thread(target=runner)
-        t.start()
-        t.join()
-        return result["value"]
-
     def generate_function_call_reply(
         self: "ConversableAgentBase",
         messages: list[dict[str, Any]] | None = None,

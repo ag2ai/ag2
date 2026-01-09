@@ -140,36 +140,20 @@ class ConversableAgent(
                     # if breaking history between function call and function response, save function call message
                     # additionally, otherwise openai will return error
                     first_msg_to_save = self._oai_messages[key][-nr_messages_to_preserve_internal]
-                    if first_msg_to_save.get("role") == "assistant" and (
-                        first_msg_to_save.get("function_call") or first_msg_to_save.get("tool_calls")
-                    ):
+                    if "tool_responses" in first_msg_to_save:
                         nr_messages_to_preserve_internal += 1
+                        # clear_conversable_agent_history.print_preserving_message(iostream.print)
+                        no_messages_preserved += 1
+                    # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
-                    no_messages_preserved += nr_messages_to_preserve_internal
+                iostream.send(ClearConversableAgentHistoryEvent(agent=self, no_events_preserved=no_messages_preserved))
             else:
                 self._oai_messages.clear()
-            if no_messages_preserved > 0:
-                iostream.send(
-                    ClearConversableAgentHistoryWarningEvent(
-                        recipient=self, no_messages_preserved=no_messages_preserved
-                    )
-                )
-            else:
-                iostream.send(ClearConversableAgentHistoryEvent(recipient=self))
         else:
-            if recipient in self._oai_messages:
-                if nr_messages_to_preserve:
-                    nr_messages_to_preserve_internal = nr_messages_to_preserve
-                    # if breaking history between function call and function response, save function call message
-                    # additionally, otherwise openai will return error
-                    first_msg_to_save = self._oai_messages[recipient][-nr_messages_to_preserve_internal]
-                    if first_msg_to_save.get("role") == "assistant" and (
-                        first_msg_to_save.get("function_call") or first_msg_to_save.get("tool_calls")
-                    ):
-                        nr_messages_to_preserve_internal += 1
-                    self._oai_messages[recipient] = self._oai_messages[recipient][-nr_messages_to_preserve_internal:]
-                else:
-                    del self._oai_messages[recipient]
+            self._oai_messages[recipient].clear()
+            # clear_conversable_agent_history.print_warning(iostream.print)
+            if nr_messages_to_preserve:
+                iostream.send(ClearConversableAgentHistoryWarningEvent(recipient=self))
 
     def print_usage_summary(self, mode: str | list[str] = ["actual", "total"]) -> None:
         """Print the usage summary."""
@@ -226,8 +210,7 @@ class ConversableAgent(
         Args:
             guardrails: List of guardrails to register.
         """
-        for guardrail in guardrails:
-            self.register_input_guardrail(guardrail)
+        self.input_guardrails.extend(guardrails)
 
     def register_output_guardrail(self, guardrail: "Guardrail") -> None:
         """Register a guardrail to be used for output validation.
@@ -243,8 +226,7 @@ class ConversableAgent(
         Args:
             guardrails: List of guardrails to register.
         """
-        for guardrail in guardrails:
-            self.register_output_guardrail(guardrail)
+        self.output_guardrails.extend(guardrails)
 
     def run_input_guardrails(self, messages: list[dict[str, Any]] | None = None) -> GuardrailResult | None:
         """Run input guardrails for an agent before the reply is generated.
