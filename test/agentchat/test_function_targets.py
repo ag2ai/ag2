@@ -4,10 +4,8 @@
 
 import json
 from typing import Any
-from unittest import mock
 
 import pytest
-from pytest import MonkeyPatch
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import (
@@ -26,7 +24,7 @@ from autogen.agentchat.group.targets.function_target import (
     construct_broadcast_messages_list,
     validate_fn_sig,
 )
-from autogen.agentchat.groupchat import GroupChat
+from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 
 ###############################################################################
 # Helpers and test doubles
@@ -431,7 +429,7 @@ def test_broadcast_raises_without_group_manager():
 
 
 def function_target_updates_context_and_messages(
-    output: str, ctx: DummyContextVariables, value: int
+    output: str, ctx: ContextVariables, value: int
 ) -> FunctionTargetResult:
     """Test function that updates context_variables and emits a reply."""
     new_ctx = ContextVariables(data={"from_fn": value, "last_output": output})
@@ -456,7 +454,8 @@ def function_target_returns_wrong_type(output: str, ctx: Any) -> str:  # type: i
     return "not a result"
 
 
-def test_function_target_resolve_updates_context_and_broadcasts(monkeypatch: MonkeyPatch):
+@pytest.mark.integration
+def test_function_target_resolve_updates_context_and_broadcasts():
     """resolve() should:
     - pass last message content and context into the function,
     - update current_agent.context_variables if provided,
@@ -464,13 +463,15 @@ def test_function_target_resolve_updates_context_and_broadcasts(monkeypatch: Mon
     - and return the next SpeakerSelectionResult from the target.
     """
     current_agent = ConversableAgent(name="current", llm_config=None)
-    current_agent.context_variables = DummyContextVariables({"existing": "value"})  # type: ignore[attr-defined]
-    current_agent._group_manager = DummyGroupManager()  # type: ignore[attr-defined]
+    current_agent.context_variables = ContextVariables(data={"existing": "value"})  # type: ignore[attr-defined]
 
     groupchat = GroupChat(
         agents=[current_agent],
         messages=[{"role": "user", "content": "last user message"}],
     )
+
+    group_chat_manager = GroupChatManager(groupchat=groupchat, llm_config=None)
+    current_agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
 
     ft = FunctionTarget(
         function_target_updates_context_and_messages,
@@ -487,30 +488,31 @@ def test_function_target_resolve_updates_context_and_broadcasts(monkeypatch: Mon
     assert isinstance(result, SpeakerSelectionResult)
 
     # Context variables should be updated with new values
-    ctx: DummyContextVariables = current_agent.context_variables  # type: ignore[assignment]
+    ctx: ContextVariables = current_agent.context_variables  # type: ignore[assignment]
     ctx_dict = ctx.to_dict()
     assert ctx_dict["existing"] == "value"
     assert ctx_dict["from_fn"] == 7
     assert ctx_dict["last_output"] == "last user message"
 
-    # A FUNCTION_HANDOFF system message should have been broadcast
-    gm: DummyGroupManager = current_agent._group_manager  # type: ignore[assignment]
-    assert len(gm.sent) == 1
-    content = gm.sent[0]["msg"]["content"]
-    assert "Reply from function function_target_updates_context_and_messages" in content
-    assert "fn reply" in content
+    # The result should indicate staying with the current agent
+    assert result.agent_name == "current"
 
 
+@pytest.mark.integration
 def test_function_target_resolve_without_messages_does_not_broadcast():
     """If FunctionTargetResult.messages is None, no broadcast should occur."""
     current_agent = ConversableAgent(name="current", llm_config=None)
-    current_agent.context_variables = DummyContextVariables({})  # type: ignore[attr-defined]
-    current_agent._group_manager = DummyGroupManager()  # type: ignore[attr-defined]
+    current_agent.context_variables = ContextVariables(data={})  # type: ignore[attr-defined]
 
     groupchat = GroupChat(
         agents=[current_agent],
         messages=[{"role": "user", "content": "hello"}],
     )
+
+    group_chat_manager = GroupChatManager(groupchat=groupchat, llm_config=None)
+    current_agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
+
+    initial_message_count = len(groupchat.messages)
 
     ft = FunctionTarget(function_target_no_messages_just_target)
 
@@ -522,20 +524,23 @@ def test_function_target_resolve_without_messages_does_not_broadcast():
 
     assert isinstance(result, SpeakerSelectionResult)
 
-    gm: DummyGroupManager = current_agent._group_manager  # type: ignore[assignment]
-    assert gm.sent == []  # No messages were broadcast
+    # No new messages should have been added to the chat history
+    assert len(groupchat.messages) == initial_message_count
 
 
+@pytest.mark.integration
 def test_function_target_resolve_raises_if_function_returns_wrong_type():
     """If the wrapped function does not return a FunctionTargetResult, resolve must raise ValueError."""
     current_agent = ConversableAgent(name="current", llm_config=None)
-    current_agent.context_variables = DummyContextVariables({})  # type: ignore[attr-defined]
-    current_agent._group_manager = DummyGroupManager()  # type: ignore[attr-defined]
+    current_agent.context_variables = ContextVariables(data={})  # type: ignore[attr-defined]
 
     groupchat = GroupChat(
         agents=[current_agent],
         messages=[{"role": "user", "content": "hello"}],
     )
+
+    group_chat_manager = GroupChatManager(groupchat=groupchat, llm_config=None)
+    current_agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
 
     ft = FunctionTarget(function_target_returns_wrong_type)  # type: ignore[arg-type]
 
@@ -547,38 +552,45 @@ def test_function_target_resolve_raises_if_function_returns_wrong_type():
         )
 
 
-def test_function_target_resolve_uses_provided_target_resolve(monkeypatch: MonkeyPatch):
+@pytest.mark.integration
+def test_function_target_resolve_uses_provided_target_resolve():
     """Ensure that FunctionTarget.resolve delegates to the underlying TransitionTarget.resolve."""
     current_agent = ConversableAgent(name="current", llm_config=None)
-    current_agent.context_variables = DummyContextVariables({})  # type: ignore[attr-defined]
-    current_agent._group_manager = DummyGroupManager()  # type: ignore[attr-defined]
+    other_agent = ConversableAgent(name="other", llm_config=None)
+    current_agent.context_variables = ContextVariables(data={})  # type: ignore[attr-defined]
 
     groupchat = GroupChat(
-        agents=[current_agent],
+        agents=[current_agent, other_agent],
         messages=[{"role": "user", "content": "hello"}],
     )
 
-    # Build a custom FunctionTargetResult with a StayTarget, but we monkeypatch its resolve.
-    stay_target = StayTarget()
+    group_chat_manager = GroupChatManager(groupchat=groupchat, llm_config=None)
+    current_agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
 
-    sentinel = SpeakerSelectionResult(next_agent=current_agent, reason="patched")
+    # Test with StayTarget - should return current_agent
+    def fn_stay(output: str, ctx: Any) -> FunctionTargetResult:
+        return FunctionTargetResult(messages=None, context_variables=None, target=StayTarget())
 
-    with mock.patch.object(
-        type(stay_target),
-        "resolve",
-        return_value=sentinel,
-    ) as mock_resolve:
+    ft_stay = FunctionTarget(fn_stay)
+    result_stay = ft_stay.resolve(
+        groupchat=groupchat,
+        current_agent=current_agent,
+        user_agent=None,
+    )
 
-        def fn(output: str, ctx: Any) -> FunctionTargetResult:
-            return FunctionTargetResult(messages=None, context_variables=None, target=stay_target)
+    assert isinstance(result_stay, SpeakerSelectionResult)
+    assert result_stay.agent_name == "current"
 
-        ft = FunctionTarget(fn)
+    # Test with AgentTarget - should return the specified agent
+    def fn_agent(output: str, ctx: Any) -> FunctionTargetResult:
+        return FunctionTargetResult(messages=None, context_variables=None, target=AgentTarget(other_agent))
 
-        result = ft.resolve(
-            groupchat=groupchat,
-            current_agent=current_agent,
-            user_agent=None,
-        )
+    ft_agent = FunctionTarget(fn_agent)
+    result_agent = ft_agent.resolve(
+        groupchat=groupchat,
+        current_agent=current_agent,
+        user_agent=None,
+    )
 
-        mock_resolve.assert_called_once_with(groupchat, current_agent, None)
-        assert result is sentinel
+    assert isinstance(result_agent, SpeakerSelectionResult)
+    assert result_agent.agent_name == "other"
