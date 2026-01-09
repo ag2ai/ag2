@@ -6,7 +6,6 @@ import asyncio
 import functools
 import inspect
 import json
-import threading
 import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
