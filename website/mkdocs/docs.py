@@ -89,7 +89,7 @@ def preview():
 
 @app.command()
 def live(port: Annotated[str | None, typer.Argument()] = None):
-    dev_server = f"0.0.0.0:{port}" if port else DEV_SERVER
+    dev_server = "0.0.0.0:8654"
 
     typer.echo("Serving mkdocs with live reload")
     typer.echo(f"Serving at: http://{dev_server}")
