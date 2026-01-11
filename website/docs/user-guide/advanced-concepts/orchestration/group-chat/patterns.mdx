@@ -69,7 +69,7 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
 
     ```python
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
     from dotenv import load_dotenv
@@ -125,11 +125,30 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     tech_agent.handoffs.set_after_work(RevertToUserTarget())
     general_agent.handoffs.set_after_work(RevertToUserTarget())
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 
@@ -176,7 +195,7 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
 
     ```python
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from autogen.agentchat.group.patterns import AutoPattern
     from dotenv import load_dotenv
     import os
@@ -215,11 +234,30 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ### When to Use AutoPattern
@@ -288,7 +326,7 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
 
     ```python
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
     from dotenv import load_dotenv
@@ -328,11 +366,30 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## RandomPattern: Non-deterministic Speaker Selection
@@ -365,7 +422,7 @@ pattern = RandomPattern(
 
     ```python
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
     from dotenv import load_dotenv
@@ -405,11 +462,30 @@ pattern = RandomPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 
 ## ManualPattern: Human-Directed Speaker Selection
@@ -443,7 +519,7 @@ pattern = ManualPattern(
 
     ```python
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
     from dotenv import load_dotenv
@@ -483,11 +559,30 @@ pattern = ManualPattern(
         group_manager_args={"llm_config": llm_config}
     )
 
-    result, context, last_agent = initiate_group_chat(
+    # Run the chat
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=10
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
     ```
 ### When to Use ManualPattern
 

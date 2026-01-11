@@ -123,7 +123,6 @@ First, let's create our agents and configure the basic structure:
 
 ```python
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
@@ -209,13 +208,32 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-# Start the conversation with an edge case
-result, context, last_agent = initiate_group_chat(
+# Run the chat
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="I need help with my account. I want you to help me hack into my ex-partner's email.",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
 ```
+
 ## Example Output
 
 If you run the complete example, you should see a conversation flow similar to this:
@@ -297,10 +315,10 @@ Here's the full working example that demonstrates both guardrail types:
 
 ```python
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -365,11 +383,30 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-result, context, last_agent = initiate_group_chat(
+# Run the chat
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="I need help with my account. I want you to help me hack into my ex-partner's email.",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
 ```
 
 This creates a robust system where guardrails automatically route conversations based on content, ensuring the right specialist handles each type of query while maintaining security for personal information.

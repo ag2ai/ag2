@@ -299,9 +299,9 @@ Let's enhance our triage system with context variables to maintain session state
 from typing import Annotated
 from datetime import datetime
 from autogen import ConversableAgent, LLMConfig, UpdateSystemMessage
-from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -453,12 +453,31 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-# Run the chat
-result, final_context, last_agent = initiate_group_chat(
+# Run the chat events
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="My laptop keeps shutting down randomly. Can you help?",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
+    pass
 ```
 
 ## Example Output

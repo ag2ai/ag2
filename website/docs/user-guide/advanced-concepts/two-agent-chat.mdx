@@ -26,35 +26,61 @@ The example below is a two-agent chat between a student agent and a teacher agen
 
 ```python
 import os
-
+from dotenv import load_dotenv
 from autogen import ConversableAgent, LLMConfig
+from autogen.events.agent_events import InputRequestEvent, TerminationEvent, TextEvent
 
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-    "api_key": os.environ["OPENAI_API_KEY"],
-})
+load_dotenv()
+
+llm_config=LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ["OPENAI_API_KEY"]
+    }
+)
 
 student_agent = ConversableAgent(
     name="Student_Agent",
     system_message="You are a student willing to learn.",
-    llm_config=llm_config,
+    llm_config=llm_config
 )
 
 teacher_agent = ConversableAgent(
     name="Teacher_Agent",
     system_message="You are a math teacher.",
-    llm_config=llm_config,
+    llm_config=llm_config
 )
 
-chat_result = student_agent.initiate_chat(
+chat_result = student_agent.run_iter(
     teacher_agent,
     message="What is triangle inequality?",
     summary_method="reflection_with_llm",
     max_turns=2,
+    yield_on=[TextEvent, TerminationEvent],
 )
 
-print(chat_result.summary)
+import pprint
+event_count = 0
+for event in chat_result:
+    event_count += 1
+    print(f"\n[Event {event_count}] Event type: {event.type}")
+
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
+
+    if isinstance(event, TerminationEvent):
+        print("Termination event received")
+        break
+
+print("Chat completed")
 ```
 
 In the above example, the summary method is set to `reflection_with_llm` which takes a list of messages from the conversation and summarize them  using a call to an LLM.
