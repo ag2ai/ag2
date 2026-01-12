@@ -73,7 +73,7 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
 
     New ingestions and queries may be raised from time to time, so use the initiate_tasks again if you see new ingestions/queries.
 
-    Transfer to the summary agent if all ingestion and query tasks are done.
+    Once the ingestion and query tasks are done, return to the summary agent, do not ask questions of the user.
     """
 
 DEFAULT_ERROR_GROUP_CHAT_MESSAGE: str = """

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class AgentBusMessage(BaseModel):
-    messages: list[dict[str, Any]]
+    messages: list[dict[str, Any]] = Field(default_factory=list)
     context: dict[str, Any] | None = None
 
 
@@ -20,7 +20,7 @@ class RequestMessage(AgentBusMessage):
 
 
 class ResponseMessage(AgentBusMessage):
-    pass
+    input_required: str | None = None
 
 
 class RemoteService(Protocol):

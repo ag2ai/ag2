@@ -8,6 +8,12 @@ from functools import partial
 from types import MethodType
 from typing import TYPE_CHECKING, Any, Optional
 
+from autogen.agentchat.group.events.transition_events import (
+    AfterWorksTransitionEvent,
+    OnContextConditionTransitionEvent,
+)
+from autogen.io.base import IOStream
+
 from ..agent import Agent
 from ..groupchat import GroupChat, GroupChatManager
 from .context_variables import ContextVariables
@@ -114,11 +120,16 @@ def _evaluate_after_works_conditions(
             after_work_condition.condition is None or after_work_condition.condition.evaluate(agent.context_variables)
         ):
             # Condition matched, resolve and return
-            return after_work_condition.target.resolve(
+            after_works_speaker = after_work_condition.target.resolve(
                 groupchat,
                 agent,
                 user_agent,
             ).get_speaker_selection_result(groupchat)
+
+            iostream = IOStream.get_default()
+            iostream.send(AfterWorksTransitionEvent(source_agent=agent, transition_target=after_work_condition.target))
+
+            return after_works_speaker
 
     return None
 
@@ -141,6 +152,9 @@ def _run_oncontextconditions(
             on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
+
+            iostream = IOStream.get_default()
+            iostream.send(OnContextConditionTransitionEvent(source_agent=agent, transition_target=on_condition.target))
 
             return True, "[Handing off to " + transfer_name + "]"
 

@@ -8,6 +8,9 @@
 
 import asyncio
 import copy
+import io
+import json
+import logging
 import os
 import threading
 import time
@@ -391,26 +394,44 @@ def test_max_consecutive_auto_reply():
 def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture[str]):
     agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_handlers = logger.handlers[:]
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    # max_consecutive_auto_reply parameter on the agent that initiates chat
-    agent1.initiate_chat(agent2, message="hello", max_turns=50)
-    assert len(agent2.chat_messages[agent1]) == 4
-    assert len(agent1.chat_messages[agent2]) == 4
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+    try:
+        # max_consecutive_auto_reply parameter on the agent that initiates chat
+        agent1.initiate_chat(agent2, message="hello", max_turns=50)
+        assert len(agent2.chat_messages[agent1]) == 4
+        assert len(agent1.chat_messages[agent2]) == 4
+        # checking captured output
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
 
-    _ = capsys.readouterr()  # Explicitly clear buffer
+        _ = capsys.readouterr()  # Explicitly clear buffer
+        log_stream.truncate(0)
+        log_stream.seek(0)
 
-    # max_consecutive_auto_reply parameter on the recipient agent
-    agent2.initiate_chat(agent1, message="hello", max_turns=50)
-    assert len(agent1.chat_messages[agent2]) == 3
-    assert len(agent2.chat_messages[agent1]) == 3
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+        # max_consecutive_auto_reply parameter on the recipient agent
+        agent2.initiate_chat(agent1, message="hello", max_turns=50)
+        assert len(agent1.chat_messages[agent2]) == 3
+        assert len(agent2.chat_messages[agent1]) == 3
+        # checking captured output
+        _ = capsys.readouterr()
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
+    finally:
+        logger.handlers = old_handlers
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
 
 def test_conversable_agent():
@@ -2003,6 +2024,55 @@ def test_tool_integration(mock_credentials: Credentials):
     tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
     assert "tool1" not in tool_schemas
     assert "tool2" in tool_schemas
+
+
+def test_execute_function_resolves_async_tool(mock_credentials: Credentials):
+    """execute_function should await async tools instead of returning coroutine reprs."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    observed_inputs: list[str] = []
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Uppercase text asynchronously")
+    async def uppercase_tool(text: str) -> str:
+        observed_inputs.append(text)
+        await asyncio.sleep(0)
+        return text.upper()
+
+    success, payload = agent.execute_function(
+        {"name": "uppercase_tool", "arguments": json.dumps({"text": "nyc"})},
+        call_id="tool-call-1",
+    )
+
+    assert success is True
+    assert payload["content"] == "NYC"
+    assert observed_inputs == ["nyc"]
+
+
+def test_generate_tool_calls_reply_handles_async_tool(mock_credentials: Credentials):
+    """generate_tool_calls_reply should await async tools registered for execution."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Title case text asynchronously")
+    async def title_tool(text: str) -> str:
+        await asyncio.sleep(0)
+        return text.title()
+
+    message = {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call-xyz",
+                "function": {"name": "title_tool", "arguments": json.dumps({"text": "new york"})},
+            }
+        ],
+    }
+
+    handled, response = agent.generate_tool_calls_reply(messages=[message])
+    assert handled is True
+    tool_response = response["tool_responses"][0]
+    assert tool_response["tool_call_id"] == "call-xyz"
+    assert tool_response["content"] == "New York"
 
 
 def test_create_or_get_executor(mock_credentials: Credentials):

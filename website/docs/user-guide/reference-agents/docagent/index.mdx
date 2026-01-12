@@ -1,6 +1,5 @@
 ---
 title: DocAgent
-sidebarTitle: DocAgent
 ---
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
@@ -152,7 +151,7 @@ document_agent = DocAgent(llm_config=llm_config)
 
 # Update this path to suit your environment
 response = document_agent.run(
-    "Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
+    message="Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
     max_turns=1
 )
 
@@ -419,7 +418,7 @@ The fiscal year 2024 financial summary for Toast, Inc. is as follows:
 
 ## DocAgent Performance
 
-How does it perform? See our [DocAgent Performance](/docs/user-guide/reference-agents/docagent-performance) page for the full breakdown on how it handles different tasks.
+How does it perform? See our [DocAgent Performance](/docs/user-guide/reference-agents/docagent/docagent-performance) page for the full breakdown on how it handles different tasks.
 
 If you have tasks you'd like DocAgent to perform, please share them as an [Issue](https://github.com/ag2ai/ag2/issues) on our GitHub repo.
 

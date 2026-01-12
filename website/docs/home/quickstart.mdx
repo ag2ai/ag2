@@ -20,11 +20,11 @@ mode: "wide"
     <img src="https://static.pepy.tech/personalized-badge/ag2?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
   </a>
   <a href="https://pypi.org/project/autogen/">
-    <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green">
+    <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green" />
   </a>
-  <img src="https://img.shields.io/pypi/pyversions/ag2.svg?label=">
+  <img src="https://img.shields.io/pypi/pyversions/ag2.svg?label=" alt="" />
   <a href="https://discord.gg/pAbnFJrkgZ">
-    <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
+    <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat" alt="Discord" />
   </a>
 </p>
 
@@ -113,7 +113,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 my_agent = ConversableAgent(
@@ -197,7 +197,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 
 # 3. Create our LLM agent
@@ -245,7 +245,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 assistant = ConversableAgent(
@@ -287,7 +287,7 @@ import os
 load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -384,7 +384,7 @@ import os
 load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:

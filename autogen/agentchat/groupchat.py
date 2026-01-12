@@ -320,7 +320,8 @@ class GroupChat:
             message["name"] = speaker.name
         if not isinstance(message["content"], str) and not isinstance(message["content"], list):
             message["content"] = str(message["content"])
-        message["content"] = content_str(message["content"])
+        if not isinstance(message["content"], list):
+            message["content"] = content_str(message["content"])
         self.messages.append(message)
 
     def agent_by_name(self, name: str, recursive: bool = False, raise_on_name_conflict: bool = False) -> Agent | None:
@@ -867,7 +868,7 @@ class GroupChat:
         """
         # Validate the speaker name selected
         if messages and (name := messages[-1].get("content")):
-            mentions = self._mentioned_agents(name.strip(), agents)
+            mentions = self._mentioned_agents(name.strip() if isinstance(name, str) else name, agents)
         else:
             mentions = []
         no_of_mentions = len(mentions)
