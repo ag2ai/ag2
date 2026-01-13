@@ -1034,6 +1034,13 @@ class OpenAIWrapper:
                 )
                 self._clients.append(v2_client)  # type: ignore[arg-type]
                 client = v2_client
+            
+            elif api_type is not None and api_type.startswith("anthropic_v2"):
+                from autogen.llm_clients import AnthropicV2Client as V2Client
+                v2_client = V2Client(response_format=response_format, **openai_config)
+                self._clients.append(v2_client)  # type: ignore[arg-type]
+                client = v2_client
+
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
                 @require_optional_import("openai>=1.66.2", "openai")

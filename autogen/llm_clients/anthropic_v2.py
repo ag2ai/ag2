@@ -27,7 +27,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -68,6 +68,8 @@ from autogen.oai.anthropic import (
     supports_native_structured_outputs,
     transform_schema_for_anthropic,
     validate_structured_outputs_version,
+    AnthropicEntryDict,
+    AnthropicLLMConfigEntry,
 )
 
 # Import ModelClient protocol
@@ -98,6 +100,19 @@ from autogen.oai.oai_models import (
 from autogen.oai.client_utils import FormatterProtocol, validate_parameter
 from autogen.code_utils import content_str
 
+
+class AnthropicV2LLMConfigDict(AnthropicEntryDict, total=False):
+    api_type: Literal["anthropic_v2"]
+
+class AnthropicV2LLMConfigEntry(AnthropicLLMConfigEntry):
+    """
+    LLMConfig entry for Anthropic V2 Client with ModelClientV2 architecture.
+
+    This uses the new AnthropicV2Client from autogen.llm_clients which returns
+    rich UnifiedResponse objects with typed content blocks (ReasoningContent,
+    CitationContent, ToolCallContent, etc.).
+    """
+    api_type: Literal["anthropic_v2"] = "anthropic_v2"
 
 class AnthropicCompletionsClient(ModelClient):
     """
