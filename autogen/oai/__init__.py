@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from ..cache.cache import Cache
 from .anthropic import AnthropicLLMConfigEntry
+from ..llm_clients.anthropic_v2 import AnthropicV2LLMConfigEntry
 from .bedrock import BedrockLLMConfigEntry
 from .cerebras import CerebrasLLMConfigEntry
 from .client import (
@@ -35,6 +36,7 @@ from .together import TogetherLLMConfigEntry
 
 __all__ = [
     "AnthropicLLMConfigEntry",
+    "AnthropicV2LLMConfigEntry",
     "AzureOpenAILLMConfigEntry",
     "BedrockLLMConfigEntry",
     "Cache",
