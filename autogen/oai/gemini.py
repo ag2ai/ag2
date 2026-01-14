@@ -288,6 +288,14 @@ class GeminiClient:
         system_instruction = self._extract_system_instruction(messages)
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
+
+        # When tools are provided alongside a system instruction that focuses on code generation,
+        # Gemini may get confused and produce MALFORMED_FUNCTION_CALL errors. Prepend a hint
+        # to prefer tools over code generation when tools are available.
+        if tools and system_instruction:
+            system_instruction = (
+                f"When tools are provided, prefer using them over generating code.\n\n{system_instruction}"
+            )
         tool_config = params.get("tool_config")
         include_thoughts = params.get("include_thoughts")
         thinking_budget = params.get("thinking_budget")
