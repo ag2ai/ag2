@@ -28,39 +28,39 @@ from autogen.llm_clients.models import (
 )
 
 
-# Mock Anthropic response classes
-class MockUsage:
-    """Mock Anthropic usage object."""
-
-    def __init__(self, input_tokens: int = 10, output_tokens: int = 20):
-        self.input_tokens = input_tokens
-        self.output_tokens = output_tokens
-
-
-class MockTextBlock:
-    """Mock Anthropic TextBlock."""
+# Mock Anthropic response classes - use class names that match fallback checks
+class TextBlock:
+    """Mock Anthropic TextBlock with correct class name."""
 
     def __init__(self, text: str):
         self.type = "text"
         self.text = text
 
 
-class MockThinkingBlock:
-    """Mock Anthropic ThinkingBlock."""
+class ThinkingBlock:
+    """Mock Anthropic ThinkingBlock with correct class name."""
 
     def __init__(self, thinking: str):
         self.type = "thinking"
         self.thinking = thinking
 
 
-class MockToolUseBlock:
-    """Mock Anthropic ToolUseBlock."""
+class ToolUseBlock:
+    """Mock Anthropic ToolUseBlock with correct class name."""
 
     def __init__(self, tool_id: str, name: str, input_data: dict):
         self.type = "tool_use"
         self.id = tool_id
         self.name = name
         self.input = input_data
+
+
+class MockUsage:
+    """Mock Anthropic usage object."""
+
+    def __init__(self, input_tokens: int = 10, output_tokens: int = 20):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 class MockAnthropicMessage:
@@ -77,7 +77,7 @@ class MockAnthropicMessage:
     ):
         self.id = id
         self.model = model
-        self.content = content
+        self.content = content  # Make sure this is a real list, not a Mock
         self.stop_reason = stop_reason
         self.usage = usage or MockUsage()
         if parsed_output is not None:
@@ -91,11 +91,58 @@ def mock_anthropic_client():
         mock_client_instance = Mock()
         mock_messages = Mock()
         mock_beta = Mock()
-        mock_beta.messages = Mock()
+        mock_beta_messages = Mock()
+        mock_beta.messages = mock_beta_messages
         mock_client_instance.messages = mock_messages
         mock_client_instance.beta = mock_beta
         mock_anthropic_class.return_value = mock_client_instance
         yield mock_client_instance
+
+
+@pytest.fixture(autouse=True)
+def patch_helper_functions():
+    """Patch helper functions to recognize mock block types."""
+    # Patch the helper functions to recognize our mock types
+    def _is_text_block_mock(content: Any) -> bool:
+        """Check if content is a TextBlock (mock or real)."""
+        # Check for our mock TextBlock first
+        if isinstance(content, TextBlock):
+            return True
+        # Fallback to original function for real types
+        from autogen.oai.anthropic import _is_text_block as original
+        try:
+            return original(content)
+        except Exception:
+            return False
+    
+    def _is_thinking_block_mock(content: Any) -> bool:
+        """Check if content is a ThinkingBlock (mock or real)."""
+        # Check for our mock ThinkingBlock first
+        if isinstance(content, ThinkingBlock):
+            return True
+        # Fallback to original function for real types
+        from autogen.oai.anthropic import _is_thinking_block as original
+        try:
+            return original(content)
+        except Exception:
+            return False
+    
+    def _is_tool_use_block_mock(content: Any) -> bool:
+        """Check if content is a ToolUseBlock (mock or real)."""
+        # Check for our mock ToolUseBlock first
+        if isinstance(content, ToolUseBlock):
+            return True
+        # Fallback to original function for real types
+        from autogen.oai.anthropic import _is_tool_use_block as original
+        try:
+            return original(content)
+        except Exception:
+            return False
+    
+    with patch("autogen.llm_clients.anthropic_v2._is_text_block", side_effect=_is_text_block_mock):
+        with patch("autogen.llm_clients.anthropic_v2._is_thinking_block", side_effect=_is_thinking_block_mock):
+            with patch("autogen.llm_clients.anthropic_v2._is_tool_use_block", side_effect=_is_tool_use_block_mock):
+                yield
 
 
 @pytest.fixture
@@ -142,7 +189,7 @@ class TestStandardCompletion:
     def test_simple_text_response(self, anthropic_v2_client, mock_anthropic_client):
         """Test simple text response."""
         # Setup mock response
-        text_block = MockTextBlock("Hello, world!")
+        text_block = TextBlock("Hello, world!")
         mock_response = MockAnthropicMessage(content=[text_block])
         mock_anthropic_client.messages.create.return_value = mock_response
 
@@ -165,8 +212,8 @@ class TestStandardCompletion:
     def test_response_with_thinking_block(self, anthropic_v2_client, mock_anthropic_client):
         """Test response with thinking block."""
         # Setup mock response with thinking
-        thinking_block = MockThinkingBlock("Let me think about this...")
-        text_block = MockTextBlock("The answer is 42")
+        thinking_block = ThinkingBlock("Let me think about this...")
+        text_block = TextBlock("The answer is 42")
         mock_response = MockAnthropicMessage(content=[thinking_block, text_block])
         mock_anthropic_client.messages.create.return_value = mock_response
 
@@ -187,7 +234,7 @@ class TestStandardCompletion:
     def test_response_with_tool_calls(self, anthropic_v2_client, mock_anthropic_client):
         """Test response with tool calls."""
         # Setup mock response with tool use
-        tool_block = MockToolUseBlock("tool_123", "get_weather", {"city": "San Francisco"})
+        tool_block = ToolUseBlock("tool_123", "get_weather", {"city": "San Francisco"})
         mock_response = MockAnthropicMessage(
             content=[tool_block], stop_reason="tool_use", usage=MockUsage(10, 15)
         )
@@ -229,7 +276,7 @@ class TestNativeStructuredOutputs:
         # Setup mock parsed output
         parsed_model = ContactInfo(name="John Doe", email="john@example.com")
         mock_response = MockAnthropicMessage(
-            content=[MockTextBlock('{"name": "John Doe", "email": "john@example.com"}')],
+            content=[TextBlock('{"name": "John Doe", "email": "john@example.com"}')],
             parsed_output=parsed_model,
         )
         mock_anthropic_client.beta.messages.parse.return_value = mock_response
@@ -259,8 +306,11 @@ class TestNativeStructuredOutputs:
 
         # Setup mock response with JSON text (no parsed_output)
         json_text = '{"name": "Jane Doe", "email": "jane@example.com"}'
-        mock_response = MockAnthropicMessage(content=[MockTextBlock(json_text)])
+        mock_response = MockAnthropicMessage(content=[TextBlock(json_text)])
+        # IMPORTANT: Set up .create() to return our mock response
         mock_anthropic_client.beta.messages.create.return_value = mock_response
+        # Also set up .parse() in case it's called (though it shouldn't be with tools)
+        mock_anthropic_client.beta.messages.parse.return_value = mock_response
 
         # Make request with tools (forces .create() method)
         params = {
@@ -288,8 +338,10 @@ class TestNativeStructuredOutputs:
         """Test structured output with dict schema (always uses .create())."""
         # Setup mock response
         json_text = '{"name": "Test", "value": 42}'
-        mock_response = MockAnthropicMessage(content=[MockTextBlock(json_text)])
+        mock_response = MockAnthropicMessage(content=[TextBlock(json_text)])
         mock_anthropic_client.beta.messages.create.return_value = mock_response
+        # Also set up .parse() in case it's called (though it shouldn't be with dict schema)
+        mock_anthropic_client.beta.messages.parse.return_value = mock_response
 
         # Make request with dict schema
         schema = {
@@ -316,10 +368,18 @@ class TestNativeStructuredOutputs:
             value: str
 
         # Mock native SO to fail
-        mock_anthropic_client.beta.messages.create.side_effect = Exception("API Error")
+        from autogen.oai.anthropic import BadRequestError
+
+        # Ensure both .create() and .parse() fail for native SO
+        mock_anthropic_client.beta.messages.create.side_effect = BadRequestError(
+            message="Error", body={}, response=Mock(status_code=400)
+        )
+        mock_anthropic_client.beta.messages.parse.side_effect = BadRequestError(
+            message="Error", body={}, response=Mock(status_code=400)
+        )
         # Mock JSON Mode to succeed
         json_mode_response = MockAnthropicMessage(
-            content=[MockTextBlock("<json_response>{\"value\": \"test\"}</json_response>")]
+            content=[TextBlock('<json_response>{"value": "test"}</json_response>')]
         )
         mock_anthropic_client.messages.create.return_value = json_mode_response
 
@@ -347,22 +407,24 @@ class TestJSONMode:
 
         # Setup mock response with JSON in tags
         json_text = '<json_response>{"name": "Alice", "age": 30}</json_response>'
-        mock_response = MockAnthropicMessage(content=[MockTextBlock(json_text)])
+        mock_response = MockAnthropicMessage(content=[TextBlock(json_text)])
         mock_anthropic_client.messages.create.return_value = mock_response
 
-        params = {
-            "model": "claude-3-5-sonnet-20241022",  # Older model
-            "messages": [{"role": "user", "content": "Return JSON"}],
-            "response_format": TestModel,
-        }
-        response = anthropic_v2_client.create(params)
+        # Patch supports_native_structured_outputs to return False for older model
+        with patch("autogen.llm_clients.anthropic_v2.supports_native_structured_outputs", return_value=False):
+            params = {
+                "model": "claude-3-5-sonnet-20241022",  # Older model
+                "messages": [{"role": "user", "content": "Return JSON"}],
+                "response_format": TestModel,
+            }
+            response = anthropic_v2_client.create(params)
 
-        # Verify JSON was extracted and parsed
-        text_content = response.messages[0].content[0]
-        assert isinstance(text_content, TextContent)
-        # Should contain parsed JSON (not the tags)
-        assert "name" in text_content.text
-        assert "Alice" in text_content.text
+            # Verify JSON was extracted and parsed
+            text_content = response.messages[0].content[0]
+            assert isinstance(text_content, TextContent)
+            # Should contain parsed JSON (not the tags)
+            assert "name" in text_content.text
+            assert "Alice" in text_content.text
 
 
 class TestCostAndUsage:
@@ -457,7 +519,7 @@ class TestV1Compatibility:
     def test_create_v1_compatible(self, anthropic_v2_client, mock_anthropic_client):
         """Test create_v1_compatible returns ChatCompletion format."""
         # Setup mock response
-        text_block = MockTextBlock("Test response")
+        text_block = TextBlock("Test response")
         mock_response = MockAnthropicMessage(content=[text_block])
         mock_anthropic_client.messages.create.return_value = mock_response
 
@@ -479,8 +541,8 @@ class TestV1Compatibility:
     def test_create_v1_compatible_with_thinking(self, anthropic_v2_client, mock_anthropic_client):
         """Test create_v1_compatible preserves thinking blocks."""
         # Setup mock response with thinking
-        thinking_block = MockThinkingBlock("Thinking...")
-        text_block = MockTextBlock("Answer")
+        thinking_block = ThinkingBlock("Thinking...")
+        text_block = TextBlock("Answer")
         mock_response = MockAnthropicMessage(content=[thinking_block, text_block])
         mock_anthropic_client.messages.create.return_value = mock_response
 
@@ -508,8 +570,10 @@ class TestErrorHandling:
             value: str
 
         # Setup mock response with invalid JSON
-        mock_response = MockAnthropicMessage(content=[MockTextBlock("not valid json")])
+        mock_response = MockAnthropicMessage(content=[TextBlock("not valid json")])
         mock_anthropic_client.beta.messages.create.return_value = mock_response
+        # Also set up .parse() in case it's called (though it shouldn't be with tools)
+        mock_anthropic_client.beta.messages.parse.return_value = mock_response
 
         params = {
             "model": "claude-sonnet-4-5",
