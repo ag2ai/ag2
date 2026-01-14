@@ -16,8 +16,6 @@ Run with:
 """
 
 import json
-import os
-from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
@@ -30,6 +28,14 @@ from test.credentials import Credentials
 @pytest.fixture
 def anthropic_v2_llm_config(credentials_anthropic_claude_sonnet: Credentials) -> dict:
     """Create LLM config for Anthropic V2 client."""
+    # Skip if credentials are not available or invalid
+    try:
+        api_key = credentials_anthropic_claude_sonnet.api_key
+        if not api_key or api_key == "":
+            pytest.skip("ANTHROPIC_API_KEY not set and OAI_CONFIG_LIST file not found")
+    except (AttributeError, FileNotFoundError, Exception) as e:
+        pytest.skip(f"Could not load Anthropic credentials: {e}")
+    
     return {
         "config_list": [
             {
@@ -44,6 +50,14 @@ def anthropic_v2_llm_config(credentials_anthropic_claude_sonnet: Credentials) ->
 @pytest.fixture
 def anthropic_v2_llm_config_vision(credentials_anthropic_claude_sonnet: Credentials) -> dict:
     """Create LLM config for Anthropic V2 client with vision model."""
+    # Skip if credentials are not available or invalid
+    try:
+        api_key = credentials_anthropic_claude_sonnet.api_key
+        if not api_key or api_key == "":
+            pytest.skip("ANTHROPIC_API_KEY not set and OAI_CONFIG_LIST file not found")
+    except (AttributeError, FileNotFoundError, Exception) as e:
+        pytest.skip(f"Could not load Anthropic credentials: {e}")
+    
     return {
         "config_list": [
             {
