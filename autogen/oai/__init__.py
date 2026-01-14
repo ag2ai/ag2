@@ -5,8 +5,8 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from ..cache.cache import Cache
-from .anthropic import AnthropicLLMConfigEntry
 from ..llm_clients.anthropic_v2 import AnthropicV2LLMConfigEntry
+from .anthropic import AnthropicLLMConfigEntry
 from .bedrock import BedrockLLMConfigEntry
 from .cerebras import CerebrasLLMConfigEntry
 from .client import (

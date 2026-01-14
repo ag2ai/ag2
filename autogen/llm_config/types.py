@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.llm_clients.anthropic_v2 import AnthropicV2LLMConfigEntry
+from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
 from autogen.oai.client import (

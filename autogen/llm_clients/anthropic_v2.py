@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 with optional_import_block() as anthropic_result:
     from anthropic import Anthropic, BadRequestError
     from anthropic.types import Message
+
     # Beta imports for structured outputs
     try:
         from anthropic import transform_schema
@@ -58,7 +59,8 @@ else:
 
 # Import helper functions and constants from existing anthropic.py
 from autogen.oai.anthropic import (
-    ANTHROPIC_PRICING_1k,
+    AnthropicEntryDict,
+    AnthropicLLMConfigEntry,
     _calculate_cost,
     _is_text_block,
     _is_thinking_block,
@@ -68,8 +70,16 @@ from autogen.oai.anthropic import (
     supports_native_structured_outputs,
     transform_schema_for_anthropic,
     validate_structured_outputs_version,
-    AnthropicEntryDict,
-    AnthropicLLMConfigEntry,
+)
+from autogen.oai.client_utils import FormatterProtocol, validate_parameter
+
+# Import for backward compatibility
+from autogen.oai.oai_models import (
+    ChatCompletion,
+    ChatCompletionMessage,
+    ChatCompletionMessageToolCall,
+    Choice,
+    CompletionUsage,
 )
 
 # Import ModelClient protocol
@@ -89,20 +99,10 @@ from .models import (
     normalize_role,
 )
 
-# Import for backward compatibility
-from autogen.oai.oai_models import (
-    ChatCompletion,
-    ChatCompletionMessage,
-    ChatCompletionMessageToolCall,
-    Choice,
-    CompletionUsage,
-)
-from autogen.oai.client_utils import FormatterProtocol, validate_parameter
-from autogen.code_utils import content_str
-
 
 class AnthropicV2LLMConfigDict(AnthropicEntryDict, total=False):
     api_type: Literal["anthropic_v2"]
+
 
 class AnthropicV2LLMConfigEntry(AnthropicLLMConfigEntry):
     """
@@ -112,7 +112,9 @@ class AnthropicV2LLMConfigEntry(AnthropicLLMConfigEntry):
     rich UnifiedResponse objects with typed content blocks (ReasoningContent,
     CitationContent, ToolCallContent, etc.).
     """
+
     api_type: Literal["anthropic_v2"] = "anthropic_v2"
+
 
 class AnthropicCompletionsClient(ModelClient):
     """
@@ -540,9 +542,7 @@ class AnthropicCompletionsClient(ModelClient):
         anthropic_params["timeout"] = validate_parameter(params, "timeout", int, True, None, (1, None), None)
         anthropic_params["top_k"] = validate_parameter(params, "top_k", int, True, None, (1, None), None)
         anthropic_params["top_p"] = validate_parameter(params, "top_p", (float, int), True, None, (0.0, 1.0), None)
-        anthropic_params["stop_sequences"] = validate_parameter(
-            params, "stop_sequences", list, True, None, None, None
-        )
+        anthropic_params["stop_sequences"] = validate_parameter(params, "stop_sequences", list, True, None, None, None)
         anthropic_params["stream"] = validate_parameter(params, "stream", bool, False, False, None, None)
         if "thinking" in params:
             anthropic_params["thinking"] = params["thinking"]
@@ -667,9 +667,7 @@ class AnthropicCompletionsClient(ModelClient):
                 return self._response_format.model_validate(json_data)
 
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
     def _resolve_schema_refs(self, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
         """Recursively resolve $ref references in a JSON schema.
@@ -907,9 +905,7 @@ Your JSON must:
             cost=unified_response.cost or 0.0,
         )
 
-    def message_retrieval(
-        self, response: UnifiedResponse
-    ) -> list[str] | list[ChatCompletionMessage]:  # type: ignore[override]
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[ChatCompletionMessage]:  # type: ignore[override]
         """
         Retrieve messages from response in OpenAI-compatible format.
 

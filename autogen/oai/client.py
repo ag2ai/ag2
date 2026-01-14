@@ -1034,9 +1034,10 @@ class OpenAIWrapper:
                 )
                 self._clients.append(v2_client)  # type: ignore[arg-type]
                 client = v2_client
-            
+
             elif api_type is not None and api_type.startswith("anthropic_v2"):
                 from autogen.llm_clients import AnthropicV2Client as V2Client
+
                 v2_client = V2Client(response_format=response_format, **openai_config)
                 self._clients.append(v2_client)  # type: ignore[arg-type]
                 client = v2_client
