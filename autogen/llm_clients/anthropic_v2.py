@@ -267,7 +267,7 @@ class AnthropicCompletionsClient(ModelClient):
             response = self._client.messages.create(**anthropic_params)  # type: ignore[misc]
 
         # Transform to UnifiedResponse
-        return self._transform_response(response, anthropic_params["model"], anthropic_params)
+        return self._transform_response(response, anthropic_params["model"])
 
     def _create_with_native_structured_output(self, params: dict[str, Any]) -> UnifiedResponse:
         """
@@ -396,7 +396,6 @@ class AnthropicCompletionsClient(ModelClient):
         self,
         anthropic_response: Message,  # type: ignore[valid-type]
         model: str,
-        anthropic_params: dict[str, Any],
         is_native_structured_output: bool = False,
     ) -> UnifiedResponse:
         """
