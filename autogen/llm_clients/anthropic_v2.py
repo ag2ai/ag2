@@ -343,7 +343,7 @@ class AnthropicCompletionsClient(ModelClient):
 
         # Transform to UnifiedResponse with is_native_structured_output=True
         return self._transform_response(
-            response, anthropic_params["model"], anthropic_params, is_native_structured_output=True
+            response, anthropic_params["model"], is_native_structured_output=True
         )
 
     def _create_with_json_mode(self, params: dict[str, Any]) -> UnifiedResponse:
@@ -375,7 +375,7 @@ class AnthropicCompletionsClient(ModelClient):
         parsed_response = self._extract_json_response(response)
 
         # Transform to UnifiedResponse
-        unified_response = self._transform_response(response, anthropic_params["model"], anthropic_params)
+        unified_response = self._transform_response(response, anthropic_params["model"])
 
         # Replace text content with parsed JSON if structured output
         if self._response_format:
