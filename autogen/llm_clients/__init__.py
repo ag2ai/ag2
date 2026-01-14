@@ -52,12 +52,14 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
+from .anthropic_v2 import AnthropicV2Client, AnthropicV2LLMConfigEntry
 
 __all__ = [  # noqa: RUF022
     # Protocol
     "ModelClientV2",
     # Clients
     "OpenAICompletionsClient",
+    "AnthropicV2Client",
     # Content blocks
     "AudioContent",
     "BaseContent",
@@ -74,4 +76,6 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    #Config Entry
+    "AnthropicV2LLMConfigEntry",
 ]

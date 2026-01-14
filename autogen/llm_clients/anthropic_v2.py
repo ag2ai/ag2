@@ -116,7 +116,7 @@ class AnthropicV2LLMConfigEntry(AnthropicLLMConfigEntry):
     api_type: Literal["anthropic_v2"] = "anthropic_v2"
 
 
-class AnthropicCompletionsClient(ModelClient):
+class AnthropicV2Client(ModelClient):
     """
     Anthropic Messages API client implementing ModelClientV2 protocol.
 
@@ -269,7 +269,7 @@ class AnthropicCompletionsClient(ModelClient):
             response = self._client.messages.create(**anthropic_params)  # type: ignore[misc]
 
         # Transform to UnifiedResponse
-        return self._transform_response(response, anthropic_params["model"])
+        return self._transform_response(response, anthropic_params["model"], anthropic_params)
 
     def _create_with_native_structured_output(self, params: dict[str, Any]) -> UnifiedResponse:
         """
@@ -343,7 +343,7 @@ class AnthropicCompletionsClient(ModelClient):
 
         # Transform to UnifiedResponse with is_native_structured_output=True
         return self._transform_response(
-            response, anthropic_params["model"], is_native_structured_output=True
+            response, anthropic_params["model"], anthropic_params, is_native_structured_output=True
         )
 
     def _create_with_json_mode(self, params: dict[str, Any]) -> UnifiedResponse:
@@ -375,7 +375,7 @@ class AnthropicCompletionsClient(ModelClient):
         parsed_response = self._extract_json_response(response)
 
         # Transform to UnifiedResponse
-        unified_response = self._transform_response(response, anthropic_params["model"])
+        unified_response = self._transform_response(response, anthropic_params["model"], anthropic_params)
 
         # Replace text content with parsed JSON if structured output
         if self._response_format:
@@ -398,6 +398,7 @@ class AnthropicCompletionsClient(ModelClient):
         self,
         anthropic_response: Message,  # type: ignore[valid-type]
         model: str,
+        anthropic_params: dict[str, Any],
         is_native_structured_output: bool = False,
     ) -> UnifiedResponse:
         """
@@ -408,12 +409,13 @@ class AnthropicCompletionsClient(ModelClient):
         - Thinking blocks → ReasoningContent
         - Tool use blocks → ToolCallContent
         - Structured outputs (parsed_output) → GenericContent with 'parsed' type
+        - Structured outputs from .create() → Parsed JSON into Pydantic model
         - Unknown fields → GenericContent (forward compatibility)
 
         Args:
             anthropic_response: Raw Anthropic Message response
             model: Model name
-            anthropic_params: Original request parameters
+            anthropic_params: Original request parameters (needed for response_format access)
             is_native_structured_output: Whether this is a native structured output response
 
         Returns:
@@ -444,43 +446,82 @@ class AnthropicCompletionsClient(ModelClient):
                 )
             # Extract text content (handles both TextBlock and BetaTextBlock)
             elif _is_text_block(block):
-                # For native structured output, prefer parsed_output from parse() if available
-                if (
-                    is_native_structured_output
-                    and hasattr(anthropic_response, "parsed_output")
-                    and anthropic_response.parsed_output is not None
-                ):
-                    parsed_response = anthropic_response.parsed_output
-                    # Store parsed object as GenericContent to preserve it
-                    if hasattr(parsed_response, "model_dump"):
-                        parsed_dict = parsed_response.model_dump()
-                    elif hasattr(parsed_response, "dict"):
-                        parsed_dict = parsed_response.dict()
+                # For native structured output, handle both .parse() and .create() responses
+                if is_native_structured_output:
+                    # Check if we have parsed_output (from .parse())
+                    if (
+                        hasattr(anthropic_response, "parsed_output")
+                        and anthropic_response.parsed_output is not None
+                    ):
+                        parsed_response = anthropic_response.parsed_output
+                        # Store parsed object as GenericContent to preserve it
+                        if hasattr(parsed_response, "model_dump"):
+                            parsed_dict = parsed_response.model_dump()
+                        elif hasattr(parsed_response, "dict"):
+                            parsed_dict = parsed_response.dict()
+                        else:
+                            parsed_dict = {"value": str(parsed_response)}
+
+                        content_blocks.append(GenericContent(type="parsed", parsed=parsed_dict))
+
+                        # Also add text representation
+                        text_content = (
+                            parsed_response.model_dump_json()
+                            if hasattr(parsed_response, "model_dump_json")
+                            else str(parsed_response)
+                        )
+                        content_blocks.append(TextContent(type="text", text=text_content))
                     else:
-                        parsed_dict = {"value": str(parsed_response)}
+                        # Using .create() - parse JSON text into Pydantic model if available
+                        # Check if we have a Pydantic model to parse into
+                        if (
+                            self._response_format
+                            and isinstance(self._response_format, type)
+                            and issubclass(self._response_format, BaseModel)
+                        ):
+                            try:
+                                # Parse JSON string into Pydantic model
+                                json_data = json.loads(block.text)
+                                parsed_response = self._response_format.model_validate(json_data)
 
-                    content_blocks.append(GenericContent(type="parsed", parsed=parsed_dict))
+                                # Store parsed object as GenericContent
+                                parsed_dict = parsed_response.model_dump()
+                                content_blocks.append(GenericContent(type="parsed", parsed=parsed_dict))
 
-                    # Also add text representation
-                    text_content = (
-                        parsed_response.model_dump_json()
-                        if hasattr(parsed_response, "model_dump_json")
-                        else str(parsed_response)
-                    )
-                    content_blocks.append(TextContent(type="text", text=text_content))
+                                # Add text representation
+                                text_content = parsed_response.model_dump_json()
+                                content_blocks.append(TextContent(type="text", text=text_content))
+                            except (json.JSONDecodeError, ValueError) as e:
+                                # If parsing fails, log warning and use text as-is
+                                logger.warning(f"Failed to parse structured output JSON: {e}")
+                                content_blocks.append(TextContent(type="text", text=block.text))
+                        else:
+                            # Dict schema or no model - just use text as-is
+                            content_blocks.append(TextContent(type="text", text=block.text))
                 else:
-                    # Regular text content
+                    # Regular text content (not structured output)
                     content_blocks.append(TextContent(type="text", text=block.text))
 
-        # Fallback: If using native SO parse() and no text was found in content blocks,
+        # Fallback: If using native SO parse() and no content blocks were found,
         # extract from parsed_output directly
         if (
-            not any(isinstance(b, TextContent) for b in content_blocks)
+            not content_blocks
             and is_native_structured_output
             and hasattr(anthropic_response, "parsed_output")
             and anthropic_response.parsed_output is not None
         ):
             parsed_response = anthropic_response.parsed_output
+            # Store parsed object as GenericContent
+            if hasattr(parsed_response, "model_dump"):
+                parsed_dict = parsed_response.model_dump()
+            elif hasattr(parsed_response, "dict"):
+                parsed_dict = parsed_response.dict()
+            else:
+                parsed_dict = {"value": str(parsed_response)}
+
+            content_blocks.append(GenericContent(type="parsed", parsed=parsed_dict))
+
+            # Add text representation
             text_content = (
                 parsed_response.model_dump_json()
                 if hasattr(parsed_response, "model_dump_json")
