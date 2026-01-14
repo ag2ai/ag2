@@ -35,7 +35,7 @@ def anthropic_v2_llm_config(credentials_anthropic_claude_sonnet: Credentials) ->
             pytest.skip("ANTHROPIC_API_KEY not set and OAI_CONFIG_LIST file not found")
     except (AttributeError, FileNotFoundError, Exception) as e:
         pytest.skip(f"Could not load Anthropic credentials: {e}")
-    
+
     return {
         "config_list": [
             {
@@ -57,7 +57,7 @@ def anthropic_v2_llm_config_vision(credentials_anthropic_claude_sonnet: Credenti
             pytest.skip("ANTHROPIC_API_KEY not set and OAI_CONFIG_LIST file not found")
     except (AttributeError, FileNotFoundError, Exception) as e:
         pytest.skip(f"Could not load Anthropic credentials: {e}")
-    
+
     return {
         "config_list": [
             {
@@ -78,6 +78,7 @@ class TestAnthropicV2StructuredOutputs:
     @run_for_optional_imports("anthropic", "anthropic")
     def test_structured_output_math_reasoning(self, anthropic_v2_llm_config):
         """Test structured output with math reasoning using Pydantic models."""
+
         # Define the structured output schema
         class Step(BaseModel):
             """A single step in mathematical reasoning."""
@@ -150,6 +151,7 @@ class TestAnthropicV2StrictToolUse:
     @run_for_optional_imports("anthropic", "anthropic")
     def test_strict_tool_use_weather(self, anthropic_v2_llm_config):
         """Test strict tool use with weather API."""
+
         # Define a tool function
         def get_weather(location: str, unit: str = "celsius") -> str:
             """Get the weather for a location.
@@ -250,6 +252,7 @@ class TestAnthropicV2CombinedFeatures:
     @run_for_optional_imports("anthropic", "anthropic")
     def test_combined_structured_output_and_strict_tools(self, anthropic_v2_llm_config):
         """Test combined strict tools + structured output."""
+
         # Define calculator tool
         def calculate(operation: str, a: float, b: float) -> float:
             """Perform a calculation.
@@ -400,8 +403,7 @@ class TestAnthropicV2Vision:
         # Verify the response mentions something about the image (dog, schnauzer, etc.)
         summary_lower = chat_result.summary.lower()
         assert any(
-            keyword in summary_lower
-            for keyword in ["dog", "schnauzer", "animal", "pet", "image", "photo", "picture"]
+            keyword in summary_lower for keyword in ["dog", "schnauzer", "animal", "pet", "image", "photo", "picture"]
         )
 
         # Verify cost tracking

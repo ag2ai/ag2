@@ -34,6 +34,7 @@ Usage:
     ContentParser.register("custom_type", CustomContent)
 """
 
+from .anthropic_v2 import AnthropicV2Client, AnthropicV2LLMConfigEntry
 from .client_v2 import ModelClientV2
 from .models import (
     AudioContent,
@@ -52,7 +53,6 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
-from .anthropic_v2 import AnthropicV2Client, AnthropicV2LLMConfigEntry
 
 __all__ = [  # noqa: RUF022
     # Protocol
@@ -76,6 +76,6 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
-    #Config Entry
+    # Config Entry
     "AnthropicV2LLMConfigEntry",
 ]

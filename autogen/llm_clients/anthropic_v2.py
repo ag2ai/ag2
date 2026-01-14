@@ -449,10 +449,7 @@ class AnthropicV2Client(ModelClient):
                 # For native structured output, handle both .parse() and .create() responses
                 if is_native_structured_output:
                     # Check if we have parsed_output (from .parse())
-                    if (
-                        hasattr(anthropic_response, "parsed_output")
-                        and anthropic_response.parsed_output is not None
-                    ):
+                    if hasattr(anthropic_response, "parsed_output") and anthropic_response.parsed_output is not None:
                         parsed_response = anthropic_response.parsed_output
                         # Store parsed object as GenericContent to preserve it
                         if hasattr(parsed_response, "model_dump"):

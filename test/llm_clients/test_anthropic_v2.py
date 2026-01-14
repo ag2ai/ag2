@@ -10,7 +10,6 @@ These tests use mocked Anthropic API responses to test the client's
 functionality without requiring API keys.
 """
 
-import json
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -102,6 +101,7 @@ def mock_anthropic_client():
 @pytest.fixture(autouse=True)
 def patch_helper_functions():
     """Patch helper functions to recognize mock block types."""
+
     # Patch the helper functions to recognize our mock types
     def _is_text_block_mock(content: Any) -> bool:
         """Check if content is a TextBlock (mock or real)."""
@@ -110,11 +110,12 @@ def patch_helper_functions():
             return True
         # Fallback to original function for real types
         from autogen.oai.anthropic import _is_text_block as original
+
         try:
             return original(content)
         except Exception:
             return False
-    
+
     def _is_thinking_block_mock(content: Any) -> bool:
         """Check if content is a ThinkingBlock (mock or real)."""
         # Check for our mock ThinkingBlock first
@@ -122,11 +123,12 @@ def patch_helper_functions():
             return True
         # Fallback to original function for real types
         from autogen.oai.anthropic import _is_thinking_block as original
+
         try:
             return original(content)
         except Exception:
             return False
-    
+
     def _is_tool_use_block_mock(content: Any) -> bool:
         """Check if content is a ToolUseBlock (mock or real)."""
         # Check for our mock ToolUseBlock first
@@ -134,11 +136,12 @@ def patch_helper_functions():
             return True
         # Fallback to original function for real types
         from autogen.oai.anthropic import _is_tool_use_block as original
+
         try:
             return original(content)
         except Exception:
             return False
-    
+
     with patch("autogen.llm_clients.anthropic_v2._is_text_block", side_effect=_is_text_block_mock):
         with patch("autogen.llm_clients.anthropic_v2._is_thinking_block", side_effect=_is_thinking_block_mock):
             with patch("autogen.llm_clients.anthropic_v2._is_tool_use_block", side_effect=_is_tool_use_block_mock):
@@ -168,7 +171,6 @@ class TestAnthropicV2ClientCreation:
 
     def test_create_client_with_response_format(self, mock_anthropic_client):
         """Test creating client with response format."""
-        from pydantic import BaseModel
 
         class TestModel(BaseModel):
             name: str
@@ -178,9 +180,8 @@ class TestAnthropicV2ClientCreation:
 
     def test_create_client_missing_api_key(self, mock_anthropic_client):
         """Test creating client without API key raises error."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="API key is required"):
-                AnthropicV2Client()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="API key is required"):
+            AnthropicV2Client()
 
 
 class TestStandardCompletion:
@@ -235,9 +236,7 @@ class TestStandardCompletion:
         """Test response with tool calls."""
         # Setup mock response with tool use
         tool_block = ToolUseBlock("tool_123", "get_weather", {"city": "San Francisco"})
-        mock_response = MockAnthropicMessage(
-            content=[tool_block], stop_reason="tool_use", usage=MockUsage(10, 15)
-        )
+        mock_response = MockAnthropicMessage(content=[tool_block], stop_reason="tool_use", usage=MockUsage(10, 15))
         mock_anthropic_client.messages.create.return_value = mock_response
 
         # Make request with tools
@@ -267,7 +266,6 @@ class TestNativeStructuredOutputs:
 
     def test_structured_output_with_parse_method(self, anthropic_v2_client, mock_anthropic_client):
         """Test structured output using .parse() method (Pydantic model, no tools)."""
-        from pydantic import BaseModel
 
         class ContactInfo(BaseModel):
             name: str
@@ -298,7 +296,6 @@ class TestNativeStructuredOutputs:
 
     def test_structured_output_with_create_method(self, anthropic_v2_client, mock_anthropic_client):
         """Test structured output using .create() method (with tools or dict schema)."""
-        from pydantic import BaseModel
 
         class ContactInfo(BaseModel):
             name: str
@@ -362,7 +359,6 @@ class TestNativeStructuredOutputs:
 
     def test_structured_output_fallback_to_json_mode(self, anthropic_v2_client, mock_anthropic_client):
         """Test fallback to JSON Mode when native SO fails."""
-        from pydantic import BaseModel
 
         class TestModel(BaseModel):
             value: str
@@ -399,7 +395,6 @@ class TestJSONMode:
 
     def test_json_mode_extraction(self, anthropic_v2_client, mock_anthropic_client):
         """Test JSON extraction from <json_response> tags."""
-        from pydantic import BaseModel
 
         class TestModel(BaseModel):
             name: str
@@ -564,7 +559,6 @@ class TestErrorHandling:
 
     def test_invalid_json_in_structured_output(self, anthropic_v2_client, mock_anthropic_client):
         """Test handling of invalid JSON in structured output."""
-        from pydantic import BaseModel
 
         class TestModel(BaseModel):
             value: str
@@ -588,6 +582,5 @@ class TestErrorHandling:
 
     def test_missing_api_key_error(self):
         """Test error when API key is missing."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="API key is required"):
-                AnthropicV2Client()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="API key is required"):
+            AnthropicV2Client()
