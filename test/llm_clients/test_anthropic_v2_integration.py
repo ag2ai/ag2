@@ -123,28 +123,23 @@ class TestAnthropicV2StructuredOutputs:
             max_turns=1,
         )
 
+        # Process the response to populate messages, summary, and cost
+        chat_result.process()
+
         # Verify chat result
         assert chat_result is not None
-        assert chat_result.chat_history is not None
-        assert len(chat_result.chat_history) > 0
+        assert chat_result.messages is not None
+        messages_list = list(chat_result.messages)
+        assert len(messages_list) > 0
 
         # Verify the response contains structured output
         # The response should be formatted by the MathReasoning.format() method
-        last_message = chat_result.chat_history[-1]
+        last_message = messages_list[-1]
         assert "content" in last_message or "text" in str(last_message)
 
         # Verify cost tracking
         assert chat_result.cost is not None
-        assert isinstance(chat_result.cost, dict)
-        # Cost should have entries for the model used
-        total_cost = sum(
-            model_usage.get("cost", 0)
-            for usage_type in chat_result.cost.values()
-            if isinstance(usage_type, dict)
-            for model_usage in usage_type.values()
-            if isinstance(model_usage, dict)
-        )
-        assert total_cost >= 0
+        assert chat_result.cost.usage_including_cached_inference.total_cost >= 0
 
 
 class TestAnthropicV2StrictToolUse:
@@ -328,14 +323,18 @@ class TestAnthropicV2CombinedFeatures:
             max_turns=2,
         )
 
+        # Process the response to populate messages, summary, and cost
+        chat_result.process()
+
         # Verify chat result
         assert chat_result is not None
-        assert chat_result.chat_history is not None
-        assert len(chat_result.chat_history) > 0
+        assert chat_result.messages is not None
+        messages_list = list(chat_result.messages)
+        assert len(messages_list) > 0
 
         # Verify tool call was made
         tool_call_found = False
-        for message in chat_result.chat_history:
+        for message in messages_list:
             if message.get("tool_calls"):
                 tool_call = message["tool_calls"][0]
                 args = json.loads(tool_call["function"]["arguments"])
@@ -350,14 +349,7 @@ class TestAnthropicV2CombinedFeatures:
 
         # Verify cost tracking
         assert chat_result.cost is not None
-        total_cost = sum(
-            model_usage.get("cost", 0)
-            for usage_type in chat_result.cost.values()
-            if isinstance(usage_type, dict)
-            for model_usage in usage_type.values()
-            if isinstance(model_usage, dict)
-        )
-        assert total_cost >= 0
+        assert chat_result.cost.usage_including_cached_inference.total_cost >= 0
 
 
 class TestAnthropicV2Vision:
