@@ -291,11 +291,11 @@ class GeminiClient:
         tool_config = params.get("tool_config")
         include_thoughts = params.get("include_thoughts")
         thinking_budget = params.get("thinking_budget")
-        thinking_level = params.get("thinking_level")
+        # Note: thinking_level is defined in GeminiLLMConfigEntry but not yet supported
+        # by google.genai.types.ThinkingConfig. Kept in config for forward compatibility.
         thinking_config = ThinkingConfig(
             include_thoughts=include_thoughts,
             thinking_budget=thinking_budget,
-            thinking_level=thinking_level,
         )
         generation_config = {
             gemini_term: params[autogen_term]
