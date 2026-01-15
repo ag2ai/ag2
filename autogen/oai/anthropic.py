@@ -1251,7 +1251,6 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
             }
 
         # If URL format is not recognized, return original content
-        # This will likely cause an API error, but preserves the original behavior
         return content_item
 
     except Exception as e:
