@@ -5,7 +5,7 @@ sidebarTitle: OpenAI Responses
 
 [OpenAI](https://openai.com/)'s Responses API is a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations.
 
-Additionally, it includes built-in tools for web search, file search, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
+Additionally, it includes built-in tools for web search, file search, shell command execution, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
 
 <Warning>
 This OpenAI Responses model provider is currently only supported in a two-agent chat using the agent's `initiate_chat`.
@@ -47,9 +47,10 @@ By specifying the `api_type` as `responses`, the client will use the OpenAI Resp
         "model": "gpt-5",
         "api_key": "your OpenAI Key goes here",
 
-        # Optional: use image_generation and web_search built-in tools
+        # Optional: use shell, image_generation, and web_search built-in tools
         # See https://platform.openai.com/docs/guides/images-vision?api-mode=responses
-        "built_in_tools": ["image_generation", "web_search"],
+        # and https://platform.openai.com/docs/api-reference/responses for more tool docs
+        "built_in_tools": ["shell", "image_generation", "web_search"],
     }
 ]
 ```
@@ -65,3 +66,8 @@ Windows:
 ``` bash
 set OPENAI_API_KEY=your_openai_api_key_here
 ```
+
+<Note>
+The `shell` tool allows secure, filtered command-line execution. When enabling it, consult the [Shell Tool documentation](/docs/user-guide/advanced-concepts/tools/shell) for configuration options and security guidelines to avoid unsafe shell access.
+</Note>
+
