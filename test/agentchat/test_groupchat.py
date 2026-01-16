@@ -41,6 +41,55 @@ def test_groupchat_init():
     assert groupchat.messages == [{"content": "hello", "role": "user", "name": "alice"}]
 
 
+def test_groupchat_duplicate_agent_names():
+    """Test that GroupChat raises ValueError when agents have duplicate names."""
+    agent1 = autogen.ConversableAgent(
+        "assistant",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+    agent2 = autogen.ConversableAgent(
+        "assistant",  # Duplicate name
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+
+    with pytest.raises(ValueError, match="Duplicate agent names found"):
+        GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
+
+
+def test_groupchat_multiple_duplicate_agent_names():
+    """Test that GroupChat detects multiple duplicate agent names."""
+    agents = [
+        autogen.ConversableAgent("bob", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("bob", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("alice", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("alice", human_input_mode="NEVER", llm_config=False),
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate agent names found"):
+        GroupChat(agents=agents, messages=[], max_round=3)
+
+
+def test_groupchat_unique_agent_names():
+    """Test that GroupChat works correctly with unique agent names."""
+    agent1 = autogen.ConversableAgent(
+        "writer",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+    agent2 = autogen.ConversableAgent(
+        "reviewer",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+
+    groupchat = GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
+    assert len(groupchat.agents) == 2
+    assert groupchat.agents[0].name == "writer"
+    assert groupchat.agents[1].name == "reviewer"
+
+
 def test_func_call_groupchat(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
