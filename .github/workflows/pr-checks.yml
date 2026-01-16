@@ -17,7 +17,7 @@ jobs:
     env:
       SKIP: "mypy"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           lfs: true
       - uses: actions/setup-python@v6
@@ -38,7 +38,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
@@ -55,7 +55,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -76,7 +76,7 @@ jobs:
     env:
       YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
@@ -110,7 +110,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
