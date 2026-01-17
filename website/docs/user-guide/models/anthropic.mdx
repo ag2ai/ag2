@@ -1036,21 +1036,44 @@ chat_result = user_proxy.initiate_chat(
 | Vision Support | Limited | Full multimodal support |
 | Cost Tracking | Per-request | Per-response with detailed breakdown |
 
-### When to Use V2 Client
+### When to Use V1 vs V2
 
-Use the V2 client when you need:
+AG2 now offers an Anthropic V2 client that returns richer response objects. Here's when to use each:
 
-- **Structured outputs**: Guaranteed schema compliance for data extraction
-- **Strict tool use**: Type-safe function calls in production systems
-- **Rich responses**: Access to reasoning blocks, citations, and typed content
-- **Vision capabilities**: Image analysis and multimodal interactions
-- **Future compatibility**: Support for new Anthropic API features
+**When to use V2:**
 
-Use the V1 client (`api_type: "anthropic"`) when you need:
+- When you need access to reasoning blocks separately
+- When building custom agents that process structured content
+- For forward compatibility with future Anthropic features
+- When you need native structured outputs with guaranteed schema compliance
+- When you require strict tool use with type-safe function calls
+- For vision capabilities and multimodal interactions
 
-- **Compatibility**: Working with existing code that expects OpenAI-compatible responses
-- **Simplicity**: Basic text generation without structured outputs
-- **Legacy support**: Older Anthropic API features
+**When to use V1:**
+
+- When you need AWS Bedrock or GCP Vertex AI support (V2 support coming soon)
+- When your existing code expects `ChatCompletion` format
+- For simple use cases where `UnifiedResponse` is overkill
+- When working with legacy Anthropic API features
+- For basic text generation without structured outputs
+
+### Benefits of UnifiedResponse over ChatCompletion
+
+The V2 client's `UnifiedResponse` provides several advantages over the V1 client's `ChatCompletion` format:
+
+1. **Typed Content Blocks**: Access to structured content types including:
+   - `TextContent`: Standard text responses
+   - `ReasoningContent`: Extended thinking/reasoning blocks (when using thinking mode)
+   - `ToolCallContent`: Structured tool/function calls
+   - `CitationContent`: Citations and references
+
+2. **Better Type Safety**: Typed response objects enable better IDE support and catch errors at development time
+
+3. **Richer Metadata**: More detailed information about the response, including per-block metadata
+
+4. **Future-Proof**: Designed to support new Anthropic API features as they're released
+
+5. **Structured Outputs**: Native support for guaranteed schema-compliant JSON responses without prompt engineering
 
 ### Example: Combined Structured Outputs and Tools
 
@@ -1084,6 +1107,7 @@ calc_assistant = AssistantAgent(
 )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
 
 # Tool for calculations
 @user_proxy.register_for_execution()
