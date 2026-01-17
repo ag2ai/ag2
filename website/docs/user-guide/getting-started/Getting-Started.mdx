@@ -2,9 +2,6 @@
 title: "Getting Started"
 ---
 
-This is an old version and needs to be rewritten.
-
-
 AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating
 cooperation among multiple agents to solve tasks. AG2 aims to provide an easy-to-use
 and flexible framework for accelerating development and research on agentic AI,
@@ -20,6 +17,7 @@ and multi-agent conversation patterns.
   conversations](/docs/Use-Cases/agent_chat) with minimal effort. It simplifies
   the orchestration, automation, and optimization of a complex LLM workflow. It
   maximizes the performance of LLM models and overcomes their weaknesses.
+- AG2 supports both OpenAI ("openai") and Anthropic ("anthropic_v2") models out of the box (and more providers via optional dependencies). Easily switch between providers for the latest features and performance.
 - It supports [diverse conversation
   patterns](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive)
   for complex workflows. With customizable and conversable agents, developers can
@@ -30,6 +28,7 @@ and multi-agent conversation patterns.
   applications](/docs/use-cases/community-gallery/community-gallery)
   from various domains and complexities. This demonstrates how AG2 can
   easily support diverse conversation patterns.
+- Direct support for Anthropic's V2 Client (api_type: "anthropic_v2") provides first-class, robust capabilities (structured outputs, tool use, vision support).
 
 AG2 is powered by collaborative [research studies](/docs/Research) from
 Microsoft, Penn State University, and University of Washington.
@@ -37,7 +36,7 @@ Microsoft, Penn State University, and University of Washington.
 ### Quickstart
 
 ```sh
-pip install autogen[openai]
+pip install autogen[openai,anthropic]
 ```
 <div class="tip">
   <Tip>
@@ -67,6 +66,30 @@ user_proxy.initiate_chat(
     message="Tell me a joke about NVDA and TESLA stock prices.",
 )
 ```
+
+    </Tab>
+    <Tab title="Anthropic V2">
+
+Easily use Anthropic's Claude models by changing the provider and following the same pattern:
+
+```python
+import os
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+llm_config = LLMConfig(config_list={
+    "api_type": "anthropic_v2",  # <- NEW: Anthropic V2 Client!
+    "model": "claude-sonnet-4-5",
+    "api_key": os.environ["ANTHROPIC_API_KEY"],
+})
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
+
+user_proxy.initiate_chat(
+    assistant,
+    message="Summarize the latest AI trends in 2 sentences.",
+)
+```
+See [Anthropic V2 documentation](/docs/user-guide/models/anthropic#anthropic-v2-client) for structured outputs and advanced options.
 
     </Tab>
     <Tab title="Local execution">
@@ -136,7 +159,7 @@ Open `coding/plot.png` to see the generated plot.
 
 <div class="tip">
   <Tip>
-    Learn more about configuring LLMs for agents
+    Learn more about configuring LLMs for agents (including Anthropic V2 and more)
     [here](/docs/user-guide/basic-concepts/llm-configuration/).
   </Tip>
 </div>
@@ -153,7 +176,7 @@ The figure below shows an example conversation flow with AG2.
 ### Where to Go Next?
 
 - Go through the [tutorial](/docs/user-guide/basic-concepts/installing-ag2) to learn more about the core concepts in AG2
-- Read the examples and guides in the [notebooks section](/notebooks)
+- Read the examples and guides in the [notebooks section](/notebooks) – see the [Anthropic V2 example notebook](/notebooks/agentchat_anthropic_v2_client_example)!
 - Understand the use cases for [multi-agent conversation](/docs/use-cases/use-cases/customer-service) and enhanced LLM inference
 - Read the [API](/docs/reference/agentchat/conversable_agent/) docs
 - Learn about [research](/docs/Research) around AG2
@@ -171,3 +194,4 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
   height="30"
   title="GitHub"
 ></iframe>
+ 
