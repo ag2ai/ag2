@@ -15,4 +15,5 @@
 /autogen/tools/experimental/apply_patch/ @priyansh4320
 /test/tools/experimental/apply_patch/ @priyansh4320
 
-/autogen/agentchat/ConversableAgent/ @priyansh4320
+/autogen/agentchat/conversableAgent/ @priyansh4320
+/test/agentchat/conversableAgent/ @priyansh4320
