@@ -1,6 +1,18 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+"""Local fallback types for Google Gemini SDK.
+
+These types are used when google-genai SDK is not installed. They are designed
+for forward compatibility - local types may include fields from newer SDK versions.
+
+Compatibility testing (test/oai/test_gemini_types.py) verifies that:
+- All fields in the installed SDK exist in local types (subset compatibility)
+- Descriptions are ignored since they may vary across SDK versions
+
+When updating these types, prefer adding new fields rather than removing existing
+ones to maintain forward compatibility with newer SDK versions.
+"""
 
 import enum
 import warnings
