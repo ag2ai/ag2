@@ -1286,9 +1286,6 @@ class TestBedrockStructuredOutputIntegration:
         # Check for AWS credentials - at least region should be set
         # AWS credentials can come from env vars, IAM role, or AWS profile
         aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
-        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        aws_profile = os.getenv("AWS_PROFILE")
 
         # Skip if no AWS region is set (required for all authentication methods)
         if not aws_region:
@@ -1543,9 +1540,6 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
         # Check for AWS credentials - at least region should be set
         # AWS credentials can come from env vars, IAM role, or AWS profile
         aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
-        aws_access_key = os.getenv("AWS_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        aws_profile = os.getenv("AWS_PROFILE")
 
         # Skip if no AWS region is set (required for all authentication methods)
         if not aws_region:
@@ -1603,8 +1597,8 @@ class TestBedrockAdditionalModelRequestFieldsIntegration:
                 "AWS credentials not available. Set AWS_ACCESS_KEY/AWS_SECRET_ACCESS_KEY or AWS_PROFILE, or use IAM role."
             )
 
-        # Create agent with thinking capability
-        reasoning_agent = ConversableAgent(
+        # Create agent with thinking capability (testing that creation succeeds)
+        _reasoning_agent = ConversableAgent(
             name="reasoning_assistant",
             llm_config=llm_config,
             system_message="You are a helpful assistant that reasons through problems step by step.",
