@@ -14,3 +14,5 @@
 # GPT 5.1 Apply Patch Tool
 /autogen/tools/experimental/apply_patch/ @priyansh4320
 /test/tools/experimental/apply_patch/ @priyansh4320
+
+/autogen/agentchat/ConversableAgent/ @priyansh4320
