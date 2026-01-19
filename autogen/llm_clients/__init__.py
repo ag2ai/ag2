@@ -34,6 +34,7 @@ Usage:
     ContentParser.register("custom_type", CustomContent)
 """
 
+from .bedrock_v2 import BedrockV2Client
 from .client_v2 import ModelClientV2
 from .models import (
     AudioContent,
@@ -52,7 +53,6 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
-from .bedrock_v2 import BedrockV2Client
 
 __all__ = [  # noqa: RUF022
     # Protocol
