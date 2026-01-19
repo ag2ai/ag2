@@ -1023,6 +1023,7 @@ class OpenAIWrapper:
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("bedrock_v2"):
+                # Bedrock V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 from autogen.llm_clients import BedrockV2Client as V2Client
 

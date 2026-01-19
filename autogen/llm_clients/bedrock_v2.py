@@ -43,7 +43,11 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+
+from pydantic import SecretStr
+from typing_extensions import Required
 
 from autogen.import_utils import optional_import_block, require_optional_import
 from autogen.llm_clients.models import (
@@ -57,9 +61,11 @@ from autogen.llm_clients.models import (
     normalize_role,
 )
 from autogen.llm_config.client import ModelClient
+from autogen.llm_config.entry import LLMConfigEntryDict
 
 # Import Bedrock-specific utilities from existing client
 from autogen.oai.bedrock import (
+    BedrockLLMConfigEntry,
     calculate_cost,
     convert_stop_reason_to_finish_reason,
     extract_system_messages,
@@ -77,6 +83,90 @@ if optional_import_block().is_successful:
     boto3_import_exception: ImportError | None = None
 else:
     boto3_import_exception = ImportError("Please install boto3 to use BedrockV2Client. Install with: pip install boto3")
+
+
+class BedrockV2EntryDict(LLMConfigEntryDict, total=False):
+    """Entry dict for Bedrock V2 client configuration.
+
+    Inherits all fields from BedrockEntryDict via BedrockLLMConfigEntry,
+    but uses api_type="bedrock_v2" to indicate ModelClientV2 architecture.
+    """
+
+    api_type: Literal["bedrock_v2"]
+    aws_region: Required[str]
+    aws_access_key: SecretStr | None
+    aws_secret_key: SecretStr | None
+    aws_session_token: SecretStr | None
+    aws_profile_name: str | None
+    top_k: int | None
+    k: int | None
+    seed: int | None
+    cache_seed: int | None
+    supports_system_prompts: bool
+    price: list[float] | None
+    timeout: int | None
+    additional_model_request_fields: dict[str, Any] | None
+    total_max_attempts: int | None
+    max_attempts: int | None
+    mode: Literal["standard", "adaptive", "legacy"]
+
+
+class BedrockV2LLMConfigEntry(BedrockLLMConfigEntry):
+    """LLMConfig entry for Bedrock V2 Client with ModelClientV2 architecture.
+
+    This uses the new BedrockV2Client from autogen.llm_clients which returns
+    rich UnifiedResponse objects with typed content blocks (TextContent,
+    ImageContent, ToolCallContent, etc.).
+
+    Example:
+    ```python
+    {
+        "api_type": "bedrock_v2",  # <-- uses ModelClientV2 architecture
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "...",
+        "aws_secret_key": "...",
+    }
+    ```
+
+    Benefits over standard Bedrock client:
+    - Returns UnifiedResponse with typed content blocks
+    - Access to rich content via response.text, response.get_content_by_type()
+    - Forward-compatible with unknown content types via GenericContent
+    - Rich metadata and provider-specific information preserved
+    - Type-safe with Pydantic validation
+    - Supports structured outputs via response_format parameter
+    """
+
+    api_type: Literal["bedrock_v2"] = "bedrock_v2"
+
+    def create_client(self) -> ModelClient:  # pragma: no cover
+        """Create BedrockV2Client instance.
+
+        Note: This is typically handled via OpenAIWrapper._register_default_client,
+        but can be called directly if needed.
+        """
+        # Extract credentials, handling SecretStr
+        aws_access_key = self.aws_access_key.get_secret_value() if self.aws_access_key else None
+        aws_secret_key = self.aws_secret_key.get_secret_value() if self.aws_secret_key else None
+        aws_session_token = self.aws_session_token.get_secret_value() if self.aws_session_token else None
+
+        # BedrockV2Client is defined later in this module, but Python resolves it at runtime
+        # Using globals() to access the class defined in this module
+        BedrockV2Client = globals()["BedrockV2Client"]  # noqa: N806
+
+        return BedrockV2Client(
+            aws_region=self.aws_region,
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
+            aws_session_token=aws_session_token,
+            aws_profile_name=self.aws_profile_name,
+            timeout=self.timeout,
+            total_max_attempts=self.total_max_attempts,
+            max_attempts=self.max_attempts,
+            mode=self.mode,
+            response_format=None,  # Can be set via params in create() call
+        )
 
 
 @require_optional_import("boto3", "bedrock")
