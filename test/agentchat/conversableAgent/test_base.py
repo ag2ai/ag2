@@ -4,7 +4,6 @@
 
 import warnings
 from collections import defaultdict
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,7 +12,6 @@ from autogen.agentchat.group import ContextVariables
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from test.credentials import Credentials
-
 
 # Initialization & Setup Tests
 
@@ -36,9 +34,7 @@ def test__init__code_execution_config_false():
 
 def test__init__code_execution_config_dict():
     """Test initialization with code_execution_config as dict."""
-    agent = ConversableAgent(
-        name="test_agent", code_execution_config={"use_docker": False}, llm_config=False
-    )
+    agent = ConversableAgent(name="test_agent", code_execution_config={"use_docker": False}, llm_config=False)
     assert isinstance(agent._code_execution_config, dict)
     assert "use_docker" in agent._code_execution_config
 
@@ -55,17 +51,23 @@ def test__init__code_execution_config_none_deprecation():
 
 def test__init__functions_list():
     """Test initialization with functions as list."""
-    def func1(): pass
-    def func2(): pass
-    
+
+    def func1():
+        pass
+
+    def func2():
+        pass
+
     agent = ConversableAgent(name="test_agent", functions=[func1, func2], llm_config=False)
     assert len(agent.function_map) == 2
 
 
 def test__init__functions_single():
     """Test initialization with single function."""
-    def func(): pass
-    
+
+    def func():
+        pass
+
     agent = ConversableAgent(name="test_agent", functions=func, llm_config=False)
     assert len(agent.function_map) == 1
 
@@ -100,7 +102,7 @@ def test__init__chat_messages():
     """Test initialization with chat_messages."""
     messages = defaultdict(list)
     messages[ConversableAgent("other", llm_config=False)] = [{"content": "hello", "role": "user"}]
-    
+
     agent = ConversableAgent(name="test_agent", chat_messages=messages, llm_config=False)
     assert len(agent.chat_messages) == 1
 
@@ -144,7 +146,7 @@ def test__setup_code_execution_executor_conflicts():
     """Test _setup_code_execution with executor conflicts raises ValueError."""
     agent = ConversableAgent(name="test_agent", llm_config=False)
     config = {"executor": "some_executor", "use_docker": True}
-    
+
     with pytest.raises(ValueError, match="'use_docker' in code_execution_config is not valid"):
         agent._setup_code_execution(config)
 
@@ -296,9 +298,7 @@ def test_use_docker_property_disabled():
 
 def test_use_docker_property_enabled():
     """Test use_docker property when code execution is enabled."""
-    agent = ConversableAgent(
-        name="test_agent", code_execution_config={"use_docker": False}, llm_config=False
-    )
+    agent = ConversableAgent(name="test_agent", code_execution_config={"use_docker": False}, llm_config=False)
     assert agent.use_docker is False
 
 
@@ -362,10 +362,10 @@ def test_chat_messages_for_summary():
     """Test chat_messages_for_summary."""
     agent = ConversableAgent(name="test_agent", llm_config=False)
     other_agent = ConversableAgent(name="other", llm_config=False)
-    
+
     messages = [{"content": "hello", "role": "user"}]
     agent.chat_messages[other_agent] = messages
-    
+
     assert agent.chat_messages_for_summary(other_agent) == messages
 
 
@@ -373,10 +373,10 @@ def test_last_message_none_agent():
     """Test last_message with None agent - single conversation."""
     agent = ConversableAgent(name="test_agent", llm_config=False)
     other_agent = ConversableAgent(name="other", llm_config=False)
-    
+
     messages = [{"content": "hello", "role": "user"}]
     agent.chat_messages[other_agent] = messages
-    
+
     assert agent.last_message() == messages[-1]
 
 
@@ -391,10 +391,10 @@ def test_last_message_none_agent_multiple_conversations():
     agent = ConversableAgent(name="test_agent", llm_config=False)
     agent1 = ConversableAgent(name="agent1", llm_config=False)
     agent2 = ConversableAgent(name="agent2", llm_config=False)
-    
+
     agent.chat_messages[agent1] = [{"content": "hello", "role": "user"}]
     agent.chat_messages[agent2] = [{"content": "hi", "role": "user"}]
-    
+
     with pytest.raises(ValueError, match="More than one conversation is found"):
         agent.last_message()
 
@@ -403,10 +403,10 @@ def test_last_message_specific_agent():
     """Test last_message with specific agent."""
     agent = ConversableAgent(name="test_agent", llm_config=False)
     other_agent = ConversableAgent(name="other", llm_config=False)
-    
+
     messages = [{"content": "hello", "role": "user"}, {"content": "hi", "role": "assistant"}]
     agent.chat_messages[other_agent] = messages
-    
+
     assert agent.last_message(other_agent) == messages[-1]
 
 
@@ -414,7 +414,7 @@ def test_last_message_agent_not_found():
     """Test last_message with agent not in conversations raises KeyError."""
     agent = ConversableAgent(name="test_agent", llm_config=False)
     other_agent = ConversableAgent(name="other", llm_config=False)
-    
+
     with pytest.raises(KeyError, match="is not present in any conversation"):
         agent.last_message(other_agent)
 
@@ -472,6 +472,6 @@ def test__content_str_list():
 def test__init__code_execution_config_executor_conflicts():
     """Test __init__ with executor conflicts raises ValueError."""
     config = {"executor": "some_executor", "use_docker": True}
-    
+
     with pytest.raises(ValueError, match="'use_docker' in code_execution_config is not valid"):
         ConversableAgent(name="test_agent", code_execution_config=config, llm_config=False)
