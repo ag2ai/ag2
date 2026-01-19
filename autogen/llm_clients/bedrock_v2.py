@@ -28,7 +28,6 @@ from autogen.llm_clients.models import (
     UserRoleEnum,
 )
 
-# Import Bedrock-specific utilities from existing client
 from autogen.oai.bedrock import (
     format_tools,
     oai_messages_to_bedrock_messages,
