@@ -821,10 +821,11 @@ class TestGeminiClient:
             "thinking_level": "High",
         })
 
+        # Note: thinking_level is defined in GeminiLLMConfigEntry but not yet supported
+        # by google.genai.types.ThinkingConfig, so it's not passed to the constructor
         mock_thinking_config.assert_called_once_with(
             include_thoughts=True,
             thinking_budget=1024,
-            thinking_level="High",
         )
 
         config_kwargs = mock_generate_content_config.call_args.kwargs
@@ -868,7 +869,6 @@ class TestGeminiClient:
         mock_thinking_config.assert_called_once_with(
             include_thoughts=None,
             thinking_budget=None,
-            thinking_level=None,
         )
 
         config_kwargs = mock_generate_content_config.call_args.kwargs
@@ -876,53 +876,57 @@ class TestGeminiClient:
             "default thinking_config should still be passed to GenerateContentConfig"
         )
 
+    # Note: thinking_level is defined in GeminiLLMConfigEntry but not yet supported
+    # by google.genai.types.ThinkingConfig, so it's not passed to the constructor.
+    # These tests verify include_thoughts and thinking_budget are passed correctly.
     @pytest.mark.parametrize(
         "kwargs,expected",
         [
-            ({"include_thoughts": True}, {"include_thoughts": True, "thinking_budget": None, "thinking_level": None}),
-            ({"thinking_budget": 256}, {"include_thoughts": None, "thinking_budget": 256, "thinking_level": None}),
-            ({"thinking_level": "High"}, {"include_thoughts": None, "thinking_budget": None, "thinking_level": "High"}),
+            ({"include_thoughts": True}, {"include_thoughts": True, "thinking_budget": None}),
+            ({"thinking_budget": 256}, {"include_thoughts": None, "thinking_budget": 256}),
+            # thinking_level is accepted in config but not passed to ThinkingConfig
+            ({"thinking_level": "High"}, {"include_thoughts": None, "thinking_budget": None}),
             (
                 {"include_thoughts": False, "thinking_budget": 512},
-                {"include_thoughts": False, "thinking_budget": 512, "thinking_level": None},
+                {"include_thoughts": False, "thinking_budget": 512},
             ),
             (
                 {"include_thoughts": True, "thinking_level": "Low"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Low"},
+                {"include_thoughts": True, "thinking_budget": None},
             ),
             (
                 {"thinking_budget": 1024, "thinking_level": "High"},
-                {"include_thoughts": None, "thinking_budget": 1024, "thinking_level": "High"},
+                {"include_thoughts": None, "thinking_budget": 1024},
             ),
             (
                 {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
-                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+                {"include_thoughts": True, "thinking_budget": 2048},
             ),
-            # Test "Medium" thinking level
+            # Test with "Medium" thinking level (not passed to ThinkingConfig)
             (
                 {"thinking_level": "Medium"},
-                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": None},
             ),
             (
                 {"include_thoughts": True, "thinking_level": "Medium"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Medium"},
+                {"include_thoughts": True, "thinking_budget": None},
             ),
             (
                 {"thinking_budget": 512, "thinking_level": "Medium"},
-                {"include_thoughts": None, "thinking_budget": 512, "thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": 512},
             ),
-            # Test "Minimal" thinking level
+            # Test with "Minimal" thinking level (not passed to ThinkingConfig)
             (
                 {"thinking_level": "Minimal"},
-                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": None},
             ),
             (
                 {"include_thoughts": True, "thinking_level": "Minimal"},
-                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Minimal"},
+                {"include_thoughts": True, "thinking_budget": None},
             ),
             (
                 {"thinking_budget": 128, "thinking_level": "Minimal"},
-                {"include_thoughts": None, "thinking_budget": 128, "thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": 128},
             ),
         ],
     )
@@ -969,7 +973,6 @@ class TestGeminiClient:
         mock_thinking_config.assert_called_once_with(
             include_thoughts=expected["include_thoughts"],
             thinking_budget=expected["thinking_budget"],
-            thinking_level=expected["thinking_level"],
         )
 
         config_kwargs = mock_generate_content_config.call_args.kwargs

@@ -144,15 +144,17 @@ async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credential
 
 def test_no_function_map():
     dummy1 = autogen.UserProxyAgent(
-        name="User_proxy",
+        name="User_proxy_1",
         system_message="A human admin that will execute function_calls.",
         human_input_mode="NEVER",
+        code_execution_config=False,
     )
 
     dummy2 = autogen.UserProxyAgent(
-        name="User_proxy",
+        name="User_proxy_2",
         system_message="A human admin that will execute function_calls.",
         human_input_mode="NEVER",
+        code_execution_config=False,
     )
     groupchat = autogen.GroupChat(agents=[dummy1, dummy2], messages=[], max_round=7)
     groupchat.messages = [

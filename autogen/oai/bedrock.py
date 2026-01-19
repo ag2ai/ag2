@@ -66,6 +66,10 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     supports_system_prompts: bool
     price: list[float] | None
     timeout: int | None
+    additional_model_request_fields: dict[str, Any] | None
+    total_max_attempts: int | None
+    max_attempts: int | None
+    mode: Literal["standard", "adaptive", "legacy"]
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -84,6 +88,10 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     supports_system_prompts: bool = True
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     timeout: int | None = None
+    additional_model_request_fields: dict[str, Any] | None = None
+    total_max_attempts: int | None = 5
+    max_attempts: int | None = 5
+    mode: Literal["standard", "adaptive", "legacy"] = "standard"
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -109,7 +117,14 @@ class BedrockClient:
         self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._aws_profile_name = kwargs.get("aws_profile_name")
         self._timeout = kwargs.get("timeout")
-
+        self._total_max_attempts = kwargs.get("total_max_attempts", 5)
+        self._max_attempts = kwargs.get("max_attempts", 5)
+        self._mode = kwargs.get("mode", "standard")
+        self._retry_config = {
+            "total_max_attempts": self._total_max_attempts,
+            "max_attempts": self._max_attempts,
+            "mode": self._mode,
+        }
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")
 
@@ -120,7 +135,7 @@ class BedrockClient:
         bedrock_config = Config(
             region_name=self._aws_region,
             signature_version="v4",
-            retries={"max_attempts": self._retries, "mode": "standard"},
+            retries=self._retry_config,
             read_timeout=self._timeout,
         )
 
@@ -361,9 +376,9 @@ class BedrockClient:
         """
         # Amazon Bedrock  base model IDs are here:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
+
         self._model_id = params.get("model")
         assert self._model_id, "Please provide the 'model` in the config_list to use Amazon Bedrock"
-
         # Parameters vary based on the model used.
         # As we won't cater for all models and parameters, it's the developer's
         # responsibility to implement the parameters and they will only be
@@ -382,6 +397,25 @@ class BedrockClient:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-meta.html
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-mistral-chat-completion.html
 
+        # Config-only fields that should not be included in inference params
+        # These are used for client initialization but not for API calls
+        config_only_fields = {
+            "api_type",
+            "model",
+            "aws_region",
+            "aws_access_key",
+            "aws_secret_key",
+            "aws_session_token",
+            "aws_profile_name",
+            "supports_system_prompts",
+            "price",
+            "timeout",
+            "api_key",  # Not used by Bedrock but may be in params
+            "messages",  # Handled separately
+            "tools",  # Handled separately
+            "response_format",  # Handled separately in create method
+        }
+
         # Here are the possible "base" parameters and their suitable types
         base_params = {}
 
@@ -399,15 +433,23 @@ class BedrockClient:
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
         additional_params = {}
 
+        # Extract fields from BedrockEntryDict that should go into additional_params
         for param_name, suitable_types in (
             ("top_k", (int,)),
             ("k", (int,)),
             ("seed", (int,)),
+            ("cache_seed", (int,)),
         ):
-            if param_name in params:
+            if param_name in params and param_name not in config_only_fields:
                 additional_params[param_name] = validate_parameter(
                     params, param_name, suitable_types, False, None, None, None
                 )
+
+        if "additional_model_request_fields" in params and isinstance(params["additional_model_request_fields"], dict):
+            additional_model_fields = params["additional_model_request_fields"]
+            for key, value in additional_model_fields.items():
+                if key not in config_only_fields:
+                    additional_params[key] = value
 
         # For this release we will not support streaming as many models do not support streaming with tool use
         if params.get("stream", False):
@@ -421,6 +463,7 @@ class BedrockClient:
     def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
+
         self.parse_custom_params(params)
 
         # Parse the inference parameters
@@ -448,7 +491,6 @@ class BedrockClient:
             system_messages = extract_system_messages(params["messages"])
 
         request_args = {"messages": messages, "modelId": self._model_id}
-
         # Base and additional args
         if len(base_params) > 0:
             request_args["inferenceConfig"] = base_params

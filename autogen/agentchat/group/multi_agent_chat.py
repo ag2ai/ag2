@@ -5,7 +5,7 @@
 import asyncio
 import threading
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
@@ -20,7 +20,8 @@ from ...io.run_response import (
 )
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ...llm_config import LLMConfig
-from ..chat import ChatResult
+from ..chat import ChatResult, CostDict
+from ..utils import gather_usage_summary
 from .context_variables import ContextVariables
 from .group_utils import cleanup_temp_user_messages
 
@@ -113,6 +114,12 @@ def initiate_group_chat(
         summary_method=pattern.summary_method,
     )
 
+    # Recalculate cost to include ALL agents in the group chat
+    # initiate_chat only gathers cost from [sender, recipient],
+    # but in group chat we need to include all participating agents
+    all_agents = list(manager.groupchat.agents) + [manager]
+    chat_result.cost = cast(CostDict, gather_usage_summary(all_agents))
+
     cleanup_temp_user_messages(chat_result)
 
     return chat_result, context_variables, manager.last_speaker
@@ -191,6 +198,12 @@ async def a_initiate_group_chat(
         clear_history=clear_history,
         summary_method=pattern.summary_method,
     )
+
+    # Recalculate cost to include ALL agents in the group chat
+    # initiate_chat only gathers cost from [sender, recipient],
+    # but in group chat we need to include all participating agents
+    all_agents = list(manager.groupchat.agents) + [manager]
+    chat_result.cost = cast(CostDict, gather_usage_summary(all_agents))
 
     cleanup_temp_user_messages(chat_result)
 
