@@ -48,6 +48,8 @@ class MockConversableAgent:
 @pytest.fixture
 def mock_agent_class(monkeypatch):
     """Replace ConversableAgent with MockConversableAgent"""
+    # Patch both the module-level import and the autogen module
+    monkeypatch.setattr("autogen.agentchat.run_parallel_agents.ConversableAgent", MockConversableAgent)
     monkeypatch.setattr("autogen.ConversableAgent", MockConversableAgent)
     return MockConversableAgent
 
