@@ -52,12 +52,14 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
+from .bedrock_v2 import BedrockV2Client
 
 __all__ = [  # noqa: RUF022
     # Protocol
     "ModelClientV2",
     # Clients
     "OpenAICompletionsClient",
+    "BedrockV2Client",
     # Content blocks
     "AudioContent",
     "BaseContent",
