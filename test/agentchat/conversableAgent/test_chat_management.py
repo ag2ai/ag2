@@ -2,17 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
-from collections import defaultdict
-from unittest.mock import MagicMock, patc
-
 import pytest
 
 from autogen.agentchat import ConversableAgent
 from autogen.agentchat.chat import ChatResult
 from autogen.cache.cache import Cache
 from autogen.import_utils import run_for_optional_imports
-from autogen.tools import Tool
 from test.credentials import Credentials
 
 
