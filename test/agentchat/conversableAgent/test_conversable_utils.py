@@ -12,7 +12,6 @@ from autogen.exception_utils import InvalidCarryOverTypeError
 from autogen.tools import Tool
 from test.credentials import Credentials
 
-
 # ============================================================================
 # _normalize_name Tests
 # ============================================================================
@@ -401,6 +400,7 @@ def test_handle_carryover_invalid_message_type():
 
 def test__create_tool_if_needed_with_tool():
     """Test _create_tool_if_needed returns Tool when Tool passed."""
+
     def test_func():
         pass
 
@@ -413,6 +413,7 @@ def test__create_tool_if_needed_with_tool():
 
 def test__create_tool_if_needed_with_tool_name_override():
     """Test _create_tool_if_needed creates new Tool with name override."""
+
     def test_func():
         pass
 
@@ -425,6 +426,7 @@ def test__create_tool_if_needed_with_tool_name_override():
 
 def test__create_tool_if_needed_with_function():
     """Test _create_tool_if_needed creates Tool from function."""
+
     def test_func(x: str) -> str:
         return x
 
