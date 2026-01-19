@@ -46,7 +46,6 @@ import warnings
 from typing import Any, Literal
 
 from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.llm_config.client import ModelClient
 from autogen.llm_clients.models import (
     GenericContent,
     ImageContent,
@@ -57,6 +56,7 @@ from autogen.llm_clients.models import (
     UserRoleEnum,
     normalize_role,
 )
+from autogen.llm_config.client import ModelClient
 
 # Import Bedrock-specific utilities from existing client
 from autogen.oai.bedrock import (
@@ -76,9 +76,7 @@ with optional_import_block():
 if optional_import_block().is_successful:
     boto3_import_exception: ImportError | None = None
 else:
-    boto3_import_exception = ImportError(
-        "Please install boto3 to use BedrockV2Client. Install with: pip install boto3"
-    )
+    boto3_import_exception = ImportError("Please install boto3 to use BedrockV2Client. Install with: pip install boto3")
 
 
 @require_optional_import("boto3", "bedrock")
@@ -206,7 +204,6 @@ class BedrockV2Client(ModelClient):
 
     def _get_response_format_schema(self, response_format: Any) -> dict[str, Any]:
         """Extract and normalize JSON schema from response_format."""
-        from pydantic import BaseModel
 
         schema = response_format.copy() if isinstance(response_format, dict) else response_format.model_json_schema()
 
@@ -298,8 +295,6 @@ class BedrockV2Client(ModelClient):
         """Validate structured data against schema and format for response message."""
         if self._response_format:
             try:
-                from pydantic import BaseModel
-
                 if isinstance(self._response_format, dict):
                     validated_data = structured_data
                 else:
@@ -452,7 +447,9 @@ class BedrockV2Client(ModelClient):
 
         return self._transform_response(response, has_response_format)
 
-    def _transform_response(self, bedrock_response: dict[str, Any], has_response_format: bool = False) -> UnifiedResponse:
+    def _transform_response(
+        self, bedrock_response: dict[str, Any], has_response_format: bool = False
+    ) -> UnifiedResponse:
         """
         Transform AWS Bedrock Converse API response to UnifiedResponse.
 
@@ -634,8 +631,6 @@ class BedrockV2Client(ModelClient):
             output_cost = (completion_tokens / 1000) * output_cost_per_k
             return input_cost + output_cost
 
-        from autogen.oai.bedrock import calculate_cost
-
         return calculate_cost(prompt_tokens, completion_tokens, response.model)
 
     @staticmethod
@@ -677,9 +672,7 @@ class BedrockV2Client(ModelClient):
         for msg in response.messages:
             tool_calls = msg.get_tool_calls()
 
-            has_complex_content = any(
-                isinstance(block, (ImageContent,)) for block in msg.content
-            )
+            has_complex_content = any(isinstance(block, (ImageContent,)) for block in msg.content)
 
             if tool_calls or has_complex_content:
                 message_dict: dict[str, Any] = {
