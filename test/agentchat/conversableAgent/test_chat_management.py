@@ -10,7 +10,6 @@ from autogen.cache.cache import Cache
 from autogen.import_utils import run_for_optional_imports
 from test.credentials import Credentials
 
-
 # Chat Initiation Tests
 
 
@@ -45,12 +44,8 @@ def test_prepare_chat_without_clear_history():
 
 def test_initiate_chat_with_max_turns():
     """Test initiate_chat with max_turns parameter."""
-    agent = ConversableAgent(
-        name="agent", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hello"
-    )
-    recipient = ConversableAgent(
-        name="recipient", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hi"
-    )
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hello")
+    recipient = ConversableAgent(name="recipient", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hi")
 
     result = agent.initiate_chat(recipient, message="Start", max_turns=2, clear_history=True)
     assert isinstance(result, ChatResult)
@@ -103,12 +98,8 @@ def test_initiate_chat_clear_history():
 @pytest.mark.asyncio
 async def test_a_initiate_chat():
     """Test async initiate_chat."""
-    agent = ConversableAgent(
-        name="agent", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hello"
-    )
-    recipient = ConversableAgent(
-        name="recipient", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hi"
-    )
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hello")
+    recipient = ConversableAgent(name="recipient", llm_config=False, human_input_mode="NEVER", default_auto_reply="Hi")
 
     result = await agent.a_initiate_chat(recipient, message="Start", max_turns=1, clear_history=True)
     assert isinstance(result, ChatResult)
