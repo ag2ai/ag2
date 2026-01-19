@@ -1053,7 +1053,7 @@ def test_get_agent_by_name_duplicate_in_nested():
 
     # Recursive search finds duplicate "shared_member" across nested teams
     result = gc.agent_by_name("shared_member", recursive=True)
-    assert result == team1_member1 or result == team2_member1
+    assert result in (team1_member1, team2_member1)
 
     # Testing name conflict with recursive search for duplicates in nested teams
     with pytest.raises(AgentNameConflictError):

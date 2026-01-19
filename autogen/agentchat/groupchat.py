@@ -184,9 +184,7 @@ class GroupChat:
         agent_names = [agent.name for agent in self.agents]
         if len(agent_names) != len(set(agent_names)):
             duplicates = {name for name in agent_names if agent_names.count(name) > 1}
-            raise ValueError(
-                f"GroupChat agents must have unique names. Duplicate agent names found: {duplicates}"
-            )
+            raise ValueError(f"GroupChat agents must have unique names. Duplicate agent names found: {duplicates}")
 
         if self.allow_repeat_speaker is not None and not isinstance(self.allow_repeat_speaker, (bool, list)):
             raise ValueError("GroupChat allow_repeat_speaker should be a bool or a list of Agents.")
