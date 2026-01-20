@@ -35,6 +35,7 @@ Usage:
 """
 
 from .client_v2 import ModelClientV2
+from .gemini_v2 import GeminiV2Client
 from .models import (
     AudioContent,
     BaseContent,
@@ -52,7 +53,6 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
-from .gemini_v2 import GeminiV2Client
 
 __all__ = [  # noqa: RUF022
     # Protocol

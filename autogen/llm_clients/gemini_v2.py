@@ -20,7 +20,6 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-
 from ..import_utils import optional_import_block
 from ..llm_config.client import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -29,33 +28,7 @@ from .models import (
 )
 
 with optional_import_block() as gemini_result:
-    import google.genai as genai
-    import vertexai
-    from google.auth.credentials import Credentials
-    from google.genai import types
-    from google.genai.types import (
-        Content,
-        FinishReason,
-        FunctionCall,
-        FunctionResponse,
-        GenerateContentConfig,
-        GenerateContentResponse,
-        Part,
-        ThinkingConfig,
-        Tool,
-    )
-    from vertexai.generative_models import (
-        Content as VertexAIContent,
-        FunctionDeclaration as vaiFunctionDeclaration,
-        GenerationConfig,
-        GenerativeModel,
-        GenerationResponse as VertexAIGenerationResponse,
-        HarmBlockThreshold as VertexAIHarmBlockThreshold,
-        HarmCategory as VertexAIHarmCategory,
-        Part as VertexAIPart,
-        SafetySetting as VertexAISafetySetting,
-        Tool as vaiTool,
-    )
+    pass
 
 if gemini_result.is_successful:
     gemini_import_exception: ImportError | None = None
