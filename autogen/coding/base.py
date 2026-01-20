@@ -106,6 +106,7 @@ CodeExecutionConfig = TypedDict(
         "ipython-embedded": Mapping[str, Any],
         "commandline-local": Mapping[str, Any],
         "yepcode": Mapping[str, Any],
+        "remyx": Mapping[str, Any],
     },
     total=False,
 )
