@@ -52,7 +52,7 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
-from .gemini_v2_client import GeminiV2Client
+from .gemini_v2 import GeminiV2Client
 
 __all__ = [  # noqa: RUF022
     # Protocol
@@ -76,4 +76,6 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    # LLM Config Entries
+    "GeminiV2LLMConfigEntry",
 ]
