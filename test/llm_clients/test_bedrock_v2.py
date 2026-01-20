@@ -352,6 +352,7 @@ class TestBedrockV2ClientCreate:
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_create_with_tools_and_response_format(self, bedrock_v2_client, mock_bedrock_runtime):
         """Test create() with both user tools and response format."""
+
         class Answer(BaseModel):
             answer: str
 
@@ -523,6 +524,7 @@ class TestBedrockV2ClientCreate:
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_create_with_response_format_no_user_tools(self, bedrock_v2_client, mock_bedrock_runtime):
         """Test create() with response format but no user tools."""
+
         class Answer(BaseModel):
             answer: str
 
