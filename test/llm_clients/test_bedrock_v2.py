@@ -16,7 +16,6 @@ from autogen.llm_clients.bedrock_v2 import BedrockV2Client, BedrockV2EntryDict, 
 from autogen.llm_clients.models import (
     GenericContent,
     ImageContent,
-    TextContent,
     ToolCallContent,
     UnifiedResponse,
     UserRoleEnum,
@@ -68,9 +67,8 @@ class TestBedrockV2ClientInitialization:
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_create_client_missing_region(self, mock_bedrock_runtime):
         """Test creating client without region raises error."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="Region is required"):
-                BedrockV2Client()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="Region is required"):
+            BedrockV2Client()
 
     @run_for_optional_imports(["boto3", "botocore"], "bedrock")
     def test_client_has_required_methods(self, bedrock_v2_client):
@@ -140,14 +138,16 @@ class TestBedrockV2ClientCreate:
         response = bedrock_v2_client.create({
             "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "messages": [{"role": "user", "content": "Get weather"}],
-            "tools": [{
-                "type": "function",
-                "function": {
-                    "name": "get_weather",
-                    "description": "Get weather for a city",
-                    "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
-                },
-            }],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather for a city",
+                        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+                    },
+                }
+            ],
         })
 
         tool_calls = response.messages[0].get_tool_calls()

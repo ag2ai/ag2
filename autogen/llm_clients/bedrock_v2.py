@@ -79,11 +79,13 @@ try:
     with optional_import_block() as boto3_result:
         import boto3
         from botocore.config import Config
-    
+
     if hasattr(boto3_result, "is_successful") and boto3_result.is_successful:
         boto3_import_exception = None
     else:
-        boto3_import_exception = ImportError("Please install boto3 to use BedrockV2Client. Install with: pip install boto3")
+        boto3_import_exception = ImportError(
+            "Please install boto3 to use BedrockV2Client. Install with: pip install boto3"
+        )
 except (AttributeError, ValueError, NameError):
     # Handle case where context manager doesn't complete properly during import
     boto3_import_exception = ImportError("Please install boto3 to use BedrockV2Client. Install with: pip install boto3")

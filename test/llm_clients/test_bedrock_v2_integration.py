@@ -143,7 +143,7 @@ class TestBedrockV2ClientBasicUsage:
         # Verify usage structure
         usage = bedrock_v2_client.get_usage(response)
         assert isinstance(usage, dict)
-        
+
         # Verify all required keys present
         for key in bedrock_v2_client.RESPONSE_USAGE_KEYS:
             assert key in usage, f"Missing required usage key: {key}"
@@ -195,12 +195,12 @@ class TestBedrockV2ClientStructuredOutputs:
         )
 
         result = agent.run(message="What is 2+2? Answer with confidence 0.95.", max_turns=1).process()
-        
+
         # Verify result structure
         assert result is not None
         assert isinstance(result, str)
         assert len(result) > 0
-        
+
         # Verify structured output was used (should contain answer and confidence)
         result_lower = result.lower()
         assert "4" in result_lower or "answer" in result_lower or "confidence" in result_lower
@@ -236,12 +236,12 @@ class TestBedrockV2ClientStructuredOutputs:
         )
 
         result = agent.run(message="Solve: 3x + 7 = 22", max_turns=1).process()
-        
+
         # Verify result
         assert result is not None
         assert isinstance(result, str)
         assert len(result) > 0
-        
+
         # Verify structured output format (should contain problem, steps, final_answer)
         result_lower = result.lower()
         assert "22" in result or "x" in result_lower or "5" in result or "solve" in result_lower
@@ -293,8 +293,9 @@ class TestBedrockV2ClientV1Compatibility:
         # Verify both contain correct answer
         result_v2_lower = result_v2.lower()
         result_v1_lower = result_v1.lower()
-        assert "10" in result_v2_lower or "10" in result_v1_lower, \
+        assert "10" in result_v2_lower or "10" in result_v1_lower, (
             f"Expected '10' in at least one result. V2: {result_v2[:100]}, V1: {result_v1[:100]}"
+        )
 
     def test_v1_compatible_format(self, bedrock_v2_client, bedrock_v2_config):
         """Test create_v1_compatible returns correct format."""
@@ -511,18 +512,20 @@ class TestBedrockV2ClientMessageRetrieval:
 
     def test_message_retrieval_with_tool_calls(self, bedrock_v2_client, bedrock_v2_config):
         """Test message retrieval with tool calls."""
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "get_weather",
-                "description": "Get weather for a city",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"city": {"type": "string"}},
-                    "required": ["city"],
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather for a city",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"city": {"type": "string"}},
+                        "required": ["city"],
+                    },
                 },
-            },
-        }]
+            }
+        ]
 
         response = bedrock_v2_client.create({
             "model": bedrock_v2_config["model"],
