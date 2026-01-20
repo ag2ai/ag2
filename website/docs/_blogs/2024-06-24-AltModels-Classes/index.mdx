@@ -49,6 +49,8 @@ The common requirements of text generation and function/tool calling are support
 Multi-modal support, such as for image/audio/video, is an area of active development. The [Google Gemini](/docs/user-guide/models/google-gemini) client class can be
 used to create a multimodal agent.
 
+> **Tip:** New in v1.2, Anthropic V2 client (`api_type: "anthropic_v2"`) now supports native structured outputs, strict tool/function calls, and vision/multimodal capabilities. For advanced workflows, use this in place of `api_type: "anthropic"`. [See the Anthropic documentation for details.](https://docs.ag2.ai/latest/docs/user-guide/models/anthropic#anthropic-v2-client)
+
 ## Tips
 
 Here are some tips when working with these client classes:
@@ -71,7 +73,7 @@ Install the appropriate client based on the model you wish to use.
 
 ```sh
 pip install autogen["openai","mistral"] # for Mistral AI client
-pip install autogen["openai","anthropic"] # for Anthropic client
+pip install autogen["openai","anthropic"] # for Anthropic client (V1 and V2 clients available)
 pip install autogen["openai","together"] # for Together.AI client
 pip install autogen["openai","groq"] # for Groq client
 ```
@@ -80,12 +82,21 @@ pip install autogen["openai","groq"] # for Groq client
 
 Add your model configurations to the `OAI_CONFIG_LIST`. Ensure you specify the `api_type` to initialize the respective client (Anthropic, Mistral, or Together).
 
+For **Anthropic**:
+- `api_type: "anthropic"` (V1 client – default, supports classic Anthropic API)
+- `api_type: "anthropic_v2"` (V2 client – supports advanced features: native structured outputs, strict tools, vision)
+
 ```yaml
 [
     {
         "model": "your anthropic model name",
         "api_key": "your Anthropic api_key",
-        "api_type": "anthropic"
+        "api_type": "anthropic"  # for classic Anthropic API (V1)
+    },
+    {
+        "model": "your anthropic v2 model name",  # e.g., claude-sonnet-4-5
+        "api_key": "your Anthropic api_key",
+        "api_type": "anthropic_v2"  # for latest Anthropics (V2): recommended for structured outputs, tools, vision
     },
     {
         "model": "your mistral model name",
@@ -150,6 +161,8 @@ user_proxy.intiate_chat(assistant, message="Write python code to print Hello Wor
 
 Now, let's look at how Anthropic's Sonnet 3.5 is able to suggest multiple function calls in a single response.
 
+> **Tip:** For advanced structured output support, strict tool calls, and vision, use the [Anthropic V2 client](https://docs.ag2.ai/latest/docs/user-guide/models/anthropic#anthropic-v2-client) (`api_type: "anthropic_v2"` – recommended for models like `claude-sonnet-4-5`, `claude-opus-4-1`, etc).
+
 This example is a simple travel agent setup with an agent for function calling and a user proxy agent for executing the functions.
 
 One thing you'll note here is Anthropic's models are more verbose than OpenAI's and will typically provide chain-of-thought or general verbiage when replying. Therefore we provide more explicit instructions to `functionbot` to not reply with more than necessary. Even so, it can't always help itself!
@@ -163,10 +176,10 @@ import json
 from typing import Literal
 from typing_extensions import Annotated
 
-# Anthropic configuration, using api_type='anthropic'
+# Anthropic configuration, using api_type='anthropic' or 'anthropic_v2'
 anthropic_llm_config = LLMConfig(config_list={
-    "api_type": "anthropic",
-    "model": "claude-3-5-sonnet-20240620",
+    "api_type": "anthropic",  # or "anthropic_v2" for enhanced features
+    "model": "claude-3-5-sonnet-20240620",  # or e.g. "claude-sonnet-4-5"
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "cache_seed": None,
 })
@@ -379,3 +392,4 @@ So we can see how Anthropic's Sonnet is able to suggest multiple tools in a sing
 ## More tips and tricks
 
 For an interesting chess game between Anthropic's Sonnet and Mistral's Mixtral, we've put together a sample notebook that highlights some of the tips and tricks for working with non-OpenAI LLMs. [See the notebook here](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess_altmodels).
+ 
