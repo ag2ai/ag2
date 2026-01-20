@@ -20,10 +20,11 @@ import pytest
 from pytest import MonkeyPatch
 
 import autogen
-from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
+from autogen import Agent, AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 from autogen.import_utils import run_for_optional_imports
+from autogen.tools import tool
 from test.credentials import Credentials
 from test.utils import suppress_json_decoder_error
 
@@ -2398,3 +2399,610 @@ def test_groupchatmanager_no_llm_config():
         ),
     ):
         agent_a.initiate_chat(manager, message="Hello")
+
+
+def test_delta_message_processing(monkeypatch: MonkeyPatch):
+    """Test that GroupChat processes all messages in a delta batch."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+    agent3 = autogen.ConversableAgent(
+        "charlie",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is charlie speaking.",
+    )
+
+    # Mock speaker selection to prevent further rounds
+    def mock_select_speaker(last_speaker, manager):
+        # Just return agent2 once, then this will be called again but we limit max_rounds
+        return agent2
+
+    monkeypatch.setattr(GroupChat, "select_speaker", mock_select_speaker)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        max_round=1,  # Only process the initial batch, no additional rounds
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,  # Process all messages in the batch
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch of multiple messages
+    delta_messages = [
+        {"role": "user", "content": "First message in batch"},
+        {"role": "user", "content": "Second message in batch"},
+        {"role": "user", "content": "Third message in batch"},
+    ]
+
+    # Initiate chat with the delta batch (this triggers run_chat)
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # Verify all messages were appended to groupchat.messages
+    assert len(groupchat.messages) >= 3, f"Expected at least 3 messages, got {len(groupchat.messages)}"
+
+    # Find the three messages we sent in the groupchat history
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "First message in batch" in message_contents
+    assert "Second message in batch" in message_contents
+    assert "Third message in batch" in message_contents
+
+
+def test_delta_with_termination(monkeypatch: MonkeyPatch):
+    """Test termination check on each message in delta."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Mock speaker selection
+    monkeypatch.setattr(GroupChat, "select_speaker", lambda *args, **kwargs: agent2)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=10,
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,  # Process all messages
+    )
+
+    # Set up termination condition
+    group_chat_manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config=False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
+    )
+
+    # Create a batch where the second message has TERMINATE
+    # The third message should NOT be processed
+    delta_messages = [
+        {"role": "user", "content": "First message"},
+        {"role": "user", "content": "Second message with TERMINATE"},
+        {"role": "user", "content": "Third message should not be processed"},
+    ]
+
+    # Initiate chat with the delta batch
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # With delta processing, messages should be processed in order
+    # and stop at the termination message
+    assert len(groupchat.messages) >= 2, "At least two messages should be processed"
+
+    # Verify that the third message was NOT processed (it comes after TERMINATE)
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "First message" in message_contents, "First message should be processed"
+    assert "TERMINATE" in str(message_contents), "Second message with TERMINATE should be processed"
+    assert "Third message should not be processed" not in message_contents, "Third message should NOT be processed"
+
+
+def test_delta_with_guardrails():
+    """Test that delta messages are processed through the system."""
+
+    # Track how many times messages are processed
+    message_count = {"count": 0}
+
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Hook into agent2's receive to count messages
+    original_receive = agent2.receive
+
+    def counted_receive(message, sender, request_reply=None, silent=False):
+        if isinstance(message, list):
+            message_count["count"] += len(message)
+        else:
+            message_count["count"] += 1
+        return original_receive(message, sender, request_reply, silent)
+
+    agent2.receive = counted_receive
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=1,
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,
+    )
+
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch with multiple messages
+    delta_messages = [
+        {"role": "user", "content": "First message is fine"},
+        {"role": "user", "content": "Second message"},
+        {"role": "user", "content": "Third message is also fine"},
+    ]
+
+    # Initiate chat - messages should be processed
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # Verify that messages were processed
+    assert len(groupchat.messages) >= 3, f"Expected at least 3 messages, got {len(groupchat.messages)}"
+
+    # Verify that agent2 received messages (broadcast from alice)
+    assert message_count["count"] >= 3, f"Agent2 should have received at least 3 messages, got {message_count['count']}"
+
+
+def test_batch_size_limit():
+    """Test max_messages_per_batch configuration."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Create groupchat with batch size limit of 3
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=1,  # Only one round to just process the initial batch
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=3,  # Only process last 3 messages from the delta
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch of 10 messages
+    delta_messages = [{"role": "user", "content": f"Message {i}"} for i in range(10)]
+
+    # Initiate chat with all 10 messages
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # With max_messages_per_batch=3, should process only the last 3 messages (7, 8, 9)
+    assert len(groupchat.messages) >= 3, f"Should have at least 3 messages, got {len(groupchat.messages)}"
+
+    # Verify that only messages 7, 8, 9 were processed (the last 3 from the batch)
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "Message 7" in message_contents, "Message 7 should be processed"
+    assert "Message 8" in message_contents, "Message 8 should be processed"
+    assert "Message 9" in message_contents, "Message 9 should be processed"
+
+    # Earlier messages should NOT be in the groupchat (they were skipped due to batch limit)
+    assert "Message 0" not in message_contents, "Message 0 should NOT be processed (beyond batch limit)"
+    assert "Message 1" not in message_contents, "Message 1 should NOT be processed (beyond batch limit)"
+
+
+# Add at the end of the file
+
+
+@tool(name="calculator", description="Basic calculator")
+def calculator(operation: str, a: float, b: float) -> float:
+    """Calculator function"""
+    ops = {"add": a + b, "subtract": a - b, "multiply": a * b, "divide": a / b if b != 0 else 0}
+    return ops.get(operation, 0)
+
+
+@tool(name="weather_check", description="Check weather")
+def weather_check(location: str) -> str:
+    """Mock weather check"""
+    return f"Weather in {location}: Sunny, 25°C"
+
+
+@tool(name="database_query", description="Query database")
+def database_query(user_id: str) -> str:
+    """Mock database query"""
+    return f"User {user_id}: Active, Premium member"
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_manager_with_multiple_agents_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: GroupChat with GroupChatManager and multiple agents."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent(
+        "triage_agent",
+        llm_config=llm_config,
+        system_message="You route requests to appropriate agents.",
+    )
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert.",
+    )
+
+    weather_agent = ConversableAgent(
+        "weather_agent",
+        llm_config=llm_config,
+        system_message="You provide weather information.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(
+        function_map={
+            "calculator": calculator,
+            "weather_check": weather_check,
+            "database_query": database_query,
+        }
+    )
+
+    group_chat = GroupChat(agents=[triage_agent, math_agent, weather_agent, user_proxy], messages=[], max_round=2)
+
+    manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="NEVER")
+
+    messages = [{"role": "user", "content": "Calculate 10+5 and check weather in Paris."}]
+    initial_count = len(messages)
+
+    user_proxy.initiate_chat(manager, message=messages, max_turns=1)
+
+    # Verify messages were added
+    assert len(group_chat.messages) >= initial_count
+    assert any(messages[0]["content"] in msg.get("content", "") for msg in group_chat.messages)
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_round_robin_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: RoundRobinPattern with initiate_group_chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Help me with my task"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_auto_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: AutoPattern with initiate_group_chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "I need database info and math calculations"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_run_group_chat_round_robin_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run_group_chat with RoundRobinPattern."""
+    from autogen.agentchat import run_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "What is 10 + 5?"}]
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+    response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_run_group_chat_auto_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run_group_chat with AutoPattern."""
+    from autogen.agentchat import run_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "what is 10 + 5?"}]
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    # Consume events
+    for event in response.events:
+        pass
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_group_chat_manager_with_multiple_agents_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: GroupChat with GroupChatManager and multiple agents."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent(
+        "triage_agent",
+        llm_config=llm_config,
+        system_message="You route requests to appropriate agents.",
+    )
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert.",
+    )
+
+    weather_agent = ConversableAgent(
+        "weather_agent",
+        llm_config=llm_config,
+        system_message="You provide weather information.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(
+        function_map={
+            "calculator": calculator,
+            "weather_check": weather_check,
+            "database_query": database_query,
+        }
+    )
+
+    group_chat = GroupChat(agents=[triage_agent, math_agent, weather_agent, user_proxy], messages=[], max_round=2)
+
+    manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="NEVER")
+
+    messages = [{"role": "user", "content": "Calculate 10+5 and check weather in Paris."}]
+    initial_count = len(messages)
+
+    await user_proxy.a_initiate_chat(manager, message=messages, max_turns=1)
+
+    # Verify messages were added
+    assert len(group_chat.messages) >= initial_count
+    assert any(messages[0]["content"] in msg.get("content", "") for msg in group_chat.messages)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_group_chat_round_robin_pattern_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: RoundRobinPattern with a_initiate_group_chat."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Help me with my task"}]
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_group_chat_auto_pattern_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: AutoPattern with a_initiate_group_chat."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "I need database info and math calculations"}]
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_a_run_group_chat_round_robin_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run_group_chat with RoundRobinPattern."""
+    from autogen.agentchat import a_run_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "What is 10 + 5?"}]
+    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+    await response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_a_run_group_chat_auto_pattern_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run_group_chat with AutoPattern."""
+    from autogen.agentchat import a_run_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "what is 10 + 5?"}]
+    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    # Consume events
+    async for event in response.events:
+        pass
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_group_chat_random_pattern_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: RandomPattern with a_initiate_group_chat."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.patterns import RandomPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RandomPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Random help needed"}]
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None

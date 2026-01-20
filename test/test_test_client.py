@@ -37,8 +37,8 @@ async def test_mock_async_client() -> None:
         {"content": "Hi, I am mock client!", "role": "assistant", "name": "mock-agent"},
     ]
 
-    # assert correct answer
-    assert client_agent.a_receive.call_args[0][0] == {"content": "Hi, I am mock client!"}
+    # assert correct answer - now expects a list
+    assert client_agent.a_receive.call_args[0][0] == [{"content": "Hi, I am mock client!"}]
 
 
 def test_mock_sync_client() -> None:
@@ -65,8 +65,25 @@ def test_mock_sync_client() -> None:
         {"content": "Hi, I am mock client!", "role": "assistant", "name": "mock-agent"},
     ]
 
+    # assert correct answer - now expects a list
+    assert client_agent.receive.call_args[0][0] == [{"content": "Hi, I am mock client!", "role": "assistant"}]
+
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
+    client_agent.name = "original"
+
+    # act
+    with TestAgent(agent, messages=[{"content": "Hi, I am mock client!"}]):
+        agent.receive("Hi, I am user! Who are you?", client_agent, request_reply=True)
+
+    # assert message history
+    assert agent.chat_messages[client_agent] == [
+        {"content": "Hi, I am user! Who are you?", "role": "user", "name": "original"},
+        {"content": "Hi, I am mock client!", "role": "assistant", "name": "mock-agent"},
+    ]
+
     # assert correct answer
-    assert client_agent.receive.call_args[0][0] == {"content": "Hi, I am mock client!", "role": "assistant"}
+    assert client_agent.receive.call_args[0][0] == [{"content": "Hi, I am mock client!", "role": "assistant"}]
 
 
 def test_mock_chat() -> None:

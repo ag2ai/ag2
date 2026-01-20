@@ -23,7 +23,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 import autogen
-from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
+from autogen.agentchat import AssistantAgent, ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
@@ -32,6 +32,7 @@ from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
+from autogen.tools import tool
 from autogen.tools.tool import Tool
 from test.credentials import Credentials
 from test.marks import credentials_all_llms
@@ -110,7 +111,7 @@ async def test_async_trigger():
     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
-    async def a_reply(recipient, messages, sender, config):
+    def a_reply(recipient, messages, sender, config):
         print("hello from a_reply")
         return (True, "hello")
 
@@ -118,7 +119,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello"
 
-    async def a_reply_a1(recipient, messages, sender, config):
+    def a_reply_a1(recipient, messages, sender, config):
         print("hello from a_reply_a1")
         return (True, "hello a1")
 
@@ -126,7 +127,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello a1"
 
-    async def a_reply_conversable_agent(recipient, messages, sender, config):
+    def a_reply_conversable_agent(recipient, messages, sender, config):
         print("hello from a_reply_conversable_agent")
         return (True, "hello conversable agent")
 
@@ -134,7 +135,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello conversable agent"
 
-    async def a_reply_a(recipient, messages, sender, config):
+    def a_reply_a(recipient, messages, sender, config):
         print("hello from a_reply_a")
         return (True, "hello a")
 
@@ -142,7 +143,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello a"
 
-    async def a_reply_b(recipient, messages, sender, config):
+    def a_reply_b(recipient, messages, sender, config):
         print("hello from a_reply_b")
         return (True, "hello b")
 
@@ -150,7 +151,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello a"
 
-    async def a_reply_agent2_or_agent1(recipient, messages, sender, config):
+    def a_reply_agent2_or_agent1(recipient, messages, sender, config):
         print("hello from a_reply_agent2_or_agent1")
         return (True, "hello agent2 or agent1")
 
@@ -158,7 +159,7 @@ async def test_async_trigger():
     await agent1.a_initiate_chat(agent, message="hi")
     assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
 
-    async def a_reply_agent2_or_agent3(recipient, messages, sender, config):
+    def a_reply_agent2_or_agent3(recipient, messages, sender, config):
         print("hello from a_reply_agent2_or_agent3")
         return (True, "hello agent2 or agent3")
 
@@ -438,22 +439,25 @@ def test_conversable_agent():
     dummy_agent_2 = ConversableAgent(name="dummy_agent_2", llm_config=False, human_input_mode="TERMINATE")
 
     # monkeypatch.setattr(sys, "stdin", StringIO("exit"))
-    dummy_agent_1.receive("hello", dummy_agent_2)  # receive a str
+    dummy_agent_1.receive([{"role": "user", "content": "hello"}], dummy_agent_2)
     # monkeypatch.setattr(sys, "stdin", StringIO("TERMINATE\n\n"))
     dummy_agent_1.receive(
-        {
-            "content": "hello {name}",
-            "context": {
-                "name": "dummy_agent_2",
-            },
-        },
+        [
+            {
+                "role": "user",
+                "content": "hello {name}",
+                "context": {
+                    "name": "dummy_agent_2",
+                },
+            }
+        ],
         dummy_agent_2,
-    )  # receive a dict
+    )
     assert "context" in dummy_agent_1.chat_messages[dummy_agent_2][-1]
     # receive dict without openai fields to be printed, such as "content", 'function_call'. There should be no error raised.
     pre_len = len(dummy_agent_1.chat_messages[dummy_agent_2])
     with pytest.raises(ValueError):
-        dummy_agent_1.receive({"message": "hello"}, dummy_agent_2)
+        dummy_agent_1.receive([{"message": "hello"}], dummy_agent_2)
     assert pre_len == len(dummy_agent_1.chat_messages[dummy_agent_2]), (
         "When the message is not an valid openai message, it should not be appended to the oai conversation."
     )
@@ -622,6 +626,37 @@ async def test_a_generate_reply_with_messages_and_sender_none(conversable_agent)
     try:
         response = await conversable_agent.a_generate_reply(messages=messages, sender=None)
         assert response is not None, "Response should not be None"
+    except AssertionError as e:
+        pytest.fail(f"Unexpected AssertionError: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {e}")
+
+
+def test_generate_reply_with_single_dict_message(conversable_agent):
+    """Test generate_reply with a single message of type dict[str, Any]."""
+    single_message = {"role": "user", "content": "Hello, this is a single message"}
+
+    try:
+        response = conversable_agent.generate_reply(messages=single_message, sender=None)
+        assert response is not None, "Response should not be None"
+        # Since conversable_agent has no LLM config, it should return the default auto reply
+        assert response == conversable_agent._default_auto_reply
+    except AssertionError as e:
+        pytest.fail(f"Unexpected AssertionError: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {e}")
+
+
+@pytest.mark.asyncio
+async def test_a_generate_reply_with_single_dict_message(conversable_agent):
+    """Test a_generate_reply with a single message of type dict[str, Any]."""
+    single_message = {"role": "user", "content": "Hello, this is a single message"}
+
+    try:
+        response = await conversable_agent.a_generate_reply(messages=single_message, sender=None)
+        assert response is not None, "Response should not be None"
+        # Since conversable_agent has no LLM config, it should return the default auto reply
+        assert response == conversable_agent._default_auto_reply
     except AssertionError as e:
         pytest.fail(f"Unexpected AssertionError: {e}")
     except Exception as e:
@@ -1431,9 +1466,11 @@ def test_process_before_send():
     dummy_agent_2 = ConversableAgent(name="dummy_agent_2", llm_config=False, human_input_mode="NEVER")
     dummy_agent_1.register_hook("process_message_before_send", send_to_frontend)
     dummy_agent_1.send("hello", dummy_agent_2)
-    print_mock.assert_called_once_with(message="hello")
+    # Updated expectation: hooks now receive normalized dict format
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "user"})
     dummy_agent_1.send("silent hello", dummy_agent_2, silent=True)
-    print_mock.assert_called_once_with(message="hello")
+    # Still only called once (silent message doesn't trigger print)
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "user"})
 
 
 def test_messages_with_carryover():
@@ -2245,3 +2282,1187 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+def test_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "First message"},
+        {"role": "assistant", "content": "Second message"},
+        {"role": "user", "content": "Third message"},
+    ]
+
+    # Send the list of messages
+    sender.send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "First message"
+    assert recipient.chat_messages[sender][1]["content"] == "Second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Third message"
+
+
+def test_send_with_empty_list_of_messages(mock_credentials: Credentials):
+    """Test send() method with an empty list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Send an empty list of messages
+    sender.send([], recipient, request_reply=False, silent=True)
+
+    # Verify that no messages were added
+    assert len(recipient.chat_messages[sender]) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test a_send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Async first message"},
+        {"role": "assistant", "content": "Async second message"},
+        {"role": "user", "content": "Async third message"},
+    ]
+
+    # Send the list of messages asynchronously
+    await sender.a_send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Async first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Async second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Async third message"
+
+
+@pytest.mark.asyncio
+async def test_a_send_with_mixed_content_list(mock_credentials: Credentials):
+    """Test a_send() method with a list containing different message types."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with mixed content types
+    messages = [
+        {"role": "user", "content": "Text message"},
+        {"role": "assistant", "content": ""},  # Avoid None content to keep strict validation
+        {"role": "function", "name": "test_function", "content": "Function result"},
+    ]
+
+    # Send the list of messages asynchronously
+    await sender.a_send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Text message"
+    assert recipient.chat_messages[sender][1]["content"] == ""
+    assert recipient.chat_messages[sender][2]["content"] == "Function result"
+
+
+def test_receive_with_list_of_messages(mock_credentials: Credentials):
+    """Test receive() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Received first message"},
+        {"role": "assistant", "content": "Received second message"},
+        {"role": "user", "content": "Received third message"},
+    ]
+
+    # Receive the list of messages
+    recipient.receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Received first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Received second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Received third message"
+
+
+def test_receive_with_list_containing_function_calls(mock_credentials: Credentials):
+    """Test receive() method with a list containing function call messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with function call messages
+    messages = [
+        {"role": "user", "content": "Please call a function"},
+        {"role": "assistant", "function_call": {"name": "test_func", "arguments": '{"arg": "value"}'}},
+        {"role": "function", "name": "test_func", "content": "Function executed successfully"},
+    ]
+
+    # Receive the list of messages
+    recipient.receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Please call a function"
+    assert "function_call" in recipient.chat_messages[sender][1]
+    assert recipient.chat_messages[sender][2]["content"] == "Function executed successfully"
+
+
+@pytest.mark.asyncio
+async def test_a_receive_with_list_of_messages(mock_credentials: Credentials):
+    """Test a_receive() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Async received first message"},
+        {"role": "assistant", "content": "Async received second message"},
+        {"role": "user", "content": "Async received third message"},
+    ]
+
+    # Receive the list of messages asynchronously
+    await recipient.a_receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Async received first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Async received second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Async received third message"
+
+
+@pytest.mark.asyncio
+async def test_a_receive_with_list_containing_tool_calls(mock_credentials: Credentials):
+    """Test a_receive() method with a list containing tool call messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with tool call messages
+    messages = [
+        {"role": "user", "content": "Please use a tool"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "test_tool", "arguments": '{"param": "value"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Tool executed successfully"},
+    ]
+
+    # Receive the list of messages asynchronously
+    await recipient.a_receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Please use a tool"
+    assert "tool_calls" in recipient.chat_messages[sender][1]
+    assert recipient.chat_messages[sender][2]["content"] == "Tool executed successfully"
+
+
+def test_process_message_before_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test _process_message_before_send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Process first message"},
+        {"role": "assistant", "content": "Process second message"},
+        {"role": "user", "content": "Process third message"},
+    ]
+
+    # Process the list of messages
+    processed_messages = sender._process_message_before_send(messages, recipient, silent=True)
+
+    # Verify that the processed messages are returned as a list
+    assert isinstance(processed_messages, list)
+    assert len(processed_messages) == 3
+    assert processed_messages[0]["content"] == "Process first message"
+    assert processed_messages[1]["content"] == "Process second message"
+    assert processed_messages[2]["content"] == "Process third message"
+
+
+def test_process_message_before_send_with_empty_list(mock_credentials: Credentials):
+    """Test _process_message_before_send() method with an empty list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Process an empty list of messages
+    processed_messages = sender._process_message_before_send([], recipient, silent=True)
+
+    # Verify that an empty list is returned
+    assert isinstance(processed_messages, list)
+    assert len(processed_messages) == 0
+
+
+# ============================================================================
+# Test 1: Hook Behavior with List Messages
+# ============================================================================
+
+
+def test_hook_processes_multiple_messages():
+    """Test that hooks receive and can modify each message in a list"""
+    # Track how many times the hook is called
+    hook_calls = []
+
+    def tracking_hook(sender, message, recipient, silent):
+        # Verify message is always a dict
+        assert isinstance(message, dict), f"Hook received non-dict: {type(message)}"
+
+        # Track this call
+        hook_calls.append({
+            "sender": sender.name,
+            "content": message.get("content"),
+            "recipient": recipient.name,
+        })
+
+        # Modify the message
+        message["modified"] = True
+        message["hook_processed"] = len(hook_calls)
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", tracking_hook)
+
+    # Send multiple messages at once
+    messages = [
+        {"content": "First message", "role": "user"},
+        {"content": "Second message", "role": "user"},
+        {"content": "Third message", "role": "user"},
+    ]
+    agent1.send(messages, agent2)
+
+    # Verify hook was called exactly 3 times (once per message)
+    assert len(hook_calls) == 3, f"Expected 3 hook calls, got {len(hook_calls)}"
+
+    # Verify each call had correct content
+    assert hook_calls[0]["content"] == "First message"
+    assert hook_calls[1]["content"] == "Second message"
+    assert hook_calls[2]["content"] == "Third message"
+
+    # Verify all messages were modified
+    received_messages = agent2.chat_messages[agent1]
+    assert len(received_messages) == 3
+    for i, msg in enumerate(received_messages):
+        assert msg.get("modified") is True, f"Message {i} was not modified"
+        assert msg.get("hook_processed") == i + 1, f"Message {i} has wrong processing order"
+
+
+def test_hook_receives_dict_for_string_input():
+    """Test that hooks receive normalized dict even when string is sent"""
+    received_messages = []
+
+    def capturing_hook(sender, message, recipient, silent):
+        received_messages.append(message)
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", capturing_hook)
+
+    # Send a string message
+    agent1.send("Hello world", agent2)
+
+    # Hook should have received a dict, not a string
+    assert len(received_messages) == 1
+    assert isinstance(received_messages[0], dict)
+    assert received_messages[0]["content"] == "Hello world"
+    assert received_messages[0]["role"] == "user"
+
+
+def test_multiple_hooks_process_list_messages():
+    """Test that multiple hooks all process each message in a list"""
+    hook1_calls = []
+    hook2_calls = []
+
+    def hook1(sender, message, recipient, silent):
+        hook1_calls.append(message.get("content"))
+        message["hook1_processed"] = True
+        return message
+
+    def hook2(sender, message, recipient, silent):
+        # Verify hook1 already processed it
+        assert message.get("hook1_processed") is True
+        hook2_calls.append(message.get("content"))
+        message["hook2_processed"] = True
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", hook1)
+    agent1.register_hook("process_message_before_send", hook2)
+
+    messages = [
+        {"content": "Message 1"},
+        {"content": "Message 2"},
+    ]
+    agent1.send(messages, agent2)
+
+    # Both hooks should have been called for both messages
+    assert hook1_calls == ["Message 1", "Message 2"]
+    assert hook2_calls == ["Message 1", "Message 2"]
+
+    # Verify both hooks processed all messages
+    received = agent2.chat_messages[agent1]
+    for msg in received:
+        assert msg.get("hook1_processed") is True
+        assert msg.get("hook2_processed") is True
+
+
+def test_hook_return_validation_with_list():
+    """Test that hook return value validation works for list messages"""
+
+    def bad_hook_returns_none(sender, message, recipient, silent):
+        return None  # Invalid!
+
+    def bad_hook_returns_string(sender, message, recipient, silent):
+        return "invalid"  # Invalid!
+
+    def bad_hook_returns_list(sender, message, recipient, silent):
+        return [message]  # Invalid! Should return dict, not list
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Test None return
+    agent1.register_hook("process_message_before_send", bad_hook_returns_none)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+    # Clear hooks and test string return
+    agent1.hook_lists["process_message_before_send"].clear()
+    agent1.register_hook("process_message_before_send", bad_hook_returns_string)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+    # Clear hooks and test list return
+    agent1.hook_lists["process_message_before_send"].clear()
+    agent1.register_hook("process_message_before_send", bad_hook_returns_list)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+
+# ============================================================================
+# Test 2: Empty Message Edge Cases
+# ============================================================================
+
+
+def test_send_empty_list_shows_warning():
+    """Test that sending an empty message list triggers a warning"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Send empty list should trigger warning
+    with pytest.warns(UserWarning, match="Attempted to send empty message list"):
+        agent1.send([], agent2)
+
+    # Verify no messages were actually sent
+    assert agent1 not in agent2.chat_messages or len(agent2.chat_messages.get(agent1, [])) == 0
+
+
+def test_hook_cannot_create_empty_list():
+    """Test behavior when hook would create an empty message scenario"""
+    # Note: Currently hooks process individual messages, so they can't create an empty list
+    # But they could return an empty dict which should be validated
+
+    def hook_returns_empty_dict(sender, message, recipient, silent):
+        return {}  # Empty dict - technically valid but might be problematic
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", hook_returns_empty_dict)
+
+    # This should work but might fail validation at _append_oai_message
+    # because empty dict has no content/function_call/tool_calls
+    with pytest.raises(ValueError, match="can't be converted into a valid ChatCompletion message"):
+        agent1.send({"content": "test"}, agent2)
+
+
+def test_empty_string_message():
+    """Test behavior with empty string message"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Empty string should still be sent (it's not an empty list)
+    agent1.send("", agent2)
+
+    # Should have created a message with empty content
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] == ""
+
+
+def test_message_with_none_content():
+    """Test sending message with None content (valid for function/tool calls)"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Message with None content but with tool_calls should be valid
+    message = {
+        "content": None,
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {"name": "test_func", "arguments": "{}"},
+            }
+        ],
+    }
+
+    agent1.send(message, agent2)
+
+    # Should have been sent successfully
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] is None
+    assert received[0]["tool_calls"] is not None
+
+
+def test_mixed_valid_and_empty_messages():
+    """Test sending a list with mix of valid and questionable messages"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Mix of valid messages
+    messages = [
+        {"content": "Valid message 1"},
+        {"content": ""},  # Empty content but still valid
+        {"content": "Valid message 2"},
+    ]
+
+    agent1.send(messages, agent2)
+
+    # All three should be received
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 3
+    assert received[0]["content"] == "Valid message 1"
+    assert received[1]["content"] == ""
+    assert received[2]["content"] == "Valid message 2"
+
+
+def test_hook_modifies_content_to_empty():
+    """Test hook that modifies content to empty string"""
+
+    def empty_content_hook(sender, message, recipient, silent):
+        message["content"] = ""
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", empty_content_hook)
+    agent1.send("Original content", agent2)
+
+    # Should receive message with empty content
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] == ""
+
+
+# ============================================================================
+# Test 3: Async versions of the above tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_hook_processes_multiple_messages_async():
+    """Async version: Test that hooks receive and can modify each message in a list"""
+    hook_calls = []
+
+    def tracking_hook(sender, message, recipient, silent):
+        assert isinstance(message, dict)
+        hook_calls.append(message.get("content"))
+        message["modified"] = True
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", tracking_hook)
+
+    messages = [
+        {"content": "First async"},
+        {"content": "Second async"},
+        {"content": "Third async"},
+    ]
+    await agent1.a_send(messages, agent2)
+
+    assert len(hook_calls) == 3
+    assert hook_calls == ["First async", "Second async", "Third async"]
+
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 3
+    for msg in received:
+        assert msg.get("modified") is True
+
+
+@pytest.mark.asyncio
+async def test_send_empty_list_shows_warning_async():
+    """Async version: Test that sending empty list triggers warning"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    with pytest.warns(UserWarning, match="Attempted to send empty message list"):
+        await agent1.a_send([], agent2)
+
+    assert agent1 not in agent2.chat_messages or len(agent2.chat_messages.get(agent1, [])) == 0
+
+
+# ============================================================================
+# Test 4: Integration tests combining hooks with list messages
+# ============================================================================
+
+
+def test_hook_adds_metadata_to_list_messages():
+    """Test realistic scenario: hook adds metadata/tracking to all messages"""
+    import time
+
+    def add_timestamp_hook(sender, message, recipient, silent):
+        message["timestamp"] = time.time()
+        message["sender_name"] = sender.name
+        message["recipient_name"] = recipient.name
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", add_timestamp_hook)
+
+    messages = [{"content": f"Message {i}"} for i in range(5)]
+    agent1.send(messages, agent2)
+
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 5
+
+    for msg in received:
+        assert "timestamp" in msg
+        assert msg["sender_name"] == "agent1"
+        assert msg["recipient_name"] == "agent2"
+        assert isinstance(msg["timestamp"], float)
+
+
+def test_hook_filters_sensitive_content():
+    """Test realistic scenario: hook sanitizes messages"""
+
+    def sanitize_hook(sender, message, recipient, silent):
+        content = message.get("content", "")
+        if isinstance(content, str):
+            # Remove sensitive patterns
+            content = content.replace("SECRET", "[REDACTED]")
+            content = content.replace("PASSWORD", "[REDACTED]")
+            message["content"] = content
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", sanitize_hook)
+
+    messages = [
+        {"content": "This is a SECRET message"},
+        {"content": "My PASSWORD is 12345"},
+        {"content": "Normal message"},
+    ]
+    agent1.send(messages, agent2)
+
+    received = agent2.chat_messages[agent1]
+    assert received[0]["content"] == "This is a [REDACTED] message"
+    assert received[1]["content"] == "My [REDACTED] is 12345"
+    assert received[2]["content"] == "Normal message"
+
+
+# Add at the end of the file
+
+
+@tool(name="calculator", description="Basic calculator for math operations")
+def calculator(operation: str, a: float, b: float) -> float:
+    """Basic calculator function"""
+    if operation == "add":
+        return a + b
+    elif operation == "subtract":
+        return a - b
+    elif operation == "multiply":
+        return a * b
+    elif operation == "divide":
+        return a / b if b != 0 else 0
+    return 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_single_agent_generate_reply_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: single agent generate_reply with OpenAI."""
+    assistant = autogen.AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a helpful assistant. Keep responses concise.",
+    )
+
+    messages = [{"role": "user", "content": "What is 2+2?"}]
+    response = assistant.generate_reply(messages)
+
+    assert response is not None
+    assert isinstance(response, (str, dict))
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_two_agent_chat_with_calculator_tool_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: two agent chat with calculator tool."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert. Use calculator tool for calculations.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    user_proxy.initiate_chat(math_agent, message="Calculate 15 * 7 using your calculator tool", max_turns=2)
+
+    assert len(user_proxy.chat_messages[math_agent]) > 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_agent_run_method_single_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run() method with single agent."""
+    assistant = autogen.AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+    )
+
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+    response = assistant.run(message=message, max_turns=1)
+    response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_agent_run_method_two_agents_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run() method with two agents."""
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a math expert.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    message = [{"content": "Calculate 10 + 5", "role": "user"}]
+    response = user_proxy.run(recipient=math_agent, message=message, max_turns=3)
+
+    # Consume events
+    for event in response.events:
+        pass
+
+    assert len(response.messages) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_single_agent_generate_reply_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: single agent generate_reply with OpenAI."""
+    assistant = AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a helpful assistant. Keep responses concise.",
+    )
+
+    messages = [{"role": "user", "content": "What is 2+2?"}]
+    response = await assistant.a_generate_reply(messages)
+
+    assert response is not None
+    assert isinstance(response, (str, dict))
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_two_agent_chat_with_calculator_tool_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: two agent chat with calculator tool."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert. Use calculator tool for calculations.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    await user_proxy.a_initiate_chat(math_agent, message="Calculate 15 * 7 using your calculator tool", max_turns=3)
+
+    assert len(user_proxy.chat_messages[math_agent]) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_agent_a_run_method_single_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run() method with single agent."""
+    assistant = AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+    )
+
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+    response = await assistant.a_run(message=message, max_turns=1)
+    await response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_agent_a_run_method_two_agents_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run() method with two agents."""
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a math expert.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    message = [{"content": "Calculate 10 + 5", "role": "user"}]
+    response = await user_proxy.a_run(recipient=math_agent, message=message, max_turns=3)
+
+    # Consume events
+    async for event in response.events:
+        pass
+
+    assert len(await response.messages) > 0
+
+
+def test_run_basic(mock_credentials: Credentials):
+    """Test basic run functionality with a recipient agent."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply function for the recipient
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Run the conversation
+    response = agent.run(
+        recipient=recipient,
+        message="Hello, how are you?",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the thread complete
+    time.sleep(0.5)
+
+
+def test_run_no_recipient(mock_credentials: Credentials):
+    """Test run functionality without a recipient (creates executor internally)."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+
+    # Run without recipient
+    response = agent.run(
+        message="Hello, please respond",
+        max_turns=1,
+        clear_history=True,
+        user_input=False,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the thread complete
+    time.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_a_run_basic(mock_credentials: Credentials):
+    """Test async run functionality with a recipient agent."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply function for the recipient
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Run the async conversation
+    response = await agent.a_run(
+        recipient=recipient,
+        message="Hello, how are you?",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the task complete
+    await asyncio.sleep(0.5)
+
+
+def test_initiate_chat_basic():
+    """Test basic initiate_chat functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Initiate chat
+    result = agent.initiate_chat(
+        recipient,
+        message="Hello",
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert hasattr(result, "chat_history")
+    assert hasattr(result, "summary")
+    assert len(result.chat_history) > 0
+
+
+def test_initiate_chat_with_max_turns():
+    """Test initiate_chat with max_turns parameter."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response"))
+    agent.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Counter response"))
+
+    # Initiate chat with max_turns
+    result = agent.initiate_chat(
+        recipient,
+        message="Hello",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert len(result.chat_history) <= 5  # Initial message + 2 turns (4 messages max)
+
+
+@pytest.mark.asyncio
+async def test_a_initiate_chat_basic():
+    """Test async basic initiate_chat functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Initiate async chat
+    result = await agent.a_initiate_chat(
+        recipient,
+        message="Hello",
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert hasattr(result, "chat_history")
+    assert hasattr(result, "summary")
+    assert len(result.chat_history) > 0
+
+
+def test_initiate_chats_basic():
+    """Test basic initiate_chats functionality with multiple chats."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Initiate chats
+    results = agent.initiate_chats(chat_queue)
+
+    # Verify results
+    assert results is not None
+    assert isinstance(results, list)
+    assert len(results) == 2
+    assert all(hasattr(r, "chat_history") for r in results)
+
+
+@pytest.mark.asyncio
+async def test_a_initiate_chats_basic():
+    """Test async basic initiate_chats functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue with chat_id for async
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+            "chat_id": 0,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+            "chat_id": 1,
+        },
+    ]
+
+    # Initiate async chats
+    results = await agent.a_initiate_chats(chat_queue)
+
+    # Verify results
+    assert results is not None
+    assert isinstance(results, dict)
+    assert len(results) == 2
+
+
+def test_sequential_run_basic():
+    """Test basic sequential_run functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Run sequential chats
+    responses = agent.sequential_run(chat_queue)
+
+    # Verify responses
+    assert responses is not None
+    assert isinstance(responses, list)
+    assert len(responses) == 2
+    assert all(hasattr(r, "iostream") for r in responses)
+
+    # Let threads complete
+    time.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_a_sequential_run_basic():
+    """Test async basic sequential_run functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Run async sequential chats
+    responses = await agent.a_sequential_run(chat_queue)
+
+    # Verify responses
+    assert responses is not None
+    assert isinstance(responses, list)
+    assert len(responses) == 2
+    assert all(hasattr(r, "iostream") for r in responses)
+
+    # Let tasks complete
+    await asyncio.sleep(0.5)
+
+
+if __name__ == "__main__":
+    # test_trigger()
+    # test_context()
+    # test_handle_carryover():
+    # test_max_turn()
+    # test_process_before_send()
+    # test_message_func()
+    # test_summary()
+    # test_adding_duplicate_function_warning()
+    # test_function_registration_e2e_sync()
+    # test_process_gemini_carryover()
+    # test_process_carryover()
+    # test_context_variables()
+    # test_max_consecutive_auto_reply_with_max_turns()
+    test_invalid_functions_parameter()

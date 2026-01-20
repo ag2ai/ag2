@@ -8,20 +8,20 @@
 
 import inspect
 import json
-import sys
 
 import pytest
 
 import autogen
+from autogen import ConversableAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
+from autogen.tools import tool
 from test.credentials import Credentials
 
 
+@pytest.mark.integration
 @run_for_optional_imports("openai", "openai")
-@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
-@run_for_optional_imports(["openai"], "openai")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     tools = [
@@ -74,9 +74,8 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     print(eval_math_responses(**arguments))
 
 
+@pytest.mark.integration
 @run_for_optional_imports("openai", "openai")
-@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
-@run_for_optional_imports(["openai"], "openai")
 def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     functions = [
@@ -125,11 +124,6 @@ def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credent
     print(eval_math_responses(**arguments))
 
 
-@run_for_optional_imports("openai", "openai")
-@pytest.mark.skipif(
-    not TOOL_ENABLED or not sys.version.startswith("3.10"),
-    reason="do not run if openai is <1.1.0 or py!=3.10 or requested to skip",
-)
 @run_for_optional_imports(["openai"], "openai")
 def test_update_tool(credentials_gpt_4o: Credentials):
     llm_config = {
@@ -220,32 +214,34 @@ def test_multi_tool_call():
     fake_agent = FakeAgent("fake_agent")
 
     user_proxy.receive(
-        message={
-            "content": "test multi tool call",
-            "tool_calls": [
-                {
-                    "id": "tool_1",
-                    "type": "function",
-                    "function": {"name": "echo", "arguments": json.JSONEncoder().encode({"str": "hello world"})},
-                },
-                {
-                    "id": "tool_2",
-                    "type": "function",
-                    "function": {
-                        "name": "echo",
-                        "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+        message=[
+            {
+                "content": "test multi tool call",
+                "tool_calls": [
+                    {
+                        "id": "tool_1",
+                        "type": "function",
+                        "function": {"name": "echo", "arguments": json.JSONEncoder().encode({"str": "hello world"})},
                     },
-                },
-                {
-                    "id": "tool_3",
-                    "type": "function",
-                    "function": {
-                        "name": "multi_tool_call_echo",  # normalized "multi_tool_call.echo"
-                        "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                    {
+                        "id": "tool_2",
+                        "type": "function",
+                        "function": {
+                            "name": "echo",
+                            "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                        },
                     },
-                },
-            ],
-        },
+                    {
+                        "id": "tool_3",
+                        "type": "function",
+                        "function": {
+                            "name": "multi_tool_call_echo",  # normalized "multi_tool_call.echo"
+                            "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                        },
+                    },
+                ],
+            }
+        ],
         sender=fake_agent,
         request_reply=True,
     )
@@ -324,32 +320,34 @@ async def test_async_multi_tool_call():
     fake_agent = FakeAgent("fake_agent")
 
     await user_proxy.a_receive(
-        message={
-            "content": "test multi tool call",
-            "tool_calls": [
-                {
-                    "id": "tool_1",
-                    "type": "function",
-                    "function": {"name": "a_echo", "arguments": json.JSONEncoder().encode({"str": "hello world"})},
-                },
-                {
-                    "id": "tool_2",
-                    "type": "function",
-                    "function": {
-                        "name": "echo",
-                        "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+        message=[
+            {
+                "content": "test multi tool call",
+                "tool_calls": [
+                    {
+                        "id": "tool_1",
+                        "type": "function",
+                        "function": {"name": "a_echo", "arguments": json.JSONEncoder().encode({"str": "hello world"})},
                     },
-                },
-                {
-                    "id": "tool_3",
-                    "type": "function",
-                    "function": {
-                        "name": "multi_tool_call_echo",  # normalized "multi_tool_call.echo"
-                        "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                    {
+                        "id": "tool_2",
+                        "type": "function",
+                        "function": {
+                            "name": "echo",
+                            "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                        },
                     },
-                },
-            ],
-        },
+                    {
+                        "id": "tool_3",
+                        "type": "function",
+                        "function": {
+                            "name": "multi_tool_call_echo",  # normalized "multi_tool_call.echo"
+                            "arguments": json.JSONEncoder().encode({"str": "goodbye and thanks for all the fish"}),
+                        },
+                    },
+                ],
+            }
+        ],
         sender=fake_agent,
         request_reply=True,
     )
@@ -381,6 +379,96 @@ async def test_async_multi_tool_call():
             ),
         }
     ]
+
+
+@tool(name="calculator", description="Basic calculator")
+def calculator(operation: str, a: float, b: float) -> float:
+    ops = {"add": a + b, "multiply": a * b, "divide": a / b if b != 0 else 0}
+    return ops.get(operation, 0)
+
+
+@tool(name="weather_check", description="Check weather")
+def weather_check(location: str) -> str:
+    return f"Weather in {location}: Sunny, 25°C"
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_handoffs_and_tools_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: handoffs with tools."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.llm_condition import StringLLMCondition
+    from autogen.agentchat.group.on_condition import OnCondition
+    from autogen.agentchat.group.patterns import ManualPattern
+    from autogen.agentchat.group.targets.transition_target import AgentTarget
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    # Setup handoffs
+    triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            condition=StringLLMCondition("contains math or calculate"),
+            target=AgentTarget(math_agent),
+            condition_llm_config=llm_config,
+        ),
+        OnCondition(
+            condition=StringLLMCondition("contains weather"),
+            target=AgentTarget(weather_agent),
+            condition_llm_config=llm_config,
+        ),
+    ])
+
+    triage_agent.handoffs.set_after_work(target=AgentTarget(general_agent))
+
+    pattern = ManualPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, weather_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Calculate 25 * 4 for me"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    # Cleanup
+    triage_agent.handoffs.clear()
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_mixed_tools_scenario_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: mixed tools in group chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, weather_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Calculate 100/4 and check weather in London"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
 
 
 if __name__ == "__main__":

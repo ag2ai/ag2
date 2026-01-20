@@ -561,7 +561,9 @@ class ReasoningAgent(AssistantAgent):
         else:
             forest_answers_str = "-" + "\n-".join(forest_answers)
             self.send(
-                message=f"""Given a list of different answers provide a complete response to a user's question.
+                message=[
+                    {
+                        "content": f"""Given a list of different answers provide a complete response to a user's question.
 Question:
 {prompt}
 
@@ -570,6 +572,9 @@ Answers:
 
 Final Answer:
 """,
+                        "role": "user",
+                    }
+                ],
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
@@ -657,7 +662,7 @@ Please provide your rating along with a brief explanation of your assessment.
 
         self._grader.clear_history()
         self.send(
-            message=prompt,
+            message=prompt,  # type: ignore[arg-type]
             recipient=self._grader,
             request_reply=True,
             silent=self.silent,
@@ -739,7 +744,7 @@ Rating: <rating>
 
         self._grader.clear_history()
         self.send(
-            message=prompt,
+            message=prompt,  # type: ignore[arg-type]
             recipient=self._grader,
             request_reply=True,
             silent=self.silent,
@@ -800,7 +805,7 @@ Rating: <rating>
                 return "Python code execution is disabled. Follow a different approach."
             self._user_proxy.clear_history()
             self.send(
-                message=node.content,
+                message=node.content,  # type: ignore[arg-type]
                 recipient=self._user_proxy,
                 request_reply=True,
                 silent=self.silent,
@@ -815,7 +820,7 @@ Rating: <rating>
 
         self._executor.clear_history()
         self.send(
-            message=prompt,
+            message=prompt,  # type: ignore[arg-type]
             recipient=self._executor,
             request_reply=True,
             silent=self.silent,
@@ -887,7 +892,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 """
             self._prompt_rewriter.clear_history()
             self.send(
-                message=rewriter_message,
+                message=rewriter_message,  # type: ignore[arg-type]
                 recipient=self._prompt_rewriter,
                 request_reply=True,
                 silent=self.silent,
@@ -988,7 +993,7 @@ Thinking processes:
 Final Answer:
 """
         self.send(
-            message=message,
+            message=message,  # type: ignore[arg-type]
             recipient=self,
             request_reply=True,
             silent=self.silent,
@@ -1054,7 +1059,7 @@ Thinking process:
 {node.trajectory}
 
 Final Answer:
-""",
+""",  # type: ignore[arg-type]
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
@@ -1097,7 +1102,7 @@ Final Answer:
             prompt = f"{node.trajectory}\n---\nHow should the thinking process continue?"
 
         self.send(
-            message=prompt,
+            message=prompt,  # type: ignore[arg-type]
             recipient=self._thinker,
             request_reply=True,
             silent=self.silent,
