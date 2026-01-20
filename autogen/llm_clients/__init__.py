@@ -52,12 +52,14 @@ from .models import (
     VideoContent,
 )
 from .openai_completions_client import OpenAICompletionsClient
+from .gemini_v2_client import GeminiV2Client
 
 __all__ = [  # noqa: RUF022
     # Protocol
     "ModelClientV2",
     # Clients
     "OpenAICompletionsClient",
+    "GeminiV2Client",
     # Content blocks
     "AudioContent",
     "BaseContent",
