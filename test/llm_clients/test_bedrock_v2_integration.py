@@ -66,7 +66,7 @@ def bedrock_v2_client(bedrock_v2_config):
     )
 
 
-# @pytest.mark.integration
+@pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 class TestBedrockV2ClientBasicUsage:
     """Test basic Bedrock V2 client usage."""
@@ -166,7 +166,7 @@ class TestBedrockV2ClientBasicUsage:
         assert calculated_cost >= 0
 
 
-# @pytest.mark.integration
+@pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 class TestBedrockV2ClientStructuredOutputs:
     """Test structured outputs with Bedrock V2."""
@@ -247,7 +247,7 @@ class TestBedrockV2ClientStructuredOutputs:
         assert "22" in result or "x" in result_lower or "5" in result or "solve" in result_lower
 
 
-# @pytest.mark.integration
+@pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 class TestBedrockV2ClientV1Compatibility:
     """Test V1 vs V2 client compatibility."""
@@ -344,7 +344,7 @@ class TestBedrockV2ClientV1Compatibility:
         assert v1_response["cost"] >= 0
 
 
-# @pytest.mark.integration
+@pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 class TestBedrockV2ClientGroupChat:
     """Test group chat with Bedrock V2."""
