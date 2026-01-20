@@ -8,6 +8,10 @@
 /test/remote/ @Lancetnik
 /website/docs/user-guide/a2a/ @Lancetnik
 
+# ParallelAgentRunner
+/autogen/agentchat/run_parallel_agents.py @priyansh4320
+/test/agentchat/test_run_parallel_agents.py @priyansh4320
+
 # observability
 /website/docs/user-guide/observability/ @priyansh4320
 
