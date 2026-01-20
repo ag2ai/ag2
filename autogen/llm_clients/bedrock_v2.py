@@ -74,11 +74,11 @@ from autogen.oai.bedrock import (
 )
 from autogen.oai.client_utils import validate_parameter
 
-with optional_import_block():
+with optional_import_block() as boto3_result:
     import boto3
     from botocore.config import Config
 
-if optional_import_block().is_successful:
+if boto3_result.is_successful:
     boto3_import_exception: ImportError | None = None
 else:
     boto3_import_exception = ImportError("Please install boto3 to use BedrockV2Client. Install with: pip install boto3")

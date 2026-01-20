@@ -34,7 +34,7 @@ Usage:
     ContentParser.register("custom_type", CustomContent)
 """
 
-from .bedrock_v2 import BedrockV2Client
+from .bedrock_v2 import BedrockV2Client, BedrockV2LLMConfigEntry
 from .client_v2 import ModelClientV2
 from .models import (
     AudioContent,
@@ -76,4 +76,6 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    # LLM Config Entries
+    "BedrockV2LLMConfigEntry",
 ]
