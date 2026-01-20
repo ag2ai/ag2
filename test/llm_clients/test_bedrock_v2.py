@@ -219,6 +219,401 @@ class TestBedrockV2ClientCreate:
         assert len(generic_blocks) == 1
         assert generic_blocks[0].type == "unknown"
 
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_system_messages(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with system messages when supports_system_prompts is True."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hello"},
+            ],
+            "supports_system_prompts": True,
+        })
+
+        # Verify system was passed to converse
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "system" in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_without_system_prompts_support(self, mock_bedrock_runtime):
+        """Test create() when supports_system_prompts is False."""
+        client = BedrockV2Client(
+            aws_region="us-east-1",
+            aws_access_key="test_key",
+            aws_secret_key="test_secret",
+        )
+
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hello"},
+            ],
+            "supports_system_prompts": False,
+        })
+
+        # Verify system was NOT passed to converse
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "system" not in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_inference_config(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with inference config parameters."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "temperature": 0.7,
+            "max_tokens": 100,
+        })
+
+        # Verify inferenceConfig was passed
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "inferenceConfig" in call_args.kwargs
+        inference_config = call_args.kwargs["inferenceConfig"]
+        assert "temperature" in inference_config or "maxTokens" in inference_config
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_additional_model_request_fields(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with additionalModelRequestFields."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "additional_model_request_fields": {
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 1024,
+                },
+            },
+        })
+
+        # Verify additionalModelRequestFields was passed
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "additionalModelRequestFields" in call_args.kwargs
+        additional_fields = call_args.kwargs["additionalModelRequestFields"]
+        assert "thinking" in additional_fields
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_tools_and_response_format(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with both user tools and response format."""
+        class Answer(BaseModel):
+            answer: str
+
+        mock_response = {
+            "stopReason": "tool_use",
+            "output": {
+                "message": {
+                    "content": [
+                        {
+                            "toolUse": {
+                                "toolUseId": "call-123",
+                                "name": "__structured_output",
+                                "input": {"answer": "42"},
+                            },
+                        },
+                    ],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        client = BedrockV2Client(
+            aws_region="us-east-1",
+            aws_access_key="test_key",
+            aws_secret_key="test_secret",
+            response_format=Answer,
+        )
+
+        response = client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "What is the answer?"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+                    },
+                }
+            ],
+        })
+
+        # Verify toolConfig was passed with both tools
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "toolConfig" in call_args.kwargs
+        tool_config = call_args.kwargs["toolConfig"]
+        assert len(tool_config["tools"]) == 2  # user tool + structured output tool
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_price_parameter(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with price parameter for cost calculation."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Test"}],
+                },
+            },
+            "usage": {"inputTokens": 1000, "outputTokens": 500, "totalTokens": 1500},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "price": [0.01, 0.02],
+        })
+
+        # Verify price was stored for cost calculation
+        assert response.cost > 0
+        expected_cost = (1000 / 1000) * 0.01 + (500 / 1000) * 0.02
+        assert abs(response.cost - expected_cost) < 0.001
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_empty_base_params(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() when base_params is empty (no inferenceConfig)."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+
+        # Verify inferenceConfig was NOT passed when empty
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "inferenceConfig" not in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_empty_additional_params(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() when additional_params is empty."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+
+        # Verify additionalModelRequestFields was NOT passed when empty
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "additionalModelRequestFields" not in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_no_tools(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() when no tools are provided."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+
+        # Verify toolConfig was NOT passed when no tools
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "toolConfig" not in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_response_is_none(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() when response is None raises RuntimeError."""
+        mock_bedrock_runtime.converse.return_value = None
+
+        with pytest.raises(RuntimeError, match="Failed to get response from Bedrock"):
+            bedrock_v2_client.create({
+                "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_response_format_no_user_tools(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with response format but no user tools."""
+        class Answer(BaseModel):
+            answer: str
+
+        mock_response = {
+            "stopReason": "tool_use",
+            "output": {
+                "message": {
+                    "content": [
+                        {
+                            "toolUse": {
+                                "toolUseId": "call-123",
+                                "name": "__structured_output",
+                                "input": {"answer": "42"},
+                            },
+                        },
+                    ],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        client = BedrockV2Client(
+            aws_region="us-east-1",
+            aws_access_key="test_key",
+            aws_secret_key="test_secret",
+            response_format=Answer,
+        )
+
+        response = client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [{"role": "user", "content": "What is the answer?"}],
+        })
+
+        # Verify toolConfig was passed with only structured output tool
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "toolConfig" in call_args.kwargs
+        tool_config = call_args.kwargs["toolConfig"]
+        assert len(tool_config["tools"]) == 1  # only structured output tool
+        assert tool_config["tools"][0]["toolSpec"]["name"] == "__structured_output"
+        assert isinstance(response, UnifiedResponse)
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_create_with_all_parameters(self, bedrock_v2_client, mock_bedrock_runtime):
+        """Test create() with all optional parameters set."""
+        mock_response = {
+            "stopReason": "stop",
+            "output": {
+                "message": {
+                    "content": [{"text": "Hello"}],
+                },
+            },
+            "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+            "ResponseMetadata": {"RequestId": "test-request-id"},
+        }
+        mock_bedrock_runtime.converse.return_value = mock_response
+
+        response = bedrock_v2_client.create({
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "messages": [
+                {"role": "system", "content": "You are helpful."},
+                {"role": "user", "content": "Hello"},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 100,
+            "supports_system_prompts": True,
+            "price": [0.01, 0.02],
+            "additional_model_request_fields": {"custom": "value"},
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "test_tool",
+                        "description": "Test",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+        })
+
+        # Verify all parameters were passed correctly
+        call_args = mock_bedrock_runtime.converse.call_args
+        assert call_args is not None
+        assert "inferenceConfig" in call_args.kwargs
+        assert "additionalModelRequestFields" in call_args.kwargs
+        assert "system" in call_args.kwargs
+        assert "toolConfig" in call_args.kwargs
+        assert isinstance(response, UnifiedResponse)
+
 
 class TestBedrockV2ClientStructuredOutputs:
     """Test structured outputs."""
