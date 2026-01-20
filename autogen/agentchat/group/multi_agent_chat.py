@@ -48,6 +48,7 @@ def initiate_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    isolate_agent_views: bool = False,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration.
 
@@ -58,6 +59,10 @@ def initiate_group_chat(
         safeguard_policy: Optional safeguard policy dict or path to JSON file.
         safeguard_llm_config: Optional LLM configuration for safeguard checks.
         mask_llm_config: Optional LLM configuration for masking.
+        isolate_agent_views: If True, agents will only maintain their own message history
+            and will not receive messages from other agents. When False (default), all agents
+            receive all messages. When True, messages are still stored in groupchat.messages
+            for the GroupChatManager's view, but are not broadcast to other agents.
 
     Returns:
         ChatResult:         Conversations chat history.
@@ -83,6 +88,7 @@ def initiate_group_chat(
     ) = pattern.prepare_group_chat(
         max_rounds=max_rounds,
         messages=messages,
+        isolate_agent_views=isolate_agent_views,
     )
 
     # Apply safeguards if provided
@@ -133,6 +139,7 @@ async def a_initiate_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    isolate_agent_views: bool = False,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration, asynchronously.
 
@@ -143,6 +150,10 @@ async def a_initiate_group_chat(
         safeguard_policy: Optional safeguard policy dict or path to JSON file.
         safeguard_llm_config: Optional LLM configuration for safeguard checks.
         mask_llm_config: Optional LLM configuration for masking.
+        isolate_agent_views: If True, agents will only maintain their own message history
+            and will not receive messages from other agents. When False (default), all agents
+            receive all messages. When True, messages are still stored in groupchat.messages
+            for the GroupChatManager's view, but are not broadcast to other agents.
 
     Returns:
         ChatResult:         Conversations chat history.
@@ -168,6 +179,7 @@ async def a_initiate_group_chat(
     ) = pattern.prepare_group_chat(
         max_rounds=max_rounds,
         messages=messages,
+        isolate_agent_views=isolate_agent_views,
     )
 
     # Apply safeguards if provided
@@ -218,26 +230,24 @@ def run_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    isolate_agent_views: bool = False,
 ) -> RunResponseProtocol:
-    """Run a group chat with multiple agents using the specified pattern.
-
-    This method executes a multi-agent conversation in a background thread and returns
-    immediately with a RunResponse object that can be used to iterate over events.
-
-    For step-by-step execution with control over each event, use run_group_chat_iter() instead.
+    """Run a group chat using a pattern for configuration in a separate thread.
 
     Args:
-        pattern: The pattern that defines how agents interact (e.g., AutoPattern,
-            RoundRobinPattern, RandomPattern).
-        messages: The initial message(s) to start the conversation. Can be a string
-            or a list of message dictionaries.
-        max_rounds: Maximum number of conversation rounds. Defaults to 20.
-        safeguard_policy: Optional safeguard policy for content filtering.
-        safeguard_llm_config: Optional LLM config for safeguard evaluation.
-        mask_llm_config: Optional LLM config for content masking.
+        pattern: Pattern object that encapsulates the chat configuration.
+        messages: Initial message(s).
+        max_rounds: Maximum number of conversation rounds.
+        safeguard_policy: Optional safeguard policy dict or path to JSON file.
+        safeguard_llm_config: Optional LLM configuration for safeguard checks.
+        mask_llm_config: Optional LLM configuration for masking.
+        isolate_agent_views: If True, agents will only maintain their own message history
+            and will not receive messages from other agents. When False (default), all agents
+            receive all messages. When True, messages are still stored in groupchat.messages
+            for the GroupChatManager's view, but are not broadcast to other agents.
 
     Returns:
-        RunResponseProtocol
+        RunResponseProtocol: Response object for tracking the async execution.
     """
     iostream = ThreadIOStream()
     all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
@@ -250,6 +260,7 @@ def run_group_chat(
         safeguard_policy: dict[str, Any] | str | None = safeguard_policy,
         safeguard_llm_config: LLMConfig | None = safeguard_llm_config,
         mask_llm_config: LLMConfig | None = mask_llm_config,
+        isolate_agent_views: bool = isolate_agent_views,
         iostream: ThreadIOStream = iostream,
         response: RunResponse = response,
     ) -> None:
@@ -262,6 +273,7 @@ def run_group_chat(
                     safeguard_policy=safeguard_policy,
                     safeguard_llm_config=safeguard_llm_config,
                     mask_llm_config=mask_llm_config,
+                    isolate_agent_views=isolate_agent_views,
                 )
 
                 IOStream.get_default().send(
@@ -291,26 +303,24 @@ async def a_run_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    isolate_agent_views: bool = False,
 ) -> AsyncRunResponseProtocol:
-    """Async version of run_group_chat for running group chats in async contexts.
-
-    This method executes a multi-agent conversation as an async task and returns
-    immediately with an AsyncRunResponse object that can be used to iterate over events.
-
-    For step-by-step execution with control over each event, use a_run_group_chat_iter() instead.
+    """Run a group chat using a pattern for configuration asynchronously.
 
     Args:
-        pattern: The pattern that defines how agents interact (e.g., AutoPattern,
-            RoundRobinPattern, RandomPattern).
-        messages: The initial message(s) to start the conversation. Can be a string
-            or a list of message dictionaries.
-        max_rounds: Maximum number of conversation rounds. Defaults to 20.
-        safeguard_policy: Optional safeguard policy for content filtering.
-        safeguard_llm_config: Optional LLM config for safeguard evaluation.
-        mask_llm_config: Optional LLM config for content masking.
+        pattern: Pattern object that encapsulates the chat configuration.
+        messages: Initial message(s).
+        max_rounds: Maximum number of conversation rounds.
+        safeguard_policy: Optional safeguard policy dict or path to JSON file.
+        safeguard_llm_config: Optional LLM configuration for safeguard checks.
+        mask_llm_config: Optional LLM configuration for masking.
+        isolate_agent_views: If True, agents will only maintain their own message history
+            and will not receive messages from other agents. When False (default), all agents
+            receive all messages. When True, messages are still stored in groupchat.messages
+            for the GroupChatManager's view, but are not broadcast to other agents.
 
     Returns:
-        AsyncRunResponseProtocol
+        AsyncRunResponseProtocol: Response object for tracking the async execution.
     """
     iostream = AsyncThreadIOStream()
     all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
@@ -323,6 +333,7 @@ async def a_run_group_chat(
         safeguard_policy: dict[str, Any] | str | None = safeguard_policy,
         safeguard_llm_config: LLMConfig | None = safeguard_llm_config,
         mask_llm_config: LLMConfig | None = mask_llm_config,
+        isolate_agent_views: bool = isolate_agent_views,
         iostream: AsyncThreadIOStream = iostream,
         response: AsyncRunResponse = response,
     ) -> None:
@@ -335,6 +346,7 @@ async def a_run_group_chat(
                     safeguard_policy=safeguard_policy,
                     safeguard_llm_config=safeguard_llm_config,
                     mask_llm_config=mask_llm_config,
+                    isolate_agent_views=isolate_agent_views,
                 )
 
                 iostream.send(
