@@ -48,11 +48,7 @@ with optional_import_block() as result:
     )
     from vertexai.generative_models import (
         Part as VertexAIPart,
-    )
-    from vertexai.generative_models import (
         SafetySetting as VertexAISafetySetting,
-    )
-    from vertexai.generative_models import (
         Tool as vaiTool,
     )
 
