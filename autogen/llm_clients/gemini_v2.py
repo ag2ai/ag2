@@ -23,10 +23,9 @@ import random
 import time
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
-from typing_extensions import Required, Unpack
+from pydantic import Field
 
-from ..import_utils import optional_import_block, require_optional_import
+from ..import_utils import optional_import_block
 from ..json_utils import resolve_json_references
 from ..llm_config.client import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -61,14 +60,30 @@ with optional_import_block() as gemini_result:
     )
     from vertexai.generative_models import (
         Content as VertexAIContent,
+    )
+    from vertexai.generative_models import (
         FunctionDeclaration as vaiFunctionDeclaration,
+    )
+    from vertexai.generative_models import (
         GenerationConfig,
         GenerativeModel,
+    )
+    from vertexai.generative_models import (
         GenerationResponse as VertexAIGenerationResponse,
+    )
+    from vertexai.generative_models import (
         HarmBlockThreshold as VertexAIHarmBlockThreshold,
+    )
+    from vertexai.generative_models import (
         HarmCategory as VertexAIHarmCategory,
+    )
+    from vertexai.generative_models import (
         Part as VertexAIPart,
+    )
+    from vertexai.generative_models import (
         SafetySetting as VertexAISafetySetting,
+    )
+    from vertexai.generative_models import (
         Tool as vaiTool,
     )
 
@@ -359,7 +374,10 @@ class GeminiV2Client(ModelClient):
         return self._transform_response(response, model_name, has_response_format)
 
     def _transform_response(
-        self, gemini_response: GenerateContentResponse | VertexAIGenerationResponse, model: str, has_response_format: bool = False
+        self,
+        gemini_response: GenerateContentResponse | VertexAIGenerationResponse,
+        model: str,
+        has_response_format: bool = False,
     ) -> UnifiedResponse:
         """
         Transform Gemini API response to UnifiedResponse.
@@ -380,14 +398,9 @@ class GeminiV2Client(ModelClient):
             UnifiedResponse with all content blocks properly typed
         """
         # Extract candidate (Gemini always returns one candidate)
-        if isinstance(gemini_response, GenerateContentResponse):
-            if len(gemini_response.candidates) != 1:
-                raise ValueError(f"Unexpected number of candidates. Expected 1, got {len(gemini_response.candidates)}")
-            candidate = gemini_response.candidates[0]
-            parts = candidate.content.parts if candidate.content and candidate.content.parts else []
-            finish_reason = self._convert_finish_reason(candidate.finish_reason)
-            usage_metadata = gemini_response.usage_metadata
-        elif isinstance(gemini_response, VertexAIGenerationResponse):
+        if isinstance(gemini_response, GenerateContentResponse) or isinstance(
+            gemini_response, VertexAIGenerationResponse
+        ):
             if len(gemini_response.candidates) != 1:
                 raise ValueError(f"Unexpected number of candidates. Expected 1, got {len(gemini_response.candidates)}")
             candidate = gemini_response.candidates[0]
@@ -553,11 +566,20 @@ class GeminiV2Client(ModelClient):
         # Ensure first and last messages are from user
         if rst and rst[0].role != "user":
             text_part = VertexAIPart.from_text("start chat") if self.use_vertexai else Part(text="start chat")
-            rst.insert(0, VertexAIContent(parts=[text_part], role="user") if self.use_vertexai else Content(parts=[text_part], role="user"))
+            rst.insert(
+                0,
+                VertexAIContent(parts=[text_part], role="user")
+                if self.use_vertexai
+                else Content(parts=[text_part], role="user"),
+            )
 
         if rst and rst[-1].role != "user":
             text_part = VertexAIPart.from_text("continue") if self.use_vertexai else Part(text="continue")
-            rst.append(VertexAIContent(parts=[text_part], role="user") if self.use_vertexai else Content(parts=[text_part], role="user"))
+            rst.append(
+                VertexAIContent(parts=[text_part], role="user")
+                if self.use_vertexai
+                else Content(parts=[text_part], role="user")
+            )
 
         return rst
 
@@ -674,7 +696,7 @@ class GeminiV2Client(ModelClient):
     def _create_gemini_function_declaration(self, tool: dict[str, Any]) -> Any:
         """Create Gemini function declaration from tool dict."""
         # Simplified - would need full schema conversion
-        from google.genai.types import FunctionDeclaration, Schema, Type
+        from google.genai.types import FunctionDeclaration
 
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
@@ -818,17 +840,15 @@ class GeminiV2Client(ModelClient):
                     for tc in tool_call_objects
                 ]
 
-            choices.append(
-                {
-                    "index": idx,
-                    "message": {
-                        "role": message.role.value if hasattr(message.role, "value") else str(message.role),
-                        "content": text_content,
-                        "tool_calls": tool_calls,
-                    },
-                    "finish_reason": response.finish_reason or "stop",
-                }
-            )
+            choices.append({
+                "index": idx,
+                "message": {
+                    "role": message.role.value if hasattr(message.role, "value") else str(message.role),
+                    "content": text_content,
+                    "tool_calls": tool_calls,
+                },
+                "finish_reason": response.finish_reason or "stop",
+            })
 
         return {
             "id": response.id,
