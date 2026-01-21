@@ -3,4 +3,3 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Integration Test Gemini V2 client."""
-
