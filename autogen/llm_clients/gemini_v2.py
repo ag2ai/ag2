@@ -398,9 +398,25 @@ class GeminiV2Client(ModelClient):
             UnifiedResponse with all content blocks properly typed
         """
         # Extract candidate (Gemini always returns one candidate)
-        if isinstance(gemini_response, GenerateContentResponse) or isinstance(
-            gemini_response, VertexAIGenerationResponse
-        ):
+        # Guard isinstance checks to handle optional imports
+        try:
+            is_generate_content = isinstance(gemini_response, GenerateContentResponse)
+        except NameError:
+            is_generate_content = type(gemini_response).__name__ == "GenerateContentResponse"
+        
+        try:
+            is_vertexai = isinstance(gemini_response, VertexAIGenerationResponse)
+        except NameError:
+            is_vertexai = type(gemini_response).__name__ == "GenerationResponse"
+        
+        if is_generate_content:
+            if len(gemini_response.candidates) != 1:
+                raise ValueError(f"Unexpected number of candidates. Expected 1, got {len(gemini_response.candidates)}")
+            candidate = gemini_response.candidates[0]
+            parts = candidate.content.parts if candidate.content and candidate.content.parts else []
+            finish_reason = self._convert_finish_reason(candidate.finish_reason)
+            usage_metadata = gemini_response.usage_metadata
+        elif is_vertexai:
             if len(gemini_response.candidates) != 1:
                 raise ValueError(f"Unexpected number of candidates. Expected 1, got {len(gemini_response.candidates)}")
             candidate = gemini_response.candidates[0]
