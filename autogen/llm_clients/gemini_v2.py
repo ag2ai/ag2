@@ -375,7 +375,7 @@ class GeminiV2Client(ModelClient):
 
     def _transform_response(
         self,
-        gemini_response: GenerateContentResponse | VertexAIGenerationResponse,
+        gemini_response: Any,
         model: str,
         has_response_format: bool = False,
     ) -> UnifiedResponse:
