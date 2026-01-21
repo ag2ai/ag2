@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Integration Test Gemini V2 client."""
+
 """
 Integration tests for GeminiV2Client with real API calls.
 
@@ -64,7 +65,11 @@ class TestGeminiV2ClientBasicChat:
 
         # Verify messages
         assert len(response.messages) > 0
-        assert response.messages[0].role.value == "assistant" if hasattr(response.messages[0].role, "value") else str(response.messages[0].role) == "assistant"
+        assert (
+            response.messages[0].role.value == "assistant"
+            if hasattr(response.messages[0].role, "value")
+            else str(response.messages[0].role) == "assistant"
+        )
 
         # Verify text content
         assert len(response.text) > 0
@@ -224,6 +229,7 @@ class TestGeminiV2ClientStructuredOutputs:
     @run_for_optional_imports(["google.genai", "vertexai"], "gemini")
     def test_structured_output_pydantic_model(self, gemini_v2_client, gemini_v2_config):
         """Test structured output with Pydantic BaseModel."""
+
         # Define a Pydantic model for structured output
         class Answer(BaseModel):
             answer: str
