@@ -542,6 +542,11 @@ class GeminiV2Client(ModelClient):
             return "stop"
 
         finish_reason_str = str(finish_reason)
+        # Extract enum name if it's in format "EnumName.VALUE" or just use the string
+        if "." in finish_reason_str:
+            # Handle enum stringification like "FinishReason.MAX_TOKENS"
+            finish_reason_str = finish_reason_str.split(".")[-1]
+
         mapping = {
             "STOP": "stop",
             "MAX_TOKENS": "length",
