@@ -436,11 +436,30 @@ class GeminiV2Client(ModelClient):
                 if hasattr(part, "thought_signature") and part.thought_signature:
                     self.tool_call_thought_signatures[tool_call_id] = part.thought_signature
 
+                # Safely convert args to dict and then to JSON string
+                # Handle different types of args objects (dict, Mapping, etc.)
+                if fn_call.args:
+                    try:
+                        # Try dict() conversion first (works for dict, Mapping, etc.)
+                        if hasattr(fn_call.args, "items"):
+                            args_dict = dict(fn_call.args.items())
+                        elif isinstance(fn_call.args, dict):
+                            args_dict = fn_call.args
+                        else:
+                            # Fallback: try direct conversion
+                            args_dict = dict(fn_call.args) if fn_call.args else {}
+                        arguments = json.dumps(args_dict)
+                    except (TypeError, ValueError, AttributeError):
+                        # If all else fails, use empty dict
+                        arguments = "{}"
+                else:
+                    arguments = "{}"
+
                 content_blocks.append(
                     ToolCallContent(
                         id=tool_call_id,
                         name=fn_call.name,
-                        arguments=json.dumps(dict(fn_call.args.items())) if fn_call.args else "{}",
+                        arguments=arguments,
                     )
                 )
 
