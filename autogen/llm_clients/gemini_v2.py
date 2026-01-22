@@ -565,7 +565,7 @@ class GeminiV2Client(ModelClient):
 
         return unified_response
 
-    def _convert_finish_reason(self, finish_reason: FinishReason | Any | None) -> str:
+    def _convert_finish_reason(self, finish_reason: Any | None) -> str:
         """Convert Gemini finish reason to standard finish reason."""
         if finish_reason is None:
             return "stop"
@@ -579,15 +579,16 @@ class GeminiV2Client(ModelClient):
         else:
             raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
 
-        mapping = {
-            "STOP": "stop",
-            "MAX_TOKENS": "length",
-            "SAFETY": "content_filter",
-            "RECITATION": "content_filter",
-            "OTHER": "stop",
-        }
+            mapping = {
+                "STOP": "stop",
+                "MAX_TOKENS": "length",
+                "SAFETY": "content_filter",
+                "RECITATION": "content_filter",
+                "OTHER": "stop",
+            }
 
-        return mapping.get(finish_reason_str.upper(), "stop")
+            return mapping.get(finish_reason_str.upper(), "stop")
+        raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
 
     def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction from messages."""
