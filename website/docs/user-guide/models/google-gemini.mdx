@@ -74,6 +74,123 @@ You can put your Google Gemini API key in an environment variable named `GOOGLE_
 For guidance on using environment variables, see our [LLMs documentation](/docs/user-guide/basic-concepts/llm-configuration#environment-variables).
 </Tip>
 
+## Gemini V2 Client
+
+AG2 now includes a **Gemini V2 client** (`api_type: "gemini_v2"`) that implements the next-generation `ModelClientV2` protocol. This client provides enhanced features and a unified response format.
+
+### Key Features of Gemini V2
+
+- **Unified Response Format**: Returns `UnifiedResponse` objects with rich, structured content blocks
+- **Multimodal Content Support**: Preserves text, images, audio, video, and reasoning content
+- **Thinking/Reasoning Tokens**: Full support for Gemini 3 models' thinking capabilities
+- **Structured Outputs**: Native support for Pydantic models and JSON schemas
+- **Function/Tool Calling**: Complete tool call support with proper argument handling
+- **Provider-Agnostic**: Compatible with AG2's unified client interface
+
+### Gemini V2 Configuration
+
+```python
+[
+    {
+        "model": "gemini-2.5-pro",
+        "api_key": "your Google's GenAI Key goes here",
+        "api_type": "gemini_v2"
+    },
+    {
+        "model": "gemini-3-pro-preview",
+        "project_id": "your-awesome-google-cloud-project-id",
+        "location": "us-west1",
+        "google_application_credentials": "your-google-service-account-key.json",
+        "api_type": "gemini_v2",
+        "thinking_level": "High",
+        "include_thoughts": True
+    }
+]
+```
+
+### Gemini V2 Usage Example
+
+```python
+from autogen import AssistantAgent, LLMConfig
+
+# Configure Gemini V2 client
+llm_config = LLMConfig(
+    config_list=[{
+        "model": "gemini-2.5-pro",
+        "api_type": "gemini_v2",
+        "api_key": "your-api-key"
+    }]
+)
+
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config
+)
+
+# The client automatically returns UnifiedResponse with rich content
+response = assistant.generate_reply(messages=[{"role": "user", "content": "Hello"}])
+
+# Access unified response properties
+print(f"Text: {response.text}")
+print(f"Reasoning blocks: {len(response.reasoning)}")
+print(f"Tool calls: {len(response.messages[0].get_tool_calls())}")
+```
+
+### Thinking Configuration (Gemini 3 Models)
+
+Gemini V2 supports advanced thinking configuration for Gemini 3 models:
+
+```python
+llm_config = LLMConfig(
+    config_list=[{
+        "model": "gemini-3-pro-preview",
+        "api_type": "gemini_v2",
+        "project_id": "your-project-id",
+        "location": "us-west1",
+        "thinking_level": "High",  # Options: "High", "Medium", "Low", "Minimal"
+        "thinking_budget": 10000,  # Token budget for thinking (0 = disabled, -1 = automatic)
+        "include_thoughts": True   # Include thinking tokens in response
+    }]
+)
+```
+
+### Direct Client Usage
+
+You can also use the Gemini V2 client directly:
+
+```python
+from autogen.llm_clients.gemini_v2 import GeminiV2Client
+
+client = GeminiV2Client(api_key="your-api-key")
+
+response = client.create({
+    "model": "gemini-2.5-pro",
+    "messages": [{"role": "user", "content": "Explain quantum computing"}]
+})
+
+# Access unified response
+print(f"Answer: {response.text}")
+
+# Access multimodal content
+images = response.get_content_by_type("image")
+for image in images:
+    print(f"Image: {image.data_uri}")
+
+# Access reasoning blocks
+for reasoning in response.reasoning:
+    print(f"Reasoning: {reasoning.reasoning}")
+```
+
+### Differences from Original Gemini Client
+
+| Feature | Original (`api_type: "google"`) | V2 (`api_type: "gemini_v2"`) |
+|---------|----------------------------------|-------------------------------|
+| Response Format | ChatCompletion | UnifiedResponse |
+| Content Blocks | Limited | Full support (text, images, audio, video, reasoning) |
+| Thinking Tokens | Supported | Enhanced with thought signatures |
+| Multimodal | Basic | Full preservation |
+| Structured Outputs | Supported | Native Pydantic/JSON schema support |
+
 ## Gemini coding example
 
 ```python
@@ -256,3 +373,17 @@ llm_config = LLMConfig(
 agent = ConversableAgent(name="agent", description="you are a helpful assistant", llm_config=llm_config)
 response = agent.run(message=prompt, max_turns=2).process()
 ```
+
+## When to Use Gemini V2 vs Original Gemini Client
+
+**Use Gemini V2 (`api_type: "gemini_v2"`)** when you need:
+- Rich, structured responses with content blocks
+- Access to reasoning/thinking tokens from Gemini 3 models
+- Multimodal content preservation (images, audio, video)
+- Integration with AG2's unified client interface
+- Structured outputs with Pydantic models
+
+**Use Original Gemini Client (`api_type: "google"`)** when you need:
+- Backward compatibility with existing code
+- Simple ChatCompletion format responses
+- Basic Gemini API functionality
