@@ -187,7 +187,7 @@ class GeminiClient:
     ) -> dict[str, Any]:
         """
         Convert a Pydantic model's JSON schema to a flat dict schema by resolving $ref references.
-        
+
         Similar to bedrock.py's _normalize_pydantic_schema_to_dict, but also handles
         additionalProperties conversion for Gemini GenAI API compatibility.
 
@@ -250,10 +250,11 @@ class GeminiClient:
 
         # Convert additionalProperties to regular properties for Gemini GenAI API
         if for_genai_api:
+
             def convert_additional_properties_to_properties(schema: dict) -> dict:
                 """Recursively convert additionalProperties to regular properties.
-                
-                For objects with only additionalProperties (like dict[str, T]), 
+
+                For objects with only additionalProperties (like dict[str, T]),
                 we convert the additionalProperties value into a regular property
                 to satisfy Gemini's requirement that objects must have non-empty properties.
                 """
@@ -273,7 +274,7 @@ class GeminiClient:
                     if "allOf" in schema:
                         for all_of_schema in schema["allOf"]:
                             convert_additional_properties_to_properties(all_of_schema)
-                    
+
                     # Convert additionalProperties to a regular property if object has no properties
                     if (
                         schema.get("type") == "object"
@@ -291,9 +292,9 @@ class GeminiClient:
                     else:
                         # Remove additionalProperties if object already has properties
                         schema.pop("additionalProperties", None)
-                
+
                 return schema
-            
+
             normalized_schema = convert_additional_properties_to_properties(normalized_schema)
 
         return normalized_schema
