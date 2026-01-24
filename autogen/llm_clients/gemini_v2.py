@@ -765,7 +765,7 @@ class GeminiV2Client(ModelClient):
             function_name = self.tool_call_function_map.get(message["tool_call_id"], "unknown")
             content = message["content"]
             if isinstance(content, str):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     content = json.loads(content)
                 except json.JSONDecodeError:
                     warnings.warn(
