@@ -491,7 +491,7 @@ class GeminiV2Client(ModelClient):
 
     def _transform_response(
         self,
-        gemini_response: GenerateContentResponse | VertexAIGenerationResponse,
+        gemini_response: Any,
         model: str,
         has_response_format: bool = False,
     ) -> UnifiedResponse:
@@ -514,9 +514,18 @@ class GeminiV2Client(ModelClient):
             UnifiedResponse with all content blocks properly typed
         """
         # Extract candidate (Gemini always returns one candidate)
-        if isinstance(gemini_response, GenerateContentResponse) or isinstance(
-            gemini_response, VertexAIGenerationResponse
-        ):
+        # Guard isinstance checks to handle optional imports
+        try:
+            is_generate_content = isinstance(gemini_response, GenerateContentResponse)
+        except NameError:
+            is_generate_content = type(gemini_response).__name__ == "GenerateContentResponse"
+
+        try:
+            is_vertexai = isinstance(gemini_response, VertexAIGenerationResponse)
+        except NameError:
+            is_vertexai = type(gemini_response).__name__ == "GenerationResponse"
+
+        if is_generate_content or is_vertexai:
             if len(gemini_response.candidates) != 1:
                 raise ValueError(f"Unexpected number of candidates. Expected 1, got {len(gemini_response.candidates)}")
             candidate = gemini_response.candidates[0]
