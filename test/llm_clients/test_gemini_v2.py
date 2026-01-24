@@ -1494,7 +1494,8 @@ class TestGeminiV2Client:
         mock_response.candidates = [mock_candidate]
         mock_response.usage_metadata = mock_usage_metadata
 
-        response = gemini_v2_client._transform_response(mock_response, "gemini-3-flash")
+        # Call _transform_response to capture thought_signature
+        gemini_v2_client._transform_response(mock_response, "gemini-3-flash")
 
         # Verify thought_signature was captured
         assert len(gemini_v2_client.tool_call_thought_signatures) == 1

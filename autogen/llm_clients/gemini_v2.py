@@ -16,6 +16,7 @@ The client preserves all provider-specific features in UnifiedResponse format
 and is compatible with AG2's agent system through ModelClient protocol.
 """
 
+import contextlib
 import copy
 import json
 import os
@@ -749,10 +750,8 @@ class GeminiV2Client(ModelClient):
             function_name = self.tool_call_function_map.get(message["tool_call_id"], "unknown")
             content = message["content"]
             if isinstance(content, str):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     content = json.loads(content)
-                except json.JSONDecodeError:
-                    pass
 
             if self.use_vertexai:
                 parts.append(VertexAIPart.from_function_response(name=function_name, response={"result": content}))

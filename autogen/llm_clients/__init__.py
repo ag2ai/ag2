@@ -35,7 +35,7 @@ Usage:
 """
 
 from .client_v2 import ModelClientV2
-from .gemini_v2 import GeminiV2Client
+from .gemini_v2 import GeminiV2Client, GeminiV2LLMConfigEntry
 from .models import (
     AudioContent,
     BaseContent,
