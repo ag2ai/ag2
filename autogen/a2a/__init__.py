@@ -18,11 +18,10 @@ warnings.warn(
     stacklevel=2,
 )
 
-from autogen.remote.httpx_client_factory import HttpxClientFactory
-
 from .agent_executor import AutogenAgentExecutor
 from .client import A2aRemoteAgent
 from .httpx_client_factory import MockClient
+from .remote import HttpxClientFactory
 from .server import A2aAgentServer, CardSettings
 
 __all__ = (

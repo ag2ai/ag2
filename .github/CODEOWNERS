@@ -3,7 +3,6 @@
 
 # A2A and Remote
 /autogen/a2a/ @Lancetnik
-/autogen/remote/ @Lancetnik
 /test/a2a/ @Lancetnik
 /test/remote/ @Lancetnik
 /website/docs/user-guide/a2a/ @Lancetnik

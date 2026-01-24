@@ -10,7 +10,8 @@ from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_
 from httpx import MockTransport, Request, Response
 
 from autogen.doc_utils import export_module
-from autogen.remote.httpx_client_factory import HttpxClientFactory
+
+from .remote import HttpxClientFactory
 
 
 @export_module("autogen.a2a")

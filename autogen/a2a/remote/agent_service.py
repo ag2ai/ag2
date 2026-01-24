@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from collections.abc import AsyncGenerator
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
@@ -15,20 +16,21 @@ from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, Te
 from autogen.events.base_event import BaseEvent
 from autogen.io.base import AsyncIOStreamProtocol
 
-from .protocol import RemoteService, RequestMessage, ResponseMessage, get_tool_names
+from .protocol import RequestMessage, ServiceResponse, get_tool_names
 
 
-class AgentService(RemoteService):
+class AgentService:
     def __init__(self, agent: ConversableAgent) -> None:
         self.name = agent.name
         self.agent = agent
 
-    async def __call__(self, state: RequestMessage) -> ResponseMessage | None:
+    async def __call__(self, state: RequestMessage) -> AsyncGenerator[ServiceResponse, None]:
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
             _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role="assistant")
-            return ResponseMessage(messages=[out_message], context=state.context)
+            yield ServiceResponse(message=out_message, context=state.context)
+            return
 
         context_variables = ContextVariables(state.context)
         tool_executor = self._make_tool_executor(context_variables)
@@ -38,24 +40,19 @@ class AgentService(RemoteService):
             messages = state.messages + local_history
 
             stream = HITLStream()
+            # check HITL required
             await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
             if stream.is_input_required:
-                return ResponseMessage(
-                    messages=local_history,
-                    context=context_variables.data or None,
+                yield ServiceResponse(
                     input_required=stream.input_prompt,
+                    context=context_variables.data or None,
                 )
+                return
 
-            reply = await self.agent.a_generate_reply(
-                messages,
-                exclude=(
-                    ConversableAgent.check_termination_and_human_reply,
-                    ConversableAgent.a_check_termination_and_human_reply,
-                    ConversableAgent.generate_oai_reply,
-                    ConversableAgent.a_generate_oai_reply,
-                ),
-            )
+            # check code execution
+            _, reply = self.agent.generate_code_execution_reply(messages)
 
+            # generate LLM reply
             if not reply:
                 _, reply = await self.agent.a_generate_oai_reply(
                     messages,
@@ -65,14 +62,20 @@ class AgentService(RemoteService):
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
                 local_history.append(out_message)
+                yield ServiceResponse(
+                    message=out_message,
+                    context=context_variables.data or None,
+                )
             if not should_continue:
                 break
             out_message = cast(dict[str, Any], out_message)
 
             called_tools = get_tool_names(out_message.get("tool_calls", []))
             if state.client_tool_names.intersection(called_tools):
-                break  # return client tool execution command back to client
+                # if AI called a client tool, return the tool execution command back to client
+                break
 
+            # execute local tools
             tool_result, updated_context_variables, return_to_user = self._try_execute_local_tool(
                 tool_executor, out_message
             )
@@ -83,24 +86,20 @@ class AgentService(RemoteService):
             should_continue, out_message = self._add_message_to_local_history(tool_result, role="tool")
             if out_message:
                 local_history.append(out_message)
+                yield ServiceResponse(
+                    message=out_message,
+                    context=context_variables.data or None,
+                )
 
             if return_to_user:
-                return ResponseMessage(
-                    messages=local_history,
-                    context=context_variables.data or None,
+                yield ServiceResponse(
                     input_required="Please, provide additional information:\n",
+                    context=context_variables.data or None,
                 )
+                return
 
             if not should_continue:
                 break
-
-        if not local_history:
-            return None
-
-        return ResponseMessage(
-            messages=local_history,
-            context=context_variables.data or None,
-        )
 
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str
