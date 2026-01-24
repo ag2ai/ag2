@@ -657,23 +657,28 @@ class GeminiV2Client(ModelClient):
         if finish_reason is None:
             return "stop"
         
+        # Handle both FinishReason enum and string inputs
         if isinstance(finish_reason, FinishReason):
             finish_reason_str = str(finish_reason)
-            # Extract enum name if it's in format "EnumName.VALUE" or just use the string
-            if "." in finish_reason_str:
-                # Handle enum stringification like "FinishReason.MAX_TOKENS"
-                finish_reason_str = finish_reason_str.split(".")[-1]
+        elif isinstance(finish_reason, str):
+            finish_reason_str = finish_reason
+        else:
+            raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
+        
+        # Extract enum name if it's in format "EnumName.VALUE" or just use the string
+        if "." in finish_reason_str:
+            # Handle enum stringification like "FinishReason.MAX_TOKENS"
+            finish_reason_str = finish_reason_str.split(".")[-1]
 
-            mapping = {
-                "STOP": "stop",
-                "MAX_TOKENS": "length",
-                "SAFETY": "content_filter",
-                "RECITATION": "content_filter",
-                "OTHER": "stop",
-            }
+        mapping = {
+            "STOP": "stop",
+            "MAX_TOKENS": "length",
+            "SAFETY": "content_filter",
+            "RECITATION": "content_filter",
+            "OTHER": "stop",
+        }
 
-            return mapping.get(finish_reason_str.upper(), "stop")
-        raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
+        return mapping.get(finish_reason_str.upper(), "stop")
 
     def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction from messages."""
