@@ -236,7 +236,7 @@ gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
     # See test/oai/test_gemini_types.py for compatibility tests.
-    "google-genai>=1.20.0,<2.0",
+    "google-genai>=1.60.0,<2.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
