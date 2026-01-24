@@ -695,16 +695,15 @@ class GeminiV2Client(ModelClient):
         else:
             raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
 
-            mapping = {
-                "STOP": "stop",
-                "MAX_TOKENS": "length",
-                "SAFETY": "content_filter",
-                "RECITATION": "content_filter",
-                "OTHER": "stop",
-            }
+        mapping = {
+            "STOP": "stop",
+            "MAX_TOKENS": "length",
+            "SAFETY": "content_filter",
+            "RECITATION": "content_filter",
+            "OTHER": "stop",
+        }
 
-            return mapping.get(finish_reason_str.upper(), "stop")
-        raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
+        return mapping.get(finish_reason_str.upper(), "stop")
 
     def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction from messages."""
