@@ -199,8 +199,8 @@ smaller than a cat. What could that be and how could you make sure?
         assert len(response.text) > 0
 
         # Check for reasoning blocks if available
-        reasoning_blocks = response.get_content_by_type("reasoning")
         # Note: thoughts may be included in text rather than separate reasoning blocks
+        _ = response.get_content_by_type("reasoning")  # Check if available but don't require it
 
     @pytest.mark.integration
     @run_for_optional_imports(["google.genai", "vertexai"], "gemini")
