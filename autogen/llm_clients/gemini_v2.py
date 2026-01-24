@@ -268,7 +268,7 @@ class GeminiV2Client(ModelClient):
     ) -> dict[str, Any]:
         """
         Convert a Pydantic model's JSON schema to a flat dict schema by resolving $ref references.
-        
+
         Similar to bedrock.py's _normalize_pydantic_schema_to_dict, but also handles
         additionalProperties conversion for Gemini GenAI API compatibility.
 
@@ -331,10 +331,11 @@ class GeminiV2Client(ModelClient):
 
         # Convert additionalProperties to regular properties for Gemini GenAI API
         if for_genai_api:
+
             def convert_additional_properties_to_properties(schema: dict) -> dict:
                 """Recursively convert additionalProperties to regular properties.
-                
-                For objects with only additionalProperties (like dict[str, T]), 
+
+                For objects with only additionalProperties (like dict[str, T]),
                 we convert the additionalProperties value into a regular property
                 to satisfy Gemini's requirement that objects must have non-empty properties.
                 """
@@ -354,7 +355,7 @@ class GeminiV2Client(ModelClient):
                     if "allOf" in schema:
                         for all_of_schema in schema["allOf"]:
                             convert_additional_properties_to_properties(all_of_schema)
-                    
+
                     # Convert additionalProperties to a regular property if object has no properties
                     if (
                         schema.get("type") == "object"
@@ -372,9 +373,9 @@ class GeminiV2Client(ModelClient):
                     else:
                         # Remove additionalProperties if object already has properties
                         schema.pop("additionalProperties", None)
-                
+
                 return schema
-            
+
             normalized_schema = convert_additional_properties_to_properties(normalized_schema)
 
         return normalized_schema
@@ -665,7 +666,7 @@ class GeminiV2Client(ModelClient):
         """Convert Gemini finish reason to standard finish reason."""
         if finish_reason is None:
             return "stop"
-        
+
         # Handle both FinishReason enum and string inputs
         if isinstance(finish_reason, FinishReason):
             finish_reason_str = str(finish_reason)
@@ -673,7 +674,7 @@ class GeminiV2Client(ModelClient):
             finish_reason_str = finish_reason
         else:
             raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
-        
+
         # Extract enum name if it's in format "EnumName.VALUE" or just use the string
         if "." in finish_reason_str:
             # Handle enum stringification like "FinishReason.MAX_TOKENS"

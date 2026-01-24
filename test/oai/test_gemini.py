@@ -561,6 +561,7 @@ class TestGeminiClient:
 
     def test_normalize_pydantic_schema_to_dict_with_refs(self, gemini_client):
         """Test _normalize_pydantic_schema_to_dict resolves $ref references."""
+
         # Define nested Pydantic models
         class Step(BaseModel):
             explanation: str
@@ -580,7 +581,7 @@ class TestGeminiClient:
         assert "properties" in normalized
         assert "steps" in normalized["properties"]
         steps_schema = normalized["properties"]["steps"]
-        
+
         # The $ref should be resolved to the actual Step schema
         assert "$ref" not in steps_schema.get("items", {})
         assert "properties" in steps_schema.get("items", {})
@@ -593,6 +594,7 @@ class TestGeminiClient:
 
     def test_normalize_pydantic_schema_to_dict_with_additional_properties(self, gemini_client):
         """Test _normalize_pydantic_schema_to_dict converts additionalProperties for GenAI API."""
+
         # Define a model with dict[str, T] which creates additionalProperties
         class Extra(BaseModel):
             notes: str
@@ -611,11 +613,11 @@ class TestGeminiClient:
         assert "properties" in normalized_genai
         assert "extra" in normalized_genai["properties"]
         extra_schema = normalized_genai["properties"]["extra"]
-        
+
         # Should have properties (converted from additionalProperties)
         assert "properties" in extra_schema
         assert "additionalProperties" not in extra_schema
-        
+
         # The converted property should be named "value" and contain the Extra schema
         assert "value" in extra_schema["properties"]
         value_schema = extra_schema["properties"]["value"]
@@ -633,7 +635,7 @@ class TestGeminiClient:
         assert "properties" in normalized_vertexai
         assert "extra" in normalized_vertexai["properties"]
         extra_schema_vertexai = normalized_vertexai["properties"]["extra"]
-        
+
         # $ref should be resolved
         assert "$ref" not in extra_schema_vertexai.get("additionalProperties", {})
 
