@@ -37,6 +37,106 @@ Amazon Bedrock pricing is available [here](https://aws.amazon.com/bedrock/pricin
 pip install ag2[bedrock]
 ```
 
+## Choosing Between V1 and V2 Clients
+
+AG2 provides two Bedrock client implementations:
+
+- **V1 Client** (`api_type: "bedrock"`): Legacy client that returns flattened `ChatCompletion` responses
+- **V2 Client** (`api_type: "bedrock_v2"`): **Recommended** - Next-generation client that returns rich `UnifiedResponse` objects
+
+### Why Prefer V2 Client?
+
+The V2 client (`bedrock_v2`) is the recommended choice for new projects and offers significant advantages:
+
+#### 1. **Rich Content Preservation**
+V2 preserves all response content as typed blocks, while V1 flattens responses:
+- **V1**: Tool calls, images, and other rich content are flattened or lost
+- **V2**: All content types (text, images, tool calls, citations) are preserved as typed `ContentBlock` objects
+
+#### 2. **Direct Property Access**
+V2 provides intuitive, direct access to response content:
+```python
+# V1 - Requires parsing nested structures
+response = client.create(params)
+messages = client.message_retrieval(response)
+content = messages[0] if messages else ""
+
+# V2 - Direct property access
+response = client.create(params)
+text = response.text                    # All text content
+tool_calls = response.get_tool_calls()   # Tool calls as objects
+images = response.get_content_by_type("image")  # Image content blocks
+```
+
+#### 3. **Type Safety**
+V2 uses Pydantic models with type validation:
+- Typed content blocks (`TextContent`, `ImageContent`, `ToolCallContent`, etc.)
+- Enum-based content types
+- Automatic validation of response structure
+
+#### 4. **Forward Compatibility**
+V2 handles unknown content types gracefully:
+- New Bedrock features are automatically supported via `GenericContent`
+- No code changes needed when Bedrock adds new content types
+- V1 may require manual parsing for new features
+
+#### 5. **Provider-Agnostic Format**
+V2 uses a unified response format across providers:
+- Same interface for OpenAI, Anthropic, Gemini, and Bedrock
+- Easier to switch between providers
+- Consistent developer experience
+
+#### 6. **Better Developer Experience**
+```python
+# V2 - Clean, intuitive API
+response = client.create(params)
+for message in response.messages:
+    for content_block in message.content:
+        if isinstance(content_block, ToolCallContent):
+            print(f"Tool: {content_block.name}")
+        elif isinstance(content_block, ImageContent):
+            print(f"Image: {content_block.image_url}")
+
+# V1 - Requires manual parsing
+response = client.create(params)
+# Manual parsing of nested structures...
+```
+
+#### 7. **Backward Compatible**
+V2 maintains full compatibility with V1:
+- Can use `create_v1_compatible()` to get V1 format when needed
+- Works seamlessly with existing V1 clients in group chats
+- No breaking changes to existing code
+
+### When to Use V1 Client
+
+Use V1 (`api_type: "bedrock"`) only if:
+- You have existing code that depends on V1-specific behavior
+- You're migrating gradually and need to maintain exact compatibility
+- You don't need access to rich content types
+
+### Migration Path
+
+Migrating from V1 to V2 is simple - just change `api_type`:
+
+```python
+# V1 Configuration
+{
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "aws_region": "us-east-1",
+    # ... other config
+}
+
+# V2 Configuration (just change api_type)
+{
+    "api_type": "bedrock_v2",  # <-- That's it!
+    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "aws_region": "us-east-1",
+    # ... other config (same as V1)
+}
+```
+
 ## Set the config for Amazon Bedrock
 
 Amazon's Bedrock does not use the `api_key` as per other cloud inference providers for authentication, instead it uses a number of access, token, and profile values. These fields will need to be added to your client configuration. Please check the Amazon Bedrock documentation to determine which ones you will need to add.
@@ -90,6 +190,8 @@ AG2 supports configuring exponential backoff and retry behavior for Bedrock API 
 **Environment Variable Support:**
 You can also configure retries via the `AWS_MAX_ATTEMPTS` environment variable, which maps to `total_max_attempts`.
 
+### V1 Client Configuration
+
 It is important to add the `api_type` field and set it to a string that corresponds to the client type used: `bedrock`.
 
 Example:
@@ -133,6 +235,69 @@ Example:
         "price": [0.00045, 0.0007] # Specific pricing for this model/region
     }
 ]
+```
+
+### V2 Client Configuration (Recommended)
+
+For V2 client, use `api_type: "bedrock_v2"`. All other configuration parameters remain the same:
+
+```python
+from autogen import LLMConfig
+
+# V2 Client Configuration
+llm_config_v2 = LLMConfig(config_list=[{
+    "api_type": "bedrock_v2",  # Use bedrock_v2 for V2 client
+    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "temperature": 0.5,
+    "topP": 0.2,
+    "maxTokens": 250,
+    "total_max_attempts": 5,
+    "mode": "standard",
+    "price": [0.003, 0.015],
+}])
+```
+
+**Key Differences:**
+- Change `api_type` from `"bedrock"` to `"bedrock_v2"`
+- All other parameters remain identical
+- Returns `UnifiedResponse` instead of `ChatCompletion`
+- Provides access to rich content blocks
+
+### Using V2 Client Directly
+
+You can also use the V2 client directly for more control:
+
+```python
+from autogen.llm_clients.bedrock_v2 import BedrockV2Client
+
+client = BedrockV2Client(
+    aws_region="us-east-1",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+)
+
+# Create a request
+response = client.create({
+    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "messages": [{"role": "user", "content": "Hello!"}],
+})
+
+# Access rich content
+print(response.text)  # Direct text access
+print(response.model)  # Model used
+print(response.provider)  # "bedrock"
+print(response.cost)  # Calculated cost
+
+# Access typed content blocks
+for message in response.messages:
+    for content_block in message.content:
+        if content_block.type == "text":
+            print(f"Text: {content_block.text}")
+        elif content_block.type == "tool_use":
+            print(f"Tool: {content_block.name}")
 ```
 
 ### Advanced: additionalModelRequestFields
