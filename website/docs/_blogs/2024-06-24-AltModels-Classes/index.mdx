@@ -49,8 +49,6 @@ The common requirements of text generation and function/tool calling are support
 Multi-modal support, such as for image/audio/video, is an area of active development. The [Google Gemini](/docs/user-guide/models/google-gemini) client class can be
 used to create a multimodal agent.
 
-> **Tip:** New in v1.2, Anthropic V2 client (`api_type: "anthropic_v2"`) now supports native structured outputs, strict tool/function calls, and vision/multimodal capabilities. For advanced workflows, use this in place of `api_type: "anthropic"`. [See the Anthropic documentation for details.](https://docs.ag2.ai/latest/docs/user-guide/models/anthropic#anthropic-v2-client)
-
 ## Tips
 
 Here are some tips when working with these client classes:
@@ -73,30 +71,32 @@ Install the appropriate client based on the model you wish to use.
 
 ```sh
 pip install autogen["openai","mistral"] # for Mistral AI client
-pip install autogen["openai","anthropic"] # for Anthropic client (V1 and V2 clients available)
+pip install autogen["openai","anthropic"] # for Anthropic client ('anthropic' and 'anthropic_v2' API types)
 pip install autogen["openai","together"] # for Together.AI client
 pip install autogen["openai","groq"] # for Groq client
 ```
+
+- If you want to use the latest Claude features (vision, strict tools, native structured outputs), install Anthropic >=0.74.1 for 'anthropic_v2' API support.
 
 ### Configuration Setup
 
 Add your model configurations to the `OAI_CONFIG_LIST`. Ensure you specify the `api_type` to initialize the respective client (Anthropic, Mistral, or Together).
 
-For **Anthropic**:
-- `api_type: "anthropic"` (V1 client – default, supports classic Anthropic API)
-- `api_type: "anthropic_v2"` (V2 client – supports advanced features: native structured outputs, strict tools, vision)
+For Anthropic, use:
+- `"api_type": "anthropic"` for the original/legacy client (for backward compatibility, general chat)
+- `"api_type": "anthropic_v2"` for the newest client (for Claude Sonnet 4.5/Opus 4.1+, structured outputs, strict tools, vision, etc)
 
 ```yaml
 [
     {
         "model": "your anthropic model name",
         "api_key": "your Anthropic api_key",
-        "api_type": "anthropic"  # for classic Anthropic API (V1)
+        "api_type": "anthropic" # for legacy
     },
     {
-        "model": "your anthropic v2 model name",  # e.g., claude-sonnet-4-5
+        "model": "your anthropic v2 model name",
         "api_key": "your Anthropic api_key",
-        "api_type": "anthropic_v2"  # for latest Anthropics (V2): recommended for structured outputs, tools, vision
+        "api_type": "anthropic_v2" # for Claude Sonnet 4.5, Opus 4.1, vision, structured outputs
     },
     {
         "model": "your mistral model name",
@@ -149,19 +149,20 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 ### Start chat
 
 ```py
-
 user_proxy.intiate_chat(assistant, message="Write python code to print Hello World!")
-
 ```
 
 **NOTE: To integrate this setup into GroupChat, follow the [tutorial](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_groupchat) with the same config as above.**
-
 
 ## Function Calls
 
 Now, let's look at how Anthropic's Sonnet 3.5 is able to suggest multiple function calls in a single response.
 
-> **Tip:** For advanced structured output support, strict tool calls, and vision, use the [Anthropic V2 client](https://docs.ag2.ai/latest/docs/user-guide/models/anthropic#anthropic-v2-client) (`api_type: "anthropic_v2"` – recommended for models like `claude-sonnet-4-5`, `claude-opus-4-1`, etc).
+> **Note:**
+> 
+> - For function calling with the newest Claude models (Sonnet 4.5, Opus 4.1, vision, structured outputs, strict tool use, and guaranteed schema validation), use `'api_type': 'anthropic_v2'` in your config.
+> - For simple legacy compatibility, `'api_type': 'anthropic'` may be used.
+> - See [Anthropic Model Docs](/docs/user-guide/models/anthropic) for details and feature matrices.
 
 This example is a simple travel agent setup with an agent for function calling and a user proxy agent for executing the functions.
 
@@ -176,16 +177,16 @@ import json
 from typing import Literal
 from typing_extensions import Annotated
 
-# Anthropic configuration, using api_type='anthropic' or 'anthropic_v2'
+# Anthropic configuration, using api_type='anthropic_v2' for advanced features, or 'anthropic' for backward compatibility.
 anthropic_llm_config = LLMConfig(config_list={
-    "api_type": "anthropic",  # or "anthropic_v2" for enhanced features
-    "model": "claude-3-5-sonnet-20240620",  # or e.g. "claude-sonnet-4-5"
+    "api_type": "anthropic_v2", # use 'anthropic' for legacy, 'anthropic_v2' for Claude 4.5/Opus/vision/structured outputs
+    "model": "claude-3-5-sonnet-20240620",
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "cache_seed": None,
 })
 
 # Our functionbot, who will be assigned two functions and
-# given directions to use them.
+given directions to use them.
 with anthropic_llm_config:
     functionbot = autogen.AssistantAgent(
         name="functionbot",
