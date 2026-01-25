@@ -665,7 +665,7 @@ class GeminiV2Client(ModelClient):
 
         return unified_response
 
-    def _convert_finish_reason(self, finish_reason: FinishReason| Any | None) -> str:
+    def _convert_finish_reason(self, finish_reason: FinishReason | Any | None) -> str:
         """Convert Gemini finish reason to standard finish reason."""
         if finish_reason is None:
             return "stop"
