@@ -16,6 +16,8 @@ The client preserves all provider-specific features in UnifiedResponse format
 and is compatible with AG2's agent system through ModelClient protocol.
 """
 
+from __future__ import annotations
+
 import contextlib
 import copy
 import json
