@@ -513,7 +513,7 @@ class GeminiV2Client(ModelClient):
 
     def _transform_response(
         self,
-        gemini_response: Any,
+        gemini_response: GenerateContentResponse | VertexAIGenerationResponse,
         model: str,
         has_response_format: bool = False,
     ) -> UnifiedResponse:
@@ -683,7 +683,7 @@ class GeminiV2Client(ModelClient):
 
         return unified_response
 
-    def _convert_finish_reason(self, finish_reason: Any | None) -> str:
+    def _convert_finish_reason(self, finish_reason: FinishReason| Any | None) -> str:
         """Convert Gemini finish reason to standard finish reason."""
         if finish_reason is None:
             return "stop"
