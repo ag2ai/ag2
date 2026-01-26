@@ -52,18 +52,18 @@ Sample OAI_CONFIG_LIST
     {
         "model": "gemini-2.5-flash",
         "api_key": "your Google's GenAI Key goes here",
-        "api_type": "google"
+        "api_type": "gemini"
     },
     {
         "model": "gemini-2.5-pro",
-        "api_type": "google"
+        "api_type": "gemini"
     },
     {
         "model": "gemini-3-pro-preview",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
-        "api_type": "google"
+        "api_type": "gemini"
     }
 ]
 ```
@@ -183,7 +183,7 @@ for reasoning in response.reasoning:
 
 ### Differences from Original Gemini Client
 
-| Feature | Original (`api_type: "google"`) | V2 (`api_type: "gemini_v2"`) |
+| Feature | Original (`api_type: "gemini"`) | V2 (`api_type: "gemini_v2"`) |
 |---------|----------------------------------|-------------------------------|
 | Response Format | ChatCompletion | UnifiedResponse |
 | Content Blocks | Limited | Full support (text, images, audio, video, reasoning) |
@@ -202,7 +202,7 @@ seed = 42  # for caching, use None for no caching
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -291,7 +291,7 @@ seed = None # for caching
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -357,7 +357,7 @@ the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gem
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -381,7 +381,7 @@ response = agent.run(message=prompt, max_turns=2).process()
 - Integration with AG2's unified client interface
 - Structured outputs with Pydantic models
 
-**Use Original Gemini Client (`api_type: "google"`)** when you need:
+**Use Original Gemini Client (`api_type: "gemini"`)** when you need:
 - Backward compatibility with existing code
 - Simple ChatCompletion format responses
 - Basic Gemini API functionality

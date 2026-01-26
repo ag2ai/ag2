@@ -11,7 +11,7 @@ Example:
     llm_config = {
         "config_list": [
             {
-                "api_type": "google",
+                "api_type": "gemini",
                 "model": "gemini-pro",
                 "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
                 "safety_settings": [
@@ -104,7 +104,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiEntryDict(LLMConfigEntryDict, total=False):
-    api_type: Literal["google"]
+    api_type: Literal["gemini"]
 
     project_id: str | None
     location: str | None
@@ -118,7 +118,7 @@ class GeminiEntryDict(LLMConfigEntryDict, total=False):
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["google"] = "google"
+    api_type: Literal["gemini"] = "gemini"
     project_id: str | None = None
     location: str | None = None
     # google_application_credentials points to the path of the JSON Keyfile

@@ -54,8 +54,9 @@ MARKER_TO_API_TYPES = {
     "openai": ["openai", "azure", "responses"],  # OpenAI SDK handles all these types
     "openai_realtime": ["openai", "azure"],  # OpenAI SDK realtime
     "anthropic": ["anthropic"],  # Anthropic SDK
-    "gemini": ["google"],  # Google GenAI SDK
-    "gemini_realtime": ["google"],  # Google GenAI SDK realtime
+    "gemini": ["gemini"],  # Google GenAI SDK
+    "gemini_realtime": ["gemini"],  # Google GenAI SDK realtime
+    "gemini_v2": ["gemini_v2"],  # Google GenAI SDK client V2
     "deepseek": ["openai"],  # DeepSeek uses OpenAI-compatible API
     "ollama": ["openai"],  # Ollama uses OpenAI-compatible API
     "bedrock": ["bedrock"],  # AWS Bedrock SDK
@@ -200,8 +201,8 @@ def get_credentials(
             credentials.llm_config = credentials.llm_config.where(api_type="openai")
         elif api_type == "azure":
             credentials.llm_config = credentials.llm_config.where(api_type="azure")
-        elif api_type == "google":
-            credentials.llm_config = credentials.llm_config.where(api_type="google")
+        elif api_type == "gemini":
+            credentials.llm_config = credentials.llm_config.where(api_type="gemini")
         elif api_type == "anthropic":
             credentials.llm_config = credentials.llm_config.where(api_type="anthropic")
         elif api_type == "responses":
@@ -324,21 +325,21 @@ def credentials_responses_gpt_4o_mini() -> Credentials:
 @pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-2.5-flash", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash", api_type="gemini", filter_dict={"tags": ["gemini-realtime"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-2.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash", api_type="gemini", filter_dict={"tags": ["gemini-flash"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash_exp() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-3-flash-preview", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash", api_type="gemini", filter_dict={"tags": ["gemini-flash-exp"]}
     )
 
 
