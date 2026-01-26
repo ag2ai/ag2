@@ -147,7 +147,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
 
 
-@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@require_optional_import(["gemini", "vertexai", "PIL", "jsonschema"], "gemini")
 class GeminiClient:
     """Client for Google's Gemini API."""
 

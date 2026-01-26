@@ -264,7 +264,7 @@ class GeminiRealtimeClient(RealtimeClientBase):
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
-        if llm_config["config_list"][0].get("api_type") in ("google") and list(kwargs.keys()) == []:
+        if llm_config["config_list"][0].get("api_type") == "google" and list(kwargs.keys()) == []:
             return lambda: GeminiRealtimeClient(llm_config=llm_config, logger=logger, **kwargs)
         return None
 

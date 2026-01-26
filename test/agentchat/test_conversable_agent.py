@@ -1249,7 +1249,7 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
-    if credentials_from_test_param.api_type == "google":
+    if credentials_from_test_param.api_type == "gemini":
         pytest.skip("This test currently fails with gemini flash model")
     await _test_function_registration_e2e_async(credentials_from_test_param)
 

@@ -96,7 +96,7 @@ class TestGoogleSearchTool:
             execute_query_called=True,
         )
 
-    @run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema", "jsonschema"], "gemini")
+    @run_for_optional_imports(["gemini", "vertexai", "PIL", "jsonschema", "jsonschema"], "gemini")
     def test_end_to_end_gemini(
         self, credentials_gemini_flash_exp: Credentials, expected_search_result: dict[str, Any]
     ) -> None:

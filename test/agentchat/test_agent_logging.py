@@ -59,7 +59,7 @@ def _test_two_agents_logging(
 ) -> None:
     cur = db_connection.cursor()
 
-    is_gemini = "google" in credentials.api_type
+    is_gemini = "gemini" in credentials.api_type
 
     teacher = autogen.AssistantAgent(
         "teacher",

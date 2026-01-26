@@ -126,7 +126,7 @@ class DefaultLiteLLmConfigFactory(LiteLLmConfigFactory):
 
     @classmethod
     def accepts(cls, first_llm_config: dict[str, Any]) -> bool:
-        non_base_api_types = ["google", "ollama"]
+        non_base_api_types = ["gemini", "ollama"]
         return first_llm_config.get("api_type", "openai") not in non_base_api_types
 
     @classmethod
@@ -145,7 +145,7 @@ class DefaultLiteLLmConfigFactory(LiteLLmConfigFactory):
 class GoogleLiteLLmConfigFactory(LiteLLmConfigFactory):
     @classmethod
     def get_api_type(cls) -> str:
-        return "google"
+        return "gemini"
 
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> dict[str, Any]:
