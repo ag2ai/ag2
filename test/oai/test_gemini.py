@@ -38,7 +38,7 @@ def test_gemini_llm_config_entry():
     )
     expected = {
         "api_type": "gemini",
-        "model": "gemini-2.0-flash",
+        "model": "gemini-2.5-flash",
         "api_key": "dummy_api_key",
         "project_id": "fake-project-id",
         "location": "us-west1",
