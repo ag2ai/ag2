@@ -37,7 +37,7 @@ def test_gemini_llm_config_entry():
         proxy="http://mock-test-proxy:90/",
     )
     expected = {
-        "api_type": "google",
+        "api_type": "gemini",
         "model": "gemini-2.0-flash-lite",
         "api_key": "dummy_api_key",
         "project_id": "fake-project-id",

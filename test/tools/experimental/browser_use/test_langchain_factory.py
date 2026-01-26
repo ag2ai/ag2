@@ -61,7 +61,7 @@ class TestLangchainFactory:
             ),
             (
                 [
-                    {"api_type": "google", "model": "gemini", "api_key": test_api_key},
+                    {"api_type": "gemini", "model": "gemini", "api_key": test_api_key},
                 ],
                 "ChatGoogleGenerativeAI",
                 None,

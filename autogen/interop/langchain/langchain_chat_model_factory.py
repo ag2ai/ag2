@@ -119,7 +119,7 @@ class ChatGoogleGenerativeAIFactory(LangChainChatModelFactory):
 
     @classmethod
     def get_api_type(cls) -> str:
-        return "google"
+        return "gemini"
 
 
 @LangChainChatModelFactory.register_factory()

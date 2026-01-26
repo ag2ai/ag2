@@ -199,7 +199,7 @@ def get_credentials_from_env_vars(
 
     # Google/Gemini configuration
     gemini_config = build_config_from_env(
-        api_type="google",
+        api_type="gemini",
         env_var_name="GEMINI_API_KEY",
         model="gemini-2.5-pro",
     )
