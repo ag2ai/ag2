@@ -72,16 +72,20 @@ The workflow follows this pattern:
 from autogen import ConversableAgent, LLMConfig
 import os
 import random
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-    "api_key": os.environ.get("OPENAI_API_KEY"),
-    "temperature": 0.2,
-})
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    }
+)
 
 # Define the system message for our finance bot
 finance_system_message = """
@@ -170,16 +174,20 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
     from autogen import ConversableAgent, LLMConfig
     import os
     import random
+    from dotenv import load_dotenv
+
+    load_dotenv()
 
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(config_list={
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ.get("OPENAI_API_KEY"),
-        "temperature": 0.2,
-    })
+    llm_config = LLMConfig(
+        config_list={
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    )
 
     # Define the system message for our finance bot
     finance_system_message = """
