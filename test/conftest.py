@@ -103,7 +103,7 @@ def get_safe_api_types_from_test_context() -> set[str]:
         "azure",
         "responses",
         "anthropic",
-        "google",
+        "gemini",
         "bedrock",
         "deepseek",
         "ollama",

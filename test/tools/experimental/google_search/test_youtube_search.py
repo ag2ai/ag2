@@ -184,7 +184,7 @@ class TestYoutubeSearchTool:
             expected_details_result=mock_video_details,
         )
 
-    @run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema", "jsonschema"], "gemini")
+    @run_for_optional_imports(["gemini", "vertexai", "PIL", "jsonschema", "jsonschema"], "gemini")
     def test_end_to_end_gemini(
         self,
         credentials_gemini_flash_exp: Credentials,
