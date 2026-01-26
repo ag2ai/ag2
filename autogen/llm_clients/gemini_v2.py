@@ -57,6 +57,7 @@ with optional_import_block() as gemini_result:
         FunctionResponse,
         GenerateContentConfig,
         GenerateContentResponse,
+        GoogleSearch,
         Part,
         ThinkingConfig,
         Tool,
@@ -772,7 +773,15 @@ class GeminiV2Client(ModelClient):
                 args = json.loads(tool_call["function"]["arguments"])
 
                 if self.use_vertexai:
-                    parts.append(VertexAIPart.from_dict({"functionCall": {"name": function_name, "args": args}}))
+                    # Vertex AI: Try to include thought_signature if available
+                    # Note: Vertex AI may not support thought_signature in the same way as GenAI API
+                    # If the API doesn't support it, this will be ignored
+                    thought_sig = self.tool_call_thought_signatures.get(function_id)
+                    function_call_dict = {"functionCall": {"name": function_name, "args": args}}
+                    # Include thought_signature if available and if Vertex AI supports it
+                    if thought_sig is not None:
+                        function_call_dict["functionCall"]["thoughtSignature"] = thought_sig
+                    parts.append(VertexAIPart.from_dict(function_call_dict))
                 else:
                     thought_sig = self.tool_call_thought_signatures.get(function_id)
                     parts.append(
@@ -829,6 +838,10 @@ class GeminiV2Client(ModelClient):
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool | vaiTool]:
         """Convert OAI tools to Gemini tools format."""
+        # Check for prebuilt Google Search tool (only for GenAI API, not Vertex AI)
+        if self._check_if_prebuilt_google_search_tool_exists(tools) and not self.use_vertexai:
+            return [Tool(google_search=GoogleSearch())]
+        
         functions = []
         for tool in tools:
             if self.use_vertexai:
@@ -936,6 +949,22 @@ class GeminiV2Client(ModelClient):
                 function_parameters_copy["properties"][property_name].pop("$defs", None)
 
         return function_parameters_copy
+
+    @staticmethod
+    def _check_if_prebuilt_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
+        """Check if the Google Search tool is present in the tools list."""
+        exists = False
+        for tool in tools:
+            if tool["function"]["name"] == "prebuilt_google_search":
+                exists = True
+                break
+
+        if exists and len(tools) > 1:
+            raise ValueError(
+                "Google Search tool can be used only by itself. Please remove other tools from the tools list."
+            )
+
+        return exists
 
     @staticmethod
     def _to_vertexai_safety_settings(safety_settings: list[dict[str, Any]] | None) -> list[Any]:
