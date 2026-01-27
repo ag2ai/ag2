@@ -33,7 +33,7 @@ def test_credentials_from_test_param_fixture(
         if "api_type" in first_config:
             assert first_config["api_type"] == "openai"
     elif "gemini" in current_llm:
-        assert first_config["api_type"] == "google"
+        assert first_config["api_type"] == "gemini"
     elif "anthropic" in current_llm:
         assert first_config["api_type"] == "anthropic"
     else:

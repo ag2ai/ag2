@@ -5,6 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from ..cache.cache import Cache
+from ..import_utils import optional_import_block
 from .anthropic import AnthropicLLMConfigEntry
 from .bedrock import BedrockLLMConfigEntry
 from .cerebras import CerebrasLLMConfigEntry
@@ -17,7 +18,19 @@ from .client import (
     OpenAIWrapper,
 )
 from .cohere import CohereLLMConfigEntry
-from .gemini import GeminiLLMConfigEntry
+
+with optional_import_block() as gemini_result:
+    from .gemini import GeminiLLMConfigEntry
+
+if gemini_result.is_successful:
+    _GeminiLLMConfigEntry = GeminiLLMConfigEntry
+else:
+    from ..llm_config.entry import LLMConfigEntry
+
+    _GeminiLLMConfigEntry = LLMConfigEntry  # type: ignore[assignment,misc]
+
+GeminiLLMConfigEntry = _GeminiLLMConfigEntry
+
 from .groq import GroqLLMConfigEntry
 from .mistral import MistralLLMConfigEntry
 from .ollama import OllamaLLMConfigEntry
@@ -31,6 +44,7 @@ from .openai_utils import (
     get_config_list,
     get_first_llm_config,
 )
+from .shared_utils import normalize_pydantic_schema_to_dict
 from .together import TogetherLLMConfigEntry
 
 __all__ = [
@@ -58,4 +72,5 @@ __all__ = [
     "filter_config",
     "get_config_list",
     "get_first_llm_config",
+    "normalize_pydantic_schema_to_dict",
 ]

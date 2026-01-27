@@ -976,7 +976,14 @@ class OpenAIWrapper:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
                 client = CerebrasClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("google"):
+            elif api_type is not None and api_type.startswith("gemini_v2"):
+                # Gemini V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                self._configure_openai_config_for_gemini(config, openai_config)
+                from autogen.llm_clients import GeminiV2Client as V2Client
+
+                client = V2Client(response_format=response_format, **openai_config)
+                self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("gemini"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
                 self._configure_openai_config_for_gemini(config, openai_config)

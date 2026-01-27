@@ -400,7 +400,7 @@ class TestUnifiedResponseComplexScenarios:
         ]
         message = UnifiedMessage(role="assistant", content=contents)
         response = UnifiedResponse(
-            id="resp-video-123", model="gemini-pro-vision", provider="google", messages=[message]
+            id="resp-video-123", model="gemini-pro-vision", provider="gemini", messages=[message]
         )
 
         video_blocks = response.get_content_by_type("video_analysis")
