@@ -572,7 +572,7 @@ class TestGeminiClient:
             final_answer: str
 
         # Get normalized schema
-        normalized = gemini_client._normalize_pydantic_schema_to_dict(MathReasoning, for_genai_api=False)
+        normalized = gemini_client.normalize_pydantic_schema_to_dict(MathReasoning, for_genai_api=False)
 
         # Verify $defs is removed
         assert "$defs" not in normalized
@@ -604,7 +604,7 @@ class TestGeminiClient:
             extra: dict[str, Extra]  # This creates additionalProperties in schema
 
         # Test with for_genai_api=True (should convert additionalProperties)
-        normalized_genai = gemini_client._normalize_pydantic_schema_to_dict(Output, for_genai_api=True)
+        normalized_genai = gemini_client.normalize_pydantic_schema_to_dict(Output, for_genai_api=True)
 
         # Verify $defs is removed
         assert "$defs" not in normalized_genai
@@ -625,7 +625,7 @@ class TestGeminiClient:
         assert "notes" in value_schema["properties"]
 
         # Test with for_genai_api=False (should keep additionalProperties for Vertex AI)
-        normalized_vertexai = gemini_client._normalize_pydantic_schema_to_dict(Output, for_genai_api=False)
+        normalized_vertexai = gemini_client.normalize_pydantic_schema_to_dict(Output, for_genai_api=False)
 
         # Verify $defs is removed
         assert "$defs" not in normalized_vertexai
