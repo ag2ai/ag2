@@ -97,11 +97,7 @@ def normalize_pydantic_schema_to_dict(
                         convert_additional_properties_to_properties(all_of_schema)
 
                 # Convert additionalProperties to a regular property if object has no properties
-                if (
-                    schema.get("type") == "object"
-                    and "additionalProperties" in schema
-                    and not schema.get("properties")
-                ):
+                if schema.get("type") == "object" and "additionalProperties" in schema and not schema.get("properties"):
                     additional_props_value = schema["additionalProperties"]
                     # Recursively process the value schema
                     if isinstance(additional_props_value, dict):

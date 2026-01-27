@@ -19,7 +19,6 @@ and is compatible with AG2's agent system through ModelClient protocol.
 from __future__ import annotations
 
 import base64
-import contextlib
 import copy
 import json
 import os
@@ -28,7 +27,7 @@ import time
 import warnings
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from autogen.oai.shared_utils import normalize_pydantic_schema_to_dict
 
@@ -328,9 +327,7 @@ class GeminiV2Client(ModelClient):
             # Normalize schema: resolve $ref references and handle additionalProperties
             # For GenAI API, convert additionalProperties to properties
             # For Vertex AI, keep as-is (may support additionalProperties)
-            response_schema = normalize_pydantic_schema_to_dict(
-                response_format, for_genai_api=not self.use_vertexai
-            )
+            response_schema = normalize_pydantic_schema_to_dict(response_format, for_genai_api=not self.use_vertexai)
             generation_config["response_schema"] = response_schema
 
         # Handle safety settings
