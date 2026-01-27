@@ -35,6 +35,7 @@ with optional_import_block() as result:
         FunctionCall,
         FunctionResponse,
         GenerateContentResponse,
+        GoogleSearch,
         Part,
         Schema,
         Tool,
