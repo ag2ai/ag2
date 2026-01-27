@@ -18,7 +18,17 @@ from .client import (
     OpenAIWrapper,
 )
 from .cohere import CohereLLMConfigEntry
-from .gemini import GeminiLLMConfigEntry
+with optional_import_block() as gemini_result:
+    from .gemini import GeminiLLMConfigEntry
+
+if gemini_result.is_successful:
+    _GeminiLLMConfigEntry = GeminiLLMConfigEntry
+else:
+    from ..llm_config.entry import LLMConfigEntry
+    _GeminiLLMConfigEntry = LLMConfigEntry  # type: ignore[assignment,misc]
+
+GeminiLLMConfigEntry = _GeminiLLMConfigEntry
+
 from .groq import GroqLLMConfigEntry
 from .mistral import MistralLLMConfigEntry
 from .ollama import OllamaLLMConfigEntry

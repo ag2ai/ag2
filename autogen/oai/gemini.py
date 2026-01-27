@@ -57,7 +57,7 @@ import requests
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
-from autogen.oai.shared_utils import normalize_pydantic_schema_to_dict
+from .shared_utils import normalize_pydantic_schema_to_dict
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
