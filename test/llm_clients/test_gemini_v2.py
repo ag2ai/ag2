@@ -34,7 +34,6 @@ with optional_import_block() as result:
         FunctionCall,
         FunctionResponse,
         GenerateContentResponse,
-        GoogleSearch,
         Part,
         Schema,
         Tool,
@@ -1068,9 +1067,7 @@ class TestGeminiV2Client:
         # Verify thought_signature is included
         assert parts[0].thought_signature == b"thought_sig_bytes"
 
-    def test_oai_content_to_gemini_content_tool_call_with_thought_signature_vertexai(
-        self, gemini_v2_client_vertexai
-    ):
+    def test_oai_content_to_gemini_content_tool_call_with_thought_signature_vertexai(self, gemini_v2_client_vertexai):
         """Test that VertexAI Part attempts to include thought_signature when available."""
         gemini_v2_client_vertexai.tool_call_thought_signatures["call-999"] = b"vertexai_thought_sig"
 
