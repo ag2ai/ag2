@@ -27,6 +27,7 @@ if gemini_result.is_successful:
     _GeminiLLMConfigEntry = GeminiLLMConfigEntry
 else:
     from ..llm_config.entry import LLMConfigEntry
+
     _GeminiLLMConfigEntry = LLMConfigEntry  # type: ignore[assignment,misc]
 
 GeminiLLMConfigEntry = _GeminiLLMConfigEntry

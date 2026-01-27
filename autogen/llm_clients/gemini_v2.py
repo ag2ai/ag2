@@ -841,7 +841,7 @@ class GeminiV2Client(ModelClient):
         # Check for prebuilt Google Search tool (only for GenAI API, not Vertex AI)
         if self._check_if_prebuilt_google_search_tool_exists(tools) and not self.use_vertexai:
             return [Tool(google_search=GoogleSearch())]
-        
+
         functions = []
         for tool in tools:
             if self.use_vertexai:
