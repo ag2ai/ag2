@@ -557,16 +557,12 @@ class GeminiV2Client(ModelClient):
 
         # Handle both FinishReason enum and string inputs
         if isinstance(finish_reason, FinishReason):
-            finish_reason_str = str(finish_reason)
+            # Use enum.name property for type-safe access to enum value name
+            finish_reason_str = finish_reason.name
         elif isinstance(finish_reason, str):
             finish_reason_str = finish_reason
         else:
             raise ValueError(f"Unexpected finish reason type: {type(finish_reason)}")
-
-        # Extract enum name if it's in format "EnumName.VALUE" or just use the string
-        if "." in finish_reason_str:
-            # Handle enum stringification like "FinishReason.MAX_TOKENS"
-            finish_reason_str = finish_reason_str.split(".")[-1]
 
         mapping = {
             "STOP": "stop",
