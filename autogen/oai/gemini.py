@@ -57,14 +57,13 @@ import requests
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
-from .shared_utils import normalize_pydantic_schema_to_dict
-
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
+from .shared_utils import normalize_pydantic_schema_to_dict
 
 with optional_import_block():
     import google.genai as genai
