@@ -45,6 +45,7 @@ from .openai_utils import (
     get_config_list,
     get_first_llm_config,
 )
+from .shared_utils import normalize_pydantic_schema_to_dict
 from .together import TogetherLLMConfigEntry
 
 __all__ = [
@@ -72,4 +73,5 @@ __all__ = [
     "filter_config",
     "get_config_list",
     "get_first_llm_config",
+    "normalize_pydantic_schema_to_dict",
 ]
