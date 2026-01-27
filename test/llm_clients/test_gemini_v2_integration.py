@@ -347,6 +347,38 @@ class TestGeminiV2ClientToolCalling:
             # Model might have responded with text instead of tool call
             assert len(response.text) > 0
 
+    @pytest.mark.integration
+    @run_for_optional_imports(["google.genai", "vertexai"], "gemini")
+    def test_google_search_tool(self, gemini_v2_client, gemini_v2_config):
+        """Test Google Search prebuilt tool functionality."""
+        # Define Google Search tool
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "prebuilt_google_search",
+                    "description": "Google Search",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        response = gemini_v2_client.create({
+            "model": gemini_v2_config["model"],
+            "messages": [{"role": "user", "content": "What is the capital of France?"}],
+            "tools": tools,
+        })
+
+        # Verify response structure
+        assert isinstance(response, UnifiedResponse)
+        assert len(response.messages) > 0
+
+        # The model should use Google Search and provide an answer
+        # Either through tool calls or direct text response
+        assert len(response.text) > 0
+        # Should mention France or Paris (capital)
+        assert "france" in response.text.lower() or "paris" in response.text.lower()
+
 
 class TestGeminiV2ClientUsageAndCost:
     """Test usage tracking and cost calculation."""
@@ -569,3 +601,75 @@ class TestGeminiV2ClientWithLLMConfig:
         except json.JSONDecodeError:
             # If not JSON, at least verify text is present
             assert len(response) > 0
+
+
+class TestGeminiV2ClientThoughtSignatures:
+    """Test thought signature handling for Gemini 3 models."""
+
+    @pytest.mark.integration
+    @run_for_optional_imports(["google.genai", "vertexai"], "gemini")
+    @pytest.mark.skipif(
+        os.getenv("ENABLE_GEMINI_3_TESTS") != "1",
+        reason="Gemini 3 models require special access. Set ENABLE_GEMINI_3_TESTS=1 to run this test.",
+    )
+    def test_thought_signature_preserved_in_multi_turn(self, gemini_v2_client):
+        """Test that thought signatures are preserved across multi-turn conversations."""
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather for a location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                },
+            }
+        ]
+
+        # First turn: Model makes a tool call
+        response1 = gemini_v2_client.create({
+            "model": "gemini-3-flash",
+            "messages": [{"role": "user", "content": "What's the weather in NYC?"}],
+            "tools": tools,
+            "include_thoughts": True,
+        })
+
+        # Check for tool calls
+        tool_calls = response1.messages[0].get_tool_calls()
+        if tool_calls:
+            tool_call_id = tool_calls[0].id
+
+            # Verify thought signature was captured
+            assert tool_call_id in gemini_v2_client.tool_call_thought_signatures
+            captured_signature = gemini_v2_client.tool_call_thought_signatures[tool_call_id]
+            assert captured_signature is not None
+            assert isinstance(captured_signature, bytes)
+
+            # Second turn: Send function result back
+            response2 = gemini_v2_client.create({
+                "model": "gemini-3-flash",
+                "messages": [
+                    {"role": "user", "content": "What's the weather in NYC?"},
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": tool_call_id,
+                                "function": {"name": "get_weather", "arguments": '{"location": "NYC"}'},
+                                "type": "function",
+                            }
+                        ],
+                    },
+                    {"role": "tool", "tool_call_id": tool_call_id, "content": '{"result": "sunny, 72F"}'},
+                ],
+                "tools": tools,
+                "include_thoughts": True,
+            })
+
+            # Verify the conversation continued successfully
+            assert isinstance(response2, UnifiedResponse)
+            assert len(response2.text) > 0

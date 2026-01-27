@@ -18,6 +18,7 @@ and is compatible with AG2's agent system through ModelClient protocol.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import copy
 import json
@@ -773,14 +774,13 @@ class GeminiV2Client(ModelClient):
                 args = json.loads(tool_call["function"]["arguments"])
 
                 if self.use_vertexai:
-                    # Vertex AI: Try to include thought_signature if available
-                    # Note: Vertex AI may not support thought_signature in the same way as GenAI API
-                    # If the API doesn't support it, this will be ignored
+                    # Vertex AI supports thoughtSignature at the Part level (not inside FunctionCall)
+                    # Include it when available for Gemini 3 models
                     thought_sig = self.tool_call_thought_signatures.get(function_id)
                     function_call_dict = {"functionCall": {"name": function_name, "args": args}}
-                    # Include thought_signature if available and if Vertex AI supports it
-                    if thought_sig is not None:
-                        function_call_dict["functionCall"]["thoughtSignature"] = thought_sig
+                    # Include thoughtSignature as base64-encoded string if available
+                    if thought_sig:
+                        function_call_dict["thoughtSignature"] = base64.b64encode(thought_sig).decode("utf-8")
                     parts.append(VertexAIPart.from_dict(function_call_dict))
                 else:
                     thought_sig = self.tool_call_thought_signatures.get(function_id)
@@ -1064,14 +1064,22 @@ class GeminiV2Client(ModelClient):
             return input_cost + output_cost
 
         # Use default Gemini pricing (import from gemini.py)
-        from ..oai.gemini import calculate_gemini_cost
+        # Use optional_import_block to safely import calculate_gemini_cost
+        # since gemini.py module may have optional dependencies
+        with optional_import_block() as gemini_cost_result:
+            from ..oai.gemini import calculate_gemini_cost
 
-        return calculate_gemini_cost(
-            self.use_vertexai,
-            response.usage.get("prompt_tokens", 0),
-            response.usage.get("completion_tokens", 0),
-            response.model,
-        )
+        if gemini_cost_result.is_successful:
+            return calculate_gemini_cost(
+                self.use_vertexai,
+                response.usage.get("prompt_tokens", 0),
+                response.usage.get("completion_tokens", 0),
+                response.model,
+            )
+        else:
+            # Fallback: return 0.0 if calculate_gemini_cost cannot be imported
+            # This can happen if gemini.py optional dependencies are not available
+            return 0.0
 
     @staticmethod
     def get_usage(response: UnifiedResponse) -> dict[str, Any]:
