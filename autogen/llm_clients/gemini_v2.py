@@ -25,6 +25,7 @@ import json
 import os
 import random
 import time
+import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -754,8 +755,16 @@ class GeminiV2Client(ModelClient):
             function_name = self.tool_call_function_map.get(message["tool_call_id"], "unknown")
             content = message["content"]
             if isinstance(content, str):
-                with contextlib.suppress(json.JSONDecodeError):
+                try:
                     content = json.loads(content)
+                except json.JSONDecodeError:
+                    warnings.warn(
+                        f"Tool response content for function '{function_name}' is not valid JSON. "
+                        f"Sending as string wrapped in {{'result': content}} format. "
+                        f"Content preview: {content[:100] if len(content) > 100 else content}",
+                        UserWarning,
+                        stacklevel=2,
+                    )
 
             if self.use_vertexai:
                 parts.append(VertexAIPart.from_function_response(name=function_name, response={"result": content}))
