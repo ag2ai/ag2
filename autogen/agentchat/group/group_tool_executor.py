@@ -45,6 +45,9 @@ class GroupToolExecutor(ConversableAgent):
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
 
+        # Async version of reply function (ensures async tools run on the correct event loop)
+        self.register_reply([Agent, None], self._a_generate_group_tool_reply, ignore_async_in_sync_chat=True)
+
     def set_next_target(self, next_target: TransitionTarget) -> None:
         """Sets the next target to transition to, used in the determine_next_agent function."""
         self._group_next_target = next_target
@@ -318,6 +321,82 @@ class GroupToolExecutor(ConversableAgent):
 
             # Put the tool responses and content strings back into the response message
             # Caters for multiple tool calls
+            if tool_message is None:
+                raise ValueError("Tool call did not return a message")
+
+            tool_message["tool_responses"] = tool_responses_inner
+            tool_message["content"] = "\n".join(contents)
+
+            return True, tool_message
+        return False, None
+
+    async def _a_generate_group_tool_reply(
+        self,
+        agent: ConversableAgent,
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
+        """Async version of _generate_group_tool_reply.
+
+        Uses a_generate_tool_calls_reply so that async tool functions
+        execute on the caller's event loop instead of a new thread.
+        """
+        if config is None:
+            config = agent  # type: ignore[assignment]
+        if messages is None:
+            messages = agent._oai_messages[sender]
+
+        message = messages[-1]
+        agent_name = message.get("name", sender.name if sender else "unknown")
+        self.set_tool_call_originator(agent_name)
+
+        if message.get("tool_calls"):
+            tool_call_count = len(message["tool_calls"])
+
+            tool_message = None
+            next_target: TransitionTarget | None = None
+            tool_responses_inner = []
+            contents = []
+            for index in range(tool_call_count):
+                message_copy = deepcopy(message)
+                tool_call = message_copy["tool_calls"][index]
+
+                function_name = tool_call.get("function", {}).get("name", "")
+                if function_name == "__structured_output":
+                    return True, tool_call.get("function", {}).get("arguments", {})
+
+                message_copy["tool_calls"] = [tool_call]
+
+                # Async tool execution — stays on the same event loop
+                _, tool_message = await agent.a_generate_tool_calls_reply([message_copy])
+
+                if tool_message is None:
+                    raise ValueError("Tool call did not return a message")
+
+                for tool_response in tool_message["tool_responses"]:
+                    content = tool_response.get("content")
+
+                    if isinstance(content, ReplyResult):
+                        if content.context_variables and content.context_variables.to_dict() != {}:
+                            agent.context_variables.update(content.context_variables.to_dict())
+                        if content.target is not None:
+                            self._send_reply_result_handoff_event(message_copy, content.target)
+                            next_target = content.target
+                    elif isinstance(content, TransitionTarget):
+                        self._send_llm_handoff_event(message_copy, content)
+                        next_target = content
+
+                    normalized_content = (
+                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
+                    )
+                    tool_response["content"] = normalized_content
+
+                    tool_responses_inner.append(tool_response)
+                    contents.append(normalized_content)
+
+            self._group_next_target = next_target  # type: ignore[attr-defined]
+
             if tool_message is None:
                 raise ValueError("Tool call did not return a message")
 
