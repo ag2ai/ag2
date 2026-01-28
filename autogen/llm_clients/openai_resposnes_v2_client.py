@@ -45,7 +45,7 @@ else:
     )
 
 from ..llm_config.client import ModelClient
-from .models import UnifiedMessage, UnifiedResponse, TextContent
+from .models import TextContent, UnifiedMessage, UnifiedResponse
 
 logger = logging.getLogger(__name__)
 
