@@ -233,7 +233,10 @@ lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
     "google-api-core",
-    "google-genai>=1.20.0,<1.60",
+    # Version bounds: local types in gemini_types.py are tested for subset compatibility
+    # with the SDK (local can have extra fields for forward compatibility).
+    # See test/oai/test_gemini_types.py for compatibility tests.
+    "google-genai>=1.20.0,<2.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
@@ -257,6 +260,7 @@ yepcode = [
     "yepcode-run>=1.6.1",
     "python-dotenv",
 ]
+remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
 mistral = ["mistralai>=1.0.1"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
