@@ -103,8 +103,8 @@ with optional_import_block():
 
     # Beta content block types for structured outputs (SDK >= 0.74.1)
     try:
-        from anthropic.types.beta.structured_outputs.beta_text_block import BetaTextBlock
-        from anthropic.types.beta.structured_outputs.beta_tool_use_block import BetaToolUseBlock
+        from anthropic.types.beta.beta_text_block import BetaTextBlock
+        from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 
         BETA_BLOCKS_AVAILABLE = True
     except ImportError:
