@@ -221,6 +221,10 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/_blogs/2025-12-24-AG2-Shell-Tool-and-multi-in-built-tool-execution/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/_blogs/2025-12-29-AG2-Gemini-Thinking-Config-Support/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -1673,6 +1677,10 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/tools/experimental/shell/shell_tool/ShellExecutor/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/tools/experimental/wikipedia/wikipedia/WikipediaPageLoadTool/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -1894,6 +1902,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/2025/12/24/AG2-MultiMCPSessionManager/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/2025/12/24/AG2-Shell-Tool-and-multi-in-built-tool-execution/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
@@ -2198,6 +2210,14 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt5.1_apply_patch_example/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt5.1_in_built_tools_example/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt5.1_shell_tool_example/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
@@ -3193,6 +3213,30 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/shell-tool/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/built-in-tools/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/devops/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/automation/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/openai-responses-api/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/apply-patch/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/logging/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -3214,10 +3258,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/gpt-51/</loc>
-         <lastmod>2026-01-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/apply-patch/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
@@ -3338,6 +3378,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/archive/2025/page/2/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/archive/2025/page/3/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
