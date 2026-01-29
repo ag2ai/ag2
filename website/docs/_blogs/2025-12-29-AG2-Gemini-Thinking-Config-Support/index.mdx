@@ -10,8 +10,6 @@ AG2 v0.10.3 introduces native support for Google Gemini's Thinking Configuration
 
 This article explores how to leverage Gemini Thinking Configuration in AG2 for enhanced reasoning capabilities, with practical examples for different use cases and model variants.
 
-{/* more */}
-
 Google Gemini models support advanced reasoning features that allow them to "think" through problems before providing answers. This internal reasoning process can significantly improve performance on complex tasks, but until now, controlling this behavior in AG2 required custom configurations or workarounds.
 
 AG2 v0.10.3's native ThinkingConfig support solves this by providing direct access to Gemini's thinking parameters through the standard `LLMConfig` interface, making it easy to:
@@ -163,6 +161,7 @@ llm_config_minimal = LLMConfig(
 ```
 
 **Available levels by model:**
+
 - `gemini-3-pro-preview`: `"High"`, `"Low"` (High is default)
 - `gemini-3-flash-preview`: `"High"`, `"Medium"`, `"Low"`, `"Minimal"`
 
