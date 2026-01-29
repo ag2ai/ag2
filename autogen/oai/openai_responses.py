@@ -753,7 +753,7 @@ class OpenAIResponsesClient:
                 allowed_paths=allowed_paths if allowed_paths is not None else None,
                 allowed_commands=allowed_commands,
                 denied_commands=denied_commands if denied_commands is not None else None,
-                enable_command_filtering=enable_command_filtering if enable_command_filtering is not None else [],
+                enable_command_filtering=enable_command_filtering if enable_command_filtering is not None else True,
                 dangerous_patterns=dangerous_patterns
                 if dangerous_patterns
                 else ShellExecutor.DEFAULT_DANGEROUS_PATTERNS,

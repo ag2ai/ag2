@@ -190,10 +190,7 @@ class ShellExecutor:
             matches = re.findall(path_pattern, cmd)
             for match in matches:
                 # Normalize path
-                if match.startswith("~"):
-                    test_path = os.path.expanduser(match) if match.startswith("~") else match
-                else:
-                    test_path = match
+                test_path = os.path.expanduser(match) if match.startswith("~") else match
 
                 if not self._validate_path(test_path):
                     raise ValueError(f"Access to path '{match}' is not allowed. Allowed paths: {self.allowed_paths}")
@@ -213,6 +210,9 @@ class ShellExecutor:
         """
         # Validate command before execution
         self._validate_command(cmd)
+
+        if timeout is not None and timeout <= 0:
+            raise ValueError("Timeout must be positive")
 
         t = timeout or self.default_timeout
 
