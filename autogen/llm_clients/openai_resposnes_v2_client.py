@@ -45,7 +45,14 @@ else:
     )
 
 from ..llm_config.client import ModelClient
-from .models import ReasoningContent, TextContent, UnifiedMessage, UnifiedResponse
+from .models import (
+    GenericContent,
+    ReasoningContent,
+    TextContent,
+    ToolCallContent,
+    UnifiedMessage,
+    UnifiedResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +140,6 @@ class OpenAIResponsesV2Client(ModelClient):
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
 
-    # --------------------------------------------------------------------------
-    # Stateful Conversation Management
-    # --------------------------------------------------------------------------
 
     def _get_previous_response_id(self) -> str | None:
         """Get current conversation state.
@@ -161,9 +165,6 @@ class OpenAIResponsesV2Client(ModelClient):
         """
         self._previous_response_id = None
 
-    # --------------------------------------------------------------------------
-    # Input Format Conversion (ported from openai_responses.py)
-    # --------------------------------------------------------------------------
 
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
@@ -494,6 +495,46 @@ class OpenAIResponsesV2Client(ModelClient):
                             summary=summary,
                         )
                     )
+
+            # Handle function_call type items (custom function tools)
+            elif item_type == "function_call":
+                # Extract function call details
+                call_id = item_dict.get("call_id", "")
+                function_name = item_dict.get("name", "")
+                function_arguments = item_dict.get("arguments", "")
+
+                if call_id and function_name:
+                    # Convert arguments to string if it's not already
+                    if not isinstance(function_arguments, str):
+                        import json
+
+                        function_arguments = json.dumps(function_arguments)
+
+                    content_blocks.append(
+                        ToolCallContent(
+                            id=call_id,
+                            name=function_name,
+                            arguments=function_arguments,
+                        )
+                    )
+
+            # Handle apply_patch_call type items (built-in tool)
+            elif item_type == "apply_patch_call":
+                # Use GenericContent to preserve all fields (call_id, status, operation, etc.)
+                # This preserves the full structure for apply_patch operations
+                content_blocks.append(
+                    GenericContent(
+                        type="apply_patch_call",
+                        call_id=item_dict.get("call_id"),
+                        status=item_dict.get("status"),
+                        operation=item_dict.get("operation", {}),
+                        **{
+                            k: v
+                            for k, v in item_dict.items()
+                            if k not in ["type", "call_id", "status", "operation"]
+                        },
+                    )
+                )
 
         # Create UnifiedMessage with all content blocks
         # Responses API typically returns assistant messages
