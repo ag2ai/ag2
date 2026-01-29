@@ -45,7 +45,7 @@ else:
     )
 
 from ..llm_config.client import ModelClient
-from .models import TextContent, UnifiedMessage, UnifiedResponse
+from .models import ReasoningContent, TextContent, UnifiedMessage, UnifiedResponse
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +480,20 @@ class OpenAIResponsesV2Client(ModelClient):
                         text = block.get("text", "")
                         if text:
                             content_blocks.append(TextContent(text=text))
+
+            # Handle reasoning type items (o3 models)
+            elif item_type == "reasoning":
+                # Extract reasoning text from the item
+                reasoning_text = item_dict.get("reasoning", "")
+                if reasoning_text:
+                    # Extract summary if available
+                    summary = item_dict.get("summary", None)
+                    content_blocks.append(
+                        ReasoningContent(
+                            reasoning=reasoning_text,
+                            summary=summary,
+                        )
+                    )
 
         # Create UnifiedMessage with all content blocks
         # Responses API typically returns assistant messages
