@@ -357,11 +357,7 @@ class OpenAIResponsesV2Client(ModelClient):
                 - **other Responses API parameters
 
         Returns:
-            UnifiedResponse with rich content blocks (will be implemented in later commits)
-
-        Note:
-            Currently returns a placeholder UnifiedResponse. Full transformation will be
-            implemented in Phase 2 commits.
+            UnifiedResponse with rich content blocks
         """
         # Make a copy of params to avoid mutating the original
         params = params.copy()
@@ -421,28 +417,135 @@ class OpenAIResponsesV2Client(ModelClient):
         params = self._parse_params(params)
 
         # Call Responses API
-        # For now, return raw Response object (will transform to UnifiedResponse in later commits)
         try:
             response = self.client.responses.create(**params)  # type: ignore[misc]
             # Update state with new response ID
             self._set_previous_response_id(response.id)
 
-            # TODO: Transform response to UnifiedResponse (Phase 2)
-            # For now, return a placeholder UnifiedResponse
-            # This will be fully implemented in Phase 2 commits
-            return UnifiedResponse(
-                id=response.id,
-                model=getattr(response, "model", params.get("model", "unknown")),
-                provider="openai_responses",
-                messages=[
-                    UnifiedMessage(
-                        role="assistant",
-                        content=[TextContent(text="[Placeholder - transformation coming in Phase 2]")],
-                    )
-                ],
-                usage={},
-                status="completed",
-            )
+            # Transform response to UnifiedResponse
+            return self._transform_response(response, params.get("model", "unknown"))
         except Exception as e:
             logger.error(f"Error calling Responses API: {e}")
             raise
+
+    def _transform_response(
+        self,
+        response: "Response",
+        model: str,
+    ) -> UnifiedResponse:
+        """Transform Responses API Response to UnifiedResponse.
+
+        This method converts the Responses API response format to UnifiedResponse,
+        extracting all content blocks from response.output items.
+
+        Args:
+            response: Raw Responses API Response object
+            model: Model name used for the request
+
+        Returns:
+            UnifiedResponse with all content blocks properly typed
+        """
+        content_blocks = []
+        messages = []
+
+        # Get output items from response
+        output_items = getattr(response, "output", [])
+
+        # Process each output item
+        for item in output_items:
+            # Convert Pydantic objects to dicts for uniform handling
+            if hasattr(item, "model_dump"):
+                item_dict = item.model_dump()
+            elif hasattr(item, "dict"):
+                item_dict = item.dict()
+            elif isinstance(item, dict):
+                item_dict = item
+            else:
+                logger.debug(f"Unknown output item type: {type(item)}")
+                continue
+
+            item_type = item_dict.get("type")
+
+            # Handle message type items (output_text blocks)
+            if item_type == "message":
+                # Extract content blocks from message
+                message_content = item_dict.get("content", [])
+
+                # Process each content block in the message
+                for block in message_content:
+                    block_type = block.get("type")
+
+                    # Handle output_text blocks (main text content)
+                    if block_type == "output_text":
+                        text = block.get("text", "")
+                        if text:
+                            content_blocks.append(TextContent(text=text))
+
+        # Create UnifiedMessage with all content blocks
+        # Responses API typically returns assistant messages
+        if content_blocks:
+            messages.append(
+                UnifiedMessage(
+                    role="assistant",
+                    content=content_blocks,
+                )
+            )
+        else:
+            # If no content blocks, create empty message (shouldn't happen in practice)
+            messages.append(
+                UnifiedMessage(
+                    role="assistant",
+                    content=[TextContent(text="")],
+                )
+            )
+
+        # Extract usage information
+        usage = {}
+        usage_obj = getattr(response, "usage", None)
+
+        if usage_obj:
+            # Convert Pydantic usage object to dict for uniform access
+            if hasattr(usage_obj, "model_dump"):
+                usage_dict = usage_obj.model_dump()
+            elif hasattr(usage_obj, "dict"):
+                usage_dict = usage_obj.dict()
+            elif isinstance(usage_obj, dict):
+                usage_dict = usage_obj
+            else:
+                usage_dict = {}
+
+            # Map Responses API usage fields to UnifiedResponse format
+            usage = {
+                "prompt_tokens": usage_dict.get("input_tokens", 0),
+                "completion_tokens": usage_dict.get("output_tokens", 0),
+                "total_tokens": usage_dict.get("total_tokens", 0),
+            }
+
+            # Extract reasoning tokens if available (for o3 models)
+            output_tokens_details = usage_dict.get("output_tokens_details", {})
+            if output_tokens_details:
+                reasoning_tokens = output_tokens_details.get("reasoning_tokens", 0)
+                if reasoning_tokens > 0:
+                    usage["reasoning_tokens"] = reasoning_tokens
+
+        # Get model name from response or use provided model
+        response_model = getattr(response, "model", None) or model
+
+        # Build UnifiedResponse
+        unified_response = UnifiedResponse(
+            id=getattr(response, "id", ""),
+            model=response_model,
+            provider="openai_responses",
+            messages=messages,
+            usage=usage,
+            status="completed",
+            provider_metadata={
+                "created": getattr(response, "created", None),
+            },
+        )
+
+        # Calculate cost - pending
+        # For now, set to 0
+        unified_response.cost = 0.0
+
+        return unified_response
