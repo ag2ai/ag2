@@ -51,6 +51,7 @@ When defining a handoff, you specify a transition target - the destination where
 
 - [`AgentNameTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentNameTarget): Transfer control to an agent by name
 - [`AgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentTarget): Transfer control to a specific agent instance
+- [`FunctionTarget`](/docs.ag2.ai/latest/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTarget/): Transfer control to a custom function that can run logic before determining the next transition
 - [`AskUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AskUserTarget): Ask the user to select the next speaker
 - [`NestedChatTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/NestedChatTarget): Target that represents a nested chat configuration
 - [`GroupManagerTarget`](/docs/api-reference/autogen/agentchat/group/targets/group_manager_target/GroupManagerTarget): Transfer control to the group manager who will select the next speaker
@@ -74,6 +75,34 @@ target = RevertToUserTarget()
 # End the conversation
 target = TerminateTarget()
 ```
+
+### Function Targets
+
+A `FunctionTarget` allows you to hand off from an agent to a custom Python function, pausing the workflow so you can run arbitrary logic before deciding what happens next.
+
+The function receives:
+
+- The most recent agent output (as a string)
+- The shared `ContextVariables`
+- Optionally extra arguments
+
+It can perform any custom logic, and then returns a [`FunctionTargetResult`](/docs.ag2.ai/latest/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTargetResult/) that specifies the next transition target and includes a message for the next agent.
+
+Some common use cases for `FunctionTarget` include:
+
+#### Complex validation and handoff behavior
+
+It is often important to validate an agent’s output, particularly when its task is complex or has a reasonable chance of failure. While you can create validation agents, they often struggle to determine handoffs correctly and can clutter the group chat message history.
+Function Targets offer a cleaner solution: you can write custom validation logic and dynamically decide how to proceed.
+
+#### Custom Data Flow Handling
+
+AG2 handles agent context automatically, but it is often important for agents to have access to specific information stored in context variables or elsewhere.
+Function Targets allow you to fetch that information and include it explicitly as a message sent to the next agent.
+
+#### Example
+
+Refer to this [example](https://github.com/ag2ai/ag2/blob/main/notebook/function_target_example.ipynb), demonstrating a `FunctionTarget` being used to inspect and validate agent output.
 
 ### ReplyResults and Transitions
 
