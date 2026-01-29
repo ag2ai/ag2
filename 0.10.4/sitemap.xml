@@ -221,6 +221,10 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/_blogs/2025-12-29-AG2-Gemini-Thinking-Config-Support/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/Agent/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -1893,6 +1897,10 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/2025/12/29/AG2-Gemini-Thinking-Config-Support/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/community-talks/2025-04-10-NOVA/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -3145,6 +3153,26 @@
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/google-gemini/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/thinking-config/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/reasoning/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/llm-configuration/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/category/agent-chat/</loc>
+         <lastmod>2026-01-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/mcp/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
@@ -3226,10 +3254,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/blog/category/react/</loc>
-         <lastmod>2026-01-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/blog/category/reasoning/</loc>
          <lastmod>2026-01-29</lastmod>
     </url>
     <url>
