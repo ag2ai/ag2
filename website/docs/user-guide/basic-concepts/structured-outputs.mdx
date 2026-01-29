@@ -371,7 +371,7 @@ Here's the complete, ready-to-run code for our financial compliance system with 
 
     # Format the initial message
     initial_prompt = (
-        "Please process the following transactions one at a time, checking for duplicates:\n note: strictly goto summary_bot once all tasks are done and generate final summary\n\n" +
+        "Please process the following transactions one at a time, checking for duplicates:\n note: you must go to the summary_bot once all tasks are done and generate final summary\n\n" +
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 
