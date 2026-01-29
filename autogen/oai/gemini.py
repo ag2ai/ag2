@@ -634,7 +634,7 @@ class GeminiClient:
         rst = []
         for message in messages:
             parts, part_type = self._oai_content_to_gemini_content(message)
-            role = "user" if message["role"] in ["user", "system"] else "model"
+            role = "user" if message.get("role", "user") in ["user", "system"] else "model"
 
             if part_type == "text":
                 rst.append(
