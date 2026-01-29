@@ -140,7 +140,6 @@ class OpenAIResponsesV2Client(ModelClient):
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
 
-
     def _get_previous_response_id(self) -> str | None:
         """Get current conversation state.
 
@@ -164,7 +163,6 @@ class OpenAIResponsesV2Client(ModelClient):
         thread. Useful when switching between different conversation contexts.
         """
         self._previous_response_id = None
-
 
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
@@ -528,11 +526,7 @@ class OpenAIResponsesV2Client(ModelClient):
                         call_id=item_dict.get("call_id"),
                         status=item_dict.get("status"),
                         operation=item_dict.get("operation", {}),
-                        **{
-                            k: v
-                            for k, v in item_dict.items()
-                            if k not in ["type", "call_id", "status", "operation"]
-                        },
+                        **{k: v for k, v in item_dict.items() if k not in ["type", "call_id", "status", "operation"]},
                     )
                 )
 
