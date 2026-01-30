@@ -75,14 +75,13 @@ class OpenAIResponsesV2Client(ModelClient):
     - Returns UnifiedResponse with typed content blocks
     - Backward compatibility via create_v1_compatible()
 
-    Example:
+    Example - Basic Usage:
         client = OpenAIResponsesV2Client(api_key="...")
 
         # Get rich response with stateful conversation
         response = client.create({
             "model": "gpt-5",
             "messages": [{"role": "user", "content": "Hello"}],
-            "built_in_tools": ["web_search"]
         })
 
         # Access text response
@@ -133,13 +132,19 @@ class OpenAIResponsesV2Client(ModelClient):
         self._workspace_dir = workspace_dir or os.getcwd()
         self._allowed_paths = allowed_paths or ["**"]
 
-        # Image generation parameters (for future use)
+        # Image generation parameters
         self.image_output_params = {
             "quality": None,  # "high" or "low"
             "background": None,  # "white" or "black" or "transparent"
             "size": None,  # "1024x1024" or "1024x1792" or "1792x1024"
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
+        }
+
+        # Web search configuration parameters
+        self.web_search_params = {
+            "user_location": None,  # Approximate user location for localized results
+            "search_context_size": None,  # "low", "medium", or "high" - amount of context
         }
 
     def _get_previous_response_id(self) -> str | None:
@@ -165,6 +170,68 @@ class OpenAIResponsesV2Client(ModelClient):
         thread. Useful when switching between different conversation contexts.
         """
         self._previous_response_id = None
+
+    @staticmethod
+    def get_citations(response: UnifiedResponse) -> list[CitationContent]:
+        """Extract all citations from a UnifiedResponse.
+
+        This is a convenience method to extract all CitationContent blocks from
+        a response, which is particularly useful when using the web_search tool.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of CitationContent blocks from the response
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "What are the latest AI trends?"}],
+                "built_in_tools": ["web_search"]
+            })
+
+            citations = OpenAIResponsesV2Client.get_citations(response)
+            for citation in citations:
+                print(f"Source: {citation.title} - {citation.url}")
+        """
+        citations = []
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, CitationContent):
+                    citations.append(block)
+        return citations
+
+    @staticmethod
+    def get_web_search_calls(response: UnifiedResponse) -> list[GenericContent]:
+        """Extract all web_search_call items from a UnifiedResponse.
+
+        This method extracts the metadata about web searches that were performed,
+        which can be useful for tracking and debugging.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of GenericContent blocks with type="web_search_call"
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Search for latest news"}],
+                "built_in_tools": ["web_search"]
+            })
+
+            search_calls = OpenAIResponsesV2Client.get_web_search_calls(response)
+            for call in search_calls:
+                print(f"Search ID: {call.get('id')}, Status: {call.get('status')}")
+        """
+        search_calls = []
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, GenericContent) and block.type == "web_search_call":
+                    search_calls.append(block)
+        return search_calls
 
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
@@ -288,6 +355,78 @@ class OpenAIResponsesV2Client(ModelClient):
             params["reasoning"] = {"effort": reasoning_effort}
         return params
 
+    def _build_web_search_tool_config(
+        self,
+        web_search_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build web search tool configuration.
+
+        Creates the tool configuration dict for the web_search_preview built-in tool
+        with optional parameters for customization.
+
+        Args:
+            web_search_config: Optional configuration parameters:
+                - user_location: dict with "type": "approximate" and location info
+                  for localized search results (e.g., {"type": "approximate", "city": "NYC"})
+                - search_context_size: "low", "medium", or "high" - controls how much
+                  context from web pages is provided to the model
+
+        Returns:
+            Tool configuration dict for the Responses API
+
+        Example:
+            config = self._build_web_search_tool_config({
+                "user_location": {"type": "approximate", "city": "San Francisco"},
+                "search_context_size": "medium"
+            })
+            # Returns: {"type": "web_search_preview", "user_location": {...}, "search_context_size": "medium"}
+        """
+        tool_config: dict[str, Any] = {"type": "web_search_preview"}
+
+        # Merge instance-level web search params
+        effective_config = {**self.web_search_params}
+        if web_search_config:
+            effective_config.update(web_search_config)
+
+        # Add user_location if provided
+        if effective_config.get("user_location"):
+            tool_config["user_location"] = effective_config["user_location"]
+
+        # Add search_context_size if provided (must be "low", "medium", or "high")
+        search_context_size = effective_config.get("search_context_size")
+        if search_context_size and search_context_size in ["low", "medium", "high"]:
+            tool_config["search_context_size"] = search_context_size
+
+        return tool_config
+
+    def set_web_search_params(
+        self,
+        user_location: dict[str, Any] | None = None,
+        search_context_size: str | None = None,
+    ) -> None:
+        """Set default web search parameters for all requests.
+
+        These parameters will be applied to all requests that use the web_search tool
+        unless overridden in the request params.
+
+        Args:
+            user_location: Approximate user location for localized search results.
+                Should be a dict like {"type": "approximate", "city": "NYC", "country": "US"}
+            search_context_size: Amount of context from web pages - "low", "medium", or "high"
+
+        Example:
+            client.set_web_search_params(
+                user_location={"type": "approximate", "city": "London", "country": "UK"},
+                search_context_size="medium"
+            )
+        """
+        if user_location is not None:
+            self.web_search_params["user_location"] = user_location
+        if search_context_size is not None:
+            if search_context_size not in ["low", "medium", "high"]:
+                raise ValueError(f"search_context_size must be 'low', 'medium', or 'high', got: {search_context_size}")
+            self.web_search_params["search_context_size"] = search_context_size
+
     def _normalize_messages_for_responses_api(
         self,
         messages: list[dict[str, Any]],
@@ -352,13 +491,45 @@ class OpenAIResponsesV2Client(ModelClient):
                 - messages: List of message dicts (will be converted to input format)
                 - input: List of input items in Responses API format (alternative to messages)
                 - previous_response_id: Optional response ID to continue conversation
-                - built_in_tools: Optional list of built-in tools to enable
+                - built_in_tools: Optional list of built-in tools to enable:
+                    - "web_search": Search the web for current information
+                    - "image_generation": Generate images
+                    - "apply_patch": File operations (create/update/delete files)
+                    - "apply_patch_async": Async file operations
+                - web_search_config: Optional dict with web search parameters:
+                    - user_location: dict with location info for localized results
+                      e.g., {"type": "approximate", "city": "NYC", "country": "US"}
+                    - search_context_size: "low", "medium", or "high"
                 - workspace_dir: Optional workspace directory for apply_patch
                 - allowed_paths: Optional allowed paths for apply_patch
                 - **other Responses API parameters
 
         Returns:
-            UnifiedResponse with rich content blocks
+            UnifiedResponse with rich content blocks including:
+                - TextContent: Main response text
+                - CitationContent: Web search citations (when using web_search)
+                - ImageContent: Generated images (when using image_generation)
+                - ReasoningContent: Reasoning blocks (o3 models)
+                - ToolCallContent: Custom function tool calls
+                - GenericContent: Other content types
+
+        Example:
+            # Basic usage
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Hello"}]
+            })
+
+            # With web search
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Latest news"}],
+                "built_in_tools": ["web_search"],
+                "web_search_config": {"search_context_size": "high"}
+            })
+
+            # Access citations
+            citations = OpenAIResponsesV2Client.get_citations(response)
         """
         # Make a copy of params to avoid mutating the original
         params = params.copy()
@@ -386,6 +557,9 @@ class OpenAIResponsesV2Client(ModelClient):
                 image_generation_tool_params=image_generation_tool_params,
             )
 
+        # Extract web search configuration if provided
+        web_search_config = params.pop("web_search_config", None)
+
         # Initialize tools list
         tools_list = []
         # Add built-in tools if specified
@@ -393,7 +567,8 @@ class OpenAIResponsesV2Client(ModelClient):
             if "image_generation" in built_in_tools:
                 tools_list.append({"type": "image_generation"})
             if "web_search" in built_in_tools:
-                tools_list.append({"type": "web_search_preview"})
+                # Build web search tool config with optional parameters
+                tools_list.append(self._build_web_search_tool_config(web_search_config))
             if "apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools:
                 tools_list.append({"type": "apply_patch"})
 
@@ -582,14 +757,13 @@ class OpenAIResponsesV2Client(ModelClient):
 
             # Handle web_search_call type items (built-in tool)
             elif item_type == "web_search_call":
-                # Web search calls may contain search results/citations
-                # Extract any available search result data
+                # Web search calls contain the search execution metadata
+                # The actual search results and citations come in output_text annotations
                 search_id = item_dict.get("id", "")
                 search_status = item_dict.get("status", "")
-                
-                # Check if there are any search results or citations in the response
-                # The actual search results are typically in separate output items
-                # Store the web_search_call metadata as GenericContent
+
+                # Store the web_search_call metadata
+                # This allows tracking which searches were performed
                 content_blocks.append(
                     GenericContent(
                         type="web_search_call",
@@ -602,14 +776,20 @@ class OpenAIResponsesV2Client(ModelClient):
             # Handle web_search type items (search results with annotations/citations)
             elif item_type == "web_search":
                 # Web search results may contain annotations with URLs
+                # These are references to web pages that were retrieved
                 annotations = item_dict.get("annotations", [])
-                
+
                 for annotation in annotations:
                     if isinstance(annotation, dict):
                         url = annotation.get("url", "")
                         title = annotation.get("title", "")
-                        snippet = annotation.get("text", "") or annotation.get("snippet", "")
-                        
+                        # Try multiple fields for the snippet/text content
+                        snippet = (
+                            annotation.get("text", "")
+                            or annotation.get("snippet", "")
+                            or annotation.get("description", "")
+                        )
+
                         if url:
                             content_blocks.append(
                                 CitationContent(
@@ -619,12 +799,37 @@ class OpenAIResponsesV2Client(ModelClient):
                                     relevance_score=annotation.get("relevance_score"),
                                 )
                             )
-                
-                # If no annotations, store the raw web_search data
+
+                # If no annotations, store the raw web_search data as GenericContent
                 if not annotations:
                     content_blocks.append(
                         GenericContent(
                             type="web_search",
+                            **{k: v for k, v in item_dict.items() if k != "type"},
+                        )
+                    )
+
+            # Handle web_search_result type items (individual search results)
+            elif item_type == "web_search_result":
+                # Individual web search result with URL, title, and content
+                url = item_dict.get("url", "")
+                title = item_dict.get("title", "")
+                snippet = item_dict.get("snippet", "") or item_dict.get("content", "")
+
+                if url:
+                    content_blocks.append(
+                        CitationContent(
+                            url=url,
+                            title=title or url,
+                            snippet=snippet,
+                            relevance_score=item_dict.get("relevance_score"),
+                        )
+                    )
+                else:
+                    # Store raw data if no URL
+                    content_blocks.append(
+                        GenericContent(
+                            type="web_search_result",
                             **{k: v for k, v in item_dict.items() if k != "type"},
                         )
                     )
