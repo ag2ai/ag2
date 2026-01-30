@@ -20,11 +20,15 @@ Note: This uses the Responses API (/responses endpoint), NOT Chat Completions AP
 """
 
 import asyncio
+import json
 import logging
 import os
 import threading
+import warnings
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block
@@ -166,6 +170,47 @@ def calculate_image_cost(
         return 0.0, f"Invalid quality '{quality}' for {model}. Valid qualities: {IMAGE_VALID_QUALITIES[model]}"
 
 
+def _convert_response_format_to_text_format(
+    response_format: type[BaseModel] | dict[str, Any],
+) -> dict[str, Any]:
+    """Convert response_format (Pydantic model or dict) to text_format for Responses API.
+
+    The Responses API uses `text_format` parameter instead of `response_format`.
+    This function handles the conversion.
+
+    Args:
+        response_format: Either a Pydantic BaseModel subclass or a JSON schema dict
+
+    Returns:
+        A dict suitable for the `text_format` parameter
+
+    Example:
+        class MyModel(BaseModel):
+            name: str
+            age: int
+
+        text_format = _convert_response_format_to_text_format(MyModel)
+        # Returns: {"type": "json_schema", "json_schema": {"schema": {...}, "name": "MyModel", "strict": True}}
+    """
+    if isinstance(response_format, dict):
+        # JSON schema dict - wrap it in the expected format
+        from autogen.oai.client import _ensure_strict_json_schema
+
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "schema": _ensure_strict_json_schema(response_format, path=(), root=response_format),
+                "name": "response_format",
+                "strict": True,
+            },
+        }
+    else:
+        # Pydantic BaseModel subclass - use OpenAI's helper
+        from autogen.oai.client import type_to_response_format_param
+
+        return type_to_response_format_param(response_format)
+
+
 class OpenAIResponsesV2Client(ModelClient):
     """
     OpenAI Responses API V2 client implementing ModelClientV2 protocol.
@@ -214,8 +259,32 @@ class OpenAIResponsesV2Client(ModelClient):
         # Access generated images
         images = OpenAIResponsesV2Client.get_generated_images(response)
 
-        # Access citations
-        citations = OpenAIResponsesV2Client.get_citations(response)
+        # Check image generation costs
+        print(f"Image costs: ${client.get_image_costs():.3f}")
+
+    Example - Structured Output:
+        from pydantic import BaseModel
+
+        class ProductInfo(BaseModel):
+            name: str
+            price: float
+            in_stock: bool
+
+        # Use response_format for structured output
+        response = client.create({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "Extract: iPhone 15 costs $999, available"}],
+            "response_format": ProductInfo
+        })
+
+        # Get the parsed Pydantic object
+        product = OpenAIResponsesV2Client.get_parsed_object(response)
+        print(f"Product: {product.name}, Price: ${product.price}")
+
+        # Or get the parsed content block with full metadata
+        parsed = OpenAIResponsesV2Client.get_parsed_content(response)
+        if parsed:
+            print(f"Parsed dict: {parsed.parsed_dict}")
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -391,6 +460,77 @@ class OpenAIResponsesV2Client(ModelClient):
                 if isinstance(block, ImageContent):
                     images.append(block)
         return images
+
+    @staticmethod
+    def get_parsed_content(response: UnifiedResponse) -> GenericContent | None:
+        """Extract parsed structured output from a UnifiedResponse.
+
+        When using structured outputs (response_format parameter), the parsed
+        result is stored as a GenericContent block with type="parsed".
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            GenericContent block with type="parsed" containing the parsed data,
+            or None if no parsed content is found
+
+        Example:
+            from pydantic import BaseModel
+
+            class UserInfo(BaseModel):
+                name: str
+                age: int
+
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Extract user info"}],
+                "response_format": UserInfo
+            })
+
+            parsed = OpenAIResponsesV2Client.get_parsed_content(response)
+            if parsed:
+                # Access the parsed object (Pydantic model instance)
+                user = parsed.parsed_object
+                print(f"Name: {user.name}, Age: {user.age}")
+
+                # Or access as dict
+                data = parsed.parsed_dict
+                print(f"Data: {data}")
+        """
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, GenericContent) and block.type == "parsed":
+                    return block
+        return None
+
+    @staticmethod
+    def get_parsed_object(response: UnifiedResponse) -> Any:
+        """Extract the parsed Pydantic object from a UnifiedResponse.
+
+        Convenience method to directly get the parsed Pydantic model instance.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            The parsed Pydantic model instance, or None if not available
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Extract info"}],
+                "response_format": MyModel
+            })
+
+            obj = OpenAIResponsesV2Client.get_parsed_object(response)
+            if obj:
+                print(f"Parsed: {obj}")
+        """
+        parsed = OpenAIResponsesV2Client.get_parsed_content(response)
+        if parsed:
+            return getattr(parsed, "parsed_object", None)
+        return None
 
     def set_image_output_params(
         self,
@@ -1050,6 +1190,7 @@ class OpenAIResponsesV2Client(ModelClient):
                 - messages: List of message dicts (will be converted to input format)
                 - input: List of input items in Responses API format (alternative to messages)
                 - previous_response_id: Optional response ID to continue conversation
+                - response_format: Optional Pydantic model or JSON schema dict for structured output
                 - built_in_tools: Optional list of built-in tools to enable:
                     - "web_search": Search the web for current information
                     - "image_generation": Generate images
@@ -1066,7 +1207,7 @@ class OpenAIResponsesV2Client(ModelClient):
                 - ImageContent: Generated images (when using image_generation)
                 - ReasoningContent: Reasoning blocks (o3 models)
                 - ToolCallContent: Custom function tool calls
-                - GenericContent: Other content types
+                - GenericContent: Other content types (including type="parsed" for structured output)
 
         Example:
             # Basic usage
@@ -1075,15 +1216,30 @@ class OpenAIResponsesV2Client(ModelClient):
                 "messages": [{"role": "user", "content": "Hello"}]
             })
 
+            # With structured output (Pydantic model)
+            from pydantic import BaseModel
+
+            class UserInfo(BaseModel):
+                name: str
+                age: int
+                city: str
+
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Extract: John is 30, lives in NYC"}],
+                "response_format": UserInfo
+            })
+
+            # Access the parsed object
+            user = OpenAIResponsesV2Client.get_parsed_object(response)
+            print(f"Name: {user.name}, Age: {user.age}")
+
             # With built-in tools
             response = client.create({
                 "model": "gpt-5",
                 "messages": [{"role": "user", "content": "Latest news"}],
-                "built_in_tools": ["web_search"],
-                "web_search_config": {"search_context_size": "high"}
+                "built_in_tools": ["web_search"]
             })
-
-            images = OpenAIResponsesV2Client.get_generated_images(response)
         """
         # Make a copy of params to avoid mutating the original
         params = params.copy()
@@ -1148,7 +1304,48 @@ class OpenAIResponsesV2Client(ModelClient):
         # Parse special parameters (verbosity, reasoning_effort)
         params = self._parse_params(params)
 
-        # Call Responses API
+        # Check for response_format (Pydantic model or JSON schema dict)
+        response_format = params.pop("response_format", None) or self._default_response_format
+
+        if response_format is not None:
+            # Convert response_format to text_format for Responses API
+            try:
+                text_format = _convert_response_format_to_text_format(response_format)
+                params["text_format"] = text_format
+
+                # Remove stream if present (Responses API doesn't support streaming with text_format)
+                if "stream" in params:
+                    params.pop("stream")
+
+                # Use responses.parse() for structured output
+                try:
+                    response = self.client.responses.parse(**params)  # type: ignore[misc]
+                    self._set_previous_response_id(response.id)
+                    return self._transform_response(
+                        response,
+                        params.get("model", "unknown"),
+                        response_format=response_format,
+                    )
+                except TypeError as e:
+                    # Older openai-python versions may not support text_format
+                    if "text_format" in str(e) and "unexpected" in str(e):
+                        warnings.warn(
+                            "Installed openai-python version doesn't support "
+                            "`response_format` for the Responses API. "
+                            "Falling back to raw text output.",
+                            UserWarning,
+                        )
+                        params.pop("text_format", None)
+                        # Fall through to regular create below
+                    else:
+                        raise
+            except ImportError as e:
+                logger.warning(f"Could not convert response_format: {e}. Falling back to raw text.")
+                # Fall through to regular create below
+
+        # ------------------------------------------------------------------
+        # Regular (non-structured or fallback) API call
+        # ------------------------------------------------------------------
         try:
             response = self.client.responses.create(**params)  # type: ignore[misc]
             # Update state with new response ID
@@ -1164,6 +1361,7 @@ class OpenAIResponsesV2Client(ModelClient):
         self,
         response: "Response",
         model: str,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> UnifiedResponse:
         """Transform Responses API Response to UnifiedResponse.
 
@@ -1173,13 +1371,35 @@ class OpenAIResponsesV2Client(ModelClient):
         Args:
             response: Raw Responses API Response object
             model: Model name used for the request
+            response_format: Optional Pydantic model or JSON schema used for structured output
 
         Returns:
             UnifiedResponse with all content blocks properly typed
         """
-        content_blocks = []
+        content_blocks: list[Any] = []
         messages = []
 
+        # When using responses.parse(), the response has an `output_parsed` attribute
+        # containing the parsed Pydantic model instance
+        output_parsed = getattr(response, "output_parsed", None)
+        if output_parsed is not None:
+            # Store the parsed object as GenericContent with type="parsed"
+            parsed_dict = None
+            if hasattr(output_parsed, "model_dump"):
+                parsed_dict = output_parsed.model_dump()
+            elif hasattr(output_parsed, "dict"):
+                parsed_dict = output_parsed.dict()
+            elif isinstance(output_parsed, dict):
+                parsed_dict = output_parsed
+
+            content_blocks.append(
+                GenericContent(
+                    type="parsed",
+                    parsed_object=output_parsed,
+                    parsed_dict=parsed_dict,
+                    response_format_type=type(output_parsed).__name__ if output_parsed else None,
+                )
+            )
         # Get output items from response
         output_items = getattr(response, "output", [])
 
@@ -1271,8 +1491,6 @@ class OpenAIResponsesV2Client(ModelClient):
                 if call_id and function_name:
                     # Convert arguments to string if it's not already
                     if not isinstance(function_arguments, str):
-                        import json
-
                         function_arguments = json.dumps(function_arguments)
 
                     content_blocks.append(
