@@ -260,32 +260,8 @@ class OpenAIResponsesV2Client(ModelClient):
         # Access generated images
         images = OpenAIResponsesV2Client.get_generated_images(response)
 
-        # Check image generation costs
-        print(f"Image costs: ${client.get_image_costs():.3f}")
 
-    Example - Structured Output:
-        from pydantic import BaseModel
 
-        class ProductInfo(BaseModel):
-            name: str
-            price: float
-            in_stock: bool
-
-        # Use response_format for structured output
-        response = client.create({
-            "model": "gpt-5",
-            "messages": [{"role": "user", "content": "Extract: iPhone 15 costs $999, available"}],
-            "response_format": ProductInfo
-        })
-
-        # Get the parsed Pydantic object
-        product = OpenAIResponsesV2Client.get_parsed_object(response)
-        print(f"Product: {product.name}, Price: ${product.price}")
-
-        # Or get the parsed content block with full metadata
-        parsed = OpenAIResponsesV2Client.get_parsed_content(response)
-        if parsed:
-            print(f"Parsed dict: {parsed.parsed_dict}")
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -532,6 +508,110 @@ class OpenAIResponsesV2Client(ModelClient):
         if parsed:
             return getattr(parsed, "parsed_object", None)
         return None
+
+    @staticmethod
+    def create_image_content(
+        image_url: str,
+        detail: str = "auto",
+    ) -> dict[str, Any]:
+        """Create an image content block for multimodal messages.
+
+        Helper method to create properly formatted image content for use in messages.
+
+        Args:
+            image_url: URL of the image or base64 data URI
+                - HTTP/HTTPS URL: "https://example.com/image.png"
+                - Base64 data URI: "data:image/png;base64,..."
+            detail: Image detail level - "auto", "low", or "high"
+
+        Returns:
+            Dict formatted for use in message content arrays
+
+        Example:
+            # Create a multimodal message with text and image
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What's in this image?"},
+                        OpenAIResponsesV2Client.create_image_content(
+                            "https://example.com/photo.jpg",
+                            detail="high"
+                        )
+                    ]
+                }]
+            })
+        """
+        return {
+            "type": "input_image",
+            "image_url": image_url,
+            "detail": detail,
+        }
+
+    @staticmethod
+    def create_multimodal_message(
+        text: str,
+        images: list[str] | None = None,
+        role: str = "user",
+    ) -> dict[str, Any]:
+        """Create a multimodal message with text and optional images.
+
+        Convenience method to create messages with mixed content types.
+
+        Args:
+            text: The text content of the message
+            images: Optional list of image URLs or data URIs
+            role: Message role - "user", "assistant", or "system"
+
+        Returns:
+            Dict formatted as a message for use in create()
+
+        Example:
+            # Message with text and multiple images
+            message = OpenAIResponsesV2Client.create_multimodal_message(
+                text="Compare these two images",
+                images=[
+                    "https://example.com/image1.jpg",
+                    "https://example.com/image2.jpg"
+                ]
+            )
+
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [message]
+            })
+        """
+        content: list[dict[str, Any]] = []
+
+        # Add text content first
+        if text:
+            content.append({"type": "input_text", "text": text})
+
+        # Add images
+        if images:
+            for image_url in images:
+                content.append(OpenAIResponsesV2Client.create_image_content(image_url))
+
+        return {
+            "role": role,
+            "content": content,
+        }
+
+    @staticmethod
+    def get_all_images(response: UnifiedResponse) -> list[ImageContent]:
+        """Extract all images from a UnifiedResponse (both generated and input).
+
+        This is an alias for get_generated_images() for semantic clarity when
+        working with multimodal responses.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of all ImageContent blocks from the response
+        """
+        return OpenAIResponsesV2Client.get_generated_images(response)
 
     def set_image_output_params(
         self,
@@ -939,6 +1019,60 @@ class OpenAIResponsesV2Client(ModelClient):
             delta_messages.append(m)
         return delta_messages[::-1]
 
+    def _convert_image_to_input_block(self, image_content: dict[str, Any]) -> dict[str, Any] | None:
+        """Convert various image content formats to Responses API input_image block.
+
+        Handles multiple image input formats:
+        - Responses API format: {"type": "input_image", "image_url": "..."}
+        - Chat Completions format: {"type": "image_url", "image_url": {"url": "..."}}
+        - Direct URL string in image_url field
+        - Base64 data URI format
+
+        Args:
+            image_content: Dict containing image content in various formats
+
+        Returns:
+            Responses API input_image block dict, or None if conversion fails
+
+        Example:
+            # Chat Completions format
+            block = self._convert_image_to_input_block({
+                "type": "image_url",
+                "image_url": {"url": "https://example.com/image.png", "detail": "high"}
+            })
+            # Returns: {"type": "input_image", "image_url": "https://example.com/image.png"}
+        """
+        content_type = image_content.get("type", "")
+
+        # Already in Responses API format
+        if content_type == "input_image":
+            image_url = image_content.get("image_url")
+            if image_url:
+                return {"type": "input_image", "image_url": image_url}
+
+        # Chat Completions API format: {"type": "image_url", "image_url": {"url": "...", "detail": "..."}}
+        elif content_type == "image_url":
+            image_url_obj = image_content.get("image_url", {})
+            if isinstance(image_url_obj, dict):
+                url = image_url_obj.get("url")
+                if url:
+                    return {"type": "input_image", "image_url": url}
+            elif isinstance(image_url_obj, str):
+                # Direct URL string
+                return {"type": "input_image", "image_url": image_url_obj}
+
+        # Handle direct image_url field (legacy format)
+        elif "image_url" in image_content and content_type not in ["input_text", "text", "output_text"]:
+            image_url = image_content.get("image_url")
+            if isinstance(image_url, dict):
+                url = image_url.get("url")
+                if url:
+                    return {"type": "input_image", "image_url": url}
+            elif isinstance(image_url, str):
+                return {"type": "input_image", "image_url": image_url}
+
+        return None
+
     def _convert_messages_to_input(
         self,
         messages: list[dict[str, Any]],
@@ -951,6 +1085,12 @@ class OpenAIResponsesV2Client(ModelClient):
         This method converts standard message format to the Responses API input format,
         which uses content blocks (input_text, output_text, input_image, etc.).
 
+        Supports multimodal content including:
+        - Text (input_text, output_text)
+        - Images (input_image, image_url from Chat Completions API)
+        - Image generation parameters (image_params)
+        - Apply patch calls (skipped, processed separately)
+
         Args:
             messages: List of messages to convert
             processed_apply_patch_call_ids: Set of call_ids that have been processed
@@ -960,31 +1100,51 @@ class OpenAIResponsesV2Client(ModelClient):
         for m in messages[::-1]:  # reverse the list to get the last item first
             role = m.get("role", "user")
             content = m.get("content")
-            blocks = []
+            blocks: list[dict[str, Any]] = []
 
             if role != "tool":
                 content_type = "output_text" if role == "assistant" else "input_text"
                 if isinstance(content, list):
                     for c in content:
-                        if c.get("type") in ["input_text", "text", "output_text"]:
-                            if c.get("type") == "output_text" or role == "assistant":
-                                blocks.append({"type": "output_text", "text": c.get("text")})
+                        c_type = c.get("type", "")
+
+                        # Handle text content
+                        if c_type in ["input_text", "text", "output_text"]:
+                            if c_type == "output_text" or role == "assistant":
+                                blocks.append({"type": "output_text", "text": c.get("text", "")})
                             else:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
-                        elif c.get("type") == "input_image":
-                            blocks.append({"type": "input_image", "image_url": c.get("image_url")})
-                        elif c.get("type") == "image_params":
+                                blocks.append({"type": "input_text", "text": c.get("text", "")})
+
+                        # Handle image content (multiple formats)
+                        elif c_type in ["input_image", "image_url"]:
+                            image_block = self._convert_image_to_input_block(c)
+                            if image_block:
+                                blocks.append(image_block)
+
+                        # Handle image generation parameters
+                        elif c_type == "image_params":
                             for k, v in c.get("image_params", {}).items():
                                 if k in self.image_output_params:
                                     image_generation_tool_params[k] = v
-                        elif c.get("type") == "apply_patch_call":
-                            # Skip apply_patch_call items - they've already been processed above
-                            # The outputs are already in input_items, recipient doesn't need the raw call
+
+                        # Skip apply_patch_call items - they've already been processed
+                        elif c_type == "apply_patch_call":
                             continue
+
+                        # Handle unknown types with image_url field (legacy/fallback)
+                        elif "image_url" in c:
+                            image_block = self._convert_image_to_input_block(c)
+                            if image_block:
+                                blocks.append(image_block)
+
+                        # Skip empty or unrecognized content types with warning
                         else:
-                            raise ValueError(f"Invalid content type: {c.get('type')}")
+                            if c_type:
+                                logger.debug(f"Skipping unrecognized content type: {c_type}")
+
                 else:
-                    blocks.append({"type": content_type, "text": content})
+                    # Simple string content
+                    blocks.append({"type": content_type, "text": content or ""})
 
                 # Only append if we have valid content blocks
                 if blocks:
