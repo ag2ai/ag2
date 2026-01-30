@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .shell_tool import ShellExecutor
 
-__version__ = "0.10.4"
+__all__ = ["ShellExecutor"]

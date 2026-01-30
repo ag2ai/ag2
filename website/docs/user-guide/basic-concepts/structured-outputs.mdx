@@ -51,11 +51,12 @@ class ResponseModel(BaseModel):
     field3: list[str]
 
 # 2. Create LLM configuration with the structured output model
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig(
+    config_list={
         "api_type": "openai",
         "model": "gpt-5-nano",
+        "response_format": ResponseModel,  # Specify the response format
     },
-    response_format=ResponseModel,  # Specify the response format
 )
 
 # 3. Create agent with structured output configuration
@@ -107,13 +108,12 @@ Next, let's update our summary agent to use this structured output model:
 ```python hl_lines="7 12-16"
 # Configure the LLM for summary bot with structured output
 summary_llm_config = LLMConfig(
-   {
+   config_list = {
         "api_type": "openai",
         "model": "gpt-5-nano",
         "api_key": os.environ.get("OPENAI_API_KEY"),
-        "temperature": 0.2,
+        "response_format": AuditLogSummary,  # Using our Pydantic model for structured output
     },
-    response_format=AuditLogSummary,  # Using our Pydantic model for structured output
 )
 
 # Define the system message for the summary agent
@@ -274,12 +274,13 @@ Here's the complete, ready-to-run code for our financial compliance system with 
         }
 
     # Configure the LLM for finance bot (standard configuration)
-    finance_llm_config = LLMConfig(config_list={
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ.get("OPENAI_API_KEY"),
-        "temperature": 0.2
-    })
+    finance_llm_config = LLMConfig(
+        config_list={
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    )
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -332,7 +333,6 @@ Here's the complete, ready-to-run code for our financial compliance system with 
             "api_type": "openai",
             "model": "gpt-5-nano",
             "api_key": os.environ.get("OPENAI_API_KEY"),
-            "temperature": 0.2,
         },
         response_format=AuditLogSummary,  # Using the Pydantic model for structured output
     )
@@ -371,7 +371,7 @@ Here's the complete, ready-to-run code for our financial compliance system with 
 
     # Format the initial message
     initial_prompt = (
-        "Please process the following transactions one at a time, checking for duplicates:\n\n" +
+        "Please process the following transactions one at a time, checking for duplicates:\n note: you must go to the summary_bot once all tasks are done and generate final summary\n\n" +
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 

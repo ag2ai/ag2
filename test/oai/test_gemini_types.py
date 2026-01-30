@@ -2,7 +2,80 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+
+def _remove_descriptions(schema: dict[str, Any]) -> dict[str, Any]:
+    """Remove description fields from schema recursively.
+
+    Description texts may vary between SDK versions but don't affect functionality.
+    """
+    result: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key == "description":
+            continue
+        elif isinstance(value, dict):
+            result[key] = _remove_descriptions(value)
+        elif isinstance(value, list):
+            result[key] = [_remove_descriptions(item) if isinstance(item, dict) else item for item in value]
+        else:
+            result[key] = value
+    return result
+
+
+def _check_schema_subset(google_schema: dict[str, Any], local_schema: dict[str, Any], path: str = "") -> list[str]:
+    """Check that all fields in google_schema exist in local_schema.
+
+    Returns list of missing/mismatched fields. Empty list means compatible.
+    Local can have additional fields for forward compatibility with newer SDK versions.
+    """
+    errors = []
+
+    for key, google_value in google_schema.items():
+        current_path = f"{path}.{key}" if path else key
+
+        if key not in local_schema:
+            errors.append(f"Missing field: {current_path}")
+            continue
+
+        local_value = local_schema[key]
+
+        if isinstance(google_value, dict) and isinstance(local_value, dict):
+            # Recursively check nested dicts
+            errors.extend(_check_schema_subset(google_value, local_value, current_path))
+        elif isinstance(google_value, list) and isinstance(local_value, list):
+            # For lists, check that types are compatible (same length and compatible items)
+            if len(google_value) != len(local_value):
+                # Lists can have different lengths if local has more options
+                # Just check that all Google items exist in local
+                for i, g_item in enumerate(google_value):
+                    if isinstance(g_item, dict):
+                        # Find matching dict in local list
+                        found = False
+                        for l_item in local_value:
+                            if isinstance(l_item, dict):
+                                sub_errors = _check_schema_subset(g_item, l_item, f"{current_path}[{i}]")
+                                if not sub_errors:
+                                    found = True
+                                    break
+                        if not found:
+                            errors.append(f"No matching item for: {current_path}[{i}]")
+                    elif g_item not in local_value:
+                        errors.append(f"Missing list item: {current_path}[{i}]={g_item}")
+            else:
+                for i, (g_item, l_item) in enumerate(zip(google_value, local_value)):
+                    if isinstance(g_item, dict) and isinstance(l_item, dict):
+                        errors.extend(_check_schema_subset(g_item, l_item, f"{current_path}[{i}]"))
+                    elif g_item != l_item and not (isinstance(g_item, dict) or isinstance(l_item, dict)):
+                        errors.append(f"Mismatch at {current_path}[{i}]: {g_item} != {l_item}")
+        elif google_value != local_value:
+            errors.append(f"Mismatch at {current_path}: {google_value} != {local_value}")
+
+    return errors
+
+
 from autogen.oai.gemini_types import CaseInSensitiveEnum as LocalCaseInSensitiveEnum
 from autogen.oai.gemini_types import CommonBaseModel as LocalCommonBaseModel
 from autogen.oai.gemini_types import FunctionCallingConfig as LocalFunctionCallingConfig
@@ -30,16 +103,36 @@ class TestGeminiTypes:
             assert getattr(LocalFunctionCallingConfigMode, v) == getattr(FunctionCallingConfigMode, v)
 
     def test_LatLng(self) -> None:  # noqa: N802
-        assert LocalLatLng.model_json_schema() == LatLng.model_json_schema()
+        # Check local schema is compatible with Google SDK schema
+        # (local can have extra fields for forward compatibility with newer SDK versions)
+        local_schema = _remove_descriptions(LocalLatLng.model_json_schema())
+        google_schema = _remove_descriptions(LatLng.model_json_schema())
+        errors = _check_schema_subset(google_schema, local_schema)
+        assert not errors, f"Schema incompatibility: {errors}"
 
     def test_FunctionCallingConfig(self) -> None:  # noqa: N802
-        assert LocalFunctionCallingConfig.model_json_schema() == FunctionCallingConfig.model_json_schema()
+        # Check local schema is compatible with Google SDK schema
+        # (local can have extra fields for forward compatibility with newer SDK versions)
+        local_schema = _remove_descriptions(LocalFunctionCallingConfig.model_json_schema())
+        google_schema = _remove_descriptions(FunctionCallingConfig.model_json_schema())
+        errors = _check_schema_subset(google_schema, local_schema)
+        assert not errors, f"Schema incompatibility: {errors}"
 
     def test_RetrievalConfig(self) -> None:  # noqa: N802
-        assert LocalRetrievalConfig.model_json_schema() == RetrievalConfig.model_json_schema()
+        # Check local schema is compatible with Google SDK schema
+        # (local can have extra fields for forward compatibility with newer SDK versions)
+        local_schema = _remove_descriptions(LocalRetrievalConfig.model_json_schema())
+        google_schema = _remove_descriptions(RetrievalConfig.model_json_schema())
+        errors = _check_schema_subset(google_schema, local_schema)
+        assert not errors, f"Schema incompatibility: {errors}"
 
     def test_ToolConfig(self) -> None:  # noqa: N802
-        assert LocalToolConfig.model_json_schema() == ToolConfig.model_json_schema()
+        # Check local schema is compatible with Google SDK schema
+        # (local can have extra fields for forward compatibility with newer SDK versions)
+        local_schema = _remove_descriptions(LocalToolConfig.model_json_schema())
+        google_schema = _remove_descriptions(ToolConfig.model_json_schema())
+        errors = _check_schema_subset(google_schema, local_schema)
+        assert not errors, f"Schema incompatibility: {errors}"
 
     def test_CaseInSensitiveEnum(self) -> None:  # noqa: N802
         class LocalTestEnum(LocalCaseInSensitiveEnum):
