@@ -2377,3 +2377,128 @@ class TestAsyncReplyFunctionSkipping:
         # Only async should be called
         assert call_log == ["async"]
         assert result == "async response"
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_skips_sync_with_async_equivalent(self):
+        """Integration test: Two-agent async chat via a_run properly skips sync functions when async equivalents exist."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        # Create two agents that will have a conversation
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=2,
+            is_termination_msg=is_termination,
+        )
+
+        # Define sync and async reply function pairs for the assistant
+        def assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_sync")
+            return (True, "sync response from assistant TERMINATE")
+
+        async def a_assistant_sync_reply(recipient, messages, sender, config):
+            call_log.append("assistant_async")
+            return (True, "async response from assistant TERMINATE")
+
+        # Define sync and async reply function pairs for the user_proxy
+        def user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_sync")
+            return (True, "sync response from user_proxy TERMINATE")
+
+        async def a_user_proxy_sync_reply(recipient, messages, sender, config):
+            call_log.append("user_proxy_async")
+            return (True, "async response from user_proxy TERMINATE")
+
+        # Register both sync and async reply functions with the naming convention and flag
+        assistant.register_reply([autogen.Agent, None], assistant_sync_reply)
+        assistant.register_reply([autogen.Agent, None], a_assistant_sync_reply, ignore_async_in_sync_chat=True)
+
+        user_proxy.register_reply([autogen.Agent, None], user_proxy_sync_reply)
+        user_proxy.register_reply([autogen.Agent, None], a_user_proxy_sync_reply, ignore_async_in_sync_chat=True)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello, let's have a conversation!",
+            max_turns=2,
+        )
+
+        # Process all events from the response
+        async for event in response.events:
+            pass  # Just consume events to let the chat complete
+
+        # Verify only async functions were called, not their sync counterparts
+        assert "assistant_sync" not in call_log, "Sync assistant reply should be skipped in async chat"
+        assert "user_proxy_sync" not in call_log, "Sync user_proxy reply should be skipped in async chat"
+        assert "assistant_async" in call_log, "Async assistant reply should be called"
+
+        # Verify the conversation completed
+        messages = await response.messages
+        assert len(messages) > 0, "Messages should not be empty"
+        assert "async response" in messages[-1]["content"]
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_two_agent_async_chat_calls_sync_only_functions(self):
+        """Integration test: Two-agent async chat via a_run calls sync-only functions (no async equivalent)."""
+        call_log = []
+
+        # Termination condition for both agents
+        def is_termination(x):
+            return x.get("content", "").find("TERMINATE") >= 0
+
+        assistant = ConversableAgent(
+            name="assistant",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+        user_proxy = ConversableAgent(
+            name="user_proxy",
+            llm_config=False,
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+            is_termination_msg=is_termination,
+        )
+
+        # Sync-only reply function (no async equivalent) - should still be called
+        def sync_only_reply(recipient, messages, sender, config):
+            call_log.append("sync_only")
+            return (False, None)  # Continue to next reply function
+
+        # Final async reply to end conversation
+        async def final_async_reply(recipient, messages, sender, config):
+            call_log.append("final_async")
+            return (True, "TERMINATE")
+
+        assistant.register_reply([autogen.Agent, None], final_async_reply, ignore_async_in_sync_chat=True)
+        assistant.register_reply([autogen.Agent, None], sync_only_reply)
+
+        # Initiate async chat using a_run
+        response = await user_proxy.a_run(
+            recipient=assistant,
+            message="Hello!",
+            max_turns=1,
+        )
+
+        # Process all events
+        async for event in response.events:
+            pass
+
+        # Sync-only function should still be called in async chat
+        assert "sync_only" in call_log, "Sync-only function should be called in async chat"
+        assert "final_async" in call_log, "Final async function should be called"
