@@ -186,7 +186,8 @@ class ShellExecutor:
         # Check for path access violations
         if self.allowed_paths and "**" not in self.allowed_paths:
             # Extract paths from command (simple heuristic - look for absolute paths or paths with /)
-            path_pattern = r"(?:^|\s)([/~]|\.\./)[^\s]*"
+            # Also match Windows absolute paths like C:\ or D:\
+            path_pattern = r"(?:^|\s)((?:[/~]|\.\./|[A-Za-z]:)[^\s]*)"
             matches = re.findall(path_pattern, cmd)
             for match in matches:
                 # Normalize path
