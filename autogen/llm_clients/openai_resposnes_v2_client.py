@@ -89,6 +89,7 @@ class ApplyPatchCallOutput:
         """Convert to dictionary format for Responses API input."""
         return asdict(self)
 
+
 # Pricing per image (in USD)
 IMAGE_PRICING = {
     "gpt-image-1": {
@@ -654,7 +655,6 @@ class OpenAIResponsesV2Client(ModelClient):
         for a specific set of operations.
         """
         self._image_costs = 0.0
-
 
     @staticmethod
     def get_apply_patch_calls(response: UnifiedResponse) -> list[GenericContent]:
@@ -1432,13 +1432,13 @@ class OpenAIResponsesV2Client(ModelClient):
                         text = block.get("text", "")
                         if text:
                             content_blocks.append(TextContent(text=text))
-                        
+
                         # Extract annotations (citations from web search) if present
                         annotations = block.get("annotations", [])
                         for annotation in annotations:
                             if isinstance(annotation, dict):
                                 ann_type = annotation.get("type", "")
-                                
+
                                 # Handle URL citations from web search
                                 if ann_type == "url_citation":
                                     url = annotation.get("url", "")
@@ -1446,7 +1446,7 @@ class OpenAIResponsesV2Client(ModelClient):
                                     # The text range in the output that this citation refers to
                                     start_index = annotation.get("start_index", 0)
                                     end_index = annotation.get("end_index", 0)
-                                    
+
                                     if url:
                                         content_blocks.append(
                                             CitationContent(
