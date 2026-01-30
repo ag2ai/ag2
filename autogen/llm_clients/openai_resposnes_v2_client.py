@@ -32,6 +32,10 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block
+from autogen.oai.oai_models.chat_completion import ChatCompletionExtended, Choice
+from autogen.oai.oai_models.chat_completion_message import ChatCompletionMessage
+from autogen.oai.oai_models.chat_completion_message_tool_call import ChatCompletionMessageFunctionToolCall, Function
+from autogen.oai.oai_models.completion_usage import CompletionUsage
 from autogen.oai.openai_utils import OAI_PRICE1K
 
 if TYPE_CHECKING:
@@ -306,7 +310,6 @@ class OpenAIResponsesV2Client(ModelClient):
 
         # Access generated images
         images = OpenAIResponsesV2Client.get_generated_images(response)
-
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -2203,3 +2206,253 @@ class OpenAIResponsesV2Client(ModelClient):
                 result.append(msg.get_text())
 
         return result
+
+    def _unified_response_to_chat_completion(
+        self,
+        response: UnifiedResponse,
+    ) -> ChatCompletionExtended:
+        """Convert a UnifiedResponse to ChatCompletionExtended for V1 compatibility.
+
+        This method transforms the rich UnifiedResponse format into a ChatCompletion-like
+        object that works with OpenAIWrapper and other V1 consumers.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            ChatCompletionExtended object compatible with V1 interfaces
+
+        Note:
+            Some information may be lost in the conversion (e.g., citations, reasoning
+            blocks are flattened to text). For full fidelity, use the V2 interface.
+        """
+        choices: list[Choice] = []
+
+        for idx, msg in enumerate(response.messages):
+            # Build message content
+            content_parts: list[str] = []
+            tool_calls: list[ChatCompletionMessageFunctionToolCall] = []
+
+            for block in msg.content:
+                if isinstance(block, TextContent):
+                    content_parts.append(block.text)
+                elif isinstance(block, ReasoningContent):
+                    # Include reasoning in content for backward compatibility
+                    content_parts.append(f"[Reasoning: {block.text}]")
+                elif isinstance(block, ToolCallContent):
+                    tool_calls.append(
+                        ChatCompletionMessageFunctionToolCall(
+                            id=block.id,
+                            type="function",
+                            function=Function(
+                                name=block.name,
+                                arguments=block.arguments,
+                            ),
+                        )
+                    )
+                elif isinstance(block, CitationContent):
+                    # Append citation info to content
+                    citation_text = f"[{block.title}]({block.url})"
+                    if block.snippet:
+                        citation_text += f": {block.snippet}"
+                    content_parts.append(citation_text)
+                elif isinstance(block, ImageContent):
+                    # Reference generated images in content
+                    if block.data_uri:
+                        content_parts.append(f"[Generated image: {block.data_uri[:50]}...]")
+                    elif block.image_url:
+                        content_parts.append(f"[Image: {block.image_url}]")
+                elif isinstance(block, GenericContent):
+                    # Include generic content type info
+                    content_parts.append(f"[{block.type}: {json.dumps(block.data)}]")
+
+            # Determine finish_reason
+            finish_reason: str = "stop"
+            if tool_calls:
+                finish_reason = "tool_calls"
+
+            # Build ChatCompletionMessage
+            message = ChatCompletionMessage(
+                role="assistant",
+                content="\n".join(content_parts) if content_parts else None,
+                tool_calls=tool_calls if tool_calls else None,
+            )
+
+            # Build Choice
+            choice = Choice(
+                index=idx,
+                message=message,
+                finish_reason=finish_reason,  # type: ignore[arg-type]
+                logprobs=None,
+            )
+            choices.append(choice)
+
+        # Build CompletionUsage
+        usage = CompletionUsage(
+            prompt_tokens=response.usage.get("prompt_tokens", 0),
+            completion_tokens=response.usage.get("completion_tokens", 0),
+            total_tokens=response.usage.get("total_tokens", 0),
+        )
+
+        # Build ChatCompletionExtended
+        chat_completion = ChatCompletionExtended(
+            id=response.id,
+            model=response.model,
+            created=int(response.provider_metadata.get("created", 0) or 0),
+            object="chat.completion",
+            choices=choices,
+            usage=usage,
+            cost=response.cost,
+        )
+
+        return chat_completion
+
+    def create_v1_compatible(
+        self,
+        params: dict[str, Any],
+    ) -> ChatCompletionExtended:
+        """Create a completion and return a ChatCompletion-like response for V1 compatibility.
+
+        This method is designed for backward compatibility with code that expects
+        the OpenAI ChatCompletion response format. It internally calls the V2 create()
+        method and converts the UnifiedResponse to ChatCompletionExtended.
+
+        Args:
+            params: Request parameters (same as create() method)
+                - model: Model name (e.g., "gpt-5", "gpt-4.1")
+                - messages: List of message dicts
+                - built_in_tools: Optional list of built-in tools
+                - tools: Optional list of function tools
+                - response_format: Optional Pydantic model or JSON schema
+                - Other Responses API parameters
+
+        Returns:
+            ChatCompletionExtended object compatible with V1 interfaces:
+                - .choices[0].message.content: Response text
+                - .choices[0].message.tool_calls: Any tool calls
+                - .usage.prompt_tokens, .usage.completion_tokens: Token counts
+                - .cost: Total cost (if available)
+
+        Example:
+            # Use V1-compatible interface
+            client = OpenAIResponsesV2Client(api_key="...")
+
+            response = client.create_v1_compatible({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Hello"}]
+            })
+
+            # Access like a ChatCompletion
+            print(response.choices[0].message.content)
+            print(f"Tokens: {response.usage.total_tokens}")
+            print(f"Cost: ${response.cost}")
+
+        Example - With tools:
+            response = client.create_v1_compatible({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Search for weather"}],
+                "built_in_tools": ["web_search"]
+            })
+
+            # Tool calls are preserved
+            if response.choices[0].message.tool_calls:
+                for tc in response.choices[0].message.tool_calls:
+                    print(f"Tool: {tc.function.name}")
+
+        Note:
+            For full access to rich content (citations, reasoning blocks, images),
+            use the standard create() method which returns UnifiedResponse.
+        """
+        # Call the V2 create method
+        unified_response = self.create(params)
+
+        # Convert to ChatCompletion format
+        return self._unified_response_to_chat_completion(unified_response)
+
+    @staticmethod
+    def unified_response_to_v1_messages(
+        response: UnifiedResponse,
+    ) -> list[str] | list[dict[str, Any]]:
+        """Convert UnifiedResponse messages to V1-compatible format.
+
+        This is a static utility for converting UnifiedResponse content to the
+        simpler V1 message format when needed outside the client context.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of strings (text-only) or list of message dicts (complex content)
+
+        Example:
+            response = client.create({...})
+            v1_messages = OpenAIResponsesV2Client.unified_response_to_v1_messages(response)
+        """
+        result: list[str] | list[dict[str, Any]] = []
+
+        for msg in response.messages:
+            # Check for complex content
+            has_complex = any(
+                isinstance(block, (ImageContent, ToolCallContent, CitationContent, GenericContent))
+                for block in msg.content
+            )
+
+            if has_complex:
+                content_items = []
+                tool_calls = []
+
+                for block in msg.content:
+                    if isinstance(block, TextContent):
+                        content_items.append({"type": "text", "text": block.text})
+                    elif isinstance(block, ImageContent):
+                        if block.data_uri:
+                            content_items.append({
+                                "type": "image",
+                                "image_url": block.data_uri,
+                            })
+                        elif block.image_url:
+                            content_items.append({
+                                "type": "image",
+                                "image_url": block.image_url,
+                            })
+                    elif isinstance(block, ToolCallContent):
+                        tool_calls.append({
+                            "id": block.id,
+                            "type": "function",
+                            "function": {
+                                "name": block.name,
+                                "arguments": block.arguments,
+                            },
+                        })
+                    elif isinstance(block, CitationContent):
+                        content_items.append({
+                            "type": "citation",
+                            "url": block.url,
+                            "title": block.title,
+                            "snippet": block.snippet,
+                        })
+                    elif isinstance(block, GenericContent):
+                        content_items.append(block.get_all_fields())
+
+                msg_dict: dict[str, Any] = {
+                    "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
+                    "content": content_items if content_items else None,
+                }
+
+                if tool_calls:
+                    msg_dict["tool_calls"] = tool_calls
+
+                result.append(msg_dict)
+            else:
+                # Simple text
+                result.append(msg.get_text())
+
+        return result
+
+    def is_v1_compatible(self) -> bool:
+        """Check if this client supports V1 compatibility mode.
+
+        Returns:
+            True - this client always supports V1 compatibility via create_v1_compatible()
+        """
+        return True
