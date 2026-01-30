@@ -390,7 +390,7 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
             >>> # Use different LLM provider
             >>> result = executor.explore(
             ...     llm_config={
-            ...         "model": "gemini-2.0-flash-exp",
+            ...         "model": "gemini-2.5-flash",
             ...         "api_key": os.getenv("GOOGLE_API_KEY"),
             ...         "api_type": "google",
             ...     }

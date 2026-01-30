@@ -302,7 +302,7 @@ class TestLLMConfig:
             pytest.param(
                 {
                     "api_type": "google",
-                    "model": "gemini-2.0-flash-lite",
+                    "model": "gemini-2.5-flash",
                     "api_key": "dummy_api_key",
                     "project_id": "fake-project-id",
                     "location": "us-west1",
@@ -310,13 +310,13 @@ class TestLLMConfig:
                 },
                 LLMConfig(
                     GeminiLLMConfigEntry(
-                        model="gemini-2.0-flash-lite",
+                        model="gemini-2.5-flash",
                         api_key="dummy_api_key",
                         project_id="fake-project-id",
                         location="us-west1",
                     )
                 ),
-                id="google gemini-2.0-flash-lite",
+                id="google gemini-2.5-flash",
             ),
             pytest.param(
                 {
