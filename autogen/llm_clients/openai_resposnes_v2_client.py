@@ -46,7 +46,9 @@ else:
 
 from ..llm_config.client import ModelClient
 from .models import (
+    CitationContent,
     GenericContent,
+    ImageContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
@@ -479,6 +481,40 @@ class OpenAIResponsesV2Client(ModelClient):
                         text = block.get("text", "")
                         if text:
                             content_blocks.append(TextContent(text=text))
+                        
+                        # Extract annotations (citations from web search) if present
+                        annotations = block.get("annotations", [])
+                        for annotation in annotations:
+                            if isinstance(annotation, dict):
+                                ann_type = annotation.get("type", "")
+                                
+                                # Handle URL citations from web search
+                                if ann_type == "url_citation":
+                                    url = annotation.get("url", "")
+                                    title = annotation.get("title", "")
+                                    # The text range in the output that this citation refers to
+                                    start_index = annotation.get("start_index", 0)
+                                    end_index = annotation.get("end_index", 0)
+                                    
+                                    if url:
+                                        content_blocks.append(
+                                            CitationContent(
+                                                url=url,
+                                                title=title or url,
+                                                snippet=text[start_index:end_index] if start_index < end_index else "",
+                                                relevance_score=annotation.get("relevance_score"),
+                                            )
+                                        )
+                                # Handle file citations
+                                elif ann_type == "file_citation":
+                                    file_id = annotation.get("file_id", "")
+                                    content_blocks.append(
+                                        GenericContent(
+                                            type="file_citation",
+                                            file_id=file_id,
+                                            **{k: v for k, v in annotation.items() if k not in ["type", "file_id"]},
+                                        )
+                                    )
 
             # Handle reasoning type items (o3 models)
             elif item_type == "reasoning":
@@ -516,6 +552,83 @@ class OpenAIResponsesV2Client(ModelClient):
                         )
                     )
 
+            # Handle image_generation_call type items (built-in tool)
+            elif item_type == "image_generation_call":
+                # Extract the base64 image result and convert to ImageContent
+                image_result = item_dict.get("result", "")
+                
+                if image_result:
+                    # Determine output format from image_output_params or default to png
+                    output_format = self.image_output_params.get("output_format", "png")
+                    
+                    # Create data URI for the generated image
+                    data_uri = f"data:image/{output_format};base64,{image_result}"
+                    
+                    content_blocks.append(
+                        ImageContent(
+                            image_url=None,  # Not a URL, it's generated
+                            data_uri=data_uri,
+                            detail="high",  # Generated images are typically high detail
+                        )
+                    )
+                else:
+                    # No image result - store as GenericContent to preserve all fields
+                    content_blocks.append(
+                        GenericContent(
+                            type="image_generation_call",
+                            **{k: v for k, v in item_dict.items() if k != "type"},
+                        )
+                    )
+
+            # Handle web_search_call type items (built-in tool)
+            elif item_type == "web_search_call":
+                # Web search calls may contain search results/citations
+                # Extract any available search result data
+                search_id = item_dict.get("id", "")
+                search_status = item_dict.get("status", "")
+                
+                # Check if there are any search results or citations in the response
+                # The actual search results are typically in separate output items
+                # Store the web_search_call metadata as GenericContent
+                content_blocks.append(
+                    GenericContent(
+                        type="web_search_call",
+                        id=search_id,
+                        status=search_status,
+                        **{k: v for k, v in item_dict.items() if k not in ["type", "id", "status"]},
+                    )
+                )
+
+            # Handle web_search type items (search results with annotations/citations)
+            elif item_type == "web_search":
+                # Web search results may contain annotations with URLs
+                annotations = item_dict.get("annotations", [])
+                
+                for annotation in annotations:
+                    if isinstance(annotation, dict):
+                        url = annotation.get("url", "")
+                        title = annotation.get("title", "")
+                        snippet = annotation.get("text", "") or annotation.get("snippet", "")
+                        
+                        if url:
+                            content_blocks.append(
+                                CitationContent(
+                                    url=url,
+                                    title=title or url,
+                                    snippet=snippet,
+                                    relevance_score=annotation.get("relevance_score"),
+                                )
+                            )
+                
+                # If no annotations, store the raw web_search data
+                if not annotations:
+                    content_blocks.append(
+                        GenericContent(
+                            type="web_search",
+                            **{k: v for k, v in item_dict.items() if k != "type"},
+                        )
+                    )
+
             # Handle apply_patch_call type items (built-in tool)
             elif item_type == "apply_patch_call":
                 # Use GenericContent to preserve all fields (call_id, status, operation, etc.)
@@ -529,6 +642,29 @@ class OpenAIResponsesV2Client(ModelClient):
                         **{k: v for k, v in item_dict.items() if k not in ["type", "call_id", "status", "operation"]},
                     )
                 )
+
+            # Handle any other built-in tool calls ending in "_call"
+            elif item_type and item_type.endswith("_call"):
+                # Generic handler for unknown built-in tool calls
+                # Preserve all fields using GenericContent
+                tool_name = item_type.replace("_call", "")
+                content_blocks.append(
+                    GenericContent(
+                        type=item_type,
+                        tool_name=tool_name,
+                        **{k: v for k, v in item_dict.items() if k != "type"},
+                    )
+                )
+
+            # Handle unknown/other output types - store as GenericContent
+            else:
+                if item_type:
+                    content_blocks.append(
+                        GenericContent(
+                            type=item_type,
+                            **{k: v for k, v in item_dict.items() if k != "type"},
+                        )
+                    )
 
         # Create UnifiedMessage with all content blocks
         # Responses API typically returns assistant messages
