@@ -59,6 +59,87 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 
+# Pricing per image (in USD)
+IMAGE_PRICING = {
+    "gpt-image-1": {
+        "low": {"1024x1024": 0.011, "1024x1536": 0.016, "1536x1024": 0.016},
+        "medium": {"1024x1024": 0.042, "1024x1536": 0.063, "1536x1024": 0.063},
+        "high": {"1024x1024": 0.167, "1024x1536": 0.25, "1536x1024": 0.25},
+    },
+    "dall-e-3": {
+        "standard": {"1024x1024": 0.040, "1024x1792": 0.080, "1792x1024": 0.080},
+        "hd": {"1024x1024": 0.080, "1024x1792": 0.120, "1792x1024": 0.120},
+    },
+    "dall-e-2": {"standard": {"1024x1024": 0.020, "512x512": 0.018, "256x256": 0.016}},
+}
+
+# Valid sizes for each image model
+IMAGE_VALID_SIZES = {
+    "gpt-image-1": ["1024x1024", "1024x1536", "1536x1024"],
+    "dall-e-3": ["1024x1024", "1024x1792", "1792x1024"],
+    "dall-e-2": ["1024x1024", "512x512", "256x256"],
+}
+
+# Valid quality settings for each image model
+IMAGE_VALID_QUALITIES = {
+    "gpt-image-1": ["low", "medium", "high"],
+    "dall-e-3": ["standard", "hd"],
+    "dall-e-2": ["standard"],
+}
+
+
+def calculate_image_cost(
+    model: str = "gpt-image-1",
+    size: str = "1024x1024",
+    quality: str = "high",
+) -> tuple[float, str | None]:
+    """Calculate the cost for a single image generation.
+
+    Args:
+        model: Model name ("gpt-image-1", "dall-e-3" or "dall-e-2")
+        size: Image size (e.g., "1024x1024", "1024x1536")
+        quality: Quality setting:
+                - For gpt-image-1: "low", "medium", or "high"
+                - For dall-e-3: "standard" or "hd"
+                - For dall-e-2: "standard" only
+
+    Returns:
+        Tuple of (cost, error_message). error_message is None if successful.
+
+    Example:
+        cost, error = calculate_image_cost("gpt-image-1", "1024x1024", "high")
+        if error:
+            print(f"Error: {error}")
+        else:
+            print(f"Cost: ${cost:.3f}")
+    """
+    # Normalize inputs
+    model = model.lower()
+    quality = quality.lower()
+
+    # Validate model
+    if model not in IMAGE_PRICING:
+        return 0.0, f"Invalid model: {model}. Valid models: {list(IMAGE_PRICING.keys())}"
+
+    # Validate size
+    if size not in IMAGE_VALID_SIZES[model]:
+        return 0.0, f"Invalid size {size} for {model}. Valid sizes: {IMAGE_VALID_SIZES[model]}"
+
+    # Get the cost based on model type
+    try:
+        if model == "gpt-image-1" or model == "dall-e-3":
+            cost = IMAGE_PRICING[model][quality][size]
+        elif model == "dall-e-2":
+            cost = IMAGE_PRICING[model]["standard"][size]
+        else:
+            return 0.0, f"Model {model} not properly configured"
+
+        return cost, None
+
+    except KeyError:
+        return 0.0, f"Invalid quality '{quality}' for {model}. Valid qualities: {IMAGE_VALID_QUALITIES[model]}"
+
+
 class OpenAIResponsesV2Client(ModelClient):
     """
     OpenAI Responses API V2 client implementing ModelClientV2 protocol.
@@ -92,6 +173,33 @@ class OpenAIResponsesV2Client(ModelClient):
             "model": "gpt-5",
             "messages": [{"role": "user", "content": "Tell me more"}]
         })
+
+    Example - Image Generation:
+        # Configure default image output settings
+        client.set_image_output_params(quality="high", size="1024x1024")
+
+        # Generate an image
+        response = client.create({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "Generate a sunset image"}],
+            "built_in_tools": ["image_generation"]
+        })
+
+        # Access generated images
+        images = OpenAIResponsesV2Client.get_generated_images(response)
+
+        # Check image generation costs
+        print(f"Image costs: ${client.get_image_costs():.3f}")
+
+    Example - Web Search:
+        response = client.create({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "Latest AI news"}],
+            "built_in_tools": ["web_search"]
+        })
+
+        # Access citations
+        citations = OpenAIResponsesV2Client.get_citations(response)
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -146,6 +254,9 @@ class OpenAIResponsesV2Client(ModelClient):
             "user_location": None,  # Approximate user location for localized results
             "search_context_size": None,  # "low", "medium", or "high" - amount of context
         }
+
+        # Track cumulative image generation costs (calculated manually since API doesn't return it)
+        self._image_costs: float = 0.0
 
     def _get_previous_response_id(self) -> str | None:
         """Get current conversation state.
@@ -232,6 +343,161 @@ class OpenAIResponsesV2Client(ModelClient):
                 if isinstance(block, GenericContent) and block.type == "web_search_call":
                     search_calls.append(block)
         return search_calls
+
+    @staticmethod
+    def get_generated_images(response: UnifiedResponse) -> list[ImageContent]:
+        """Extract all generated images from a UnifiedResponse.
+
+        This is a convenience method to extract all ImageContent blocks from
+        a response, which is particularly useful when using the image_generation tool.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of ImageContent blocks from the response
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Generate a sunset image"}],
+                "built_in_tools": ["image_generation"]
+            })
+
+            images = OpenAIResponsesV2Client.get_generated_images(response)
+            for image in images:
+                if image.data_uri:
+                    print(f"Generated image (data URI): {image.data_uri[:50]}...")
+        """
+        images = []
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, ImageContent):
+                    images.append(block)
+        return images
+
+    def set_image_output_params(
+        self,
+        quality: str | None = None,
+        size: str | None = None,
+        background: str | None = None,
+        output_format: str | None = None,
+        output_compression: int | None = None,
+    ) -> None:
+        """Set default image generation parameters for all requests.
+
+        These parameters will be applied to all requests that use the image_generation tool
+        unless overridden in the request params.
+
+        Args:
+            quality: Image quality - "low", "medium", or "high" (for gpt-image-1)
+                    or "standard", "hd" (for dall-e-3)
+            size: Image size - "1024x1024", "1024x1536", "1536x1024" (gpt-image-1)
+                  or "1024x1024", "1024x1792", "1792x1024" (dall-e-3)
+            background: Background type - "white", "black", or "transparent"
+            output_format: Output format - "png", "jpg", "jpeg", or "webp"
+            output_compression: Compression level 0-100 (only for jpg/jpeg/webp)
+
+        Example:
+            client.set_image_output_params(
+                quality="high",
+                size="1024x1024",
+                output_format="png"
+            )
+        """
+        if quality is not None:
+            valid_qualities = ["low", "medium", "high", "standard", "hd"]
+            if quality not in valid_qualities:
+                raise ValueError(f"quality must be one of {valid_qualities}, got: {quality}")
+            self.image_output_params["quality"] = quality
+
+        if size is not None:
+            # Accept any size format - validation happens at API level
+            self.image_output_params["size"] = size
+
+        if background is not None:
+            valid_backgrounds = ["white", "black", "transparent"]
+            if background not in valid_backgrounds:
+                raise ValueError(f"background must be one of {valid_backgrounds}, got: {background}")
+            self.image_output_params["background"] = background
+
+        if output_format is not None:
+            valid_formats = ["png", "jpg", "jpeg", "webp"]
+            if output_format not in valid_formats:
+                raise ValueError(f"output_format must be one of {valid_formats}, got: {output_format}")
+            self.image_output_params["output_format"] = output_format
+
+        if output_compression is not None:
+            if not (0 <= output_compression <= 100):
+                raise ValueError(f"output_compression must be between 0 and 100, got: {output_compression}")
+            self.image_output_params["output_compression"] = output_compression
+
+    def _build_image_generation_tool_config(
+        self,
+        image_generation_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build image generation tool configuration.
+
+        Creates the tool configuration dict for the image_generation built-in tool
+        with optional parameters for customization.
+
+        Args:
+            image_generation_config: Optional configuration parameters:
+                - quality: "low", "medium", "high" (gpt-image-1) or "standard", "hd" (dall-e-3)
+                - size: Image dimensions (e.g., "1024x1024")
+                - background: "white", "black", or "transparent"
+                - output_format: "png", "jpg", "jpeg", or "webp"
+                - output_compression: 0-100 (for jpg/jpeg/webp)
+
+        Returns:
+            Tool configuration dict for the Responses API
+
+        Example:
+            config = self._build_image_generation_tool_config({
+                "quality": "high",
+                "size": "1024x1536",
+                "output_format": "png"
+            })
+        """
+        tool_config: dict[str, Any] = {"type": "image_generation"}
+
+        # Merge instance-level image params with request-level config
+        effective_config = {**self.image_output_params}
+        if image_generation_config:
+            effective_config.update(image_generation_config)
+
+        # Add parameters if they have values
+        for param in ["quality", "size", "background", "output_format", "output_compression"]:
+            value = effective_config.get(param)
+            if value is not None:
+                tool_config[param] = value
+
+        return tool_config
+
+    def get_image_costs(self) -> float:
+        """Get the cumulative image generation costs.
+
+        Returns the total cost of all images generated through this client instance.
+        This is tracked separately because the API doesn't include image costs in
+        the usage response.
+
+        Returns:
+            Total image generation cost in USD
+
+        Example:
+            # After generating several images
+            total_cost = client.get_image_costs()
+            print(f"Total image generation cost: ${total_cost:.2f}")
+        """
+        return self._image_costs
+
+    def reset_image_costs(self) -> None:
+        """Reset the cumulative image generation costs to zero.
+
+        Useful when starting a new session or when you want to track costs
+        for a specific set of operations.
+        """
+        self._image_costs = 0.0
 
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
@@ -496,10 +762,6 @@ class OpenAIResponsesV2Client(ModelClient):
                     - "image_generation": Generate images
                     - "apply_patch": File operations (create/update/delete files)
                     - "apply_patch_async": Async file operations
-                - web_search_config: Optional dict with web search parameters:
-                    - user_location: dict with location info for localized results
-                      e.g., {"type": "approximate", "city": "NYC", "country": "US"}
-                    - search_context_size: "low", "medium", or "high"
                 - workspace_dir: Optional workspace directory for apply_patch
                 - allowed_paths: Optional allowed paths for apply_patch
                 - **other Responses API parameters
@@ -520,7 +782,7 @@ class OpenAIResponsesV2Client(ModelClient):
                 "messages": [{"role": "user", "content": "Hello"}]
             })
 
-            # With web search
+            # With built-in tools
             response = client.create({
                 "model": "gpt-5",
                 "messages": [{"role": "user", "content": "Latest news"}],
@@ -528,8 +790,7 @@ class OpenAIResponsesV2Client(ModelClient):
                 "web_search_config": {"search_context_size": "high"}
             })
 
-            # Access citations
-            citations = OpenAIResponsesV2Client.get_citations(response)
+            images = OpenAIResponsesV2Client.get_generated_images(response)
         """
         # Make a copy of params to avoid mutating the original
         params = params.copy()
@@ -557,15 +818,17 @@ class OpenAIResponsesV2Client(ModelClient):
                 image_generation_tool_params=image_generation_tool_params,
             )
 
-        # Extract web search configuration if provided
+        # Extract tool configurations if provided
         web_search_config = params.pop("web_search_config", None)
+        image_generation_config = params.pop("image_generation_config", None)
 
         # Initialize tools list
         tools_list = []
         # Add built-in tools if specified
         if built_in_tools:
             if "image_generation" in built_in_tools:
-                tools_list.append({"type": "image_generation"})
+                # Build image generation tool config with optional parameters
+                tools_list.append(self._build_image_generation_tool_config(image_generation_config))
             if "web_search" in built_in_tools:
                 # Build web search tool config with optional parameters
                 tools_list.append(self._build_web_search_tool_config(web_search_config))
@@ -731,21 +994,42 @@ class OpenAIResponsesV2Client(ModelClient):
             elif item_type == "image_generation_call":
                 # Extract the base64 image result and convert to ImageContent
                 image_result = item_dict.get("result", "")
-                
+
+                # Extract image metadata from model_extra or item_dict
+                extra_fields = item_dict.get("model_extra", {}) or {}
+                image_size = extra_fields.get("size") or item_dict.get("size") or "1024x1536"
+                image_quality = extra_fields.get("quality") or item_dict.get("quality") or "high"
+
                 if image_result:
                     # Determine output format from image_output_params or default to png
                     output_format = self.image_output_params.get("output_format", "png")
-                    
+
                     # Create data URI for the generated image
                     data_uri = f"data:image/{output_format};base64,{image_result}"
-                    
-                    content_blocks.append(
-                        ImageContent(
-                            image_url=None,  # Not a URL, it's generated
-                            data_uri=data_uri,
-                            detail="high",  # Generated images are typically high detail
-                        )
+
+                    # Create ImageContent with metadata stored in extra
+                    image_content = ImageContent(
+                        image_url=None,  # Not a URL, it's generated
+                        data_uri=data_uri,
+                        detail="high",  # Generated images are typically high detail
                     )
+                    # Store generation metadata in the extra field
+                    image_content.extra = {
+                        "generated": True,
+                        "size": image_size,
+                        "quality": image_quality,
+                        "output_format": output_format,
+                    }
+                    content_blocks.append(image_content)
+
+                    # Calculate and accumulate image cost
+                    cost, error = calculate_image_cost(
+                        model="gpt-image-1",  # Default model for Responses API
+                        size=image_size,
+                        quality=image_quality,
+                    )
+                    if not error and cost > 0:
+                        self._image_costs += cost
                 else:
                     # No image result - store as GenericContent to preserve all fields
                     content_blocks.append(
@@ -931,11 +1215,131 @@ class OpenAIResponsesV2Client(ModelClient):
             status="completed",
             provider_metadata={
                 "created": getattr(response, "created", None),
+                "image_costs": self._image_costs,  # Track cumulative image costs
             },
         )
 
-        # Calculate cost - pending
-        # For now, set to 0
-        unified_response.cost = 0.0
+        # Calculate cost (token-based cost + image costs)
+        # Token costs will be calculated when we have pricing data
+        unified_response.cost = self._image_costs
 
         return unified_response
+
+    def cost(self, response: UnifiedResponse) -> float:  # type: ignore[override]
+        """Calculate cost from response.
+
+        Returns the cost stored in the response, which includes image generation costs.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            Cost in USD for the API call (including image generation costs)
+        """
+        return response.cost or 0.0
+
+    @staticmethod
+    def get_usage(response: UnifiedResponse) -> dict[str, Any]:  # type: ignore[override]
+        """Extract usage statistics from response.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            Dict with keys from RESPONSE_USAGE_KEYS including:
+                - prompt_tokens: Number of input tokens
+                - completion_tokens: Number of output tokens
+                - total_tokens: Total tokens used
+                - cost: Total cost in USD
+                - model: Model name
+                - reasoning_tokens: (optional) Reasoning tokens for o3 models
+        """
+        usage = {
+            "prompt_tokens": response.usage.get("prompt_tokens", 0),
+            "completion_tokens": response.usage.get("completion_tokens", 0),
+            "total_tokens": response.usage.get("total_tokens", 0),
+            "cost": response.cost or 0.0,
+            "model": response.model,
+        }
+
+        # Include reasoning tokens if present
+        if "reasoning_tokens" in response.usage:
+            usage["reasoning_tokens"] = response.usage["reasoning_tokens"]
+
+        return usage
+
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:  # type: ignore[override]
+        """Retrieve messages from response in OpenAI-compatible format.
+
+        Returns list of strings for text-only messages, or list of dicts when
+        tool calls, images, or complex content is present.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of strings (for text-only) OR list of message dicts (for complex content)
+        """
+        result: list[str] | list[dict[str, Any]] = []
+
+        for msg in response.messages:
+            # Check for complex content (tool calls, images, citations)
+            has_complex_content = any(
+                isinstance(block, (ImageContent, ToolCallContent, CitationContent, GenericContent))
+                for block in msg.content
+            )
+
+            if has_complex_content:
+                # Return dict format for complex content
+                content_items = []
+                tool_calls = []
+
+                for block in msg.content:
+                    if isinstance(block, TextContent):
+                        content_items.append({"type": "text", "text": block.text})
+                    elif isinstance(block, ImageContent):
+                        if block.data_uri:
+                            content_items.append({
+                                "type": "image",
+                                "image_url": block.data_uri,
+                                "generated": True,
+                            })
+                        elif block.image_url:
+                            content_items.append({
+                                "type": "image",
+                                "image_url": block.image_url,
+                            })
+                    elif isinstance(block, ToolCallContent):
+                        tool_calls.append({
+                            "id": block.id,
+                            "type": "function",
+                            "function": {
+                                "name": block.name,
+                                "arguments": block.arguments,
+                            },
+                        })
+                    elif isinstance(block, CitationContent):
+                        content_items.append({
+                            "type": "citation",
+                            "url": block.url,
+                            "title": block.title,
+                            "snippet": block.snippet,
+                        })
+                    elif isinstance(block, GenericContent):
+                        # Preserve generic content as-is
+                        content_items.append(block.get_all_fields())
+
+                message_dict: dict[str, Any] = {
+                    "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
+                    "content": content_items if content_items else None,
+                }
+
+                if tool_calls:
+                    message_dict["tool_calls"] = tool_calls
+
+                result.append(message_dict)
+            else:
+                # Simple text content - return string
+                result.append(msg.get_text())
+
+        return result
