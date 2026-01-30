@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block
+from autogen.oai.openai_utils import OAI_PRICE1K
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -171,6 +172,52 @@ def calculate_image_cost(
         return 0.0, f"Invalid quality '{quality}' for {model}. Valid qualities: {IMAGE_VALID_QUALITIES[model]}"
 
 
+def calculate_token_cost(
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    custom_price: tuple[float, float] | None = None,
+) -> float:
+    """Calculate the cost for token usage.
+
+    Uses the OAI_PRICE1K pricing table or custom pricing if provided.
+
+    Args:
+        model: Model name (e.g., "gpt-5", "gpt-4o")
+        prompt_tokens: Number of input/prompt tokens
+        completion_tokens: Number of output/completion tokens
+        custom_price: Optional tuple of (input_price_per_1k, output_price_per_1k)
+
+    Returns:
+        Cost in USD for the token usage
+
+    Example:
+        # Using standard pricing
+        cost = calculate_token_cost("gpt-5", 1000, 500)
+
+        # Using custom pricing
+        cost = calculate_token_cost("custom-model", 1000, 500, custom_price=(0.001, 0.002))
+    """
+    # Use custom pricing if provided
+    if custom_price is not None:
+        input_price, output_price = custom_price
+        return (prompt_tokens * input_price + completion_tokens * output_price) / 1000
+
+    # Check if model is in the pricing table
+    if model not in OAI_PRICE1K:
+        # Model not found - return 0 (will be logged as warning)
+        return 0.0
+
+    price_1k = OAI_PRICE1K[model]
+
+    # Handle tuple (input, output) or single value pricing
+    if isinstance(price_1k, tuple):
+        return (price_1k[0] * prompt_tokens + price_1k[1] * completion_tokens) / 1000
+    else:
+        # Single price for both input and output
+        return price_1k * (prompt_tokens + completion_tokens) / 1000
+
+
 def _convert_response_format_to_text_format(
     response_format: type[BaseModel] | dict[str, Any],
 ) -> dict[str, Any]:
@@ -260,8 +307,6 @@ class OpenAIResponsesV2Client(ModelClient):
         # Access generated images
         images = OpenAIResponsesV2Client.get_generated_images(response)
 
-
-
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -317,8 +362,16 @@ class OpenAIResponsesV2Client(ModelClient):
             "search_context_size": None,  # "low", "medium", or "high" - amount of context
         }
 
+        # Cost tracking
         # Track cumulative image generation costs (calculated manually since API doesn't return it)
         self._image_costs: float = 0.0
+        # Track cumulative token costs
+        self._token_costs: float = 0.0
+        # Track cumulative total tokens
+        self._total_prompt_tokens: int = 0
+        self._total_completion_tokens: int = 0
+        # Custom pricing (input_price_per_1k, output_price_per_1k) - overrides OAI_PRICE1K
+        self._custom_price: tuple[float, float] | None = None
 
     def _get_previous_response_id(self) -> str | None:
         """Get current conversation state.
@@ -735,6 +788,94 @@ class OpenAIResponsesV2Client(ModelClient):
         for a specific set of operations.
         """
         self._image_costs = 0.0
+
+    def get_token_costs(self) -> float:
+        """Get the cumulative token costs.
+
+        Returns the total cost of all token usage through this client instance.
+
+        Returns:
+            Total token cost in USD
+
+        Example:
+            total_token_cost = client.get_token_costs()
+            print(f"Total token cost: ${total_token_cost:.4f}")
+        """
+        return self._token_costs
+
+    def reset_token_costs(self) -> None:
+        """Reset the cumulative token costs to zero."""
+        self._token_costs = 0.0
+        self._total_prompt_tokens = 0
+        self._total_completion_tokens = 0
+
+    def get_total_costs(self) -> float:
+        """Get the total cumulative costs (tokens + images).
+
+        Returns:
+            Total cost in USD (token costs + image costs)
+
+        Example:
+            total_cost = client.get_total_costs()
+            print(f"Total cost: ${total_cost:.4f}")
+        """
+        return self._token_costs + self._image_costs
+
+    def reset_all_costs(self) -> None:
+        """Reset all cumulative cost tracking to zero.
+
+        Resets both token costs and image costs.
+        """
+        self._token_costs = 0.0
+        self._image_costs = 0.0
+        self._total_prompt_tokens = 0
+        self._total_completion_tokens = 0
+
+    def get_cumulative_usage(self) -> dict[str, Any]:
+        """Get cumulative usage statistics across all requests.
+
+        Returns:
+            Dict with cumulative usage statistics
+
+        Example:
+            usage = client.get_cumulative_usage()
+            print(f"Total tokens: {usage['total_tokens']}")
+            print(f"Total cost: ${usage['total_cost']:.4f}")
+        """
+        return {
+            "prompt_tokens": self._total_prompt_tokens,
+            "completion_tokens": self._total_completion_tokens,
+            "total_tokens": self._total_prompt_tokens + self._total_completion_tokens,
+            "token_cost": self._token_costs,
+            "image_cost": self._image_costs,
+            "total_cost": self._token_costs + self._image_costs,
+        }
+
+    def set_custom_price(
+        self,
+        input_price_per_1k: float,
+        output_price_per_1k: float,
+    ) -> None:
+        """Set custom pricing for token cost calculation.
+
+        This overrides the default OAI_PRICE1K pricing table.
+
+        Args:
+            input_price_per_1k: Price per 1000 input tokens in USD
+            output_price_per_1k: Price per 1000 output tokens in USD
+
+        Example:
+            # Set custom pricing for a fine-tuned model
+            client.set_custom_price(
+                input_price_per_1k=0.003,
+                output_price_per_1k=0.006
+            )
+        """
+        self._custom_price = (input_price_per_1k, output_price_per_1k)
+
+    def clear_custom_price(self) -> None:
+        """Clear custom pricing and use default OAI_PRICE1K table."""
+        self._custom_price = None
 
     @staticmethod
     def get_apply_patch_calls(response: UnifiedResponse) -> list[GenericContent]:
@@ -1876,6 +2017,37 @@ class OpenAIResponsesV2Client(ModelClient):
         # Get model name from response or use provided model
         response_model = getattr(response, "model", None) or model
 
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+
+        # Calculate token cost for this request
+        token_cost = calculate_token_cost(
+            model=response_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            custom_price=self._custom_price,
+        )
+
+        # Log warning if model not found in pricing table (and no custom price)
+        if token_cost == 0.0 and prompt_tokens > 0 and self._custom_price is None:
+            if response_model not in OAI_PRICE1K:
+                logger.warning(
+                    f"Model {response_model} not found in pricing table. Token cost will be 0. "
+                    f"Use set_custom_price() to set custom pricing."
+                )
+
+        # Update cumulative token tracking
+        self._token_costs += token_cost
+        self._total_prompt_tokens += prompt_tokens
+        self._total_completion_tokens += completion_tokens
+
+        # Calculate total cost (tokens + images)
+        total_cost = token_cost + self._image_costs
+
+        # Add cost breakdown to usage
+        usage["token_cost"] = token_cost
+        usage["image_cost"] = self._image_costs
+
         # Build UnifiedResponse
         unified_response = UnifiedResponse(
             id=getattr(response, "id", ""),
@@ -1886,26 +2058,34 @@ class OpenAIResponsesV2Client(ModelClient):
             status="completed",
             provider_metadata={
                 "created": getattr(response, "created", None),
-                "image_costs": self._image_costs,  # Track cumulative image costs
+                "token_cost": token_cost,
+                "image_cost": self._image_costs,
+                "cumulative_token_cost": self._token_costs,
+                "cumulative_image_cost": self._image_costs,
             },
         )
 
-        # Calculate cost (token-based cost + image costs)
-        # Token costs will be calculated when we have pricing data
-        unified_response.cost = self._image_costs
+        # Set total cost
+        unified_response.cost = total_cost
 
         return unified_response
 
     def cost(self, response: UnifiedResponse) -> float:  # type: ignore[override]
         """Calculate cost from response.
 
-        Returns the cost stored in the response, which includes image generation costs.
+        Returns the total cost stored in the response, which includes both
+        token costs and image generation costs.
 
         Args:
             response: UnifiedResponse from create()
 
         Returns:
-            Cost in USD for the API call (including image generation costs)
+            Total cost in USD for the API call (token + image costs)
+
+        Example:
+            response = client.create({...})
+            total_cost = client.cost(response)
+            print(f"This request cost: ${total_cost:.4f}")
         """
         return response.cost or 0.0
 
@@ -1917,13 +2097,20 @@ class OpenAIResponsesV2Client(ModelClient):
             response: UnifiedResponse from create()
 
         Returns:
-            Dict with keys from RESPONSE_USAGE_KEYS including:
+            Dict with usage statistics including:
                 - prompt_tokens: Number of input tokens
                 - completion_tokens: Number of output tokens
                 - total_tokens: Total tokens used
-                - cost: Total cost in USD
+                - cost: Total cost in USD (token + image)
                 - model: Model name
+                - token_cost: Cost for tokens only
+                - image_cost: Cost for image generation only
                 - reasoning_tokens: (optional) Reasoning tokens for o3 models
+
+        Example:
+            response = client.create({...})
+            usage = OpenAIResponsesV2Client.get_usage(response)
+            print(f"Tokens: {usage['total_tokens']}, Cost: ${usage['cost']:.4f}")
         """
         usage = {
             "prompt_tokens": response.usage.get("prompt_tokens", 0),
@@ -1931,6 +2118,8 @@ class OpenAIResponsesV2Client(ModelClient):
             "total_tokens": response.usage.get("total_tokens", 0),
             "cost": response.cost or 0.0,
             "model": response.model,
+            "token_cost": response.usage.get("token_cost", 0.0),
+            "image_cost": response.usage.get("image_cost", 0.0),
         }
 
         # Include reasoning tokens if present
