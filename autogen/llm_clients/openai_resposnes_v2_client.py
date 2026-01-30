@@ -19,8 +19,11 @@ maintaining backward compatibility with the ModelClient protocol.
 Note: This uses the Responses API (/responses endpoint), NOT Chat Completions API.
 """
 
+import asyncio
 import logging
 import os
+import threading
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from autogen.code_utils import content_str
@@ -58,6 +61,29 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class ApplyPatchCallOutput:
+    """Output from an apply_patch_call operation.
+
+    This dataclass represents the result of executing an apply_patch operation
+    (create_file, update_file, or delete_file) on a file in the workspace.
+
+    Attributes:
+        call_id: Unique identifier for the patch call (from the API)
+        status: Result status - "success" or "failed"
+        output: Output message describing the result
+        type: Always "apply_patch_call_output"
+    """
+
+    call_id: str
+    status: str
+    output: str
+    type: str = "apply_patch_call_output"
+
+    def to_dict(self) -> dict[str, str]:
+        """Convert to dictionary format for Responses API input."""
+        return asdict(self)
 
 # Pricing per image (in USD)
 IMAGE_PRICING = {
@@ -187,16 +213,6 @@ class OpenAIResponsesV2Client(ModelClient):
 
         # Access generated images
         images = OpenAIResponsesV2Client.get_generated_images(response)
-
-        # Check image generation costs
-        print(f"Image costs: ${client.get_image_costs():.3f}")
-
-    Example - Web Search:
-        response = client.create({
-            "model": "gpt-5",
-            "messages": [{"role": "user", "content": "Latest AI news"}],
-            "built_in_tools": ["web_search"]
-        })
 
         # Access citations
         citations = OpenAIResponsesV2Client.get_citations(response)
@@ -499,6 +515,254 @@ class OpenAIResponsesV2Client(ModelClient):
         """
         self._image_costs = 0.0
 
+
+    @staticmethod
+    def get_apply_patch_calls(response: UnifiedResponse) -> list[GenericContent]:
+        """Extract all apply_patch_call items from a UnifiedResponse.
+
+        This method extracts the metadata about apply_patch operations that were
+        performed, which can be useful for tracking file modifications.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of GenericContent blocks with type="apply_patch_call"
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "Update the config file"}],
+                "built_in_tools": ["apply_patch"]
+            })
+
+            patch_calls = OpenAIResponsesV2Client.get_apply_patch_calls(response)
+            for call in patch_calls:
+                print(f"Patch ID: {call.call_id}, Status: {call.status}")
+        """
+        patch_calls = []
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, GenericContent) and block.type == "apply_patch_call":
+                    patch_calls.append(block)
+        return patch_calls
+
+    def _apply_patch_operation(
+        self,
+        operation: dict[str, Any],
+        call_id: str,
+        workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = None,
+        async_patches: bool = False,
+    ) -> ApplyPatchCallOutput:
+        """Apply a patch operation and return apply_patch_call_output.
+
+        This method executes a single file operation (create, update, or delete)
+        using the WorkspaceEditor tool.
+
+        Args:
+            operation: Dictionary containing the patch operation with keys:
+                - type: "create_file", "update_file", or "delete_file"
+                - path: File path relative to workspace
+                - diff: Diff string (for create_file and update_file)
+            call_id: The call_id for this patch operation (from API response)
+            workspace_dir: Workspace directory path (defaults to instance setting)
+            allowed_paths: List of allowed path patterns (defaults to instance setting)
+            async_patches: Whether to apply patches asynchronously
+
+        Returns:
+            ApplyPatchCallOutput with call_id, status, and output message
+
+        Example:
+            output = self._apply_patch_operation(
+                operation={"type": "create_file", "path": "test.py", "diff": "..."},
+                call_id="call_123",
+                workspace_dir="/workspace"
+            )
+            print(f"Status: {output.status}, Output: {output.output}")
+        """
+        from autogen.tools.experimental.apply_patch.apply_patch_tool import WorkspaceEditor
+
+        # Use instance defaults if not provided
+        workspace_dir = workspace_dir or self._workspace_dir
+        allowed_paths = allowed_paths or self._allowed_paths
+
+        # Valid operation types for apply_patch tool
+        valid_operations = {"create_file", "update_file", "delete_file"}
+
+        editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
+        op_type = operation.get("type")
+
+        # Validate operation type early
+        if op_type not in valid_operations:
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status="failed",
+                output=f"Invalid operation type: {op_type}. Must be one of {valid_operations}",
+            )
+
+        def _run_async_in_thread(coro: Any) -> Any:
+            """Run an async coroutine in a separate thread with its own event loop."""
+            result: dict[str, Any] = {}
+
+            def runner() -> None:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result["value"] = loop.run_until_complete(coro)
+                loop.close()
+
+            t = threading.Thread(target=runner)
+            t.start()
+            t.join()
+            return result["value"]
+
+        try:
+            # Execute the patch operation
+            if async_patches:
+                # Check if there's already a running event loop (e.g., in Jupyter)
+                try:
+                    asyncio.get_running_loop()
+                    # If we get here, there's a running loop, so use thread-based approach
+                    if op_type == "create_file":
+                        result = _run_async_in_thread(editor.a_create_file(operation))
+                    elif op_type == "update_file":
+                        result = _run_async_in_thread(editor.a_update_file(operation))
+                    elif op_type == "delete_file":
+                        result = _run_async_in_thread(editor.a_delete_file(operation))
+                    else:
+                        return ApplyPatchCallOutput(
+                            call_id=call_id,
+                            status="failed",
+                            output=f"Unknown operation type: {op_type}",
+                        )
+                except RuntimeError:
+                    # No running loop, safe to use asyncio.run()
+                    if op_type == "create_file":
+                        result = asyncio.run(editor.a_create_file(operation))
+                    elif op_type == "update_file":
+                        result = asyncio.run(editor.a_update_file(operation))
+                    elif op_type == "delete_file":
+                        result = asyncio.run(editor.a_delete_file(operation))
+                    else:
+                        return ApplyPatchCallOutput(
+                            call_id=call_id,
+                            status="failed",
+                            output=f"Unknown operation type: {op_type}",
+                        )
+            else:
+                # Synchronous execution
+                if op_type == "create_file":
+                    result = editor.create_file(operation)
+                elif op_type == "update_file":
+                    result = editor.update_file(operation)
+                elif op_type == "delete_file":
+                    result = editor.delete_file(operation)
+                else:
+                    return ApplyPatchCallOutput(
+                        call_id=call_id,
+                        status="failed",
+                        output=f"Unknown operation type: {op_type}",
+                    )
+
+            # Return in the correct format
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status=result.get("status", "failed"),
+                output=result.get("output", ""),
+            )
+        except Exception as e:
+            logger.error(f"Error applying patch: {e}")
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status="failed",
+                output=f"Error applying patch: {str(e)}",
+            )
+
+    def _extract_apply_patch_calls(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract apply_patch_call items from messages.
+
+        Scans through messages to find all apply_patch_call items, which contain
+        file operations to be executed.
+
+        Args:
+            messages: List of messages to scan
+
+        Returns:
+            Dictionary mapping call_id to apply_patch_call item dict
+
+        Example:
+            calls = self._extract_apply_patch_calls(messages)
+            for call_id, call_data in calls.items():
+                print(f"Call {call_id}: {call_data.get('operation', {}).get('type')}")
+        """
+        message_apply_patch_calls: dict[str, Any] = {}
+        for msg in messages:
+            role = msg.get("role")
+            if role == "assistant":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "apply_patch_call":
+                            call_id = item.get("call_id")
+                            if call_id:
+                                message_apply_patch_calls[call_id] = item
+                tool_calls = msg.get("tool_calls", [])
+                if isinstance(tool_calls, list):
+                    for tool_call in tool_calls:
+                        if isinstance(tool_call, dict) and tool_call.get("type") == "apply_patch_call":
+                            call_id = tool_call.get("call_id")
+                            if call_id:
+                                message_apply_patch_calls[call_id] = tool_call
+        return message_apply_patch_calls
+
+    def _execute_apply_patch_calls(
+        self,
+        calls_dict: dict[str, Any],
+        built_in_tools: list[str],
+        workspace_dir: str,
+        allowed_paths: list[str],
+    ) -> list[dict[str, Any]]:
+        """Execute apply_patch_call items and return outputs.
+
+        This method processes a collection of apply_patch_call items, executing
+        each file operation and returning the results.
+
+        Args:
+            calls_dict: Dictionary mapping call_id to apply_patch_call item
+            built_in_tools: List of built-in tools enabled (checks for apply_patch/apply_patch_async)
+            workspace_dir: Workspace directory for file operations
+            allowed_paths: Allowed paths for file operations
+
+        Returns:
+            List of apply_patch_call_output dictionaries ready for API input
+
+        Example:
+            outputs = self._execute_apply_patch_calls(
+                calls_dict={"call_123": {...}},
+                built_in_tools=["apply_patch"],
+                workspace_dir="/workspace",
+                allowed_paths=["**"]
+            )
+        """
+        outputs: list[dict[str, Any]] = []
+        if not calls_dict or not ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
+            return outputs
+
+        async_mode = "apply_patch_async" in built_in_tools
+
+        for call_id, apply_patch_call in calls_dict.items():
+            operation = apply_patch_call.get("operation", {})
+            if operation:
+                output = self._apply_patch_operation(
+                    operation,
+                    call_id=call_id,
+                    workspace_dir=workspace_dir,
+                    allowed_paths=allowed_paths,
+                    async_patches=async_mode,
+                )
+                outputs.append(output.to_dict())
+        return outputs
+
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
 
@@ -707,29 +971,57 @@ class OpenAIResponsesV2Client(ModelClient):
         This method processes apply_patch_call items from messages before sending to recipient,
         implementing the diff generation (sender) -> executor (recipient) pattern.
 
+        The pattern is:
+        1. Agent A (sender) generates apply_patch_call items in its response
+        2. This method (on Agent B/recipient side) extracts and executes those patches
+        3. The outputs (apply_patch_call_output) are included in the API input
+        4. Agent B then sees the results of the file operations
+
         Args:
             messages: List of messages to normalize
-            built_in_tools: List of built-in tools enabled
+            built_in_tools: List of built-in tools enabled (apply_patch or apply_patch_async)
             workspace_dir: Workspace directory for apply_patch operations
             allowed_paths: Allowed paths for apply_patch operations
-            previous_apply_patch_calls: Apply patch calls from previous response
+            previous_apply_patch_calls: Apply patch calls from previous response (same agent continuation)
             image_generation_tool_params: Image generation tool parameters dict (modified in place)
 
         Returns:
-            List of input items in Responses API format
-
-        Note:
-            This is a simplified version that doesn't execute apply_patch operations yet.
-            Full apply_patch support will be added in later commits.
+            List of input items in Responses API format, with apply_patch outputs first
         """
-        input_items = []
+        input_items: list[dict[str, Any]] = []
 
-        # For now, skip apply_patch processing (will be implemented in later commits)
-        # This allows us to get the basic structure working first
+        # Extract apply_patch_call items from messages (from sender agent)
+        message_apply_patch_calls = self._extract_apply_patch_calls(messages)
 
-        # Convert messages to Responses API format
-        processed_apply_patch_call_ids: set[str] = set()
+        # Execute apply_patch_call items from messages if built_in_tools includes apply_patch
+        # This implements the diff generation (sender) -> executor (recipient) pattern
+        message_apply_patch_outputs = self._execute_apply_patch_calls(
+            message_apply_patch_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+        )
 
+        # Execute apply_patch_call items from previous_response_id (same agent continuation)
+        previous_apply_patch_outputs = self._execute_apply_patch_calls(
+            previous_apply_patch_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+        )
+
+        # Combine all outputs: message outputs first (from sender), then previous response outputs
+        all_apply_patch_outputs = message_apply_patch_outputs + previous_apply_patch_outputs
+
+        # Add all apply_patch outputs at the beginning
+        if all_apply_patch_outputs:
+            input_items.extend(all_apply_patch_outputs)
+
+        # Track which apply_patch_call items have been processed
+        # (their outputs are already in input_items, so we skip them during message conversion)
+        processed_apply_patch_call_ids = set(message_apply_patch_calls.keys()) | set(previous_apply_patch_calls.keys())
+
+        # Convert messages to Responses API format, filtering out processed apply_patch_call items
         self._convert_messages_to_input(
             messages,
             processed_apply_patch_call_ids,
@@ -737,7 +1029,8 @@ class OpenAIResponsesV2Client(ModelClient):
             input_items,
         )
 
-        # Reverse input_items so that messages come first (in chronological order)
+        # Reverse input_items so that messages come first (in chronological order), then outputs
+        # We added outputs first, then messages in reverse, so reversing gives us: messages first, then outputs
         return input_items[::-1]
 
     # --------------------------------------------------------------------------
