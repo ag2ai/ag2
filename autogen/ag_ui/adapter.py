@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -29,6 +30,10 @@ try:
 except ImportError:
     # Fallback to Any until Starlette is installed
     HTTPEndpoint = Any  # type: ignore[misc,assignment]
+
+
+def _get_timestamp() -> int:
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 @export_module("autogen.ag_ui")
@@ -63,7 +68,13 @@ class AGUIStream:
         )
 
         try:
-            yield encoder.encode(RunStartedEvent(thread_id=data.thread_id, run_id=data.run_id))
+            yield encoder.encode(
+                RunStartedEvent(
+                    thread_id=data.thread_id,
+                    run_id=data.run_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
 
             async for response in self.service(message):
                 msg_id = str(uuid4())
@@ -79,11 +90,13 @@ class AGUIStream:
                                 tool_call_id=tool_response["tool_call_id"],
                                 content=tool_response["content"],
                                 message_id=msg_id,
+                                timestamp=_get_timestamp(),
                             )
                         )
                         yield encoder.encode(
                             ToolCallEndEvent(
                                 tool_call_id=tool_response["tool_call_id"],
+                                timestamp=_get_timestamp(),
                             )
                         )
 
@@ -99,6 +112,7 @@ class AGUIStream:
                                     tool_call_id=tool_call.get("id"),
                                     tool_call_name=name,
                                     delta=func.get("arguments"),
+                                    timestamp=_get_timestamp(),
                                 )
                             )
 
@@ -108,12 +122,14 @@ class AGUIStream:
                                 ToolCallStartEvent(
                                     tool_call_id=tool_call.get("id"),
                                     tool_call_name=name,
+                                    timestamp=_get_timestamp(),
                                 )
                             )
                             yield encoder.encode(
                                 ToolCallArgsEvent(
                                     tool_call_id=tool_call.get("id"),
                                     delta=func.get("arguments"),
+                                    timestamp=_get_timestamp(),
                                 )
                             )
 
@@ -127,14 +143,31 @@ class AGUIStream:
                         # than refular text message
                         (not has_tool or has_local_tool)
                     ):
-                        yield encoder.encode(TextMessageChunkEvent(message_id=msg_id, delta=content))
+                        yield encoder.encode(
+                            TextMessageChunkEvent(
+                                message_id=msg_id,
+                                delta=content,
+                                timestamp=_get_timestamp(),
+                            )
+                        )
 
         except Exception as e:
-            yield encoder.encode(RunErrorEvent(message=repr(e)))
+            yield encoder.encode(
+                RunErrorEvent(
+                    message=repr(e),
+                    timestamp=_get_timestamp(),
+                )
+            )
             raise e
 
         else:
-            yield encoder.encode(RunFinishedEvent(thread_id=data.thread_id, run_id=data.run_id))
+            yield encoder.encode(
+                RunFinishedEvent(
+                    thread_id=data.thread_id,
+                    run_id=data.run_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
         """Build an ASGI endpoint for the AGUIStream."""
