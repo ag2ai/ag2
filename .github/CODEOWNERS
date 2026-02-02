@@ -5,9 +5,13 @@
 /autogen/a2a/ @Lancetnik
 /autogen/ag_ui/ @Lancetnik
 /autogen/agentchat/remote/ @Lancetnik
+
 /test/a2a/ @Lancetnik
+/test/ag_ui/ @Lancetnik
 /test/agentchat/remote/ @Lancetnik
+
 /website/docs/user-guide/a2a/ @Lancetnik
+/website/docs/user-guide/ag-ui/ @Lancetnik
 
 # Observability
 /website/docs/user-guide/observability/ @priyansh4320

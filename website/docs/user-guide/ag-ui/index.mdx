@@ -1,0 +1,257 @@
+---
+title: "AG-UI (Agent-User Interaction) Integration"
+description: "Expose AG2 ConversableAgent agents to AG-UI-compatible frontends using AGUIStream."
+---
+
+The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications talk to AI agents – including streaming, tools, shared state, and custom events.
+AG2 provides a lightweight integration via `autogen.ag_ui.AGUIStream`, which lets you connect a `ConversableAgent` to any AG-UI-compatible frontend.
+
+For background on the protocol itself and a reference implementation in Pydantic AI, see:
+
+- [AG-UI Protocol introduction](https://docs.ag-ui.com/introduction){.external-link target="_blank"}
+- [CopilotKit Fronted Framework](https://docs.copilotkit.ai/ag2){.external-link target="_blank"}
+
+## When to use AG-UI with AG2
+
+Use the AG-UI integration when:
+
+- You already have (or plan to build) a **web UI** based on the AG-UI protocol
+- You want **streaming responses** and **tool events** that the frontend can render in real time
+- You need to mix **backend tools** (Python functions) with **frontend tools** (UI actions / GenUI tools) in one coherent protocol
+- You want to reuse existing AG-UI debugging tooling (e.g. Dojo) while keeping your agent logic in AG2
+
+Generally, we recommend to use AG-UI always when you need to build a rich interactive UI for your agent. It should take less than 1 hour to create your own *ChatGPT*-like Web application.
+
+## Installation
+
+To use the AG-UI integration, install AG2 with the `ag-ui` extra, which pulls in the official `ag-ui-protocol` package:
+
+```bash
+pip install "ag2[ag-ui]"
+```
+
+## Fast integration: build an ASGI endpoint
+
+If you are using Starlette or a Starlette-based framework (like FastAPI), `AGUIStream` can build an ASGI endpoint class for you.
+
+<Tabs>
+  <Tab title="Starlette">
+
+```python title="asgi_ag_ui_starlette.py" linenums="1" hl_lines="13-14"
+from starlette.applications import Starlette
+from starlette.routing import Route
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+
+
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You answer product questions.",
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+
+stream = AGUIStream(agent)
+app = Starlette(routes=[Route("/chat", stream.build_asgi())])
+```
+
+  </Tab>
+
+  <Tab title="FastAPI">
+
+```python title="asgi_ag_ui_fastapi.py" linenums="1" hl_lines="14-15"
+from fastapi import FastAPI
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+
+
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You answer product questions.",
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+
+stream = AGUIStream(agent)
+
+app = FastAPI()
+app.mount("/chat", stream.build_asgi())
+```
+
+  </Tab>
+</Tabs>
+
+Because the class returned by `build_asgi()` is a standard Starlette `HTTPEndpoint`, you can plug it or mount into **any ASGI application** that accepts ASGI routes (for example, FastAPI, Starlette itself, or other Starlette-based frameworks).
+
+This gives you a ready-to-use endpoint compatible with AG-UI frontends:
+
+```bash
+uvicorn asgi_ag_ui:app
+```
+
+## Advanced example: manual dispatch
+
+The most flexible way to integrate AG-UI is to:
+
+1. Accept an HTTP request from an AG-UI frontend
+2. Parse the body into a `RunAgentInput`
+3. Call `AGUIStream.dispatch`
+4. Stream the encoded SSE (Server-Sent Events) events back to the client
+
+```python title="run_ag_ui.py" linenums="1" hl_lines="17-30"
+from ag_ui.core import RunAgentInput
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You help users with billing questions.",
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+
+stream = AGUIStream(agent)
+app = FastAPI()
+
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    accept: str | None = Header(None),
+) -> StreamingResponse:
+    event_stream = stream.dispatch(
+        message,
+        accept=accept,
+    )
+
+    return StreamingResponse(
+        event_stream,
+        media_type=accept or "text/event-stream",
+    )
+```
+
+You can then run this using any ASGI server:
+
+```bash
+uvicorn run_ag_ui:app
+```
+
+Your AG-UI frontend can now send `RunAgentInput` payloads to `/chat` and consume the streamed events to render messages, tools, and state updates.
+
+It allows you to add any additional logic to the endpoint, for example, you can add a logging layer, a cache layer, a rate limiting layer, etc.
+
+### Authentication
+
+As an example, you can easily protect your endpoint with a simple authentication layer you use in your other endpoints.
+
+```python title="run_ag_ui.py" linenums="1" hl_lines="11 13-14"
+from typing import Annotated
+
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
+
+app = FastAPI()
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    token: Annotated[str, Header(..., description="Authentication token")],
+) -> StreamingResponse:
+    if token != "1234567890":
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    event_stream = stream.dispatch(message)
+    return StreamingResponse(event_stream)
+```
+
+### Tools Context
+
+In other cases you may want to provide additional context to your agent. For example, you may want to provide a user ID, a session ID, a user profile, etc.
+
+You can use this information in your agent's tools in a regular way ([`ContextVariables`](../advanced-concepts/orchestration/group-chat/context-variables.mdx)), by passing it as a parameter to the tool function.
+
+```python linenums="1" hl_lines="3-5"
+from autogen import ConversableAgent, LLMConfig, ContextVariables
+
+def get_user_profile(context: ContextVariables) -> str:
+    user_id = context.get("user_id")
+    return f"User profile for user {user_id}"
+
+agent = ConversableAgent(
+    "calculator",
+    functions=[get_user_profile],
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+```
+
+To pass this context to your agent, you can use the `context` parameter of the `RunAgentInput` object.
+
+```python linenums="1" hl_lines="22"
+from typing import Annotated
+
+from fastapi import FastAPI, HTTPException, Header
+from fastapi.responses import StreamingResponse
+
+from autogen.ag_ui import AGUIStream, RunAgentInput
+
+app = FastAPI()
+
+stream = AGUIStream(agent)
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    token: Annotated[str, Header(..., description="Authentication token")],
+) -> StreamingResponse:
+    if token != "1234567890":
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    event_stream = stream.dispatch(
+        message,
+        context={"user_id": "1234567890"},
+    )
+    return StreamingResponse(event_stream)
+```
+
+## Backend vs frontend tools
+
+Tools mechanism is one of the most powerful features of AG-UI. It allows you to mix backend tools (Python functions) and frontend tools (UI actions / GenUI tools) in one coherent protocol.
+
+### Backend tools (Python functions)
+
+Backend tools are regular AG2 tools registered on your `ConversableAgent`:
+
+```python linenums="1"
+from typing import Annotated
+
+from autogen import ConversableAgent, LLMConfig
+
+
+def calculate_sum(
+    a: Annotated[int, "First number"],
+    b: Annotated[int, "Second number"],
+) -> int:
+    return a + b
+
+
+agent = ConversableAgent(
+    "calculator",
+    functions=[calculate_sum],
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+```
+
+AG-UI allows you to capture such tool calls and render them in the UI to notify user about backend agent activity.
+
+### Frontend tools (UI-driven actions)
+
+Frontend tools are defined on the AG-UI side and allow you to build flexible and fancy UI to interact with your agent.
+
+Most common cases of frontend tools are:
+
+- Generative UI - tools, that able render UI based on LLM output: fancy cards, lists, buttons and others
+- HITL (Human in the Loop) - tools, that allow you ask user input from UI in a specific way: buttons, toggles, etc.
+
+You can learn more about frontend tools in the [CopilotKit documentation](https://docs.copilotkit.ai/ag2/frontend-actions).
