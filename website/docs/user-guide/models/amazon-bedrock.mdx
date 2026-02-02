@@ -68,6 +68,28 @@ An additional parameter can be added that denotes whether the model supports a s
 
 - supports_system_prompts
 
+### Retry Configuration
+
+AG2 supports configuring exponential backoff and retry behavior for Bedrock API calls. This helps handle transient errors, rate limits, and network issues gracefully. The following retry configuration parameters are available:
+
+- **`total_max_attempts`** (int, optional, default: 5): Maximum number of total attempts (initial request + retries). This is the preferred parameter as it aligns with AWS environment variables. Example: `10` means 1 initial attempt + 9 retries = 10 total attempts.
+
+- **`max_attempts`** (int, optional, default: 5): Legacy parameter for maximum number of retry attempts. If both `total_max_attempts` and `max_attempts` are provided, `total_max_attempts` takes precedence.
+
+- **`mode`** (str, optional, default: "standard"): Retry strategy mode. Valid values are:
+  - `"legacy"`: Pre-existing retry behavior
+  - `"standard"`: Standardized retry rules (defaults to 3 max attempts if not overridden)
+  - `"adaptive"`: Retries with additional client-side throttling (recommended for handling rate limits)
+
+**Best Practices:**
+- Use `total_max_attempts` instead of `max_attempts` (preferred parameter)
+- Use `"adaptive"` mode for high-throughput scenarios or when dealing with rate limits
+- Use `"standard"` mode for general-purpose applications
+- Set `total_max_attempts` to 5-7 for most applications, or 10+ for critical applications
+
+**Environment Variable Support:**
+You can also configure retries via the `AWS_MAX_ATTEMPTS` environment variable, which maps to `total_max_attempts`.
+
 It is important to add the `api_type` field and set it to a string that corresponds to the client type used: `bedrock`.
 
 Example:
@@ -77,7 +99,7 @@ Example:
         "api_type": "bedrock",
         "model": "amazon.titan-text-premier-v1:0",
         "api_key": BEDROCK_API_KEY,
-        "aws_region": "us-east-1"
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "aws_session_token": "",
@@ -87,7 +109,7 @@ Example:
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "api_key": BEDROCK_API_KEY,
-        "aws_region": "us-east-1"
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "aws_session_token": "",
@@ -95,23 +117,127 @@ Example:
         "temperature": 0.5,
         "topP": 0.2,
         "maxTokens": 250,
+        "total_max_attempts": 5,  # Retry configuration
+        "mode": "standard",
     },
     {
         "api_type": "bedrock",
         "model": "mistral.mixtral-8x7b-instruct-v0:1",
         "api_key": BEDROCK_API_KEY,
-        "aws_region": "us-east-1"
+        "aws_region": "us-east-1",
         "aws_access_key": "",
         "aws_secret_key": "",
         "supports_system_prompts": False, # Mistral Instruct models don't support a separate system prompt
+        "total_max_attempts": 8,  # More retries for reliability
+        "mode": "adaptive",  # Adaptive mode for rate limit handling
         "price": [0.00045, 0.0007] # Specific pricing for this model/region
     }
 ]
 ```
 
+### Advanced: additionalModelRequestFields
+
+Amazon Bedrock models often offer advanced, model-specific features that are not part of general AG2 config. AG2 now supports the `additional_model_request_fields` parameter, which allows you to send these advanced options directly to Bedrock.
+
+Typical use cases include (but are not limited to):
+- Anthropic Claude's *thinking configuration* (enables internal reasoning phases)
+- Model provider experimental or proprietary features
+
+**How to use:**
+- Add `"additional_model_request_fields": { ... }` to the config/dictionary you pass to AG2, filling in with the provider/model's supported fields as needed.
+
+For example, to enable Claude's 'thinking' mode:
+```python
+llm_config_bedrock = autogen.LLMConfig(config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "[FILL THIS IN]",
+        "aws_secret_key": "[FILL THIS IN]",
+        "additional_model_request_fields": {
+            # Claude thinking configuration example
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 1024,  # Must be < max_tokens and above or equal to 1024 tokens
+            },
+        },
+        "max_tokens": 4096,
+    },
+)
+```
+
+Refer to [the Amazon Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) to discover which features are supported by your chosen model. AG2 will pass all fields in `additional_model_request_fields` through to Bedrock as-is;
+
 ## Using within an AWS Lambda function
 
 If you are using your AG2 code within an AWS Lambda function, you can utilise the attached role to access the Bedrock service and do not need to provide access, token, or profile values.
+
+## Retry Configuration Examples
+
+### Basic Retry Configuration
+
+The following example shows a basic configuration with default retry settings (5 total attempts, standard mode):
+
+```python
+llm_config_default = autogen.LLMConfig(config_list={
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    # Default: total_max_attempts=5, mode="standard"
+})
+```
+
+### High-Reliability Configuration
+
+For critical applications that need maximum retry attempts:
+
+```python
+llm_config_reliable = autogen.LLMConfig(config_list={
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 10,  # More retries for reliability
+    "mode": "adaptive",  # Best for handling various error types
+})
+```
+
+### Rate-Limit Optimized Configuration
+
+For handling rate limits and throttling:
+
+```python
+llm_config_rate_limit = autogen.LLMConfig(config_list={
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 8,
+    "mode": "adaptive",  # Best for rate limit handling
+})
+```
+
+### Fast-Fail Configuration
+
+For applications that need quick failure detection:
+
+```python
+llm_config_fast_fail = autogen.LLMConfig(config_list={
+    "api_type": "bedrock",
+    "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "aws_region": "us-east-1",
+    "aws_access_key": "[FILL THIS IN]",
+    "aws_secret_key": "[FILL THIS IN]",
+    "total_max_attempts": 2,  # Minimal retries for fast failure
+    "mode": "standard",
+})
+```
+
+For more detailed information on retry configuration, see the [Exponential Backoff and Retry Configuration notebook](/notebook/agentchat_bedrock_client_exponential_backoff_and_retry_config).
 
 ## Two-agent Coding Example
 
@@ -616,7 +742,7 @@ Here's the image we'll use:
 
 ```python
 llm_config_sonnet = LLMConfig(config_list={
-        "api_type"; "bedrock",
+        "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "aws_region": "us-east-1",
         "aws_access_key": "[FILL THIS IN]",

@@ -46,7 +46,18 @@ number_agent.description = "Return the numbers given."
 
 We first create a `GroupChat` object and provide the list of agents. If we were to use the `round_robin` strategy, this list would specify the order of the agents to be selected.
 
-We also initialize the group chat with an empty message list and a maximum round of 6, which means there will be at most 6 iteratiosn of selecting speaker, agent speaks and broadcasting message.
+We also initialize the group chat with an empty message list and a maximum round of 6, which means there will be at most 6 iterations of selecting speaker, agent speaks and broadcasting message.
+
+<Note>
+**Unique Agent Names Required**: All agents in a `GroupChat` must have unique names. If you attempt to create a `GroupChat` with duplicate agent names, a `ValueError` will be raised. This ensures that speaker selection and message routing work correctly.
+
+```python
+# This will raise a ValueError
+agent1 = ConversableAgent("assistant", ...)
+agent2 = ConversableAgent("assistant", ...)  # Duplicate name!
+group_chat = GroupChat(agents=[agent1, agent2], ...)  # ValueError!
+```
+</Note>
 
 ```python
 from autogen import GroupChat
