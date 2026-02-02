@@ -18,6 +18,8 @@ from autogen.oai.groq import GroqLLMConfigEntry
 from autogen.oai.mistral import MistralLLMConfigEntry
 from autogen.oai.ollama import OllamaLLMConfigEntry
 from autogen.oai.together import TogetherLLMConfigEntry
+from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2LLMConfigEntry
+
 
 ConfigEntries = (
     AnthropicLLMConfigEntry
@@ -34,4 +36,5 @@ ConfigEntries = (
     | MistralLLMConfigEntry
     | OllamaLLMConfigEntry
     | TogetherLLMConfigEntry
+    | OpenAIResponsesV2LLMConfigEntry
 )

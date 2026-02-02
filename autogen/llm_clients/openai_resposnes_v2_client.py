@@ -26,12 +26,13 @@ import os
 import threading
 import warnings
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block
+from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.oai.oai_models.chat_completion import ChatCompletionExtended, Choice
 from autogen.oai.oai_models.chat_completion_message import ChatCompletionMessage
 from autogen.oai.oai_models.chat_completion_message_tool_call import ChatCompletionMessageFunctionToolCall, Function
@@ -70,6 +71,13 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+
+class OpenAIResponsesV2LLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for OpenAI Responses API V2 (stateful)."""
+    api_type: Literal["responses_v2"] = "responses_v2"
+    
+    def create_client(self) -> ModelClient:
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
 
 @dataclass
 class ApplyPatchCallOutput:
@@ -1574,7 +1582,6 @@ class OpenAIResponsesV2Client(ModelClient):
         if response_format is not None:
             # Convert response_format to text_format for Responses API
             try:
-                # text_format = _convert_response_format_to_text_format(response_format)
                 params["text_format"] = response_format
 
                 # Remove stream if present (Responses API doesn't support streaming with text_format)
