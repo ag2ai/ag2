@@ -205,13 +205,7 @@ def get_credentials_from_env_vars(
     )
     if gemini_config:
         config_list.append({**gemini_config, "tags": ["gemini-pro"]})
-        config_list.append({**gemini_config, "model": "gemini-2.5-flash", "tags": ["gemini-2.5-flash"]})
-        config_list.append({
-            **gemini_config,
-            "model": "gemini-2.0-flash-exp",
-            "tags": ["gemini-flash-exp", "gemini-realtime"],
-        })
-        config_list.append({**gemini_config, "model": "gemini-2.0-flash", "tags": ["gemini-flash"]})
+        config_list.append({**gemini_config, "model": "gemini-2.5-flash", "tags": ["gemini-2.5-flash", "gemini-flash"]})
 
     # Anthropic configuration
     anthropic_config = build_config_from_env(
