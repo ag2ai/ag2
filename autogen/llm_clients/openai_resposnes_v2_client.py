@@ -2062,7 +2062,7 @@ class OpenAIResponsesV2Client(ModelClient):
             provider_metadata={
                 "created": getattr(response, "created", None),
                 "token_cost": token_cost,
-                "image_cost": self._image_costs,
+                "image_cost": int(self._image_costs),
                 "cumulative_token_cost": self._token_costs,
                 "cumulative_image_cost": self._image_costs,
             },
