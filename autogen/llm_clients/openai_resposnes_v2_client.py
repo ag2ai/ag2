@@ -1609,7 +1609,7 @@ class OpenAIResponsesV2Client(ModelClient):
         params = self._parse_params(params)
 
         # Check for response_format (Pydantic model or JSON schema dict)
-        response_format = params.pop("response_format", None) or self._default_response_format
+        response_format = params.get("response_format", None) or self._default_response_format
 
         if response_format is not None:
             # Convert response_format to text_format for Responses API
