@@ -8,12 +8,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from autogen.llm_clients.openai_resposnes_v2_client import (
-    OpenAIResponsesV2Client,
-    OpenAIResponsesV2LLMConfigEntry,
-    calculate_image_cost,
-    calculate_token_cost,
-)
 from autogen.llm_clients.models import (
     CitationContent,
     GenericContent,
@@ -21,10 +15,14 @@ from autogen.llm_clients.models import (
     ReasoningContent,
     TextContent,
     ToolCallContent,
-    UnifiedMessage,
     UnifiedResponse,
 )
-
+from autogen.llm_clients.openai_resposnes_v2_client import (
+    OpenAIResponsesV2Client,
+    OpenAIResponsesV2LLMConfigEntry,
+    calculate_image_cost,
+    calculate_token_cost,
+)
 
 # =============================================================================
 # Mock Classes for Testing
@@ -410,13 +408,15 @@ class TestBuiltInTools:
                 create_mock_web_search_output("search_123", "completed"),
                 create_mock_message_output(
                     "Latest AI news...",
-                    annotations=[{
-                        "type": "url_citation",
-                        "url": "https://example.com/ai-news",
-                        "title": "AI News Article",
-                        "start_index": 0,
-                        "end_index": 10,
-                    }],
+                    annotations=[
+                        {
+                            "type": "url_citation",
+                            "url": "https://example.com/ai-news",
+                            "title": "AI News Article",
+                            "start_index": 0,
+                            "end_index": 10,
+                        }
+                    ],
                 ),
             ],
             usage=MockUsage(),
@@ -477,12 +477,14 @@ class TestBuiltInTools:
     def test_create_with_apply_patch(self, client):
         """Test creating request with apply_patch built-in tool."""
         mock_response = MockResponsesAPIResponse(
-            output=[MockOutputItem(
-                "apply_patch_call",
-                call_id="patch_123",
-                status="success",
-                operation={"type": "create_file", "path": "test.py"},
-            )],
+            output=[
+                MockOutputItem(
+                    "apply_patch_call",
+                    call_id="patch_123",
+                    status="success",
+                    operation={"type": "create_file", "path": "test.py"},
+                )
+            ],
             usage=MockUsage(),
         )
         client.client.responses.create = Mock(return_value=mock_response)
@@ -817,13 +819,27 @@ class TestStaticHelperMethods:
     def test_get_citations(self, client):
         """Test extracting citations from response."""
         mock_response = MockResponsesAPIResponse(
-            output=[create_mock_message_output(
-                "News article content",
-                annotations=[
-                    {"type": "url_citation", "url": "https://example1.com", "title": "Article 1", "start_index": 0, "end_index": 10},
-                    {"type": "url_citation", "url": "https://example2.com", "title": "Article 2", "start_index": 10, "end_index": 20},
-                ],
-            )],
+            output=[
+                create_mock_message_output(
+                    "News article content",
+                    annotations=[
+                        {
+                            "type": "url_citation",
+                            "url": "https://example1.com",
+                            "title": "Article 1",
+                            "start_index": 0,
+                            "end_index": 10,
+                        },
+                        {
+                            "type": "url_citation",
+                            "url": "https://example2.com",
+                            "title": "Article 2",
+                            "start_index": 10,
+                            "end_index": 20,
+                        },
+                    ],
+                )
+            ],
             usage=MockUsage(),
         )
         client.client.responses.create = Mock(return_value=mock_response)
@@ -1049,9 +1065,7 @@ class TestResponseTransformation:
         response = client.create({"model": "gpt-4.1", "messages": []})
 
         # Unknown types should be preserved as GenericContent
-        generic_blocks = [
-            b for msg in response.messages for b in msg.content if isinstance(b, GenericContent)
-        ]
+        generic_blocks = [b for msg in response.messages for b in msg.content if isinstance(b, GenericContent)]
         assert len(generic_blocks) >= 1
         assert generic_blocks[0].type == "unknown_new_type"
 
@@ -1143,13 +1157,16 @@ class TestErrorHandling:
             )
 
         client.client.responses.parse = Mock(side_effect=side_effect)
-        client.client.responses.create = Mock(return_value=MockResponsesAPIResponse(
-            output=[create_mock_message_output("Fallback response")],
-            usage=MockUsage(),
-        ))
+        client.client.responses.create = Mock(
+            return_value=MockResponsesAPIResponse(
+                output=[create_mock_message_output("Fallback response")],
+                usage=MockUsage(),
+            )
+        )
 
         # Should warn and fallback to create()
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             response = client.create({
@@ -1297,6 +1314,7 @@ class TestIntegrationScenarios:
         search_calls = OpenAIResponsesV2Client.get_web_search_calls(response)
         assert len(search_calls) >= 1
 
+
 # =============================================================================
 # Test: Apply Patch Operations
 # =============================================================================
@@ -1436,7 +1454,9 @@ class TestApplyPatchOperation:
         """Test async execution when no event loop is running."""
         with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
             mock_editor = Mock()
+
             # Create an async mock
+
             async def async_create_file(op):
                 return {"status": "success", "output": "Async created"}
 

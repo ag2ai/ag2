@@ -299,9 +299,7 @@ class TestCustomTools:
                     "description": "Get weather for a city",
                     "parameters": {
                         "type": "object",
-                        "properties": {
-                            "city": {"type": "string", "description": "City name"}
-                        },
+                        "properties": {"city": {"type": "string", "description": "City name"}},
                         "required": ["city"],
                     },
                 },

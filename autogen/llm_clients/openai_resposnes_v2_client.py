@@ -1357,7 +1357,9 @@ class OpenAIResponsesV2Client(ModelClient):
         allowed_paths = allowed_paths or self._allowed_paths
         allowed_commands = allowed_commands or self._shell_allowed_commands
         denied_commands = denied_commands if denied_commands is not None else self._shell_denied_commands
-        enable_command_filtering = enable_command_filtering if enable_command_filtering is not None else self._shell_enable_command_filtering
+        enable_command_filtering = (
+            enable_command_filtering if enable_command_filtering is not None else self._shell_enable_command_filtering
+        )
         dangerous_patterns = dangerous_patterns or self._shell_dangerous_patterns
 
         # Initialize shell executor if not already initialized
