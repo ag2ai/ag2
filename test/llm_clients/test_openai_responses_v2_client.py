@@ -1805,7 +1805,7 @@ class TestShellToolInCreate:
         )
         client.client.responses.create = Mock(return_value=mock_response)
 
-        response = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "List files"}],
             "built_in_tools": ["shell"],
@@ -1850,7 +1850,7 @@ class TestShellToolInCreate:
         )
         client.client.responses.create = Mock(return_value=mock_response)
 
-        response = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "Run command"}],
             "built_in_tools": ["shell"],
