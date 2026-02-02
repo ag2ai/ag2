@@ -25,10 +25,10 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ github.event.inputs.node-version }}
       - name: setup python
