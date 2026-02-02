@@ -7,34 +7,45 @@ Get up and running with AG2 in just **3 minutes**! This guide will help you set 
 
 ### Set Up Your Environment
 
-<Tip>
-We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
-</Tip>
+
+**Install Python**
+
+AG2 requires **Python version >= 3.10, < 3.14**. We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
+
+**Set API Keys**
+
+Make sure to set your LLM API key as an environment variable. For example:
+
+=== "macOS / Linux"
+
+    ```
+    export OPENAI_API_KEY="YOUR_API_KEY"
+    ```
+
+=== "Windows"
+
+    ```
+    setx OPENAI_API_KEY "YOUR_API_KEY"
+    ```
+
 
 **Install AG2**
 
-AG2 requires **Python version >= 3.10, < 3.14**. Install AG2 with OpenAI integration using pip:
+ Install AG2 with your preferred model provider(s), for example:
 
 ```bash
 pip install ag2[openai]
+pip install ag2[gemini]
+pip install ag2[anthropic,cohere,mistral]
 ```
 
-The package is available under either the `ag2` or `autogen` name. The default installation includes minimal dependencies, you can add extra options based on your specific requirements.
-
 <Warning>
-**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
-
-Install AG2 with your preferred model provider(s), for example:
-
-- `pip install ag2[openai]`
-- `pip install ag2[gemini]`
-- `pip install ag2[anthropic,cohere,mistral]`
-
-On Mac OS, if you get "no matches found:", add a quote to the package name, for example:
+On MacOS, if you get "no matches found:", add a quote to the package name, for example:
 - `pip install "ag2[openai]"`
 </Warning>
 
 ### Build Your First Agent Workflow
+
 
 Let’s build a poetic AI assistant that responds in rhymes using AG2 and OpenAI’s gpt-5-nano model.
 
@@ -78,38 +89,21 @@ response.process()
 print(response.messages)
 ```
 
+<!--
 import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
 
 <RunMethodHelpMsg/>
+-->
 
 
 ### Run Your Example
 
-Now you're ready to see your poetic AI agent in action!
 
-<Note>
-
-Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
-
-=== "macOS / Linux"
-
-    ```
-    export OPENAI_API_KEY="YOUR_API_KEY"
-    ```
-
-=== "Windows"
-
-    ```
-    setx OPENAI_API_KEY "YOUR_API_KEY"
-    ```
-
-</Note>
-
-In your terminal, run:
+Now you're ready to see your poetic AI agent in action! In your terminal, run:
 
 
 ```bash
-python first_agent.py
+python3 first_agent.py
 ```
 
 If everything is set up correctly, the agent will reply to your initial message in rhyme, then prompt you for a response.
