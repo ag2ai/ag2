@@ -390,7 +390,7 @@ class TestLLMConfig:
             ),
             pytest.param(
                 {
-                    "api_type": "responses",
+                    "api_type": "responses_v2",
                     "model": "o3",
                     "api_key": "fake_api_key",
                     "max_tokens": 512,

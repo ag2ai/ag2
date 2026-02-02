@@ -1620,7 +1620,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     ```python
     {
-        "api_type": "responses",  # <-- key differentiator
+        "api_type": "responses_v2",  # <-- key differentiator
         "model": "o3",  # reasoning model
         "reasoning_effort": "medium",  # low / medium / high
         "stream": True,
