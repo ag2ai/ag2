@@ -30,7 +30,7 @@ with optional_import_block() as result:
 
 def test_gemini_llm_config_entry():
     gemini_llm_config = GeminiLLMConfigEntry(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         api_key="dummy_api_key",
         project_id="fake-project-id",
         location="us-west1",
@@ -38,7 +38,7 @@ def test_gemini_llm_config_entry():
     )
     expected = {
         "api_type": "google",
-        "model": "gemini-2.0-flash-lite",
+        "model": "gemini-2.5-flash",
         "api_key": "dummy_api_key",
         "project_id": "fake-project-id",
         "location": "us-west1",
@@ -222,6 +222,23 @@ class TestGeminiClient:
         converted_messages = gemini_client._oai_messages_to_gemini_messages(messages)
         assert converted_messages[-3].parts[0].text == "empty", "Empty message is not converted to 'empty' correctly"
         assert converted_messages[-1].parts[0].text == "empty", "Empty message is not converted to 'empty' correctly"
+
+    def test_gemini_message_without_role_defaults_to_user(self, gemini_client):
+        """Test that messages without a 'role' field default to 'user' role (e.g., A2A messages)."""
+        messages = [
+            {"content": "Hello, this message has no role field"},
+            {"role": "model", "content": "How can I help you?"},
+            {"content": "Another message without role"},
+        ]
+
+        converted_messages = gemini_client._oai_messages_to_gemini_messages(messages)
+
+        # Messages without role should be treated as "user"
+        assert converted_messages[0].role == "user", "Message without role should default to 'user'"
+        assert converted_messages[0].parts[0].text == "Hello, this message has no role field"
+        assert converted_messages[1].role == "model"
+        assert converted_messages[2].role == "user", "Message without role should default to 'user'"
+        assert converted_messages[2].parts[0].text == "Another message without role"
 
     def test_vertexai_safety_setting_conversion(self):
         safety_settings = [
