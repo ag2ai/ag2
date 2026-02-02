@@ -105,6 +105,88 @@ class ApplyPatchCallOutput:
         return asdict(self)
 
 
+@dataclass
+class ShellCallOutcome:
+    """Outcome of shell command execution.
+
+    This dataclass represents the result status of a shell command,
+    indicating whether it exited normally or timed out.
+
+    Attributes:
+        type: Type of outcome - "exit" (normal completion) or "timeout"
+        exit_code: Exit code if type is "exit", None for timeout
+    """
+
+    type: str  # "exit" or "timeout"
+    exit_code: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary format for Responses API input."""
+        return asdict(self)
+
+
+@dataclass
+class ShellCommandOutput:
+    """Output from a single shell command execution.
+
+    This dataclass captures the stdout, stderr, and outcome of
+    executing a single shell command.
+
+    Attributes:
+        stdout: Standard output from the command
+        stderr: Standard error from the command
+        outcome: ShellCallOutcome indicating how the command completed
+    """
+
+    stdout: str = ""
+    stderr: str = ""
+    outcome: ShellCallOutcome | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary format for Responses API input."""
+        result = {"stdout": self.stdout, "stderr": self.stderr}
+        if self.outcome:
+            result["outcome"] = self.outcome.to_dict()
+        return result
+
+
+@dataclass
+class ShellCallOutput:
+    """Shell call output payload for Responses API.
+
+    This dataclass represents the complete output from a shell tool call,
+    including all command outputs and metadata.
+
+    Attributes:
+        call_id: Call ID matching the shell_call from the API
+        type: Always "shell_call_output"
+        max_output_length: Optional maximum output length for truncation
+        output: List of ShellCommandOutput for each command executed
+    """
+
+    call_id: str
+    type: str = "shell_call_output"
+    max_output_length: int | None = None
+    output: list[ShellCommandOutput] | None = None
+
+    def __post_init__(self) -> None:
+        """Initialize default values."""
+        if self.output is None:
+            self.output = []
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary format for Responses API input."""
+        result: dict[str, Any] = {
+            "call_id": self.call_id,
+            "type": self.type,
+        }
+        if self.max_output_length is not None:
+            result["max_output_length"] = self.max_output_length
+        if self.output:
+            result["output"] = [cmd.to_dict() for cmd in self.output]
+        return result
+
+
 # Pricing per image (in USD)
 IMAGE_PRICING = {
     "gpt-image-1": {
@@ -345,6 +427,13 @@ class OpenAIResponsesV2Client(ModelClient):
         # Custom pricing (input_price_per_1k, output_price_per_1k) - overrides OAI_PRICE1K
         self._custom_price: tuple[float, float] | None = None
 
+        # Shell tool configuration
+        self._shell_allowed_commands: list[str] | None = None
+        self._shell_denied_commands: list[str] | None = None
+        self._shell_enable_command_filtering: bool = True
+        self._shell_dangerous_patterns: list[tuple[str, str]] | None = None
+        self._shell_executor: Any = None  # Lazy-initialized ShellExecutor
+
     def _get_previous_response_id(self) -> str | None:
         """Get current conversation state.
 
@@ -430,6 +519,37 @@ class OpenAIResponsesV2Client(ModelClient):
                 if isinstance(block, GenericContent) and block.type == "web_search_call":
                     search_calls.append(block)
         return search_calls
+
+    @staticmethod
+    def get_shell_calls(response: UnifiedResponse) -> list[GenericContent]:
+        """Extract all shell_call items from a UnifiedResponse.
+
+        This method extracts the metadata about shell commands that were executed,
+        which can be useful for tracking command execution and debugging.
+
+        Args:
+            response: UnifiedResponse from create()
+
+        Returns:
+            List of GenericContent blocks with type="shell_call"
+
+        Example:
+            response = client.create({
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "List files in the directory"}],
+                "built_in_tools": ["shell"]
+            })
+
+            shell_calls = OpenAIResponsesV2Client.get_shell_calls(response)
+            for call in shell_calls:
+                print(f"Shell call ID: {call.call_id}, Commands: {call.action}")
+        """
+        shell_calls = []
+        for msg in response.messages:
+            for block in msg.content:
+                if isinstance(block, GenericContent) and block.type == "shell_call":
+                    shell_calls.append(block)
+        return shell_calls
 
     @staticmethod
     def get_generated_images(response: UnifiedResponse) -> list[ImageContent]:
@@ -1096,6 +1216,291 @@ class OpenAIResponsesV2Client(ModelClient):
                 outputs.append(output.to_dict())
         return outputs
 
+    def _extract_shell_calls(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract shell_call items from messages.
+
+        Scans through messages to find all shell_call items, which contain
+        shell commands to be executed.
+
+        Args:
+            messages: List of messages to scan
+
+        Returns:
+            Dictionary mapping call_id to shell_call item dict
+
+        Example:
+            calls = self._extract_shell_calls(messages)
+            for call_id, call_data in calls.items():
+                print(f"Call {call_id}: {call_data.get('action', {}).get('commands')}")
+        """
+        message_shell_calls: dict[str, Any] = {}
+        for msg in messages:
+            role = msg.get("role")
+            if role == "assistant":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "shell_call":
+                            call_id = item.get("call_id")
+                            if call_id:
+                                message_shell_calls[call_id] = item
+                tool_calls = msg.get("tool_calls", [])
+                if isinstance(tool_calls, list):
+                    for tool_call in tool_calls:
+                        if isinstance(tool_call, dict) and tool_call.get("type") == "shell_call":
+                            call_id = tool_call.get("call_id")
+                            if call_id:
+                                message_shell_calls[call_id] = tool_call
+        return message_shell_calls
+
+    def _execute_shell_calls(
+        self,
+        calls_dict: dict[str, Any],
+        built_in_tools: list[str],
+        workspace_dir: str,
+        allowed_paths: list[str],
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute shell_call items and return outputs.
+
+        This method processes a collection of shell_call items, executing
+        each shell command and returning the results.
+
+        Args:
+            calls_dict: Dictionary mapping call_id to shell_call item
+            built_in_tools: List of built-in tools enabled (checks for "shell")
+            workspace_dir: Workspace directory for shell operations
+            allowed_paths: Allowed paths for sandboxing
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
+
+        Returns:
+            List of shell_call_output dictionaries ready for API input
+
+        Example:
+            outputs = self._execute_shell_calls(
+                calls_dict={"call_123": {...}},
+                built_in_tools=["shell"],
+                workspace_dir="/workspace",
+                allowed_paths=["**"]
+            )
+        """
+        outputs: list[dict[str, Any]] = []
+        if not calls_dict or "shell" not in built_in_tools:
+            return outputs
+
+        for call_id, shell_call in calls_dict.items():
+            action = shell_call.get("action", {})
+            if action:
+                shell_output = self._execute_shell_operation(
+                    action,
+                    call_id=call_id,
+                    workspace_dir=workspace_dir,
+                    allowed_paths=allowed_paths,
+                    allowed_commands=allowed_commands,
+                    denied_commands=denied_commands,
+                    enable_command_filtering=enable_command_filtering,
+                    dangerous_patterns=dangerous_patterns,
+                )
+                outputs.append(shell_output.to_dict())
+        return outputs
+
+    def _execute_shell_operation(
+        self,
+        action: dict[str, Any],
+        call_id: str,
+        workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = None,
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> ShellCallOutput:
+        """Execute shell commands and return shell_call_output.
+
+        This method executes shell commands using the ShellExecutor tool
+        with configurable sandboxing and filtering options.
+
+        Args:
+            action: Dictionary containing shell action with keys:
+                - commands: List of shell commands to execute
+                - timeout_ms: Optional timeout in milliseconds
+                - max_output_length: Optional maximum output length
+            call_id: The call_id for this shell operation (from API response)
+            workspace_dir: Working directory for command execution
+            allowed_paths: List of allowed path patterns for sandboxing
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
+
+        Returns:
+            ShellCallOutput with execution results
+
+        Example:
+            output = self._execute_shell_operation(
+                action={"commands": ["ls -la", "pwd"]},
+                call_id="call_123",
+                workspace_dir="/workspace"
+            )
+            print(f"Status: {output.output[0].outcome.type}")
+        """
+        from autogen.tools.experimental.shell.shell_tool import ShellExecutor
+
+        # Use instance defaults if not provided
+        workspace_dir = workspace_dir or self._workspace_dir
+        allowed_paths = allowed_paths or self._allowed_paths
+        allowed_commands = allowed_commands or self._shell_allowed_commands
+        denied_commands = denied_commands if denied_commands is not None else self._shell_denied_commands
+        enable_command_filtering = enable_command_filtering if enable_command_filtering is not None else self._shell_enable_command_filtering
+        dangerous_patterns = dangerous_patterns or self._shell_dangerous_patterns
+
+        # Initialize shell executor if not already initialized
+        if self._shell_executor is None:
+            self._shell_executor = ShellExecutor(
+                workspace_dir=workspace_dir if workspace_dir else os.getcwd(),
+                allowed_paths=allowed_paths if allowed_paths is not None else None,
+                allowed_commands=allowed_commands,
+                denied_commands=denied_commands if denied_commands is not None else None,
+                enable_command_filtering=enable_command_filtering if enable_command_filtering is not None else True,
+                dangerous_patterns=dangerous_patterns
+                if dangerous_patterns
+                else ShellExecutor.DEFAULT_DANGEROUS_PATTERNS,
+            )
+        else:
+            # Update executor settings if provided
+            from pathlib import Path
+
+            self._shell_executor.workspace_dir = (
+                Path(workspace_dir).resolve() if workspace_dir else self._shell_executor.workspace_dir
+            )
+            self._shell_executor.allowed_paths = (
+                allowed_paths if allowed_paths is not None else self._shell_executor.allowed_paths
+            )
+            self._shell_executor.allowed_commands = (
+                allowed_commands if allowed_commands is not None else self._shell_executor.allowed_commands
+            )
+            self._shell_executor.denied_commands = (
+                denied_commands if denied_commands is not None else self._shell_executor.denied_commands
+            )
+            self._shell_executor.dangerous_patterns = (
+                dangerous_patterns if dangerous_patterns is not None else self._shell_executor.dangerous_patterns
+            )
+            self._shell_executor.enable_command_filtering = (
+                enable_command_filtering
+                if enable_command_filtering is not None
+                else self._shell_executor.enable_command_filtering
+            )
+
+        commands = action.get("commands", [])
+        timeout_ms = action.get("timeout_ms")
+        max_output_length = action.get("max_output_length")
+
+        if not commands:
+            # Return empty output if no commands
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[
+                    ShellCommandOutput(
+                        stdout="",
+                        stderr="No commands provided",
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                ],
+            )
+
+        try:
+            # Execute commands
+            command_outputs = self._shell_executor.run_commands(commands, timeout_ms=timeout_ms)
+
+            # Convert to our dataclass format
+            shell_outputs = []
+            for cmd_output in command_outputs:
+                if isinstance(cmd_output, dict):
+                    outcome_data = cmd_output.get("outcome", {})
+                    outcome = ShellCallOutcome(
+                        type=outcome_data.get("type", "exit"),
+                        exit_code=outcome_data.get("exit_code"),
+                    )
+                    shell_outputs.append(
+                        ShellCommandOutput(
+                            stdout=cmd_output.get("stdout", ""),
+                            stderr=cmd_output.get("stderr", ""),
+                            outcome=outcome,
+                        )
+                    )
+                else:
+                    # Handle if it's already a ShellCommandOutput-like object
+                    shell_outputs.append(cmd_output)
+
+            # Return in the correct format
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=shell_outputs,
+            )
+        except Exception as e:
+            # Return error in the correct format
+            logger.error(f"Error executing shell commands: {e}")
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[
+                    ShellCommandOutput(
+                        stdout="",
+                        stderr=f"Error executing shell commands: {str(e)}",
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                ],
+            )
+
+    def set_shell_params(
+        self,
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool | None = None,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> None:
+        """Configure shell tool parameters.
+
+        This method allows configuring the shell executor's sandboxing
+        and command filtering settings.
+
+        Args:
+            allowed_commands: List of allowed commands (whitelist). If set,
+                only these commands will be allowed to execute.
+            denied_commands: List of denied commands (blacklist). These
+                commands will be blocked from execution.
+            enable_command_filtering: Whether to enable command filtering.
+                When enabled, commands are checked against allowed/denied lists.
+            dangerous_patterns: List of (pattern, description) tuples for
+                dangerous command patterns to check against.
+
+        Example:
+            client.set_shell_params(
+                allowed_commands=["ls", "cat", "grep"],
+                denied_commands=["rm", "sudo"],
+                enable_command_filtering=True
+            )
+        """
+        if allowed_commands is not None:
+            self._shell_allowed_commands = allowed_commands
+        if denied_commands is not None:
+            self._shell_denied_commands = denied_commands
+        if enable_command_filtering is not None:
+            self._shell_enable_command_filtering = enable_command_filtering
+        if dangerous_patterns is not None:
+            self._shell_dangerous_patterns = dangerous_patterns
+
+        # Reset executor so it gets recreated with new settings
+        self._shell_executor = None
+
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages.
 
@@ -1544,6 +1949,14 @@ class OpenAIResponsesV2Client(ModelClient):
         web_search_config = params.pop("web_search_config", None)
         image_generation_config = params.pop("image_generation_config", None)
 
+        # Extract shell sandboxing parameters from params (they're only used internally)
+        shell_allowed_commands = params.pop("allowed_commands", self._shell_allowed_commands)
+        shell_denied_commands = params.pop("denied_commands", self._shell_denied_commands)
+        if shell_denied_commands is None:
+            shell_denied_commands = []
+        shell_enable_command_filtering = params.pop("enable_command_filtering", self._shell_enable_command_filtering)
+        shell_dangerous_patterns = params.pop("dangerous_patterns", self._shell_dangerous_patterns)
+
         # Initialize tools list
         tools_list = []
         # Add built-in tools if specified
@@ -1556,6 +1969,8 @@ class OpenAIResponsesV2Client(ModelClient):
                 tools_list.append(self._build_web_search_tool_config(web_search_config))
             if "apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools:
                 tools_list.append({"type": "apply_patch"})
+            if "shell" in built_in_tools:
+                tools_list.append({"type": "shell"})
 
         # Add custom function tools if provided
         if "tools" in params:
@@ -1912,6 +2327,20 @@ class OpenAIResponsesV2Client(ModelClient):
                         status=item_dict.get("status"),
                         operation=item_dict.get("operation", {}),
                         **{k: v for k, v in item_dict.items() if k not in ["type", "call_id", "status", "operation"]},
+                    )
+                )
+
+            # Handle shell_call type items (built-in tool)
+            elif item_type == "shell_call":
+                # Use GenericContent to preserve all fields (call_id, action, status, etc.)
+                # This preserves the full structure for shell operations
+                content_blocks.append(
+                    GenericContent(
+                        type="shell_call",
+                        call_id=item_dict.get("call_id"),
+                        action=item_dict.get("action", {}),
+                        status=item_dict.get("status"),
+                        **{k: v for k, v in item_dict.items() if k not in ["type", "call_id", "action", "status"]},
                     )
                 )
 
