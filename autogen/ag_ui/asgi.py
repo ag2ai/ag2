@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .adapter import AGUIStream
 
 
-def build_asgi(stream: "AGUIStream") -> HTTPEndpoint:
+def build_asgi(stream: "AGUIStream") -> type[HTTPEndpoint]:
     class AGUIEndpoint(HTTPEndpoint):
         async def post(
             endpoint,  # noqa: N805

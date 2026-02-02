@@ -27,7 +27,8 @@ from autogen.doc_utils import export_module
 try:
     from starlette.endpoints import HTTPEndpoint
 except ImportError:
-    HTTPEndpoint = Any
+    # Fallback to Any until Starlette is installed
+    HTTPEndpoint = Any  # type: ignore[misc,assignment]
 
 
 @export_module("autogen.ag_ui")
@@ -42,7 +43,8 @@ class AGUIStream:
         context: dict[str, Any] | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
-        encoder = EventEncoder(accept=accept)
+        # EventEncoder typed incompletely, so we need to ignore the type error
+        encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
 
         client_tools = []
         client_tools_names: set[str] = set()
@@ -134,7 +136,7 @@ class AGUIStream:
         else:
             yield encoder.encode(RunFinishedEvent(thread_id=data.thread_id, run_id=data.run_id))
 
-    def build_asgi(self) -> "HTTPEndpoint":
+    def build_asgi(self) -> "type[HTTPEndpoint]":
         """Build an ASGI endpoint for the AGUIStream."""
         # import here to avoid Starlette requirements in the main package
         from .asgi import build_asgi
