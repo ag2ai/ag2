@@ -130,7 +130,7 @@ class TestMultimodal:
 
         message = OpenAIResponsesV2Client.create_multimodal_message(
             text="Describe this image briefly.",
-            images=["https://via.placeholder.com/150/FF0000/FFFFFF?text=Red"],
+            images=["https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400"],
             role="user",
         )
 
@@ -149,7 +149,7 @@ class TestBuiltInTools:
     def test_web_search(self, client):
         """Test web search built-in tool."""
         response = client.create({
-            "model": "gpt-4.1-nano",
+            "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "What is the current weather in New York?"}],
             "built_in_tools": ["web_search"],
         })
