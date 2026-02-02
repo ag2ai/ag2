@@ -222,46 +222,6 @@ def calculate_token_cost(
         return price_1k * (prompt_tokens + completion_tokens) / 1000
 
 
-def _convert_response_format_to_text_format(
-    response_format: type[BaseModel] | dict[str, Any],
-) -> dict[str, Any]:
-    """Convert response_format (Pydantic model or dict) to text_format for Responses API.
-
-    The Responses API uses `text_format` parameter instead of `response_format`.
-    This function handles the conversion.
-
-    Args:
-        response_format: Either a Pydantic BaseModel subclass or a JSON schema dict
-
-    Returns:
-        A dict suitable for the `text_format` parameter
-
-    Example:
-        class MyModel(BaseModel):
-            name: str
-            age: int
-
-        text_format = _convert_response_format_to_text_format(MyModel)
-        # Returns: {"type": "json_schema", "json_schema": {"schema": {...}, "name": "MyModel", "strict": True}}
-    """
-    if isinstance(response_format, dict):
-        # JSON schema dict - wrap it in the expected format
-        from autogen.oai.client import _ensure_strict_json_schema
-
-        return {
-            "type": "json_schema",
-            "json_schema": {
-                "schema": _ensure_strict_json_schema(response_format, path=(), root=response_format),
-                "name": "response_format",
-                "strict": True,
-            },
-        }
-    else:
-        # Pydantic BaseModel subclass - use OpenAI's helper
-        from autogen.oai.client import type_to_response_format_param
-
-        return type_to_response_format_param(response_format)
-
 
 class OpenAIResponsesV2Client(ModelClient):
     """
@@ -1609,13 +1569,13 @@ class OpenAIResponsesV2Client(ModelClient):
         params = self._parse_params(params)
 
         # Check for response_format (Pydantic model or JSON schema dict)
-        response_format = params.get("response_format", None) or self._default_response_format
+        response_format = params.pop("response_format", None) or self._default_response_format
 
         if response_format is not None:
             # Convert response_format to text_format for Responses API
             try:
-                text_format = _convert_response_format_to_text_format(response_format)
-                params["text_format"] = text_format
+                # text_format = _convert_response_format_to_text_format(response_format)
+                params["text_format"] = response_format
 
                 # Remove stream if present (Responses API doesn't support streaming with text_format)
                 if "stream" in params:
