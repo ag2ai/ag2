@@ -9,7 +9,7 @@ from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, 
 from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
 from a2a.utils.message import new_agent_text_message
 
-from .remote import RequestMessage, ResponseMessage
+from autogen.agentchat.remote import RequestMessage, ResponseMessage
 
 AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"

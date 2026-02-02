@@ -18,13 +18,14 @@ from typing_extensions import Self
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
+from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.doc_utils import export_module
 from autogen.events.agent_events import TerminationEvent
 from autogen.io.base import IOStream
 from autogen.oai.client import OpenAIWrapper
 
+from .client_factory import ClientFactory, EmptyClientFactory
 from .errors import A2aAgentNotFoundError, A2aClientError
-from .remote import ClientFactory, EmptyClientFactory, RequestMessage, ResponseMessage
 from .utils import (
     request_message_to_a2a,
     response_message_from_a2a_message,

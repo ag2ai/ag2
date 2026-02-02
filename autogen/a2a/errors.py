@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from .remote import RemoteAgentError, RemoteAgentNotFoundError
+from autogen.agentchat.remote import RemoteAgentError, RemoteAgentNotFoundError
 
 
 class A2aClientError(RemoteAgentError):

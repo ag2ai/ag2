@@ -7,7 +7,6 @@ from uuid import uuid4
 import pytest
 from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TaskStatus, TextPart
 
-from autogen.a2a.remote.protocol import RequestMessage, ResponseMessage
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
     CONTEXT_KEY,
@@ -20,6 +19,7 @@ from autogen.a2a.utils import (
     response_message_from_a2a_message,
     response_message_from_a2a_task,
 )
+from autogen.agentchat.remote.protocol import RequestMessage, ResponseMessage
 
 
 class TestMessageToPart:

@@ -9,9 +9,9 @@ import pytest
 from dirty_equals import IsStr
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.a2a.remote import AgentService, RequestMessage, ServiceResponse
 from autogen.agentchat import ContextVariables, ReplyResult
 from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult
+from autogen.agentchat.remote import AgentService, RequestMessage, ServiceResponse
 from autogen.testing import TestAgent, ToolCall
 
 

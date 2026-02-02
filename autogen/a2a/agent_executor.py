@@ -12,9 +12,9 @@ from a2a.types import InternalError, Task, TaskState, TaskStatus
 from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
+from autogen.agentchat.remote import AgentService, ServiceResponse
 from autogen.doc_utils import export_module
 
-from .remote import AgentService, ServiceResponse
 from .utils import make_artifact, make_input_required_message, make_working_message, request_message_from_a2a
 
 
