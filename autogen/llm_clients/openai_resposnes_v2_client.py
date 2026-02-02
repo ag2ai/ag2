@@ -74,10 +74,12 @@ logger = logging.getLogger(__name__)
 
 class OpenAIResponsesV2LLMConfigEntry(OpenAILLMConfigEntry):
     """LLMConfig entry for OpenAI Responses API V2 (stateful)."""
+
     api_type: Literal["responses_v2"] = "responses_v2"
-    
+
     def create_client(self) -> ModelClient:
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
+
 
 @dataclass
 class ApplyPatchCallOutput:
@@ -228,7 +230,6 @@ def calculate_token_cost(
     else:
         # Single price for both input and output
         return price_1k * (prompt_tokens + completion_tokens) / 1000
-
 
 
 class OpenAIResponsesV2Client(ModelClient):
@@ -1999,12 +2000,11 @@ class OpenAIResponsesV2Client(ModelClient):
         )
 
         # Log warning if model not found in pricing table (and no custom price)
-        if token_cost == 0.0 and prompt_tokens > 0 and self._custom_price is None:
-            if response_model not in OAI_PRICE1K:
-                logger.warning(
-                    f"Model {response_model} not found in pricing table. Token cost will be 0. "
-                    f"Use set_custom_price() to set custom pricing."
-                )
+        if token_cost == 0.0 and prompt_tokens > 0 and self._custom_price is None and response_model not in OAI_PRICE1K:
+            logger.warning(
+                f"Model {response_model} not found in pricing table. Token cost will be 0. "
+                f"Use set_custom_price() to set custom pricing."
+            )
 
         # Update cumulative token tracking
         self._token_costs += token_cost

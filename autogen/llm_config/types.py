@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2LLMConfigEntry
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
@@ -18,8 +19,6 @@ from autogen.oai.groq import GroqLLMConfigEntry
 from autogen.oai.mistral import MistralLLMConfigEntry
 from autogen.oai.ollama import OllamaLLMConfigEntry
 from autogen.oai.together import TogetherLLMConfigEntry
-from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2LLMConfigEntry
-
 
 ConfigEntries = (
     AnthropicLLMConfigEntry
