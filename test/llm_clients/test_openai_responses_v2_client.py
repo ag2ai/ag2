@@ -1493,3 +1493,354 @@ class TestApplyPatchCallOutput:
             "output": "Permission denied",
             "type": "apply_patch_call_output",
         }
+
+
+# =============================================================================
+# Test: Shell Tool Operations
+# =============================================================================
+
+
+class TestShellToolDataclasses:
+    """Test shell tool dataclasses."""
+
+    def test_shell_call_outcome_creation(self):
+        """Test creating ShellCallOutcome."""
+        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+
+        outcome = ShellCallOutcome(type="exit", exit_code=0)
+
+        assert outcome.type == "exit"
+        assert outcome.exit_code == 0
+
+    def test_shell_call_outcome_timeout(self):
+        """Test ShellCallOutcome with timeout."""
+        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+
+        outcome = ShellCallOutcome(type="timeout", exit_code=None)
+
+        assert outcome.type == "timeout"
+        assert outcome.exit_code is None
+
+    def test_shell_call_outcome_to_dict(self):
+        """Test converting ShellCallOutcome to dict."""
+        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+
+        outcome = ShellCallOutcome(type="exit", exit_code=1)
+        result = outcome.to_dict()
+
+        assert result == {"type": "exit", "exit_code": 1}
+
+    def test_shell_command_output_creation(self):
+        """Test creating ShellCommandOutput."""
+        from autogen.llm_clients.openai_resposnes_v2_client import (
+            ShellCallOutcome,
+            ShellCommandOutput,
+        )
+
+        outcome = ShellCallOutcome(type="exit", exit_code=0)
+        output = ShellCommandOutput(
+            stdout="file1.txt\nfile2.txt",
+            stderr="",
+            outcome=outcome,
+        )
+
+        assert output.stdout == "file1.txt\nfile2.txt"
+        assert output.stderr == ""
+        assert output.outcome.exit_code == 0
+
+    def test_shell_command_output_to_dict(self):
+        """Test converting ShellCommandOutput to dict."""
+        from autogen.llm_clients.openai_resposnes_v2_client import (
+            ShellCallOutcome,
+            ShellCommandOutput,
+        )
+
+        outcome = ShellCallOutcome(type="exit", exit_code=0)
+        output = ShellCommandOutput(stdout="hello", stderr="", outcome=outcome)
+        result = output.to_dict()
+
+        assert result["stdout"] == "hello"
+        assert result["stderr"] == ""
+        assert result["outcome"]["type"] == "exit"
+        assert result["outcome"]["exit_code"] == 0
+
+    def test_shell_call_output_creation(self):
+        """Test creating ShellCallOutput."""
+        from autogen.llm_clients.openai_resposnes_v2_client import (
+            ShellCallOutcome,
+            ShellCallOutput,
+            ShellCommandOutput,
+        )
+
+        outcome = ShellCallOutcome(type="exit", exit_code=0)
+        cmd_output = ShellCommandOutput(stdout="output", stderr="", outcome=outcome)
+        shell_output = ShellCallOutput(
+            call_id="call_shell_123",
+            output=[cmd_output],
+        )
+
+        assert shell_output.call_id == "call_shell_123"
+        assert shell_output.type == "shell_call_output"
+        assert len(shell_output.output) == 1
+
+    def test_shell_call_output_to_dict(self):
+        """Test converting ShellCallOutput to dict."""
+        from autogen.llm_clients.openai_resposnes_v2_client import (
+            ShellCallOutcome,
+            ShellCallOutput,
+            ShellCommandOutput,
+        )
+
+        outcome = ShellCallOutcome(type="exit", exit_code=0)
+        cmd_output = ShellCommandOutput(stdout="hello world", stderr="", outcome=outcome)
+        shell_output = ShellCallOutput(
+            call_id="call_456",
+            max_output_length=1000,
+            output=[cmd_output],
+        )
+
+        result = shell_output.to_dict()
+
+        assert result["call_id"] == "call_456"
+        assert result["type"] == "shell_call_output"
+        assert result["max_output_length"] == 1000
+        assert len(result["output"]) == 1
+        assert result["output"][0]["stdout"] == "hello world"
+
+
+class TestShellToolOperation:
+    """Test shell tool operation methods."""
+
+    def test_extract_shell_calls_from_messages(self, client):
+        """Test extracting shell_call items from messages."""
+        messages = [
+            {
+                "role": "user",
+                "content": "List files",
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "shell_call", "call_id": "shell_123", "action": {"commands": ["ls -la"]}},
+                    {"type": "text", "text": "Running command..."},
+                ],
+            },
+        ]
+
+        result = client._extract_shell_calls(messages)
+
+        assert "shell_123" in result
+        assert result["shell_123"]["type"] == "shell_call"
+        assert result["shell_123"]["action"]["commands"] == ["ls -la"]
+
+    def test_extract_shell_calls_from_tool_calls(self, client):
+        """Test extracting shell_call items from tool_calls field."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "Let me run that command.",
+                "tool_calls": [
+                    {"type": "shell_call", "call_id": "shell_456", "action": {"commands": ["pwd"]}},
+                ],
+            },
+        ]
+
+        result = client._extract_shell_calls(messages)
+
+        assert "shell_456" in result
+        assert result["shell_456"]["action"]["commands"] == ["pwd"]
+
+    def test_extract_shell_calls_empty(self, client):
+        """Test extracting shell_call items when none present."""
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+
+        result = client._extract_shell_calls(messages)
+
+        assert result == {}
+
+    def test_execute_shell_operation_no_commands(self, client):
+        """Test shell operation with no commands."""
+        result = client._execute_shell_operation(
+            action={},  # No commands
+            call_id="call_empty",
+        )
+
+        assert result.call_id == "call_empty"
+        assert len(result.output) == 1
+        assert "No commands provided" in result.output[0].stderr
+        assert result.output[0].outcome.exit_code == 1
+
+    def test_execute_shell_calls_not_in_tools(self, client):
+        """Test that shell calls are not executed when shell not in built_in_tools."""
+        calls_dict = {"shell_123": {"action": {"commands": ["ls"]}}}
+
+        result = client._execute_shell_calls(
+            calls_dict=calls_dict,
+            built_in_tools=["web_search"],  # shell not included
+            workspace_dir="/tmp",
+            allowed_paths=["**"],
+        )
+
+        assert result == []
+
+    def test_execute_shell_operation_with_mock(self, client):
+        """Test shell operation with mocked ShellExecutor."""
+        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as MockExecutor:
+            mock_executor = Mock()
+            mock_executor.run_commands.return_value = [
+                {"stdout": "file1.txt", "stderr": "", "outcome": {"type": "exit", "exit_code": 0}}
+            ]
+            MockExecutor.return_value = mock_executor
+
+            # Reset executor to force re-creation
+            client._shell_executor = None
+
+            result = client._execute_shell_operation(
+                action={"commands": ["ls"], "timeout_ms": 5000},
+                call_id="call_ls",
+            )
+
+            assert result.call_id == "call_ls"
+            mock_executor.run_commands.assert_called_once_with(["ls"], timeout_ms=5000)
+
+    def test_execute_shell_operation_exception_handling(self, client):
+        """Test shell operation exception handling."""
+        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as MockExecutor:
+            mock_executor = Mock()
+            mock_executor.run_commands.side_effect = Exception("Command failed")
+            MockExecutor.return_value = mock_executor
+
+            # Reset executor
+            client._shell_executor = None
+
+            result = client._execute_shell_operation(
+                action={"commands": ["bad_command"]},
+                call_id="call_error",
+            )
+
+            assert result.call_id == "call_error"
+            assert result.output[0].outcome.exit_code == 1
+            assert "Error executing shell commands" in result.output[0].stderr
+
+
+class TestShellToolConfiguration:
+    """Test shell tool configuration."""
+
+    def test_set_shell_params(self, client):
+        """Test setting shell parameters."""
+        client.set_shell_params(
+            allowed_commands=["ls", "cat", "grep"],
+            denied_commands=["rm", "sudo"],
+            enable_command_filtering=True,
+            dangerous_patterns=[("rm -rf", "Dangerous recursive delete")],
+        )
+
+        assert client._shell_allowed_commands == ["ls", "cat", "grep"]
+        assert client._shell_denied_commands == ["rm", "sudo"]
+        assert client._shell_enable_command_filtering is True
+        assert client._shell_dangerous_patterns == [("rm -rf", "Dangerous recursive delete")]
+        # Executor should be reset
+        assert client._shell_executor is None
+
+    def test_set_shell_params_partial(self, client):
+        """Test setting only some shell parameters."""
+        original_filtering = client._shell_enable_command_filtering
+
+        client.set_shell_params(allowed_commands=["echo"])
+
+        assert client._shell_allowed_commands == ["echo"]
+        # Other params should be unchanged
+        assert client._shell_enable_command_filtering == original_filtering
+
+    def test_initial_shell_config(self, mock_openai_client):
+        """Test initial shell configuration in client."""
+        client = OpenAIResponsesV2Client(api_key="test-key")
+
+        assert client._shell_allowed_commands is None
+        assert client._shell_denied_commands is None
+        assert client._shell_enable_command_filtering is True
+        assert client._shell_dangerous_patterns is None
+        assert client._shell_executor is None
+
+
+class TestShellToolInCreate:
+    """Test shell tool integration in create() method."""
+
+    def test_create_with_shell_tool(self, client):
+        """Test creating request with shell built-in tool."""
+        mock_response = MockResponsesAPIResponse(
+            output=[
+                MockOutputItem(
+                    "shell_call",
+                    call_id="shell_123",
+                    action={"commands": ["ls -la"]},
+                    status="completed",
+                ),
+                create_mock_message_output("Here are the files..."),
+            ],
+            usage=MockUsage(),
+        )
+        client.client.responses.create = Mock(return_value=mock_response)
+
+        response = client.create({
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "List files"}],
+            "built_in_tools": ["shell"],
+        })
+
+        # Verify tools were passed
+        call_kwargs = client.client.responses.create.call_args[1]
+        tools = call_kwargs.get("tools", [])
+        assert any(t.get("type") == "shell" for t in tools)
+
+    def test_get_shell_calls_static_method(self, client):
+        """Test get_shell_calls static method."""
+        mock_response = MockResponsesAPIResponse(
+            output=[
+                MockOutputItem(
+                    "shell_call",
+                    call_id="shell_abc",
+                    action={"commands": ["pwd"]},
+                    status="completed",
+                ),
+            ],
+            usage=MockUsage(),
+        )
+        client.client.responses.create = Mock(return_value=mock_response)
+
+        response = client.create({
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "Show directory"}],
+            "built_in_tools": ["shell"],
+        })
+
+        shell_calls = OpenAIResponsesV2Client.get_shell_calls(response)
+
+        assert len(shell_calls) >= 1
+        assert shell_calls[0].type == "shell_call"
+
+    def test_create_with_shell_config_params(self, client):
+        """Test create with shell configuration parameters."""
+        mock_response = MockResponsesAPIResponse(
+            output=[create_mock_message_output("Done")],
+            usage=MockUsage(),
+        )
+        client.client.responses.create = Mock(return_value=mock_response)
+
+        response = client.create({
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "Run command"}],
+            "built_in_tools": ["shell"],
+            "allowed_commands": ["ls", "cat"],
+            "denied_commands": ["rm"],
+            "enable_command_filtering": True,
+        })
+
+        # Verify shell config params were removed from API call
+        call_kwargs = client.client.responses.create.call_args[1]
+        assert "allowed_commands" not in call_kwargs
+        assert "denied_commands" not in call_kwargs
+        assert "enable_command_filtering" not in call_kwargs
