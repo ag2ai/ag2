@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.llm_config import LLMConfig
+from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2LLMConfigEntry
 from autogen.oai import (
     AnthropicLLMConfigEntry,
     AzureOpenAILLMConfigEntry,
@@ -397,7 +398,7 @@ class TestLLMConfig:
                     "stream": False,
                 },
                 LLMConfig(
-                    OpenAIResponsesLLMConfigEntry(
+                    OpenAIResponsesV2LLMConfigEntry(
                         model="o3",
                         api_key="fake_api_key",
                         max_tokens=512,
