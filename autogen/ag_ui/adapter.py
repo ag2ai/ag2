@@ -87,7 +87,7 @@ class AGUIStream:
                 )
             )
 
-            if state != data.state:
+            if state.data != data.state:
                 yield encoder.encode(
                     StateSnapshotEvent(
                         snapshot=state.data,
