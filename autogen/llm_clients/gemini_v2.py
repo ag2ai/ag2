@@ -27,7 +27,7 @@ import time
 import warnings
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from autogen.oai.shared_utils import normalize_pydantic_schema_to_dict
 
@@ -137,6 +137,20 @@ class GeminiV2LLMConfigEntry(LLMConfigEntry):
     thinking_budget: int | None = None
     thinking_level: Literal["High", "Medium", "Low", "Minimal"] | None = None
 
+    @field_validator("tool_config", mode="before")
+    @classmethod
+    def _coerce_tool_config(cls, v: Any) -> dict[str, Any] | None:
+        """Accept ToolConfig (google.genai.types or autogen.oai.gemini_types) and coerce to dict."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if hasattr(v, "model_dump"):
+            return v.model_dump(exclude_none=True, mode="json")
+        if hasattr(v, "dict"):  # Pydantic v1 fallback
+            return v.dict(exclude_none=True)
+        raise ValueError(f"tool_config must be dict or ToolConfig, got {type(v).__name__}")
+
     def create_client(self) -> ModelClient:  # pragma: no cover
         """Create GeminiV2Client instance."""
         GeminiV2Client = globals()["GeminiV2Client"]  # noqa: N806
@@ -150,6 +164,7 @@ class GeminiV2LLMConfigEntry(LLMConfigEntry):
             proxy=self.proxy,
             response_format=None,
         )
+
 
 @require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
 class GeminiV2Client(ModelClient):
