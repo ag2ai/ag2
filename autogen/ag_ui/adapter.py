@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -35,7 +35,7 @@ except ImportError:
 
 
 def _get_timestamp() -> int:
-    return int(datetime.now(UTC).timestamp() * 1000)
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
 @export_module("autogen.ag_ui")
