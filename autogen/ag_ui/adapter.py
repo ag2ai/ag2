@@ -12,6 +12,7 @@ from ag_ui.core import (
     RunErrorEvent,
     RunFinishedEvent,
     RunStartedEvent,
+    StateSnapshotEvent,
     TextMessageChunkEvent,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
@@ -22,6 +23,7 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 
 from autogen import ConversableAgent
+from autogen.agentchat import ContextVariables
 from autogen.agentchat.remote import AgentService, RequestMessage
 from autogen.doc_utils import export_module
 
@@ -39,6 +41,7 @@ def _get_timestamp() -> int:
 @export_module("autogen.ag_ui")
 class AGUIStream:
     def __init__(self, agent: ConversableAgent) -> None:
+        self.__agent = agent
         self.service = AgentService(agent)
 
     async def dispatch(
@@ -48,8 +51,13 @@ class AGUIStream:
         context: dict[str, Any] | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
-        # EventEncoder typed incompletely, so we need to ignore the type error
-        encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
+        state = ContextVariables()
+        # add agent initial context
+        state.update(self.__agent.context_variables.to_dict())
+        # add frontend-passed context
+        state.update(data.state or {})
+        # add manual-passed context
+        state.update(context or {})
 
         client_tools = []
         client_tools_names: set[str] = set()
@@ -63,9 +71,12 @@ class AGUIStream:
 
         message = RequestMessage(
             messages=[m.model_dump(exclude_none=True) for m in data.messages],
-            context=context,
+            context=state.data,
             client_tools=client_tools,
         )
+
+        # EventEncoder typed incompletely, so we need to ignore the type error
+        encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
 
         try:
             yield encoder.encode(
@@ -76,8 +87,24 @@ class AGUIStream:
                 )
             )
 
+            if state != data.state:
+                yield encoder.encode(
+                    StateSnapshotEvent(
+                        snapshot=state.data,
+                        timestamp=_get_timestamp(),
+                    )
+                )
+
             async for response in self.service(message):
                 msg_id = str(uuid4())
+
+                if ctx := response.context:
+                    yield encoder.encode(
+                        StateSnapshotEvent(
+                            snapshot=ctx,
+                            timestamp=_get_timestamp(),
+                        )
+                    )
 
                 if msg := response.message:
                     content = msg.get("content", "")
@@ -91,6 +118,7 @@ class AGUIStream:
                                 content=tool_response["content"],
                                 message_id=msg_id,
                                 timestamp=_get_timestamp(),
+                                role="tool",
                             )
                         )
                         yield encoder.encode(
