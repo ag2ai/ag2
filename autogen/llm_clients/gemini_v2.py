@@ -31,7 +31,7 @@ from pydantic import Field
 
 from autogen.oai.shared_utils import normalize_pydantic_schema_to_dict
 
-from ..import_utils import optional_import_block
+from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config.client import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -151,7 +151,7 @@ class GeminiV2LLMConfigEntry(LLMConfigEntry):
             response_format=None,
         )
 
-
+@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
 class GeminiV2Client(ModelClient):
     """
     Google Gemini V2 client implementing ModelClientV2 protocol.
