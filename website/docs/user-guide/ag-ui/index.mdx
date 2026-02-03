@@ -4,35 +4,32 @@ description: "Expose AG2 ConversableAgent agents to AG-UI-compatible frontends u
 ---
 
 The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications talk to AI agents – including streaming, tools, shared state, and custom events.
-AG2 provides a lightweight integration via `autogen.ag_ui.AGUIStream`, which lets you connect a `ConversableAgent` to any AG-UI-compatible frontend.
+AG2 provides a lightweight integration via `autogen.ag_ui.AGUIStream`, letting you connect a `ConversableAgent` to any AG-UI-compatible frontend.
 
-For background on the protocol itself and a reference implementation in Pydantic AI, see:
-
-- [AG-UI Protocol introduction](https://docs.ag-ui.com/introduction){.external-link target="_blank"}
-- [CopilotKit Fronted Framework](https://docs.copilotkit.ai/ag2){.external-link target="_blank"}
+For background on the protocol see [AG-UI Protocol introduction](https://docs.ag-ui.com/introduction){.external-link target="_blank"}
 
 ## When to use AG-UI with AG2
 
 Use the AG-UI integration when:
 
 - You already have (or plan to build) a **web UI** based on the AG-UI protocol
-- You want **streaming responses** and **tool events** that the frontend can render in real time
-- You need to mix **backend tools** (Python functions) with **frontend tools** (UI actions / GenUI tools) in one coherent protocol
+- You want **streaming responses** and **tool events** that the frontend can render in real-time
+- You need to mix **backend tools** (Python functions) with **frontend tools** (UI actions / Generative UI tools) in one coherent protocol
 - You want to reuse existing AG-UI debugging tooling (e.g. Dojo) while keeping your agent logic in AG2
 
-Generally, we recommend to use AG-UI always when you need to build a rich interactive UI for your agent. It should take less than 1 hour to create your own *ChatGPT*-like Web application.
+Generally, we recommend using AG-UI whenever you need to build a rich interactive UI for your agent. It less than an hour you can create your own *ChatGPT*-like web application.
 
 ## Installation
 
-To use the AG-UI integration, install AG2 with the `ag-ui` extra, which pulls in the official `ag-ui-protocol` package:
+To use the AG-UI integration, install AG2 with the `ag-ui` extra, pulling in the official `ag-ui-protocol` package:
 
 ```bash
 pip install "ag2[ag-ui]"
 ```
 
-## Fast integration: build an ASGI endpoint
+## Fast integration: Build an ASGI endpoint
 
-If you are using Starlette or a Starlette-based framework (like FastAPI), `AGUIStream` can build an ASGI endpoint class for you.
+If you are using Starlette or a Starlette-based framework, like FastAPI, `AGUIStream` can build an ASGI endpoint class for you.
 
 <Tabs>
   <Tab title="Starlette">
@@ -81,7 +78,7 @@ app.mount("/chat", stream.build_asgi())
   </Tab>
 </Tabs>
 
-Because the class returned by `build_asgi()` is a standard Starlette `HTTPEndpoint`, you can plug it or mount into **any ASGI application** that accepts ASGI routes (for example, FastAPI, Starlette itself, or other Starlette-based frameworks).
+Because the class returned by `build_asgi()` is a standard Starlette `HTTPEndpoint`, you can plug or mount into **any ASGI application** that accepts ASGI routes (for example, FastAPI, Starlette itself, or other Starlette-based frameworks).
 
 This gives you a ready-to-use endpoint compatible with AG-UI frontends:
 
@@ -89,7 +86,7 @@ This gives you a ready-to-use endpoint compatible with AG-UI frontends:
 uvicorn asgi_ag_ui:app
 ```
 
-## Advanced example: manual dispatch
+## Advanced example: Manual dispatch
 
 The most flexible way to integrate AG-UI is to:
 
@@ -144,7 +141,7 @@ It allows you to add any additional logic to the endpoint, for example, you can 
 
 ### Authentication
 
-As an example, you can easily protect your endpoint with a simple authentication layer you use in your other endpoints.
+You can protect your endpoint with a simple authentication layer, such token-based shown below, that you already use in other endpoints.
 
 ```python title="run_ag_ui.py" linenums="1" hl_lines="11 13-14"
 from typing import Annotated
@@ -168,9 +165,9 @@ async def run_agent(
 
 ### Tools Context
 
-In other cases you may want to provide additional context to your agent. For example, you may want to provide a user ID, a session ID, a user profile, etc.
+In some cases you may want to provide additional context to your agent, such as the user's ID, a session ID, a user profile, etc.
 
-You can use this information in your agent's tools in a regular way ([`ContextVariables`](../advanced-concepts/orchestration/group-chat/context-variables.mdx)), by passing it as a parameter to the tool function.
+You can pass this information into your agent's tools using the standard ([`ContextVariables`](../advanced-concepts/orchestration/group-chat/context-variables.mdx)) way, passing it as a parameter to the tool function.
 
 ```python linenums="1" hl_lines="3-5"
 from autogen import ConversableAgent, LLMConfig, ContextVariables
@@ -186,7 +183,7 @@ agent = ConversableAgent(
 )
 ```
 
-To pass this context to your agent, you can use the `context` parameter of the `RunAgentInput` object.
+Pass this context to your agent, you can use the `context` parameter of the `dispatch` method.
 
 ```python linenums="1" hl_lines="22"
 from typing import Annotated
@@ -215,13 +212,13 @@ async def run_agent(
     return StreamingResponse(event_stream)
 ```
 
-## Backend vs frontend tools
+## Backend vs Frontend tools
 
-Tools mechanism is one of the most powerful features of AG-UI. It allows you to mix backend tools (Python functions) and frontend tools (UI actions / GenUI tools) in one coherent protocol.
+The tools mechanism is one of the most powerful features of AG-UI. It allows you to mix backend tools (Python functions) and frontend tools (UI actions / GenUI tools) in one coherent protocol.
 
 ### Backend tools (Python functions)
 
-Backend tools are regular AG2 tools registered on your `ConversableAgent`:
+Backend tools are AG2 tools registered on your `ConversableAgent`:
 
 ```python linenums="1"
 from typing import Annotated
@@ -243,15 +240,15 @@ agent = ConversableAgent(
 )
 ```
 
-AG-UI allows you to capture such tool calls and render them in the UI to notify user about backend agent activity.
+AG-UI allows you to capture these tool's calls and render them in the UI to notify the user about backend agent activity.
 
 ### Frontend tools (UI-driven actions)
 
-Frontend tools are defined on the AG-UI side and allow you to build flexible and fancy UI to interact with your agent.
+Frontend tools are defined on the AG-UI side and allow you to build flexible and appealing UI to interact with your agent.
 
-Most common cases of frontend tools are:
+The most common cases of frontend tools are:
 
-- Generative UI - tools, that able render UI based on LLM output: fancy cards, lists, buttons and others
-- HITL (Human in the Loop) - tools, that allow you ask user input from UI in a specific way: buttons, toggles, etc.
+- Generative UI - tools that are able to render UI based on LLM output: custom cards, lists, buttons and others
+- HITL (Human in the Loop) - tools that allow you to ask the user for specific input from the UI: buttons, toggles, etc.
 
 You can learn more about frontend tools in the [CopilotKit documentation](https://docs.copilotkit.ai/ag2/frontend-actions).
