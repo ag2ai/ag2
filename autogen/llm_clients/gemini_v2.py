@@ -987,14 +987,33 @@ class GeminiV2Client(ModelClient):
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:  # type: ignore[override]
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:  # type: ignore[override]
         """
-        Extract text messages from UnifiedResponse for V1 compatibility.
+        Extract text messages or OpenAI-style message dicts from UnifiedResponse for V1 compatibility.
+
+        Returns message dicts with tool_calls when present so _Group_Tool_Executor can execute tools.
 
         Args:
             response: UnifiedResponse object
 
         Returns:
-            List of text strings from messages
+            List of text strings or message dicts (with tool_calls when present)
         """
-        return [msg.get_text() for msg in response.messages]
+        if not response.messages:
+            return []
+        result: list[str] | list[dict[str, Any]] = []
+        for msg in response.messages:
+            tool_calls_list = msg.get_tool_calls()
+            if tool_calls_list:
+                result.append({
+                    "role": "assistant",
+                    "content": msg.get_text() or None,
+                    "tool_calls": [
+                        {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                        for tc in tool_calls_list
+                    ],
+                })
+            else:
+                text = msg.get_text()
+                result.append({"role": "assistant", "content": text or ""})
+        return result
