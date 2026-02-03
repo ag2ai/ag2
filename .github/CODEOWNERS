@@ -1,20 +1,27 @@
 # AG2 code owners
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# A2A and Remote
+# A2A, AG-UI, and Remote
 /autogen/a2a/ @Lancetnik
-/autogen/remote/ @Lancetnik
+/autogen/ag_ui/ @Lancetnik
+/autogen/agentchat/remote/ @Lancetnik
+
 /test/a2a/ @Lancetnik
-/test/remote/ @Lancetnik
+/test/ag_ui/ @Lancetnik
+/test/agentchat/remote/ @Lancetnik
+
 /website/docs/user-guide/a2a/ @Lancetnik
+/website/docs/user-guide/ag-ui/ @Lancetnik
 
 # ParallelAgentRunner
 /autogen/agentchat/run_parallel_agents.py @priyansh4320
 /test/agentchat/test_run_parallel_agents.py @priyansh4320
 
-# observability
+# Observability
 /website/docs/user-guide/observability/ @priyansh4320
 
-# GPT 5.1 Apply Patch Tool
+# GPT Apply Patch Tool & Shell Tool
 /autogen/tools/experimental/apply_patch/ @priyansh4320
+/autogen/tools/experimental/shell/ @priyansh4320
 /test/tools/experimental/apply_patch/ @priyansh4320
+/test/tools/experimental/shell/ @priyansh4320

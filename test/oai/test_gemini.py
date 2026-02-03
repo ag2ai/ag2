@@ -30,7 +30,7 @@ with optional_import_block() as result:
 
 def test_gemini_llm_config_entry():
     gemini_llm_config = GeminiLLMConfigEntry(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         api_key="dummy_api_key",
         project_id="fake-project-id",
         location="us-west1",
@@ -38,7 +38,7 @@ def test_gemini_llm_config_entry():
     )
     expected = {
         "api_type": "google",
-        "model": "gemini-2.0-flash-lite",
+        "model": "gemini-2.5-flash",
         "api_key": "dummy_api_key",
         "project_id": "fake-project-id",
         "location": "us-west1",

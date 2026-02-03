@@ -11,8 +11,7 @@ from dirty_equals import IsStr
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import ContextVariables, ReplyResult
 from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult
-from autogen.remote.agent_service import AgentService
-from autogen.remote.protocol import RequestMessage, ResponseMessage
+from autogen.agentchat.remote import AgentService, RequestMessage, ServiceResponse
 from autogen.testing import TestAgent, ToolCall
 
 
@@ -21,20 +20,22 @@ async def test_smoke() -> None:
     # arrange
     agent = ConversableAgent("test-agent")
 
+    responses = []
     with TestAgent(agent, ["Hi, I am remote agent!"]):
         # act
-        result = await AgentService(agent)(RequestMessage(messages=[{"content": "Hi agent!"}]))
+        service = AgentService(agent)
+
+        async for response in service(RequestMessage(messages=[{"content": "Hi agent!"}])):
+            responses.append(response)
 
     # assert
-    assert result == ResponseMessage(
-        messages=[
-            {
-                "content": "Hi, I am remote agent!",
-                "role": "assistant",
-                "name": "test-agent",
-            }
-        ]
-    )
+    assert responses == [
+        ServiceResponse(
+            message={"content": "Hi, I am remote agent!", "role": "assistant", "name": "test-agent"},
+            context=None,
+            input_required=None,
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -50,6 +51,7 @@ async def test_remote_tool_call() -> None:
     def get_time() -> str:
         return "12:00:00"
 
+    responses = []
     with TestAgent(
         agent,
         [
@@ -57,13 +59,16 @@ async def test_remote_tool_call() -> None:
             "Well, good to know!",
         ],
     ):
+        service = AgentService(agent)
+
         # act
-        result = await AgentService(agent)(RequestMessage(messages=[{"content": "Hi agent!"}]))
+        async for response in service(RequestMessage(messages=[{"content": "Hi agent!"}])):
+            responses.append(response)
 
     # assert
-    assert result == ResponseMessage(
-        messages=[
-            {
+    assert responses == [
+        ServiceResponse(
+            message={
                 "tool_calls": [
                     {
                         "function": {"name": "get_time", "arguments": "{}"},
@@ -74,19 +79,23 @@ async def test_remote_tool_call() -> None:
                 "content": None,
                 "role": "assistant",
             },
-            {
+        ),
+        ServiceResponse(
+            message={
                 "content": "12:00:00",
                 "tool_responses": [{"role": "tool", "content": "12:00:00", "tool_call_id": IsStr()}],
                 "role": "tool",
                 "name": "test-agent",
             },
-            {
+        ),
+        ServiceResponse(
+            message={
                 "content": "Well, good to know!",
                 "role": "assistant",
                 "name": "test-agent",
             },
-        ],
-    )
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -108,6 +117,7 @@ async def test_update_context() -> None:
 
         return ReplyResult(message="", context_variables=context_variables)
 
+    responses = []
     with TestAgent(
         agent,
         [
@@ -115,19 +125,22 @@ async def test_update_context() -> None:
             "Well, good to know!",
         ],
     ):
+        service = AgentService(agent)
+
         # act
-        result = await AgentService(agent)(
+        async for response in service(
             RequestMessage(
                 messages=[{"content": "Hi agent!"}],
                 context={"time": "00:00:00", "another_time": "01:00:00"},
             ),
-        )
+        ):
+            responses.append(response)
 
     # assert
-    assert result.context == {
+    assert responses[-1].context == {
         "time": "12:00:00",
         "another_time": "01:00:00",
-    }, result
+    }
 
 
 @pytest.mark.asyncio
@@ -150,10 +163,12 @@ async def test_guardrails() -> None:
     agent.register_output_guardrail(out_guard)
 
     with TestAgent(agent, ["Hi, user!"]):
+        service = AgentService(agent)
         # act
-        await AgentService(agent)(
+        async for _ in service(
             RequestMessage(messages=[{"content": "Hi agent!"}]),
-        )
+        ):
+            pass
 
     # assert
     in_guard.mock.assert_called_once_with([{"content": "Hi agent!"}])
