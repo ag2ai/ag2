@@ -32,7 +32,7 @@ from pydantic import Field, field_validator
 
 from autogen.oai.shared_utils import normalize_pydantic_schema_to_dict
 
-from ..import_utils import optional_import_block
+from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config.client import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
