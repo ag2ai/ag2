@@ -202,7 +202,7 @@ seed = 42  # for caching, use None for no caching
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
-        "api_type": "gemini",
+        "api_type": "gemini_v2",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -293,7 +293,7 @@ seed = None # for caching
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
-        "api_type": "gemini",
+        "api_type": "gemini_v2",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -359,7 +359,7 @@ the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gem
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
-        "api_type": "gemini",
+        "api_type": "gemini_v2",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -387,3 +387,4 @@ response = agent.run(message=prompt, max_turns=2).process()
 - Backward compatibility with existing code
 - Simple ChatCompletion format responses
 - Basic Gemini API functionality
+ 
