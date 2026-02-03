@@ -10,6 +10,7 @@ from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, 
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
     CONTEXT_KEY,
+    make_artifact,
     message_from_part,
     message_to_part,
     request_message_from_a2a,
@@ -17,9 +18,8 @@ from autogen.a2a.utils import (
     response_message_from_a2a_artifacts,
     response_message_from_a2a_message,
     response_message_from_a2a_task,
-    response_message_to_a2a,
 )
-from autogen.remote.protocol import RequestMessage, ResponseMessage
+from autogen.agentchat.remote.protocol import RequestMessage, ResponseMessage
 
 
 class TestMessageToPart:
@@ -396,25 +396,17 @@ class TestResponseMessageFromA2AMessage:
 
 class TestResponseMessageToA2A:
     def test_none_response(self) -> None:
-        artifact, messages, input_required = response_message_to_a2a(None, "ctx-123", "task-456")
+        artifact = make_artifact(message=None)
 
-        assert not input_required
         assert artifact == Artifact(
             name="result",
             parts=[],
             # randomly generated artifact_id
             artifact_id=artifact.artifact_id,
         )
-        assert messages == []
 
     def test_response_with_context(self) -> None:
-        response = ResponseMessage(
-            messages=[{"content": "Hello"}],
-            context={"key": "value"},
-        )
-        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
-
-        assert not input_required
+        artifact = make_artifact(message={"content": "Hello"}, context={"key": "value"})
 
         assert artifact == Artifact(
             name="result",
@@ -423,43 +415,6 @@ class TestResponseMessageToA2A:
             # randomly generated artifact_id
             artifact_id=artifact.artifact_id,
         )
-
-        assert messages == [
-            Message(
-                context_id="ctx-123",
-                task_id="task-456",
-                parts=[
-                    Part(root=TextPart(text="Hello")),
-                ],
-                role=Role.agent,
-                # randomly generated message_id
-                message_id=messages[0].message_id,
-            )
-        ]
-
-    def test_response_with_multiple_messages(self) -> None:
-        response = ResponseMessage(
-            messages=[
-                {"content": "Message 1"},
-                {"content": "Message 2"},
-                {"content": "Message 3"},
-            ]
-        )
-        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
-
-        assert not input_required
-
-        # Artifact should contain only the last message
-        assert artifact == Artifact(
-            name="result",
-            parts=[Part(root=TextPart(text="Message 3"))],
-            # randomly generated artifact_id
-            artifact_id=artifact.artifact_id,
-        )
-
-        # History messages should contain all message with all history parts
-        assert len(messages) == 1
-        assert len(messages[0].parts) == 3
 
 
 class TestRoundTripConversions:
@@ -474,15 +429,3 @@ class TestRoundTripConversions:
         converted_request = request_message_from_a2a(a2a_message)
 
         assert converted_request == original_request
-
-    def test_response_round_trip_with_message(self) -> None:
-        original_response = ResponseMessage(
-            messages=[{"content": "Response text"}],
-            context={"session": "123"},
-        )
-
-        # Convert to A2A and back
-        artifact, _, _ = response_message_to_a2a(original_response, "ctx-123", "task-456")
-        converted_response = response_message_from_a2a_artifacts([artifact])
-
-        assert converted_response == original_response
