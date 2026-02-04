@@ -229,7 +229,7 @@ class TestCrawl4aiCompatibility:
         [
             ("openai", "gpt-4o-mini", "openai/gpt-4o-mini"),
             ("anthropic", "claude-sonnet-4-5", "anthropic/claude-sonnet-4-5"),
-            ("google", "gemini", "gemini-pro", "gemini/gemini-pro"),  # Note: google gets converted to gemini
+            ("gemini", "gemini-pro", "gemini/gemini-pro"),  # Note: google gets converted to gemini
             ("azure", "gpt-4", "azure/gpt-4"),
             ("ollama", "llama2", "ollama/llama2"),
         ],
