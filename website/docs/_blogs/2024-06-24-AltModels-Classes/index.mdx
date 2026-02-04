@@ -10,7 +10,7 @@ tags: [Non-OpenAI Models]
 
 - **AutoGen has expanded integrations with a variety of cloud-based model providers beyond OpenAI.**
 - **Leverage models and platforms from Gemini, Anthropic, Mistral AI, Together.AI, and Groq for your AutoGen agents.**
-- **Utilise models specifically for chat, language, and coding; multimodal (image, audio, video) support is currently only available via Google Gemini.**
+- **Utilise models specifically for chat, language, image, and coding.**
 - **LLM provider diversification can provide cost and resilience benefits.**
 
 In addition to the recently released AutoGen [Google Gemini](https://ai.google.dev/) client, new client classes for [Mistral AI](https://mistral.ai/), [Anthropic](https://www.anthropic.com/), [Together.AI](https://www.together.ai/), and [Groq](https://groq.com/) enable you to utilize over 75 different large language models in your AutoGen agent workflow.
@@ -46,7 +46,8 @@ AutoGen's ability to associate specific configurations to each agent means you c
 
 The common requirements of text generation and function/tool calling are supported by these client classes.
 
-**Multi-modal support, such as for image/audio/video, is currently only available via the [Google Gemini](/docs/user-guide/models/google-gemini) client class.** This can be used to create a multimodal agent. Multimodal support for other providers (Mistral, Anthropic, Groq, Together.AI) is an area of active development, but not yet available.
+Multi-modal support, such as for image/audio/video, is an area of active development. The [Google Gemini](/docs/user-guide/models/google-gemini) client class can be
+used to create a multimodal agent.
 
 ## Tips
 
@@ -313,14 +314,14 @@ user_proxy (to functionbot):
 
 ***** Response from calling tool (toolu_016wBUKVX2TToBaMqmiGvhav) *****
 New York will be 11 degrees fahrenheit
-***********************************************************************
+***************************************************************
 
 --------------------------------------------------------------------------------
 user_proxy (to functionbot):
 
 ***** Response from calling tool (toolu_01Nxjeew2BspfKdZ85on3XkP) *****
 913.0000000000001 USD
-***********************************************************************
+***************************************************************
 
 --------------------------------------------------------------------------------
 functionbot (to user_proxy):
