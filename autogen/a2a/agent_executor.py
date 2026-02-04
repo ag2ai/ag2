@@ -12,10 +12,10 @@ from a2a.types import InternalError, Task, TaskState, TaskStatus
 from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
-from autogen.agentchat.remote import AgentService, ServiceResponse
 from autogen.doc_utils import export_module
+from autogen.remote.agent_service import AgentService
 
-from .utils import make_artifact, make_input_required_message, make_working_message, request_message_from_a2a
+from .utils import request_message_from_a2a, response_message_to_a2a
 
 
 @export_module("autogen.a2a")
@@ -50,42 +50,28 @@ class AutogenAgentExecutor(AgentExecutor):
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
 
-        final_message: ServiceResponse | None = None
         try:
-            async for response in self.agent(request_message_from_a2a(context.message)):
-                if response.input_required:
-                    await updater.requires_input(
-                        message=make_input_required_message(
-                            context_id=task.context_id,
-                            task_id=task.id,
-                            text=response.input_required,
-                            context=response.context,
-                        ),
-                        final=True,
-                    )
-                    return
-
-                else:
-                    await updater.update_status(
-                        message=make_working_message(
-                            message=response.message,
-                            context_id=task.context_id,
-                            task_id=task.id,
-                        ),
-                        state=TaskState.working,
-                    )
-
-                final_message = response
+            result = await self.agent(request_message_from_a2a(context.message))
 
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-        if final_message:
-            artifact = make_artifact(
-                message=final_message.message,
-                context=final_message.context,
+        artifact, messages, input_required_msg = response_message_to_a2a(result, context.context_id, task.id)
+
+        # publish local chat history events
+        for message in messages:
+            await updater.update_status(
+                state=TaskState.working,
+                message=message,
             )
 
+        # publish input required event
+        if input_required_msg:
+            await updater.requires_input(message=input_required_msg, final=True)
+            return
+
+        # publish the task final result event
+        if artifact:
             await updater.add_artifact(
                 artifact_id=artifact.artifact_id,
                 name=artifact.name,

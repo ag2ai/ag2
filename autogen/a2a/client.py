@@ -18,13 +18,13 @@ from typing_extensions import Self
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
-from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.doc_utils import export_module
 from autogen.events.agent_events import TerminationEvent
 from autogen.io.base import IOStream
 from autogen.oai.client import OpenAIWrapper
+from autogen.remote.httpx_client_factory import ClientFactory, EmptyClientFactory
+from autogen.remote.protocol import RequestMessage, ResponseMessage
 
-from .client_factory import ClientFactory, EmptyClientFactory
 from .errors import A2aAgentNotFoundError, A2aClientError
 from .utils import (
     request_message_to_a2a,
@@ -220,15 +220,13 @@ class A2aRemoteAgent(ConversableAgent):
         except (httpx.ConnectError, A2AClientHTTPError) as e:
             if not started_task:
                 if not self._agent_card:
-                    raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                ) from e
+                    raise A2aClientError("Failed to connect to the agent: agent card not found") from e
+                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         if not started_task:
             if not self._agent_card:
                 raise A2aClientError("Failed to connect to the agent: agent card not found")
-            raise A2aClientError(f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}")
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
 
         connection_attemps = 1
         while connection_attemps < self._max_reconnects:
@@ -242,9 +240,9 @@ class A2aRemoteAgent(ConversableAgent):
                 connection_attemps += 1
                 if connection_attemps >= self._max_reconnects:
                     if not self._agent_card:
-                        raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
+                        raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                     raise A2aClientError(
-                        f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
+                        f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}"
                     ) from e
 
         return None
@@ -261,15 +259,13 @@ class A2aRemoteAgent(ConversableAgent):
         except (httpx.ConnectError, A2AClientHTTPError) as e:
             if not started_task:
                 if not self._agent_card:
-                    raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                ) from e
+                    raise A2aClientError("Failed to connect to the agent: agent card not found") from e
+                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         if not started_task:
             if not self._agent_card:
                 raise A2aClientError("Failed to connect to the agent: agent card not found")
-            raise A2aClientError(f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}")
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
 
         connection_attemps = 1
         while connection_attemps < self._max_reconnects:
@@ -280,9 +276,9 @@ class A2aRemoteAgent(ConversableAgent):
                 connection_attemps += 1
                 if connection_attemps >= self._max_reconnects:
                     if not self._agent_card:
-                        raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
+                        raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                     raise A2aClientError(
-                        f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
+                        f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}"
                     ) from e
 
             else:

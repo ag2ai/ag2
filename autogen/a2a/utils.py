@@ -9,7 +9,7 @@ from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, 
 from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
 from a2a.utils.message import new_agent_text_message
 
-from autogen.agentchat.remote import RequestMessage, ResponseMessage
+from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
@@ -125,48 +125,51 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
     )
 
 
-def make_artifact(
-    message: dict[str, Any] | None,
-    context: dict[str, Any] | None = None,
-) -> Artifact:
+def response_message_to_a2a(
+    result: ResponseMessage | None,
+    context_id: str | None,
+    task_id: str | None,
+) -> tuple[Artifact | None, list[Message], Message | None]:
+    if not result:
+        return (
+            new_artifact(
+                name="result",
+                parts=[],
+                description=None,
+            ),
+            [],
+            None,
+        )
+
+    message_history = [
+        new_agent_parts_message(
+            parts=[message_to_part(m) for m in result.messages],
+            context_id=context_id,
+            task_id=task_id,
+        ),
+    ]
+
+    if result.input_required is not None:
+        input_message = new_agent_text_message(
+            text=result.input_required,
+            context_id=context_id,
+            task_id=task_id,
+        )
+        if result.context:
+            input_message.metadata = {CONTEXT_KEY: result.context}
+
+        return None, message_history, input_message
+
     artifact = new_artifact(
         name="result",
-        parts=[message_to_part(message)] if message else [],
+        parts=[message_to_part(result.messages[-1])],
         description=None,
     )
 
-    if context:
-        artifact.metadata = {CONTEXT_KEY: context}
+    if result.context:
+        artifact.metadata = {CONTEXT_KEY: result.context}
 
-    return artifact
-
-
-def make_working_message(
-    message: dict[str, Any] | None,
-    context_id: str,
-    task_id: str,
-) -> Message:
-    return new_agent_parts_message(
-        parts=[message_to_part(message)] if message else [],
-        context_id=context_id,
-        task_id=task_id,
-    )
-
-
-def make_input_required_message(
-    text: str,
-    context_id: str,
-    task_id: str,
-    context: dict[str, Any] | None = None,
-) -> Message:
-    message = new_agent_text_message(
-        text=text,
-        context_id=context_id,
-        task_id=task_id,
-    )
-    if context:
-        message.metadata = {CONTEXT_KEY: context}
-    return message
+    return artifact, message_history, None
 
 
 def message_to_part(message: dict[str, Any]) -> Part:
