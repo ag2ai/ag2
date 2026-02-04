@@ -53,9 +53,11 @@ Sample OAI_CONFIG_LIST
         "model": "gemini-2.5-flash",
         "api_key": "your Google's GenAI Key goes here",
         "api_type": "gemini"
+        "api_type": "gemini"
     },
     {
         "model": "gemini-2.5-pro",
+        "api_type": "gemini"
         "api_type": "gemini"
     },
     {
@@ -385,3 +387,4 @@ response = agent.run(message=prompt, max_turns=2).process()
 - Backward compatibility with existing code
 - Simple ChatCompletion format responses
 - Basic Gemini API functionality
+ 
