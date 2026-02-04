@@ -14,6 +14,7 @@ from autogen.agentchat.remote import RequestMessage, ResponseMessage
 AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
 CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
+COST_KEY = f"{AG2_METADATA_KEY_PREFIX}cost"
 
 
 def request_message_to_a2a(
@@ -88,9 +89,10 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     if len(artifact.parts) > 1:
         raise NotImplementedError("Multiple parts are not supported")
 
+    metadata = artifact.metadata or {}
+
     return ResponseMessage(
-        messages=[message_from_part(artifact.parts[-1])],
-        context=(artifact.metadata or {}).get(CONTEXT_KEY),
+        messages=[message_from_part(artifact.parts[-1])], context=metadata.get(CONTEXT_KEY), cost=metadata.get(COST_KEY)
     )
 
 
@@ -128,15 +130,20 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
 def make_artifact(
     message: dict[str, Any] | None,
     context: dict[str, Any] | None = None,
+    cost: dict[str, Any] | None = None,
+    name: str = "result",
 ) -> Artifact:
     artifact = new_artifact(
-        name="result",
+        name=name,
         parts=[message_to_part(message)] if message else [],
         description=None,
     )
 
+    artifact.metadata = artifact.metadata or {}
     if context:
-        artifact.metadata = {CONTEXT_KEY: context}
+        artifact.metadata[CONTEXT_KEY] = context
+    if cost:
+        artifact.metadata[COST_KEY] = cost
 
     return artifact
 

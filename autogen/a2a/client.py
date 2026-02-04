@@ -185,6 +185,10 @@ class A2aRemoteAgent(ConversableAgent):
                     return True, None
 
                 messages = reply.messages
+
+                if reply.cost and self.client:
+                    self.client.actual_usage_summary = reply.cost
+
                 if reply.input_required is not None:
                     user_input = await self.a_get_human_input(prompt=f"Input for `{self.name}`\n{reply.input_required}")
 

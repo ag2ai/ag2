@@ -401,6 +401,7 @@ class TestResponseMessageToA2A:
         assert artifact == Artifact(
             name="result",
             parts=[],
+            metadata={},
             # randomly generated artifact_id
             artifact_id=artifact.artifact_id,
         )

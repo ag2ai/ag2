@@ -28,6 +28,7 @@ class AutogenAgentExecutor(AgentExecutor):
 
     def __init__(self, agent: ConversableAgent) -> None:
         self.agent = AgentService(agent)
+        self.__agent = agent
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         assert context.message
@@ -84,6 +85,7 @@ class AutogenAgentExecutor(AgentExecutor):
             artifact = make_artifact(
                 message=final_message.message,
                 context=final_message.context,
+                cost=self.__agent.get_actual_usage(),
             )
 
             await updater.add_artifact(
