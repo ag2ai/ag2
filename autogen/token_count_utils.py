@@ -77,8 +77,6 @@ def get_max_token_limit(model: str = "gpt-3.5-turbo-0613") -> int:
         "gpt-5.2": 128000,
         "gpt-5.2-chat-latest": 128000,
         "gpt-5.2-pro": 128000,
-        "gpt-5.2-codex": 128000,
-        "gpt-5.1-codex-max": 128000,
     }
     return max_token_limit[model]
 
