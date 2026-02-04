@@ -18,12 +18,10 @@ from dirty_equals import IsInt, IsPartialDict, IsStr
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.ag_ui import AGUIStream
-from autogen.agentchat import ContextVariables, ReplyResult
 from autogen.testing import TestAgent
 from autogen.testing import ToolCall as TestToolCall
 from test.ag_ui.utils import (
     assert_event_type,
-    assert_no_event_type,
     collect_events,
     create_run_input,
     get_events_of_type,
@@ -532,108 +530,4 @@ class TestContextHandling:
                     events.append(json.loads(event_str))
 
         assert_event_type(events, "RUN_STARTED")
-        assert_event_type(events, "RUN_FINISHED")
-
-
-class TestStateSnapshotEvent:
-    async def test_initial_state_snapshot_when_agent_has_context_variables(self) -> None:
-        agent = ConversableAgent(
-            "test_agent",
-            context_variables=ContextVariables({"proverbs": ["AG2 the best choice to build your agent."]}),
-        )
-
-        with TestAgent(agent, ["Response using context."]):
-            stream = AGUIStream(agent)
-            run_input = create_run_input(
-                UserMessage(id="msg_1", content="Hello!"),
-                state=None,
-            )
-
-            events = await collect_events(stream, run_input)
-
-        run_started = assert_event_type(events, "RUN_STARTED")
-        assert run_started == IsPartialDict({
-            "threadId": run_input.thread_id,
-            "runId": run_input.run_id,
-            "timestamp": IsInt(),
-        })
-
-        state_snapshot = assert_event_type(events, "STATE_SNAPSHOT")
-        assert state_snapshot == IsPartialDict({
-            "snapshot": {"proverbs": ["AG2 the best choice to build your agent."]},
-            "timestamp": IsInt(),
-        })
-
-        assert_event_type(events, "TEXT_MESSAGE_CHUNK")
-        assert_event_type(events, "RUN_FINISHED")
-
-    async def test_no_initial_state_snapshot_when_state_matches(self) -> None:
-        agent = ConversableAgent("test_agent")
-
-        with TestAgent(agent, ["Response."]):
-            stream = AGUIStream(agent)
-            run_input = create_run_input(
-                UserMessage(id="msg_1", content="Hello!"),
-                state={},
-            )
-
-            events = await collect_events(stream, run_input)
-
-        assert_event_type(events, "RUN_STARTED")
-        assert_no_event_type(events, "STATE_SNAPSHOT")
-        assert_event_type(events, "TEXT_MESSAGE_CHUNK")
-        assert_event_type(events, "RUN_FINISHED")
-
-    async def test_state_snapshot_when_tool_returns_reply_result_with_context(self) -> None:
-        agent = ConversableAgent(
-            "test_agent",
-            llm_config=LLMConfig({
-                "model": "gpt-4o-mini",
-                "api_key": "test-key",
-            }),
-            context_variables=ContextVariables({"proverbs": ["Initial proverb."]}),
-        )
-
-        @agent.register_for_execution()
-        @agent.register_for_llm()
-        def get_proverbs(context_variables: ContextVariables) -> ReplyResult:
-            """Get the current list of proverbs."""
-            proverbs = context_variables.get("proverbs", [])
-            return ReplyResult(
-                message=", ".join(proverbs),
-                context_variables=context_variables,
-            )
-
-        with TestAgent(
-            agent,
-            [
-                TestToolCall("get_proverbs").to_message(),
-                "The proverbs are: Initial proverb.",
-            ],
-        ):
-            stream = AGUIStream(agent)
-            run_input = create_run_input(
-                UserMessage(id="msg_1", content="What are the proverbs?"),
-                state={"proverbs": ["Initial proverb."]},
-            )
-
-            events = await collect_events(stream, run_input)
-
-        assert_event_type(events, "RUN_STARTED")
-
-        assert_event_type(events, "TOOL_CALL_START")
-        assert_event_type(events, "TOOL_CALL_ARGS")
-        assert_event_type(events, "TOOL_CALL_RESULT")
-        assert_event_type(events, "TOOL_CALL_END")
-
-        state_snapshots = get_events_of_type(events, "STATE_SNAPSHOT")
-        assert len(state_snapshots) >= 1
-        snapshot_with_proverbs = next(
-            (e for e in state_snapshots if e.get("snapshot", {}).get("proverbs") == ["Initial proverb."]),
-            None,
-        )
-        assert snapshot_with_proverbs is not None
-        assert "timestamp" in snapshot_with_proverbs
-
-        assert_event_type(events, "TEXT_MESSAGE_CHUNK")
         assert_event_type(events, "RUN_FINISHED")

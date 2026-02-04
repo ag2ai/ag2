@@ -17,6 +17,7 @@ from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_
 from typing_extensions import Self
 
 from autogen import ConversableAgent
+from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.doc_utils import export_module
 from autogen.events.agent_events import TerminationEvent
@@ -202,8 +203,9 @@ class A2aRemoteAgent(ConversableAgent):
                     continue
 
                 if sender and reply.context:
-                    self.context_variables.update(reply.context)
-                    sender.context_variables.update(reply.context)
+                    context_variables = ContextVariables(reply.context)
+                    self.context_variables.update(context_variables.to_dict())
+                    sender.context_variables.update(context_variables.to_dict())
 
                 return True, reply.messages[-1]
 
