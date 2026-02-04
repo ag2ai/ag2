@@ -3,6 +3,10 @@ title: Google Gemini
 sidebarTitle: Google Gemini
 ---
 
+<Warn>
+**AG-UI/AGUIStream Removed**: AG-UI integration (including AGUIStream and related UI streaming) is no longer available in AG2 as of this version. If you are seeking frontend streaming protocol or UI integration, this is not currently supported.
+</Warn>
+
 ## Installation
 
 Install AG2 with Gemini features:
@@ -387,3 +391,4 @@ response = agent.run(message=prompt, max_turns=2).process()
 - Backward compatibility with existing code
 - Simple ChatCompletion format responses
 - Basic Gemini API functionality
+ 
