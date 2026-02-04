@@ -84,23 +84,20 @@ First, let's create a function that checks for duplicate payments:
 import os
 from typing import Annotated, Any
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 
-load_dotenv()
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(
-    config_list={
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ.get("OPENAI_API_KEY"),
-    }
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ.get("OPENAI_API_KEY"),
+    "temperature": 0.2,
+})
 
 # Mock database of previous transactions
 def get_previous_transactions() -> list[dict[str, Any]]:
@@ -257,7 +254,7 @@ transactions = [
 
 # Format the initial message
 initial_prompt = (
-    "Please process the following transactions one at a time, checking for duplicates:\n note: strictly goto summary_bot once all tasks are done and generate final summary\n\n" +
+    "Please process the following transactions one at a time, checking for duplicates:\n\n" +
     "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
 )
 ```
@@ -327,23 +324,20 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     import random
     from typing import Annotated, Any
     from datetime import datetime, timedelta
-    from dotenv import load_dotenv
 
     from autogen import ConversableAgent, LLMConfig
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
 
-    load_dotenv()
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(
-        config_list={
-            "api_type": "openai",
-            "model": "gpt-5-nano",
-            "api_key": os.environ.get("OPENAI_API_KEY"),
-        }
-    )
+    llm_config = LLMConfig(config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "temperature": 0.2,
+    })
 
     # Mock database of previous transactions
     def get_previous_transactions() -> list[dict[str, Any]]:
