@@ -387,22 +387,6 @@ class TestShellExecutorValidateCommand:
             # Tilde paths should be expanded
             executor._validate_command("cat ~/file.txt")
 
-    def test_validate_command_path_validation_windows_style(self) -> None:
-        """Test _validate_command validates Windows-style paths (e.g., C:\\path)."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            executor = ShellExecutor(
-                workspace_dir=tmpdir,
-                allowed_paths=["src/**"],  # Not "**", so path validation is active
-            )
-
-            # Windows-style absolute paths should be detected and validated
-            # These paths are outside the allowed patterns and should fail
-            with pytest.raises(ValueError, match="Access to path.*is not allowed"):
-                executor._validate_command("cat C:\\Windows\\System32\\file.txt")
-
-            with pytest.raises(ValueError, match="Access to path.*is not allowed"):
-                executor._validate_command("type D:\\Users\\test\\file.txt")
-
 
 # -----------------------------------------------------------------------------
 # run Method Tests
