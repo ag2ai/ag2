@@ -301,7 +301,7 @@ class TestLLMConfig:
             ),
             pytest.param(
                 {
-                    "api_type": "google",
+                    "api_type": "gemini",
                     "model": "gemini-2.5-flash",
                     "api_key": "dummy_api_key",
                     "project_id": "fake-project-id",

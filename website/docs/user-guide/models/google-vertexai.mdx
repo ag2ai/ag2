@@ -109,26 +109,26 @@ The config could look like the following (change `project_id` and `google_applic
 config_list = [
     {
         "model": "gemini-pro",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "ag2-with-gemini",
         "location": "us-west1"
     },
     {
         "model": "gemini-1.5-pro-001",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "ag2-with-gemini",
         "location": "us-west1"
     },
     {
         "model": "gemini-1.5-pro",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "ag2-with-gemini",
         "location": "us-west1",
         "google_application_credentials": "ag2-with-gemini-service-account-key.json"
     },
     {
         "model": "gemini-pro-vision",
-        "api_type": "google",
+        "api_type": "gemini",
         "project_id": "ag2-with-gemini",
         "location": "us-west1"
     }
@@ -264,7 +264,7 @@ credentials, project_id = google.auth.default(scopes)
 
 llm_config_gemini_vision = LLMConfig(config_list={
     "model": "gemini-pro-vision",
-    "api_type": "google",
+    "api_type": "gemini",
     "project_id": project_id,
     "credentials": credentials,
     "location": "us-west1",

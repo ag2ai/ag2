@@ -6,11 +6,6 @@ try:
 except ImportError as e:
     raise ImportError("a2a-sdk is not installed. Please install it with:\npip install ag2[a2a]") from e
 
-try:
-    import httpx  # noqa: F401
-except ImportError as e:
-    raise ImportError("httpx is not installed. Please install it with:\npip install httpx") from e
-
 import warnings
 
 warnings.warn(
@@ -23,9 +18,11 @@ warnings.warn(
     stacklevel=2,
 )
 
+from autogen.remote.httpx_client_factory import HttpxClientFactory
+
 from .agent_executor import AutogenAgentExecutor
 from .client import A2aRemoteAgent
-from .client_factory import HttpxClientFactory, MockClient
+from .httpx_client_factory import MockClient
 from .server import A2aAgentServer, CardSettings
 
 __all__ = (

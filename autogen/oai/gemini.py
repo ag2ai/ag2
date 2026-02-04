@@ -11,7 +11,7 @@ Example:
     llm_config = {
         "config_list": [
             {
-                "api_type": "google",
+                "api_type": "gemini",
                 "model": "gemini-pro",
                 "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
                 "safety_settings": [
@@ -63,6 +63,7 @@ from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
+from .shared_utils import normalize_pydantic_schema_to_dict
 
 with optional_import_block():
     import google.genai as genai
@@ -104,7 +105,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiEntryDict(LLMConfigEntryDict, total=False):
-    api_type: Literal["google"]
+    api_type: Literal["gemini"]
 
     project_id: str | None
     location: str | None
@@ -118,7 +119,7 @@ class GeminiEntryDict(LLMConfigEntryDict, total=False):
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["google"] = "google"
+    api_type: Literal["gemini"] = "gemini"
     project_id: str | None = None
     location: str | None = None
     # google_application_credentials points to the path of the JSON Keyfile
@@ -333,15 +334,12 @@ class GeminiClient:
         if params.get("response_format"):
             self._response_format = params.get("response_format")
             generation_config["response_mime_type"] = "application/json"
-
-            response_format_schema_raw = params.get("response_format")
-
-            if isinstance(response_format_schema_raw, dict):
-                response_schema = resolve_json_references(response_format_schema_raw)
-            else:
-                response_schema = resolve_json_references(params.get("response_format").model_json_schema())
-            if "$defs" in response_schema:
-                response_schema.pop("$defs")
+            # Normalize schema: resolve $ref references and handle additionalProperties
+            # For GenAI API, convert additionalProperties to properties
+            # For Vertex AI, keep as-is (may support additionalProperties)
+            response_schema = normalize_pydantic_schema_to_dict(
+                params.get("response_format"), for_genai_api=not self.use_vertexai
+            )
             generation_config["response_schema"] = response_schema
 
         # A. create and call the chat model.
@@ -634,7 +632,7 @@ class GeminiClient:
         rst = []
         for message in messages:
             parts, part_type = self._oai_content_to_gemini_content(message)
-            role = "user" if message.get("role", "user") in ["user", "system"] else "model"
+            role = "user" if message["role"] in ["user", "system"] else "model"
 
             if part_type == "text":
                 rst.append(

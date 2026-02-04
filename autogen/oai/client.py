@@ -256,6 +256,8 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     extra_body: dict[str, Any] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
+    workspace_dir: str | None
+    allowed_paths: list[str] | None
 
 
 class OpenAILLMConfigEntry(LLMConfigEntry):
@@ -974,7 +976,14 @@ class OpenAIWrapper:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
                 client = CerebrasClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
-            elif api_type is not None and api_type.startswith("google"):
+            elif api_type is not None and api_type.startswith("gemini_v2"):
+                # Gemini V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                self._configure_openai_config_for_gemini(config, openai_config)
+                from autogen.llm_clients import GeminiV2Client as V2Client
+
+                client = V2Client(response_format=response_format, **openai_config)
+                self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type in ("gemini", "google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
                 self._configure_openai_config_for_gemini(config, openai_config)
@@ -1595,7 +1604,7 @@ class OpenAIResponsesEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["responses"]
 
     tool_choice: Literal["none", "auto", "required"] | None
-    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "shell"]] | None
+    built_in_tools: list[str] | None
 
 
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
@@ -1618,15 +1627,11 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
-    built_in_tools: (
-        list[Literal["web_search", "image_generation", "apply_patch", "apply_patch_async", "shell"]] | None
-    ) = None
+    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "apply_patch_async"]] | None = (
+        None  # added type safety for built-in tools and IDE autocomplete
+    )
     workspace_dir: str | None = None
     allowed_paths: list[str] | None = None
-    allowed_commands: list[str] | None = None
-    denied_commands: list[str] | None = None
-    enable_command_filtering: bool = True
-    dangerous_patterns: list[tuple[str, str]] | None = None
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")

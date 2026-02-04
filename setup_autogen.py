@@ -29,7 +29,6 @@ setuptools.setup(
     install_requires=["ag2==" + __version__],
     extras_require={
         "a2a": ["ag2[a2a]==" + __version__],
-        "ag-ui": ["ag2[ag-ui]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
         "openai-realtime": ["ag2[openai-realtime]==" + __version__],

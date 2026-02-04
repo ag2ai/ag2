@@ -35,6 +35,7 @@ Usage:
 """
 
 from .client_v2 import ModelClientV2
+from .gemini_v2 import GeminiV2Client, GeminiV2LLMConfigEntry
 from .models import (
     AudioContent,
     BaseContent,
@@ -58,6 +59,7 @@ __all__ = [  # noqa: RUF022
     "ModelClientV2",
     # Clients
     "OpenAICompletionsClient",
+    "GeminiV2Client",
     # Content blocks
     "AudioContent",
     "BaseContent",
@@ -74,4 +76,6 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    # LLM Config Entries
+    "GeminiV2LLMConfigEntry",
 ]
