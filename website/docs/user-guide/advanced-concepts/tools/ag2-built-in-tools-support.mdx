@@ -71,9 +71,9 @@ Built-in tools are currently supported when using the OpenAI Responses API (`api
 "built_in_tools": ["web_search"]
 ```
 
-**Use cases:** 
-(1) Answering questions about recent events or breaking news; 
-(2) Fetching and summarizing documentation for a specific library or API; 
+**Use cases:**
+(1) Answering questions about recent events or breaking news;
+(2) Fetching and summarizing documentation for a specific library or API;
 (3) Verifying factual claims against current sources.
 
 ---
@@ -92,9 +92,9 @@ Built-in tools are currently supported when using the OpenAI Responses API (`api
 
 **Supported models:** gpt-image-1, dall-e-3, dall-e-2 (varies by API availability).
 
-**Use cases:** 
-(1) Generating a brand logo or icon from a textual brief; 
-(2) Creating diagrams or flowcharts to illustrate a concept; 
+**Use cases:**
+(1) Generating a brand logo or icon from a textual brief;
+(2) Creating diagrams or flowcharts to illustrate a concept;
 (3) Producing marketing assets (banners, thumbnails) from descriptions.
 
 ---
@@ -133,9 +133,9 @@ llm_config = LLMConfig(
 
 **Sync vs async:** Use `apply_patch` for synchronous execution; use `apply_patch_async` for async workflows (e.g., Jupyter, event loops).
 
-**Use cases:** 
-(1) Scaffolding a new project with predefined file structure and boilerplate; 
-(2) Implementing a feature across multiple files via targeted diffs; 
+**Use cases:**
+(1) Scaffolding a new project with predefined file structure and boilerplate;
+(2) Implementing a feature across multiple files via targeted diffs;
 (3) Applying suggested edits from an automated code review.
 
 ---
@@ -177,9 +177,9 @@ llm_config = LLMConfig(
 For production use, always configure `workspace_dir` and restrict `allowed_paths`. Use `allowed_commands` for strict control. See the [Shell Tool and Multi-tool Execution blog](/docs/_blogs/2025-12-24-AG2-Shell-Tool-and-multi-in-built-tool-execution/) for detailed security guidelines.
 </Warning>
 
-**Use cases:** 
-(1) Running tests and linters after code changes (e.g., `pytest`, `ruff`); 
-(2) Building and packaging an application (e.g., `npm build`, `poetry build`); 
+**Use cases:**
+(1) Running tests and linters after code changes (e.g., `pytest`, `ruff`);
+(2) Building and packaging an application (e.g., `npm build`, `poetry build`);
 (3) Inspecting files and processes (e.g., `ls`, `grep`, `ps`) for diagnostics.
 
 ---
