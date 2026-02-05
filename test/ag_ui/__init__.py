@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ("__version__",)
+import pytest
 
-__version__ = "0.11.0"
+pytest.importorskip("ag_ui")

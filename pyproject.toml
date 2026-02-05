@@ -66,6 +66,10 @@ a2a = [
     "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
 
+ag-ui = [
+    "ag-ui-protocol>=0.1.10,<0.2",
+]
+
 flaml = [
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
@@ -538,7 +542,6 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
-    "autogen/remote",
     "autogen/a2a",
     "autogen/testing",
     "website/*.py",
