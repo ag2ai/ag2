@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult, LLMGuardrail, RegexGuardrail
+from autogen.agentchat.group.guardrails import (
+    Guardrail,
+    GuardrailResult,
+    LLMGuardrail,
+    RegexGuardrail,
+    ToolCallLLMGuardrail,
+)
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 
 
@@ -219,8 +225,91 @@ class TestLLMGuardrail:
                 name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
             )
 
-            # Verify that response_format was set to GuardrailResult
+            # Verify that response_format was set (GuardrailCheckResponse) and config was copied
             mock_llm_config.deepcopy.assert_called_once()
+
+
+class TestToolCallLLMGuardrail:
+    @pytest.fixture
+    def mock_target(self) -> TransitionTarget:
+        return MagicMock(spec=TransitionTarget)
+
+    @pytest.fixture
+    def mock_llm_config(self) -> MagicMock:
+        config = MagicMock()
+        config.deepcopy.return_value = config
+        config.model_dump.return_value = {"model": "test", "api_key": "test"}
+        return config
+
+    def test_init_prepends_tool_call_condition(
+        self, mock_target: TransitionTarget, mock_llm_config: MagicMock
+    ) -> None:
+        """Test that ToolCallLLMGuardrail prepends tool-call context to the condition."""
+        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
+            guardrail = ToolCallLLMGuardrail(
+                name="tool_guard",
+                condition="arguments contain PII.",
+                target=mock_target,
+                llm_config=mock_llm_config,
+            )
+        assert "Here are arguments to a Tool call function." in guardrail.condition
+        assert "arguments contain PII." in guardrail.condition
+
+    def test_check_returns_not_activated_when_no_tool_calls(
+        self, mock_target: TransitionTarget, mock_llm_config: MagicMock
+    ) -> None:
+        """Test that check returns activated=False when context has no tool calls."""
+        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
+            guardrail = ToolCallLLMGuardrail(
+                name="tool_guard",
+                condition="test",
+                target=mock_target,
+                llm_config=mock_llm_config,
+            )
+        result = guardrail.check(context=[])
+        assert result.activated is False
+        assert result.guardrail is guardrail
+        result = guardrail.check(context=[{"role": "user", "content": "hello"}])
+        assert result.activated is False
+
+    def test_check_delegates_to_base_when_tool_calls_present(
+        self, mock_target: TransitionTarget, mock_llm_config: MagicMock
+    ) -> None:
+        """Test that check delegates to LLMGuardrail when tool_calls are in the last message."""
+        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper") as mock_wrapper:
+            mock_wrapper.return_value.create.return_value = MagicMock(
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content='{"activated": false, "justification": "No issue."}'
+                        )
+                    )
+                ]
+            )
+            guardrail = ToolCallLLMGuardrail(
+                name="tool_guard",
+                condition="test",
+                target=mock_target,
+                llm_config=mock_llm_config,
+            )
+            context = [
+                {"role": "user", "content": "hi"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "function": {"name": "run_code", "arguments": '{"code": "1+1"}'},
+                            "type": "function",
+                        }
+                    ],
+                },
+            ]
+            result = guardrail.check(context=context)
+        assert result.activated is False
+        assert result.justification == "No issue."
+        assert result.guardrail is guardrail
+        mock_wrapper.return_value.create.assert_called_once()
 
 
 class TestRegexGuardrail:
