@@ -241,9 +241,7 @@ class TestToolCallLLMGuardrail:
         config.model_dump.return_value = {"model": "test", "api_key": "test"}
         return config
 
-    def test_init_prepends_tool_call_condition(
-        self, mock_target: TransitionTarget, mock_llm_config: MagicMock
-    ) -> None:
+    def test_init_prepends_tool_call_condition(self, mock_target: TransitionTarget, mock_llm_config: MagicMock) -> None:
         """Test that ToolCallLLMGuardrail prepends tool-call context to the condition."""
         with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
             guardrail = ToolCallLLMGuardrail(
@@ -278,13 +276,7 @@ class TestToolCallLLMGuardrail:
         """Test that check delegates to LLMGuardrail when tool_calls are in the last message."""
         with patch("autogen.agentchat.group.guardrails.OpenAIWrapper") as mock_wrapper:
             mock_wrapper.return_value.create.return_value = MagicMock(
-                choices=[
-                    MagicMock(
-                        message=MagicMock(
-                            content='{"activated": false, "justification": "No issue."}'
-                        )
-                    )
-                ]
+                choices=[MagicMock(message=MagicMock(content='{"activated": false, "justification": "No issue."}'))]
             )
             guardrail = ToolCallLLMGuardrail(
                 name="tool_guard",
