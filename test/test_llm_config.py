@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2LLMConfigEntry
+from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2LLMConfigEntry
 from autogen.llm_config import LLMConfig
 from autogen.oai import (
     AnthropicLLMConfigEntry,

@@ -26,7 +26,7 @@ pytestmark = [
 @pytest.fixture
 def client():
     """Create a fresh client for each test."""
-    from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+    from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
     return OpenAIResponsesV2Client()
 
@@ -115,7 +115,7 @@ class TestMultimodal:
     @pytest.mark.integration
     def test_create_multimodal_message(self):
         """Test creating multimodal message structure."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         message = OpenAIResponsesV2Client.create_multimodal_message(
             text="What do you see?",
@@ -130,7 +130,7 @@ class TestMultimodal:
     @pytest.mark.integration
     def test_image_description(self, client):
         """Test image description with vision model."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         message = OpenAIResponsesV2Client.create_multimodal_message(
             text="Describe this image briefly.",
@@ -162,7 +162,7 @@ class TestBuiltInTools:
         assert response.messages[0].get_text() is not None
 
         # Check for citations
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         citations = OpenAIResponsesV2Client.get_citations(response)
         # May or may not have citations depending on query
@@ -172,7 +172,7 @@ class TestBuiltInTools:
     @pytest.mark.slow
     def test_image_generation(self, client):
         """Test image generation built-in tool."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         client.set_image_output_params(quality="low", size="1024x1024")
 
@@ -195,7 +195,7 @@ class TestStructuredOutput:
         """Test structured output with Pydantic model."""
         from pydantic import BaseModel
 
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         class Person(BaseModel):
             name: str
@@ -222,7 +222,7 @@ class TestCostTracking:
     @pytest.mark.integration
     def test_per_request_cost(self, client):
         """Test per-request cost tracking."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         response = client.create({
             "model": "gpt-4.1-nano",
@@ -337,7 +337,7 @@ class TestShellTool:
     @pytest.mark.integration
     def test_shell_tool_config(self):
         """Test shell tool configuration."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         client = OpenAIResponsesV2Client()
         client.set_shell_params(
@@ -353,7 +353,7 @@ class TestShellTool:
     @pytest.mark.integration
     def test_get_shell_calls(self, client):
         """Test get_shell_calls static method."""
-        from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client
+        from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
 
         # This test verifies the method exists and works
         # Actual shell execution requires API support

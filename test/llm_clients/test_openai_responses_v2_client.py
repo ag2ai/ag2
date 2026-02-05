@@ -17,7 +17,7 @@ from autogen.llm_clients.models import (
     ToolCallContent,
     UnifiedResponse,
 )
-from autogen.llm_clients.openai_resposnes_v2_client import (
+from autogen.llm_clients.openai_responses_v2 import (
     OpenAIResponsesV2Client,
     OpenAIResponsesV2LLMConfigEntry,
     calculate_image_cost,
@@ -118,7 +118,7 @@ def create_mock_web_search_output(search_id, status="completed"):
 @pytest.fixture
 def mock_openai_client():
     """Create mock OpenAI client for Responses API."""
-    with patch("autogen.llm_clients.openai_resposnes_v2_client.OpenAI") as mock_openai_class:
+    with patch("autogen.llm_clients.openai_responses_v2.OpenAI") as mock_openai_class:
         mock_client_instance = Mock()
         mock_client_instance.responses = Mock()
         mock_openai_class.return_value = mock_client_instance
@@ -1482,7 +1482,7 @@ class TestApplyPatchCallOutput:
 
     def test_apply_patch_call_output_creation(self):
         """Test creating ApplyPatchCallOutput."""
-        from autogen.llm_clients.openai_resposnes_v2_client import ApplyPatchCallOutput
+        from autogen.llm_clients.openai_responses_v2 import ApplyPatchCallOutput
 
         output = ApplyPatchCallOutput(
             call_id="call_123",
@@ -1497,7 +1497,7 @@ class TestApplyPatchCallOutput:
 
     def test_apply_patch_call_output_to_dict(self):
         """Test converting ApplyPatchCallOutput to dict."""
-        from autogen.llm_clients.openai_resposnes_v2_client import ApplyPatchCallOutput
+        from autogen.llm_clients.openai_responses_v2 import ApplyPatchCallOutput
 
         output = ApplyPatchCallOutput(
             call_id="call_456",
@@ -1525,7 +1525,7 @@ class TestShellToolDataclasses:
 
     def test_shell_call_outcome_creation(self):
         """Test creating ShellCallOutcome."""
-        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+        from autogen.llm_clients.openai_responses_v2 import ShellCallOutcome
 
         outcome = ShellCallOutcome(type="exit", exit_code=0)
 
@@ -1534,7 +1534,7 @@ class TestShellToolDataclasses:
 
     def test_shell_call_outcome_timeout(self):
         """Test ShellCallOutcome with timeout."""
-        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+        from autogen.llm_clients.openai_responses_v2 import ShellCallOutcome
 
         outcome = ShellCallOutcome(type="timeout", exit_code=None)
 
@@ -1543,7 +1543,7 @@ class TestShellToolDataclasses:
 
     def test_shell_call_outcome_to_dict(self):
         """Test converting ShellCallOutcome to dict."""
-        from autogen.llm_clients.openai_resposnes_v2_client import ShellCallOutcome
+        from autogen.llm_clients.openai_responses_v2 import ShellCallOutcome
 
         outcome = ShellCallOutcome(type="exit", exit_code=1)
         result = outcome.to_dict()
@@ -1552,7 +1552,7 @@ class TestShellToolDataclasses:
 
     def test_shell_command_output_creation(self):
         """Test creating ShellCommandOutput."""
-        from autogen.llm_clients.openai_resposnes_v2_client import (
+        from autogen.llm_clients.openai_responses_v2 import (
             ShellCallOutcome,
             ShellCommandOutput,
         )
@@ -1570,7 +1570,7 @@ class TestShellToolDataclasses:
 
     def test_shell_command_output_to_dict(self):
         """Test converting ShellCommandOutput to dict."""
-        from autogen.llm_clients.openai_resposnes_v2_client import (
+        from autogen.llm_clients.openai_responses_v2 import (
             ShellCallOutcome,
             ShellCommandOutput,
         )
@@ -1586,7 +1586,7 @@ class TestShellToolDataclasses:
 
     def test_shell_call_output_creation(self):
         """Test creating ShellCallOutput."""
-        from autogen.llm_clients.openai_resposnes_v2_client import (
+        from autogen.llm_clients.openai_responses_v2 import (
             ShellCallOutcome,
             ShellCallOutput,
             ShellCommandOutput,
@@ -1605,7 +1605,7 @@ class TestShellToolDataclasses:
 
     def test_shell_call_output_to_dict(self):
         """Test converting ShellCallOutput to dict."""
-        from autogen.llm_clients.openai_resposnes_v2_client import (
+        from autogen.llm_clients.openai_responses_v2 import (
             ShellCallOutcome,
             ShellCallOutput,
             ShellCommandOutput,

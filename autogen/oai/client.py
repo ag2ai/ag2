@@ -1034,7 +1034,7 @@ class OpenAIWrapper:
                 client = v2_client
             elif api_type is not None and api_type.startswith("responses_v2"):
                 # OpenAI Responses API V2 (stateful). Use the new OpenAIResponsesV2Client.
-                from autogen.llm_clients.openai_resposnes_v2_client import OpenAIResponsesV2Client as V2Client
+                from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client as V2Client
 
                 v2_client = V2Client(
                     api_key=openai_config.get("api_key"),
