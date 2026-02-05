@@ -5,9 +5,12 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import json
+
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.code_utils import content_str
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import __TOOL_EXECUTOR_NAME__, GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
@@ -504,6 +507,80 @@ class TestGroupToolExecutor:
             result = executor.is_handoff_function(message8)
             assert result is True
             assert mock_check.call_count == 2
+
+    def test_normalize_tool_content_none(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with None."""
+        result = executor._normalize_tool_content(None)
+        assert result == ""
+
+    def test_normalize_tool_content_string(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a string."""
+        result = executor._normalize_tool_content("hello world")
+        assert result == "hello world"
+
+    def test_normalize_tool_content_plain_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a plain Python list."""
+        content = [5, 3, 10]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_empty_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an empty list."""
+        result = executor._normalize_tool_content([])
+        assert result == json.dumps([])
+
+    def test_normalize_tool_content_openai_format(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with OpenAI message format (list of dicts with 'type' keys)."""
+        content = [
+            {"type": "text", "text": "hello"},
+            {"type": "image_url", "image_url": {"url": "test.jpg"}},
+        ]
+        result = executor._normalize_tool_content(content)
+        assert result == content_str(content)
+
+    def test_normalize_tool_content_list_of_dicts_no_type(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a list of dicts without 'type' keys."""
+        content = [{"key": "value"}, {"another": "dict"}]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_tuple(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a tuple."""
+        content = (5, 3, 10)
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_dict(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a dictionary."""
+        content = {"key": "value", "nested": {"a": 1}}
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_int(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an integer."""
+        result = executor._normalize_tool_content(42)
+        assert result == json.dumps(42)
+
+    def test_normalize_tool_content_float(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a float."""
+        result = executor._normalize_tool_content(3.14)
+        assert result == json.dumps(3.14)
+
+    def test_normalize_tool_content_bool(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a boolean."""
+        result = executor._normalize_tool_content(True)
+        assert result == json.dumps(True)
+
+    def test_normalize_tool_content_non_json_serializable(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a non-JSON-serializable object."""
+
+        class CustomObject:
+            def __str__(self) -> str:
+                return "custom_object"
+
+        content = CustomObject()
+        result = executor._normalize_tool_content(content)
+        assert result == str(content)
 
 
 class TestGroupToolExecutorAsync:
