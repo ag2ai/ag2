@@ -2068,6 +2068,9 @@ class OpenAIResponsesV2Client(ModelClient):
         content_blocks: list[Any] = []
         messages = []
 
+        # Capture image cost before processing so we can compute per-response cost
+        image_cost_before = self._image_costs
+
         # When using responses.parse(), the response has an `output_parsed` attribute
         # containing the parsed Pydantic model instance
         output_parsed = getattr(response, "output_parsed", None)
@@ -2442,12 +2445,11 @@ class OpenAIResponsesV2Client(ModelClient):
         self._total_prompt_tokens += prompt_tokens
         self._total_completion_tokens += completion_tokens
 
-        # Calculate total cost (tokens + images)
-        total_cost = token_cost + self._image_costs
+        response_image_cost = self._image_costs - image_cost_before
+        total_cost = token_cost + response_image_cost
 
-        # Add cost breakdown to usage
         usage["token_cost"] = token_cost
-        usage["image_cost"] = self._image_costs
+        usage["image_cost"] = response_image_cost
 
         # Build UnifiedResponse
         unified_response = UnifiedResponse(
@@ -2460,7 +2462,7 @@ class OpenAIResponsesV2Client(ModelClient):
             provider_metadata={
                 "created": getattr(response, "created", None),
                 "token_cost": token_cost,
-                "image_cost": int(self._image_costs),
+                "image_cost": response_image_cost,
                 "cumulative_token_cost": self._token_costs,
                 "cumulative_image_cost": self._image_costs,
             },
