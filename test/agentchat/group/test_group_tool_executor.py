@@ -2,20 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
-
 import json
+from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.code_utils import content_str
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import __TOOL_EXECUTOR_NAME__, GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.code_utils import content_str
 from autogen.tools import Tool
+from autogen.types import UserMessageImageContentPart, UserMessageTextContentPart
 
 
 class TestGroupToolExecutor:
@@ -536,7 +536,7 @@ class TestGroupToolExecutor:
             {"type": "image_url", "image_url": {"url": "test.jpg"}},
         ]
         result = executor._normalize_tool_content(content)
-        assert result == content_str(content)
+        assert result == content_str(cast(list[UserMessageTextContentPart | UserMessageImageContentPart], content))
 
     def test_normalize_tool_content_list_of_dicts_no_type(self, executor: GroupToolExecutor) -> None:
         """Test _normalize_tool_content with a list of dicts without 'type' keys."""
