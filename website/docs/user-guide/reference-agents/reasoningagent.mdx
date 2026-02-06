@@ -54,7 +54,7 @@ import os
 load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 verbose = True
 
@@ -737,7 +737,7 @@ To use a different model for grading instead of gpt-5, pass the `grader_llm_conf
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+grader_llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 writer = AssistantAgent(
     name="Writer",
