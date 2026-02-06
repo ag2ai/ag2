@@ -141,7 +141,7 @@ workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
 
 # Setting up the LLM configuration
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
     "model": "llama3.1:8b",
     # We specify the API Type as 'ollama' so it uses the Ollama client class

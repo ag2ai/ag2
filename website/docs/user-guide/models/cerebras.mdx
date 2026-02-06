@@ -98,7 +98,7 @@ from pathlib import Path
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     "model": "llama-3.3-70b",
     "api_key": os.environ.get("CEREBRAS_API_KEY"),
     "api_type": "cerebras",

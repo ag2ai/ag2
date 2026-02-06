@@ -741,7 +741,7 @@ Here's the image we'll use:
 ![I -heart- AutoGen](/static/img/love.png)
 
 ```python
-llm_config_sonnet = LLMConfig(config_list={
+llm_config_sonnet = LLMConfig({
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "aws_region": "us-east-1",
