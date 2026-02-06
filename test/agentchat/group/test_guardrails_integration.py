@@ -5,6 +5,7 @@
 """Integration tests for guardrails (LLMGuardrail, ToolCallLLMGuardrail) with real API calls."""
 
 import os
+from typing import Any
 
 import pytest
 
@@ -75,7 +76,7 @@ def test_tool_call_guardrail_check_with_tool_calls_calls_llm() -> None:
         llm_config=llm_config,
     )
 
-    context_with_tool_calls = [
+    context_with_tool_calls: list[dict[str, Any]] = [
         {"role": "user", "content": "Run this for me."},
         {
             "role": "assistant",

@@ -106,6 +106,8 @@ You will activate the guardrail only if the condition is met.
         # Call the LLM with the check messages
         response = self.client.create(messages=check_messages)
         content = response.choices[0].message.content  # type: ignore[union-attr]
+        if not isinstance(content, str):
+            raise ValueError("Guardrail LLM response content must be a JSON string")
         parsed = GuardrailCheckResponse.model_validate_json(content)
         return GuardrailResult(
             activated=parsed.activated,

@@ -284,7 +284,7 @@ class TestToolCallLLMGuardrail:
                 target=mock_target,
                 llm_config=mock_llm_config,
             )
-            context = [
+            context: list[dict[str, Any]] = [
                 {"role": "user", "content": "hi"},
                 {
                     "role": "assistant",
