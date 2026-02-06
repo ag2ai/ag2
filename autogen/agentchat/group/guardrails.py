@@ -145,9 +145,8 @@ class ToolCallLLMGuardrail(LLMGuardrail):
                 last_msg = context[-1]
                 if "tool_calls" in last_msg:
                     return self._parse_tool_call_info(last_msg["tool_calls"])
-        elif isinstance(context, dict):
-            if "tool_calls" in context:
-                return self._parse_tool_call_info(context["tool_calls"])
+        elif isinstance(context, dict) and "tool_calls" in context:
+            return self._parse_tool_call_info(context["tool_calls"])
         return None
 
     def _parse_tool_call_info(self, tool_calls: list[dict[str, Any]]) -> str:
