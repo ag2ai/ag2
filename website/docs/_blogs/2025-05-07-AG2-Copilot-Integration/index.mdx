@@ -1,7 +1,7 @@
 ---
-title: "AG2 Now Integrated with CopilotKit"
-authors: [harish]
-tags: [AG2, CopilotKit]
+title: "AG-UI Integration in AG2: Build Real-Time Interactive Agent Applications"
+authors: [michael_barilla]
+tags: [AG2, AG-UI, CopilotKit]
 render_macros: false
 ---
 
@@ -9,242 +9,284 @@ render_macros: false
 
 **TL;DR**
 
-- **Instant Multi-Agent UI with CopilotKit**: Connect AG2's powerful multi-agent systems to polished React UIs without building custom components.
-- **Standardized Communication**: Uses the AG UI protocol to create a consistent bridge between frontend and backend, eliminating custom API development.
-- **Rapid Development**: Build production-ready AG2 powered AI applications in hours through pre-built and custom UI components using CopilotKit.
-- **Ready to Go**: Starter repo containing sample code for a travel planning assistant to get you started immediately.
+- **First-Class AG-UI Support**: AG2 now ships native integration with the AG-UI protocol for real-time interactive agent applications.
+- **Streaming & Tools**: Enable real-time streaming, unified tool execution, shared state, and custom UI events with minimal infrastructure.
+- **Production-Ready**: Expose any AG2 `ConversableAgent` directly to AG-UI-compatible frontends using the lightweight `AGUIStream` runtime.
+- **Get Started Fast**: Use the CopilotKit CLI to scaffold a working AG2 + React app in minutes.
 
-We’re excited to announce that <a href="https://www.copilotkit.ai/" target="_blank">CopilotKit</a> now integrates with AG2, bringing together AG2’s multi-agent orchestration capabilities with CopilotKit’s React UI components. This integration creates a more seamless development experience for building AI-powered applications.
+Modern AI agents are no longer just backend systems responding to API calls. They increasingly power full interactive applications — streaming responses, triggering tools, updating shared state, and driving rich user interfaces.
 
-\<!-- more -->
+To support this natively, AG2 now ships first-class integration with the AG-UI (Agent-User Interaction) protocol.
 
-## Why This Integration Matters for Developers
+<!-- more -->
 
-Building applications with intuitive interfaces that connect to AI backends presents several practical challenges:
+## What Is AG-UI?
 
-1. **Interface Development**: Creating intuitive interfaces for users to interact with LLM-powered backends requires building custom components for various functionalities—chat interfaces, approval workflows, login forms, and UI elements that dynamically respond to LLM outputs. Developing these components is time-consuming and difficult to maintain.
-2. **Backend Integration**: Connecting React applications to LLM powered backends typically requires custom API development and complex state management, especially when handling streaming responses or maintaining conversation context.
-3. **Protocol Standardization**: Without a common protocol, developers must build custom solutions for message passing between frontend and backend, often resulting in brittle implementations.
-4. **Maintenance Overhead**: As AI technologies evolve, maintaining compatibility between frontend and backend components requires ongoing developer attention.
+The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with AI agents.
 
-By communicating over a <a href="https://docs.agentwire.io/introduction" target="_blank">common protocol</a> and leveraging <a href="https://docs.copilotkit.ai/guides/custom-look-and-feel/built-in-ui-components" target="_blank">CopilotKit’s out-of-the-box components</a>, developers can integrate AI capabilities into existing applications or create new ones in hours rather than weeks or months.
+It defines a consistent event stream for:
 
-## AG2-CopilotKit Integration in Action
+- Streaming messages and partial responses
+- Tool invocations and results
+- Shared state updates
+- Custom UI events and actions
 
-Let’s see how this integration works by building a travel planning assistant that helps users create personalized itineraries.
+Instead of building custom WebSocket layers or brittle APIs, AG-UI provides a single coherent protocol for interactive agent applications.
 
-![screenshot 1](img/quick-start-1.png)
-![screenshot 2](img/quick-start-2.png)
+AG2's integration exposes this protocol through a lightweight runtime class:
 
-### Architecture Overview: How AG2 and CopilotKit Work Together
+```python
+from autogen.ag_ui import AGUIStream
+```
 
-The AG2-CopilotKit integration leverages the <a href="https://docs.agentwire.io/introduction" target="_blank">AG UI protocol</a> to standardize communication between frontend applications and AI agents.
+This connects AG2 agents directly to any AG-UI-compatible frontend — including frameworks like CopilotKit.
 
-![architecture](img/ag2-copilotkit-architecture.png)
+---
 
-The architecture consists of three main components:
+## When Should You Use AG-UI with AG2?
 
-1. **CopilotKit UI Components**: React components that provide the chat interface and other UI elements.
-2. **CopilotKit Runtime**: A middleware that handles communication between the frontend and backend.
-3. **AG2 Agent**: The backend agent system powered by AG2 and exposed via <a href="https://fastagency.ai/" target="_blank">FastAgency</a>.
+AG-UI is recommended whenever you're building a rich, interactive agent experience.
 
-The <a href="https://docs.agentwire.io/introduction" target='_blank'>AG UI protocol</a> creates a standardized way for these components to exchange messages, states, and actions, making integration more consistent across different frameworks and platforms.
+**Use it when:**
 
-### Starting with the Starter Kit
+- You already have (or plan to build) a web UI based on the AG-UI protocol
+- You want streaming responses and live tool events rendered in real time
+- You need both backend tools (Python functions) and frontend tools (UI actions) in a single workflow
+- You want standardized debugging and observability tooling (such as AG-UI Dojo)
+- You're building ChatGPT-style or workflow-driven agent applications
 
-The easiest way to get started is with the AG2-CopilotKit starter repository:
+In practice, most interactive agent apps benefit from AG-UI. In under an hour, you can expose an AG2 agent to a production-ready frontend.
+
+---
+
+## Installing AG-UI Support in AG2
+
+AG-UI support ships as an optional extra:
 
 ```bash
-git clone https://github.com/ag2ai/ag2-copilotkit-starter.git
-cd ag2-copilotkit-starter
+pip install "ag2[ag-ui]"
 ```
 
-This repository contains a complete example of an AG2-powered multi-agent system integrated with CopilotKit.
+This pulls in the official AG-UI protocol package and enables `AGUIStream`.
 
-### Prerequisites
+---
 
-Before you begin, you’ll need:
+## Fast Integration: Expose an ASGI Endpoint Automatically
 
-- Python 3.10 or newer
-- Node.js 18.18.0 or newer
-- pnpm (for package management)
-- OpenAI API key
+For most applications, the fastest way to integrate AG-UI is by letting `AGUIStream` generate an ASGI endpoint.
 
-### Backend Setup: AG2 Multi-Agent System
-
-The backend is built with <a href="https://fastagency.ai/" target="_blank">FastAgency</a>, a framework that simplifies creating and deploying AG2 agents. Let’s examine the key components and start with our <a href="https://github.com/ag2ai/ag2-copilotkit-starter/blob/main/agent-py/simple_workflow.py" target='_blank'>simple_workflow.py</a> file:
+### Using Starlette
 
 ```python
-# Initialize the workflowfrom fastagency import UI
-from fastagency.adapters.awp import AWPAdapter
-from fastagency.runtimes.ag2 import Workflow
-wf = Workflow()
+from starlette.applications import Starlette
+from starlette.routing import Route
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You answer product questions.",
+    llm_config=LLMConfig(model="gpt-4o-mini"),
+)
+
+stream = AGUIStream(agent)
+app = Starlette(routes=[Route("/chat", stream.build_asgi())])
 ```
 
-This code initializes an AG2 workflow that will contain your agent logic. Next, we register the workflow:
+### Using FastAPI
 
 ```python
-# Register the workflow
-@wf.register(name="simple_learning", description="A simple travel itinerary generator workflow")
-def simple_workflow(ui: UI, params: dict[str, Any]) -> str:
-    # Present the initial message to the user
-    initial_message = ui.text_input(
-        sender="Workflow",
-        recipient="User",
-        prompt=INITIAL_MESSAGE,
-    )
-    # Configure and run the agents
+from fastapi import FastAPI
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
 
-    # ...
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You answer product questions.",
+    llm_config=LLMConfig(model="gpt-4o-mini"),
+)
 
-    return ui.process(response)
-```
-
-This function:
-
-- Registers our FastAgency workflow with a name and description
-- Presents an initial message to the user
-- Configures agents to handle the conversation
-- Processes and returns the response
-
-Finally, we expose the workflow through FastAgency and FastAPI:
-
-```python
-# Set up FastAPI with the AWP adapter
-adapter = AWPAdapter(provider=wf)
+stream = AGUIStream(agent)
 app = FastAPI()
-app.include_router(adapter.router)
+app.mount("/chat", stream.build_asgi())
 ```
 
-This creates an endpoint that speaks the AG UI protocol, making our agent accessible to frontend applications. For more details, check the <a href="https://fastagency.ai/" target="_blank">FastAgency documentation</a>.
+Because `build_asgi()` returns a standard ASGI endpoint, it plugs into any Starlette-based framework.
 
-To start the backend, run the following commands from the root directory:
-
-!!! note
-    We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
-
-!!! note
-    Before running the below commands, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock/) supported by AG2.
-
-    ```bash
-    # macOS / Linux
-    export OPENAI_API_KEY="YOUR_API_KEY"
-
-    # Windows
-    setx OPENAI_API_KEY "YOUR_API_KEY"
-    ```
+Run it with:
 
 ```bash
-cd agent-py
-pip install -r requirements.txt
-uvicorn simple_workflow:app --port 8008 --reload
+uvicorn asgi_ag_ui:app
 ```
 
-### Frontend Setup: CopilotKit Integration
+Your agent is now exposed as a streaming AG-UI endpoint.
 
-The frontend integration consists of three main parts:
+---
 
-**1. API Route Configuration** (`ui/app/api/copilotkit/route.ts`):
+## Advanced Integration: Manual Event Dispatch
 
-```tsx
-import { CopilotRuntime, CustomHttpAgent } from "@copilotkit/runtime";
-import { copilotRuntimeHandler } from "@copilotkit/runtime/nextjs";
+For more control over request handling, you can manually dispatch events:
 
-// Connect to the AG2 backend server
-const BASE_URL = "http://127.0.0.1:8008";
+```python
+from ag_ui.core import RunAgentInput
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
 
-const agenticChatAgent = new CustomHttpAgent({
-    url: `${BASE_URL}/fastagency/awp`,
-});
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You help users with billing questions.",
+    llm_config=LLMConfig(model="gpt-4o-mini"),
+)
 
-const runtime = new CopilotRuntime({
-	agents: {
-        agenticChatAgent,
-    },
-});
-export const { GET, POST } = copilotRuntimeHandler(runtime);
+stream = AGUIStream(agent)
+app = FastAPI()
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    accept: str | None = Header(None),
+) -> StreamingResponse:
+    event_stream = stream.dispatch(message, accept=accept)
+    return StreamingResponse(
+        event_stream,
+        media_type=accept or "text/event-stream",
+    )
 ```
 
-This code:
+This streams encoded AG-UI Server-Sent Events back to the client — including messages, tools, and state updates.
 
-- Creates a connection to our AG2 backend using the AG UI protocol
-- Sets up a CopilotKit runtime with our agent
-- Exports handlers for `Next.js` API routes
+---
 
-**2. CopilotKit Provider** (`ui/app/layout.tsx`):
+## Authentication and Middleware
 
-```tsx
-import { CopilotKit } from "@copilotkit/react-core";
-import "@copilotkit/react-ui/styles.css";
+Adding authentication is straightforward:
 
-export default function RootLayout({ children }: { children: any }) {
-    return (
-        <html lang="en">
-            <body>
-                <CopilotKit
-                    agent="agenticChatAgent"
-                    runtimeUrl="/api/copilotkit"
-                    showDevConsole={false}
-                >
-                    {children}
-                </CopilotKit>
-            </body>
-        </html>
-    );
-}
-```
-This wraps our application with the CopilotKit provider, connecting it to our agent through the runtime.
+```python
+from typing import Annotated
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 
-**3. Chat Interface** (`ui/app/page.tsx`):
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    token: Annotated[str, Header(...)]
+) -> StreamingResponse:
+    if token != "1234567890":
+        raise HTTPException(status_code=401)
 
-```tsx
-"use client";
-
-import { CopilotSidebar } from "@copilotkit/react-ui";
-
-export default function Home() {
-    return (
-        <main>
-        <YourMainContent />
-        <CopilotSidebar
-            defaultOpen={true}
-            labels={{
-            title: "Popup Assistant",
-            initial: "Hello! I'm here and ready to help.",
-            }}
-        />
-        </main>
-    );
-}
+    return StreamingResponse(stream.dispatch(message))
 ```
 
-This `CopilotSidebar` component is the key UI element that adds a chat interface powered by AG2 to your application. With just these few lines of code, you get a functional chat interface that communicates with your backend agents.
+You can also add:
 
-To start the frontend, run the following commands in a new terminal session:
+- Rate limiting
+- Caching
+- Observability
+- Session handling
+
+without touching agent logic.
+
+---
+
+## Passing Context Into Agent Tools
+
+You can inject context into your agent's tools using `ContextVariables`:
+
+```python
+from autogen import ConversableAgent, LLMConfig, ContextVariables
+
+def get_user_profile(context: ContextVariables) -> str:
+    return f"User profile for {context.get('user_id')}"
+
+agent = ConversableAgent(
+    "calculator",
+    functions=[get_user_profile],
+    llm_config=LLMConfig(model="gpt-4o-mini"),
+)
+```
+
+Pass it during dispatch:
+
+```python
+event_stream = stream.dispatch(
+    message,
+    context={"user_id": "1234567890"},
+)
+```
+
+This allows agents to personalize behavior based on session or user state.
+
+---
+
+## Backend Tools vs Frontend Tools — One Unified Protocol
+
+### Backend Tools (Python)
+
+```python
+def calculate_sum(a: int, b: int) -> int:
+    return a + b
+
+agent = ConversableAgent(
+    "calculator",
+    functions=[calculate_sum],
+    llm_config=LLMConfig(model="gpt-4o-mini"),
+)
+```
+
+These execute in Python and stream their activity to the UI.
+
+### Frontend Tools (UI Actions)
+
+Defined in the AG-UI frontend layer, these enable:
+
+- Generative UI (cards, lists, dynamic layouts)
+- UI-driven actions and controls
+- Interactive workflows rendered live
+
+Both tool types operate over the same AG-UI event stream — keeping agent logic and UI behavior fully synchronized.
+
+---
+
+## Why AG-UI in AG2 Matters
+
+Before AG-UI, interactive agent apps required:
+
+- Custom WebSocket servers
+- Hand-rolled streaming APIs
+- Frontend state orchestration
+- Tool plumbing across layers
+
+**With AG-UI in AG2:**
+
+✅ One standardized protocol  
+✅ Built-in streaming  
+✅ Unified tools and state  
+✅ Production-ready ASGI integration
+
+Your agents now directly power rich user experiences.
+
+---
+
+## Get Started
+
+Get hands-on fast with the CopilotKit CLI:
 
 ```bash
-cd ui
-pnpm i
-pnpm run dev
+npx copilotkit@latest init
 ```
 
-**Voilà!** 🚀. Your travel planning application is now live at <a href="http://localhost:3000" target="_blank">http://localhost:3000/</a>
+Select **AG2** when prompted, and you'll get:
 
-Open this URL in your browser and you'll see a sleek sidebar with your travel planning assistant ready to help.
+- A working AG2 backend with AG-UI streaming
+- A React frontend with CopilotKit components
+- An end-to-end example you can run immediately
 
-Try asking it to plan a trip to Paris for 5 days or request a budget-friendly itinerary to Tokyo. The agent will guide you through collecting necessary information and then generate a personalized travel plan just for you.
-
-This is the power of AG2 and CopilotKit working together—a sophisticated multi-agent system with a polished UI, all with minimal code!
-
-## Next Steps
-
-The AG2-CopilotKit integration provides a solid foundation for building AI-powered applications. By combining AG2’s agent capabilities with CopilotKit’s UI components, you can focus more on creating unique experiences for your users.
-
-Ready to explore more? Check out the <a href="https://docs.copilotkit.ai/" target="_blank">CopilotKit documentation</a> for more information.
+---
 
 ## Resources
 
-- <a href="https://github.com/ag2ai/ag2-copilotkit-starter" target="_blank">AG2-CopilotKit Starter Repository</a>
-- <a href="https://docs.copilotkit.ai/" target="_blank">CopilotKit Documentation</a>
-- <a href="https://docs.agentwire.io/introduction" target="_blank">AG UI Protocol Documentation</a>
-- <a href="https://fastagency.ai/" target="_blank">FastAgency Documentation</a>
+- <a href="https://github.com/ag2ai/ag2-samples" target="_blank">AG2 Samples Repository</a>
+- <a href="https://docs.copilotkit.ai/ag2" target="_blank">CopilotKit + AG2 Documentation</a>
+- <a href="https://docs.ag-ui.com/introduction" target="_blank">AG-UI Protocol Documentation</a>
