@@ -126,7 +126,7 @@ from autogen.agentchat.group.targets.transition_target import AgentTarget, Agent
 from autogen.agentchat.group import ReplyResult, ContextVariables, ExpressionContextCondition, ExpressionAvailableCondition, ContextExpression, OnContextCondition
 
 # Setup LLM configuration
-llm_config = LLMConfig(config_list={"model": "gpt-4.1-mini", "api_type": "openai", "cache_seed": 1, "parallel_tool_calls": False})
+llm_config = LLMConfig({"model": "gpt-4.1-mini", "api_type": "openai", "cache_seed": 1, "parallel_tool_calls": False})
 
 # Shared context for tracking the conversation and routing decisions
 shared_context = ContextVariables(data={
