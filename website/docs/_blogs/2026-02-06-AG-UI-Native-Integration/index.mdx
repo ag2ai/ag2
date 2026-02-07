@@ -78,6 +78,8 @@ For most applications, the fastest way to integrate AG-UI is by letting `AGUIStr
 ### Using Starlette
 
 ```python
+import os
+
 from starlette.applications import Starlette
 from starlette.routing import Route
 from autogen import ConversableAgent, LLMConfig
@@ -86,7 +88,9 @@ from autogen.ag_ui import AGUIStream
 agent = ConversableAgent(
     name="support_bot",
     system_message="You answer product questions.",
-    llm_config=LLMConfig(model="gpt-4o-mini"),
+    llm_config=LLMConfig(
+        {"model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
+    ),
 )
 
 stream = AGUIStream(agent)
@@ -96,6 +100,8 @@ app = Starlette(routes=[Route("/chat", stream.build_asgi())])
 ### Using FastAPI
 
 ```python
+import os
+
 from fastapi import FastAPI
 from autogen import ConversableAgent, LLMConfig
 from autogen.ag_ui import AGUIStream
@@ -103,7 +109,9 @@ from autogen.ag_ui import AGUIStream
 agent = ConversableAgent(
     name="support_bot",
     system_message="You answer product questions.",
-    llm_config=LLMConfig(model="gpt-4o-mini"),
+    llm_config=LLMConfig(
+        {"model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
+    ),
 )
 
 stream = AGUIStream(agent)
@@ -128,20 +136,25 @@ Your agent is now exposed as a streaming AG-UI endpoint.
 For more control over request handling, you can manually dispatch events:
 
 ```python
+import os
+
 from ag_ui.core import RunAgentInput
-from fastapi import FastAPI, Header
-from fastapi.responses import StreamingResponse
 from autogen import ConversableAgent, LLMConfig
 from autogen.ag_ui import AGUIStream
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
 
 agent = ConversableAgent(
     name="support_bot",
     system_message="You help users with billing questions.",
-    llm_config=LLMConfig(model="gpt-4o-mini"),
+    llm_config=LLMConfig(
+        {"model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
+    ),
 )
 
 stream = AGUIStream(agent)
 app = FastAPI()
+
 
 @app.post("/chat")
 async def run_agent(
@@ -165,13 +178,15 @@ Adding authentication is straightforward:
 
 ```python
 from typing import Annotated
+
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
+
 
 @app.post("/chat")
 async def run_agent(
     message: RunAgentInput,
-    token: Annotated[str, Header(...)]
+    token: Annotated[str, Header(...)],
 ) -> StreamingResponse:
     if token != "1234567890":
         raise HTTPException(status_code=401)
@@ -195,7 +210,10 @@ without touching agent logic.
 You can inject context into your agent's tools using `ContextVariables`:
 
 ```python
-from autogen import ConversableAgent, LLMConfig, ContextVariables
+import os
+
+from autogen import ConversableAgent, ContextVariables, LLMConfig
+
 
 def get_user_profile(context: ContextVariables) -> str:
     return f"User profile for {context.get('user_id')}"
@@ -203,7 +221,9 @@ def get_user_profile(context: ContextVariables) -> str:
 agent = ConversableAgent(
     "calculator",
     functions=[get_user_profile],
-    llm_config=LLMConfig(model="gpt-4o-mini"),
+    llm_config=LLMConfig(
+        {"model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
+    ),
 )
 ```
 
@@ -225,13 +245,18 @@ This allows agents to personalize behavior based on session or user state.
 ### Backend Tools (Python)
 
 ```python
+import os
+
+
 def calculate_sum(a: int, b: int) -> int:
     return a + b
 
 agent = ConversableAgent(
     "calculator",
     functions=[calculate_sum],
-    llm_config=LLMConfig(model="gpt-4o-mini"),
+    llm_config=LLMConfig(
+        {"model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
+    ),
 )
 ```
 
@@ -260,10 +285,10 @@ Before AG-UI, interactive agent apps required:
 
 **With AG-UI in AG2:**
 
-* ✅ One standardized protocol
-* ✅ Built-in streaming
-* ✅ Unified tools and state
-* ✅ Production-ready ASGI integration
+- ✅ One standardized protocol
+- ✅ Built-in streaming
+- ✅ Unified tools and state
+- ✅ Production-ready ASGI integration
 
 Your agents now directly power rich user experiences.
 
@@ -287,6 +312,6 @@ Select **AG2** when prompted, and you'll get:
 
 ## Resources
 
-- <a href="https://github.com/ag2ai/ag2-samples" target="_blank">AG2 Samples Repository</a>
-- <a href="https://docs.copilotkit.ai/ag2" target="_blank">CopilotKit + AG2 Documentation</a>
-- <a href="https://docs.ag-ui.com/introduction" target="_blank">AG-UI Protocol Documentation</a>
+- [AG2 Samples Repository](https://github.com/ag2ai/ag2-samples)
+- [CopilotKit + AG2 Documentation](https://docs.copilotkit.ai/ag2)
+- [AG-UI Protocol Documentation](https://docs.ag-ui.com/introduction)
