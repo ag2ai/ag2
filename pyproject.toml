@@ -303,6 +303,7 @@ docs = [
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-grpc",
+    "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
@@ -333,7 +334,7 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
-    "ag2[test, openai, a2a]",
+    "ag2[test, openai, a2a, ag-ui]",
 ]
 
 lint = [
