@@ -1,0 +1,205 @@
+---
+title: "Local OpenTelemetry Setup"
+description: "Set up a local OpenTelemetry Collector, Grafana Tempo, and Grafana stack for developing and testing AG2 tracing."
+---
+
+This page provides a ready-to-use Docker Compose stack for local tracing development. It runs an OpenTelemetry Collector, Grafana Tempo (trace storage), and Grafana (visualization) so you can see AG2 traces without any external services.
+
+For AG2 tracing instrumentation, see the [OpenTelemetry Tracing](/docs/user-guide/tracing/opentelemetry) page.
+
+## Directory Structure
+
+Create a directory with the following layout:
+
+```
+tracing/
+├── docker-compose.yaml
+├── otel-collector-config.yaml
+├── tempo/
+│   └── tempo-config.yaml
+└── grafana/
+    └── grafana-datasources.yaml
+```
+
+## Configuration Files
+
+### docker-compose.yaml
+
+```yaml title="docker-compose.yaml"
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "14317:4317"   # OTLP gRPC (AG2 sends here)
+      - "14318:4318"   # OTLP HTTP
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.8.1
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo/tempo-config.yaml:/etc/tempo.yaml
+    ports:
+      - "14268:14268"  # jaeger ingest
+      - "3200:3200"    # tempo
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./grafana/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - "3333:3000"
+    depends_on:
+      - tempo
+```
+
+### otel-collector-config.yaml
+
+The collector receives OTLP spans from your AG2 application, batches them, and forwards them to Tempo.
+
+```yaml title="otel-collector-config.yaml"
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo, debug]
+```
+
+The `debug` exporter logs spans to the collector's stdout, which is useful for verifying that spans are arriving.
+
+### tempo/tempo-config.yaml
+
+```yaml title="tempo/tempo-config.yaml"
+stream_over_http_enabled: true
+server:
+  http_listen_port: 3200
+  log_level: info
+
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09
+  trace_by_id:
+    duration_slo: 5s
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 1h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics, local-blocks]
+```
+
+### grafana/grafana-datasources.yaml
+
+This provisions Tempo as the default data source in Grafana automatically.
+
+```yaml title="grafana/grafana-datasources.yaml"
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    access: proxy
+    orgId: 1
+    url: http://tempo:3200
+    basicAuth: false
+    isDefault: true
+    version: 1
+    editable: false
+    apiVersion: 1
+    uid: tempo
+```
+
+## Starting the Stack
+
+```bash
+cd tracing
+docker-compose up -d
+```
+
+This starts three services:
+
+| Service | Port | Description |
+|---|---|---|
+| **OTel Collector** | `localhost:14317` (gRPC), `localhost:14318` (HTTP) | Receives OTLP spans and forwards them to Tempo |
+| **Grafana Tempo** | `localhost:3200` | Stores and indexes traces |
+| **Grafana** | `localhost:3333` | Web UI for exploring traces (pre-configured Tempo datasource) |
+
+## Connecting AG2
+
+Point your `OTLPSpanExporter` at the collector:
+
+```python
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+exporter = OTLPSpanExporter(endpoint="http://localhost:14317")
+```
+
+Then open <a href="http://localhost:3333" className="external-link" target="_blank" rel="noopener noreferrer">http://localhost:3333</a> in your browser. In Grafana's Explore view, select the **Tempo** data source and search by service name or trace ID to view your traces.
+
+## Stopping the Stack
+
+```bash
+cd tracing
+docker-compose down
+```
+
+Add `-v` to also remove volumes (stored trace data):
+
+```bash
+docker-compose down -v
+```

@@ -1,0 +1,312 @@
+---
+title: "Tracing Remote A2A Agents"
+description: "Add distributed tracing across services with AG2's A2A protocol and OpenTelemetry trace context propagation."
+sidebarTitle: Tracing Remote Agents
+---
+
+When agents run as separate services using the <a href="https://google.github.io/A2A/" className="external-link" target="_blank" rel="noopener noreferrer">A2A (Agent-to-Agent) protocol</a>, a single user request can fan out across multiple processes and machines.
+Without distributed tracing, debugging these interactions means correlating logs from each service by hand.
+
+AG2's tracing integration solves this by propagating <a href="https://www.w3.org/TR/trace-context/" className="external-link" target="_blank" rel="noopener noreferrer">W3C Trace Context</a> headers across A2A HTTP calls, so every span -- client-side and server-side -- shares a single trace ID and appears in one unified trace view.
+
+For general tracing setup (installation, `TracerProvider` configuration, backend integration), see the [OpenTelemetry Tracing](/docs/user-guide/tracing) page.
+
+## How It Works
+
+AG2 uses the standard W3C `traceparent` HTTP header to link client and server spans into a single trace:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Client Process                                             │
+│                                                             │
+│  conversation user_proxy                                    │
+│    ├── invoke_agent triage_agent                            │
+│    │     └── chat gpt-4o-mini                               │
+│    ├── invoke_agent tech_agent  ─── HTTP + traceparent ───┐ │
+│    │     (gen_ai.agent.remote = true)                     │ │
+│    ...                                                    │ │
+└───────────────────────────────────────────────────────────┼─┘
+                                                            │
+┌───────────────────────────────────────────────────────────┼─┐
+│  Server Process (tech_agent A2A server)                   │ │
+│                                                           ▼ │
+│  a2a-execution  ◄── extracts traceparent ─────────────────┘ │
+│    └── conversation tech_agent                              │
+│          ├── invoke_agent tech_agent                        │
+│          │     └── chat gpt-4o-mini                         │
+│          ...                                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The propagation happens in two steps:
+
+1. **Client side** -- When `instrument_agent` (or `instrument_pattern`) instruments an `A2aRemoteAgent`, it wraps the HTTPX client factory so that every outgoing HTTP request includes a `traceparent` header carrying the current span context.
+
+2. **Server side** -- When `instrument_a2a_server` instruments an `A2aAgentServer`, it adds ASGI middleware that extracts the `traceparent` header from incoming requests and sets it as the active context. All server-side spans are then created as children of that context, linking them to the client's trace.
+
+## Server Setup
+
+Use `instrument_a2a_server` to add tracing to an A2A server. This single call:
+
+- Adds middleware that extracts W3C Trace Context from incoming requests
+- Instruments the server's underlying agent (equivalent to calling `instrument_agent`)
+
+```python title="server.py"
+import uvicorn
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+from autogen.opentelemetry import instrument_a2a_server, instrument_llm_wrapper
+
+# 1. Configure tracing
+resource = Resource.create(attributes={"service.name": "tech-agent-service"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:14317"))
+)
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create the agent
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="You solve technical problems. Provide clear, actionable solutions.",
+    llm_config=llm_config,
+)
+
+# 3. Create and instrument the server
+server = A2aAgentServer(tech_agent, url="http://localhost:18123/")
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_a2a_server(server, tracer_provider=tracer_provider)
+
+# 4. Build and run the app
+app = server.build()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=18123)
+```
+
+Run the server:
+
+```bash
+python server.py
+```
+
+!!! note
+    Use a **different `service.name`** for each A2A server so you can distinguish services in your tracing backend. For example, `"tech-agent-service"` and `"research-agent-service"`.
+
+## Client Setup
+
+On the client side, `instrument_agent` and `instrument_pattern` automatically detect `A2aRemoteAgent` instances and set up trace context injection -- no extra configuration is needed.
+
+```python title="client.py"
+import asyncio
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+
+# 1. Configure tracing
+resource = Resource.create(attributes={"service.name": "client-service"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:14317"))
+)
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create agents
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+user_proxy = ConversableAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+)
+
+# Remote agent -- points to the server started above
+tech_agent = A2aRemoteAgent(
+    "http://localhost:18123/",
+    name="tech_agent",
+)
+
+# 3. Instrument
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(user_proxy, tracer_provider=tracer_provider)
+instrument_agent(tech_agent, tracer_provider=tracer_provider)
+
+# 4. Run
+asyncio.run(
+    user_proxy.a_initiate_chat(
+        tech_agent,
+        message="My Python app crashes with a segfault on startup. How do I debug this?",
+        max_turns=3,
+    )
+)
+```
+
+When this runs, `instrument_agent` detects that `tech_agent` is an `A2aRemoteAgent` and wraps its HTTP client to inject `traceparent` headers. The server extracts those headers, and both sides' spans appear in the same trace.
+
+## Complete Example: Trace Hierarchy
+
+With both the server and client above running and exporting to the same backend, you get a single trace that spans both processes:
+
+```
+trace_id: abc123...
+
+CLIENT (service.name: client-service)
+  conversation user_proxy
+    ├── invoke_agent tech_agent          ← remote call (gen_ai.agent.remote = true)
+    │                                      server.address = http://localhost:18123/
+    │
+    │   SERVER (service.name: tech-agent-service)
+    │     a2a-execution                  ← middleware extracts traceparent
+    │       └── conversation tech_agent
+    │             └── invoke_agent tech_agent
+    │                   └── chat gpt-4o-mini
+    │
+    ├── invoke_agent user_proxy
+    ├── invoke_agent tech_agent          ← second remote call
+    │     ...server spans...
+    └── invoke_agent user_proxy
+```
+
+The key insight is that the `invoke_agent tech_agent` span on the client side and the `a2a-execution` span on the server side share the same trace ID, creating a continuous trace across services.
+
+## Remote Agent Span Attributes
+
+When `instrument_agent` instruments an `A2aRemoteAgent`, the `invoke_agent` span includes these additional attributes:
+
+| Attribute | Type | Value | Description |
+|---|---|---|---|
+| `gen_ai.agent.remote` | bool | `true` | Indicates this is a remote agent call |
+| `server.address` | string | Agent URL | The URL of the A2A server (e.g. `http://localhost:18123/`) |
+
+These are in addition to the standard agent span attributes (`gen_ai.operation.name`, `gen_ai.agent.name`, `ag2.span.type`). See the [Semantic Attributes](/docs/user-guide/tracing#semantic-attributes) section for the full list.
+
+## Group Chat with Remote Agents
+
+`instrument_pattern` handles remote agents automatically. You can mix local and remote agents in the same pattern:
+
+```python title="group_chat_with_remote.py"
+import asyncio
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+from autogen.agentchat import a_run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern
+
+# Setup tracing
+resource = Resource.create(attributes={"service.name": "orchestrator"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:14317"))
+)
+trace.set_tracer_provider(tracer_provider)
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+# Local agent
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="You triage issues. Route technical problems to tech_agent and research questions to research_agent.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+# Remote agents (running as separate A2A servers)
+tech_agent = A2aRemoteAgent(
+    "http://localhost:18123/",
+    name="tech_agent",
+)
+
+research_agent = A2aRemoteAgent(
+    "http://localhost:18124/",
+    name="research_agent",
+)
+
+user = ConversableAgent(name="user", human_input_mode="NEVER", llm_config=False)
+
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, research_agent],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Instrument everything -- local and remote agents are handled automatically
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+
+
+async def main():
+    result = await a_run_group_chat(
+        pattern=pattern,
+        messages="My API is returning 500 errors intermittently. Help me investigate.",
+        max_rounds=6,
+    )
+    await result.process()
+
+
+asyncio.run(main())
+```
+
+The resulting trace shows the full orchestration -- speaker selection, local agent turns, and remote agent calls -- all under one trace:
+
+```
+conversation chat_manager
+  ├── speaker_selection
+  │     └── invoke_agent speaker_sel...
+  │           └── chat gpt-4o-mini
+  ├── invoke_agent triage_agent              ← local
+  │     └── chat gpt-4o-mini
+  ├── speaker_selection
+  │     └── invoke_agent speaker_sel...
+  │           └── chat gpt-4o-mini
+  ├── invoke_agent tech_agent                ← remote (server.address = localhost:18123)
+  │     └── [server-side spans linked by traceparent]
+  ├── speaker_selection
+  │     ...
+  └── invoke_agent research_agent            ← remote (server.address = localhost:18124)
+        └── [server-side spans linked by traceparent]
+```
+
+## Viewing Distributed Traces
+
+### Finding Traces
+
+In Grafana (or Jaeger), you can find distributed traces by:
+
+- **Service name** -- Search for the client's `service.name` (e.g. `"orchestrator"`) to find traces that originate from the client.
+- **Span attributes** -- Filter by `gen_ai.agent.remote = true` to find all remote agent calls.
+- **Trace ID** -- If you log trace IDs in your application, you can look up a specific trace directly.
+
+### Correlating Client and Server Spans
+
+Because both the client and server export to the same backend (or to collectors that forward to the same backend), spans from both services appear in the same trace view automatically.
+
+If the client and server export to **different** backends, you can still correlate them manually by trace ID. The trace ID is the same on both sides -- search for it in each backend to see the corresponding spans.
+
+### Using the Local Development Stack
+
+The [Local OpenTelemetry Setup](/docs/user-guide/tracing/local-setup) page provides a Docker Compose stack with an OpenTelemetry Collector, Grafana Tempo, and Grafana. Point all your services' exporters at `http://localhost:14317` and open <a href="http://localhost:3333" className="external-link" target="_blank" rel="noopener noreferrer">http://localhost:3333</a> to explore traces.
+
+In Grafana's Explore view, select the Tempo data source and search by service name or trace ID. You will see a flame graph with spans from all services arranged by time, making it straightforward to identify latency bottlenecks and errors in your multi-agent system.

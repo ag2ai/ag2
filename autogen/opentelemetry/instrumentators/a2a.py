@@ -53,9 +53,11 @@ def instrument_a2a_server(server: A2aAgentServer, *, tracer_provider: TracerProv
 
     class OTELMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
-            span_context = TRACE_PROPAGATOR.extract(request.headers)
-            with tracer.start_as_current_span("a2a-execution", context=span_context):
-                return await call_next(request)
+            if "traceparent" in request.headers:
+                span_context = TRACE_PROPAGATOR.extract(request.headers)
+                with tracer.start_as_current_span("a2a-execution", context=span_context):
+                    return await call_next(request)
+            return await call_next(request)
 
     server.add_middleware(OTELMiddleware)
 
