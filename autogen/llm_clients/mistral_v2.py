@@ -364,8 +364,14 @@ class MistralAIClientV2(ModelClient):
         Returns:
             Cost in USD for the API call
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("cost() method will be implemented in second commit")
+        if not response.usage:
+            return 0.0
+
+        prompt_tokens = response.usage.get("prompt_tokens", 0)
+        completion_tokens = response.usage.get("completion_tokens", 0)
+        model = response.model
+
+        return calculate_mistral_cost(prompt_tokens, completion_tokens, model)
 
     @staticmethod
     def get_usage(response: UnifiedResponse) -> dict[str, Any]:  # type: ignore[override]
@@ -379,8 +385,13 @@ class MistralAIClientV2(ModelClient):
         Returns:
             Dict with keys from RESPONSE_USAGE_KEYS
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("get_usage() method will be implemented in second commit")
+        return {
+            "prompt_tokens": response.usage.get("prompt_tokens", 0),
+            "completion_tokens": response.usage.get("completion_tokens", 0),
+            "total_tokens": response.usage.get("total_tokens", 0),
+            "cost": response.cost or 0.0,
+            "model": response.model,
+        }
 
     def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:  # type: ignore[override]
         """Retrieve messages from response in OpenAI-compatible format.
