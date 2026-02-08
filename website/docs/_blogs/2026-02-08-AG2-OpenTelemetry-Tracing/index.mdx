@@ -248,25 +248,7 @@ conversation chat_manager                 # run_chat (GroupChatManager)
 
 When agents run as separate services using the [A2A (Agent-to-Agent) protocol](https://google.github.io/A2A/), AG2 propagates [W3C Trace Context](https://www.w3.org/TR/trace-context/) headers across HTTP calls so that client-side and server-side spans share a single trace ID.
 
-```mermaid
-flowchart TD
-    subgraph Client Process
-        C1["conversation user_proxy"]
-        C2["invoke_agent triage_agent"]
-        C3["chat gpt-4o-mini"]
-        C4["invoke_agent tech_agent\n(gen_ai.agent.remote = true)"]
-        C1 --> C2 --> C3
-        C1 --> C4
-    end
-    subgraph Server Process — tech_agent A2A server
-        S1["a2a-execution"]
-        S2["conversation tech_agent"]
-        S3["invoke_agent tech_agent"]
-        S4["chat gpt-4o-mini"]
-        S1 --> S2 --> S3 --> S4
-    end
-    C4 -- "HTTP + traceparent" --> S1
-```
+![A2A Distributed Trace Diagram](img/a2a-trace-diagram.svg)
 
 **Server side** -- Use `instrument_a2a_server` to add tracing middleware and instrument the agent:
 
