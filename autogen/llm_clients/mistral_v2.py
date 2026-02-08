@@ -181,7 +181,11 @@ class MistralAIClientV2(ModelClient):
             if getattr(message_obj, "tool_calls", None):
                 for tool_call in message_obj.tool_calls:
                     # Mistral tool calls have function.arguments as dict, need to convert to JSON string
-                    arguments_str = json.dumps(tool_call.function.arguments) if isinstance(tool_call.function.arguments, dict) else tool_call.function.arguments
+                    arguments_str = (
+                        json.dumps(tool_call.function.arguments)
+                        if isinstance(tool_call.function.arguments, dict)
+                        else tool_call.function.arguments
+                    )
                     content_blocks.append(
                         ToolCallContent(
                             id=tool_call.id,
