@@ -350,8 +350,64 @@ class MistralAIClientV2(ModelClient):
         Returns:
             ChatCompletion-compatible dict (flattened response)
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("create_v1_compatible() method will be implemented in second commit")
+        # Get rich response
+        unified_response = self.create(params)
+
+        # Extract role and convert UserRoleEnum to string
+        role = unified_response.messages[0].role if unified_response.messages else UserRoleEnum.ASSISTANT
+        role_str = role.value if isinstance(role, UserRoleEnum) else role
+
+        # Extract text content (flatten all content blocks)
+        text_content = unified_response.text
+
+        # Extract tool calls if present
+        tool_calls = None
+        if unified_response.messages:
+            message = unified_response.messages[0]
+            tool_call_blocks = message.get_tool_calls()
+            if tool_call_blocks:
+                tool_calls = []
+                for tc in tool_call_blocks:
+                    # Convert ToolCallContent to OpenAI format
+                    # Arguments are already stored as JSON string in ToolCallContent
+                    tool_calls.append({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": tc.arguments,  # Already JSON string from _transform_response
+                        },
+                    })
+
+        # Determine finish reason
+        finish_reason = unified_response.finish_reason or "stop"
+        if tool_calls:
+            finish_reason = "tool_calls"
+
+        # Build ChatCompletion-like dict
+        return {
+            "id": unified_response.id,
+            "model": unified_response.model,
+            "created": unified_response.provider_metadata.get("created", int(time.time())),
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": role_str,
+                        "content": text_content,
+                        "tool_calls": tool_calls,
+                    },
+                    "finish_reason": finish_reason,
+                }
+            ],
+            "usage": {
+                "prompt_tokens": unified_response.usage.get("prompt_tokens", 0),
+                "completion_tokens": unified_response.usage.get("completion_tokens", 0),
+                "total_tokens": unified_response.usage.get("total_tokens", 0),
+            },
+            "cost": unified_response.cost or 0.0,
+        }
 
     def cost(self, response: UnifiedResponse) -> float:  # type: ignore[override]
         """Calculate cost from response usage.
@@ -399,14 +455,57 @@ class MistralAIClientV2(ModelClient):
         Returns list of strings for text-only messages, or list of dicts when
         tool calls or complex content is present.
 
+        This matches the behavior of the legacy MistralAIClient which returns:
+        - ChatCompletionMessage objects (as dicts) for all messages
+        - Tool calls are preserved in the message dict
+
         Args:
             response: UnifiedResponse from create()
 
         Returns:
             List of strings (for text-only) OR list of message dicts (for tool calls/complex content)
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("message_retrieval() method will be implemented in second commit")
+        result: list[str] | list[dict[str, Any]] = []
+
+        for msg in response.messages:
+            # Check for tool calls
+            tool_calls = msg.get_tool_calls()
+
+            if tool_calls:
+                # Return OpenAI-compatible dict format when tool calls are present
+                message_dict: dict[str, Any] = {
+                    "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
+                    "content": msg.get_text() or None,
+                }
+
+                # Add optional fields
+                if msg.name:
+                    message_dict["name"] = msg.name
+
+                # Add tool calls in OpenAI format
+                tool_calls_list = []
+                for tc in tool_calls:
+                    # Convert ToolCallContent to OpenAI format
+                    # Arguments are already stored as JSON string in ToolCallContent
+                    tool_calls_list.append({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": tc.arguments,  # Already JSON string from _transform_response
+                        },
+                    })
+
+                message_dict["tool_calls"] = tool_calls_list
+                result.append(message_dict)
+            else:
+                # Simple text content - return string
+                # Note: V1 MistralAIClient returns ChatCompletionMessage objects, but for compatibility
+                # we return strings for text-only to match OpenAI behavior
+                text = msg.get_text()
+                result.append(text)
+
+        return result
 
 
 @require_optional_import("mistralai", "mistral")
