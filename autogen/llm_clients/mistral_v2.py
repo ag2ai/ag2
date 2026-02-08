@@ -39,7 +39,7 @@ from typing_extensions import Unpack
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.client import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
-from .client_utils import should_hide_tools, validate_parameter
+from ..oai.client_utils import should_hide_tools, validate_parameter
 from .models import (
     TextContent,
     ToolCallContent,
@@ -141,11 +141,23 @@ class MistralAIClientV2(ModelClient):
         Returns:
             UnifiedResponse with text content and tool calls preserved
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("create() method will be implemented in second commit")
+        # 1. Parse parameters to Mistral.AI API's parameters
+        mistral_params = self.parse_params(params)
+
+        # 2. Call Mistral.AI API
+        mistral_response = self._client.chat.complete(**mistral_params)
+        # TODO: Handle streaming
+
+        # 3. Transform Mistral response to UnifiedResponse
+        return self._transform_response(mistral_response, mistral_params.get("model", params.get("model", "unknown")))
 
     def _transform_response(self, mistral_response: Any, model: str) -> UnifiedResponse:
         """Transform Mistral API response to UnifiedResponse.
+
+        This handles the standard Mistral chat completion format including:
+        - Text content → TextContent
+        - Tool calls → ToolCallContent
+        - Usage information and cost calculation
 
         Args:
             mistral_response: Raw Mistral API response
@@ -154,9 +166,77 @@ class MistralAIClientV2(ModelClient):
         Returns:
             UnifiedResponse with all content blocks properly typed
         """
-        # TODO: Implement in second commit
-        raise NotImplementedError("_transform_response() method will be implemented in second commit")
+        messages = []
 
+        # Process each choice
+        for choice in mistral_response.choices:
+            content_blocks = []
+            message_obj = choice.message
+
+            # Extract text content
+            if message_obj.content:
+                content_blocks.append(TextContent(text=message_obj.content))
+
+            # Extract tool calls
+            if getattr(message_obj, "tool_calls", None):
+                for tool_call in message_obj.tool_calls:
+                    # Mistral tool calls have function.arguments as dict, need to convert to JSON string
+                    arguments_str = json.dumps(tool_call.function.arguments) if isinstance(tool_call.function.arguments, dict) else tool_call.function.arguments
+                    content_blocks.append(
+                        ToolCallContent(
+                            id=tool_call.id,
+                            name=tool_call.function.name,
+                            arguments=arguments_str,
+                        )
+                    )
+
+            # Create unified message with normalized role
+            messages.append(
+                UnifiedMessage(
+                    role=normalize_role(getattr(message_obj, "role", "assistant")),
+                    content=content_blocks,
+                )
+            )
+
+        # Extract usage information
+        usage = {}
+        if getattr(mistral_response, "usage", None):
+            usage = {
+                "prompt_tokens": mistral_response.usage.prompt_tokens,
+                "completion_tokens": mistral_response.usage.completion_tokens,
+                "total_tokens": mistral_response.usage.prompt_tokens + mistral_response.usage.completion_tokens,
+            }
+
+        # Determine finish reason
+        finish_reason = None
+        if mistral_response.choices:
+            finish_reason = mistral_response.choices[0].finish_reason
+
+        # Build UnifiedResponse
+        unified_response = UnifiedResponse(
+            id=mistral_response.id,
+            model=mistral_response.model if hasattr(mistral_response, "model") else model,
+            provider="mistral",
+            messages=messages,
+            usage=usage,
+            finish_reason=finish_reason,
+            status="completed",
+            provider_metadata={
+                "created": getattr(mistral_response, "created", None),
+            },
+        )
+
+        # Calculate cost
+        if usage:
+            unified_response.cost = calculate_mistral_cost(
+                usage["prompt_tokens"],
+                usage["completion_tokens"],
+                unified_response.model,
+            )
+
+        return unified_response
+
+    @require_optional_import("mistralai", "mistral")
     def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Mistral.AI API from the passed in parameters and returns a validated set.
 
@@ -168,8 +248,95 @@ class MistralAIClientV2(ModelClient):
         Returns:
             Validated Mistral API parameters dict
         """
-        # TODO: Implement in second commit (can reuse logic from v1)
-        raise NotImplementedError("parse_params() method will be implemented in second commit")
+        mistral_params = {}
+
+        # 1. Validate models
+        mistral_params["model"] = params.get("model")
+        assert mistral_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
+        )
+
+        # 2. Validate allowed Mistral.AI parameters
+        mistral_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 0.7, None, None)
+        mistral_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+        mistral_params["max_tokens"] = validate_parameter(params, "max_tokens", int, True, None, (0, None), None)
+        mistral_params["safe_prompt"] = validate_parameter(
+            params, "safe_prompt", bool, False, False, None, [True, False]
+        )
+        mistral_params["random_seed"] = validate_parameter(params, "random_seed", int, True, None, False, None)
+        mistral_params["tool_choice"] = validate_parameter(
+            params, "tool_choice", str, False, None, None, ["none", "auto", "any"]
+        )
+
+        # TODO: Handle streaming
+        if params.get("stream", False):
+            warnings.warn(
+                "Streaming is not currently supported, streaming will be disabled.",
+                UserWarning,
+            )
+
+        # 3. Convert messages to Mistral format
+        mistral_messages = []
+        tool_call_ids = {}  # tool call ids to function name mapping
+        for message in params["messages"]:
+            if message["role"] == "assistant" and "tool_calls" in message and message["tool_calls"] is not None:
+                # Convert OAI ToolCall to Mistral ToolCall
+                mistral_messages_tools = []
+                for toolcall in message["tool_calls"]:
+                    mistral_messages_tools.append(
+                        ToolCall(
+                            id=toolcall["id"],
+                            function=FunctionCall(
+                                name=toolcall["function"]["name"],
+                                arguments=json.loads(toolcall["function"]["arguments"]),
+                            ),
+                        )
+                    )
+
+                mistral_messages.append(AssistantMessage(content="", tool_calls=mistral_messages_tools))
+
+                # Map tool call id to the function name
+                for tool_call in message["tool_calls"]:
+                    tool_call_ids[tool_call["id"]] = tool_call["function"]["name"]
+
+            elif message["role"] == "system":
+                if len(mistral_messages) > 0 and mistral_messages[-1].role == "assistant":
+                    # System messages can't appear after an Assistant message, so use a UserMessage
+                    mistral_messages.append(UserMessage(content=message["content"]))
+                else:
+                    mistral_messages.append(SystemMessage(content=message["content"]))
+            elif message["role"] == "assistant":
+                mistral_messages.append(AssistantMessage(content=message["content"]))
+            elif message["role"] == "user":
+                mistral_messages.append(UserMessage(content=message["content"]))
+
+            elif message["role"] == "tool":
+                # Indicates the result of a tool call, the name is the function name called
+                mistral_messages.append(
+                    ToolMessage(
+                        name=tool_call_ids[message["tool_call_id"]],
+                        content=message["content"],
+                        tool_call_id=message["tool_call_id"],
+                    )
+                )
+            else:
+                warnings.warn(f"Unknown message role {message['role']}", UserWarning)
+
+        # 4. Last message needs to be user or tool, if not, add a "please continue" message
+        if not isinstance(mistral_messages[-1], UserMessage) and not isinstance(mistral_messages[-1], ToolMessage):
+            mistral_messages.append(UserMessage(content="Please continue."))
+
+        mistral_params["messages"] = mistral_messages
+
+        # 5. Add tools to the call if we have them and aren't hiding them
+        if "tools" in params:
+            hide_tools = validate_parameter(
+                params, "hide_tools", str, False, "never", None, ["if_all_run", "if_any_run", "never"]
+            )
+            if not should_hide_tools(params["messages"], params["tools"], hide_tools):
+                mistral_params["tools"] = tool_def_to_mistral(params["tools"])
+
+        return mistral_params
 
     def create_v1_compatible(self, params: dict[str, Any]) -> Any:
         """Create completion in backward-compatible ChatCompletion format.
