@@ -24,8 +24,6 @@ This installs `opentelemetry-api`, `opentelemetry-sdk`, and the OTLP gRPC export
 The following example sets up tracing with a `ConsoleSpanExporter` so you can see spans printed directly to your terminal. In production you would replace this with an OTLP exporter pointed at your backend.
 
 ```python title="quickstart_tracing.py"
-import asyncio
-
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -62,13 +60,12 @@ instrument_agent(assistant, tracer_provider=tracer_provider)
 instrument_agent(user_proxy, tracer_provider=tracer_provider)
 
 # 4. Run a chat
-asyncio.run(
-    user_proxy.a_initiate_chat(
-        assistant,
-        message="What is the capital of France?",
-        max_turns=2,
-    )
+result = user_proxy.run(
+    assistant,
+    message="What is the capital of France?",
+    max_turns=2,
 )
+result.process()
 ```
 
 When you run this script, the `ConsoleSpanExporter` prints each span to stdout as it completes. You will see a `conversation` span wrapping the entire chat, `invoke_agent` spans for each `generate_reply` call, and `chat` spans for each LLM API request -- all connected by a shared trace ID.
@@ -89,7 +86,7 @@ Instruments a single `ConversableAgent` (or any subclass) to emit spans for:
 
 | Activity | Span name pattern | When it fires |
 |---|---|---|
-| Conversations | `conversation {agent.name}` | `initiate_chat` / `a_initiate_chat` / `resume` |
+| Conversations | `conversation {agent.name}` | `run` / `initiate_chat` / `a_initiate_chat` / `resume` |
 | Agent invocations | `invoke_agent {agent.name}` | `generate_reply` / `a_generate_reply` |
 | Remote agent calls | `invoke_agent {agent.name}` | `a_generate_remote_reply` (A2A) |
 | Tool execution | `execute_tool {func_name}` | `execute_function` / `a_execute_function` |
@@ -226,7 +223,7 @@ On the client side, `instrument_agent` automatically injects `traceparent` heade
 AG2 traces form a hierarchical tree that mirrors how agents process a conversation. Here is the typical structure for a two-agent chat:
 
 ```
-conversation user_proxy                   # initiate_chat
+conversation user_proxy                   # run
   |-- invoke_agent assistant              # generate_reply
   |     |-- chat gpt-4o-mini              # LLM API call
   |-- invoke_agent user_proxy             # generate_reply
@@ -260,7 +257,7 @@ Every span emitted by AG2 includes an `ag2.span.type` attribute that identifies 
 
 | `ag2.span.type` | Operation name | Triggered by |
 |---|---|---|
-| `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `resume`, `run_chat`, `a_run_chat` |
+| `conversation` | `conversation` | `run`, `initiate_chat`, `a_initiate_chat`, `resume`, `run_chat`, `a_run_chat` |
 | `multi_conversation` | `initiate_chats` | `initiate_chats`, `a_initiate_chats` (sequential or parallel) |
 | `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
 | `llm` | `chat` | `OpenAIWrapper.create()` (every LLM API call) |
@@ -384,8 +381,6 @@ Then open <a href="http://localhost:3333" className="external-link" target="_bla
 A basic code-review workflow between a reviewer and a coder, with full tracing of the conversation, each agent turn, and every LLM call:
 
 ```python title="two_agent_tracing.py"
-import asyncio
-
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
@@ -424,13 +419,12 @@ instrument_llm_wrapper(tracer_provider=tracer_provider)
 instrument_agent(reviewer, tracer_provider=tracer_provider)
 instrument_agent(coder, tracer_provider=tracer_provider)
 
-asyncio.run(
-    reviewer.a_initiate_chat(
-        coder,
-        message="Write a Python function to compute the Fibonacci sequence.",
-        max_turns=3,
-    )
+result = reviewer.run(
+    coder,
+    message="Write a Python function to compute the Fibonacci sequence.",
+    max_turns=3,
 )
+result.process()
 ```
 
 ### Tool Execution
@@ -615,7 +609,7 @@ AG2 tracing captures messages at different levels depending on the span type:
 
 | Span type | `gen_ai.input.messages` / `gen_ai.output.messages` | Controllable? |
 |---|---|---|
-| `conversation` (initiate_chat) | **Always captured** | No |
+| `conversation` (run / initiate_chat) | **Always captured** | No |
 | `agent` (generate_reply) | **Always captured** | No |
 | `llm` (LLM API call) | **Off by default** | Yes, via `capture_messages` |
 

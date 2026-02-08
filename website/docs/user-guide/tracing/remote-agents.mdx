@@ -106,8 +106,6 @@ python server.py
 On the client side, `instrument_agent` and `instrument_pattern` automatically detect `A2aRemoteAgent` instances and set up trace context injection -- no extra configuration is needed.
 
 ```python title="client.py"
-import asyncio
-
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
@@ -147,13 +145,12 @@ instrument_agent(user_proxy, tracer_provider=tracer_provider)
 instrument_agent(tech_agent, tracer_provider=tracer_provider)
 
 # 4. Run
-asyncio.run(
-    user_proxy.a_initiate_chat(
-        tech_agent,
-        message="My Python app crashes with a segfault on startup. How do I debug this?",
-        max_turns=3,
-    )
+result = user_proxy.run(
+    tech_agent,
+    message="My Python app crashes with a segfault on startup. How do I debug this?",
+    max_turns=3,
 )
+result.process()
 ```
 
 When this runs, `instrument_agent` detects that `tech_agent` is an `A2aRemoteAgent` and wraps its HTTP client to inject `traceparent` headers. The server extracts those headers, and both sides' spans appear in the same trace.
