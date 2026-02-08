@@ -1,0 +1,374 @@
+---
+title: "AG2 OpenTelemetry Tracing: Full Observability for Multi-Agent Systems"
+authors: [marklysze, Lancetnik]
+tags: [Tracing, OpenTelemetry, Observability, Multi-Agent, Debugging]
+---
+
+![AG2 OpenTelemetry Tracing](img/robot_telemetry.jpg)
+
+Multi-agent systems are powerful -- but when something goes wrong, figuring out *where* and *why* is painful. Which agent made the bad decision? Was the LLM call slow, or did the tool fail? How many tokens did that group chat actually use?
+
+AG2 now has built-in [OpenTelemetry](https://opentelemetry.io/) tracing that gives you full visibility into your multi-agent workflows. Every conversation, agent turn, LLM call, tool execution, and speaker selection is captured as a structured span -- connected by a shared trace ID and exportable to any OpenTelemetry-compatible backend.
+
+Key highlights:
+
+- **Four simple API functions** to instrument agents, LLM calls, group chats, and A2A servers
+- **Hierarchical traces** that mirror how agents process conversations
+- **Distributed tracing** across services using W3C Trace Context propagation
+- **Works with any backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, and more
+- **Follows OpenTelemetry GenAI Semantic Conventions** for standard interoperability
+
+## What is OpenTelemetry Tracing?
+
+[OpenTelemetry](https://opentelemetry.io/) is the industry-standard framework for observability in distributed systems. At its core, **tracing** captures the path of a request through your system as a tree of *spans* -- each span representing a unit of work (an LLM call, a tool execution, an agent turn) with timing, attributes, and parent-child relationships.
+
+For multi-agent systems, tracing answers questions like:
+
+- What was the full sequence of agent interactions in this conversation?
+- How long did each LLM call take, and how many tokens did it consume?
+- Which tool was called, with what arguments, and what did it return?
+- In a group chat, why was a particular agent selected to speak?
+- Across multiple services, how did a request flow from client to remote agent?
+
+AG2's tracing follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) so your agent traces are structured the same way as traces from other GenAI tools and frameworks.
+
+## Quick Start
+
+Install AG2 with the tracing extra:
+
+```bash
+pip install "ag2[tracing]"
+```
+
+Then set up a `TracerProvider`, instrument your agents, and run a chat:
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+
+# 1. Configure the TracerProvider
+resource = Resource.create(attributes={"service.name": "ag2-quickstart"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create agents
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+user_proxy = ConversableAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=1,
+)
+
+# 3. Instrument agents and LLM calls
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(assistant, tracer_provider=tracer_provider)
+instrument_agent(user_proxy, tracer_provider=tracer_provider)
+
+# 4. Run a chat
+result = user_proxy.run(
+    assistant,
+    message="What is the capital of France?",
+    max_turns=2,
+)
+result.process()
+```
+
+When you run this, the `ConsoleSpanExporter` prints each span to stdout as it completes. You'll see a `conversation` span wrapping the entire chat, `invoke_agent` spans for each agent turn, and `chat` spans for each LLM API call -- all connected by a shared trace ID.
+
+To send traces to a real backend instead, swap the exporter:
+
+```python
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+exporter = OTLPSpanExporter(endpoint="http://localhost:14317")
+tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+```
+
+## What Gets Traced
+
+AG2 traces form a hierarchical tree that mirrors how agents process a conversation. Here is the typical structure for a two-agent chat:
+
+```
+conversation user_proxy                   # run
+  |-- invoke_agent assistant              # generate_reply
+  |     |-- chat gpt-4o-mini              # LLM API call
+  |-- invoke_agent user_proxy             # generate_reply
+  |-- invoke_agent assistant              # generate_reply
+  |     |-- chat gpt-4o-mini              # LLM API call
+  |     +-- execute_tool get_weather      # tool execution
+  |-- invoke_agent assistant              # generate_reply
+  |     +-- chat gpt-4o-mini              # LLM API call
+  +-- invoke_agent user_proxy             # generate_reply
+```
+
+Every span includes an `ag2.span.type` attribute that identifies what it represents:
+
+| `ag2.span.type` | Span name | What triggers it |
+|---|---|---|
+| `conversation` | `conversation {agent}` | `run`, `run_chat`, `initiate_chat` |
+| `agent` | `invoke_agent {agent}` | `generate_reply`, `a_generate_reply` |
+| `llm` | `chat {model}` | Every `OpenAIWrapper.create()` call |
+| `tool` | `execute_tool {func}` | `execute_function`, `a_execute_function` |
+| `code_execution` | `execute_code {agent}` | Code-execution reply handler |
+| `human_input` | `await_human_input {agent}` | `get_human_input`, `a_get_human_input` |
+| `speaker_selection` | `speaker_selection` | Group chat speaker selection |
+
+Spans carry rich attributes following the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/): model name, provider, token usage, cost, temperature, tool call arguments and results, and more. Conversation and agent spans also capture the input/output messages so you can reconstruct the full conversation flow from your tracing backend.
+
+## The Instrumentation API
+
+AG2 exposes four functions in `autogen.opentelemetry`. Each takes a `tracer_provider` and patches the target in place:
+
+### `instrument_agent(agent, tracer_provider=...)`
+
+Instruments a single `ConversableAgent` (or any subclass) to emit spans for conversations, agent turns, tool execution, code execution, human input, and remote A2A calls.
+
+```python
+from autogen.opentelemetry import instrument_agent
+
+instrument_agent(my_agent, tracer_provider=tracer_provider)
+```
+
+### `instrument_llm_wrapper(tracer_provider=..., capture_messages=False)`
+
+Instruments **all** LLM calls globally by patching `OpenAIWrapper.create()`. Each call produces a `chat {model}` span with provider, model, token usage, cost, and request parameters.
+
+```python
+from autogen.opentelemetry import instrument_llm_wrapper
+
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+```
+
+By default, request/response messages are **not** captured on LLM spans to protect sensitive data. Pass `capture_messages=True` for debugging.
+
+### `instrument_pattern(pattern, tracer_provider=...)`
+
+Instruments a group chat `Pattern` (such as `AutoPattern` or `RoundRobinPattern`). This is the recommended approach for group chats because it automatically instruments **all agents** in the pattern, the `GroupChatManager`, and speaker selection.
+
+```python
+from autogen.opentelemetry import instrument_pattern
+
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+```
+
+### `instrument_a2a_server(server, tracer_provider=...)`
+
+Instruments an `A2aAgentServer` for distributed tracing across services. Adds middleware for W3C Trace Context extraction and instruments the server's agent.
+
+```python
+from autogen.opentelemetry import instrument_a2a_server
+
+instrument_a2a_server(server, tracer_provider=tracer_provider)
+```
+
+## Instrumenting Group Chats
+
+For group chats, `instrument_pattern` is the one-liner that does it all. It instruments every agent in the pattern and adds `speaker_selection` spans that show which agents were candidates and who was selected:
+
+```python
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+researcher = ConversableAgent(
+    name="researcher",
+    system_message="You research topics and provide factual information.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+writer = ConversableAgent(
+    name="writer",
+    system_message="You write clear summaries. Say TERMINATE after being asked to summarize.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+user = ConversableAgent(
+    name="user",
+    human_input_mode="NEVER",
+    llm_config=False,
+    default_auto_reply="Great, summarize for me.",
+)
+
+pattern = AutoPattern(
+    initial_agent=researcher,
+    agents=[researcher, writer],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Instrument everything in one call
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+
+result = run_group_chat(
+    pattern=pattern,
+    messages="Explain quantum computing in simple terms.",
+    max_rounds=5,
+)
+result.process()
+```
+
+The resulting trace tree includes speaker selection:
+
+```
+conversation chat_manager                 # run_chat (GroupChatManager)
+  |-- speaker_selection                   # auto speaker selection
+  |     +-- invoke_agent speaker_sel...   # internal LLM call to pick speaker
+  |           +-- chat gpt-4o-mini
+  |-- invoke_agent researcher             # selected agent generates reply
+  |     +-- chat gpt-4o-mini
+  |-- speaker_selection
+  |     +-- invoke_agent speaker_sel...
+  |           +-- chat gpt-4o-mini
+  +-- invoke_agent writer
+        +-- chat gpt-4o-mini
+```
+
+## Distributed Tracing with A2A
+
+When agents run as separate services using the [A2A (Agent-to-Agent) protocol](https://google.github.io/A2A/), AG2 propagates [W3C Trace Context](https://www.w3.org/TR/trace-context/) headers across HTTP calls so that client-side and server-side spans share a single trace ID.
+
+```mermaid
+flowchart TD
+    subgraph Client Process
+        C1["conversation user_proxy"]
+        C2["invoke_agent triage_agent"]
+        C3["chat gpt-4o-mini"]
+        C4["invoke_agent tech_agent\n(gen_ai.agent.remote = true)"]
+        C1 --> C2 --> C3
+        C1 --> C4
+    end
+    subgraph Server Process — tech_agent A2A server
+        S1["a2a-execution"]
+        S2["conversation tech_agent"]
+        S3["invoke_agent tech_agent"]
+        S4["chat gpt-4o-mini"]
+        S1 --> S2 --> S3 --> S4
+    end
+    C4 -- "HTTP + traceparent" --> S1
+```
+
+**Server side** -- Use `instrument_a2a_server` to add tracing middleware and instrument the agent:
+
+```python
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+from autogen.opentelemetry import instrument_a2a_server, instrument_llm_wrapper
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="You solve technical problems.",
+    llm_config=llm_config,
+)
+
+server = A2aAgentServer(tech_agent, url="http://localhost:18123/")
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_a2a_server(server, tracer_provider=tracer_provider)
+
+app = server.build()
+# Run with: uvicorn server:app --port 18123
+```
+
+**Client side** -- `instrument_agent` (and `instrument_pattern`) automatically detects `A2aRemoteAgent` instances and injects `traceparent` headers into outgoing HTTP requests. No extra setup needed:
+
+```python
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+
+user_proxy = ConversableAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+)
+
+tech_agent = A2aRemoteAgent(
+    "http://localhost:18123/",
+    name="tech_agent",
+)
+
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(user_proxy, tracer_provider=tracer_provider)
+instrument_agent(tech_agent, tracer_provider=tracer_provider)
+```
+
+Both sides' spans appear in the same trace, giving you a unified view across services.
+
+## Local Observability Stack
+
+For local development and testing, the documentation includes a ready-to-use Docker Compose configuration that runs an OpenTelemetry Collector, Grafana Tempo (trace storage), and Grafana (visualization). See the [Local OpenTelemetry Setup](/docs/user-guide/tracing/local-setup) page for the full configuration files and step-by-step instructions.
+
+Once the stack is running, point your AG2 exporter at the collector:
+
+```python
+exporter = OTLPSpanExporter(endpoint="http://localhost:14317")
+```
+
+Then open Grafana at [http://localhost:3333](http://localhost:3333), select the Tempo data source in the Explore view, and search by service name or trace ID to see your traces as a flame graph.
+
+## Connecting to Cloud Backends
+
+Because AG2 uses standard OpenTelemetry, you can export traces to any compatible backend. Typically you just change the exporter endpoint and add authentication headers:
+
+**Jaeger:**
+
+```python
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+exporter = OTLPSpanExporter(endpoint="http://localhost:4317")
+```
+
+**Datadog, Honeycomb, Grafana Cloud, and others:**
+
+```python
+exporter = OTLPSpanExporter(
+    endpoint="https://otel.vendor.com:4317",
+    headers={"api-key": "YOUR_API_KEY"},
+)
+```
+
+Consult your vendor's documentation for the exact endpoint and authentication details.
+
+## Getting Started
+
+1. **Install**: `pip install "ag2[tracing]"`
+2. **Configure**: Create a `TracerProvider` with your chosen exporter
+3. **Instrument**: Call `instrument_llm_wrapper()` and `instrument_agent()` (or `instrument_pattern()` for group chats)
+4. **Run**: Execute your agent workflow as usual
+5. **Observe**: View traces in your backend (Grafana, Jaeger, Datadog, or the console)
+
+## Additional Resources
+
+- [OpenTelemetry Tracing documentation](/docs/user-guide/tracing/opentelemetry) -- Full API reference, semantic attributes, and more examples
+- [Tracing Remote Agents](/docs/user-guide/tracing/remote-agents) -- Distributed tracing with A2A in detail
+- [Local OpenTelemetry Setup](/docs/user-guide/tracing/local-setup) -- Docker Compose stack configuration
+- [Tracing notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_tracing.ipynb) -- Interactive Jupyter notebook walkthrough
+- [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) -- The standard AG2 follows
+
+## Conclusion
+
+Observability shouldn't be an afterthought for multi-agent systems. With AG2's built-in OpenTelemetry tracing, you get structured, hierarchical traces of every conversation, agent turn, LLM call, tool execution, and speaker selection -- across local and distributed deployments.
+
+Install `ag2[tracing]`, add a few instrumentation calls, and start seeing exactly what your agents are doing. We'd love to hear how you use it -- share your feedback on our [GitHub](https://github.com/ag2ai/ag2) or [Discord](https://discord.gg/pAbnFJrkgZ).
