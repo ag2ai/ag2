@@ -352,3 +352,192 @@ class TestLlmWrapperSpanWithMocking:
         calls = {call.args[0]: call.args[1] for call in span.set_attribute.call_args_list}
         # completion_tokens=None should map to output_tokens=0
         assert calls.get("gen_ai.usage.output_tokens") == 0
+
+
+# ---------------------------------------------------------------------------
+# traced_create end-to-end tests
+# ---------------------------------------------------------------------------
+class TestTracedCreateEndToEnd:
+    """Tests the full traced_create flow by replacing OpenAIWrapper.create before instrumenting."""
+
+    def test_traced_create_produces_llm_span(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+
+        # Replace OpenAIWrapper.create with a mock that returns fake_resp
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        # Now instrument (this wraps our mock)
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        # Call it with a mock self
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hi"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        assert llm_spans[0].name == "chat gpt-4"
+        assert llm_spans[0].attributes["gen_ai.provider.name"] == "openai"
+
+    def test_traced_create_captures_messages_when_enabled(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        # Instrument with capture_messages=True
+        instrument_llm_wrapper(tracer_provider=provider, capture_messages=True)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hello world"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        # Should have input messages
+        assert "gen_ai.input.messages" in span.attributes
+        input_msgs = json.loads(span.attributes["gen_ai.input.messages"])
+        assert len(input_msgs) >= 1
+        # Should have output messages
+        assert "gen_ai.output.messages" in span.attributes
+
+    def test_traced_create_does_not_capture_messages_by_default(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        # Instrument with default capture_messages=False
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "secret data"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert "gen_ai.input.messages" not in span.attributes
+        assert "gen_ai.output.messages" not in span.attributes
+
+    def test_traced_create_records_error_on_exception(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        def failing_create(self, **config):
+            raise ConnectionError("API unreachable")
+
+        OpenAIWrapper.create = failing_create
+
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+
+        with pytest.raises(ConnectionError, match="API unreachable"):
+            OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hi"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert span.attributes.get("error.type") == "ConnectionError"
+
+    def test_traced_create_sets_request_params(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+        OpenAIWrapper.create(
+            wrapper,
+            messages=[{"role": "user", "content": "hi"}],
+            temperature=0.7,
+            max_tokens=100,
+            top_p=0.9,
+        )
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert span.attributes.get("gen_ai.request.temperature") == 0.7
+        assert span.attributes.get("gen_ai.request.max_tokens") == 100
+        assert span.attributes.get("gen_ai.request.top_p") == 0.9
+
+    def test_traced_create_sets_response_token_usage(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+        fake_resp.usage = FakeUsage(prompt_tokens=50, completion_tokens=25)
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hi"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert span.attributes.get("gen_ai.usage.input_tokens") == 50
+        assert span.attributes.get("gen_ai.usage.output_tokens") == 25
+
+    def test_traced_create_sets_model_and_operation(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4-turbo")
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4-turbo"}]
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hi"}])
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert span.attributes["gen_ai.operation.name"] == "chat"
+        assert span.attributes["gen_ai.request.model"] == "gpt-4-turbo"
+        assert span.attributes["gen_ai.response.model"] == "gpt-4-turbo"
+        assert span.name == "chat gpt-4-turbo"
+
+    def test_traced_create_sets_agent_name(self, otel_setup) -> None:
+        exporter, provider = otel_setup
+
+        fake_resp = FakeResponse(model="gpt-4")
+
+        OpenAIWrapper.create = lambda self, **config: fake_resp
+
+        instrument_llm_wrapper(tracer_provider=provider)
+
+        wrapper = MagicMock()
+        wrapper._config_list = [{"model": "gpt-4"}]
+
+        agent_mock = MagicMock()
+        agent_mock.name = "my_assistant"
+        OpenAIWrapper.create(wrapper, messages=[{"role": "user", "content": "hi"}], agent=agent_mock)
+
+        spans = exporter.get_finished_spans()
+        llm_spans = [s for s in spans if s.attributes.get("ag2.span.type") == "llm"]
+        assert len(llm_spans) == 1
+        span = llm_spans[0]
+        assert span.attributes.get("gen_ai.agent.name") == "my_assistant"
