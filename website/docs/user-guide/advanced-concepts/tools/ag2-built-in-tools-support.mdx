@@ -1,0 +1,225 @@
+---
+title: AG2 support for LLM specific Built-in Tools
+sidebarTitle: Built-in Tools
+description: Comprehensive guide to AG2's built-in tools for web search, image generation, file editing, and shell execution
+---
+
+AG2 provides **built-in tools** that extend agent capabilities with production-ready implementations for common tasks. Unlike custom tool integrations that require manual registration and wiring, built-in tools are enabled declaratively through the `built_in_tools` parameter in your LLM configuration. AG2 automatically registers and executes them. no additional setup is required.
+
+Author: [Priyanshu Deshmukh](https://github.com/priyansh4320)
+
+## What Are Built-in Tools?
+
+Built-in tools are first-class capabilities shipped with AG2. When you specify a tool in `built_in_tools`, AG2:
+
+- Registers the tool with the agent for LLM-driven selection
+- Handles execution, error handling, and result formatting
+- Applies security controls where applicable (workspace isolation, command filtering, path restrictions)
+
+This reduces boilerplate and ensures consistent, secure behavior across deployments.
+
+## Available Built-in Tools
+
+| Tool | Description | Primary Use Cases |
+|------|-------------|-------------------|
+| **web_search** | Real-time web search for current information | Research, fact-checking, news, documentation lookup |
+| **image_generation** | Generate images from text prompts | Logos, diagrams, illustrations, creative assets |
+| **apply_patch** | Create, update, and delete files using structured diffs | Code editing, project scaffolding, refactoring |
+| **apply_patch_async** | Same as apply_patch with asynchronous execution | Jupyter notebooks, async workflows, long-running operations |
+| **shell** | Execute shell commands with sandboxing and validation | Build automation, file operations, diagnostics, DevOps |
+
+## Configuration Overview
+
+Enable built-in tools by adding the `built_in_tools` parameter to your LLM configuration. You can enable one or more tools:
+
+```python
+import os
+from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+
+load_dotenv()
+
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["web_search", "image_generation", "apply_patch", "shell"],
+    },
+)
+
+agent = ConversableAgent(
+    name="assistant",
+    llm_config=llm_config,
+    system_message="You are a helpful assistant with access to web search, image generation, file editing, and shell commands.",
+)
+```
+
+<Note>
+Built-in tools are currently supported when using the OpenAI Responses API (`api_type: "responses"`). See [OpenAI Responses](/docs/user-guide/models/openai_responses) for model requirements and setup.
+</Note>
+
+---
+
+## web_search
+
+**Purpose:** Enables agents to query the web in real time and incorporate current information into their responses.
+
+**Behavior:** The agent can invoke web search when it needs up-to-date data, documentation, or external references. Search results and citations are returned to the model for synthesis.
+
+**Configuration:**
+
+```python
+"built_in_tools": ["web_search"]
+```
+
+**Use cases:**
+(1) Answering questions about recent events or breaking news;
+(2) Fetching and summarizing documentation for a specific library or API;
+(3) Verifying factual claims against current sources.
+
+---
+
+## image_generation
+
+**Purpose:** Generates images from natural language prompts using DALL·E or gpt-image-1 models.
+
+**Behavior:** The agent produces image descriptions; the tool executes generation and returns base64-encoded image data. AG2 tracks image costs according to model, size, and quality settings.
+
+**Configuration:**
+
+```python
+"built_in_tools": ["image_generation"]
+```
+
+**Supported models:** gpt-image-1, dall-e-3, dall-e-2 (varies by API availability).
+
+**Use cases:**
+(1) Generating a brand logo or icon from a textual brief;
+(2) Creating diagrams or flowcharts to illustrate a concept;
+(3) Producing marketing assets (banners, thumbnails) from descriptions.
+
+---
+
+## apply_patch and apply_patch_async
+
+**Purpose:** Enables agents to create, update, and delete files using structured diffs (unified diff format). Unlike raw code blocks, apply_patch provides deterministic, reviewable file modifications.
+
+**Operations:**
+
+| Operation | Description |
+|-----------|-------------|
+| `create_file` | Create a new file with specified content |
+| `update_file` | Modify an existing file using a unified diff |
+| `delete_file` | Remove a file from the workspace |
+
+**Configuration:**
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["apply_patch"],
+        "workspace_dir": "./my_project",
+        "allowed_paths": ["src/**", "tests/**", "*.py"],
+    },
+)
+```
+
+**Parameters:**
+
+- **workspace_dir** — Root directory for all file operations. Defaults to the current working directory.
+- **allowed_paths** — Glob patterns restricting which paths can be created, updated, or deleted. Default `["**"]` allows all paths within the workspace. Examples: `["src/**"]`, `["*.py"]`, `["docs/**", "README.md"]`.
+
+**Sync vs async:** Use `apply_patch` for synchronous execution; use `apply_patch_async` for async workflows (e.g., Jupyter, event loops).
+
+**Use cases:**
+(1) Scaffolding a new project with predefined file structure and boilerplate;
+(2) Implementing a feature across multiple files via targeted diffs;
+(3) Applying suggested edits from an automated code review.
+
+---
+
+## shell
+
+**Purpose:** Executes shell commands with security controls. Commands run in a restricted workspace with pattern-based filtering, optional whitelisting/blacklisting, and path validation.
+
+**Configuration:**
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["shell"],
+        "workspace_dir": "./sandbox",
+        "allowed_paths": ["src/**", "data/*.json"],
+        "allowed_commands": ["ls", "cat", "grep", "python"],  # optional whitelist
+        "denied_commands": ["rm", "curl"],                   # optional blacklist
+        "enable_command_filtering": True,
+    },
+)
+```
+
+**Parameters:**
+
+- **workspace_dir** — Working directory for command execution. All commands run relative to this path.
+- **allowed_paths** — Glob patterns for file system access. Paths in commands are validated against these patterns.
+- **allowed_commands** — If set, only commands in this list may execute (whitelist).
+- **denied_commands** — Commands always blocked, regardless of other checks (blacklist).
+- **enable_command_filtering** — When `True` (default), blocks dangerous patterns (e.g., `rm -rf /`, `dd of=/dev/sda`).
+- **dangerous_patterns** — Custom regex patterns to block (advanced).
+
+**Security model:** The shell tool uses defense-in-depth: pattern filtering, workspace isolation, path validation, and optional command whitelisting/blacklisting.
+
+<Warning>
+For production use, always configure `workspace_dir` and restrict `allowed_paths`. Use `allowed_commands` for strict control. See the [Shell Tool and Multi-tool Execution blog](/docs/_blogs/2025-12-24-AG2-Shell-Tool-and-multi-in-built-tool-execution/) for detailed security guidelines.
+</Warning>
+
+**Use cases:**
+(1) Running tests and linters after code changes (e.g., `pytest`, `ruff`);
+(2) Building and packaging an application (e.g., `npm build`, `poetry build`);
+(3) Inspecting files and processes (e.g., `ls`, `grep`, `ps`) for diagnostics.
+
+---
+
+## Combining Multiple Tools
+
+You can enable multiple built-in tools in a single configuration. The agent selects the appropriate tool based on the task:
+
+```python
+"built_in_tools": ["shell", "apply_patch", "web_search"]
+```
+
+Combining **shell** and **apply_patch** is common for full development workflows: the agent edits files with apply_patch and runs builds or tests with shell.
+
+---
+
+## Tool-Specific Shared Configuration
+
+When both **shell** and **apply_patch** are enabled, `workspace_dir` and `allowed_paths` apply to both tools. Specify them once in the config list:
+
+```python
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["shell", "apply_patch"],
+        "workspace_dir": "./project",
+        "allowed_paths": ["src/**", "tests/**"],
+    },
+)
+```
+
+---
+
+## Related Documentation
+
+- [OpenAI Responses API](/docs/user-guide/models/openai_responses) — Model provider setup and requirements
+- [Tool Basics](/docs/user-guide/advanced-concepts/tools/basics) — General tool usage and registration in AG2
+- [Blog: Shell Tool and Multi-tool Execution](/docs/_blogs/2025-12-24-AG2-Shell-Tool-and-multi-in-built-tool-execution/) — Shell tool configuration and security
+- [Blog: GPT-5.1 Apply Patch Tool](/docs/_blogs/2025-12-22-GPT-5.1-Apply-Patch-Tool/) — File operations and diff format
