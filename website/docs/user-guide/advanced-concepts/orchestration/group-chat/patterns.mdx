@@ -76,7 +76,7 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -182,7 +182,7 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -295,7 +295,7 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -372,7 +372,7 @@ pattern = RandomPattern(
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -450,7 +450,7 @@ pattern = ManualPattern(
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

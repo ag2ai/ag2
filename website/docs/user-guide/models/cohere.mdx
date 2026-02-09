@@ -128,7 +128,7 @@ from pathlib import Path
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     # Let's choose the Command-R model
     "model": "command-r",
     # Provide your Cohere's API key here or put it into the COHERE_API_KEY environment variable.
