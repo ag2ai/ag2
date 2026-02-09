@@ -21,6 +21,7 @@ class RequestMessage(AgentBusMessage):
 
 class ResponseMessage(AgentBusMessage):
     input_required: str | None = None
+    cost: dict[str, Any] | None = None
 
 
 class ServiceResponse(BaseModel):
