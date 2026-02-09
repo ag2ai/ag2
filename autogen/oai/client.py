@@ -401,7 +401,7 @@ class OpenAIClient:
     @staticmethod
     def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
         for msg in messages:
-            if msg["role"] == "system":
+            if msg.get("role") == "system":
                 messages.insert(0, messages.pop(messages.index(msg)))
                 break
 
@@ -438,7 +438,7 @@ class OpenAIClient:
 
         # The last message of deepseek-reasoner must be a user message
         # , or an assistant message with prefix mode on (but this is supported only for beta api)
-        if new_messages[-1]["role"] != "user":
+        if new_messages[-1].get("role") != "user":
             new_messages.append({"role": "user", "content": "continue"})
 
         kwargs["messages"] = new_messages
@@ -683,7 +683,7 @@ class OpenAIClient:
             # remove the system_message from the response and add it in the prompt at the start.
             if is_o1:
                 for msg in params["messages"]:
-                    if msg["role"] == "user" and msg["content"].startswith("System message: "):
+                    if msg.get("role") == "user" and msg.get("content", "").startswith("System message: "):
                         msg["role"] = "system"
                         msg["content"] = msg["content"][len("System message: ") :]
 
@@ -720,7 +720,7 @@ class OpenAIClient:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
             # replace the system messages with user messages preappended with "System message: "
             for msg in params["messages"]:
-                if msg["role"] == "system":
+                if msg.get("role") == "system":
                     msg["role"] = "user"
                     msg["content"] = f"System message: {msg['content']}"
 

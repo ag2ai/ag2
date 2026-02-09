@@ -476,6 +476,25 @@ def test_oai_messages_to_anthropic_messages():
     assert user_message["content"] == expected_content
 
 
+def test_oai_messages_to_anthropic_messages_without_role():
+    """Test that messages without a 'role' field don't break Anthropic message processing (e.g., A2A messages)."""
+    from autogen.oai.anthropic import oai_messages_to_anthropic_messages
+
+    params = {
+        "messages": [
+            {"content": "Hello, this message has no role field"},
+            {"role": "assistant", "content": "How can I help you?"},
+            {"content": "Another message without role"},
+        ]
+    }
+    processed = oai_messages_to_anthropic_messages(params)
+
+    # Should not raise KeyError and should produce valid messages
+    assert len(processed) >= 2
+    # Last message should be a user message (Anthropic requirement)
+    assert processed[-1]["role"] == "user"
+
+
 # ==============================================================================
 # Unit Tests for Native Structured Outputs Feature
 # ==============================================================================
