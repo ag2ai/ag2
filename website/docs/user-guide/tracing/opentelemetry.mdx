@@ -603,20 +603,22 @@ asyncio.run(main())
 
 The `instrument_pattern` call on the client side instruments `A2aRemoteAgent` so that W3C `traceparent` headers are injected into outgoing HTTP requests. The `instrument_a2a_server` call on the server side extracts those headers, linking the server-side spans to the client trace.
 
-## Message Capture
+## Message and Data Capture
 
-AG2 tracing captures messages at different levels depending on the span type:
+AG2 tracing captures data at different levels depending on the span type:
 
-| Span type | `gen_ai.input.messages` / `gen_ai.output.messages` | Controllable? |
+| Span type | Data captured | Controllable? |
 |---|---|---|
-| `conversation` (run / initiate_chat) | **Always captured** | No |
-| `agent` (generate_reply) | **Always captured** | No |
-| `llm` (LLM API call) | **Off by default** | Yes, via `capture_messages` |
+| `conversation` (run / initiate_chat) | Input/output messages | No, always captured |
+| `agent` (generate_reply) | Input/output messages | No, always captured |
+| `tool` (execute_function) | Tool arguments and results | No, always captured |
+| `human_input` (get_human_input) | Prompt shown and human's response | No, always captured |
+| `llm` (LLM API call) | Request/response messages | Yes, off by default via `capture_messages` |
 
-Conversation and agent spans always include input and output messages because these attributes are essential for understanding the flow of a multi-agent conversation. This means that **message content will appear in your tracing backend even with default settings**.
+Conversation and agent spans always include input and output messages (`gen_ai.input.messages` / `gen_ai.output.messages`). Tool spans always capture call arguments (`gen_ai.tool.call.arguments`) and results (`gen_ai.tool.call.result`). Human input spans always capture the prompt shown (`ag2.human_input.prompt`) and the human's response (`ag2.human_input.response`). Only LLM spans require explicit opt-in via `capture_messages=True` -- all other span types capture their data by default.
 
 !!! warning
-    If your agents process sensitive data (personal information, credentials, proprietary content), be aware that conversation and agent spans will contain that data. Ensure your tracing backend has appropriate access controls and retention policies.
+    If your agents process sensitive data (personal information, credentials, proprietary content), be aware that conversation messages, tool arguments and results, and human input prompts and responses will appear in your tracing backend with default settings. Ensure your backend has appropriate access controls and retention policies.
 
 ### Enabling LLM Message Capture
 
