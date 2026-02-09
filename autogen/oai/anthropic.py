@@ -225,7 +225,6 @@ def has_messages_parse_api() -> bool:
         return False
 
 
-
 def _is_text_block(content: Any) -> bool:
     """Check if a content block is a text block (legacy or beta version).
 

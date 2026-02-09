@@ -957,7 +957,6 @@ def test_real_native_vs_json_mode_comparison():
 # ==============================================================================
 
 
-
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_openai_func_to_anthropic_preserves_strict(anthropic_client):
     """Test that strict field is preserved during tool conversion."""
