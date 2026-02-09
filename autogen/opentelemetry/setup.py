@@ -5,12 +5,12 @@
 from collections.abc import Sequence
 from typing import Optional
 
-from a2a.utils.telemetry import SpanKind
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.sdk.resources import Attributes
 from opentelemetry.sdk.trace import Tracer, TracerProvider
 from opentelemetry.sdk.trace.sampling import Decision, Sampler, SamplingResult
+from opentelemetry.trace import SpanKind
 
 from .consts import INSTRUMENTING_LIBRARY_VERSION, INSTRUMENTING_MODULE_NAME, OTEL_SCHEMA
 

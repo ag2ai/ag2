@@ -6,15 +6,20 @@
 # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
 
 from .instrumentators import (
-    instrument_a2a_server,
     instrument_agent,
     instrument_llm_wrapper,
     instrument_pattern,
 )
 
-__all__ = (
-    "instrument_a2a_server",
+__all__ = [
     "instrument_agent",
     "instrument_llm_wrapper",
     "instrument_pattern",
-)
+]
+
+try:
+    from .instrumentators import instrument_a2a_server  # noqa: F401
+
+    __all__.append("instrument_a2a_server")
+except ImportError:
+    pass

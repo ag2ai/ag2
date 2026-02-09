@@ -5,8 +5,8 @@
 import json
 from typing import Any
 
-from a2a.utils.telemetry import SpanKind
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.trace import SpanKind
 
 from autogen.doc_utils import export_module
 from autogen.oai import client as oai_client_module
