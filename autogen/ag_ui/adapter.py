@@ -128,12 +128,10 @@ class AGUIStream:
                             )
                         )
 
-                    has_tool, has_local_tool = False, False
                     for tool_call in msg.get("tool_calls", []):
                         func = tool_call["function"]
 
                         if (name := func.get("name")) in client_tools_names:
-                            has_local_tool = True
                             yield encoder.encode(
                                 ToolCallChunkEvent(
                                     parent_message_id=msg_id,
@@ -145,7 +143,6 @@ class AGUIStream:
                             )
 
                         else:
-                            has_tool = True
                             yield encoder.encode(
                                 ToolCallStartEvent(
                                     tool_call_id=tool_call.get("id"),
@@ -161,16 +158,7 @@ class AGUIStream:
                                 )
                             )
 
-                    if (
-                        content
-                        and
-                        # do not send tool result as chat message
-                        not has_tool_result
-                        and
-                        # message attached to `tool_calls` mostly thinking block
-                        # than refular text message
-                        (not has_tool or has_local_tool)
-                    ):
+                    if content and not has_tool_result:
                         yield encoder.encode(
                             TextMessageChunkEvent(
                                 message_id=msg_id,

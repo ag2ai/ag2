@@ -118,7 +118,7 @@ from autogen.agentchat.group import AgentTarget, ContextVariables, ReplyResult, 
 from autogen.agentchat.group.patterns import DefaultPattern
 
 # Setup LLM configuration
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "cache_seed": 41, "parallel_tool_calls": False})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "cache_seed": 41, "parallel_tool_calls": False})
 
 # Document types for the document editing feedback loop: essay, article, email, report, other
 # Feedback severity: minor, moderate, major, critical

@@ -116,7 +116,7 @@ from autogen.agentchat.group import AgentTarget, AgentNameTarget, OnContextCondi
 # Each agent handles a specific stage of order processing in sequence
 
 # Setup LLM configuration
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False, "cache_seed": None})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False, "cache_seed": None})
 
 # Shared context for tracking order processing state
 shared_context = ContextVariables(data={

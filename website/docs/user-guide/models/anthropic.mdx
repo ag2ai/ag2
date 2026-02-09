@@ -129,7 +129,7 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 ```python
 import os
 
-llm_config_vertexai = LLMConfig(config_list={
+llm_config_vertexai = LLMConfig({
     "model": "claude-3-5-sonnet-20240620-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region

@@ -75,7 +75,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
     websurfer = WebSurferAgent(
@@ -94,7 +94,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
     websurfer = WebSurferAgent(
