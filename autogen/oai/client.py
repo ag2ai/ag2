@@ -537,6 +537,12 @@ class OpenAIClient:
         if is_mistral:
             OpenAIClient._convert_system_role_to_user(params["messages"])
 
+        # Default missing role to "user" (e.g., A2A messages may not have role set)
+        if "messages" in params:
+            for msg in params["messages"]:
+                if "role" not in msg:
+                    msg["role"] = "user"
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response and is not using structured outputs.
         if params.get("stream", False) and "messages" in params and not is_o1 and not is_structured_output:
             # Usage will be returned as the last chunk

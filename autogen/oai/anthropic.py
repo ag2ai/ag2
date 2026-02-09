@@ -1425,6 +1425,11 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     user_continue_message = {"content": "Please continue.", "role": "user"}
     assistant_continue_message = {"content": "Please continue.", "role": "assistant"}
 
+    # Default missing role to "user" (e.g., A2A messages may not have role set)
+    for message in params["messages"]:
+        if "role" not in message:
+            message["role"] = "user"
+
     tool_use_messages = 0
     tool_result_messages = 0
     last_tool_use_index = -1
