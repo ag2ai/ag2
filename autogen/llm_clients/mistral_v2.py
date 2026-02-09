@@ -361,7 +361,7 @@ class MistralAIClientV2(ModelClient):
                 warnings.warn(f"Unknown message role {message['role']}", UserWarning)
 
         # 4. Last message needs to be user or tool, if not, add a "please continue" message
-        if not isinstance(mistral_messages[-1], UserMessage) and not isinstance(mistral_messages[-1], ToolMessage):
+        if mistral_messages and not isinstance(mistral_messages[-1], UserMessage) and not isinstance(mistral_messages[-1], ToolMessage):
             mistral_messages.append(UserMessage(content="Please continue."))
 
         mistral_params["messages"] = mistral_messages
@@ -511,9 +511,11 @@ class MistralAIClientV2(ModelClient):
 
             if tool_calls:
                 # Return OpenAI-compatible dict format when tool calls are present
+                # Extract only TextContent, not ToolCallContent text
+                text_content = " ".join([block.text for block in msg.content if isinstance(block, TextContent)])
                 message_dict: dict[str, Any] = {
                     "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
-                    "content": msg.get_text() or None,
+                    "content": text_content or None,
                 }
 
                 # Add optional fields
@@ -552,12 +554,13 @@ def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str
     mistral_tools = []
 
     for autogen_tool in tool_definitions:
+        function_def = autogen_tool["function"]
         mistral_tool = {
             "type": "function",
             "function": Function(
-                name=autogen_tool["function"]["name"],
-                description=autogen_tool["function"]["description"],
-                parameters=autogen_tool["function"]["parameters"],
+                name=function_def["name"],
+                description=function_def.get("description", ""),
+                parameters=function_def.get("parameters", {}),
             ),
         }
 

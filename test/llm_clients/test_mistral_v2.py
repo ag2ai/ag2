@@ -1,12 +1,10 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
+
 """Tests for MistralAIClientV2."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -172,7 +170,7 @@ class TestMistralV2ClientCreate:
         response = mistral_v2_client.create({
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": "Get weather"}],
-            "tools": [{"type": "function", "function": {"name": "get_weather"}}],
+            "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}],
         })
 
         # Verify tool calls are extracted
@@ -198,7 +196,10 @@ class TestMistralV2ClientCreate:
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
         # Test
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
 
         # Verify usage
         assert response.usage["prompt_tokens"] == 100
@@ -273,6 +274,45 @@ class TestMistralV2ClientTransformResponse:
         assert isinstance(unified_response.messages[0].role, UserRoleEnum)
         assert unified_response.messages[0].role == UserRoleEnum.ASSISTANT
 
+    @run_for_optional_imports(["mistralai"], "mistral")
+    def test_unified_message_creation(self):
+        """Test UnifiedMessage creation and methods."""
+        # Create UnifiedMessage with text content
+        message = UnifiedMessage(
+            role=UserRoleEnum.ASSISTANT,
+            content=[TextContent(text="Hello world")],
+        )
+
+        assert message.role == UserRoleEnum.ASSISTANT
+        assert len(message.content) == 1
+        assert isinstance(message.content[0], TextContent)
+        assert message.get_text() == "Hello world"
+        assert len(message.get_tool_calls()) == 0
+
+        # Create UnifiedMessage with tool calls
+        tool_call = ToolCallContent(id="call_123", name="get_weather", arguments='{"city": "SF"}')
+        message_with_tools = UnifiedMessage(
+            role=UserRoleEnum.ASSISTANT,
+            content=[
+                TextContent(text="Checking weather"),
+                tool_call,
+            ],
+        )
+
+        # get_text() includes text from all content blocks, including ToolCallContent
+        full_text = message_with_tools.get_text()
+        assert "Checking weather" in full_text
+        assert "get_weather" in full_text  # Tool call text is included
+        
+        # Extract only TextContent blocks separately
+        text_blocks = [block.text for block in message_with_tools.content if isinstance(block, TextContent)]
+        assert text_blocks == ["Checking weather"]
+        
+        tool_calls = message_with_tools.get_tool_calls()
+        assert len(tool_calls) == 1
+        assert tool_calls[0].id == "call_123"
+        assert tool_calls[0].name == "get_weather"
+
 
 class TestMistralV2ClientCost:
     """Test cost() method."""
@@ -289,7 +329,10 @@ class TestMistralV2ClientCost:
         )
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
 
         # Verify cost calculation
         assert response.cost is not None
@@ -326,7 +369,10 @@ class TestMistralV2ClientGetUsage:
         )
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
         usage = mistral_v2_client.get_usage(response)
 
         # Verify all required keys
@@ -351,7 +397,10 @@ class TestMistralV2ClientMessageRetrieval:
         mock_response = MockMistralResponse(choices=[mock_choice], usage=MockMistralUsage())
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
         messages = mistral_v2_client.message_retrieval(response)
 
         assert len(messages) == 1
@@ -367,7 +416,10 @@ class TestMistralV2ClientMessageRetrieval:
         mock_response = MockMistralResponse(choices=[mock_choice], usage=MockMistralUsage())
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Get weather"}],
+        })
         messages = mistral_v2_client.message_retrieval(response)
 
         assert len(messages) == 1
@@ -392,7 +444,10 @@ class TestMistralV2ClientV1Compatible:
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
         # Get v1 compatible response
-        response = mistral_v2_client.create_v1_compatible({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create_v1_compatible({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
 
         # Verify it's a dict with expected structure
         assert isinstance(response, dict)
@@ -416,7 +471,10 @@ class TestMistralV2ClientV1Compatible:
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
         # Get v1 response
-        v1_response = mistral_v2_client.create_v1_compatible({"model": "mistral-small-latest", "messages": []})
+        v1_response = mistral_v2_client.create_v1_compatible({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
 
         # V1 format should preserve tool calls
         assert "choices" in v1_response
@@ -463,7 +521,10 @@ class TestMistralV2ClientBackwardCompatibility:
         mock_response = MockMistralResponse(choices=[mock_choice], usage=MockMistralUsage())
         mock_mistral_client.chat.complete = Mock(return_value=mock_response)
 
-        response = mistral_v2_client.create({"model": "mistral-small-latest", "messages": []})
+        response = mistral_v2_client.create({
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": "Test"}],
+        })
         messages = mistral_v2_client.message_retrieval(response)
 
         # Should work with UnifiedResponse (duck typing)
@@ -528,7 +589,7 @@ class TestMistralV2ClientIntegration:
         response = mistral_v2_client.create({
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": "What's the weather?"}],
-            "tools": [{"type": "function", "function": {"name": "get_weather"}}],
+            "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}],
         })
 
         # Verify all aspects
