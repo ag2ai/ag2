@@ -991,6 +991,15 @@ class OpenAIWrapper:
                     raise ImportError("Please install `anthropic` to use Anthropic API.")
                 client = AnthropicClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("mistral_v2"):
+                # Mistral V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                    # Mistral V2 Client (ModelClientV2 architecture)
+                from autogen.llm_clients import MistralAIClientV2 as V2Client
+                if mistral_import_exception:
+                    raise ImportError("Please install `mistralai` to use the Mistral.AI API.")
+                v2_client = V2Client(**openai_config)
+                self._clients.append(v2_client)  # type: ignore[arg-type]
+                client = v2_client
             elif api_type is not None and api_type.startswith("mistral"):
                 if mistral_import_exception:
                     raise ImportError("Please install `mistralai` to use the Mistral.AI API.")

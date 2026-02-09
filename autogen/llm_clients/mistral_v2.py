@@ -86,6 +86,40 @@ class MistralLLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
 
 
+class MistralV2EntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["mistral_v2"]
+
+
+class MistralV2LLMConfigEntry(MistralLLMConfigEntry):
+    """LLMConfig entry for Mistral V2 Client with ModelClientV2 architecture.
+
+    This uses the new MistralAIClientV2 from autogen.llm_clients which returns
+    rich UnifiedResponse objects with typed content blocks (TextContent,
+    ToolCallContent, etc.).
+
+    Example:
+    ```python
+    {
+        "api_type": "mistral_v2",  # <-- uses ModelClientV2 architecture
+        "model": "open-mixtral-8x22b",
+        "api_key": "...",
+    }
+    ```
+
+    Benefits over standard Mistral client:
+    - Returns UnifiedResponse with typed content blocks
+    - Direct property access (response.text, response.get_content_by_type())
+    - Forward-compatible with unknown content types via GenericContent
+    - Rich metadata support
+    - Type-safe with Pydantic validation
+    """
+
+    api_type: Literal["mistral_v2"] = "mistral_v2"
+
+    def create_client(self) -> ModelClient:  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
+
+
 @require_optional_import("mistralai", "mistral")
 class MistralAIClientV2(ModelClient):
     """Client for Mistral.AI's API implementing ModelClientV2 protocol.

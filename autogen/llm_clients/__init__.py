@@ -51,12 +51,14 @@ from .models import (
     UnifiedResponse,
     VideoContent,
 )
+from .mistral_v2 import MistralAIClientV2
 from .openai_completions_client import OpenAICompletionsClient
 
 __all__ = [  # noqa: RUF022
     # Protocol
     "ModelClientV2",
     # Clients
+    "MistralAIClientV2",
     "OpenAICompletionsClient",
     # Content blocks
     "AudioContent",
