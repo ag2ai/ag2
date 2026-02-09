@@ -506,29 +506,33 @@ def test_supports_native_structured_outputs():
     assert not supports_native_structured_outputs("claude-2.1")
     assert not supports_native_structured_outputs("claude-instant-1.2")
 
-    # Haiku models should not be supported
+    # Haiku 4.5 should be supported
+    assert supports_native_structured_outputs("claude-haiku-4-5")
+    assert supports_native_structured_outputs("claude-haiku-4-5-20251001")
+
+    # Older Haiku models should not be supported
     assert not supports_native_structured_outputs("claude-3-5-haiku-20241022")
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_has_beta_messages_api():
-    """Test SDK version detection for beta API (Approach 2)."""
-    from autogen.oai.anthropic import has_beta_messages_api
+def test_has_messages_parse_api():
+    """Test SDK version detection for messages.parse() API."""
+    from autogen.oai.anthropic import has_messages_parse_api
 
-    # Should detect if current SDK has beta.messages.parse()
-    has_beta = has_beta_messages_api()
+    # Should detect if current SDK has messages.parse()
+    has_parse = has_messages_parse_api()
 
     # If we have anthropic SDK, it should be a boolean
-    assert isinstance(has_beta, bool)
+    assert isinstance(has_parse, bool)
 
-    # If True, verify we can import the beta API
-    if has_beta:
+    # If True, verify we can import the stable API
+    if has_parse:
         try:
-            from anthropic.resources.beta.messages import Messages
+            from anthropic.resources.messages import Messages
 
-            assert hasattr(Messages, "parse"), "Beta API should have parse method"
+            assert hasattr(Messages, "parse"), "Stable API should have parse method"
         except ImportError:
-            pytest.fail("has_beta_messages_api returned True but cannot import beta API")
+            pytest.fail("has_messages_parse_api returned True but cannot import stable API")
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
@@ -675,14 +679,14 @@ def create_mock_anthropic_response():
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_native_structured_output_with_beta_api(anthropic_client, monkeypatch):
-    """Test that native structured output uses beta API correctly."""
-    from autogen.oai.anthropic import has_beta_messages_api
+def test_native_structured_output_with_parse_api(anthropic_client, monkeypatch):
+    """Test that native structured output uses stable messages.parse() API correctly."""
+    from autogen.oai.anthropic import has_messages_parse_api
 
-    if not has_beta_messages_api():
-        pytest.skip("SDK does not support beta.messages API")
+    if not has_messages_parse_api():
+        pytest.skip("SDK does not support messages.parse() API")
 
-    beta_parse_called = False
+    parse_called = False
     captured_params = {}
 
     # Define TestModel first so we can use it in the mock
@@ -700,40 +704,38 @@ def test_native_structured_output_with_beta_api(anthropic_client, monkeypatch):
             # Add parsed_output as a Pydantic model instance (not dict)
             self.parsed_output = TestModel(answer="test answer")
 
-    def mock_beta_parse(**kwargs):
-        nonlocal beta_parse_called, captured_params
-        beta_parse_called = True
+    def mock_parse(**kwargs):
+        nonlocal parse_called, captured_params
+        parse_called = True
         captured_params = kwargs
         # Create a mock response with parsed_output attribute
         base_response = create_mock_anthropic_response()
         return MockParsedResponse(base_response)
 
-    # Mock beta.messages.parse (used for Pydantic models)
-    if hasattr(anthropic_client._client, "beta"):
-        monkeypatch.setattr(anthropic_client._client.beta.messages, "parse", mock_beta_parse)
+    # Mock messages.parse (stable API, used for Pydantic models)
+    monkeypatch.setattr(anthropic_client._client.messages, "parse", mock_parse)
 
-        # Set response format (Pydantic model)
-        anthropic_client._response_format = TestModel
+    # Set response format (Pydantic model)
+    anthropic_client._response_format = TestModel
 
-        # Call create with Sonnet 4.5
-        params = {
-            "model": "claude-sonnet-4-5",
-            "messages": [{"role": "user", "content": "test"}],
-            "max_tokens": 100,
-        }
+    # Call create with Sonnet 4.5
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "test"}],
+        "max_tokens": 100,
+    }
 
-        anthropic_client._create_with_native_structured_output(params)
+    anthropic_client._create_with_native_structured_output(params)
 
-        # Verify beta API was called
-        assert beta_parse_called, "Should call beta.messages.parse for Pydantic models"
+    # Verify stable messages.parse was called
+    assert parse_called, "Should call messages.parse for Pydantic models"
 
-        # Verify output_format parameter (should be the Pydantic model itself)
-        assert "output_format" in captured_params
-        assert captured_params["output_format"] == TestModel
+    # Verify output_format parameter (should be the Pydantic model itself)
+    assert "output_format" in captured_params
+    assert captured_params["output_format"] == TestModel
 
-        # Verify beta header
-        assert "betas" in captured_params
-        assert "structured-outputs-2025-11-13" in captured_params["betas"]
+    # Verify no beta headers are present
+    assert "betas" not in captured_params
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
@@ -955,27 +957,6 @@ def test_real_native_vs_json_mode_comparison():
 # ==============================================================================
 
 
-@run_for_optional_imports(["anthropic"], "anthropic")
-def test_validate_structured_outputs_version(monkeypatch):
-    """Test SDK version validation for structured outputs beta header."""
-    from autogen.oai.anthropic import validate_structured_outputs_version
-
-    # Test with sufficient version
-    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.74.1")
-    validate_structured_outputs_version()  # Should not raise
-
-    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.80.0")
-    validate_structured_outputs_version()  # Should not raise
-
-    # Test with insufficient version
-    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.70.0")
-    with pytest.raises(ImportError, match="Anthropic structured outputs require anthropic>=0.74.1"):
-        validate_structured_outputs_version()
-
-    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.74.0")
-    with pytest.raises(ImportError, match="Anthropic structured outputs require anthropic>=0.74.1"):
-        validate_structured_outputs_version()
-
 
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_openai_func_to_anthropic_preserves_strict(anthropic_client):
@@ -1036,27 +1017,19 @@ def test_openai_func_to_anthropic_preserves_strict(anthropic_client):
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_strict_tools_use_beta_api(anthropic_client, monkeypatch):
-    """Test that strict tools trigger beta API usage."""
+def test_strict_tools_use_standard_api_with_strict(anthropic_client, monkeypatch):
+    """Test that strict tools use standard messages.create() API (strict is now GA)."""
 
-    beta_create_called = False
     standard_create_called = False
     captured_params = {}
 
-    def mock_beta_create(**kwargs):
-        nonlocal beta_create_called, captured_params
-        beta_create_called = True
+    def mock_standard_create(**kwargs):
+        nonlocal standard_create_called, captured_params
+        standard_create_called = True
         captured_params = kwargs
         return create_mock_anthropic_response()
 
-    def mock_standard_create(**kwargs):
-        nonlocal standard_create_called
-        standard_create_called = True
-        return create_mock_anthropic_response()
-
-    # Mock both beta and standard API calls
-    if hasattr(anthropic_client._client, "beta"):
-        monkeypatch.setattr(anthropic_client._client.beta.messages, "create", mock_beta_create)
+    # Mock standard API call
     monkeypatch.setattr(anthropic_client._client.messages, "create", mock_standard_create)
 
     # Test with strict tools
@@ -1079,13 +1052,11 @@ def test_strict_tools_use_beta_api(anthropic_client, monkeypatch):
 
     anthropic_client._create_standard(params)
 
-    # Verify beta API was called
-    assert beta_create_called, "Strict tools should trigger beta API"
-    assert not standard_create_called, "Should not call standard API when strict tools present"
+    # Verify standard API was called (strict tools no longer need beta)
+    assert standard_create_called, "Strict tools should use standard messages.create()"
 
-    # Verify beta header
-    assert "betas" in captured_params
-    assert "structured-outputs-2025-11-13" in captured_params["betas"]
+    # Verify no beta headers are present
+    assert "betas" not in captured_params
 
     # Verify tools have strict field
     assert "tools" in captured_params
@@ -1465,11 +1436,11 @@ Think through this step by step, being careful about the wording.""",
 @pytest.mark.aux_neg_flag
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_real_tools_with_structured_output_beta_api(credentials_anthropic_claude_sonnet, caplog):
-    """Real API call test for tools + structured outputs using beta API.
+    """Real API call test for tools + structured outputs using GA API.
 
     This test verifies that OpenAI tool format works with Anthropic's structured
-    outputs beta API. Previously, the OpenAI wrapper format {"type": "function", ...}
-    was rejected by the beta API with a 400 error.
+    outputs API. Previously, the OpenAI wrapper format {"type": "function", ...}
+    was rejected by the API with a 400 error.
 
     The key test is that combining tools (in OpenAI format) with response_format
     doesn't cause a 400 error, proving the tool format conversion works correctly.
@@ -1614,3 +1585,428 @@ def test_real_tools_with_structured_output_beta_api(credentials_anthropic_claude
     # Verify structured output has required fields
     assert result.steps, "Should have steps"
     assert result.answer == 22, "Should have correct answer"
+
+
+# ==============================================================================
+# Unit Tests for Streaming Support
+# ==============================================================================
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_load_config_stream_enabled(anthropic_client):
+    """Verify that stream=True flows through load_config without being forced to False."""
+    params = {
+        "model": "claude-sonnet-4-5",
+        "stream": True,
+        "temperature": 1,
+        "max_tokens": 100,
+    }
+    result = anthropic_client.load_config(params)
+    assert result["stream"] is True, "stream=True should be preserved in config"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_streaming_routes(anthropic_client, monkeypatch):
+    """Verify that _create_standard routes to _create_streaming when stream=True."""
+    streaming_called = False
+
+    def mock_create_streaming(params):
+        nonlocal streaming_called
+        streaming_called = True
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_streaming", mock_create_streaming)
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 100,
+        "stream": True,
+    }
+    anthropic_client._create_standard(params)
+    assert streaming_called, "_create_standard should route to _create_streaming when stream=True"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_standard_no_stream_does_not_route(anthropic_client, monkeypatch):
+    """Verify _create_standard does NOT route to _create_streaming when stream=False."""
+    streaming_called = False
+
+    def mock_create_streaming(params):
+        nonlocal streaming_called
+        streaming_called = True
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_streaming", mock_create_streaming)
+    monkeypatch.setattr(anthropic_client._client.messages, "create", lambda **kw: create_mock_anthropic_response())
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 100,
+        "stream": False,
+    }
+    anthropic_client._create_standard(params)
+    assert not streaming_called, "_create_standard should NOT route to _create_streaming when stream=False"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_streaming_text_accumulation(anthropic_client, monkeypatch):
+    """Mock raw streaming events and verify text accumulation + StreamEvent emission."""
+    from autogen.io.base import IOStream
+
+    # Build mock streaming events
+    class MockUsage:
+        def __init__(self, input_tokens=0, output_tokens=0):
+            self.input_tokens = input_tokens
+            self.output_tokens = output_tokens
+
+    class MockEvent:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockMessage:
+        def __init__(self):
+            self.id = "msg_stream_123"
+            self.model = "claude-sonnet-4-5"
+            self.usage = MockUsage(input_tokens=10)
+
+    class MockContentBlock:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockDelta:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    # Create sequence of streaming events for a text response
+    events = [
+        MockEvent("message_start", message=MockMessage()),
+        MockEvent("content_block_start", index=0, content_block=MockContentBlock("text")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("text_delta", text="Hello")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("text_delta", text=" world")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("text_delta", text="!")),
+        MockEvent("content_block_stop", index=0),
+        MockEvent(
+            "message_delta", delta=MockDelta("message_delta", stop_reason="end_turn"), usage=MockUsage(output_tokens=3)
+        ),
+        MockEvent("message_stop"),
+    ]
+
+    # Mock messages.create to return events iterable
+    monkeypatch.setattr(anthropic_client._client.messages, "create", lambda **kw: iter(events))
+
+    # Capture StreamEvents
+    sent_events = []
+
+    class MockIOStream:
+        def send(self, event):
+            sent_events.append(event)
+
+    monkeypatch.setattr(IOStream, "get_default", staticmethod(lambda: MockIOStream()))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Say hello"}],
+        "max_tokens": 100,
+        "stream": True,
+    }
+
+    result = anthropic_client._create_streaming(params)
+
+    # Verify accumulated text
+    assert result.choices[0].message.content == "Hello world!"
+
+    # Verify StreamEvents were emitted
+    # StreamEvent is wrapped by @wrap_event, so actual text is at .content.content
+    assert len(sent_events) == 3
+    assert sent_events[0].content.content == "Hello"
+    assert sent_events[1].content.content == " world"
+    assert sent_events[2].content.content == "!"
+
+    # Verify response structure
+    assert result.id == "msg_stream_123"
+    assert result.model == "claude-sonnet-4-5"
+    assert result.usage.prompt_tokens == 10
+    assert result.usage.completion_tokens == 3
+    assert result.choices[0].finish_reason == "stop"
+    assert result.choices[0].message.tool_calls is None
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_streaming_tool_call_accumulation(anthropic_client, monkeypatch):
+    """Mock tool_use streaming events and verify tool call reconstruction."""
+    from autogen.io.base import IOStream
+
+    class MockUsage:
+        def __init__(self, input_tokens=0, output_tokens=0):
+            self.input_tokens = input_tokens
+            self.output_tokens = output_tokens
+
+    class MockEvent:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockMessage:
+        def __init__(self):
+            self.id = "msg_tool_123"
+            self.model = "claude-sonnet-4-5"
+            self.usage = MockUsage(input_tokens=15)
+
+    class MockContentBlock:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockDelta:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    # Simulate tool_use streaming events
+    events = [
+        MockEvent("message_start", message=MockMessage()),
+        MockEvent(
+            "content_block_start",
+            index=0,
+            content_block=MockContentBlock("tool_use", id="toolu_123", name="calculate"),
+        ),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("input_json_delta", partial_json='{"a":')),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("input_json_delta", partial_json=" 5, ")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("input_json_delta", partial_json='"b": 3}')),
+        MockEvent("content_block_stop", index=0),
+        MockEvent(
+            "message_delta", delta=MockDelta("message_delta", stop_reason="tool_use"), usage=MockUsage(output_tokens=10)
+        ),
+        MockEvent("message_stop"),
+    ]
+
+    monkeypatch.setattr(anthropic_client._client.messages, "create", lambda **kw: iter(events))
+
+    class MockIOStream:
+        def send(self, event):
+            pass
+
+    monkeypatch.setattr(IOStream, "get_default", staticmethod(lambda: MockIOStream()))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Calculate 5 + 3"}],
+        "max_tokens": 100,
+        "stream": True,
+    }
+
+    result = anthropic_client._create_streaming(params)
+
+    # Verify tool calls were reconstructed
+    assert result.choices[0].message.tool_calls is not None
+    assert len(result.choices[0].message.tool_calls) == 1
+
+    tool_call = result.choices[0].message.tool_calls[0]
+    assert tool_call.id == "toolu_123"
+    assert tool_call.function.name == "calculate"
+
+    import json
+
+    args = json.loads(tool_call.function.arguments)
+    assert args["a"] == 5
+    assert args["b"] == 3
+
+    # Verify finish reason
+    assert result.choices[0].finish_reason == "tool_calls"
+
+    # Verify usage
+    assert result.usage.prompt_tokens == 15
+    assert result.usage.completion_tokens == 10
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_streaming_thinking_blocks(anthropic_client, monkeypatch):
+    """Mock thinking streaming events and verify [Thinking] prefix in output."""
+    from autogen.io.base import IOStream
+
+    class MockUsage:
+        def __init__(self, input_tokens=0, output_tokens=0):
+            self.input_tokens = input_tokens
+            self.output_tokens = output_tokens
+
+    class MockEvent:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockMessage:
+        def __init__(self):
+            self.id = "msg_think_123"
+            self.model = "claude-sonnet-4-5"
+            self.usage = MockUsage(input_tokens=20)
+
+    class MockContentBlock:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class MockDelta:
+        def __init__(self, type, **kwargs):
+            self.type = type
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    # Simulate thinking + text streaming events
+    events = [
+        MockEvent("message_start", message=MockMessage()),
+        # Thinking block
+        MockEvent("content_block_start", index=0, content_block=MockContentBlock("thinking")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("thinking_delta", thinking="Let me think...")),
+        MockEvent("content_block_delta", index=0, delta=MockDelta("thinking_delta", thinking=" The answer is 9.")),
+        MockEvent("content_block_stop", index=0),
+        # Text block
+        MockEvent("content_block_start", index=1, content_block=MockContentBlock("text")),
+        MockEvent("content_block_delta", index=1, delta=MockDelta("text_delta", text="9 sheep remain.")),
+        MockEvent("content_block_stop", index=1),
+        MockEvent(
+            "message_delta", delta=MockDelta("message_delta", stop_reason="end_turn"), usage=MockUsage(output_tokens=15)
+        ),
+        MockEvent("message_stop"),
+    ]
+
+    monkeypatch.setattr(anthropic_client._client.messages, "create", lambda **kw: iter(events))
+
+    # Capture stream events
+    sent_events = []
+
+    class MockIOStream:
+        def send(self, event):
+            sent_events.append(event)
+
+    monkeypatch.setattr(IOStream, "get_default", staticmethod(lambda: MockIOStream()))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "How many sheep?"}],
+        "max_tokens": 8000,
+        "stream": True,
+    }
+
+    result = anthropic_client._create_streaming(params)
+
+    # Verify thinking + text combined with [Thinking] prefix
+    content = result.choices[0].message.content
+    assert content.startswith("[Thinking]")
+    assert "Let me think... The answer is 9." in content
+    assert "9 sheep remain." in content
+
+    # Verify only text deltas emit StreamEvents (not thinking)
+    # StreamEvent is wrapped by @wrap_event, so actual text is at .content.content
+    assert len(sent_events) == 1
+    assert sent_events[0].content.content == "9 sheep remain."
+
+
+# ==============================================================================
+# Real API Call Tests for Streaming
+# ==============================================================================
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_streaming_text():
+    """Real API call test for basic streaming text response."""
+    import os
+
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Say 'Hello streaming!' and nothing else."}],
+        "max_tokens": 100,
+        "stream": True,
+    }
+
+    response = client.create(params)
+
+    # Verify response structure
+    assert response is not None
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+
+    content = response.choices[0].message.content
+    assert content is not None
+    assert len(content) > 0
+    assert "hello" in content.lower() or "streaming" in content.lower()
+
+    # Verify usage is tracked
+    assert response.usage is not None
+    assert response.usage.prompt_tokens > 0
+    assert response.usage.completion_tokens > 0
+    assert response.usage.total_tokens > 0
+
+    # Verify cost is calculated
+    assert response.cost is not None
+    assert response.cost >= 0
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_streaming_with_tools():
+    """Real API call test for streaming with tool calls."""
+    import json
+    import os
+
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Calculate 10 + 5 using the calculator tool."}],
+        "max_tokens": 1024,
+        "stream": True,
+        "functions": [
+            {
+                "name": "calculator",
+                "description": "Perform basic arithmetic",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide"]},
+                        "a": {"type": "number"},
+                        "b": {"type": "number"},
+                    },
+                    "required": ["operation", "a", "b"],
+                },
+            }
+        ],
+    }
+
+    response = client.create(params)
+
+    # Verify response
+    assert response is not None
+    message = response.choices[0].message
+
+    # Should have tool calls
+    assert message.tool_calls is not None, "Streaming should reconstruct tool calls"
+    assert len(message.tool_calls) > 0
+
+    tool_call = message.tool_calls[0]
+    assert tool_call.function.name == "calculator"
+
+    args = json.loads(tool_call.function.arguments)
+    assert args["operation"] == "add"
+    assert args["a"] == 10
+    assert args["b"] == 5
+
+    # Verify finish reason
+    assert response.choices[0].finish_reason == "tool_calls"

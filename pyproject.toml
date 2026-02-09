@@ -258,7 +258,7 @@ redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
-anthropic = ["anthropic[vertex]>=0.23.1"]
+anthropic = ["anthropic[vertex]>=0.79.0"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = [
     "yepcode-run>=1.6.1",
