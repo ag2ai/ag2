@@ -155,7 +155,9 @@ class TestMistralV2ClientCreate:
         """Test creating response with tool calls."""
         # Setup mock with tool calls
         mock_tool_call = MockMistralToolCall(call_id="call_abc", name="get_weather", arguments={"city": "NYC"})
-        mock_message = MockMistralMessage(role="assistant", content="I'll check the weather", tool_calls=[mock_tool_call])
+        mock_message = MockMistralMessage(
+            role="assistant", content="I'll check the weather", tool_calls=[mock_tool_call]
+        )
         mock_choice = MockMistralChoice(message=mock_message, finish_reason="tool_calls")
         mock_response = MockMistralResponse(
             response_id="mistral-456",
@@ -170,7 +172,12 @@ class TestMistralV2ClientCreate:
         response = mistral_v2_client.create({
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": "Get weather"}],
-            "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {"name": "get_weather", "description": "Get weather", "parameters": {}},
+                }
+            ],
         })
 
         # Verify tool calls are extracted
@@ -303,11 +310,11 @@ class TestMistralV2ClientTransformResponse:
         full_text = message_with_tools.get_text()
         assert "Checking weather" in full_text
         assert "get_weather" in full_text  # Tool call text is included
-        
+
         # Extract only TextContent blocks separately
         text_blocks = [block.text for block in message_with_tools.content if isinstance(block, TextContent)]
         assert text_blocks == ["Checking weather"]
-        
+
         tool_calls = message_with_tools.get_tool_calls()
         assert len(tool_calls) == 1
         assert tool_calls[0].id == "call_123"
@@ -589,7 +596,12 @@ class TestMistralV2ClientIntegration:
         response = mistral_v2_client.create({
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": "What's the weather?"}],
-            "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {"name": "get_weather", "description": "Get weather", "parameters": {}},
+                }
+            ],
         })
 
         # Verify all aspects
@@ -623,4 +635,3 @@ class TestMistralV2ClientIntegration:
         assert callable(mistral_v2_client.cost)
         assert callable(mistral_v2_client.get_usage)
         assert callable(mistral_v2_client.message_retrieval)
-

@@ -361,7 +361,11 @@ class MistralAIClientV2(ModelClient):
                 warnings.warn(f"Unknown message role {message['role']}", UserWarning)
 
         # 4. Last message needs to be user or tool, if not, add a "please continue" message
-        if mistral_messages and not isinstance(mistral_messages[-1], UserMessage) and not isinstance(mistral_messages[-1], ToolMessage):
+        if (
+            mistral_messages
+            and not isinstance(mistral_messages[-1], UserMessage)
+            and not isinstance(mistral_messages[-1], ToolMessage)
+        ):
             mistral_messages.append(UserMessage(content="Please continue."))
 
         mistral_params["messages"] = mistral_messages

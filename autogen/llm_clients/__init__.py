@@ -35,6 +35,7 @@ Usage:
 """
 
 from .client_v2 import ModelClientV2
+from .mistral_v2 import MistralAIClientV2
 from .models import (
     AudioContent,
     BaseContent,
@@ -51,7 +52,6 @@ from .models import (
     UnifiedResponse,
     VideoContent,
 )
-from .mistral_v2 import MistralAIClientV2
 from .openai_completions_client import OpenAICompletionsClient
 
 __all__ = [  # noqa: RUF022
