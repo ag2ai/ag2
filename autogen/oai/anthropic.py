@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -83,7 +83,9 @@ from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
 from ..code_utils import content_str
+from ..events.client_events import StreamEvent
 from ..import_utils import optional_import_block, require_optional_import
+from ..io.base import IOStream
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 
 logger = logging.getLogger(__name__)
@@ -119,31 +121,39 @@ with optional_import_block():
 
 
 ANTHROPIC_PRICING_1k = {
-    "claude-3-7-sonnet-20250219": (0.003, 0.015),
-    "claude-3-5-sonnet-20241022": (0.003, 0.015),
-    "claude-3-5-haiku-20241022": (0.0008, 0.004),
-    "claude-3-5-sonnet-20240620": (0.003, 0.015),
-    "claude-3-sonnet-20240229": (0.003, 0.015),
-    "claude-3-opus-20240229": (0.015, 0.075),
     "claude-3-haiku-20240307": (0.00025, 0.00125),
-    "claude-2.1": (0.008, 0.024),
-    "claude-2.0": (0.008, 0.024),
-    "claude-instant-1.2": (0.008, 0.024),
+    "claude-3-5-haiku-20241022": (0.0008, 0.004),
+    "claude-haiku-4-5": (0.0001, 0.0005),
+    "claude-haiku-4-5-20251001": (0.0001, 0.0005),
+    "claude-3-7-sonnet-20250219": (0.0003, 0.0015),
+    "claude-sonnet-4": (0.0003, 0.0015),
+    "claude-sonnet-4-20250514": (0.0003, 0.0015),
+    "claude-sonnet-4-5": (0.0003, 0.0015),
+    "claude-sonnet-4-5-20250929": (0.0003, 0.0015),
+    "claude-opus-4": (0.015, 0.075),
+    "claude-opus-4-1": (0.015, 0.075),
+    "claude-opus-4-5": (0.0005, 0.0025),
+    "claude-opus-4-5-20251101": (0.0005, 0.0025),
+    "claude-opus-4-6": (0.0005, 0.0025),
 }
 
-# Models that support native structured outputs via beta API
+# Models that support native structured outputs
 # https://docs.anthropic.com/en/docs/build-with-claude/structured-outputs
 STRUCTURED_OUTPUT_MODELS = {
     "claude-sonnet-4-5",
     "claude-sonnet-4-5-20250929",  # Versioned Claude Sonnet 4.5
     "claude-3-5-sonnet-20241022",
     "claude-3-7-sonnet-20250219",
-    "claude-opus-4-1",  # Future model
+    "claude-opus-4-1",
+    "claude-opus-4-6",
+    "claude-opus-4-5",
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5",
 }
 
 
 def supports_native_structured_outputs(model: str) -> bool:
-    """Check if a Claude model supports native structured outputs (beta feature).
+    """Check if a Claude model supports native structured outputs.
 
     Native structured outputs use constrained decoding to guarantee schema compliance.
     This is more reliable than JSON Mode which relies on prompting.
@@ -158,10 +168,11 @@ def supports_native_structured_outputs(model: str) -> bool:
         - Claude Sonnet 4.5+ (claude-sonnet-4-5, claude-sonnet-4-5-20250929, claude-3-5-sonnet-20241022+)
         - Claude Sonnet 3.7+ (claude-3-7-sonnet-20250219+)
         - Claude Opus 4.1+ (claude-opus-4-1+)
+        - Claude Haiku 4.5+ (claude-haiku-4-5, claude-haiku-4-5-20251001)
 
     NOT supported (will use JSON Mode fallback):
         - Claude Sonnet 4.0 (claude-sonnet-4-20250514) - older version
-        - Claude 3 Haiku models
+        - Claude 3 Haiku models (claude-3-haiku-20240307)
         - Claude 2.x models
 
     Example:
@@ -185,70 +196,33 @@ def supports_native_structured_outputs(model: str) -> bool:
     if model.startswith("claude-sonnet-4-5"):
         return True
 
+    # Support Haiku 4.5+ versions
+    if model.startswith("claude-haiku-4-5"):
+        return True
+
     # Support future Opus 4.x versions
     return bool(model.startswith("claude-opus-4"))
 
 
-def has_beta_messages_api() -> bool:
-    """Check if the current Anthropic SDK version supports beta.messages API.
+def has_messages_parse_api() -> bool:
+    """Check if the current Anthropic SDK version supports messages.parse() API.
 
-    The beta.messages API is required for native structured outputs.
+    The messages.parse() API is used for native structured outputs with Pydantic models.
     This function performs runtime detection of SDK capabilities.
 
     Returns:
-        True if beta.messages.parse() is available, False otherwise.
+        True if messages.parse() is available, False otherwise.
 
     Example:
-        >>> has_beta_messages_api()
-        True  # If anthropic>=0.39.0 is installed
+        >>> has_messages_parse_api()
+        True  # If anthropic>=0.77.0 is installed
     """
     try:
-        from anthropic.resources.beta.messages import Messages
+        from anthropic.resources.messages import Messages
 
         return hasattr(Messages, "parse")
     except ImportError:
         return False
-
-
-def validate_structured_outputs_version() -> None:
-    """Validate that the Anthropic SDK version supports structured outputs beta.
-
-    The structured-outputs-2025-11-13 beta header requires anthropic>=0.74.1.
-
-    Raises:
-        ImportError: If the Anthropic SDK version is too old
-
-    Example:
-        >>> validate_structured_outputs_version()  # Raises if version < 0.74.1
-    """
-    try:
-        from packaging import version
-
-        min_version = "0.74.1"
-        current_version = anthropic_version  # Use module-level import
-
-        if version.parse(current_version) < version.parse(min_version):
-            raise ImportError(
-                f"Anthropic structured outputs require anthropic>={min_version}, "
-                f"but found version {current_version}. "
-                f"Please upgrade: pip install --upgrade 'anthropic>={min_version}'"
-            )
-    except ImportError as e:
-        if "anthropic" in str(e) or "version" in str(e).lower():
-            raise
-        # If packaging is not available, try manual version comparison
-        current_version = anthropic_version  # Use module-level import
-
-        # Simple version comparison (works for major.minor.patch format)
-        current_parts = [int(x) for x in anthropic_version.split(".")[:3]]
-        min_parts = [0, 74, 1]
-
-        if current_parts < min_parts:
-            raise ImportError(
-                f"Anthropic structured outputs require anthropic>=0.74.1, "
-                f"but found version {anthropic_version}. "
-                f"Please upgrade: pip install --upgrade 'anthropic>=0.74.1'"
-            )
 
 
 def _is_text_block(content: Any) -> bool:
@@ -480,13 +454,6 @@ class AnthropicClient:
         anthropic_params["stream"] = validate_parameter(params, "stream", bool, False, False, None, None)
         if "thinking" in params:
             anthropic_params["thinking"] = params["thinking"]
-
-        if anthropic_params["stream"]:
-            warnings.warn(
-                "Streaming is not currently supported, streaming will be disabled.",
-                UserWarning,
-            )
-            anthropic_params["stream"] = False
 
         # Note the Anthropic API supports "tool" for tool_choice but you must specify the tool name so we will ignore that here
         # Dictionary, see options here: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#controlling-claudes-output
@@ -760,18 +727,18 @@ class AnthropicClient:
             params["response_format"] = response_format  # Ensure response_format is in params for methods
 
             # Try native structured outputs if model supports it
-            if supports_native_structured_outputs(model) and has_beta_messages_api():
+            if supports_native_structured_outputs(model) and has_messages_parse_api():
                 try:
                     return self._create_with_native_structured_output(params)
                 except (BadRequestError, AttributeError, ValueError) as e:
                     # Fallback to JSON Mode if native API not supported or schema invalid
-                    # BadRequestError: Model doesn't support output_format
-                    # AttributeError: SDK doesn't have beta API
+                    # BadRequestError: Model doesn't support structured outputs
+                    # AttributeError: SDK doesn't have messages.parse API
                     # ValueError: Invalid schema format
                     self._log_structured_output_fallback(e, model, response_format, params)
                     return self._create_with_json_mode(params)
             else:
-                # Use JSON Mode for older models or when beta API unavailable
+                # Use JSON Mode for older models or when messages.parse API unavailable
                 return self._create_with_json_mode(params)
         else:
             # Standard completion without structured outputs
@@ -779,24 +746,16 @@ class AnthropicClient:
 
     def _create_standard(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a standard completion without structured outputs."""
+        if params.get("stream", False):
+            return self._create_streaming(params)
+
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
 
         # Prepare Anthropic API parameters using helper (handles tool conversion, None removal, etc.)
         anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
 
-        # Check if any tools use strict mode (requires beta API)
-        has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
-
-        if has_strict_tools:
-            # Validate SDK version supports structured outputs beta
-            validate_structured_outputs_version()
-            # Use beta API for strict tools
-            anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
-            response = self._client.beta.messages.create(**anthropic_params)
-        else:
-            # Standard API for legacy tools
-            response = self._client.messages.create(**anthropic_params)
+        response = self._client.messages.create(**anthropic_params)
 
         # Process response content using helper (extracts tool calls, text, finish reason)
         message_text, tool_calls, anthropic_finish = self._process_response_content(response)
@@ -804,10 +763,160 @@ class AnthropicClient:
         # Build and return ChatCompletion
         return self._build_chat_completion(response, message_text, tool_calls, anthropic_finish, anthropic_params)
 
-    def _create_with_native_structured_output(self, params: dict[str, Any]) -> ChatCompletion:
-        """Create completion using native structured outputs (beta API).
+    def _create_streaming(self, params: dict[str, Any]) -> ChatCompletion:
+        """Create a streaming completion, accumulating results into a ChatCompletion.
 
-        This method uses Anthropic's beta structured outputs feature for guaranteed
+        Uses raw streaming events from the Anthropic SDK to emit StreamEvent for
+        real-time text display while building the final response.
+
+        Args:
+            params: Request parameters (stream=True expected)
+
+        Returns:
+            ChatCompletion built from accumulated stream data
+        """
+        # Convert AG2 messages to Anthropic messages
+        anthropic_messages = oai_messages_to_anthropic_messages(params)
+
+        # Prepare Anthropic API parameters
+        anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
+
+        # Force stream on (load_config may have already set it, but ensure it)
+        anthropic_params["stream"] = True
+
+        stream = self._client.messages.create(**anthropic_params)
+
+        # Get IOStream for emitting StreamEvents
+        iostream = IOStream.get_default()
+
+        # Accumulators
+        # Use the model alias from params for cost calculation (matches non-streaming path).
+        # The stream's message_start returns the resolved model name (e.g. "claude-sonnet-4-5-20250929")
+        # which may not be in the pricing table.
+        cost_model = anthropic_params.get("model", "")
+        message_id = ""
+        input_tokens = 0
+        output_tokens = 0
+        stop_reason = "stop"
+
+        # Content block tracking: list of dicts with type, accumulated text, etc.
+        content_blocks: list[dict[str, Any]] = []
+        current_block_index = -1
+
+        for event in stream:
+            event_type = event.type
+
+            if event_type == "message_start":
+                msg = event.message
+                message_id = msg.id
+                if hasattr(msg, "usage") and msg.usage:
+                    input_tokens = getattr(msg.usage, "input_tokens", 0)
+
+            elif event_type == "content_block_start":
+                current_block_index = event.index
+                block = event.content_block
+                block_type = block.type  # "text", "tool_use", or "thinking"
+                block_data: dict[str, Any] = {"type": block_type, "text": ""}
+                if block_type == "tool_use":
+                    block_data["id"] = block.id
+                    block_data["name"] = block.name
+                    block_data["input_json"] = ""
+                elif block_type == "thinking":
+                    block_data["thinking"] = ""
+
+                # Extend list to accommodate index
+                while len(content_blocks) <= current_block_index:
+                    content_blocks.append({"type": "unknown", "text": ""})
+                content_blocks[current_block_index] = block_data
+
+            elif event_type == "content_block_delta":
+                delta = event.delta
+                delta_type = delta.type
+                idx = event.index
+
+                if delta_type == "text_delta":
+                    text = delta.text
+                    content_blocks[idx]["text"] += text
+                    # Emit StreamEvent for real-time display
+                    if iostream is not None:
+                        iostream.send(StreamEvent(content=text))
+                elif delta_type == "input_json_delta":
+                    content_blocks[idx]["input_json"] += delta.partial_json
+                elif delta_type == "thinking_delta":
+                    content_blocks[idx]["thinking"] += delta.thinking
+
+            elif event_type == "message_delta":
+                if hasattr(event, "delta") and hasattr(event.delta, "stop_reason"):
+                    sr = event.delta.stop_reason
+                    stop_reason = "tool_calls" if sr == "tool_use" else "stop"
+                if hasattr(event, "usage") and event.usage:
+                    output_tokens = getattr(event.usage, "output_tokens", 0)
+
+        # Build final response from accumulated data
+        tool_calls: list[ChatCompletionMessageToolCall] = []
+        thinking_text = ""
+        text_content = ""
+
+        for block in content_blocks:
+            btype = block.get("type")
+            if btype == "text":
+                if text_content:
+                    text_content += "\n\n"
+                text_content += block.get("text", "")
+            elif btype == "tool_use":
+                raw_json = block.get("input_json", "")
+                try:
+                    parsed_input = json.loads(raw_json) if raw_json else {}
+                except json.JSONDecodeError:
+                    parsed_input = {}
+                tool_calls.append(
+                    ChatCompletionMessageToolCall(
+                        id=block.get("id", ""),
+                        function={"name": block.get("name", ""), "arguments": json.dumps(parsed_input)},
+                        type="function",
+                    )
+                )
+            elif btype == "thinking":
+                if thinking_text:
+                    thinking_text += "\n\n"
+                thinking_text += block.get("thinking", "")
+
+        # Combine thinking and text content
+        if thinking_text and text_content:
+            message_text = f"[Thinking]\n{thinking_text}\n\n{text_content}"
+        elif thinking_text:
+            message_text = f"[Thinking]\n{thinking_text}"
+        else:
+            message_text = text_content
+
+        # Build ChatCompletion message
+        message = ChatCompletionMessage(
+            role="assistant",
+            content=message_text,
+            function_call=None,
+            tool_calls=tool_calls if tool_calls else None,
+        )
+
+        choices = [Choice(finish_reason=stop_reason, index=0, message=message)]
+
+        return ChatCompletion(
+            id=message_id,
+            model=cost_model,
+            created=int(time.time()),
+            object="chat.completion",
+            choices=choices,
+            usage=CompletionUsage(
+                prompt_tokens=input_tokens,
+                completion_tokens=output_tokens,
+                total_tokens=input_tokens + output_tokens,
+            ),
+            cost=_calculate_cost(input_tokens, output_tokens, cost_model),
+        )
+
+    def _create_with_native_structured_output(self, params: dict[str, Any]) -> ChatCompletion:
+        """Create completion using native structured outputs (GA API).
+
+        This method uses Anthropic's structured outputs feature for guaranteed
         schema compliance via constrained decoding.
 
         Args:
@@ -817,7 +926,7 @@ class AnthropicClient:
             ChatCompletion with structured JSON output
 
         Raises:
-            AttributeError: If SDK doesn't support beta API
+            AttributeError: If SDK doesn't support messages.parse API
             Exception: If native structured output fails
         """
         # Check if Anthropic's transform_schema is available
@@ -842,36 +951,26 @@ class AnthropicClient:
         # Prepare Anthropic API parameters using helper
         anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
 
-        # Validate SDK version supports structured outputs beta
-        validate_structured_outputs_version()
-
-        # Add native structured output parameters
-        anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
-
-        # Use beta API
-        if not hasattr(self._client, "beta"):
-            raise AttributeError(
-                "Anthropic SDK does not support beta.messages API. Please upgrade to anthropic>=0.39.0"
-            )
-
         # When both tools and structured output are configured, must use create() (not parse())
         # parse() doesn't support tools, so we convert Pydantic models to dict schemas
         has_tools = "tools" in anthropic_params and anthropic_params["tools"]
 
         if has_tools or isinstance(self._response_format, dict):
-            # Use create() with output_format for:
+            # Use create() with output_config for:
             # 1. Dict schemas (always)
             # 2. Pydantic models when tools are present (parse() doesn't support tools)
-            anthropic_params["output_format"] = {
-                "type": "json_schema",
-                "schema": transformed_schema,
+            anthropic_params["output_config"] = {
+                "format": {
+                    "type": "json_schema",
+                    "schema": transformed_schema,
+                }
             }
-            response = self._client.beta.messages.create(**anthropic_params)
+            response = self._client.messages.create(**anthropic_params)
         else:
             # Pydantic model without tools - use parse() for automatic validation
             # parse() provides parsed_output attribute for direct model access
             anthropic_params["output_format"] = self._response_format
-            response = self._client.beta.messages.parse(**anthropic_params)
+            response = self._client.messages.parse(**anthropic_params)
 
         # Process response content using helper (extracts tool calls, text, finish reason)
         # Pass is_native_structured_output=True to handle parsed_output correctly
