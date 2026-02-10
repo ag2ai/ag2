@@ -7,9 +7,9 @@
 # !/usr/bin/env python3 -m pytest
 
 from autogen import ConversableAgent, UserProxyAgent
-from autogen.llm_config.utils import config_list_from_json
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
+from autogen.llm_config.utils import config_list_from_json
 from test.const import KEY_LOC, OAI_CONFIG_LIST
 
 # Specify the model to use. GPT-3.5 is less reliable than GPT-4 at learning from user input.

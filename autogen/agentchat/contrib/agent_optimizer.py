@@ -9,9 +9,9 @@ import json
 from typing import Any
 
 from ... import OpenAIWrapper
-from ...llm_config.utils import filter_config
 from ...code_utils import execute_code
 from ...llm_config import LLMConfig
+from ...llm_config.utils import filter_config
 
 ADD_FUNC = {
     "type": "function",

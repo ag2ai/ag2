@@ -271,9 +271,7 @@ def test_config_list_from_json():
         assert config_list == config_list_2
 
         # Test: the env variable is set to a file path with folder name inside.
-        config_list_3 = config_list_from_json(
-            tmp_file.name, filter_dict={"model": ["gpt", "gpt-4", "gpt-4-32k"]}
-        )
+        config_list_3 = config_list_from_json(tmp_file.name, filter_dict={"model": ["gpt", "gpt-4", "gpt-4-32k"]})
         assert all(config.get("model") in ["gpt-4", "gpt"] for config in config_list_3)
 
         del os.environ["CONFIG_LIST_TEST"]
@@ -444,7 +442,11 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     }
     with caplog.at_level(logging.ERROR):  # noqa: SIM117
         # Mocking `config_list_from_json` to return an empty list and raise an exception when called
-        with mock.patch("autogen.oai.openai_utils.latest_config_list_from_json", return_value=[], side_effect=Exception("Mock called")):
+        with mock.patch(
+            "autogen.oai.openai_utils.latest_config_list_from_json",
+            return_value=[],
+            side_effect=Exception("Mock called"),
+        ):
             # Call the function with the invalid map
             config_list = autogen.config_list_from_dotenv(
                 model_api_key_map=invalid_model_api_key_map,

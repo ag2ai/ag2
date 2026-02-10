@@ -18,7 +18,6 @@ from .entry import ApplicationConfig, LLMConfigEntry
 from .types import ConfigEntries
 from .utils import config_list_from_json, filter_config
 
-
 ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 
 
