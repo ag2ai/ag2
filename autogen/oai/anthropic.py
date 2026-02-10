@@ -1524,12 +1524,17 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     user_continue_message = {"content": "Please continue.", "role": "user"}
     assistant_continue_message = {"content": "Please continue.", "role": "assistant"}
 
+    # Default missing role to "user" (e.g., A2A messages may not have role set)
+    for message in params["messages"]:
+        if "role" not in message:
+            message["role"] = "user"
+
     tool_use_messages = 0
     tool_result_messages = 0
     last_tool_use_index = -1
     last_tool_result_index = -1
     for message in params["messages"]:
-        if message["role"] == "system":
+        if message.get("role") == "system":
             _extract_system_message(message, params)
         else:
             # New messages will be added here, manage role alternations
@@ -1554,11 +1559,11 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                     last_tool_result_index,
                 )
                 tool_result_messages += count
-            elif message["content"] == "":
+            elif message.get("content") == "":
                 # Ignoring empty messages
                 pass
             else:
-                if expected_role != message["role"]:
+                if expected_role != message.get("role", "user"):
                     # Inserting the alternating continue message
                     processed_messages.append(
                         user_continue_message if expected_role == "user" else assistant_continue_message
@@ -1580,7 +1585,7 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
 
     # Note: When using reflection_with_llm we may end up with an "assistant" message as the last message and that may cause a blank response
     # So, if the last role is not user, add a 'user' continue message at the end
-    if processed_messages[-1]["role"] != "user":
+    if processed_messages[-1].get("role") != "user":
         processed_messages.append(user_continue_message)
 
     return processed_messages
