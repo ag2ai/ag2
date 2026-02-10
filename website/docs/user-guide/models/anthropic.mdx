@@ -10,14 +10,13 @@ In this notebook, we demonstrate how to use Anthropic Claude model for AgentChat
 ## Features
 
 - Function/tool calling
+- Streaming
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
-- Token usage and cost correctly as per Anthropic's API costs (as of December 2024)
+- Token usage and cost correctly as per Anthropic's API costs (as of February 2026)
 - [Extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?q=extended_thinking#pricing-and-token-usage-for-extended-thinking)
 
 ## Requirements
 To use Anthropic Claude with AG2, first you need to install the `ag2[anthropic]` package.
-
-To try out the function call feature of Claude model, you need to install `anthropic>=0.23.1`.
 
 ```bash
 # If you need to install AG2 with Anthropic
@@ -46,20 +45,20 @@ Example:
 ```
 [
     {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-sonnet-4-5",
         "api_key": "your api key",
         "api_type": "anthropic",
     },
     {
-        "model": "claude-3-7-sonnet-20250219",
+        "model": "claude-sonnet-4-5",
         "api_key": "your api key",
         "api_type": "anthropic",
         "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
         "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
         "thinking": {"type": "enabled", "budget_tokens": 2048},
-    }
+    },
     {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-opus-4-6",
         "api_key": "your api key",
         "api_type": "anthropic",
         "temperature": 0.5,
@@ -67,24 +66,15 @@ Example:
         "max_tokens": 10000,
     },
     {
-        "model":"claude-3-opus-20240229",
-        "api_key":"your api key",
-        "api_type":"anthropic",
+        "model": "claude-haiku-4-5",
+        "api_key": "your api key",
+        "api_type": "anthropic",
     },
     {
-        "model":"claude-2.0",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-2.1",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-3.0-haiku",
-        "api_key":"your api key",
-        "api_type":"anthropic",
+        "model": "claude-sonnet-4",
+        "api_key": "your api key",
+        "api_type": "anthropic",
+        "stream": true,
     },
 ]
 ```
@@ -111,7 +101,7 @@ import autogen
 
 llm_config_claude = autogen.LLMConfig(config_list={
     # Choose your model name.
-    "model": "claude-3-5-sonnet-20240620",
+    "model": "claude-sonnet-4-5",
     # You need to provide your API key here.
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "api_type": "anthropic",
@@ -130,7 +120,7 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 import os
 
 llm_config_vertexai = LLMConfig({
-    "model": "claude-3-5-sonnet-20240620-v1:0",
+    "model": "claude-sonnet-4-5-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region
     "gcp_auth_token": None,  # Optional: If not passed, Google Default Authentication will be used
@@ -160,7 +150,7 @@ This allows seamless integration without explicitly specifying the authenticatio
 
 ### Construct Agents
 
-Construct a simple conversation between a User proxy and an ConversableAgent based on Claude-3 model.
+Construct a simple conversation between a User proxy and a ConversableAgent based on Claude model.
 
 ```python
 assistant = autogen.AssistantAgent("assistant", llm_config=llm_config_claude)
@@ -259,7 +249,7 @@ TERMINATE
 ```
 
 ## Tool Call Example with the Latest Anthropic API
-Anthropic announced that tool use is supported in the Anthropic API. To use this feature, please install `anthropic>=0.23.1`.
+Tool use is supported in the Anthropic API.
 
 ### Register the function
 
@@ -586,7 +576,7 @@ While we're proud of our record and the merits you've recognized in our argument
 --------------------------------------------------------------------------------
 ```
 
-### Same group chat with Claude 3.5 Sonnet as the judge
+### Same group chat with Claude as the judge
 
 ```python
 dan = AssistantAgent(
@@ -834,7 +824,7 @@ from autogen import ConversableAgent
 llm_config = {
     "config_list": [
         {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-5",
             "api_type": "anthropic",
             "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
             "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
