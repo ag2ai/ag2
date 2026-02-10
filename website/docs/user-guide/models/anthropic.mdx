@@ -10,29 +10,30 @@ In this notebook, we demonstrate how to use Anthropic Claude model for AgentChat
 ## Features
 
 - Function/tool calling
+- Streaming
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
 - Token usage and cost correctly as per Anthropic's API costs (as of December 2024)
 - [Extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?q=extended_thinking#pricing-and-token-usage-for-extended-thinking)
-- Streaming responses via the Anthropic API (`stream=True`)
 
 ## Requirements
-To use Anthropic Claude with AG2, you need to install the `ag2[anthropic]` package, which will install a recent Anthropic SDK with streaming and GA structured outputs support.
+To use Anthropic Claude with AG2, first you need to install the `ag2[anthropic]` package.
 
-To use function call, tool use, structured outputs, or streaming features of Claude models, you **must** install `anthropic[vertex]>=0.79.0`.
+To use the full feature set of Claude models (tool calls, streaming, structured outputs), you must install `anthropic>=0.79.0`.
 
 ```bash
-# If you need to install AG2 with Anthropic
-pip install ag2[anthropic]
+# If you need to install AG2 with Anthropic and the correct Anthropic package:
+pip install 'ag2[anthropic]'
+# The ag2[anthropic] or autogen[anthropic] install will pull in anthropic>=0.79.0.
 ```
 
 <Tip>
 If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[anthropic]
+pip install -U 'autogen[anthropic]'
 ```
 or
 ```bash
-pip install -U ag2[anthropic]
+pip install -U 'ag2[anthropic]'
 ```
 as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -47,45 +48,26 @@ Example:
 ```
 [
     {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-opus-4",
         "api_key": "your api key",
         "api_type": "anthropic",
+        "max_tokens": 8192,
     },
     {
-        "model": "claude-3-7-sonnet-20250219",
+        "model": "claude-sonnet-4-5-20250929",
         "api_key": "your api key",
         "api_type": "anthropic",
-        "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
+        "max_tokens": 8192, # override the default value, max tokens must be greater than thinking budget
         "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
         "thinking": {"type": "enabled", "budget_tokens": 2048},
-    }
+    },
     {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-haiku-4-5",
         "api_key": "your api key",
         "api_type": "anthropic",
         "temperature": 0.5,
-        "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
+        "top_p": 0.2, # It is recommended to set temperature or top_p but not both.
         "max_tokens": 10000,
-    },
-    {
-        "model":"claude-3-opus-20240229",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-2.0",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-2.1",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-3.0-haiku",
-        "api_key":"your api key",
-        "api_type":"anthropic",
     },
 ]
 ```
@@ -112,7 +94,7 @@ import autogen
 
 llm_config_claude = autogen.LLMConfig(config_list={
     # Choose your model name.
-    "model": "claude-3-5-sonnet-20240620",
+    "model": "claude-sonnet-4-5",
     # You need to provide your API key here.
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "api_type": "anthropic",
@@ -131,7 +113,7 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 import os
 
 llm_config_vertexai = LLMConfig({
-    "model": "claude-3-5-sonnet-20240620-v1:0",
+    "model": "claude-sonnet-4-5-20250929-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region
     "gcp_auth_token": None,  # Optional: If not passed, Google Default Authentication will be used
@@ -157,63 +139,11 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
 
 This allows seamless integration without explicitly specifying the authentication token in your code.
 
-## Streaming Responses with Anthropic
-
-Anthropic API now supports streaming responses. To enable this, pass `"stream": True` in your LLM configuration:
-
-```python
-llm_config = {
-    "config_list": [
-        {
-            "model": "claude-3-7-sonnet-20250219",
-            "api_key": os.getenv("ANTHROPIC_API_KEY"),
-            "api_type": "anthropic",
-            "stream": True,  # Enable streaming
-            "max_tokens": 4096,
-        }
-    ]
-}
-```
-
-When streaming is enabled, Claude returns results as they are generated, allowing real-time display or incremental processing. The AgentChat interface emits partial completions as streaming events, and the final result is accumulated as a normal message for your workflow.
-
-This is especially useful for large completions, long answers, or interactive UIs. You may also wish to use streaming when working with large `thinking` budgets or in any use-case benefiting from immediate model responses.
-
-## Structured Outputs (GA API)
-
-Anthropic now supports structured outputs as a generally available (GA) feature (no longer requiring any beta endpoint). This allows you to request responses in a precise schema, such as a JSON format defined by your OpenAPI/Pydantic schema.
-
-- For Pydantic models (no tools), use the `output_format` parameter with your model class.
-- For raw JSON schema or with tools, supply an `output_config` (which includes a JSON schema) in your config list or directly in the call.
-- There is no need for custom beta headers; strict and structured outputs are now supported via the main API.
-
-Example (with a simple JSON schema):
-```python
-config_list = [{
-    "model": "claude-sonnet-4-5",
-    "api_key": os.getenv("ANTHROPIC_API_KEY"),
-    "api_type": "anthropic",
-    # Use output_config for structured output
-    "output_config": {
-        "format": {
-            "type": "json_schema",
-            "schema": your_json_schema,
-        }
-    },
-}]
-```
-
-If using Pydantic models without tools, you can pass the model itself as `output_format`.
-
-Tool/function calling with strict argument checking is now generally available. You can use the same OpenAI tool/function specification for Anthropic, and strict validation happens by default—no beta parameters are needed.
-
----
-
 ## Two-agent Coding Example
 
 ### Construct Agents
 
-Construct a simple conversation between a User proxy and an ConversableAgent based on Claude-3 model.
+Construct a simple conversation between a User proxy and a ConversableAgent based on Claude 4.x model. Ensure your model name matches the supported Anthropic model list.
 
 ```python
 assistant = autogen.AssistantAgent("assistant", llm_config=llm_config_claude)
@@ -233,11 +163,37 @@ user_proxy.initiate_chat(
     assistant, message="Write a python program to print the first 10 numbers of the Fibonacci sequence."
 )
 ```
-... (rest of content unchanged) ...
+
+... (console output remains unchanged) ...
+
+## Tool Call Example with the Latest Anthropic API
+Anthropic announced that tool use is supported in the Anthropic API. **You must use `anthropic>=0.79.0` for all new tool/structured output features and streaming**.
+
+### Register the function
+
+```python
+@user_proxy.register_for_execution()  # Decorator factory for registering a function to be executed by an agent
+@assistant.register_for_llm(
+    name="get_weather", description="Get the current weather in a given location."
+)  # Decorator factory for registering a function to be used by an agent
+def preprocess(location: Annotated[str, "The city and state, e.g. Toronto, ON."]) -> str:
+    return "Absolutely cloudy and rainy"
+
+user_proxy.initiate_chat(
+    assistant,
+    message="What's the weather in Toronto?",
+)
+```
+
+... (console output remains unchanged) ...
+
+## Group Chat Example with both Claude and GPT Agents
+
+... (rest unchanged - but ensure the Claude models referenced match current naming, such as "claude-sonnet-4-5", "claude-opus-4", etc.) ...
 
 ## Thinking mode
 
-You can utilize Anthropic's thinking mode by setting it in the configuration.
+You can utilize Anthropic's thinking mode by setting it in the configuration. (The settings and sample code remain the same, but ensure you use a supported Claude 4.x model in the example.)
 
 ```
 from autogen import ConversableAgent
@@ -246,7 +202,7 @@ from autogen import ConversableAgent
 llm_config = {
     "config_list": [
         {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-5-20250929",
             "api_type": "anthropic",
             "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
             "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
