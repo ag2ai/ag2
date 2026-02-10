@@ -87,13 +87,17 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     if not artifact.parts:
         return None
 
-    if len(artifact.parts) > 1:
-        raise NotImplementedError("Multiple parts are not supported")
+    from pprint import pprint
 
-    return ResponseMessage(
-        messages=[message_from_part(artifact.parts[-1])],
+    pprint(artifact)
+    # pprint(artifact.parts[-1].metadata)
+
+    r = ResponseMessage(
+        messages=[message_from_part(p) for p in artifact.parts],
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
     )
+    pprint(r)
+    return r
 
 
 def response_message_from_a2a_message(message: Message) -> ResponseMessage | None:
@@ -130,9 +134,10 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
 def make_artifact(
     message: dict[str, Any] | None,
     context: dict[str, Any] | None = None,
+    name: str = RESULT_ARTIFACT_NAME,
 ) -> Artifact:
     artifact = new_artifact(
-        name=RESULT_ARTIFACT_NAME,
+        name=name,
         parts=[message_to_part(message)] if message else [],
         description=None,
     )
@@ -141,6 +146,29 @@ def make_artifact(
         artifact.metadata = {CONTEXT_KEY: context}
 
     return artifact
+
+
+def copy_artifact(
+    artifact: Artifact,
+    message: dict[str, Any] | None,
+    context: dict[str, Any] | None = None,
+) -> Artifact:
+    updated_artifact = Artifact(
+        artifact_id=artifact.artifact_id,
+        description=artifact.description,
+        parts=[message_to_part(message)] if message else [],
+        name=artifact.name,
+        metadata=artifact.metadata,
+        extensions=artifact.extensions,
+    )
+
+    old_metadata = artifact.metadata or {}
+    context = (context or {}) | old_metadata.get(CONTEXT_KEY, {})
+    if context:
+        old_metadata[CONTEXT_KEY] = context
+        updated_artifact.metadata = old_metadata
+
+    return updated_artifact
 
 
 def make_working_message(

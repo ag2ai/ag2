@@ -212,8 +212,9 @@ class TestResponseMessageFromA2AArtifacts:
             ],
         )
 
-        with pytest.raises(NotImplementedError, match="Multiple parts are not supported"):
-            response_message_from_a2a_artifacts([artifact])
+        assert response_message_from_a2a_artifacts([artifact]) == ResponseMessage(
+            messages=[{"content": "Part 1"}, {"content": "Part 2"}],
+        )
 
 
 class TestResponseMessageFromA2ATask:

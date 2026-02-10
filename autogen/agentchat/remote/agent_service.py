@@ -58,14 +58,14 @@ class AgentService:
 
             # generate LLM reply with token-level streaming
             if not reply:
-                async for chunk_or_reply in self._streaming_oai_reply(messages, state.client_tools):
-                    if isinstance(chunk_or_reply, str):
+                async for is_final, chunk in self._streaming_oai_reply(messages, state.client_tools):
+                    if not is_final:
                         yield ServiceResponse(
-                            streaming_text=chunk_or_reply,
+                            streaming_text=chunk,
                             context=context_variables.data or None,
                         )
                     else:
-                        _, reply = chunk_or_reply
+                        reply = chunk
 
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
@@ -143,14 +143,15 @@ class AgentService:
 
             while not task.done():
                 for chunk in self._drain_stream_events(iostream):
-                    yield chunk
+                    yield False, chunk
                 await asyncio.sleep(0.01)
 
             # Final drain after task completion
             for chunk in self._drain_stream_events(iostream):
-                yield chunk
+                yield False, chunk
 
-            yield task.result()
+            _, result = task.result()
+            yield True, result
 
     @staticmethod
     def _drain_stream_events(iostream: ThreadIOStream) -> list[str]:
