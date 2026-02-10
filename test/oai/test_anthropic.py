@@ -32,7 +32,7 @@ def mock_completion():
             self,
             id="msg_013Zva2CMHLNnXjNJJKqJ2EF",
             completion="Hi! My name is Claude.",
-            model="claude-3-opus-20240229",
+            model="claude-opus-4",
             stop_reason="end_turn",
             role="assistant",
             type: Literal["completion"] = "completion",
@@ -151,12 +151,12 @@ def test_cost_calculation(mock_completion):
     completion = mock_completion(
         completion="Hi! My name is Claude.",
         usage={"prompt_tokens": 10, "completion_tokens": 25, "total_tokens": 35},
-        model="claude-3-opus-20240229",
+        model="claude-opus-4",
     )
     assert (
         _calculate_cost(completion.usage["prompt_tokens"], completion.usage["completion_tokens"], completion.model)
-        == 0.002025
-    ), "Cost should be $0.002025"
+        == 0.0002025
+    ), "Cost should be $0.0002025"
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
