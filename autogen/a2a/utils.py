@@ -163,7 +163,7 @@ def copy_artifact(
     )
 
     old_metadata = artifact.metadata or {}
-    context = (context or {}) | old_metadata.get(CONTEXT_KEY, {})
+    context = old_metadata.get(CONTEXT_KEY, {}) | (context or {})
     if context:
         old_metadata[CONTEXT_KEY] = context
         updated_artifact.metadata = old_metadata

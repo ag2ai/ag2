@@ -12,7 +12,7 @@ from a2a.types import InternalError, Task, TaskState, TaskStatus
 from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
-from autogen.agentchat.remote import AgentService, ServiceResponse
+from autogen.agentchat.remote import AgentService
 from autogen.doc_utils import export_module
 
 from .utils import (
@@ -59,7 +59,6 @@ class AutogenAgentExecutor(AgentExecutor):
         artifact = make_artifact(message=None)
 
         streaming_started = False
-        final_message: ServiceResponse | None = None
         try:
             async for response in self.agent(request_message_from_a2a(context.message)):
                 if response.input_required:
@@ -75,15 +74,16 @@ class AutogenAgentExecutor(AgentExecutor):
                     return
 
                 if response.streaming_text:
-                    chunk_artifact = copy_artifact(
+                    artifact = copy_artifact(
                         artifact=artifact,
                         message={"content": response.streaming_text},
+                        context=response.context,
                     )
 
                     await updater.add_artifact(
-                        parts=chunk_artifact.parts,
-                        artifact_id=chunk_artifact.artifact_id,
-                        name=chunk_artifact.name,
+                        parts=artifact.parts,
+                        artifact_id=artifact.artifact_id,
+                        name=artifact.name,
                         append=streaming_started,
                         last_chunk=False,
                     )
@@ -91,30 +91,26 @@ class AutogenAgentExecutor(AgentExecutor):
                     streaming_started = True
 
                 elif response.message:
-                    final_message = response
+                    artifact = copy_artifact(
+                        artifact=artifact,
+                        message=response.message,
+                        context=response.context,
+                    )
 
         except Exception as e:
-            print(repr(e))
             raise ServerError(error=InternalError()) from e
 
-        if final_message:
-            artifact = copy_artifact(
-                artifact=artifact,
-                message=final_message.message,
-                context=final_message.context,
-            )
+        await updater.add_artifact(
+            artifact_id=artifact.artifact_id,
+            name=artifact.name,
+            parts=artifact.parts,
+            metadata=artifact.metadata,
+            extensions=artifact.extensions,
+            last_chunk=True,
+            **({"append": True} if streaming_started else {}),
+        )
 
-            await updater.add_artifact(
-                artifact_id=artifact.artifact_id,
-                name=artifact.name,
-                parts=artifact.parts,
-                metadata=artifact.metadata,
-                extensions=artifact.extensions,
-                last_chunk=True,
-                **({"append": True} if streaming_started else {}),
-            )
-
-            await updater.complete()
+        await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass
