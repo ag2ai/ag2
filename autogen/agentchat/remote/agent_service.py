@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import queue
 import warnings
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
@@ -18,7 +18,6 @@ from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, Te
 from autogen.events.base_event import BaseEvent
 from autogen.events.client_events import StreamEvent
 from autogen.io.base import AsyncIOStreamProtocol, IOStream
-from autogen.io.thread_io_stream import ThreadIOStream
 
 from .protocol import RequestMessage, ServiceResponse, get_tool_names
 
@@ -136,37 +135,26 @@ class AgentService:
             str: Incremental text chunks from LLM streaming.
             tuple[bool, ...]: The final (valid, reply) result when complete.
         """
-        iostream = ThreadIOStream()
+        iostream = AsyncIOQueueStream()
 
         with IOStream.set_default(iostream):
             task = asyncio.ensure_future(self.agent.a_generate_oai_reply(messages, tools=client_tools))
 
             while not task.done():
-                for chunk in self._drain_stream_events(iostream):
-                    yield False, chunk
-                await asyncio.sleep(0.01)
+                with suppress(asyncio.TimeoutError):
+                    event = await asyncio.wait_for(
+                        iostream.queue.get(),
+                        timeout=0.01,
+                    )
+                    yield False, event
 
             # Final drain after task completion
-            for chunk in self._drain_stream_events(iostream):
-                yield False, chunk
+            while not iostream.queue.empty():
+                event = await iostream.queue.get()
+                yield False, event
 
             _, result = task.result()
             yield True, result
-
-    @staticmethod
-    def _drain_stream_events(iostream: ThreadIOStream) -> list[str]:
-        """Drain all StreamEvent items from the iostream queue, returning text chunks."""
-        chunks: list[str] = []
-        while True:
-            try:
-                event = iostream.input_stream.get_nowait()
-                if isinstance(event, StreamEvent):
-                    # Note: @wrap_event wraps StreamEvent: outer.content is the inner event,
-                    # inner.content is the actual text string
-                    chunks.append(event.content.content)
-            except queue.Empty:
-                break
-        return chunks
 
     def _make_tool_executor(self, context_variables: ContextVariables) -> GroupToolExecutor:
         tool_executor = GroupToolExecutor()
@@ -230,9 +218,6 @@ class HITLStream(AsyncIOStreamProtocol):
         self.input_prompt = prompt
         return ""
 
-    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
-        raise NotImplementedError("HITLStream does not support printing")
-
     def send(self, message: BaseEvent) -> None:
         if isinstance(
             message,
@@ -245,3 +230,12 @@ class HITLStream(AsyncIOStreamProtocol):
             return
 
         raise NotImplementedError("HITLStream does not support sending messages")
+
+
+class AsyncIOQueueStream(AsyncIOStreamProtocol):
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[str] = asyncio.Queue()
+
+    def send(self, message: BaseEvent) -> None:
+        if isinstance(message, StreamEvent):
+            self.queue.put_nowait(message.content.content)
