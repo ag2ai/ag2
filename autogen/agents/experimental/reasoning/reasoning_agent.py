@@ -415,7 +415,6 @@ class ReasoningAgent(AssistantAgent):
             )
             kwargs["silent"] = not kwargs.pop("verbose")
 
-        llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
         self._scope = scope
 
         system_msg = kwargs.pop("system_message", REASONING_AGENT_MESSAGE)

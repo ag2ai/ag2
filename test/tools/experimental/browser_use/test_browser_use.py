@@ -118,7 +118,7 @@ class TestBrowserUseToolOpenai:
         assert result_validated, "No valid result found in the chat history."
 
     def test_llm_config_current_property(self, mock_credentials: Credentials) -> None:
-        """Test that BrowserUseTool correctly uses LLMConfig.current property when llm_config is None."""
+        """Test that BrowserUseTool works when llm_config is explicitly provided."""
         # Create a default LLMConfig
         llm_config = LLMConfig(
             *mock_credentials.config_list,
@@ -135,14 +135,10 @@ class TestBrowserUseToolOpenai:
 
 
 def test_browser_use_llm_config_without_context() -> None:
-    """Test that BrowserUseTool raises ValueError when no LLMConfig is provided and no context is set."""
-    # Test that we get an appropriate error when trying to use LLMConfig.current without context
-    # This tests the fix for the callable issue
+    """Test that BrowserUseTool raises ValueError when no llm_config is provided."""
     try:
-        # This should raise a ValueError because no current LLMConfig is set
-        with pytest.raises(ValueError, match="No current LLMConfig set"):
-            # Access LLMConfig.current property (not calling it as a method)
-            _ = LLMConfig.current
+        with pytest.raises(ValueError, match="llm_config is required"):
+            BrowserUseTool(llm_config=None)
     except ImportError:
         # Skip if browser_use dependencies are not installed
         pytest.skip("Browser use dependencies not installed")
