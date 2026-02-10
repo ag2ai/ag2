@@ -317,10 +317,6 @@
          <lastmod>2026-02-10</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/config_list_from_json/</loc>
-         <lastmod>2026-02-10</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/config_list_from_models/</loc>
          <lastmod>2026-02-10</lastmod>
     </url>
@@ -330,10 +326,6 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/config_list_openai_aoai/</loc>
-         <lastmod>2026-02-10</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/filter_config/</loc>
          <lastmod>2026-02-10</lastmod>
     </url>
     <url>
