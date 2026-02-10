@@ -12,9 +12,7 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig([
-    {"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]}
-])
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
 ```
 
 <Warning>
@@ -29,9 +27,9 @@ import autogen
 assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
-## Introduction to the LLMConfig argument
+## Introduction to `config_list`
 
-Different tasks may require different models, and the configuration allows specifying the different endpoints and configurations that are to be used. The argument is a list of dictionaries, each of which contains the following keys depending on the kind of endpoint being used:
+Different tasks may require different models, and LLMConfig accepts one or multiple configuration dictionaries as its positional arguments. (Internally, these are stored as the `config_list`). Each configuration dictionary contains keys depending on the endpoint being used:
 
 <Tabs>
   <Tab title="OpenAI">
@@ -100,7 +98,7 @@ These will create a model client which assumes an OpenAI API (or compatible) end
 
 ### `OAI_CONFIG_LIST` pattern
 
-A common, useful pattern used is to define this configuration via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `from_json` method to load it:
+A common, useful pattern used is to define these configuration dicts in JSON (in a file or environment variable set to a JSON-formatted string) and use the `from_json` method to load them:
 
 ```python
 llm_config = autogen.LLMConfig.from_json(
@@ -113,28 +111,26 @@ assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 
 This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
 
-This function interprets the `env_or_file` argument as follows:
+This function interprets the `env` or `path` argument as follows:
 
-- If `env_or_file` is an environment variable then:
-    - It will first try to load the file from the path specified in the environment variable.
-    - If there is no file, it will try to interpret the environment variable as a JSON string.
-- Otherwise, it will try to open the file at the path specified by `env_or_file`.
+- If `env` is provided, it attempts to load the content from the environment variable by name. This can be a path to a file (which is loaded), or an in-place JSON string (which is parsed).
+- If `path` is provided, it loads and parses that file's content as JSON.
 
 ### Why is it a list?
 
-Being a list allows you to define multiple models that can be used by the agent. This is useful for a few reasons:
+Being able to specify one or more config dictionaries (as positional arguments) allows you to define multiple models that can be used by the agent. This is useful for a few reasons:
 
 - If one model times out or fails, the agent can try another model.
-- Having a single global list of models and filtering it based on certain keys (e.g. name, tag) in order to pass select models into a certain agent (e.g. use cheaper GPT 4o-mini for agents solving easier tasks)
-- While the core agents, (e.g. conversable or assistant) do not have special logic around selecting configs, some of the specialized agents *may* have logic to select the best model based on the task at hand.
+- You can use a global list of models and filter it based on certain keys (e.g., name, tag) to pass select models into a certain agent (e.g., use cheaper GPT 4o-mini for agents solving easier tasks)
+- While the core agents (e.g. conversable or assistant) do not have special logic for selecting configs, some of the specialized agents *may* have logic to select the best model based on the task at hand.
 
 ### How does an agent decide which model to pick out of the list?
 
-An agent uses the very first model available in the configuration list and makes LLM calls against this model. If the model fails (e.g. API throttling) the agent will retry the request against the 2nd model and so on until prompt completion is received (or throws an error if none of the models successfully completes the request). In general there's no implicit/hidden logic inside agents that is used to pick "the best model for the task". However, some specialized agents may attempt to choose "the best model for the task". It is developers responsibility to pick the right models and use them with agents.
+An agent uses the very first model available in its configuration list and makes LLM calls against this model. If the model fails (e.g. API throttling), the agent will retry the request against the next model and so on until prompt completion is received (or throws an error if none of the models successfully completes the request). In general, there is no implicit/hidden logic inside agents that is used to pick "the best model for the task". However, some specialized agents may attempt to choose "the best model for the task". It is the developer's responsibility to pick the right models and use them with agents.
 
 ### Config list filtering
 
-As described above, the list can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you want to select a config with specific model(s), you can pass either a single string or a list of strings:
+As described above, this list (the positional configs passed to LLMConfig) can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you want to select a config with specific model(s), you can pass either a single string or a list of strings:
 
 ```python
 # Single model (string)
@@ -144,13 +140,7 @@ filter_dict = {"model": "gpt-5-nano"}
 filter_dict = {"model": ["gpt-5-nano", "gpt-4.1"]}
 ```
 
-This can then be applied to a config when constructing an `LLM_CONFIG` with the `where` method:
-
-```python
-llm_config = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(**filter_dict)
-```
-
-Or, directly when loading the config list using `from_json`:
+This can then be applied to a config when constructing an `LLMConfig` object with the `where` method:
 
 ```python
 llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(**filter_dict)
@@ -158,7 +148,7 @@ llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(**filter_
 
 #### Tags
 
-Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy way to smooth over this inconsistency. Tags are a list of strings in the configuration list. For example, for the following configuration list:
+Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy way to smooth over this inconsistency. Tags are a list of strings in the config dictionary. For example:
 
 ```python
 config_list = [
@@ -167,17 +157,17 @@ config_list = [
 ]
 ```
 
-When filtering the configuration list, you can pass a single tag or multiple tags. A config is selected if it has at least one of the specified tags:
+When filtering, you can pass a single tag or multiple tags. A config is selected if it has at least one of the specified tags:
 
 ```python
 # Single tag
 filter_dict = {"tags": "llama"}
-llm_config = autogen.LLMConfig(config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
 assert len(llm_config.config_list) == 1
 
 # Multiple tags
 filter_dict = {"tags": ["llama", "another_tag"]}
-llm_config = autogen.LLMConfig(config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
 ```
 
 ### Adding http client in llm_config for proxy
@@ -197,13 +187,11 @@ class MyHttpClient(httpx.Client):
         return self
 
 llm_config = LLMConfig(
-    [
-        {
-            "api_type": "openai",
-            "model": "my-gpt-5-deployment",
-            "api_key": "",
-        }
-    ],
+    {  # note: passing dict positionally
+        "api_type": "openai",
+        "model": "my-gpt-5-deployment",
+        "api_key": "",
+    },
     http_client=MyHttpClient(proxy="http://localhost:8030")
 )
 ```
@@ -286,7 +274,7 @@ Here is an example configuration:
 ```
 from autogen import LLMConfig
 
-llm_config = LLMConfig([
+llm_config = LLMConfig(
     {
         "model": "gpt-4",
         "base_url": "YOUR_BASE_URL",
@@ -295,7 +283,7 @@ llm_config = LLMConfig([
         "max_tokens": 1000,
         "azure_ad_token_provider": "DEFAULT"
     }
-])
+)
 ```
 
 For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
@@ -325,7 +313,7 @@ This documentation provides a complete guide to configure and use AAD authentica
 
 ## Other configuration parameters
 
-Besides the main list, there are other parameters that can be used to configure the LLM. These are split between parameters specifically used by Autogen and those passed into the model client.
+Besides the positional config dicts, you can provide further keyword arguments to LLMConfig to control LLM behavior. These are split between parameters used by AG2 itself and those passed through to the model client.
 
 ### AG2 specific parameters
 
@@ -342,7 +330,7 @@ This is commonly used for things like `temperature`, or `timeout`.
 ```python
 from autogen import LLMConfig
 
-llm_config = LLMConfig([
+llm_config = LLMConfig(
     {
         "model": "my-gpt-5-deployment",
         "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -355,8 +343,7 @@ llm_config = LLMConfig([
         "model": "llama-7B",
         "base_url": "http://127.0.0.1:8080",
         "api_type": "openai",
-    }
-],
+    },
     temperature=0.9,
     timeout=300,
 )
@@ -369,6 +356,7 @@ llm_config = LLMConfig([
 - [`config_list_from_models`](/docs/api-reference/autogen/config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
 - [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
+> Note: `config_list_from_json` and `filter_config` are only available via `autogen.llm_config.utils` since 0.11.0. Update existing code to import them directly from there if needed.
+
 See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.
  
-  
