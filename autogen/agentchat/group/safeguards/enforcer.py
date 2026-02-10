@@ -158,7 +158,7 @@ class SafeguardEnforcer:
                 # Create LLM guardrail - handle dict config by converting to LLMConfig
                 llm_config = self.safeguard_llm_config
                 if isinstance(llm_config, dict):
-                    llm_config = LLMConfig(config_list=[llm_config])
+                    llm_config = LLMConfig(llm_config)
 
                 guardrail = LLMGuardrail(
                     name=f"llm_guard_{rule['message_source']}_{rule['message_destination']}",
@@ -516,7 +516,7 @@ class SafeguardEnforcer:
         # Handle dict config by converting to LLMConfig
         llm_config = self.safeguard_llm_config
         if isinstance(llm_config, dict):
-            llm_config = LLMConfig(config_list=[llm_config])
+            llm_config = LLMConfig(llm_config)
 
         from ..targets.transition_target import TransitionTarget
 
