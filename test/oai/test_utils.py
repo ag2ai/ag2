@@ -423,6 +423,7 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
         os.remove(temp_name)  # The file is deleted after using its name (to prevent windows build from breaking)
 
     # Test with missing dotenv file
+    caplog.clear()
     with caplog.at_level(logging.WARNING):
         config_list = autogen.config_list_from_dotenv(dotenv_file_path="non_existent_path")
         assert "The specified .env file non_existent_path does not exist." in caplog.text
@@ -430,8 +431,10 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     # Test with invalid API key
     ENV_VARS["ANOTHER_API_KEY"] = ""  # Removing ANOTHER_API_KEY value
 
+    caplog.clear()
     with caplog.at_level(logging.WARNING):
-        config_list = autogen.config_list_from_dotenv()
+        with mock.patch("autogen.oai.openai_utils.find_dotenv", return_value=""):
+            config_list = autogen.config_list_from_dotenv()
         assert "No .env file found. Loading configurations from environment variables." in caplog.text
         # The function does not return an empty list if at least one configuration is loaded successfully
         assert config_list != [], "Config list is empty"
@@ -441,11 +444,10 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
         "gpt-4": "INVALID_API_KEY",  # Simulate an environment var name that doesn't exist
     }
     with caplog.at_level(logging.ERROR):  # noqa: SIM117
-        # Mocking `config_list_from_json` to return an empty list and raise an exception when called
+        # Mocking `config_list_from_json` to return an empty list
         with mock.patch(
             "autogen.oai.openai_utils.latest_config_list_from_json",
             return_value=[],
-            side_effect=Exception("Mock called"),
         ):
             # Call the function with the invalid map
             config_list = autogen.config_list_from_dotenv(

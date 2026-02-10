@@ -148,7 +148,7 @@ class LLMConfig:
                 config_list = config.pop("config_list")
                 if isinstance(config_list, dict):
                     config_list = [config_list]
-                return LLMConfig(*config_list)
+                return LLMConfig(*config_list, **config)
             return LLMConfig(config)
 
         return LLMConfig(*config)
