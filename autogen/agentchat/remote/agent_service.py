@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import queue
 import warnings
 from collections.abc import AsyncGenerator
 from typing import Any, Literal, cast
@@ -14,7 +16,9 @@ from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import AskUserTarget, TransitionTarget
 from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, TerminationEvent, UsingAutoReplyEvent
 from autogen.events.base_event import BaseEvent
-from autogen.io.base import AsyncIOStreamProtocol
+from autogen.events.client_events import StreamEvent
+from autogen.io.base import AsyncIOStreamProtocol, IOStream
+from autogen.io.thread_io_stream import ThreadIOStream
 
 from .protocol import RequestMessage, ServiceResponse, get_tool_names
 
@@ -52,12 +56,16 @@ class AgentService:
             # check code execution
             _, reply = self.agent.generate_code_execution_reply(messages)
 
-            # generate LLM reply
+            # generate LLM reply with token-level streaming
             if not reply:
-                _, reply = await self.agent.a_generate_oai_reply(
-                    messages,
-                    tools=state.client_tools,
-                )
+                async for chunk_or_reply in self._streaming_oai_reply(messages, state.client_tools):
+                    if isinstance(chunk_or_reply, str):
+                        yield ServiceResponse(
+                            streaming_text=chunk_or_reply,
+                            context=context_variables.data or None,
+                        )
+                    else:
+                        _, reply = chunk_or_reply
 
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
@@ -116,6 +124,48 @@ class AgentService:
             return False, None  # tool result is not valid OAI message, interrupt the loop
 
         return True, out_message
+
+    async def _streaming_oai_reply(
+        self,
+        messages: list[dict[str, Any]],
+        client_tools: list[dict[str, Any]],
+    ) -> AsyncGenerator[str | tuple[bool, str | dict[str, Any] | None], None]:
+        """Generate LLM reply while yielding streaming text chunks.
+
+        Yields:
+            str: Incremental text chunks from LLM streaming.
+            tuple[bool, ...]: The final (valid, reply) result when complete.
+        """
+        iostream = ThreadIOStream()
+
+        with IOStream.set_default(iostream):
+            task = asyncio.ensure_future(self.agent.a_generate_oai_reply(messages, tools=client_tools))
+
+            while not task.done():
+                for chunk in self._drain_stream_events(iostream):
+                    yield chunk
+                await asyncio.sleep(0.01)
+
+            # Final drain after task completion
+            for chunk in self._drain_stream_events(iostream):
+                yield chunk
+
+            yield task.result()
+
+    @staticmethod
+    def _drain_stream_events(iostream: ThreadIOStream) -> list[str]:
+        """Drain all StreamEvent items from the iostream queue, returning text chunks."""
+        chunks: list[str] = []
+        while True:
+            try:
+                event = iostream.input_stream.get_nowait()
+                if isinstance(event, StreamEvent):
+                    # Note: @wrap_event wraps StreamEvent: outer.content is the inner event,
+                    # inner.content is the actual text string
+                    chunks.append(event.content.content)
+            except queue.Empty:
+                break
+        return chunks
 
     def _make_tool_executor(self, context_variables: ContextVariables) -> GroupToolExecutor:
         tool_executor = GroupToolExecutor()

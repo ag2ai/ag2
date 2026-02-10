@@ -8,14 +8,19 @@ from uuid import uuid4
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import InternalError, Task, TaskState, TaskStatus
+from a2a.types import InternalError, Part, Task, TaskState, TaskStatus, TextPart
 from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
 from autogen.agentchat.remote import AgentService, ServiceResponse
 from autogen.doc_utils import export_module
 
-from .utils import make_artifact, make_input_required_message, make_working_message, request_message_from_a2a
+from .utils import (
+    make_artifact,
+    make_input_required_message,
+    make_working_message,
+    request_message_from_a2a,
+)
 
 
 @export_module("autogen.a2a")
@@ -50,6 +55,9 @@ class AutogenAgentExecutor(AgentExecutor):
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
 
+        artifact_id = uuid4().hex
+        streaming_started = False
+        first_artifact_sent = False
         final_message: ServiceResponse | None = None
         try:
             async for response in self.agent(request_message_from_a2a(context.message)):
@@ -65,7 +73,20 @@ class AutogenAgentExecutor(AgentExecutor):
                     )
                     return
 
-                else:
+                elif response.streaming_text:
+                    if not streaming_started:
+                        await updater.update_status(state=TaskState.working)
+                        streaming_started = True
+                    await updater.add_artifact(
+                        parts=[Part(root=TextPart(text=response.streaming_text))],
+                        artifact_id=artifact_id,
+                        name="response",
+                        append=first_artifact_sent,
+                        last_chunk=False,
+                    )
+                    first_artifact_sent = True
+
+                elif not streaming_started:
                     await updater.update_status(
                         message=make_working_message(
                             message=response.message,
@@ -75,12 +96,28 @@ class AutogenAgentExecutor(AgentExecutor):
                         state=TaskState.working,
                     )
 
-                final_message = response
+                if not response.streaming_text:
+                    final_message = response
 
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-        if final_message:
+        if streaming_started:
+            if final_message:
+                artifact = make_artifact(
+                    message=final_message.message,
+                    context=final_message.context,
+                )
+                await updater.add_artifact(
+                    parts=artifact.parts,
+                    artifact_id=artifact_id,
+                    name="response",
+                    append=True,
+                    last_chunk=True,
+                    metadata=artifact.metadata,
+                )
+            await updater.complete()
+        elif final_message:
             artifact = make_artifact(
                 message=final_message.message,
                 context=final_message.context,
