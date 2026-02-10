@@ -6,7 +6,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TextPart
-from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
+from a2a.utils import get_message_text, new_artifact
 from a2a.utils.message import new_agent_text_message
 
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
@@ -87,17 +87,10 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     if not artifact.parts:
         return None
 
-    from pprint import pprint
-
-    pprint(artifact)
-    # pprint(artifact.parts[-1].metadata)
-
-    r = ResponseMessage(
+    return ResponseMessage(
         messages=[message_from_part(p) for p in artifact.parts],
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
     )
-    pprint(r)
-    return r
 
 
 def response_message_from_a2a_message(message: Message) -> ResponseMessage | None:
@@ -169,18 +162,6 @@ def copy_artifact(
         updated_artifact.metadata = old_metadata
 
     return updated_artifact
-
-
-def make_working_message(
-    message: dict[str, Any] | None,
-    context_id: str,
-    task_id: str,
-) -> Message:
-    return new_agent_parts_message(
-        parts=[message_to_part(message)] if message else [],
-        context_id=context_id,
-        task_id=task_id,
-    )
 
 
 def make_input_required_message(

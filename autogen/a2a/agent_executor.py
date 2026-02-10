@@ -84,8 +84,8 @@ class AutogenAgentExecutor(AgentExecutor):
                         parts=artifact.parts,
                         artifact_id=artifact.artifact_id,
                         name=artifact.name,
-                        append=streaming_started,
                         last_chunk=False,
+                        append=streaming_started,
                     )
 
                     streaming_started = True
