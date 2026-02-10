@@ -155,8 +155,8 @@ def test_cost_calculation(mock_completion):
     )
     assert (
         _calculate_cost(completion.usage["prompt_tokens"], completion.usage["completion_tokens"], completion.model)
-        == 0.0002025
-    ), "Cost should be $0.0002025"
+        == 0.002025
+    ), "Cost should be $0.002025"
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
