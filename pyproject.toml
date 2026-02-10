@@ -272,6 +272,12 @@ ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 deepseek = ["ag2[openai]"]
 
+tracing = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+]
+
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
 commsagent-telegram = ["telethon>=1.38.1, <2"]
@@ -300,6 +306,7 @@ test = [
 
 docs = [
     "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "ag2[tracing]",  # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
     "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
@@ -422,6 +429,7 @@ markers = [
     "commsagent_slack",
     "commsagent-telegram",
     "lmm",
+    "tracing",
 ]
 
 [tool.black]
