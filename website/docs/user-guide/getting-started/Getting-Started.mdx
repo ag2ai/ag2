@@ -2,9 +2,6 @@
 title: "Getting Started"
 ---
 
-This is an old version and needs to be rewritten.
-
-
 AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating
 cooperation among multiple agents to solve tasks. AG2 aims to provide an easy-to-use
 and flexible framework for accelerating development and research on agentic AI,
@@ -30,6 +27,7 @@ and multi-agent conversation patterns.
   applications](/docs/use-cases/community-gallery/community-gallery)
   from various domains and complexities. This demonstrates how AG2 can
   easily support diverse conversation patterns.
+- **New:** AG2 supports streaming agent responses, providing incremental output as generation occurs. This improves responsiveness and allows real-time feedback from agents during long or complex tasks.
 
 AG2 is powered by collaborative [research studies](/docs/Research) from
 Microsoft, Penn State University, and University of Washington.
@@ -136,8 +134,7 @@ Open `coding/plot.png` to see the generated plot.
 
 <div class="tip">
   <Tip>
-    Learn more about configuring LLMs for agents
-    [here](/docs/user-guide/basic-concepts/llm-configuration/).
+    <b>Streaming Responses:</b> When using supported LLMs and agent configurations in AG2, chat responses may appear incrementally as they are generated. This streaming provides faster feedback, especially for long outputs, allowing you to see agent results in real time where possible.
   </Tip>
 </div>
 
@@ -171,3 +168,4 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
   height="30"
   title="GitHub"
 ></iframe>
+ 
