@@ -17,9 +17,9 @@ from unittest.mock import patch
 import pytest
 
 import autogen
+from autogen.llm_config.utils import config_list_from_json, filter_config
 from autogen.oai.openai_utils import (
     DEFAULT_AZURE_API_VERSION,
-    filter_config,
     get_first_llm_config,
     is_valid_api_key,
 )
@@ -250,21 +250,12 @@ def test_filter_config_comprehensive(test_case):
     )
 
 
-def test_filter_config_warning() -> None:
-    test_case = FILTER_CONFIG_TEST[0]
-    filter_dict = test_case["filter_dict"]
-    exclude = test_case["exclude"]
-
-    with pytest.warns(DeprecationWarning):
-        filter_config(JSON_SAMPLE_DICT, filter_dict, exclude)
-
-
 def test_config_list_from_json():
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp_file:
         json_data = json.loads(JSON_SAMPLE)
         tmp_file.write(JSON_SAMPLE)
         tmp_file.flush()
-        config_list = autogen.config_list_from_json(tmp_file.name)
+        config_list = config_list_from_json(tmp_file.name)
 
         assert len(config_list) == len(json_data)
         i = 0
@@ -276,11 +267,11 @@ def test_config_list_from_json():
             i += 1  # noqa: SIM113
 
         os.environ["CONFIG_LIST_TEST"] = JSON_SAMPLE
-        config_list_2 = autogen.config_list_from_json("CONFIG_LIST_TEST")
+        config_list_2 = config_list_from_json("CONFIG_LIST_TEST")
         assert config_list == config_list_2
 
         # Test: the env variable is set to a file path with folder name inside.
-        config_list_3 = autogen.config_list_from_json(
+        config_list_3 = config_list_from_json(
             tmp_file.name, filter_dict={"model": ["gpt", "gpt-4", "gpt-4-32k"]}
         )
         assert all(config.get("model") in ["gpt-4", "gpt"] for config in config_list_3)
@@ -288,7 +279,7 @@ def test_config_list_from_json():
         del os.environ["CONFIG_LIST_TEST"]
 
         # Test: using the `file_location` parameter.
-        config_list_4 = autogen.config_list_from_json(
+        config_list_4 = config_list_from_json(
             os.path.basename(tmp_file.name),
             file_location=os.path.dirname(tmp_file.name),
             filter_dict={"model": ["gpt4", "gpt-4-32k"]},
@@ -300,23 +291,14 @@ def test_config_list_from_json():
         fd, temp_name = tempfile.mkstemp()
         json.dump(config_list, os.fdopen(fd, "w+"), indent=4)
         os.environ["CONFIG_LIST_TEST"] = temp_name
-        config_list_5 = autogen.config_list_from_json("CONFIG_LIST_TEST")
+        config_list_5 = config_list_from_json("CONFIG_LIST_TEST")
         assert config_list_5 == config_list_2
 
         del os.environ["CONFIG_LIST_TEST"]
 
     # Test that an error is thrown when the config list is missing
     with pytest.raises(FileNotFoundError):
-        autogen.config_list_from_json("OAI_CONFIG_LIST.missing")
-
-
-def test_config_list_from_json_warning():
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp_file:
-        tmp_file.write(JSON_SAMPLE)
-        tmp_file.flush()
-
-        with pytest.warns(DeprecationWarning):
-            autogen.config_list_from_json(tmp_file.name)
+        config_list_from_json("OAI_CONFIG_LIST.missing")
 
 
 def test_config_list_openai_aoai():
@@ -462,7 +444,7 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     }
     with caplog.at_level(logging.ERROR):  # noqa: SIM117
         # Mocking `config_list_from_json` to return an empty list and raise an exception when called
-        with mock.patch("autogen.config_list_from_json", return_value=[], side_effect=Exception("Mock called")):
+        with mock.patch("autogen.oai.openai_utils.latest_config_list_from_json", return_value=[], side_effect=Exception("Mock called")):
             # Call the function with the invalid map
             config_list = autogen.config_list_from_dotenv(
                 model_api_key_map=invalid_model_api_key_map,

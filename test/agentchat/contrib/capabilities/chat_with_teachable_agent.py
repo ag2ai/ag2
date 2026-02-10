@@ -6,7 +6,8 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-from autogen import ConversableAgent, UserProxyAgent, config_list_from_json
+from autogen import ConversableAgent, UserProxyAgent
+from autogen.llm_config.utils import config_list_from_json
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
 from test.const import KEY_LOC, OAI_CONFIG_LIST
