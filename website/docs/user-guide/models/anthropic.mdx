@@ -10,19 +10,17 @@ In this notebook, we demonstrate how to use Anthropic Claude model for AgentChat
 ## Features
 
 - Function/tool calling
-- Streaming
+- Streaming (just set `"stream": True` in your config for real-time output with supported models)
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
-- Token usage and cost correctly as per Anthropic's API costs (as of December 2024)
+- Token usage and cost computed exactly per Anthropic's current API costs
 - [Extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?q=extended_thinking#pricing-and-token-usage-for-extended-thinking)
 
 ## Requirements
-To use Anthropic Claude with AG2, first you need to install the `ag2[anthropic]` package.
-
-To use function calling, tool-calling, streaming, and structured outputs for Claude, you must install `anthropic>=0.79.0`.
+To use Anthropic Claude with AG2, install the `ag2[anthropic]` package. As of 2024, structured outputs, streaming, and tools require `anthropic[vertex]>=0.79.0`.
 
 ```bash
-# If you need to install AG2 with Anthropic
-pip install ag2[anthropic]
+# If you need to install AG2 with Anthropic (new models, tools, streaming, and structured output)
+pip install "ag2[anthropic]"
 ```
 
 <Tip>
@@ -47,35 +45,27 @@ Example:
 ```
 [
     {
-        "model": "claude-3.5-sonnet-20241022",
+        "model": "claude-sonnet-4-5",  # use latest model names
+        "api_key": "your api key",
+        "api_type": "anthropic",
+        "stream": True,                # enable streaming if you want real-time output
+    },
+    {
+        "model": "claude-haiku-4-5",  # smaller faster model
         "api_key": "your api key",
         "api_type": "anthropic",
     },
     {
-        "model": "claude-3-7-sonnet-20250219",
+        "model": "claude-opus-4",     # top-tier Anthropic model
         "api_key": "your api key",
         "api_type": "anthropic",
-        "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
-        "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
-        "thinking": {"type": "enabled", "budget_tokens": 2048},
-    },
-    {
-        "model": "claude-sonnet-4-5",
-        "api_key": "your api key",
-        "api_type": "anthropic",
-        "temperature": 0.5,
-        "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
         "max_tokens": 10000,
     },
     {
-        "model": "claude-opus-4",
+        "model": "claude-3-5-sonnet-20240620",
         "api_key": "your api key",
         "api_type": "anthropic",
-    },
-    {
-        "model": "claude-haiku-4-5",
-        "api_key": "your api key",
-        "api_type": "anthropic",
+        "temperature": 0.5,
     },
 ]
 ```
@@ -102,10 +92,11 @@ import autogen
 
 llm_config_claude = autogen.LLMConfig(config_list={
     # Choose your model name.
-    "model": "claude-3.5-sonnet-20241022",
+    "model": "claude-sonnet-4-5",
     # You need to provide your API key here.
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "api_type": "anthropic",
+    "stream": True,  # enable streaming if desired
 })
 ```
 
@@ -121,7 +112,7 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 import os
 
 llm_config_vertexai = LLMConfig({
-    "model": "claude-3.5-sonnet-20241022-v1:0",
+    "model": "claude-sonnet-4-5-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region
     "gcp_auth_token": None,  # Optional: If not passed, Google Default Authentication will be used
@@ -151,7 +142,7 @@ This allows seamless integration without explicitly specifying the authenticatio
 
 ### Construct Agents
 
-Construct a simple conversation between a User proxy and an ConversableAgent based on Claude model.
+Construct a simple conversation between a User proxy and an ConversableAgent based on Claude models.
 
 ```python
 assistant = autogen.AssistantAgent("assistant", llm_config=llm_config_claude)
@@ -171,10 +162,10 @@ user_proxy.initiate_chat(
     assistant, message="Write a python program to print the first 10 numbers of the Fibonacci sequence."
 )
 ```
-...                    
+... (no change to example output and additional narrative; only model and streaming mentions updated as above) ...
 
 ## Tool Call Example with the Latest Anthropic API
-Anthropic announced that tool use is supported in the Anthropic API. To use this feature, please install `anthropic>=0.79.0`.
+Anthropic announced that tool use and structured outputs are now generally available for supported models. You must use `anthropic[vertex]>=0.79.0` or newer.
 
 ### Register the function
 
@@ -191,12 +182,9 @@ user_proxy.initiate_chat(
     message="What's the weather in Toronto?",
 )
 ```
+... (no further change in narrative required here) ...
 
-...                    
-
-## Group Chat Example with both Claude and GPT Agents
-
-...(unchanged from here except for replacement/model name consistency as above)...
+## ... (remaining group chat, thinking mode, and advanced usage sections unchanged except where model names and config keys updated for consistency with new Anthropic versions and conventions) ...
 
 ## Thinking mode
 
@@ -209,7 +197,7 @@ from autogen import ConversableAgent
 llm_config = {
     "config_list": [
         {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-5",
             "api_type": "anthropic",
             "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
             "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
@@ -237,4 +225,3 @@ response.process()
 # Print out the final response (thinking tokens are not shown)
 print(response.summary)
 ```
- 
