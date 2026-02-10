@@ -77,8 +77,7 @@ class AutogenAgentExecutor(AgentExecutor):
                 if response.streaming_text:
                     chunk_artifact = copy_artifact(
                         artifact=artifact,
-                        message=response.message,
-                        context=response.context,
+                        message={"content": response.streaming_text},
                     )
 
                     await updater.add_artifact(
@@ -95,6 +94,7 @@ class AutogenAgentExecutor(AgentExecutor):
                     final_message = response
 
         except Exception as e:
+            print(repr(e))
             raise ServerError(error=InternalError()) from e
 
         if final_message:
