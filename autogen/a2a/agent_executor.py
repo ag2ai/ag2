@@ -57,7 +57,6 @@ class AutogenAgentExecutor(AgentExecutor):
 
         artifact_id = uuid4().hex
         streaming_started = False
-        first_artifact_sent = False
         final_message: ServiceResponse | None = None
         try:
             async for response in self.agent(request_message_from_a2a(context.message)):
@@ -76,15 +75,15 @@ class AutogenAgentExecutor(AgentExecutor):
                 elif response.streaming_text:
                     if not streaming_started:
                         await updater.update_status(state=TaskState.working)
-                        streaming_started = True
+
                     await updater.add_artifact(
                         parts=[Part(root=TextPart(text=response.streaming_text))],
                         artifact_id=artifact_id,
                         name="response",
-                        append=first_artifact_sent,
+                        append=streaming_started,
                         last_chunk=False,
                     )
-                    first_artifact_sent = True
+                    streaming_started = True
 
                 elif not streaming_started:
                     await updater.update_status(
@@ -102,22 +101,7 @@ class AutogenAgentExecutor(AgentExecutor):
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-        if streaming_started:
-            if final_message:
-                artifact = make_artifact(
-                    message=final_message.message,
-                    context=final_message.context,
-                )
-                await updater.add_artifact(
-                    parts=artifact.parts,
-                    artifact_id=artifact_id,
-                    name="response",
-                    append=True,
-                    last_chunk=True,
-                    metadata=artifact.metadata,
-                )
-            await updater.complete()
-        elif final_message:
+        if final_message:
             artifact = make_artifact(
                 message=final_message.message,
                 context=final_message.context,
@@ -129,6 +113,8 @@ class AutogenAgentExecutor(AgentExecutor):
                 parts=artifact.parts,
                 metadata=artifact.metadata,
                 extensions=artifact.extensions,
+                last_chunk=True if streaming_started else None,
+                append=True if streaming_started else None,
             )
 
             await updater.complete()

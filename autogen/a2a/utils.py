@@ -15,6 +15,8 @@ AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
 CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
 
+RESULT_ARTIFACT_NAME = "result"
+
 
 def request_message_to_a2a(
     request_message: RequestMessage,
@@ -130,7 +132,7 @@ def make_artifact(
     context: dict[str, Any] | None = None,
 ) -> Artifact:
     artifact = new_artifact(
-        name="result",
+        name=RESULT_ARTIFACT_NAME,
         parts=[message_to_part(message)] if message else [],
         description=None,
     )
@@ -191,10 +193,10 @@ def message_from_part(part: Part) -> dict[str, Any]:
 
     elif isinstance(root, DataPart):
         if (  # pydantic-ai specific
-            set(root.data.keys()) == {"result"}
+            set(root.data.keys()) == {RESULT_ARTIFACT_NAME}
             and root.metadata
             and "json_schema" in root.metadata
-            and isinstance(data := root.data["result"], dict)
+            and isinstance(data := root.data[RESULT_ARTIFACT_NAME], dict)
         ):
             return data
 
