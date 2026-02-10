@@ -84,8 +84,8 @@ class AutogenAgentExecutor(AgentExecutor):
                         parts=artifact.parts,
                         artifact_id=artifact.artifact_id,
                         name=artifact.name,
-                        last_chunk=False,
                         append=streaming_started,
+                        last_chunk=False,
                     )
 
                     streaming_started = True
@@ -106,8 +106,8 @@ class AutogenAgentExecutor(AgentExecutor):
             parts=artifact.parts,
             metadata=artifact.metadata,
             extensions=artifact.extensions,
+            append=streaming_started,
             last_chunk=True,
-            **({"append": True} if streaming_started else {}),
         )
 
         await updater.complete()
