@@ -4,7 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.llm_config.utils import config_list_from_json
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration

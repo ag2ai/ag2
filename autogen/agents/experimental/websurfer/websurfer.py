@@ -45,7 +45,6 @@ class WebSurferAgent(ConversableAgent):
             web_tool_kwargs: The keyword arguments for the web tool. Defaults to None.
             **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
-        llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
         web_tool_kwargs = web_tool_kwargs if web_tool_kwargs else {}
         web_tool_llm_config = web_tool_llm_config if web_tool_llm_config else llm_config
         if web_tool == "browser_use":

@@ -28,4 +28,4 @@ done
 echo "Running tests with mark: $MARK"
 
 # Call the test script with the correct mark and any remaining arguments
-bash scripts/test.sh "$@" -m "$MARK" --ignore=test/agentchat/contrib
+bash scripts/test.sh "$@" -m "$MARK" --ignore=test/agentchat/contrib --ignore=test/opentelemetry

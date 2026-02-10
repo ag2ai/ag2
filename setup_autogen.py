@@ -80,6 +80,7 @@ setuptools.setup(
         "ollama": ["ag2[ollama]==" + __version__],
         "bedrock": ["ag2[bedrock]==" + __version__],
         "deepseek": ["ag2[deepseek]==" + __version__],
+        "tracing": ["ag2[tracing]==" + __version__],
         "commsagent-discord": ["ag2[commsagent-discord]==" + __version__],
         "commsagent-slack": ["ag2[commsagent-slack]==" + __version__],
         "commsagent-telegram": ["ag2[commsagent-telegram]==" + __version__],
