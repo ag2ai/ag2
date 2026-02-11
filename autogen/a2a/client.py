@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from pprint import pformat
 from typing import Any
 from uuid import uuid4
@@ -12,7 +12,7 @@ from uuid import uuid4
 import httpx
 from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientCallInterceptor, ClientConfig, ClientEvent
 from a2a.client import ClientFactory as A2AClientFactory
-from a2a.types import AgentCard, Message, Task, TaskIdParams, TaskQueryParams, TaskState
+from a2a.types import AgentCard, Message, Task, TaskArtifactUpdateEvent, TaskIdParams, TaskQueryParams, TaskState
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
 from typing_extensions import Self
 
@@ -29,6 +29,7 @@ from .utils import (
     request_message_to_a2a,
     response_message_from_a2a_message,
     response_message_from_a2a_task,
+    update_artifact_to_streaming,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,9 +178,27 @@ class A2aRemoteAgent(ConversableAgent):
                 )
 
                 if self._agent_card.capabilities.streaming:
-                    reply = await self._ask_streaming(agent_client, initial_message)
+                    a2a_stream = self._ask_streaming(agent_client, initial_message)
                 else:
-                    reply = await self._ask_polling(agent_client, initial_message)
+                    a2a_stream = self._ask_polling(agent_client, initial_message)
+
+                io_stream = IOStream.get_default()
+
+                reply: ResponseMessage | None = None
+                async for a2a_event in a2a_stream:
+                    if isinstance(a2a_event, Message):
+                        reply = response_message_from_a2a_message(a2a_event)
+                        break
+
+                    else:
+                        task, ev = a2a_event
+                        if isinstance(ev, TaskArtifactUpdateEvent):
+                            for e in update_artifact_to_streaming(ev):
+                                io_stream.send(e)
+
+                        if _is_task_completed(task):
+                            reply = response_message_from_a2a_task(task)
+                            break
 
                 if not reply:
                     return True, None
@@ -189,7 +208,7 @@ class A2aRemoteAgent(ConversableAgent):
                     user_input = await self.a_get_human_input(prompt=f"Input for `{self.name}`\n{reply.input_required}")
 
                     if user_input == "exit":
-                        IOStream.get_default().send(
+                        io_stream.send(
                             TerminationEvent(
                                 termination_reason="User requested to end the conversation",
                                 sender=self,
@@ -207,13 +226,14 @@ class A2aRemoteAgent(ConversableAgent):
 
                 return True, reply.messages[-1]
 
-    async def _ask_streaming(self, client: Client, message: Message) -> ResponseMessage | None:
+    async def _ask_streaming(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
         started_task: Task | None = None
         try:
             async for event in client.send_message(message):
-                result, started_task = self._process_event(event)
-                if not started_task:
-                    return result
+                if isinstance(event, (Task, TaskArtifactUpdateEvent)):
+                    started_task = event[0]
+
+                yield event
 
         except (httpx.ConnectError, A2AClientHTTPError) as e:
             if not started_task:
@@ -232,9 +252,7 @@ class A2aRemoteAgent(ConversableAgent):
         while connection_attemps < self._max_reconnects:
             try:
                 async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
-                    result, task = self._process_event(event)
-                    if not task:
-                        return result
+                    yield event
 
             except (httpx.ConnectError, A2AClientHTTPError) as e:
                 connection_attemps += 1
@@ -245,16 +263,14 @@ class A2aRemoteAgent(ConversableAgent):
                         f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
                     ) from e
 
-        return None
-
-    async def _ask_polling(self, client: Client, message: Message) -> ResponseMessage | None:
+    async def _ask_polling(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
         started_task: Task | None = None
         try:
             async for event in client.send_message(message):
-                result, started_task = self._process_event(event)
-                if not started_task:
-                    return result
-                break
+                if isinstance(event, (Task, TaskArtifactUpdateEvent)):
+                    started_task = event[0]
+
+                yield event
 
         except (httpx.ConnectError, A2AClientHTTPError) as e:
             if not started_task:
@@ -284,22 +300,8 @@ class A2aRemoteAgent(ConversableAgent):
                     ) from e
 
             else:
-                if _is_task_completed(task):
-                    return response_message_from_a2a_task(task)
-
+                yield task, None
                 await asyncio.sleep(self._polling_interval)
-
-        return None
-
-    def _process_event(self, event: ClientEvent | Message) -> tuple[ResponseMessage | None, Task | None]:
-        if isinstance(event, Message):
-            return response_message_from_a2a_message(event), None
-
-        task, _ = event
-        if _is_task_completed(task):
-            return response_message_from_a2a_task(task), None
-
-        return None, task
 
     def update_tool_signature(
         self,
