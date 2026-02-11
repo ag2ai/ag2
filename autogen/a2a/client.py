@@ -230,9 +230,8 @@ class A2aRemoteAgent(ConversableAgent):
         started_task: Task | None = None
         try:
             async for event in client.send_message(message):
-                if isinstance(event, (Task, TaskArtifactUpdateEvent)):
+                if not isinstance(event, Message):
                     started_task = event[0]
-
                 yield event
 
         except (httpx.ConnectError, A2AClientHTTPError) as e:
@@ -267,9 +266,8 @@ class A2aRemoteAgent(ConversableAgent):
         started_task: Task | None = None
         try:
             async for event in client.send_message(message):
-                if isinstance(event, (Task, TaskArtifactUpdateEvent)):
+                if not isinstance(event, Message):
                     started_task = event[0]
-
                 yield event
 
         except (httpx.ConnectError, A2AClientHTTPError) as e:
