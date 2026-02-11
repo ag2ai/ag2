@@ -852,3 +852,281 @@ response.process()
 # Print out the final response (thinking tokens are not shown)
 print(response.summary)
 ```
+
+## Anthropic V2 Client
+
+The Anthropic V2 client (`api_type: "anthropic_v2"`) provides enhanced features and a modern API interface for working with Claude models. It implements the `ModelClientV2` protocol, returning rich `UnifiedResponse` objects with typed content blocks.
+
+### Features
+
+- **Native Structured Outputs**: Guaranteed schema-compliant JSON responses using Pydantic models or JSON schemas
+- **Strict Tool Use**: Type-safe function calls with guaranteed schema validation
+- **Vision Support**: Full multimodal capabilities with image input
+- **Rich Response Objects**: Typed content blocks including `TextContent`, `ReasoningContent`, `ToolCallContent`, and `CitationContent`
+- **Extended Thinking**: Support for Claude's thinking mode with reasoning blocks
+- **Cost Tracking**: Automatic per-response cost calculation
+
+### Requirements
+
+To use the Anthropic V2 client, you need:
+
+- `anthropic>=0.74.1` (for structured outputs support)
+- Claude Sonnet 4.5 (`claude-sonnet-4-5`) or Claude Opus 4.1 (`claude-opus-4-1`) for structured outputs
+- Set `api_type: "anthropic_v2"` in your configuration
+
+### Basic Configuration
+
+```python
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(config_list={
+    "model": "claude-sonnet-4-5",
+    "api_key": os.getenv("ANTHROPIC_API_KEY"),
+    "api_type": "anthropic_v2",  # Use V2 client
+})
+```
+
+### Structured Outputs with Pydantic Models
+
+The V2 client supports native structured outputs using Pydantic models. This ensures guaranteed schema compliance and type safety:
+
+```python
+from pydantic import BaseModel
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+# Define structured output schema
+class Step(BaseModel):
+    explanation: str
+    output: str
+
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
+
+# Configure with structured output
+llm_config = LLMConfig(
+    config_list={
+        "model": "claude-sonnet-4-5",
+        "api_key": os.getenv("ANTHROPIC_API_KEY"),
+        "api_type": "anthropic_v2",
+    },
+    response_format=MathReasoning,  # Enable structured outputs
+)
+
+math_assistant = AssistantAgent(
+    name="MathAssistant",
+    system_message="You are a math tutor. Solve problems step by step.",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=0,
+)
+
+# Use the agent - responses will match MathReasoning schema
+chat_result = user_proxy.run(
+    math_assistant,
+    message="Solve the equation: 3x + 7 = 22",
+    max_turns=1,
+)
+chat_result.process()
+print(chat_result.summary)
+```
+
+### Strict Tool Use
+
+The V2 client supports strict tool use, ensuring that tool inputs exactly match your schema:
+
+```python
+from typing import Annotated
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+# Configure with V2 client
+llm_config = LLMConfig(config_list={
+    "model": "claude-sonnet-4-5",
+    "api_key": os.getenv("ANTHROPIC_API_KEY"),
+    "api_type": "anthropic_v2",
+})
+
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+# Define tool with strict validation
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(
+    name="get_weather",
+    description="Get the current weather in a given location.",
+    strict=True,  # Enable strict tool use
+)
+def get_weather(location: Annotated[str, "The city and state, e.g. Toronto, ON."]) -> str:
+    return f"Weather in {location}: Sunny, 22°C"
+
+user_proxy.initiate_chat(
+    assistant,
+    message="What's the weather in Toronto?",
+)
+```
+
+### Vision Support
+
+The V2 client supports image input for vision-capable models:
+
+```python
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+llm_config = LLMConfig(config_list={
+    "model": "claude-3-5-haiku-20241022",  # Vision-capable model
+    "api_key": os.getenv("ANTHROPIC_API_KEY"),
+    "api_type": "anthropic_v2",
+})
+
+vision_assistant = AssistantAgent(
+    name="VisionAssistant",
+    system_message="You are a helpful assistant that can analyze images.",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+# Message with image
+message_with_image = {
+    "role": "user",
+    "content": [
+        {
+            "type": "text",
+            "text": "What's in this image?",
+        },
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": "https://example.com/image.jpg",  # Or use base64 data URI
+            },
+        },
+    ],
+}
+
+chat_result = user_proxy.initiate_chat(
+    vision_assistant,
+    message=message_with_image,
+    max_turns=1,
+)
+```
+
+### Differences from V1 Client
+
+| Feature | V1 Client (`anthropic`) | V2 Client (`anthropic_v2`) |
+|---------|------------------------|----------------------------|
+| Response Format | OpenAI-compatible `ChatCompletion` | Rich `UnifiedResponse` with typed blocks |
+| Structured Outputs | JSON Mode (prompt-based) | Native structured outputs (beta API) |
+| Tool Validation | Basic validation | Strict tool use with guaranteed schema compliance |
+| Content Blocks | Text only | Text, Reasoning, Tool Calls, Citations |
+| Vision Support | Limited | Full multimodal support |
+| Cost Tracking | Per-request | Per-response with detailed breakdown |
+
+### When to Use V1 vs V2
+
+AG2 now offers an Anthropic V2 client that returns richer response objects. Here's when to use each:
+
+**When to use V2:**
+
+- When you need access to reasoning blocks separately
+- When building custom agents that process structured content
+- For forward compatibility with future Anthropic features
+- When you need native structured outputs with guaranteed schema compliance
+- When you require strict tool use with type-safe function calls
+- For vision capabilities and multimodal interactions
+
+**When to use V1:**
+
+- When you need AWS Bedrock or GCP Vertex AI support (V2 support coming soon)
+- When your existing code expects `ChatCompletion` format
+- For simple use cases where `UnifiedResponse` is overkill
+- When working with legacy Anthropic API features
+- For basic text generation without structured outputs
+
+### Benefits of UnifiedResponse over ChatCompletion
+
+The V2 client's `UnifiedResponse` provides several advantages over the V1 client's `ChatCompletion` format:
+
+1. **Typed Content Blocks**: Access to structured content types including:
+   - `TextContent`: Standard text responses
+   - `ReasoningContent`: Extended thinking/reasoning blocks (when using thinking mode)
+   - `ToolCallContent`: Structured tool/function calls
+   - `CitationContent`: Citations and references
+
+2. **Better Type Safety**: Typed response objects enable better IDE support and catch errors at development time
+
+3. **Richer Metadata**: More detailed information about the response, including per-block metadata
+
+4. **Future-Proof**: Designed to support new Anthropic API features as they're released
+
+5. **Structured Outputs**: Native support for guaranteed schema-compliant JSON responses without prompt engineering
+
+### Example: Combined Structured Outputs and Tools
+
+You can combine structured outputs with strict tool use for powerful agentic workflows:
+
+```python
+from pydantic import BaseModel
+from typing import Annotated
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+# Structured output for calculation results
+class CalculationResult(BaseModel):
+    operation: str
+    operands: list[float]
+    result: float
+
+# Configure with both structured outputs and tools
+llm_config = LLMConfig(
+    config_list={
+        "model": "claude-sonnet-4-5",
+        "api_key": os.getenv("ANTHROPIC_API_KEY"),
+        "api_type": "anthropic_v2",
+    },
+    response_format=CalculationResult,
+)
+
+calc_assistant = AssistantAgent(
+    name="Calculator",
+    system_message="You are a calculator assistant. Use tools to perform calculations.",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+
+# Tool for calculations
+@user_proxy.register_for_execution()
+@calc_assistant.register_for_llm(
+    name="calculate",
+    description="Perform arithmetic operations",
+    strict=True,
+)
+def calculate(
+    operation: Annotated[str, "Operation: add, subtract, multiply, divide"],
+    a: Annotated[float, "First number"],
+    b: Annotated[float, "Second number"],
+) -> float:
+    if operation == "add":
+        return a + b
+    elif operation == "subtract":
+        return a - b
+    elif operation == "multiply":
+        return a * b
+    elif operation == "divide":
+        return a / b if b != 0 else float("inf")
+    return 0.0
+
+chat_result = user_proxy.run(
+    calc_assistant,
+    message="add 3 and 555",
+    max_turns=2,
+)
+chat_result.process()
+```
+
+For more examples, see the [Anthropic V2 Client notebook](/docs/use-cases/notebooks/notebooks/agentchat_anthropic_v2_client_example).

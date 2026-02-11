@@ -37,7 +37,13 @@ Just as standardized medical forms ensure complete and consistent documentation 
 Implementing structured outputs in AG2 is straightforward using Pydantic models and the [`response_format`](/docs/api-reference/autogen/llm_config/LLMConfigEntry#response_format) parameter:
 
 <Note>
-Not all model providers support structured outputs. For a current list of supported providers, see [here](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs/?h=structured#supported-model-providers).
+Not all model providers support structured outputs. Supported providers include:
+
+- **OpenAI**: Native structured outputs via `response_format` parameter
+- **Anthropic V2** (`api_type: "anthropic_v2"`): Native structured outputs using Anthropic's beta API with Pydantic models or JSON schemas
+- **Anthropic V1** (`api_type: "anthropic"`): JSON Mode (prompt-based fallback)
+
+For a current list of supported providers and examples, see [here](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs/?h=structured#supported-model-providers).
 </Note>
 
 ```python hl_lines="5-8 14"
@@ -599,6 +605,43 @@ Structured outputs offer several compelling benefits:
 - **Simplicity**: Reduced need for complex formatting instructions in system messages
 - **Integration**: Easy to parse and use in downstream systems
 - **Maintainability**: Schema changes can be managed centrally
+
+## Provider-Specific Features
+
+### Anthropic V2 Native Structured Outputs
+
+When using `api_type: "anthropic_v2"`, structured outputs are handled natively by Anthropic's beta API. This provides several advantages:
+
+- **Guaranteed Schema Compliance**: The API enforces schema validation at the API level, not just through prompts
+- **No Retries Needed**: Invalid responses are prevented, not just detected
+- **Dual Methods**: Supports both `.parse()` (for Pydantic models) and `.create()` (for JSON schemas or when tools are present)
+- **Strict Tool Use**: Can combine structured outputs with strict tool validation
+
+Example with Anthropic V2:
+
+```python
+from pydantic import BaseModel
+from autogen import LLMConfig, AssistantAgent
+import os
+
+class ContactInfo(BaseModel):
+    name: str
+    email: str
+    plan_interest: str
+
+llm_config = LLMConfig(
+    config_list={
+        "model": "claude-sonnet-4-5",
+        "api_type": "anthropic_v2",  # Use V2 client for native support
+        "api_key": os.getenv("ANTHROPIC_API_KEY"),
+    },
+    response_format=ContactInfo,
+)
+
+agent = AssistantAgent("assistant", llm_config=llm_config)
+```
+
+For more details on Anthropic V2 structured outputs, see the [Anthropic V2 Client documentation](/docs/user-guide/models/anthropic#anthropic-v2-client).
 
 ## Next Steps
 

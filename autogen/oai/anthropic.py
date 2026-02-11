@@ -1331,7 +1331,7 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
 
     url = content_item["image_url"]["url"]
     try:
-        # Handle data URLs
+        # Handle data URLs (base64 encoded)
         if url.startswith("data:"):
             data_url_pattern = r"data:image/([a-zA-Z]+);base64,(.+)"
             match = re.match(data_url_pattern, url)
@@ -1342,13 +1342,18 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
                     "source": {"type": "base64", "media_type": f"image/{media_type}", "data": base64_data},
                 }
 
-        else:
-            print("Error processing image.")
-            # Return original content if image processing fails
-            return content_item
+        # Handle regular HTTP/HTTPS URLs
+        elif url.startswith("http://") or url.startswith("https://"):
+            return {
+                "type": "image",
+                "source": {"type": "url", "url": url},
+            }
+
+        # If URL format is not recognized, return original content
+        return content_item
 
     except Exception as e:
-        print(f"Error processing image image: {e}")
+        print(f"Error processing image: {e}")
         # Return original content if image processing fails
         return content_item
 
