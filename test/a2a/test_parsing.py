@@ -2,10 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TaskStatus, TextPart
+from a2a.types import (
+    Artifact,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    Task,
+    TaskState,
+    TaskStatus,
+    TextPart,
+)
+from dirty_equals import IsUUID
 
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
@@ -18,6 +30,7 @@ from autogen.a2a.utils import (
     response_message_from_a2a_artifacts,
     response_message_from_a2a_message,
     response_message_from_a2a_task,
+    update_artifact_to_streaming,
 )
 from autogen.agentchat.remote.protocol import RequestMessage, ResponseMessage
 
@@ -416,6 +429,93 @@ class TestResponseMessageToA2A:
             # randomly generated artifact_id
             artifact_id=artifact.artifact_id,
         )
+
+
+def _artifact_event(artifact: Artifact, last_chunk: bool | None) -> SimpleNamespace:
+    return SimpleNamespace(artifact=artifact, last_chunk=last_chunk)
+
+
+class TestUpdateArtifactToStreaming:
+    def test_text_part_yields_stream_event(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-1",
+            name="result",
+            parts=[Part(root=TextPart(text="Hello"))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": "Hello"}]
+
+    def test_data_part_yields_content_from_data(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-2",
+            name="result",
+            parts=[Part(root=DataPart(data={"content": "streamed text", "role": "assistant"}))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": "streamed text"}]
+
+    def test_data_part_missing_content_yields_empty_string(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-3",
+            name="result",
+            parts=[Part(root=DataPart(data={"role": "assistant"}))],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [{"uuid": IsUUID(), "content": ""}]
+
+    def test_last_chunk_true_yields_nothing(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-4",
+            name="result",
+            parts=[Part(root=TextPart(text="final"))],
+        )
+        event = _artifact_event(artifact, last_chunk=True)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert result == []
+
+    def test_last_chunk_none_yields_nothing(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-5",
+            name="result",
+            parts=[Part(root=TextPart(text="chunk"))],
+        )
+        event = _artifact_event(artifact, last_chunk=None)
+
+        result = list(update_artifact_to_streaming(event))
+
+        # last_chunk is None; `if event.last_chunk is False` is False for None
+        assert result == []
+
+    def test_multiple_parts_yields_multiple_events(self) -> None:
+        artifact = Artifact(
+            artifact_id="art-6",
+            name="result",
+            parts=[
+                Part(root=TextPart(text="A")),
+                Part(root=TextPart(text="B")),
+                Part(root=DataPart(data={"content": "C"})),
+            ],
+        )
+        event = _artifact_event(artifact, last_chunk=False)
+
+        result = list(update_artifact_to_streaming(event))
+
+        assert [r.content.model_dump() for r in result] == [
+            {"uuid": IsUUID(), "content": "A"},
+            {"uuid": IsUUID(), "content": "B"},
+            {"uuid": IsUUID(), "content": "C"},
+        ]
 
 
 class TestRoundTripConversions:
