@@ -131,6 +131,8 @@ To use docker execution, you need to [install Docker](https://docs.docker.com/en
 Once you have Docker installed and running, you can set up your code executor agent as follow:
 
 ```python
+import tempfile
+from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
 
 # Create a temporary directory to store the code files.
