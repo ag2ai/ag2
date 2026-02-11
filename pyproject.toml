@@ -97,9 +97,9 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==6.32.0",
-    "chromadb>=1.3.0,<1.4",
-    "sentence_transformers>=3.0.0,<=5.1.0",
+    "protobuf==6.33.5",
+    "chromadb>=1.3.0,<1.5",
+    "sentence_transformers>=3.0.0,<=5.2.2",
     "pypdf",
     "ipython",
     "beautifulsoup4",
@@ -132,7 +132,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.8.0",
+    "graphrag_sdk==0.8.2",
     "falkordb>=1.0.10",
 ]
 
@@ -141,20 +141,20 @@ rag = [
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<2",
-    "llama-index>=0.12,<0.14",
-    "llama-index-core>=0.12,<0.14",
+    "llama-index>=0.12,<0.15",
+    "llama-index-core>=0.12,<0.15",
     "llama-index-vector-stores-chroma>=0.4,<0.6",
-    "llama-index-vector-stores-mongodb>=0.6,<0.9",
+    "llama-index-vector-stores-mongodb>=0.6,<0.10",
     "llama-index-embeddings-huggingface>=0.5,<0.7",
     "llama-index-llms-langchain>=0.6,<0.8",
     "llama-index-embeddings-openai>=0.3,<0.6",
-    "llama-index-llms-openai>=0.4,<0.6",
+    "llama-index-llms-openai>=0.4,<0.7",
     "requests>=2.32.3,<3",
 ]
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.8",
+    "crawl4ai>=0.4.247,<0.9",
 ]
 
 browser-use = [
@@ -169,7 +169,7 @@ google-client = [
 
 google-api = [
     "ag2[google-client]",
-    "google-auth-httplib2>=0.2.0,<0.3",
+    "google-auth-httplib2>=0.2.0,<0.4",
     "google-auth-oauthlib>=1.2.1,<2.0",
 ]
 
@@ -184,8 +184,8 @@ wikipedia = [
 neo4j = [
     "docx2txt==0.9",
     # Updated llama-index constraints
-    "llama-index>=0.12,<0.14",
-    "llama-index-core>=0.12,<0.14",
+    "llama-index>=0.12,<0.15",
+    "llama-index-core>=0.12,<0.15",
     "llama-index-graph-stores-neo4j>=0.4,<0.6",
     "llama-index-readers-web>=0.4,<0.6",
 ]
@@ -214,7 +214,7 @@ interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
     # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.76.3",
+    "litellm<=1.81.8",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
@@ -224,8 +224,8 @@ interop =[
 ]
 
 autobuild = [
-    "chromadb>=1.3.0,<1.4",
-    "sentence_transformers>=3.0.0,<=5.1.0",
+    "chromadb>=1.3.0,<1.5",
+    "sentence_transformers>=3.0.0,<=5.2.2",
     "huggingface-hub"
 ]
 
@@ -256,7 +256,7 @@ together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=14.0,<16"]
+websockets = ["websockets>=14.0,<17"]
 long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.79.0"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
@@ -289,17 +289,17 @@ tavily = ["tavily-python>=0.7.4"]
 
 # test dependencies
 test = [
-    "ipykernel==6.30.1",
-    "nbconvert==7.16.6",
+    "ipykernel==7.2.0",
+    "nbconvert==7.17.0",
     "nbformat==5.10.4",
-    "pandas==2.3.2",
-    "fastapi==0.116.1",
+    "pandas==2.3.3",
+    "fastapi==0.128.3",
     "mcp>=1.11.0",
     # test utilities
-    "pytest==8.4.2",
-    "pytest-cov==6.3.0",
-    "pytest-asyncio==1.1.0",
-    "dirty-equals==0.9.0",
+    "pytest==9.0.2",
+    "pytest-cov==7.0.0",
+    "pytest-asyncio==1.3.0",
+    "dirty-equals==0.11",
     "freezegun==1.5.5",
     "aiofiles>=24.1.0,<26.0.0",
 ]
@@ -308,30 +308,30 @@ docs = [
     "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
     "ag2[tracing]",  # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
     "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
-    "mkdocs-material==9.6.19",
-    "mkdocstrings[python]==0.30.0",
+    "mkdocs-material==9.7.1",
+    "mkdocstrings[python]==1.0.2",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
-    "mkdocs-git-revision-date-localized-plugin==1.4.7",
+    "mkdocs-git-revision-date-localized-plugin==1.5.1",
     "mike==2.1.3",
-    "typer==0.17.4",
+    "typer==0.21.1",
     "mkdocs-minify-plugin==0.8.0",
-    "mkdocs-macros-plugin==1.3.9",  # includes with variables
-    "mkdocs-glightbox==0.5.1",  # img zoom
+    "mkdocs-macros-plugin==1.5.0",  # includes with variables
+    "mkdocs-glightbox==0.5.2",  # img zoom
     "mkdocs-redirects==1.2.2",  # required for handling redirects natively
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
     "pdoc3==0.11.6",
     "jinja2==3.1.6",
-    "pyyaml==6.0.2",
-    "termcolor==3.1.0",
-    "nbclient==0.10.2",
+    "pyyaml==6.0.3",
+    "termcolor==3.3.0",
+    "nbclient==0.10.4",
     "mcp>=1.11.0",
 ]
 
 types = [
-    "mypy==1.17.1",
+    "mypy==1.19.1",
     "types-PyYAML",
     "types-decorator",
     "types-pycurl",
@@ -342,7 +342,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.12.12",
+    "ruff==0.15.0",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -350,9 +350,9 @@ lint = [
 dev = [
     "toml==0.10.2",
     "ag2[lint,test,types,docs]",
-    "pre-commit==4.3.0",
+    "pre-commit==4.5.1",
     "detect-secrets==1.5.0",
-    "uv==0.8.15",
+    "uv==0.10.0",
 ]
 
 
