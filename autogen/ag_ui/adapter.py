@@ -244,5 +244,9 @@ class AGUIStream:
 
 
 def _encode_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Drop all unserializable values from the context.
+
+    It is required to share with AG-UI frontend application only data values.
+    Any Python objects (like functions, classes, etc.) will be dropped from the context."""
     context = to_jsonable_python(context, fallback=lambda _: None, exclude_none=True)
     return {k: v for k, v in context.items() if v is not None}
