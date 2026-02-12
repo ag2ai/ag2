@@ -97,7 +97,7 @@ class AGUIStream:
                     )
                 )
 
-                if snapshot != _encode_context(incoming.state):
+                if snapshot:
                     await stream_queue.put(
                         StateSnapshotEvent(
                             snapshot=snapshot,
@@ -228,12 +228,26 @@ class AGUIStream:
 
         tg = asyncio.ensure_future(run_stream())
 
-        while not tg.done() or not stream_queue.empty():
-            with suppress(TimeoutError):
-                event = await asyncio.wait_for(stream_queue.get(), timeout=0.01)
-                yield encoder.encode(event)
+        try:
+            while not tg.done() or not stream_queue.empty():
+                with suppress(TimeoutError):
+                    event = await asyncio.wait_for(stream_queue.get(), timeout=0.01)
+                    yield encoder.encode(event)
 
-        await tg
+            await tg
+
+        except Exception as e:
+            tg.cancel()
+            yield encoder.encode(
+                RunErrorEvent(
+                    message=repr(e),
+                    timestamp=_get_timestamp(),
+                )
+            )
+            raise e
+
+        else:
+            await tg
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
         """Build an ASGI endpoint for the AGUIStream."""
@@ -248,5 +262,5 @@ def _encode_context(context: dict[str, Any]) -> dict[str, Any]:
 
     It is required to share with AG-UI frontend application only data values.
     Any Python objects (like functions, classes, etc.) will be dropped from the context."""
-    context = to_jsonable_python(context, fallback=lambda _: None, exclude_none=True)
+    context = to_jsonable_python(context, fallback=lambda _: None, exclude_none=True) or {}
     return {k: v for k, v in context.items() if v is not None}
