@@ -2,14 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterator
 from typing import Any, cast
 from uuid import uuid4
 
-from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TextPart
+from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskArtifactUpdateEvent, TaskState, TextPart
 from a2a.utils import get_message_text, new_artifact
 from a2a.utils.message import new_agent_text_message
 
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
+from autogen.events.client_events import StreamEvent
 
 AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
@@ -91,6 +93,17 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
         messages=[message_from_part(p) for p in artifact.parts],
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
     )
+
+
+def update_artifact_to_streaming(event: TaskArtifactUpdateEvent) -> Iterator[StreamEvent]:
+    if event.last_chunk is False:  # respect None
+        for part in event.artifact.parts:
+            root = part.root
+            if isinstance(root, TextPart):
+                text = root.text
+            elif isinstance(root, DataPart):
+                text = root.data.get("content", "")
+            yield StreamEvent(content=text)
 
 
 def response_message_from_a2a_message(message: Message) -> ResponseMessage | None:
