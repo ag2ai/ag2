@@ -154,7 +154,7 @@ rag = [
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.8",
+    "crawl4ai>=0.5.0,<0.9",
 ]
 
 browser-use = [
