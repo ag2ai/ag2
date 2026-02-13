@@ -102,10 +102,13 @@ class TestCrawl4aiCompatibility:
 
     def test_get_crawl4ai_version_when_not_installed(self) -> None:
         """Test version detection when crawl4ai is not installed."""
-        with patch(
-            "autogen.interop.litellm.litellm_config_factory.metadata.version",
-            side_effect=metadata.PackageNotFoundError("crawl4ai"),
-        ), patch.dict("sys.modules", {"crawl4ai": None}):
+        with (
+            patch(
+                "autogen.interop.litellm.litellm_config_factory.metadata.version",
+                side_effect=metadata.PackageNotFoundError("crawl4ai"),
+            ),
+            patch.dict("sys.modules", {"crawl4ai": None}),
+        ):
             version = get_crawl4ai_version()
             assert version is None
 
