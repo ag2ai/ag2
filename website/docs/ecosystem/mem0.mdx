@@ -4,7 +4,7 @@ title: Mem0:Long-Term Memory and Personalization for Agents
 
 <img src="https://github.com/mem0ai/mem0/blob/main/docs/images/mem0-bg.png?raw=true" alt="Mem0 logo"  />
 
-[Mem0 Platform](https://www.mem0.ai/) provides a smart, self-improving memory layer for Large Language Models (LLMs), enabling developers to create personalized AI experiences that evolve with each user interaction.
+[Mem0](https://www.mem0.ai/) provides a smart, self-improving memory layer for Large Language Models (LLMs), enabling developers to create personalized AI experiences that evolve with each user interaction. This page focuses on **Mem0 Open Source** as the primary integration for AG2; a hosted Mem0 Platform alternative is included below.
 
 At a high level, Mem0 Platform offers comprehensive memory management, self-improving memory capabilities, cross-platform consistency, and centralized memory control for AI applications. For more info, check out the [Mem0 Platform Documentation](https://docs.mem0.ai).
 
@@ -23,34 +23,30 @@ At a high level, Mem0 Platform offers comprehensive memory management, self-impr
 
 ## Installation
 
-Mem0 Platform works seamlessly with various AI applications.
+Mem0 Open Source works seamlessly with various AI applications.
 
-1. **Sign Up:**
-Create an account at [Mem0 Platform](https://app.mem0.ai/)
-
-2. **Generate API Key:**
-Create an API key in your Mem0 dashboard
-
-3. **Install Mem0 SDK:**
+1. **Install Mem0 SDK:**
 ```bash
 pip install mem0ai
 ```
 
-4. **Configure Your Environment:**
-Add your API key to your environment variables
+2. **Configure Your Environment:**
+Mem0 Open Source uses your LLM provider by default. Add your OpenAI key (or configure another provider).
 
 ```
-MEM0_API_KEY=<YOUR_MEM0_API_KEY>
+OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
 ```
 
-5. **Initialize Mem0:**
+3. **Initialize Mem0 (Open Source):**
 
 ```python
-from mem0ai import MemoryClient
-memory = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+from mem0 import Memory
+memory = Memory()
 ```
 
 After initializing Mem0, you can start using its memory management features in your AI application.
+
+> Note: `Memory` is the open-source client. The hosted Mem0 Platform uses `MemoryClient` (see below).
 
 ## Features
 
@@ -69,18 +65,17 @@ After initializing Mem0, you can start using its memory management features in y
 
 ## Mem0 Platform Examples
 
-### AG2 with Mem0 Example
+### AG2 with Mem0 (Open Source) Example
 
 This example demonstrates how to use Mem0 with AG2 to create a conversational AI system with memory capabilities.
 
 ```python
 import os
 from autogen import ConversableAgent, LLMConfig
-from mem0 import MemoryClient
+from mem0 import Memory
 
 # Set up environment variables
 os.environ["OPENAI_API_KEY"] = "your_openai_api_key"
-os.environ["MEM0_API_KEY"] = "your_mem0_api_key"
 
 # Initialize Agent and Memory
 agent = ConversableAgent(
@@ -91,7 +86,7 @@ agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-memory = MemoryClient(api_key=os.environ.get("MEM0_API_KEY"))
+memory = Memory()
 
 # Insert a conversation into memory
 conversation = [
@@ -160,5 +155,17 @@ This example showcases:
 2. Adding a conversation to Mem0 memory
 3. Using Mem0 to retrieve relevant memories for agent inference
 4. Implementing a multi-agent conversation with memory-augmented context
+
+### Mem0 Platform (Hosted) Alternative
+
+If you prefer the hosted Mem0 Platform, use the `MemoryClient` with an API key:
+
+```python
+import os
+from mem0 import MemoryClient
+
+client = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+results = client.search("Which TV am I using?", filters={"user_id": "customer_service_bot"})
+```
 
 For more Mem0 examples, visit our [documentation](https://docs.mem0.ai/examples).
