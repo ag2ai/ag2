@@ -17,7 +17,7 @@ load_dotenv(Path(__file__).parent / ".env")
 llm_config = LLMConfig(
     {
         "api_type": "openai",
-        "model": "minimaxai/minimax-m2.1",
+        "model": "nvidia/nemotron-3-nano-30b-a3b",
         "base_url": "https://integrate.api.nvidia.com/v1",
         "api_key": os.environ["NVIDIA_API_KEY"],
     },
