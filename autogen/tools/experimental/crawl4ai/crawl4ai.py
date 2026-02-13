@@ -15,7 +15,8 @@ from ... import Tool
 from ...dependency_injection import Depends, on
 
 with optional_import_block():
-    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig, LLMConfig as Crawl4aiLLMConfig
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+    from crawl4ai import LLMConfig as Crawl4aiLLMConfig
     from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 __all__ = ["Crawl4AITool"]

@@ -5,7 +5,7 @@
 
 from importlib import metadata
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -105,10 +105,9 @@ class TestCrawl4aiCompatibility:
         with patch(
             "autogen.interop.litellm.litellm_config_factory.metadata.version",
             side_effect=metadata.PackageNotFoundError("crawl4ai"),
-        ):
-            with patch.dict("sys.modules", {"crawl4ai": None}):
-                version = get_crawl4ai_version()
-                assert version is None
+        ), patch.dict("sys.modules", {"crawl4ai": None}):
+            version = get_crawl4ai_version()
+            assert version is None
 
     @pytest.mark.parametrize(
         ("version", "expected"),

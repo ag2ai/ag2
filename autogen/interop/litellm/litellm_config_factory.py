@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from importlib import metadata
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
+from importlib import metadata
 from typing import Any, TypeVar
 
 from ...doc_utils import export_module
