@@ -59,3 +59,25 @@ for event in response.events:
             print(f"User:\n{event.content.content[0:100]}...")
         else:
             print(f"Vision Agent:\n{event.content.content}")
+
+# SAMPLE OUTPUT:
+
+# User: What do you see? <img data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnYAAACxCAYAAABJJvDcAAAErWlUWHRY...
+# [autogen.oai.client: 02-13 19:24:17] {738} WARNING - Model moonshotai/kimi-k2.5 is not found. The cost will be 0. In your config_list, add field {"price" : [prompt_price_per_1k, completion_token_price_per_1k]} for customized pricing.
+
+# Vision Agent:  I see a diagram illustrating an **Automatic Speech Recognition (ASR)** pipeline. The flow moves from left to right, showing how audio input is converted to text output through several processing stages:
+
+# **Input:**
+# - **Audio** (represented by a sound wave icon on the far left)
+
+# **Processing Pipeline:**
+# 1. **Custom Vocabulary** - Speech bubble icon with three dots
+# 2. **Feature Extraction** - Visual representation of audio waves/spectrogram
+# 3. **Acoustic Model** - Stacked layers resembling sound processing units
+# 4. **Decoder or N-gram Language Model** - Network of circular nodes (neural network representation)
+# 5. **BERT Punctuation Model** - Geometric network diagram (triangle with connections)
+
+# **Output:**
+# - **Text** (represented by a document icon on the far right)
+
+# The entire workflow is enclosed in a green-bordered box with a green header labeled "Automatic Speech Recognition." Green arrows indicate the flow direction from audio input through each processing stage to the final text output.
