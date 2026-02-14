@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2LLMConfigEntry
 from autogen.llm_config import LLMConfig
 from autogen.oai import (
     AnthropicLLMConfigEntry,
@@ -390,14 +391,14 @@ class TestLLMConfig:
             ),
             pytest.param(
                 {
-                    "api_type": "responses",
+                    "api_type": "responses_v2",
                     "model": "o3",
                     "api_key": "fake_api_key",
                     "max_tokens": 512,
                     "stream": False,
                 },
                 LLMConfig(
-                    OpenAIResponsesLLMConfigEntry(
+                    OpenAIResponsesV2LLMConfigEntry(
                         model="o3",
                         api_key="fake_api_key",
                         max_tokens=512,

@@ -5,69 +5,311 @@ sidebarTitle: OpenAI Responses
 
 [OpenAI](https://openai.com/)'s Responses API is a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations.
 
-Additionally, it includes built-in tools for web search, file search, apply_patch ,shell command execution, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
+Additionally, it includes built-in tools for web search, image generation, apply_patch, shell command execution, and computer use. The robust multimodal capabilities of the API also set it apart. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
 
-<Warning>
-This OpenAI Responses model provider is currently only supported in a two-agent chat using the agent's `initiate_chat`.
-
-Support for group chat and the `run` methods is planned for a future release.
-
-See the examples in the [Notebook section](/docs/use-cases/notebooks/Notebooks/?tags=responses) of the documentation for examples of using this model provider.
-</Warning>
+AG2 provides two client implementations:
+- **V1 Client** (`api_type: "responses"`) - Returns `ChatCompletion`-like responses
+- **V2 Client** (`api_type: "responses_v2"`) - Returns rich `UnifiedResponse` objects with typed content blocks (recommended)
 
 ## Installation
 
-``` bash
+```bash
 pip install ag2[openai]
 ```
 
 <Tip>
-If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
-```bash
-pip install -U autogen[openai]
-```
-or
+If you have been using `autogen` or `ag2`, upgrade using:
 ```bash
 pip install -U ag2[openai]
 ```
-as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
-## LLM Configurations
+## Environment Setup
 
-See the [LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration) for further details on setting an creating an LLM configuration.
+Set your OpenAI API key as an environment variable:
 
-The below example of an `OAI_CONFIG_LIST` shows how the OpenAI client class is used.
-By specifying the `api_type` as `responses`, the client will use the OpenAI Responses API.
+**Linux/Mac:**
+```bash
+export OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+**Windows:**
+```bash
+set OPENAI_API_KEY=your_openai_api_key_here
+```
+
+---
+
+## V2 Client (Recommended)
+
+The V2 client (`api_type: "responses_v2"`) provides rich `UnifiedResponse` objects with typed content blocks, making it easier to work with multimodal content, reasoning tokens, and structured outputs.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Stateful Conversations** | Automatic context tracking via `previous_response_id` |
+| **Rich Content Blocks** | `TextContent`, `ReasoningContent`, `CitationContent`, `ImageContent`, `ToolCallContent` |
+| **Built-in Tools** | `web_search`, `image_generation`, `apply_patch`, `shell` |
+| **Multimodal Support** | Send and receive images |
+| **Structured Output** | Pydantic models and JSON schemas |
+| **Cost Tracking** | Token and image generation cost tracking |
+| **V1 Compatibility** | `create_v1_compatible()` for `ChatCompletion` format |
+
+### LLM Configuration
 
 ```python
-[
+config_list = [
     {
-        "api_type": "responses", # use OpenAI Responses API
-        "model": "gpt-5",
-        "api_key": "your OpenAI Key goes here",
+        "api_type": "responses_v2",  # Use V2 client
+        "model": "gpt-4.1",
+        "api_key": "your OpenAI Key goes here",  # Or use OPENAI_API_KEY env var
 
-        # Optional: use shell, image_generation, and web_search built-in tools
-        # See https://platform.openai.com/docs/guides/images-vision?api-mode=responses
-        # and https://platform.openai.com/docs/api-reference/responses for more tool docs
-        "built_in_tools": ["shell", "image_generation", "web_search", "apply_patch", "apply_patch_async"],
+        # Optional: Enable built-in tools
+        "built_in_tools": ["web_search", "image_generation", "apply_patch", "shell"],
     }
 ]
 ```
 
-As an alternative to the `api_key` key and value in the config, you can set the environment variable `OPENAI_API_KEY` to your OpenAI key.
+### Basic Usage
 
-Linux/Mac:
-``` bash
-export OPENAI_API_KEY="your_openai_api_key_here"
+```python
+from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client
+
+# Create the V2 client
+client = OpenAIResponsesV2Client()
+
+# Make a request
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "Hello, how are you?"}],
+})
+
+# Access the response
+print(f"Response ID: {response.id}")
+print(f"Model: {response.model}")
+print(f"Content: {response.messages[0].get_text()}")
+print(f"Cost: ${response.cost:.6f}")
 ```
 
-Windows:
-``` bash
-set OPENAI_API_KEY=your_openai_api_key_here
+### Stateful Conversations
+
+The V2 client automatically maintains conversation context:
+
+```python
+client = OpenAIResponsesV2Client()
+
+# First message
+response1 = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "My name is Alice. Remember this."}],
+})
+
+# Second message - context is automatically maintained
+response2 = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "What is my name?"}],
+})
+# The model will remember "Alice"
+
+# Reset conversation to start fresh
+client.reset_conversation()
 ```
+
+### Built-in Tools
+
+#### Web Search
+
+```python
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "What are the latest news about AI?"}],
+    "built_in_tools": ["web_search"],
+})
+
+# Extract citations
+citations = OpenAIResponsesV2Client.get_citations(response)
+for citation in citations:
+    print(f"- {citation.title}: {citation.url}")
+```
+
+#### Image Generation
+
+```python
+# Configure image output
+client.set_image_output_params(quality="high", size="1024x1024", output_format="png")
+
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "Generate an image of a sunset"}],
+    "built_in_tools": ["image_generation"],
+})
+
+# Extract generated images
+images = OpenAIResponsesV2Client.get_generated_images(response)
+for img in images:
+    print(f"Image data URI: {img.data_uri[:50]}...")
+```
+
+#### Shell Commands
+
+```python
+# Configure shell security
+client.set_shell_params(
+    allowed_commands=["ls", "cat", "grep"],
+    denied_commands=["rm", "sudo"],
+    enable_command_filtering=True,
+)
+
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "List files in the current directory"}],
+    "built_in_tools": ["shell"],
+})
+
+# Extract shell calls
+shell_calls = OpenAIResponsesV2Client.get_shell_calls(response)
+```
+
+#### Apply Patch (File Operations)
+
+```python
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "Create a file called hello.py with a hello world function"}],
+    "built_in_tools": ["apply_patch"],
+    "workspace_dir": "/path/to/workspace",
+    "allowed_paths": ["**/*.py"],
+})
+```
+
+### Multimodal Support
+
+```python
+# Create a multimodal message with images
+message = OpenAIResponsesV2Client.create_multimodal_message(
+    text="What do you see in this image?",
+    images=["https://example.com/image.jpg"],
+    role="user",
+)
+
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [message],
+})
+```
+
+### Structured Output
+
+```python
+from pydantic import BaseModel
+
+class Person(BaseModel):
+    name: str
+    age: int
+    occupation: str
+
+response = client.create({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "Generate a fictional person's profile"}],
+    "response_format": Person,
+})
+
+# Get the parsed object
+parsed = OpenAIResponsesV2Client.get_parsed_object(response)
+print(f"Name: {parsed.name}, Age: {parsed.age}, Occupation: {parsed.occupation}")
+```
+
+### Cost Tracking
+
+```python
+# Per-request usage
+usage = OpenAIResponsesV2Client.get_usage(response)
+print(f"Tokens: {usage['total_tokens']}, Cost: ${usage['cost']:.6f}")
+
+# Cumulative usage across all requests
+cumulative = client.get_cumulative_usage()
+print(f"Total cost: ${cumulative['total_cost']:.6f}")
+
+# Reset cost tracking
+client.reset_all_costs()
+```
+
+### V1 Backward Compatibility
+
+For code expecting `ChatCompletion` format:
+
+```python
+response = client.create_v1_compatible({
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "Hello!"}],
+})
+
+# Access like standard ChatCompletion
+print(response.choices[0].message.content)
+print(response.usage.total_tokens)
+```
+
+### Agent Integration
+
+```python
+from autogen import ConversableAgent
+
+config_list = [{"api_type": "responses_v2", "model": "gpt-4.1"}]
+llm_config = {"config_list": config_list}
+
+assistant = ConversableAgent(
+    name="assistant",
+    llm_config=llm_config,
+    system_message="You are a helpful AI assistant.",
+)
+
+result = assistant.initiate_chat(
+    assistant,
+    message="What is the capital of France?",
+    max_turns=2,
+)
+```
+
+---
+
+## V1 Client
+
+The V1 client (`api_type: "responses"`) returns `ChatCompletion`-like responses for backward compatibility.
+
+### LLM Configuration
+
+```python
+[
+    {
+        "api_type": "responses",  # Use V1 client
+        "model": "gpt-4.1",
+        "api_key": "your OpenAI Key goes here",
+        "built_in_tools": ["web_search", "image_generation", "apply_patch", "shell"],
+    }
+]
+```
+
+<Warning>
+The V1 client is maintained for backward compatibility. For new projects, we recommend using the V2 client (`api_type: "responses_v2"`) for access to rich content blocks and better type safety.
+</Warning>
+
+---
+
+## Built-in Tools Reference
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search the web for real-time information with citations |
+| `image_generation` | Generate images using DALL-E or GPT-Image models |
+| `apply_patch` | Create, update, and delete files using structured diffs |
+| `apply_patch_async` | Async version of apply_patch for better performance |
+| `shell` | Execute shell commands with configurable sandboxing |
 
 <Note>
 The `apply_patch` tool enables agents to create, update, and delete files using structured diffs, making it ideal for code editing tasks.
-The `shell` tool allows secure, filtered command-line execution. When enabling it, consult the [Shell Tool documentation](/docs/user-guide/advanced-concepts/tools/shell) for configuration options and security guidelines to avoid unsafe shell access.
+
+The `shell` tool allows secure, filtered command-line execution. When enabling it, consult the [Shell Tool documentation](/docs/user-guide/advanced-concepts/tools/shell) for configuration options and security guidelines.
 </Note>
+
+---

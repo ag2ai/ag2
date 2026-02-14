@@ -31,7 +31,7 @@ pytestmark = [
 
 
 class TestASGIEndpoint:
-    def test_build_asgi_creates_endpoint(self) -> None:
+    async def test_build_asgi_creates_endpoint(self) -> None:
         agent = ConversableAgent("test_agent")
 
         stream = AGUIStream(agent)

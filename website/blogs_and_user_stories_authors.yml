@@ -229,19 +229,19 @@ authors:
 
   boris_bolliet:
     name: Boris Bolliet
-    description: Agentic AI Lead, Infosys-Cambridge AI Centre
+    description: Researcher, Cambridge University
     url: ""
     avatar: ../img/boris_profile.png
 
   inigo_zubeldia:
     name: Inigo Zubeldia
-    description: Senior Researcher, Infosys-Cambridge AI Centre
+    description: Researcher, Cambridge University
     url: ""
     avatar: ../img/inigo_profile.png
 
   james_fergusson:
     name: James Fergusson
-    description: Director, Infosys-Cambridge AI Centre
+    description: Professor, Cambridge University
     url: ""
     avatar: ../img/james_profile.png
 

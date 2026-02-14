@@ -17,6 +17,17 @@ To register tools, you can use methods like [`register_for_llm`](/docs/api-refer
 
 🔗 [Explore the Walk-through](/docs/user-guide/basic-concepts/introducing-tools)
 
+## Tool return types
+
+Tool functions can return a variety of types; AG2 normalizes them to strings for use in the conversation:
+
+- **Strings** — Returned as-is.
+- **None** — Treated as an empty string.
+- **Lists and tuples** — Serialized as JSON (e.g. `[5, 3, 10]` or `(5, 3, 10)`). Lists in OpenAI message format (list of dicts with a `"type"` key, such as `text` or `image_url`) are handled specially for multimodal content.
+- **Dicts and primitives** — Numbers, booleans, and dicts are JSON-serialized; other types fall back to `str()` if they are not JSON-serializable.
+
+This allows tools to return structured data (e.g. `list[int]`, `dict`, or Pydantic models serialized to dict) without causing errors in group chats or with providers that expect string tool results.
+
 ## Secure Tool Usage with Secrets
 
 When tools require sensitive information like API keys or credentials, AG2 employs **dependency injection** to keep such data secure. This method ensures that private information is not exposed to the LLM while still allowing seamless execution of agent tasks. Some key benefits include:
