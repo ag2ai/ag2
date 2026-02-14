@@ -489,7 +489,7 @@ class TestBuiltInTools:
         )
         client.client.responses.create = Mock(return_value=mock_response)
 
-        response = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "Create test.py"}],
             "built_in_tools": ["apply_patch"],
@@ -703,7 +703,7 @@ class TestCostTracking:
         )
         client.client.responses.create = Mock(return_value=mock_response)
 
-        response = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [],
             "built_in_tools": ["image_generation"],
@@ -724,7 +724,7 @@ class TestCostTracking:
         )
         client.client.responses.create = Mock(return_value=mock_response)
 
-        response = client.create({"model": "gpt-4o-mini", "messages": [], "built_in_tools": ["image_generation"]})
+        client.create({"model": "gpt-4o-mini", "messages": [], "built_in_tools": ["image_generation"]})
 
         total_cost = client.get_total_costs()
         token_cost = client.get_token_costs()
@@ -1169,7 +1169,7 @@ class TestErrorHandling:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            response = client.create({
+            client.create({
                 "model": "gpt-4.1",
                 "messages": [],
                 "response_format": TestModel,
@@ -1241,7 +1241,7 @@ class TestIntegrationScenarios:
         )
         client.client.responses.create = Mock(return_value=mock_response1)
 
-        response1 = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "My name is Alice"}],
         })
@@ -1257,7 +1257,7 @@ class TestIntegrationScenarios:
         )
         client.client.responses.create = Mock(return_value=mock_response2)
 
-        response2 = client.create({
+        client.create({
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "What's my name?"}],
         })
@@ -1337,10 +1337,10 @@ class TestApplyPatchOperation:
 
     def test_apply_patch_create_file_sync(self, client):
         """Test synchronous create_file operation."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.create_file.return_value = {"status": "success", "output": "File created"}
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             result = client._apply_patch_operation(
                 operation={"type": "create_file", "path": "test.py", "diff": "print('hello')"},
@@ -1355,10 +1355,10 @@ class TestApplyPatchOperation:
 
     def test_apply_patch_update_file_sync(self, client):
         """Test synchronous update_file operation."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.update_file.return_value = {"status": "success", "output": "File updated"}
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             result = client._apply_patch_operation(
                 operation={"type": "update_file", "path": "test.py", "diff": "..."},
@@ -1373,10 +1373,10 @@ class TestApplyPatchOperation:
 
     def test_apply_patch_delete_file_sync(self, client):
         """Test synchronous delete_file operation."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.delete_file.return_value = {"status": "success", "output": "File deleted"}
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             result = client._apply_patch_operation(
                 operation={"type": "delete_file", "path": "test.py"},
@@ -1391,10 +1391,10 @@ class TestApplyPatchOperation:
 
     def test_apply_patch_exception_handling(self, client):
         """Test exception handling in apply_patch_operation."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.create_file.side_effect = Exception("Disk full")
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             result = client._apply_patch_operation(
                 operation={"type": "create_file", "path": "test.py", "diff": "..."},
@@ -1415,10 +1415,10 @@ class TestApplyPatchOperation:
             allowed_paths=["*.py", "*.txt"],
         )
 
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.create_file.return_value = {"status": "success", "output": "Done"}
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             client._apply_patch_operation(
                 operation={"type": "create_file", "path": "test.py", "diff": "..."},
@@ -1426,17 +1426,17 @@ class TestApplyPatchOperation:
             )
 
             # Verify WorkspaceEditor was created with instance defaults
-            MockEditor.assert_called_once_with(
+            mock_editor_cls.assert_called_once_with(
                 workspace_dir="/custom/workspace",
                 allowed_paths=["*.py", "*.txt"],
             )
 
     def test_apply_patch_overrides_instance_defaults(self, client):
         """Test that explicit params override instance defaults."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
             mock_editor.create_file.return_value = {"status": "success", "output": "Done"}
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
             client._apply_patch_operation(
                 operation={"type": "create_file", "path": "test.py", "diff": "..."},
@@ -1445,14 +1445,14 @@ class TestApplyPatchOperation:
                 allowed_paths=["**/*.md"],
             )
 
-            MockEditor.assert_called_once_with(
+            mock_editor_cls.assert_called_once_with(
                 workspace_dir="/override/workspace",
                 allowed_paths=["**/*.md"],
             )
 
     def test_apply_patch_async_no_running_loop(self, client):
         """Test async execution when no event loop is running."""
-        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as MockEditor:
+        with patch("autogen.tools.experimental.apply_patch.apply_patch_tool.WorkspaceEditor") as mock_editor_cls:
             mock_editor = Mock()
 
             # Create an async mock
@@ -1461,20 +1461,22 @@ class TestApplyPatchOperation:
                 return {"status": "success", "output": "Async created"}
 
             mock_editor.a_create_file = Mock(side_effect=lambda op: async_create_file(op))
-            MockEditor.return_value = mock_editor
+            mock_editor_cls.return_value = mock_editor
 
-            with patch("asyncio.get_running_loop", side_effect=RuntimeError("No running loop")):
-                with patch("asyncio.run") as mock_run:
-                    mock_run.return_value = {"status": "success", "output": "Async created"}
+            with (
+                patch("asyncio.get_running_loop", side_effect=RuntimeError("No running loop")),
+                patch("asyncio.run") as mock_run,
+            ):
+                mock_run.return_value = {"status": "success", "output": "Async created"}
 
-                    result = client._apply_patch_operation(
-                        operation={"type": "create_file", "path": "test.py", "diff": "..."},
-                        call_id="call_async",
-                        async_patches=True,
-                    )
+                result = client._apply_patch_operation(
+                    operation={"type": "create_file", "path": "test.py", "diff": "..."},
+                    call_id="call_async",
+                    async_patches=True,
+                )
 
-                    assert result.status == "success"
-                    mock_run.assert_called_once()
+                assert result.status == "success"
+                mock_run.assert_called_once()
 
 
 class TestApplyPatchCallOutput:
@@ -1708,12 +1710,12 @@ class TestShellToolOperation:
 
     def test_execute_shell_operation_with_mock(self, client):
         """Test shell operation with mocked ShellExecutor."""
-        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as MockExecutor:
+        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as mock_executor_cls:
             mock_executor = Mock()
             mock_executor.run_commands.return_value = [
                 {"stdout": "file1.txt", "stderr": "", "outcome": {"type": "exit", "exit_code": 0}}
             ]
-            MockExecutor.return_value = mock_executor
+            mock_executor_cls.return_value = mock_executor
 
             # Reset executor to force re-creation
             client._shell_executor = None
@@ -1728,10 +1730,10 @@ class TestShellToolOperation:
 
     def test_execute_shell_operation_exception_handling(self, client):
         """Test shell operation exception handling."""
-        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as MockExecutor:
+        with patch("autogen.tools.experimental.shell.shell_tool.ShellExecutor") as mock_executor_cls:
             mock_executor = Mock()
             mock_executor.run_commands.side_effect = Exception("Command failed")
-            MockExecutor.return_value = mock_executor
+            mock_executor_cls.return_value = mock_executor
 
             # Reset executor
             client._shell_executor = None
