@@ -836,6 +836,30 @@ class TestDeepSeekPatch:
         kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
         assert kwargs == expected_kwargs
 
+    def test_move_system_message_to_beginning_without_role(self) -> None:
+        """Test that messages without a 'role' field don't break system message reordering (e.g., A2A messages)."""
+        messages = [
+            {"content": "Hello, this message has no role field"},
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Help me."},
+        ]
+        OpenAIClient._move_system_message_to_beginning(messages)
+        assert messages[0]["role"] == "system"
+        assert messages[1] == {"content": "Hello, this message has no role field"}
+
+    def test_patch_messages_for_deepseek_reasoner_without_role(self) -> None:
+        """Test that messages without a 'role' field don't break deepseek patching (e.g., A2A messages)."""
+        kwargs = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"content": "A message without role"},
+            ],
+            "model": "deepseek-reasoner",
+        }
+        result = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
+        # Should not raise KeyError
+        assert len(result["messages"]) >= 2
+
 
 class TestGemini:
     def test_configure_openai_config_for_gemini_updates_proxy(self):

@@ -322,6 +322,7 @@ class MCPProxy:
         rename_functions: bool = False,
         group_functions: bool = False,
         configuration_type: Literal["json", "yaml"] = "json",
+        llm_config: Any = None,
     ) -> "MCPProxy":
         if (openapi_specification is None) == (openapi_url is None):
             raise ValueError("Either openapi_specification or openapi_url should be provided")
@@ -349,6 +350,10 @@ class MCPProxy:
                 custom_visitors.append(Path(__file__).parent / "operation_renaming.py")
 
             if group_functions:
+                if llm_config is not None:
+                    from .operation_grouping import set_llm_config
+
+                    set_llm_config(llm_config)
                 custom_visitors.append(Path(__file__).parent / "operation_grouping.py")
 
             main_name = cls.generate_code(  # noqa F841
