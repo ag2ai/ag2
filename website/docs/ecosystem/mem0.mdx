@@ -80,7 +80,7 @@ os.environ["OPENAI_API_KEY"] = "your_openai_api_key"
 # Initialize Agent and Memory
 agent = ConversableAgent(
     "chatbot",
-    llm_config=LLMConfig(config_list={"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}),
+    llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ.get("OPENAI_API_KEY")}),
     code_execution_config=False,
     function_map=None,
     human_input_mode="NEVER",
@@ -106,7 +106,7 @@ memory.add(messages=conversation, user_id="customer_service_bot")
 data = "Which TV am I using?"
 
 relevant_memories = memory.search(data, user_id="customer_service_bot")
-flatten_relevant_memories = "\n".join([m["memory"] for m in relevant_memories])
+flatten_relevant_memories = "\n".join([m["memory"] for m in relevant_memories["results"]])
 
 prompt = f"""Answer the user question considering the memories.
 Memories:
@@ -122,21 +122,21 @@ print("Reply :", reply)
 manager = ConversableAgent(
     "manager",
     system_message="You are a manager who helps in resolving customer issues.",
-    llm_config=LLMConfig(config_list={"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}),
+    llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}),
     human_input_mode="NEVER"
 )
 
 customer_bot = ConversableAgent(
     "customer_bot",
     system_message="You are a customer service bot who gathers information on issues customers are facing.",
-    llm_config=LLMConfig(config_list={"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}),
+    llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}),
     human_input_mode="NEVER"
 )
 
-data = "What appointment is booked?"
+data = "What can the customer do to resolve the issue?"
 
 relevant_memories = memory.search(data, user_id="customer_service_bot")
-flatten_relevant_memories = "\n".join([m["memory"] for m in relevant_memories])
+flatten_relevant_memories = "\n".join([m["memory"] for m in relevant_memories["results"]])
 
 prompt = f"""
 Context:
@@ -146,6 +146,9 @@ Question: {data}
 """
 
 result = manager.send(prompt, customer_bot, request_reply=True)
+
+memory.vector_store.client.close()
+memory._telemetry_vector_store.client.close()
 ```
 
 Access the complete code from this notebook: [Mem0 with AG2](https://colab.research.google.com/drive/1NZEwC9w6V2S6hYmK7l2SQ9jhQrG1uKk8?usp=sharing)
