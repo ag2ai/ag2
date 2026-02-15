@@ -435,7 +435,7 @@ class ApplyPatchTool(Tool):
         agent = ConversableAgent(
             name="coding_assistant",
             llm_config={
-                "api_type": "responses",
+                "api_type": "responses_v2",
                 "model": "gpt-5.1",
                 "built_in_tools": ["apply_patch"]
             }

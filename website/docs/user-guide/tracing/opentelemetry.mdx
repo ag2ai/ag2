@@ -1,0 +1,636 @@
+---
+title: "OpenTelemetry Tracing"
+description: "Add distributed tracing and observability to AG2 multi-agent workflows using OpenTelemetry."
+sidebarTitle: OpenTelemetry Tracing
+---
+
+AG2 provides built-in <a href="https://opentelemetry.io/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry</a> instrumentation for multi-agent workflows.
+The tracing module follows the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry GenAI Semantic Conventions</a> for agent spans, giving you structured observability into conversations, LLM calls, tool executions, code execution, and human-in-the-loop interactions.
+
+Because AG2 uses standard OpenTelemetry, traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Axiom, and many others.
+
+## Installation
+
+Install AG2 with the `tracing` extra to pull in the required OpenTelemetry SDK and exporter packages:
+
+```bash
+pip install "ag2[tracing]"
+```
+
+This installs `opentelemetry-api`, `opentelemetry-sdk`, and the OTLP gRPC exporter.
+
+## Quick Start
+
+The following example sets up tracing with a `ConsoleSpanExporter` so you can see spans printed directly to your terminal. In production you would replace this with an OTLP exporter pointed at your backend.
+
+```python title="quickstart_tracing.py"
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+
+# 1. Configure the TracerProvider
+resource = Resource.create(attributes={"service.name": "ag2-quickstart"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create agents
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+user_proxy = ConversableAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=1,
+)
+
+# 3. Instrument agents and LLM calls
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(assistant, tracer_provider=tracer_provider)
+instrument_agent(user_proxy, tracer_provider=tracer_provider)
+
+# 4. Run a chat
+result = user_proxy.run(
+    assistant,
+    message="What is the capital of France?",
+    max_turns=2,
+)
+result.process()
+```
+
+When you run this script, the `ConsoleSpanExporter` prints each span to stdout as it completes. You will see a `conversation` span wrapping the entire chat, `invoke_agent` spans for each `generate_reply` call, and `chat` spans for each LLM API request -- all connected by a shared trace ID.
+
+## Instrumentation API
+
+AG2 exposes four instrumentation functions in `autogen.opentelemetry`. Each one takes a `tracer_provider` keyword argument and patches the target object in place.
+
+### `instrument_agent`
+
+```python
+from autogen.opentelemetry import instrument_agent
+
+instrument_agent(agent, tracer_provider=tracer_provider)
+```
+
+Instruments a single `ConversableAgent` (or any subclass) to emit spans for:
+
+| Activity | Span name pattern | When it fires |
+|---|---|---|
+| Conversations | `conversation {agent.name}` | `run` / `initiate_chat` / `a_initiate_chat` / `resume` |
+| Agent invocations | `invoke_agent {agent.name}` | `generate_reply` / `a_generate_reply` |
+| Remote agent calls | `invoke_agent {agent.name}` | `a_generate_remote_reply` (A2A) |
+| Tool execution | `execute_tool {func_name}` | `execute_function` / `a_execute_function` |
+| Code execution | `execute_code {agent.name}` | Code-execution reply handler |
+| Human input | `await_human_input {agent.name}` | `get_human_input` / `a_get_human_input` |
+| Sequential / parallel chats | `agent.initiate_chats` | `initiate_chats` / `a_initiate_chats` |
+
+The function returns the same agent object (modified in place), so you can chain it if you like:
+
+```python
+agent = instrument_agent(ConversableAgent(...), tracer_provider=tracer_provider)
+```
+
+### `instrument_llm_wrapper`
+
+```python
+from autogen.opentelemetry import instrument_llm_wrapper
+
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+```
+
+Instruments **all** LLM calls globally by patching `OpenAIWrapper.create()`. Each call produces a `chat {model}` span that captures:
+
+- Provider name (`openai`, `anthropic`, `azure.ai.openai`, etc.)
+- Model name
+- Token usage (input and output)
+- Request parameters (temperature, max_tokens, etc.)
+- Response metadata (finish reasons, cost)
+
+LLM spans automatically become children of the active `invoke_agent` span through OpenTelemetry's context propagation.
+
+**Message capture** -- By default, request and response messages are **not** captured because they may contain sensitive data. To enable message capture for debugging, pass `capture_messages=True`:
+
+```python
+instrument_llm_wrapper(tracer_provider=tracer_provider, capture_messages=True)
+```
+
+See the [Advanced: Message Capture](#advanced-message-capture) section for details.
+
+### `instrument_pattern`
+
+```python
+from autogen.opentelemetry import instrument_pattern
+
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+```
+
+Instruments a group chat `Pattern` (such as `AutoPattern`, `RoundRobinPattern`, etc.). This is the recommended approach for group chats because it automatically:
+
+- Instruments **all agents** in the pattern
+- Instruments the `GroupChatManager`
+- Wraps speaker selection to produce `speaker_selection` spans with candidate and selected-agent attributes
+
+```python title="group_chat_tracing.py"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+researcher = ConversableAgent(
+    name="researcher",
+    system_message="You research topics and provide factual information. Be concise.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+writer = ConversableAgent(
+    name="writer",
+    system_message="You take research and write clear summaries. Say TERMINATE when done.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+user = ConversableAgent(name="user", human_input_mode="NEVER", llm_config=False)
+
+pattern = AutoPattern(
+    initial_agent=researcher,
+    agents=[researcher, writer],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Instrument everything at once
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+
+result = run_group_chat(
+    pattern=pattern,
+    messages="What are the three laws of thermodynamics? Summarize briefly.",
+    max_rounds=5,
+)
+result.process()
+```
+
+### `instrument_a2a_server`
+
+```python
+from autogen.opentelemetry import instrument_a2a_server
+
+instrument_a2a_server(server, tracer_provider=tracer_provider)
+```
+
+Instruments an `A2aAgentServer` for distributed tracing across services. This function:
+
+- Adds ASGI middleware that extracts <a href="https://www.w3.org/TR/trace-context/" className="external-link" target="_blank" rel="noopener noreferrer">W3C Trace Context</a> headers from incoming HTTP requests
+- Instruments the server's underlying agent (calls `instrument_agent` internally)
+
+When a client sends a request with a `traceparent` header, the server-side spans are linked to the client's trace, giving you a single end-to-end trace across services.
+
+```python title="a2a_server_traced.py"
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+from autogen.opentelemetry import instrument_a2a_server
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+agent = ConversableAgent(
+    name="tech_agent",
+    system_message="You solve technical problems.",
+    llm_config=llm_config,
+)
+
+server = A2aAgentServer(agent, url="http://localhost:18123/")
+server = instrument_a2a_server(server, tracer_provider=tracer_provider)
+app = server.build()
+```
+
+On the client side, `instrument_agent` automatically injects `traceparent` headers into outgoing HTTP calls for `A2aRemoteAgent`, so no additional setup is needed on the client.
+
+## Trace Hierarchy
+
+AG2 traces form a hierarchical tree that mirrors how agents process a conversation. Here is the typical structure for a two-agent chat:
+
+```
+conversation user_proxy                   # run
+  |-- invoke_agent assistant              # generate_reply
+  |     |-- chat gpt-4o-mini              # LLM API call
+  |-- invoke_agent user_proxy             # generate_reply
+  |-- invoke_agent assistant              # generate_reply
+  |     |-- chat gpt-4o-mini              # LLM API call
+  |     +-- execute_tool get_weather      # tool execution
+  |-- invoke_agent assistant              # generate_reply
+  |     +-- chat gpt-4o-mini              # LLM API call
+  +-- invoke_agent user_proxy             # generate_reply
+```
+
+For group chats with a pattern, the tree includes speaker selection:
+
+```
+conversation chat_manager                 # run_chat (GroupChatManager)
+  |-- speaker_selection                   # auto speaker selection
+  |     +-- invoke_agent speaker_sel...   # internal LLM call to pick speaker
+  |           +-- chat gpt-4o-mini
+  |-- invoke_agent researcher             # selected agent generates reply
+  |     +-- chat gpt-4o-mini
+  |-- speaker_selection
+  |     +-- invoke_agent speaker_sel...
+  |           +-- chat gpt-4o-mini
+  +-- invoke_agent writer
+        +-- chat gpt-4o-mini
+```
+
+## Span Types
+
+Every span emitted by AG2 includes an `ag2.span.type` attribute that identifies what the span represents:
+
+| `ag2.span.type` | Operation name | Triggered by |
+|---|---|---|
+| `conversation` | `conversation` | `run`, `initiate_chat`, `a_initiate_chat`, `resume`, `run_chat`, `a_run_chat` |
+| `multi_conversation` | `initiate_chats` | `initiate_chats`, `a_initiate_chats` (sequential or parallel) |
+| `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
+| `llm` | `chat` | `OpenAIWrapper.create()` (every LLM API call) |
+| `tool` | `execute_tool` | `execute_function`, `a_execute_function` |
+| `code_execution` | `execute_code` | Code-execution reply handler |
+| `human_input` | `await_human_input` | `get_human_input`, `a_get_human_input` |
+| `speaker_selection` | `speaker_selection` | `_auto_select_speaker`, `a_auto_select_speaker` (group chat) |
+
+## Semantic Attributes
+
+AG2 spans carry both standard OpenTelemetry GenAI attributes and AG2-specific attributes.
+
+### Standard OpenTelemetry GenAI Attributes
+
+These follow the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry GenAI Semantic Conventions</a>:
+
+| Attribute | Type | Description | Span types |
+|---|---|---|---|
+| `gen_ai.operation.name` | string | Operation name (`conversation`, `invoke_agent`, `chat`, etc.) | All |
+| `gen_ai.agent.name` | string | Name of the agent | `conversation`, `agent`, `code_execution`, `human_input` |
+| `gen_ai.provider.name` | string | LLM provider (`openai`, `anthropic`, `azure.ai.openai`, etc.) | `conversation`, `agent`, `llm` |
+| `gen_ai.request.model` | string | Requested model name | `conversation`, `agent`, `llm` |
+| `gen_ai.response.model` | string | Model name in the response (may differ from request) | `conversation`, `llm` |
+| `gen_ai.usage.input_tokens` | int | Number of input/prompt tokens | `conversation`, `llm` |
+| `gen_ai.usage.output_tokens` | int | Number of output/completion tokens | `conversation`, `llm` |
+| `gen_ai.usage.cost` | float | Total cost of the operation | `conversation`, `llm` |
+| `gen_ai.request.temperature` | float | Temperature parameter | `llm` |
+| `gen_ai.request.max_tokens` | int | Max tokens parameter | `llm` |
+| `gen_ai.request.top_p` | float | Top-p parameter | `llm` |
+| `gen_ai.input.messages` | string (JSON) | Input messages in OTEL format | `conversation`, `agent`, `llm` (opt-in) |
+| `gen_ai.output.messages` | string (JSON) | Output messages in OTEL format | `conversation`, `agent`, `llm` (opt-in) |
+| `gen_ai.response.finish_reasons` | string (JSON) | Finish reasons from the LLM response | `llm` |
+| `gen_ai.tool.name` | string | Tool function name | `tool` |
+| `gen_ai.tool.call.id` | string | Tool call ID | `tool` |
+| `gen_ai.tool.call.arguments` | string (JSON) | Tool call arguments | `tool` |
+| `gen_ai.tool.call.result` | string | Tool call result | `tool` |
+| `gen_ai.conversation.id` | string | Conversation/chat ID | `conversation` |
+| `gen_ai.conversation.turns` | int | Number of turns in the conversation | `conversation` |
+| `gen_ai.conversation.max_turns` | int | Maximum allowed turns | `conversation` |
+
+### AG2-Specific Attributes
+
+| Attribute | Type | Description | Span types |
+|---|---|---|---|
+| `ag2.span.type` | string | AG2 span type (see [Span Types](#span-types) table) | All |
+| `ag2.speaker_selection.candidates` | string (JSON) | List of candidate agent names | `speaker_selection` |
+| `ag2.speaker_selection.selected` | string | Name of the selected speaker | `speaker_selection` |
+| `ag2.human_input.prompt` | string | Prompt shown to the human | `human_input` |
+| `ag2.human_input.response` | string | Human's response | `human_input` |
+| `ag2.code_execution.exit_code` | int | Exit code from code execution | `code_execution` |
+| `ag2.code_execution.output` | string | Output from code execution (truncated to 4096 chars) | `code_execution` |
+| `ag2.chats.count` | int | Number of chats in `initiate_chats` | `multi_conversation` |
+| `ag2.chats.mode` | string | `"sequential"` or `"parallel"` | `multi_conversation` |
+| `ag2.chats.recipients` | string (JSON) | List of recipient agent names | `multi_conversation` |
+| `gen_ai.agent.remote` | bool | Whether the agent is a remote A2A agent | `agent` |
+| `server.address` | string | URL of the remote A2A agent | `agent` |
+| `error.type` | string | Error type on failure (`ExecutionError`, `CodeExecutionError`, etc.) | Any |
+
+## Backend Integration
+
+### Grafana Tempo
+
+<a href="https://grafana.com/oss/tempo/" className="external-link" target="_blank" rel="noopener noreferrer">Grafana Tempo</a> is an open-source distributed tracing backend that integrates with the Grafana observability stack.
+
+```python title="tempo_setup.py"
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+resource = Resource.create(attributes={"service.name": "my-ag2-service"})
+tracer_provider = TracerProvider(resource=resource)
+
+# Point to your Tempo/OTel Collector OTLP gRPC endpoint
+exporter = OTLPSpanExporter(endpoint="http://localhost:4317")
+tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(tracer_provider)
+```
+
+### Jaeger
+
+<a href="https://www.jaegertracing.io/" className="external-link" target="_blank" rel="noopener noreferrer">Jaeger</a> natively supports OTLP ingestion, so the setup is the same:
+
+```python title="jaeger_setup.py"
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+# Jaeger's OTLP gRPC endpoint (default port 4317)
+exporter = OTLPSpanExporter(endpoint="http://localhost:4317")
+```
+
+### Commercial Backends
+
+Most commercial observability platforms accept OTLP traces. Typically you only need to change the `endpoint` and add authentication headers:
+
+```python
+exporter = OTLPSpanExporter(
+    endpoint="https://otel.vendor.com:4317",
+    headers={"api-key": "YOUR_API_KEY"},
+)
+```
+
+Consult your vendor's documentation for the exact endpoint and authentication details. Popular options include <a href="https://docs.datadoghq.com/opentelemetry/" className="external-link" target="_blank" rel="noopener noreferrer">Datadog</a>, <a href="https://docs.honeycomb.io/send-data/opentelemetry/" className="external-link" target="_blank" rel="noopener noreferrer">Honeycomb</a>, and <a href="https://grafana.com/products/cloud/" className="external-link" target="_blank" rel="noopener noreferrer">Grafana Cloud</a>.
+
+## Local Development Stack
+
+For local development and testing, you can run an OpenTelemetry Collector, Grafana Tempo, and Grafana using Docker Compose. See the [Local OpenTelemetry Setup](/docs/user-guide/tracing/local-setup) page for the full configuration files and instructions.
+
+Once the stack is running, point your exporter at the collector:
+
+```python
+exporter = OTLPSpanExporter(endpoint="http://localhost:14317")
+```
+
+Then open <a href="http://localhost:3333" className="external-link" target="_blank" rel="noopener noreferrer">http://localhost:3333</a> in your browser to explore traces in Grafana.
+
+## Examples
+
+### Two-Agent Chat
+
+A basic code-review workflow between a reviewer and a coder, with full tracing of the conversation, each agent turn, and every LLM call:
+
+```python title="two_agent_tracing.py"
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+
+# Setup tracing
+resource = Resource.create(attributes={"service.name": "two-agent-chat"})
+tracer_provider = TracerProvider(resource=resource)
+exporter = OTLPSpanExporter(endpoint="http://localhost:14317")
+tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(tracer_provider)
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+reviewer = ConversableAgent(
+    name="reviewer",
+    system_message="You are a code reviewer. Provide constructive feedback.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+coder = ConversableAgent(
+    name="coder",
+    system_message="You are an expert Python developer.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+    is_termination_msg=lambda x: "LGTM" in x.get("content", ""),
+)
+
+# Instrument
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(reviewer, tracer_provider=tracer_provider)
+instrument_agent(coder, tracer_provider=tracer_provider)
+
+result = reviewer.run(
+    coder,
+    message="Write a Python function to compute the Fibonacci sequence.",
+    max_turns=3,
+)
+result.process()
+```
+
+### Tool Execution
+
+Tool calls produce `execute_tool` spans nested inside the agent's `invoke_agent` span:
+
+```python title="tool_tracing.py"
+from typing import Annotated
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
+from autogen.tools import tool
+
+# Setup tracing
+resource = Resource.create(attributes={"service.name": "tool-tracing"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:14317"))
+)
+trace.set_tracer_provider(tracer_provider)
+
+
+@tool(description="Get weather information for a city")
+def get_weather(city: Annotated[str, "The city name"]) -> str:
+    """Get weather information for a city."""
+    weather_data = {
+        "new york": "Sunny, 72F",
+        "london": "Cloudy, 15C",
+        "tokyo": "Rainy, 18C",
+    }
+    return weather_data.get(city.lower(), f"Weather data not available for {city}")
+
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+weather_agent = ConversableAgent(
+    name="weather",
+    system_message="Use the get_weather tool to answer weather questions.",
+    functions=[get_weather],
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+# Instrument
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_agent(weather_agent, tracer_provider=tracer_provider)
+
+result = weather_agent.run(message="What is the weather in Tokyo?", max_turns=2)
+result.process()
+```
+
+### Group Chat with Pattern
+
+Use `instrument_pattern` instead of instrumenting each agent individually:
+
+```python title="group_chat_tracing.py"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.opentelemetry import instrument_llm_wrapper, instrument_pattern
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+researcher = ConversableAgent(
+    name="researcher",
+    system_message="You research topics and provide factual information.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+writer = ConversableAgent(
+    name="writer",
+    system_message="You write clear summaries. Say TERMINATE after being asked to summarize.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+user = ConversableAgent(name="user", human_input_mode="NEVER", llm_config=False, default_auto_reply="Great, summarize for me.")
+
+pattern = AutoPattern(
+    initial_agent=researcher,
+    agents=[researcher, writer],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Instrument everything in one call
+instrument_llm_wrapper(tracer_provider=tracer_provider)
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+
+result = run_group_chat(
+    pattern=pattern,
+    messages="Explain quantum computing in simple terms.",
+    max_rounds=5,
+)
+result.process()
+```
+
+### Distributed Tracing with A2A
+
+For multi-service architectures where some agents run as separate A2A servers, instrument both sides to get a single end-to-end trace:
+
+**Remote agent server:**
+
+```python title="remote_server.py"
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+from autogen.opentelemetry import instrument_a2a_server
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="You solve technical problems.",
+    llm_config=llm_config,
+)
+
+server = A2aAgentServer(tech_agent, url="http://localhost:18123/")
+server = instrument_a2a_server(server, tracer_provider=tracer_provider)
+app = server.build()
+
+# Run with: uvicorn remote_server:app --port 18123
+```
+
+**Client with remote agent in a group chat:**
+
+```python title="client_group_chat.py"
+import asyncio
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+from autogen.agentchat import a_run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.opentelemetry import instrument_pattern
+
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
+
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="Route technical issues to the tech agent.",
+    llm_config=llm_config,
+)
+
+# Remote agent -- calls are traced across the network
+tech_agent = A2aRemoteAgent(
+    "http://localhost:18123/",
+    name="tech_agent",
+)
+
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent],
+    group_manager_args={"llm_config": llm_config},
+)
+
+instrument_pattern(pattern, tracer_provider=tracer_provider)
+
+
+async def main():
+    result = await a_run_group_chat(
+        pattern=pattern,
+        messages="My application crashes on startup with a segfault.",
+        max_rounds=5,
+    )
+    await result.process()
+
+
+asyncio.run(main())
+```
+
+The `instrument_pattern` call on the client side instruments `A2aRemoteAgent` so that W3C `traceparent` headers are injected into outgoing HTTP requests. The `instrument_a2a_server` call on the server side extracts those headers, linking the server-side spans to the client trace.
+
+## Message and Data Capture
+
+AG2 tracing captures data at different levels depending on the span type:
+
+| Span type | Data captured | Controllable? |
+|---|---|---|
+| `conversation` (run / initiate_chat) | Input/output messages | No, always captured |
+| `agent` (generate_reply) | Input/output messages | No, always captured |
+| `tool` (execute_function) | Tool arguments and results | No, always captured |
+| `human_input` (get_human_input) | Prompt shown and human's response | No, always captured |
+| `llm` (LLM API call) | Request/response messages | Yes, off by default via `capture_messages` |
+
+Conversation and agent spans always include input and output messages (`gen_ai.input.messages` / `gen_ai.output.messages`). Tool spans always capture call arguments (`gen_ai.tool.call.arguments`) and results (`gen_ai.tool.call.result`). Human input spans always capture the prompt shown (`ag2.human_input.prompt`) and the human's response (`ag2.human_input.response`). Only LLM spans require explicit opt-in via `capture_messages=True` -- all other span types capture their data by default.
+
+!!! warning
+    If your agents process sensitive data (personal information, credentials, proprietary content), be aware that conversation messages, tool arguments and results, and human input prompts and responses will appear in your tracing backend with default settings. Ensure your backend has appropriate access controls and retention policies.
+
+### Enabling LLM Message Capture
+
+By default, `instrument_llm_wrapper` does **not** capture request and response messages on LLM spans. To enable this for debugging or development:
+
+```python
+instrument_llm_wrapper(tracer_provider=tracer_provider, capture_messages=True)
+```
+
+When enabled, two additional attributes appear on `chat` (LLM) spans:
+
+- `gen_ai.input.messages` -- JSON array of input messages in OpenTelemetry GenAI format
+- `gen_ai.output.messages` -- JSON array of output messages in OpenTelemetry GenAI format
+
+This includes the full request and response payloads sent to and received from the LLM provider, which can be large and may duplicate content already present on the parent agent span.

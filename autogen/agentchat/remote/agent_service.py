@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import warnings
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
@@ -14,7 +16,8 @@ from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import AskUserTarget, TransitionTarget
 from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, TerminationEvent, UsingAutoReplyEvent
 from autogen.events.base_event import BaseEvent
-from autogen.io.base import AsyncIOStreamProtocol
+from autogen.events.client_events import StreamEvent
+from autogen.io.base import AsyncIOStreamProtocol, IOStream
 
 from .protocol import RequestMessage, ServiceResponse, get_tool_names
 
@@ -52,12 +55,16 @@ class AgentService:
             # check code execution
             _, reply = self.agent.generate_code_execution_reply(messages)
 
-            # generate LLM reply
+            # generate LLM reply with token-level streaming
             if not reply:
-                _, reply = await self.agent.a_generate_oai_reply(
-                    messages,
-                    tools=state.client_tools,
-                )
+                async for is_final, chunk in self._streaming_oai_reply(messages, state.client_tools):
+                    if not is_final:
+                        yield ServiceResponse(
+                            streaming_text=chunk,
+                            context=context_variables.data or None,
+                        )
+                    else:
+                        reply = chunk
 
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
@@ -116,6 +123,38 @@ class AgentService:
             return False, None  # tool result is not valid OAI message, interrupt the loop
 
         return True, out_message
+
+    async def _streaming_oai_reply(
+        self,
+        messages: list[dict[str, Any]],
+        client_tools: list[dict[str, Any]],
+    ) -> AsyncGenerator[str | tuple[bool, str | dict[str, Any] | None], None]:
+        """Generate LLM reply while yielding streaming text chunks.
+
+        Yields:
+            str: Incremental text chunks from LLM streaming.
+            tuple[bool, ...]: The final (valid, reply) result when complete.
+        """
+        iostream = AsyncIOQueueStream()
+
+        with IOStream.set_default(iostream):
+            task = asyncio.ensure_future(self.agent.a_generate_oai_reply(messages, tools=client_tools))
+
+            while not task.done():
+                with suppress(asyncio.TimeoutError):
+                    event = await asyncio.wait_for(
+                        iostream.queue.get(),
+                        timeout=0.01,
+                    )
+                    yield False, event
+
+            # Final drain after task completion
+            while not iostream.queue.empty():
+                event = await iostream.queue.get()
+                yield False, event
+
+            _, result = task.result()
+            yield True, result
 
     def _make_tool_executor(self, context_variables: ContextVariables) -> GroupToolExecutor:
         tool_executor = GroupToolExecutor()
@@ -179,9 +218,6 @@ class HITLStream(AsyncIOStreamProtocol):
         self.input_prompt = prompt
         return ""
 
-    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
-        raise NotImplementedError("HITLStream does not support printing")
-
     def send(self, message: BaseEvent) -> None:
         if isinstance(
             message,
@@ -194,3 +230,12 @@ class HITLStream(AsyncIOStreamProtocol):
             return
 
         raise NotImplementedError("HITLStream does not support sending messages")
+
+
+class AsyncIOQueueStream(AsyncIOStreamProtocol):
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[str] = asyncio.Queue()
+
+    def send(self, message: BaseEvent) -> None:
+        if isinstance(message, StreamEvent):
+            self.queue.put_nowait(message.content.content)
