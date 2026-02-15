@@ -105,7 +105,7 @@ def test_step(credentials_all: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_llm_config_current_property(credentials_all: Credentials):
-    """Test that AgentOptimizer correctly uses LLMConfig.current property when llm_config is None."""
+    """Test that AgentOptimizer works when llm_config is explicitly provided."""
     # Create a default LLMConfig
     llm_config = LLMConfig(
         *credentials_all.config_list,
@@ -123,7 +123,6 @@ def test_llm_config_current_property(credentials_all: Credentials):
 
 
 def test_llm_config_without_context():
-    """Test that AgentOptimizer raises ValueError when no LLMConfig is provided and no context is set."""
-    # This should raise a ValueError because no current LLMConfig is set
-    with pytest.raises(ValueError, match="No current LLMConfig set"):
+    """Test that AgentOptimizer raises ValueError when no llm_config is provided."""
+    with pytest.raises(ValueError, match="llm_config is required for AgentOptimizer"):
         AgentOptimizer(max_actions_per_step=3)

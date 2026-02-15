@@ -28,6 +28,8 @@ class TestAgent:
         ...     pass
     """
 
+    __test__ = False
+
     def __init__(
         self,
         agent: ConversableAgent,

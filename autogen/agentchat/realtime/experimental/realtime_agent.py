@@ -57,8 +57,6 @@ class RealtimeAgent:
         self._name = name
         self._system_message = system_message
 
-        llm_config = LLMConfig.get_current_llm_config(llm_config)
-
         self._realtime_client: RealtimeClientProtocol = get_client(
             llm_config=llm_config, logger=self.logger, **client_kwargs
         )

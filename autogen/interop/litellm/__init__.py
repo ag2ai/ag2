@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .litellm_config_factory import LiteLLmConfigFactory
+from .litellm_config_factory import LiteLLmConfigAdapter, LiteLLmConfigFactory
 
-__all__ = ["LiteLLmConfigFactory"]
+__all__ = ["LiteLLmConfigAdapter", "LiteLLmConfigFactory"]

@@ -313,7 +313,7 @@ class TestSafeguardChecks:
             }
         }
 
-        mock_llm_config: LLMConfig = LLMConfig(model="test-model")
+        mock_llm_config: LLMConfig = LLMConfig({"model": "test-model"})
         with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
             enforcer = SafeguardEnforcer(policy=policy, safeguard_llm_config=mock_llm_config)
 
