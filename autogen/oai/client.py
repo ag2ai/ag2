@@ -853,7 +853,9 @@ class OpenAIWrapper:
         extra_kwargs.pop("routing_method", None)
 
         if config_list:
-            config_list = [config.copy() for config in config_list]  # make a copy before modifying
+            config_list = [
+                config.model_dump() if hasattr(config, "model_dump") else config.copy() for config in config_list
+            ]  # make a copy before modifying
             for config_item in config_list:
                 self._register_default_client(config_item, openai_config)
                 # Construct current_config_extra_kwargs using the cleaned extra_kwargs

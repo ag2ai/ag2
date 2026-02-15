@@ -226,6 +226,24 @@ def test_round_robin_routing_with_failures(mock_openai_wrapper_round_robin: Open
     assert mock_openai_wrapper_round_robin._round_robin_index == 1
 
 
+def test_config_list_with_pydantic_models():
+    """Test that OpenAIWrapper handles Pydantic model config items from LLMConfig unpacking."""
+    config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": "test_key"})
+    wrapper = OpenAIWrapper(**config)
+
+    assert len(wrapper._config_list) == 1
+    assert wrapper._config_list[0]["model"] == "gpt-5-nano"
+
+
+def test_config_list_with_dict_items():
+    """Test that OpenAIWrapper still handles plain dict config items correctly."""
+    config_list = [{"model": "gpt-5-nano", "api_key": "test_key"}]
+    wrapper = OpenAIWrapper(config_list=config_list)
+
+    assert len(wrapper._config_list) == 1
+    assert wrapper._config_list[0]["model"] == "gpt-5-nano"
+
+
 TOOL_ENABLED = False
 
 with optional_import_block() as result:
