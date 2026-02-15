@@ -174,7 +174,7 @@ from autogen import ConversableAgent, LLMConfig
 # Configure the LLM with Responses API and shell tool
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -212,7 +212,7 @@ dangerous_patterns = [
 # Configure with custom security settings
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -353,7 +353,7 @@ Always specify a workspace directory for production use:
 # ✅ Good: Workspace directory specified
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -364,7 +364,7 @@ llm_config = LLMConfig(
 # ❌ Bad: No workspace directory
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -380,7 +380,7 @@ Implement command allow-lists or deny-lists:
 # ✅ Good: Command restrictions configured
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -392,7 +392,7 @@ llm_config = LLMConfig(
 # ❌ Bad: No command restrictions
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -415,7 +415,7 @@ custom_patterns = [
 
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -498,7 +498,7 @@ Adjust timeout for long-running commands:
 # Configure longer timeout for build commands
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -535,7 +535,7 @@ llm_config = LLMConfig(
 
    llm_config = LLMConfig(
        config_list={
-           "api_type": "responses",
+           "api_type": "responses_v2",
            "model": "gpt-5.1",
            "api_key": os.getenv("OPENAI_API_KEY"),
            "built_in_tools": ["shell"],
@@ -569,7 +569,7 @@ llm_config = LLMConfig(
    ```python
    llm_config = LLMConfig(
        config_list={
-           "api_type": "responses",
+           "api_type": "responses_v2",
            "model": "gpt-5.1",
            "api_key": os.getenv("OPENAI_API_KEY"),
            "built_in_tools": ["shell"],

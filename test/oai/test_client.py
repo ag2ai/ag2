@@ -883,6 +883,55 @@ class TestGemini:
         assert "proxy" not in openai_config
 
 
+class TestCreateV2Client:
+    """Unit tests for OpenAIWrapper._create_v2_client."""
+
+    def test_create_v2_client_passes_openai_config_and_response_format(self):
+        """Verify _create_v2_client passes response_format and **openai_config to client constructor."""
+        config_list = [{"model": "gpt-4", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}]
+        wrapper = OpenAIWrapper(config_list=config_list)
+        # Replace placeholder with actual mock so we have a valid wrapper
+        wrapper._clients[0] = MockModelClient(config=wrapper._config_list[0])
+
+        openai_config = {
+            "api_key": "test-key",
+            "base_url": "https://api.example.com/v1",
+            "timeout": 120.0,
+        }
+        response_format = {"type": "json_object"}
+
+        class MockV2Client:
+            def __init__(self, response_format: Any = None, **kwargs: Any):
+                self.response_format = response_format
+                self.kwargs = kwargs
+
+        client = wrapper._create_v2_client(MockV2Client, openai_config, response_format)
+
+        assert client.response_format == response_format
+        assert client.kwargs["api_key"] == "test-key"
+        assert client.kwargs["base_url"] == "https://api.example.com/v1"
+        assert client.kwargs["timeout"] == 120.0
+        assert client in wrapper._clients
+        assert len(wrapper._clients) == 2
+
+    def test_create_v2_client_appends_to_clients_and_returns_instance(self):
+        """Verify _create_v2_client appends the new client and returns it."""
+        config_list = [{"model": "gpt-4", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}]
+        wrapper = OpenAIWrapper(config_list=config_list)
+        wrapper._clients[0] = MockModelClient(config=wrapper._config_list[0])
+        initial_len = len(wrapper._clients)
+
+        class MinimalV2Client:
+            def __init__(self, response_format: Any = None, **kwargs: Any):
+                pass
+
+        result = wrapper._create_v2_client(MinimalV2Client, {"api_key": "k"}, None)
+
+        assert isinstance(result, MinimalV2Client)
+        assert len(wrapper._clients) == initial_len + 1
+        assert wrapper._clients[-1] is result
+
+
 class TestO1:
     @pytest.fixture
     def mock_oai_client(self, mock_credentials: Credentials) -> OpenAIClient:

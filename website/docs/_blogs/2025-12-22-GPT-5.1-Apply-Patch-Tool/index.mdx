@@ -84,7 +84,7 @@ load_dotenv()
 
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -163,7 +163,7 @@ Specify a workspace directory directly in your LLM configuration:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -223,7 +223,7 @@ Set up path restrictions in your LLM configuration:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -295,7 +295,7 @@ Use `apply_patch_async` instead of `apply_patch`:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch_async"],  # Use async version

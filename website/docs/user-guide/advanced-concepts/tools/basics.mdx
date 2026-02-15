@@ -103,7 +103,7 @@ load_dotenv()
 # configure LLMConfig to use built_in_tools
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
