@@ -1952,12 +1952,9 @@ class OpenAIResponsesV2Client(ModelClient):
         image_generation_config = params.pop("image_generation_config", None)
 
         # Extract shell sandboxing parameters from params (they're only used internally)
-        shell_allowed_commands = params.pop("allowed_commands", self._shell_allowed_commands)
         shell_denied_commands = params.pop("denied_commands", self._shell_denied_commands)
         if shell_denied_commands is None:
             shell_denied_commands = []
-        shell_enable_command_filtering = params.pop("enable_command_filtering", self._shell_enable_command_filtering)
-        shell_dangerous_patterns = params.pop("dangerous_patterns", self._shell_dangerous_patterns)
 
         # Initialize tools list
         tools_list = []
