@@ -416,11 +416,22 @@ The complete working code is available in the [build-with-ag2](https://github.co
 
 - **[Weather Agent](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/weather)** is a single-agent chat with a weather tool, as above, with our signature AG2 styling
 
-## What's Next
+## What About Multi-Agent?
 
-Today's AG-UI integration works with a single `ConversableAgent`. This gives you streaming text, tool visualization, state synchronization, and error handling out of the box. But we know the real strength of AG2 is multi-agent workflows: group chats, handoffs, sequential pipelines, and nested conversations.
+Today's AG-UI integration works with a single `ConversableAgent`. This gives you streaming text, tool visualization, state synchronization, and error handling out of the box. But the real strength of AG2 is multi-agent workflows: group chats, handoffs, sequential pipelines, and nested conversations. So how do you visualize those?
 
-**Multi-agent UI is an active focus for us.** We're working with the CopilotKit team on bringing multi-agent patterns to frontends so you can visualize agent pipelines, track which agent is speaking, show handoff transitions, and render per-agent tool activity. If you're interested in this direction, watch the [AG2 repository](https://github.com/ag2ai/ag2) for updates and join the conversation on [Discord](https://discord.gg/pAbnFJrkgZ). If you can't wait and want to see how we created a multi-agent demo, see the [Multi-agent Factory](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/factory) in our Build-with-AG2 repository.
+AG-UI doesn't natively support multi-agent workflows yet -- it sees a single agent on the backend. But you can simulate a multi-agent pipeline today using `ContextVariables` and `STATE_SNAPSHOT` events. The approach:
+
+1. **A single orchestrator agent** with stage-specific tools (e.g. `submit_plan`, `submit_draft`, `submit_review`)
+2. **Each tool sets `context_variables["active_agent"]`** and `context_variables["stage"]`** to signal which "agent" is working and what phase the pipeline is in
+3. **AG2's `AGUIStream` automatically emits a `STATE_SNAPSHOT`** event whenever `ContextVariables` change, delivering the updated state to the frontend over SSE
+4. **The frontend reads `active_agent` and `stage`** from the snapshot to update the UI -- highlighting the active agent, showing pipeline progress, and rendering stage-appropriate content
+
+This keeps all transition logic in the backend as the single source of truth. The frontend just reacts to state changes.
+
+We built a full working example of this pattern -- the [Feedback Factory](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/factory) -- a multi-stage document creation pipeline with a 3-panel UI showing agent pipeline, document preview, and conversation log.
+
+**Native multi-agent support is an active focus for us.** We're working with the CopilotKit team on bringing first-class multi-agent patterns to the AG-UI protocol so you won't need the orchestrator workaround. If you're interested in this direction, watch the [AG2 repository](https://github.com/ag2ai/ag2) for updates and join the conversation on [Discord](https://discord.gg/pAbnFJrkgZ).
 
 ## Learn More
 
