@@ -177,6 +177,9 @@ The frontend is a single HTML file, save it as `frontend.html` next to `backend.
 
 The core pattern: POST a `RunAgentInput` payload, read the SSE stream line by line, parse each `data:` line as JSON, and `switch` on the event type.
 
+<details markdown="1">
+<summary>frontend.html — full source (click to expand)</summary>
+
 ```html title="frontend.html"
 <!DOCTYPE html>
 <html lang="en">
@@ -398,6 +401,8 @@ The core pattern: POST a `RunAgentInput` payload, read the SSE stream line by li
 </html>
 ```
 
+</details>
+
 The key parts to notice:
 
 - **The payload** follows the AG-UI `RunAgentInput` schema, `messages` carries the conversation history, and `Accept: text/event-stream` tells the server to stream SSE
@@ -436,6 +441,6 @@ We built a full working example of this pattern -- the [Feedback Factory](https:
 ## Learn More
 
 - [AG2 AG-UI User Guide](https://docs.ag2.ai/latest/docs/user-guide/ag-ui/) -- Full integration documentation including authentication, context variables, and frontend tools
+- [AG2 @ CopilotKit](https://docs.copilotkit.ai/ag2) -- CopilotKit's AG-UI and AG2 documentation
 - [AG-UI Protocol Documentation](https://docs.ag-ui.com/introduction) -- Protocol specification and event type reference
-- [CopilotKit](https://www.copilotkit.ai/) -- The AG-UI-compatible React framework for building agent UIs, if you want a full component library instead of vanilla JS
 - [AG-UI Dojo](https://dojo.ag-ui.com/ag2?file=page.tsx) -- Interactive playground for testing AG-UI integrations across frameworks
