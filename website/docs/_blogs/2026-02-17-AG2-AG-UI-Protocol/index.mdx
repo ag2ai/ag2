@@ -22,7 +22,7 @@ You've built an agent with AG2. It reasons, calls tools, and streams responses. 
 
 [AG-UI](https://docs.ag-ui.com/introduction) (Agent-User Interaction Protocol) is an open, lightweight, event-based protocol that standardizes this agent-to-UI layer. AG2 now supports AG-UI natively, meaning you can connect any `ConversableAgent` to an AG-UI-compatible frontend with just a couple of lines of code.
 
-In this post, we'll walk through building a working agent chat application, from a `ConversableAgent` with a weather tool, through the AG-UI event stream, to a browser frontend that renders streaming text and an interactive tool card. Just HTML, no React framework required.
+In this post, we'll look under the hood at how the protocol works by building a working agent chat application from scratch using a `ConversableAgent` with a weather tool, through the AG-UI event stream, to a browser frontend that renders streaming text and an interactive tool card. We'll consume the raw SSE events directly in vanilla HTML/JS (without React, for example) so you can see exactly what AG-UI does at the protocol level. At the end, we'll point you to production-ready frontend libraries that handle all of this for you.
 
 ![AG2 Agent Chat powered by AG-UI](img/ag2-ag-ui-demo.gif)
 
@@ -172,6 +172,8 @@ data: {"type":"RUN_FINISHED","timestamp":1771292591288,"threadId":"blog-capture"
 Each event has a `type` that tells the frontend exactly what to do. The frontend doesn't need to understand AG2 internals as it just reacts to a standardized event stream.
 
 ## The Frontend: Consuming AG-UI Events
+
+To understand what AG-UI gives you, we'll consume the event stream directly using just `fetch` and a `switch` statement. This low-level approach allows you to see every event the protocol produces. (For production frontends with pre-built UI components, see [Frontend Libraries](#frontend-libraries) below.)
 
 The frontend is a single HTML file, save it as `frontend.html` next to `backend.py`. It has minimal styling and an **event log** panel so you can see every AG-UI event as it arrives.
 
@@ -420,6 +422,15 @@ The page is split into two panels. On the left, a simple chat interface. On the 
 The complete working code is available in the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository:
 
 - **[Weather Agent](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/weather)** is a single-agent chat with a weather tool, as above, with our signature AG2 styling
+
+## Frontend Libraries
+
+The HTML approach above is great for understanding the protocol, but AG-UI's ecosystem includes frontend libraries that handle event consumption and provide pre-built UI components:
+
+- **[CopilotKit](https://www.copilotkit.ai/)** -- The team behind AG-UI. Provides React components (`<CopilotChat />`), hooks for bidirectional state sync (`useCoAgent`), and human-in-the-loop patterns (`useCopilotAction`). Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
+- **[`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview)** -- AG-UI's TypeScript SDK. Gives you typed event subscribers, middleware, and connection management without any UI framework -- useful if you want full control over the rendering.
+
+These libraries consume the same AG-UI event stream that our vanilla frontend does. The backend code (the `AGUIStream` + FastAPI endpoint) stays exactly the same regardless of which frontend approach you choose.
 
 ## What About Multi-Agent?
 
