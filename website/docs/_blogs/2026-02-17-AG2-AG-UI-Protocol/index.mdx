@@ -22,7 +22,7 @@ You've built an agent with AG2. It reasons, calls tools, and streams responses. 
 
 [AG-UI](https://docs.ag-ui.com/introduction) (Agent-User Interaction Protocol) is an open, lightweight, event-based protocol that standardizes this agent-to-UI layer. AG2 now supports AG-UI natively, meaning you can connect any `ConversableAgent` to an AG-UI-compatible frontend with just a couple of lines of code.
 
-In this post, we'll look under the hood at how the protocol works by building a working agent chat application from scratch using a `ConversableAgent` with a weather tool, through the AG-UI event stream, to a browser frontend that renders streaming text and an interactive tool card. We'll consume the raw SSE events directly in vanilla HTML/JS (without React, for example) so you can see exactly what AG-UI does at the protocol level. At the end, we'll point you to production-ready frontend libraries that handle all of this for you.
+In this post, we'll look under the hood at how the protocol works by building a working agent chat application from scratch using a `ConversableAgent` with a weather tool, sending AG-UI events to a browser frontend that renders streaming text and an interactive tool card. Simple HTML, no frontend framework required.
 
 ![AG2 Agent Chat powered by AG-UI](img/ag2-ag-ui-demo.gif)
 
@@ -427,10 +427,10 @@ The complete working code is available in the [build-with-ag2](https://github.co
 
 The HTML approach above is great for understanding the protocol, but AG-UI's ecosystem includes frontend libraries that handle event consumption and provide pre-built UI components:
 
-- **[CopilotKit](https://www.copilotkit.ai/)** -- The team behind AG-UI. Provides React components (`<CopilotChat />`), hooks for bidirectional state sync (`useCoAgent`), and human-in-the-loop patterns (`useCopilotAction`). Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
-- **[`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview)** -- AG-UI's TypeScript SDK. Gives you typed event subscribers, middleware, and connection management without any UI framework -- useful if you want full control over the rendering.
+- **[CopilotKit](https://www.copilotkit.ai/)**: The team behind AG-UI. Provides React components, hooks for bidirectional state sync, and human-in-the-loop patterns. Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
+- **[`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview)**: AG-UI's TypeScript SDK. Gives you typed event subscribers, middleware, and connection management without any UI framework, useful if you want full control over the rendering.
 
-These libraries consume the same AG-UI event stream that our vanilla frontend does. The backend code (the `AGUIStream` + FastAPI endpoint) stays exactly the same regardless of which frontend approach you choose.
+Whether you decide to do the frontend yourself or use the components above, the AG2 backend code stays exactly the same.
 
 ## What About Multi-Agent?
 
