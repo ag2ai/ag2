@@ -425,12 +425,22 @@ The complete working code is available in the [build-with-ag2](https://github.co
 
 ## Frontend Libraries
 
-The HTML approach above is great for understanding the protocol, but AG-UI's ecosystem includes frontend libraries that handle event consumption and provide pre-built UI components:
+The HTML approach above is great for understanding the protocol, but AG-UI's ecosystem includes frontend libraries that handle event consumption and provide pre-built UI components.
 
-- **[CopilotKit](https://www.copilotkit.ai/)**: The team behind AG-UI. Provides React components, hooks for bidirectional state sync, and human-in-the-loop patterns. Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
-- **[`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview)**: AG-UI's TypeScript SDK. Gives you typed event subscribers, middleware, and connection management without any UI framework, useful if you want full control over the rendering.
+**[CopilotKit](https://www.copilotkit.ai/)**, the team behind AG-UI, provides React components, hooks for bidirectional state sync, and human-in-the-loop patterns. Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
 
-Whether you decide to do the frontend yourself or use the components above, the AG2 backend code stays exactly the same.
+With CopilotKit, for example, the entire frontend becomes:
+
+```tsx
+import { CopilotKit } from "@copilotkit/react-core";
+import { CopilotChat } from "@copilotkit/react-ui";
+
+<CopilotKit runtimeUrl="/api/copilotkit" agent="weather_agent">
+  <CopilotChat />
+</CopilotKit>
+```
+
+All the SSE parsing, event routing, and streaming text rendering from our manual frontend is handled for you. The backend stays exactly the same with `AGUIStream` serving the same AG-UI events regardless of which frontend consumes them.
 
 ## What About Multi-Agent?
 
