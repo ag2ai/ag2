@@ -31,17 +31,17 @@ Use AG-UI when you want a reusable UI contract across clients and frameworks.
 
 Verified in AG2 code/tests:
 
-- [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)  
+* [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
   Source: `autogen/ag_ui/adapter.py`, `test/ag_ui/test_adapter.py`
-- [x] Backend tool lifecycle events (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)  
+* [x] Backend tool lifecycle events (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)
   Source: `autogen/ag_ui/adapter.py`, `test/ag_ui/test_adapter.py`
-- [x] Frontend-tool dispatch (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)  
+* [x] Frontend-tool dispatch (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
   Source: `autogen/ag_ui/adapter.py`, `test/ag_ui/test_adapter.py`
-- [x] Shared-state snapshots (`STATE_SNAPSHOT`) from context and agent state  
+* [x] Shared-state snapshots (`STATE_SNAPSHOT`) from context and agent state
   Source: `autogen/ag_ui/adapter.py`, `test/ag_ui/test_adapter.py`
-- [x] Human input checkpoints (`input_required` surfaced as user-visible message events)  
+* [x] Human input checkpoints (`input_required` surfaced as user-visible message events)
   Source: `autogen/ag_ui/adapter.py`
-- [x] ASGI endpoint generation via `build_asgi()` for Starlette/FastAPI apps  
+* [x] ASGI endpoint generation via `build_asgi()` for Starlette/FastAPI apps
   Source: `autogen/ag_ui/asgi.py`, `test/ag_ui/test_asgi.py`
 
 ## Architecture
@@ -85,7 +85,7 @@ Compatibility note: the `ag-ui` extra pins `ag-ui-protocol>=0.1.10,<0.2` in this
 
 Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
 
-```python title="run_ag_ui.py" linenums="1"
+```python title="run_ag_ui.py" linenums="1" hl_lines="13 16-24"
 from fastapi import FastAPI, Header
 from fastapi.responses import StreamingResponse
 
@@ -103,7 +103,10 @@ app = FastAPI()
 
 
 @app.post("/chat")
-async def run_agent(message: RunAgentInput, accept: str | None = Header(None)) -> StreamingResponse:
+async def run_agent(
+    message: RunAgentInput,
+    accept: str | None = Header(None),
+) -> StreamingResponse:
     return StreamingResponse(
         stream.dispatch(message, accept=accept),
         media_type=accept or "text/event-stream",
@@ -150,9 +153,9 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 - Tool UI rendering hooks/components
 - Shared state patterns for interactive workflows
 
-Start from the [CopilotKit UI quickstart](./copilotkit-quickstart.mdx).
+Start from the [CopilotKit UI quickstart](./copilotkit-quickstart).
 
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart.mdx) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart) to connect a React/Next.js client.
