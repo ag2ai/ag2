@@ -324,6 +324,31 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
 
         content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
+    # Escape JSX double curly braces in code blocks to prevent Jinja macro parsing errors
+    # This handles patterns like labels={{ ... }} or style={{ ... }} inside code fences
+    # We use Jinja's escape syntax: {{ "{{" }} outputs {{ literally
+    def escape_jsx_curly_braces_in_code_blocks(content: str) -> str:
+        """Escape {{ and }} in code blocks using Jinja escape syntax."""
+        import re
+
+        # Match code blocks (fenced code blocks with ```)
+        code_block_pattern = re.compile(r"(```[^\n]*\n.*?```)", re.DOTALL)
+
+        def escape_curly_braces_in_block(match: re.Match[str]) -> str:
+            code_block = match.group(1)
+            # Use a temporary placeholder to avoid double-replacement issues
+            # First replace }} with placeholder (process closing braces first to avoid conflicts)
+            code_block = code_block.replace("}}", "__JSX_CLOSE_PLACEHOLDER__")
+            # Then replace {{ with Jinja escape syntax
+            code_block = code_block.replace("{{", '{{ "{{" }}')
+            # Finally restore }}
+            code_block = code_block.replace("__JSX_CLOSE_PLACEHOLDER__", '{{ "}}" }}')
+            return code_block
+
+        return code_block_pattern.sub(escape_curly_braces_in_block, content)
+
+    content = escape_jsx_curly_braces_in_code_blocks(content)
+
     # Clean up style tags with double curly braces
     style_pattern = r"style\s*=\s*{{\s*([^}]+)\s*}}"
 
