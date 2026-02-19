@@ -1,0 +1,164 @@
+---
+sidebarTitle: CopilotKit Quickstart
+title: "CopilotKit UI Quickstart for AG-UI"
+description: "Connect a React/Next.js CopilotKit UI to an AG2 AG-UI runtime endpoint."
+---
+
+This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks AG-UI.
+
+## What you'll build
+
+- A streaming chat UI in Next.js
+- Tool call rendering hooks for interactive UI actions
+- Shared state synchronization between frontend and runtime payloads
+
+## Prerequisites
+
+- Python backend runtime with an AG-UI endpoint (for example, `/chat` from [AG-UI integration](./index.mdx))
+- Node.js and a Next.js frontend
+- Backend model credentials (for example `OPENAI_API_KEY`) required by your AG2 agent
+- If your backend is protected, an auth strategy (header/cookie/token) for runtime requests
+
+## Quickstart
+
+1. Start an AG-UI backend endpoint (example: `http://127.0.0.1:8000/chat`).
+2. Create or open a Next.js app.
+3. Install CopilotKit packages in the UI app.
+4. Add a runtime route (`/api/copilotkit`) that forwards requests to your backend AG-UI endpoint.
+5. Wrap your app with `CopilotKit` provider and render a chat UI component.
+
+Runnable reference implementation: [AG2 CopilotKit starter](https://github.com/ag2ai/ag2-copilotkit-starter){.external-link target="_blank"}.
+
+## Connect to the runtime URL
+
+The runtime route below is adapted from this repository's CopilotKit integration article.
+
+```tsx title="ui/app/api/copilotkit/route.ts"
+import { CopilotRuntime, CustomHttpAgent } from "@copilotkit/runtime";
+import { copilotRuntimeHandler } from "@copilotkit/runtime/nextjs";
+
+const BASE_URL = "http://127.0.0.1:8000";
+
+const aguiAgent = new CustomHttpAgent({
+  url: `${BASE_URL}/chat`,
+});
+
+const runtime = new CopilotRuntime({
+  agents: { aguiAgent },
+});
+
+export const { GET, POST } = copilotRuntimeHandler(runtime);
+```
+
+Provider wiring with runtime URL:
+
+```tsx title="ui/app/layout.tsx"
+import { CopilotKit } from "@copilotkit/react-core";
+import "@copilotkit/react-ui/styles.css";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <CopilotKit agent="aguiAgent" runtimeUrl="/api/copilotkit" showDevConsole={false}>
+          {children}
+        </CopilotKit>
+      </body>
+    </html>
+  );
+}
+```
+
+If your backend enforces CORS/auth, configure those before starting the UI (details in Production notes).
+
+## Chat UI
+
+```tsx title="ui/app/page.tsx"
+"use client";
+
+import { CopilotSidebar } from "@copilotkit/react-ui";
+
+export default function Home() {
+  return (
+    <main>
+      <CopilotSidebar
+        defaultOpen={true}
+        labels={{
+          title: "Support Assistant",
+          initial: "Hi, I can help with billing and account questions.",
+        }}
+      />
+    </main>
+  );
+}
+```
+
+## Tool UI rendering
+
+```tsx title="ui/app/tool-rendering.tsx"
+// Pseudocode - replace with the current CopilotKit frontend-actions API:
+// https://docs.copilotkit.ai/ag2/frontend-actions
+
+registerFrontendTool({
+  name: "request_approval",
+  render: ({ args, status, respond }) => (
+    <ApprovalCard
+      title={args.title}
+      status={status}
+      onApprove={() => respond({ approved: true })}
+      onReject={() => respond({ approved: false })}
+    />
+  ),
+});
+```
+
+Expected behavior: when your AG2 agent emits a matching frontend tool/action call, the UI renders this component and sends the user decision back to the runtime.
+
+## Shared state
+
+```tsx title="ui/app/shared-state.tsx"
+// Pseudocode - replace with your CopilotKit shared-state API.
+// Initialize state and push updates back into the runtime payload.
+
+const [sharedState, updateSharedState] = copilotkitSharedState({
+  initial: { currency: "USD", locale: "en-US" },
+});
+
+function setCurrency(currency: string) {
+  updateSharedState({ ...sharedState, currency });
+}
+```
+
+On the backend, AG2 receives frontend state in `RunAgentInput.state`; AG2 may emit new `STATE_SNAPSHOT` events after context changes.
+
+## Expected output
+
+After setup:
+
+- The Next.js page shows a Copilot chat sidebar
+- User messages stream token-by-token/segment-by-segment from the AG2 runtime
+- Tool/action calls can render custom UI cards/components
+- Shared-state changes in the UI are reflected in backend run state and subsequent responses
+
+## Production notes
+
+- CORS: allow your frontend origin on the AG-UI backend (`POST`, `OPTIONS`, auth headers).
+- Auth: protect both `/api/copilotkit` and backend `/chat` (token/header/cookie); do not rely on client-only secrets.
+- Deployment topology: keep frontend runtime route and AG-UI backend on trusted internal network paths where possible.
+- Timeouts/retries: configure conservative client and server timeouts for long-running tool workflows and retry only idempotent requests.
+
+## Troubleshooting
+
+- CORS errors (`blocked by CORS policy`): check backend `Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, and preflight handling.
+- No streaming output: verify backend response `Content-Type` is `text/event-stream` and that proxy layers do not buffer SSE.
+- Tool UI not rendering: ensure emitted tool/action names match UI registration names exactly.
+- Backend receives empty state: verify frontend is sending initial state and subsequent updates with each runtime request.
+
+## Security considerations
+
+Treat tool inputs and shared state as untrusted user-controlled data. Validate and authorize server-side before invoking privileged tools, and log tool execution with request identifiers for auditability.
+
+## Version and compatibility notes
+
+- AG2 side in this repo uses `ag2[ag-ui]` with `ag-ui-protocol>=0.1.10,<0.2` (`pyproject.toml`).
+- Use CopilotKit runtime/react packages that support `CopilotRuntime`, `CustomHttpAgent`, and `runtimeUrl`-based provider wiring shown above.
