@@ -17,7 +17,7 @@ This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 bac
 - Python backend runtime with an AG-UI endpoint (for example, `/chat` from [AG-UI integration](./))
 - Node.js and a Next.js frontend
 - CopilotKit + AG-UI client packages in your frontend:
-  `@copilotkit/react-core`, `@copilotkit/react-ui`, `@copilotkit/runtime`, `@ag-ui/client`
+  `@copilotkit/react-core`, `@copilotkit/runtime`, `@ag-ui/client`, `zod`
 - Backend model credentials (for example `OPENAI_API_KEY`) required by your AG2 agent
 - If your backend is protected, an auth strategy (header/cookie/token) for runtime requests
 
@@ -67,7 +67,7 @@ Provider wiring with runtime URL:
 
 ```tsx title="ui/app/layout.tsx"
 import { CopilotKit } from "@copilotkit/react-core";
-import "@copilotkit/react-ui/styles.css";
+import "@copilotkit/react-core/v2/styles.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -82,6 +82,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
+This guide uses CopilotKit v2 hooks/components from `@copilotkit/react-core/v2`. The `<CopilotKit>` provider is imported from `@copilotkit/react-core`.
+
 If your backend enforces CORS/auth, configure those before starting the UI (details in Production notes).
 
 ## Chat UI
@@ -89,7 +91,7 @@ If your backend enforces CORS/auth, configure those before starting the UI (deta
 ```tsx title="ui/app/page.tsx"
 "use client";
 
-import { CopilotSidebar } from "@copilotkit/react-ui";
+import { CopilotSidebar } from "@copilotkit/react-core/v2";
 
 export default function Home() {
   return (
@@ -109,23 +111,30 @@ export default function Home() {
 ## Tool UI rendering
 
 ```tsx title="ui/app/tool-rendering.tsx"
-import { useFrontendTool } from "@copilotkit/react-core";
+import { z } from "zod";
+import { ToolCallStatus, useFrontendTool } from "@copilotkit/react-core/v2";
 
 export function OrderStatusTool() {
   useFrontendTool({
     name: "show_order_status_card",
     description: "Render order status in the chat UI.",
-    parameters: [
-      { name: "orderId", type: "string", description: "Order identifier", required: true },
-      { name: "status", type: "string", description: "Order status text", required: true },
-    ],
-    handler: async ({ orderId, status }) => ({ orderId, status }),
-    render: ({ args }) => (
-      <div>
-        <strong>Order {args.orderId}</strong>
-        <p>Status: {args.status}</p>
-      </div>
-    ),
+    parameters: z.object({
+      orderId: z.string().describe("Order identifier"),
+      status: z.string().describe("Order status text"),
+    }),
+    handler: async ({ orderId, status }) => JSON.stringify({ orderId, status }),
+    render: ({ args, status: toolStatus, result }) => {
+      if (toolStatus === ToolCallStatus.InProgress) {
+        return <div>Loading order status...</div>;
+      }
+      const payload = result ? JSON.parse(result) : args;
+      return (
+        <div>
+          <strong>Order {payload.orderId}</strong>
+          <p>Status: {payload.status}</p>
+        </div>
+      );
+    },
   });
 
   return null;
@@ -196,3 +205,4 @@ Treat tool inputs and shared state as untrusted user-controlled data. Validate a
 
 - AG2 side in this repo uses `ag2[ag-ui]` with `ag-ui-protocol>=0.1.10,<0.2` (`pyproject.toml`).
 - CopilotKit examples on `main` currently use `CopilotRuntime` + `ExperimentalEmptyAdapter` + `copilotRuntimeNextJSAppRouterEndpoint` (from `@copilotkit/runtime`) and `HttpAgent` (from `@ag-ui/client`) for runtime-to-agent wiring.
+- CopilotKit v2 hooks/components in this guide import from `@copilotkit/react-core/v2` (for example `useAgent`, `useFrontendTool`, `CopilotSidebar`).
