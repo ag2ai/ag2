@@ -1282,7 +1282,10 @@ class TestEnsureMdExtension:
         assert _ensure_md_extension("../overview.md#section") == "../overview.md#section"
 
     def test_deep_path_no_extension(self) -> None:
-        assert _ensure_md_extension("../../user-guide/basic-concepts/installing-ag2") == "../../user-guide/basic-concepts/installing-ag2.md"
+        assert (
+            _ensure_md_extension("../../user-guide/basic-concepts/installing-ag2")
+            == "../../user-guide/basic-concepts/installing-ag2.md"
+        )
 
     def test_relative_dot_path(self) -> None:
         assert _ensure_md_extension("./overview") == "./overview.md"

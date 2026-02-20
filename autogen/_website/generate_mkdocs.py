@@ -199,7 +199,7 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
         A relative path from source to destination (e.g., "../user-guide/basic-concepts/installing-ag2")
     """
     sep = os.sep
-    source_dir = os.path.dirname(source_path) if not os.path.basename(source_path) == "" else source_path
+    source_dir = os.path.dirname(source_path) if os.path.basename(source_path) != "" else source_path
     is_index = Path(source_path).stem == "index"
 
     try:
