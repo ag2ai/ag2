@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -319,34 +319,40 @@ def process_notebook(
         relative_notebook = src_notebook.resolve().relative_to(notebook_dir.resolve())
         dest_dir = target_dir_func(website_build_directory)
         target_file = dest_dir / relative_notebook.with_suffix(".mdx")
-        intermediate_notebook = dest_dir / relative_notebook
-
-        # If the intermediate_notebook already exists, check if it is newer than the source file
+        # If the target file already exists, check if it is newer than the source file
         if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
             return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")
 
-        # Copy notebook to target dir
-        # The reason we copy the notebook is that quarto does not support rendering from a different directory
-        shutil.copy(src_notebook, intermediate_notebook)
+        # Render in an isolated temp directory so parallel quarto processes cannot
+        # see each other's intermediate notebooks
+        with tempfile.TemporaryDirectory() as _tmpdir:
+            tmp_dir = Path(_tmpdir)
+            tmp_notebook = tmp_dir / src_notebook.name
 
-        # Check if another file has to be copied too
-        # Solely added for the purpose of agent_library_example.json
-        if "extra_files_to_copy" in metadata:
-            for file in metadata["extra_files_to_copy"]:
-                shutil.copy(src_notebook.parent / file, dest_dir / file)
+            shutil.copy(src_notebook, tmp_notebook)
 
-        # Capture output
-        result = subprocess.run([quarto_bin, "render", intermediate_notebook], capture_output=True, text=True)
-        if result.returncode != 0:
-            return fmt_error(
-                src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
-            )
+            (tmp_dir / "_quarto.yml").write_text("format: docusaurus-md\n", encoding="utf-8")
 
-        # Unlink intermediate files
-        intermediate_notebook.unlink()
+            # Check if another file has to be copied too
+            if "extra_files_to_copy" in metadata:
+                for file in metadata["extra_files_to_copy"]:
+                    shutil.copy(src_notebook.parent / file, tmp_dir / file)
+
+            # Capture output
+            result = subprocess.run([quarto_bin, "render", tmp_notebook], capture_output=True, text=True)
+            if result.returncode != 0:
+                return fmt_error(
+                    src_notebook,
+                    f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}",
+                )
+
+            # Copy the rendered .mdx output to the final destination
+            tmp_output = tmp_notebook.with_suffix(".mdx")
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(tmp_output, target_file)
     else:
         target_file = src_notebook.with_suffix(".mdx")
 
@@ -386,6 +392,12 @@ def create_base_argument_parser() -> argparse.ArgumentParser:
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
     render_parser.add_argument("--dry-run", help="Don't render", action="store_true")
+    render_parser.add_argument(
+        "--workers",
+        help="Number of parallel workers for rendering (default: number of CPUs). Use 1 to render sequentially.",
+        type=int,
+        default=-1,
+    )
     render_parser.add_argument("notebooks", type=path, nargs="*", default=None)
 
     test_parser = subparsers.add_parser("test")
@@ -459,17 +471,23 @@ def process_notebooks_core(
         if not target_dir.exists():
             target_dir.mkdir(parents=True)
 
-        for notebook in filtered_notebooks:
-            print(
-                process_notebook(
-                    notebook,
-                    args.website_build_directory,
-                    args.notebook_directory,
-                    args.quarto_bin,
-                    args.dry_run,
-                    target_dir_func,
-                    post_process_func,
-                )
+        max_workers = None if args.workers == -1 else args.workers
+
+        def _render_one(notebook: Path) -> str:
+            return process_notebook(
+                notebook,
+                args.website_build_directory,
+                args.notebook_directory,
+                args.quarto_bin,
+                args.dry_run,
+                target_dir_func,
+                post_process_func,
             )
+
+        render_executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        with render_executor:
+            render_futures = {render_executor.submit(_render_one, nb): nb for nb in filtered_notebooks}
+            for render_future in concurrent.futures.as_completed(render_futures):
+                print(render_future.result())
 
     return filtered_notebooks
