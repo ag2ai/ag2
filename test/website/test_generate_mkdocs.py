@@ -12,6 +12,7 @@ import pytest
 
 from autogen._website.generate_mkdocs import (
     _ensure_md_extension,
+    _transform_api_anchor,
     absolute_to_relative,
     add_api_ref_to_mkdocs_template,
     add_authors_info_to_user_stories,
@@ -1259,10 +1260,33 @@ def test_fix_internal_references() -> None:
 
         assert actual == expected
 
+        # fix_internal_references only resolves paths; fragments are not its concern.
+        # In fix_internal_links the fragment is split off before calling this function,
+        # then transformed separately via _transform_api_anchor.
         actual = fix_internal_references("/docs/api-reference/autogen/ConversableAgent#initiate-all-chats", tmpdir_path)
-        expected = "/docs/api-reference/autogen/ConversableAgent#autogen.ConversableAgent.initiate_all_chats"
+        expected = "/docs/api-reference/autogen/ConversableAgent#initiate-all-chats"
 
         assert actual == expected
+
+
+def test_transform_api_anchor() -> None:
+    # Method anchor: kebab-case → full dotted mkdocstrings path
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "initiate-all-chats")
+        == "autogen.ConversableAgent.initiate_all_chats"
+    )
+    # Class-level anchor (fragment matches class name) → module_prefix only
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "conversableagent")
+        == "autogen.ConversableAgent"
+    )
+    # Non-API-reference link → fragment unchanged
+    assert _transform_api_anchor("/docs/home/quickstart", "some-section") == "some-section"
+    # Already in dotted format → unchanged
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "autogen.ConversableAgent.initiate_chat")
+        == "autogen.ConversableAgent.initiate_chat"
+    )
 
 
 class TestEnsureMdExtension:
