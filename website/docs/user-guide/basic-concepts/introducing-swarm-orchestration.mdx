@@ -37,7 +37,7 @@ This pattern leverages specialized skills while maintaining a cohesive workflow 
 
 ## From Concept to Implementation
 
-Implementing a swarm in AG2 is straightforward using the [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat) method:
+Implementing a swarm in AG2 is straightforward using the `initiate_swarm_chat` method:
 
 ```python hl_lines="12-18"
 from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
@@ -100,7 +100,7 @@ import random
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.environ.get("OPENAI_API_KEY"),
@@ -246,7 +246,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(config_list={
+    llm_config = LLMConfig({
         "api_type": "openai",
         "model": "gpt-5-nano",
         "api_key": os.environ.get("OPENAI_API_KEY"),
@@ -517,7 +517,7 @@ Here's the updated code that incorporates automatic termination:
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(config_list={
+    llm_config = LLMConfig({
         "api_type": "openai",
         "model": "gpt-5-nano",
         "api_key": os.environ.get("OPENAI_API_KEY"),

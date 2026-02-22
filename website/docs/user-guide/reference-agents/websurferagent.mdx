@@ -13,7 +13,7 @@ The [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurfer
 2. [Crawl4AI](https://github.com/unclecode/crawl4ai) - crawls without a visual browser instance
 
 <Tip>
-If you want to add browsing capabilities to your existing agents, see [this notebook for browser-use](/docs/use-cases/notebooks/notebooks/tools_browser_use) and [this notebook for Crawl4AI](/docs/use-cases/notebooks/notebooks/tools_crawl4ai).
+If you want to add browsing capabilities to your existing agents, see [this notebook for browser-use](/docs/use-cases/notebooks/notebooks/agentchat_tools_browser_use) and [this notebook for Crawl4AI](/docs/use-cases/notebooks/notebooks/agentchat_tools_crawl4ai).
 </Tip>
 
 <Warning>
@@ -75,7 +75,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
     websurfer = WebSurferAgent(
@@ -94,7 +94,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
     websurfer = WebSurferAgent(
@@ -108,7 +108,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 
 
 <Tip>
-Crawl4AI doesn't always require an LLM configuration, see [this notebook](/docs/use-cases/notebooks/notebooks/tools_crawl4ai) for examples with and without one.
+Crawl4AI doesn't always require an LLM configuration, see [this notebook](/docs/use-cases/notebooks/notebooks/agentchat_tools_crawl4ai) for examples with and without one.
 </Tip>
 
 Let's browse the web for news on AG2.

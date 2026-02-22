@@ -29,6 +29,7 @@ setuptools.setup(
     install_requires=["ag2==" + __version__],
     extras_require={
         "a2a": ["ag2[a2a]==" + __version__],
+        "ag-ui": ["ag2[ag-ui]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
         "openai-realtime": ["ag2[openai-realtime]==" + __version__],
@@ -79,6 +80,7 @@ setuptools.setup(
         "ollama": ["ag2[ollama]==" + __version__],
         "bedrock": ["ag2[bedrock]==" + __version__],
         "deepseek": ["ag2[deepseek]==" + __version__],
+        "tracing": ["ag2[tracing]==" + __version__],
         "commsagent-discord": ["ag2[commsagent-discord]==" + __version__],
         "commsagent-slack": ["ag2[commsagent-slack]==" + __version__],
         "commsagent-telegram": ["ag2[commsagent-telegram]==" + __version__],

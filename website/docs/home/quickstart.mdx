@@ -6,7 +6,7 @@ mode: "wide"
 <div class="homepage-hero-section">
   <div class="hero-content">
     <div class="hero-logo-section">
-      <img class="hero-logo" noZoom src="../../assets/img/ag2.svg" alt="AG2 Logo" />
+      <img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
     </div>
     <div class="hero-text-section">
       <h2 class="hero-title">Open-Source AgentOS for AI Agents</h2>
@@ -36,7 +36,7 @@ AG2 (formerly AutoGen) is an open-source framework for building AI agents and en
     <CardGroup cols={3}>
         <Card>
             <div class="key-feature">
-                <img noZoom src="/static/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+                <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
                 <div class="key-feature-text">
                     <b>Multi-Agent Conversation Framework</b>
                     <p>AG2 provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows.</p>
@@ -45,7 +45,7 @@ AG2 (formerly AutoGen) is an open-source framework for building AI agents and en
         </Card>
         <Card>
             <div class="key-feature">
-                <img noZoom src="/static/img/autogen_app.svg" alt='Easily Build Diverse Applications' />
+                <img noZoom src="/assets/img/autogen_app.svg" alt='Easily Build Diverse Applications' />
                 <div class="key-feature-text">
                     <b>Easily Build Diverse Applications</b>
                     <p>AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.</p>
@@ -54,7 +54,7 @@ AG2 (formerly AutoGen) is an open-source framework for building AI agents and en
         </Card>
         <Card>
             <div class="key-feature">
-                <img noZoom src="/static/img/extend.svg" alt='Enhanced LLM Inference & Optimization' />
+                <img noZoom src="/assets/img/extend.svg" alt='Enhanced LLM Inference & Optimization' />
                 <div class="key-feature-text">
                     <b>Enhanced LLM Inference & Optimization</b>
                     <p>AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.</p>
@@ -113,7 +113,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 my_agent = ConversableAgent(
@@ -137,7 +137,7 @@ print(response.messages)
 
 <Note>
 
-Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
+Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](/docs/user-guide/models/amazon-bedrock) supported by AG2.
 
 === "macOS / Linux"
 
@@ -184,7 +184,7 @@ AG2 provides several foundational agent types and interaction patterns to build 
 
 ### Conversable agent
 
-The [ConversableAgent](../api-reference/autogen/ConversableAgent) is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
+The [ConversableAgent](/docs/api-reference/autogen/ConversableAgent) is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
 
 In the example below, we'll create a simple information validation workflow with two specialized agents that communicate with each other:
 
@@ -197,7 +197,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 
 # 3. Create our LLM agent
@@ -245,7 +245,7 @@ load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 assistant = ConversableAgent(
@@ -287,7 +287,7 @@ import os
 load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -360,7 +360,7 @@ teacher.initiate_chat(
 
 When executed, this code creates a collaborative system where the teacher initiates the conversation, and the lesson planner and reviewer agents work together to create and refine a lesson plan. The GroupChatManager orchestrates the conversation, selecting the next agent to respond based on the context of the discussion.
 
-For workflows requiring more structured processes, explore the Swarm pattern in the detailed [documentation](../user-guide/advanced-concepts/conversation-patterns-deep-dive).
+For workflows requiring more structured processes, explore the Swarm pattern in the detailed [documentation](/docs/user-guide/basic-concepts/introducing-swarm-orchestration).
 
 ### Tools
 
@@ -384,7 +384,7 @@ import os
 load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
@@ -428,11 +428,9 @@ When executed, this code determines that March 25, 1995, was a Saturday—delive
 
 AG2 offers sophisticated patterns and capabilities to build production-ready agent systems for complex use cases. These advanced features enable you to create robust, secure, and highly functional agent workflows.
 
-- [Structured Output](../user-guide/basic-concepts/llm-configuration/structured-outputs)
-- [Ending a chat](../user-guide/basic-concepts/orchestration/ending-a-chat)
-- [Retrieval Augmented Generation (RAG)](../user-guide/advanced-concepts/rag)
-- [Code Execution](../user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](../user-guide/basic-concepts/tools/tools-with-secrets)
+- [Structured Output](/docs/user-guide/basic-concepts/structured-outputs)
+- [Retrieval Augmented Generation (RAG)](/docs/user-guide/advanced-concepts/rag)
+- [Code Execution](/docs/user-guide/advanced-concepts/code-execution)
 
 ## Popular resources
 
@@ -442,7 +440,7 @@ Our dedicated <a href="https://github.com/ag2ai/build-with-ag2" target="_blank">
 
 ### Interactive Tutorials
 
-Explore our collection of [Jupyter Notebooks](../use-cases/notebooks/Notebooks) for hands-on learning experiences. These interactive tutorials cover everything from basic agent creation to advanced orchestration patterns, with step-by-step explanations and executable code samples that you can modify and experiment with in real-time.
+Explore our collection of [Jupyter Notebooks](/docs/use-cases/notebooks/Notebooks) for hands-on learning experiences. These interactive tutorials cover everything from basic agent creation to advanced orchestration patterns, with step-by-step explanations and executable code samples that you can modify and experiment with in real-time.
 
 ### Video Resources
 

@@ -12,7 +12,7 @@ like PyTorch for Deep Learning. It offers features such as agents that can conve
 with other agents, LLM and tool use support, autonomous and human-in-the-loop workflows,
 and multi-agent conversation patterns.
 
-![AG2 Overview](/static/img/autogen_agentchat.png)
+![AG2 Overview](/assets/img/autogen_agentchat.png)
 
 ### Main Features
 
@@ -53,7 +53,7 @@ pip install autogen[openai]
 import os
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],
@@ -82,7 +82,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],
@@ -108,7 +108,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(config_list={
+llm_config = LLMConfig({
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],
@@ -148,7 +148,7 @@ By automating chat among multiple capable agents, one can easily make them colle
 
 The figure below shows an example conversation flow with AG2.
 
-![Agent Chat Example](/static/img/chat_example.png)
+![Agent Chat Example](/assets/img/chat_example.png)
 
 ### Where to Go Next?
 

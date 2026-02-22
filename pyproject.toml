@@ -66,6 +66,10 @@ a2a = [
     "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
 
+ag-ui = [
+    "ag-ui-protocol>=0.1.10,<0.2",
+]
+
 flaml = [
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
@@ -93,9 +97,9 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==6.32.0",
-    "chromadb>=1.3.0,<1.4",
-    "sentence_transformers>=3.0.0,<=5.1.0",
+    "protobuf==6.33.5",
+    "chromadb>=1.4.1,<1.5",
+    "sentence_transformers>=5.2.2,<=6",
     "pypdf",
     "ipython",
     "beautifulsoup4",
@@ -128,7 +132,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.8.0",
+    "graphrag_sdk==0.8.2",
     "falkordb>=1.0.10",
 ]
 
@@ -137,8 +141,8 @@ rag = [
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<2",
-    "llama-index>=0.12,<0.14",
-    "llama-index-core>=0.12,<0.14",
+    "llama-index>=0.14.13,<0.15",
+    "llama-index-core>=0.14.13,<0.15",
     "llama-index-vector-stores-chroma>=0.4,<0.6",
     "llama-index-vector-stores-mongodb>=0.6,<0.9",
     "llama-index-embeddings-huggingface>=0.5,<0.7",
@@ -150,7 +154,7 @@ rag = [
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.8",
+    "crawl4ai>=0.5.0,<0.9",
 ]
 
 browser-use = [
@@ -221,7 +225,7 @@ interop =[
 
 autobuild = [
     "chromadb>=1.3.0,<1.4",
-    "sentence_transformers>=3.0.0,<=5.1.0",
+    "sentence_transformers>=5.2.2,<=6",
     "huggingface-hub"
 ]
 
@@ -254,7 +258,7 @@ redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
-anthropic = ["anthropic[vertex]>=0.23.1"]
+anthropic = ["anthropic[vertex]>=0.79.0"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = [
     "yepcode-run>=1.6.1",
@@ -268,6 +272,12 @@ ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 deepseek = ["ag2[openai]"]
 
+tracing = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+]
+
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
 commsagent-telegram = ["telethon>=1.38.1, <2"]
@@ -279,7 +289,7 @@ tavily = ["tavily-python>=0.7.4"]
 
 # test dependencies
 test = [
-    "ipykernel==6.30.1",
+    "ipykernel==7.1.0",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
     "pandas==2.3.2",
@@ -296,6 +306,8 @@ test = [
 
 docs = [
     "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "ag2[tracing]",  # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
+    "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
@@ -326,7 +338,7 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
-    "ag2[test, openai, a2a]",
+    "ag2[test, openai, a2a, ag-ui]",
 ]
 
 lint = [
@@ -417,6 +429,7 @@ markers = [
     "commsagent_slack",
     "commsagent-telegram",
     "lmm",
+    "tracing",
 ]
 
 [tool.black]
@@ -535,7 +548,6 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
-    "autogen/remote",
     "autogen/a2a",
     "autogen/testing",
     "website/*.py",

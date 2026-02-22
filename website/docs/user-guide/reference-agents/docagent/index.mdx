@@ -1,4 +1,5 @@
 ---
+sidebarTitle: DocAgent
 title: DocAgent
 ---
 
@@ -144,7 +145,7 @@ Note that the request is handled in natural language and the output will show th
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgent
 document_agent = DocAgent(llm_config=llm_config)
@@ -459,7 +460,7 @@ However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/ag
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgents with their own collections
 # so that their ingested data and queries will be unique to them
@@ -479,4 +480,4 @@ document_agent_nvidia = DocAgent(
 
 ## Further examples
 
-See this [notebook](/docs/use-cases/notebooks/notebooks/agents_docagent) for more examples of using document agent.
+See this [notebook](/docs/use-cases/notebooks/notebooks/agentchat_agents_docagent) for more examples of using document agent.

@@ -1,0 +1,152 @@
+---
+title: MCP Client Session Manager
+sidebarTitle: Session Manager
+description: Manage multiple MCP server sessions dynamically with on-demand connections
+---
+
+The **MCPClientSessionManager** simplifies managing MCP (Model Context Protocol) client sessions by enabling on-demand session creation. Unlike the traditional approach where you open a session at startup and keep it alive, `MCPClientSessionManager` allows you to open sessions only when needed inside tool functions or agent workflows with automatic resource cleanup.
+
+Author: [Priyanshu Deshmukh](https://github.com/priyansh4320)
+
+## When to Use MCPClientSessionManager
+
+Use `MCPClientSessionManager` when you need:
+
+- **Multi-server workflows** — Connect to multiple MCP servers (arXiv, Wikipedia, APIs) in a single agent workflow
+- **Dynamic server selection** — Let agents choose which server to use based on the query context
+- **Resource efficiency** — Avoid keeping connections open when not in use
+- **Mixed transport types** — Work with both local `stdio` servers and remote `SSE` endpoints
+- **Tool-based architecture** — Integrate MCP servers as tools that agents invoke on-demand
+
+For single-server, long-running workflows where you maintain one persistent connection, use the standard [MCP Clients](/docs/user-guide/advanced-concepts/tools/mcp/client) approach instead.
+
+## Installation
+
+Install AG2 with MCP support:
+
+```bash
+pip install ag2[openai,mcp]
+```
+
+## Key Components
+
+### StdioConfig
+
+Configuration for stdio-based MCP servers (local processes). Communicates via stdin/stdout.
+
+```python
+from autogen.mcp.mcp_client import StdioConfig
+
+arxiv_server = StdioConfig(
+    command="python3",
+    args=["mcp/mcp_arxiv.py", "stdio", "--storage-path", "/tmp/arxiv_papers"],
+    transport="stdio",
+    server_name="ArxivServer",
+)
+```
+
+### SseConfig
+
+Configuration for SSE-based MCP servers (HTTP endpoints). Connects via Server-Sent Events.
+
+```python
+from autogen.mcp.mcp_client import SseConfig
+
+wikipedia_server = SseConfig(
+    url="http://127.0.0.1:8000/sse",
+    timeout=10,
+    sse_read_timeout=60,
+    server_name="WikipediaServer",
+)
+```
+
+### MCPConfig
+
+Container for multiple server configurations. Enables dynamic server selection at runtime.
+
+```python
+from autogen.mcp.mcp_client import MCPConfig, StdioConfig, SseConfig
+
+mcp_config = MCPConfig(
+    servers=[arxiv_server, wikipedia_server]
+)
+```
+
+## Basic Usage
+
+Open a session within an async context manager. The session is automatically initialized and cleaned up on exit:
+
+```python
+from autogen.mcp.mcp_client import MCPClientSessionManager, StdioConfig, create_toolkit
+
+arxiv_server = StdioConfig(
+    command="python3",
+    args=["mcp/mcp_arxiv.py", "stdio", "--storage-path", "/tmp/arxiv_papers"],
+    transport="stdio",
+    server_name="ArxivServer",
+)
+
+async with MCPClientSessionManager().open_session(arxiv_server) as session:
+    tools = await session.list_tools()
+    toolkit = await create_toolkit(session=session)
+    # Use the toolkit with your agent...
+```
+
+## Tool-Based Integration
+
+A powerful pattern is wrapping `MCPClientSessionManager` in a tool function, allowing agents to dynamically choose which MCP server to use:
+
+```python
+from autogen.mcp.mcp_client import (
+    MCPClientSessionManager,
+    MCPConfig,
+    StdioConfig,
+    SseConfig,
+    create_toolkit,
+)
+from autogen import ConversableAgent, LLMConfig
+from autogen.tools import Tool
+
+# Configure multiple servers
+mcp_config = MCPConfig(
+    servers=[
+        StdioConfig(
+            command="python3",
+            args=["mcp_arxiv.py", "stdio", "--storage-path", "/tmp/arxiv"],
+            transport="stdio",
+            server_name="ArxivServer",
+        ),
+        SseConfig(
+            url="http://127.0.0.1:8000/sse",
+            server_name="WikipediaServer",
+        ),
+    ]
+)
+
+async def query_mcp_server(server_name: str, query: str) -> str:
+    """Query an MCP server by name. Use ArxivServer for papers, WikipediaServer for articles."""
+    server = next(s for s in mcp_config.servers if s.server_name == server_name)
+    async with MCPClientSessionManager().open_session(server) as session:
+        toolkit = await create_toolkit(session=session)
+        # Use toolkit.tools to execute based on query...
+        return "Result from MCP server"
+
+# Register the tool with your agent
+agent = ConversableAgent(
+    name="researcher",
+    llm_config=LLMConfig(config_list={"model": "gpt-4o", "api_type": "openai"}),
+)
+agent.register_for_llm(description="Query MCP servers: ArxivServer or WikipediaServer")(query_mcp_server)
+```
+
+The agent can now decide at runtime which server to call based on the user's request.
+
+## Use Cases
+
+**Use cases:** (1) Building a research assistant that queries arXiv for papers and Wikipedia for articles in a single conversation; (2) Routing user queries to different data sources (database, API, file system) via multiple MCP servers; (3) Running one-off operations against servers without maintaining persistent connections.
+
+## Related Resources
+
+- [MCP Clients](/docs/user-guide/advanced-concepts/tools/mcp/client) — Standard MCP client setup and transport protocols
+- [Blog: AG2 Multi-MCP Session Management](/docs/blog/2025/12/24/AG2-MultiMCPSessionManager/) — Detailed guide with examples
+- [MCP Session Manager Example Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_mcp_session_manager_example.ipynb) — Full working example

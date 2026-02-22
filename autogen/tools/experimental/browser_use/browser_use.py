@@ -92,7 +92,7 @@ class BrowserUseTool(Tool):
             browser_config: The browser configuration to use. If defined, browser must be None
         """
         if llm_config is None:
-            llm_config = LLMConfig.current
+            raise ValueError("llm_config is required")
         if agent_kwargs is None:
             agent_kwargs = {}
         if browser_config is None:

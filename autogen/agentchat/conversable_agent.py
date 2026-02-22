@@ -498,9 +498,7 @@ class ConversableAgent(LLMAgent):
         cls, llm_config: LLMConfig | dict[str, Any] | Literal[False] | None
     ) -> LLMConfig | Literal[False]:
         if llm_config is None:
-            llm_config = LLMConfig.get_current_llm_config()
-            if llm_config is None:
-                return cls.DEFAULT_CONFIG
+            return cls.DEFAULT_CONFIG
 
         elif llm_config is False:
             return False

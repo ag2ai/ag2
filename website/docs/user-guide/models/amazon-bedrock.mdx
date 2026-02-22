@@ -237,7 +237,7 @@ llm_config_fast_fail = autogen.LLMConfig(config_list={
 })
 ```
 
-For more detailed information on retry configuration, see the [Exponential Backoff and Retry Configuration notebook](/notebook/agentchat_bedrock_client_exponential_backoff_and_retry_config).
+For more detailed information on retry configuration, see the [Exponential Backoff and Retry Configuration notebook](../../use-cases/notebooks/notebooks/agentchat_bedrock_client_exponential_backoff_and_retry_config.md).
 
 ## Two-agent Coding Example
 
@@ -738,10 +738,10 @@ In this simple example, we'll use an image on the Internet and send it to Anthro
 
 Here's the image we'll use:
 
-![I -heart- AutoGen](/static/img/love.png)
+![I -heart- AutoGen](/assets/img/love.png)
 
 ```python
-llm_config_sonnet = LLMConfig(config_list={
+llm_config_sonnet = LLMConfig({
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "aws_region": "us-east-1",
