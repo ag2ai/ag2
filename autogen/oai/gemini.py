@@ -647,11 +647,24 @@ class GeminiClient:
                     VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
             elif part_type == "tool":
-                # Function responses should be from the user
+                # Function responses should be from the user.
+                # Gemini requires that all function responses for a parallel function call
+                # turn are sent together in a single Content object. Merge consecutive
+                # tool responses into one Content.
                 role = "user"
-                rst.append(
-                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
-                )
+                if (
+                    rst
+                    and rst[-1].role == "user"
+                    and any(hasattr(p, "function_response") and p.function_response for p in rst[-1].parts)
+                ):
+                    # Previous Content already contains function responses — append to it
+                    rst[-1].parts.extend(parts)
+                else:
+                    rst.append(
+                        VertexAIContent(parts=parts, role=role)
+                        if self.use_vertexai
+                        else Content(parts=parts, role=role)
+                    )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
                 text_parts = []
