@@ -22,29 +22,9 @@ From the project root directory, install the necessary Python packages:
 pip install -e ".[docs]"
 ```
 
-### Building the Documentation
+### Building and Serving the Documentation
 
-To build the documentation locally, run the following command from the project root directory:
-
-```console
-./scripts/docs_build_mkdocs.sh
-```
-
-Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
-
-```console
-./scripts/docs_build_mkdocs.sh --force
-```
-
-### Serving the documentation
-
-Once the build is complete, please run the following command to serve the docs:
-
-```console
-./scripts/docs_serve_mkdocs.sh
-```
-
-This will spin up a server at port 8000, which you can access by visiting `http://localhost:8000` in your browser.
+**Note:** The scripts (`./scripts/docs_build_mkdocs.sh`, `./scripts/docs_serve_mkdocs.sh`, and any related automation) previously used for building and serving documentation have been removed from the codebase. Please refer to the main project README or contact project maintainers for updated instructions on how to build and serve documentation locally.
 
 ## Build with Dev Containers
 
@@ -68,35 +48,19 @@ Once your project is open in the Dev Container:
     pip install -e ".[docs]"
     ```
 
-- Build the documentation:
+- Build and serve the documentation using the updated workflow. (The commands referenced previously may no longer be available; check with the most recent project documentation or contact maintainers.)
 
-    ```console
-    ./scripts/docs_build_mkdocs.sh
-    ```
-
-- Serve the documentation:
-
-    ```console
-    ./scripts/docs_serve_mkdocs.sh
-    ```
-
-The documentation will be accessible at `http://localhost:8000` in your browser.
+The documentation will be accessible at `http://localhost:8000` in your browser if you follow the appropriate serving instructions.
 
 ## Handling updates or changes
 
 For any changes to be reflected in the documentation, you will need to:
 
-- Stop the running server
-- Run the build command again
-- Start the server again
+- Stop any running doc server
+- Follow the updated build/serve process as provided in the main project documentation
 
 
-When switching branches or making major changes to the documentation structure, you might occasionally notice deleted files still appearing or changes not showing up properly. This happens due to cached build files. In such cases, running the commands with the `--force` flag will clear the cache and rebuild everything from scratch:
-
-```console
-./scripts/docs_build_mkdocs.sh --force
-./scripts/docs_serve_mkdocs.sh
-```
+When switching branches or making major changes to the documentation structure, you might occasionally notice deleted files still appearing or changes not showing up properly. This happens due to cached build files. In previous workflows, running with the `--force` flag would clear the cache and rebuild from scratch; as the related scripts and automation have been removed, please check the latest project documentation or ask a maintainer for the current process to rebuild documentation and handle cache issues.
 
 
 ## Adding Notebooks to the Website
@@ -104,3 +68,5 @@ When switching branches or making major changes to the documentation structure, 
 When you want to add a new Jupyter notebook and have it rendered in the documentation, you need to follow specific guidelines to ensure proper integration with the website.
 
 Please refer to <a href="https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website" target="_blank">this</a> guideline for more details.
+ 
+  

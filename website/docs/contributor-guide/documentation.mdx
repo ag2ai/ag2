@@ -25,29 +25,9 @@ From the project root directory, install the necessary Python packages:
 pip install -e ".[docs]"
 ```
 
-### Building the Documentation
+### Building and Serving the Documentation
 
-To build the documentation locally, run the following command from the project root directory:
-
-```console
-./scripts/docs_build_mkdocs.sh
-```
-
-Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
-
-```console
-./scripts/docs_build_mkdocs.sh --force
-```
-
-### Serving the documentation
-
-Once the build is complete, please run the following command to serve the docs:
-
-```console
-./scripts/docs_serve_mkdocs.sh
-```
-
-This will spin up a server at port 8000, which you can access by visiting `http://localhost:8000` in your browser.
+**Note:** The previously available scripts for building and serving documentation (such as `./scripts/docs_build_mkdocs.sh`, `./scripts/docs_serve_mkdocs.sh`, `./scripts/docs_build.sh`, and `./scripts/docs_serve.sh`) have been removed from the codebase. Please refer to the project README or reach out to the maintainers for the current workflow for building and serving documentation locally.
 
 ## Build with Dev Containers
 
@@ -71,36 +51,21 @@ Once your project is open in the Dev Container:
     pip install -e ".[docs]"
     ```
 
-- Build the documentation:
+- Build and serve the documentation using the currently recommended workflow. (The scripts referenced previously may no longer be available; consult project documentation or maintainers for up-to-date instructions.)
 
-    ```console
-    ./scripts/docs_build_mkdocs.sh
-    ```
-
-- Serve the documentation:
-
-    ```console
-    ./scripts/docs_serve_mkdocs.sh
-    ```
-
-The documentation will be accessible at `http://localhost:8000` in your browser.
+The documentation will be accessible at `http://localhost:8000` in your browser, depending on the serving approach used.
 
 ## Handling updates or changes
 
 For any changes to be reflected in the documentation, you will need to:
 
-- Stop the running server
-- Run the build command again
-- Start the server again
+- Stop the running server (if applicable)
+- Re-run the build process (refer to up-to-date project documentation for this step)
+- Start the server again (if applicable)
 
 <Note>
 
-When switching branches or making major changes to the documentation structure, you might occasionally notice deleted files still appearing or changes not showing up properly. This happens due to cached build files. In such cases, running the commands with the `--force` flag will clear the cache and rebuild everything from scratch:
-
-```console
-./scripts/docs_build_mkdocs.sh --force
-./scripts/docs_serve_mkdocs.sh
-```
+When switching branches or making major changes to the documentation structure, you might occasionally notice deleted files still appearing or changes not showing up properly. This happens due to cached build files. The previous solution required running build commands with the `--force` flag using project scripts. As those scripts have been removed, please consult the current project documentation or maintainers for instructions on how to clear caches or fully rebuild documentation.
 
 </Note>
 
@@ -128,3 +93,5 @@ From the project root, run the following command to install the development depe
 pip install -e ".[dev]" && pre-commit install
 ```
 This ensures that every time you run git commit, a **series of checks will automatically be executed**.
+ 
+  
