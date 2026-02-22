@@ -1180,6 +1180,109 @@ class TestGeminiClient:
         else:
             assert result != tools_list
 
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_response_format_uses_response_json_schema_for_non_vertexai(
+        self, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that non-VertexAI path uses response_json_schema instead of response_schema.
+
+        This is the fix for issue #2348: Pydantic models with dict[str, SomeModel]
+        generate additionalProperties in the JSON schema, which the Google GenAI SDK
+        rejects via response_schema but accepts via response_json_schema.
+        """
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert "response_json_schema" in config_kwargs, (
+            "Non-VertexAI path should use response_json_schema"
+        )
+        assert "response_schema" not in config_kwargs, (
+            "Non-VertexAI path should NOT use response_schema"
+        )
+        assert config_kwargs["response_mime_type"] == "application/json"
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.GenerationConfig")
+    def test_response_format_uses_response_schema_for_vertexai(
+        self, mock_generation_config, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that VertexAI path still uses response_schema (not response_json_schema)."""
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=VertexAIGenerationResponse)
+        mock_response.candidates = [mock_candidate]
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client_with_credentials.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generation_config.call_args.kwargs
+        assert "response_schema" in config_kwargs, (
+            "VertexAI path should use response_schema"
+        )
+        assert "response_json_schema" not in config_kwargs, (
+            "VertexAI path should NOT use response_json_schema"
+        )
+
     def test_thought_signature_initialized_in_init(self, gemini_client):
         """Test that thought signature mapping is initialized in __init__"""
         assert hasattr(gemini_client, "tool_call_thought_signatures")

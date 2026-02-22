@@ -342,7 +342,10 @@ class GeminiClient:
                 response_schema = resolve_json_references(params.get("response_format").model_json_schema())
             if "$defs" in response_schema:
                 response_schema.pop("$defs")
-            generation_config["response_schema"] = response_schema
+            if self.use_vertexai:
+                generation_config["response_schema"] = response_schema
+            else:
+                generation_config["response_json_schema"] = response_schema
 
         # A. create and call the chat model.
         gemini_messages = self._oai_messages_to_gemini_messages(messages)
