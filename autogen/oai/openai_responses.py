@@ -580,7 +580,7 @@ class OpenAIResponsesClient:
                         else:
                             raise ValueError(f"Invalid content type: {c.get('type')}")
                 else:
-                    blocks.append({"type": content_type, "text": content})
+                    blocks.append({"type": content_type, "text": content or ""})
 
                 # Only append if we have valid content blocks
                 if blocks:
