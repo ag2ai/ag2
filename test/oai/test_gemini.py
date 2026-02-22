@@ -1226,12 +1226,8 @@ class TestGeminiClient:
         })
 
         config_kwargs = mock_generate_content_config.call_args.kwargs
-        assert "response_json_schema" in config_kwargs, (
-            "Non-VertexAI path should use response_json_schema"
-        )
-        assert "response_schema" not in config_kwargs, (
-            "Non-VertexAI path should NOT use response_schema"
-        )
+        assert "response_json_schema" in config_kwargs, "Non-VertexAI path should use response_json_schema"
+        assert "response_schema" not in config_kwargs, "Non-VertexAI path should NOT use response_schema"
         assert config_kwargs["response_mime_type"] == "application/json"
 
     @patch("autogen.oai.gemini.GenerativeModel")
@@ -1276,12 +1272,8 @@ class TestGeminiClient:
         })
 
         config_kwargs = mock_generation_config.call_args.kwargs
-        assert "response_schema" in config_kwargs, (
-            "VertexAI path should use response_schema"
-        )
-        assert "response_json_schema" not in config_kwargs, (
-            "VertexAI path should NOT use response_json_schema"
-        )
+        assert "response_schema" in config_kwargs, "VertexAI path should use response_schema"
+        assert "response_json_schema" not in config_kwargs, "VertexAI path should NOT use response_json_schema"
 
     def test_thought_signature_initialized_in_init(self, gemini_client):
         """Test that thought signature mapping is initialized in __init__"""
