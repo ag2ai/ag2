@@ -318,7 +318,9 @@ class TestHelperFunctions:
     def test_validate_handoff_target_random_invalid(self, agent1: MagicMock, agent2: MagicMock) -> None:
         """Test _validate_handoff_target raises for RandomAgentTarget with agent not in group."""
         target = RandomAgentTarget(agents=[agent1, agent2])
-        with pytest.raises(ValueError, match="Agent 'agent2' in RandomAgentTarget Hand-offs must be in the agents list"):
+        with pytest.raises(
+            ValueError, match="Agent 'agent2' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
             _validate_handoff_target(target, ["agent1"], "test")
 
     def test_validate_handoff_target_other_target_types(self) -> None:
@@ -369,7 +371,9 @@ class TestHelperFunctions:
         random_target_invalid = RandomAgentTarget(agents=[agent1, agent3])
         cond_invalid = OnCondition(target=random_target_invalid, condition=StringLLMCondition(prompt="prompt"))
         agent1.handoffs.llm_conditions = [cond_invalid]
-        with pytest.raises(ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"):
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
             ensure_handoff_agents_in_group([agent1, agent2])
 
         # Invalid case (context condition)
@@ -378,13 +382,17 @@ class TestHelperFunctions:
             target=random_target_invalid, condition=StringContextCondition(variable_name="var")
         )
         agent1.handoffs.context_conditions = [context_cond_invalid]
-        with pytest.raises(ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"):
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
             ensure_handoff_agents_in_group([agent1, agent2])
 
         # Invalid case (after_works)
         agent1.handoffs.context_conditions = []
         agent1.handoffs.after_works = [OnContextCondition(target=random_target_invalid, condition=None)]
-        with pytest.raises(ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"):
+        with pytest.raises(
+            ValueError, match="Agent 'agent3' in RandomAgentTarget Hand-offs must be in the agents list"
+        ):
             ensure_handoff_agents_in_group([agent1, agent2])
 
     def test_ensure_guardrail_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
