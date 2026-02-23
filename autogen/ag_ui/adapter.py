@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -32,7 +32,7 @@ from pydantic_core import to_jsonable_python
 
 from autogen import ConversableAgent
 from autogen.agentchat import ContextVariables
-from autogen.agentchat.remote import AgentService, RequestMessage
+from autogen.agentchat.remote import AgentService, RequestMessage, ServiceResponse
 from autogen.doc_utils import export_module
 
 try:
@@ -101,7 +101,7 @@ class AGStreamInput:
 
 async def run_stream(
     command: AGStreamInput,
-    service: AgentService,
+    service: Callable[[RequestMessage], AsyncGenerator[ServiceResponse, None]],
     write_events_stream: MemoryObjectSendStream[BaseEvent],
 ) -> None:
     client_tools = []

@@ -4,7 +4,7 @@
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
@@ -27,6 +27,11 @@ if TYPE_CHECKING:
     from starlette.middleware.base import BaseHTTPMiddleware
 
     from autogen import ConversableAgent
+
+    try:
+        from faststream.nats import NatsBroker
+    except ImportError:
+        NatsBroker: TypeAlias = Any  # type: ignore[no-redef]
 
 
 @export_module("autogen.a2a")
@@ -228,5 +233,23 @@ class A2aAgentServer:
             app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]
 
         return app
+
+    def build_nats_app(self, broker: "NatsBroker") -> Callable[..., Any]:  # type: ignore[no-any-unimported]
+        """Build a NATS ASGI application for ASGI server."""
+        from .nats import make_nats_app
+
+        for interface in self.card.additional_interfaces or ():
+            if interface.transport == "nats":
+                subject = interface.url
+                break
+        else:
+            raise ValueError("No NATS interface found in the agent card")
+
+        return make_nats_app(
+            broker=broker,
+            subject=subject,
+            request_handler=self.build_request_handler(),
+            card=self.card,
+        )
 
     build = build_starlette_app  # default alias for build_starlette_app

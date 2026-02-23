@@ -578,6 +578,8 @@ exclude = [
     "autogen/agentchat/contrib/compressible_agent\\.py",
     "autogen/agentchat/contrib/math_user_proxy_agent.py",
     "autogen/oai/openai_utils.py",
+    # Optional: requires faststream[nats]; skip when not installed
+    "autogen/a2a/nats.py",
 ]
 
 strict = true

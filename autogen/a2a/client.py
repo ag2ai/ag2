@@ -10,8 +10,10 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientCallInterceptor, ClientConfig, ClientEvent
+from a2a.client import A2ACardResolver, Client, ClientCallInterceptor, ClientConfig, ClientEvent
 from a2a.client import ClientFactory as A2AClientFactory
+from a2a.client.client_factory import TransportProducer
+from a2a.client.errors import A2AClientHTTPError, A2AClientTimeoutError
 from a2a.types import AgentCard, Message, Task, TaskArtifactUpdateEvent, TaskIdParams, TaskQueryParams, TaskState
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
 from typing_extensions import Self
@@ -51,6 +53,7 @@ class A2aRemoteAgent(ConversableAgent):
         max_reconnects: Maximum number of reconnection attempts before giving up.
         polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
         interceptors: A list of interceptors to use for the client.
+        transports: A dictionary of transport producers to use for the client.
     """
 
     def __init__(
@@ -61,13 +64,15 @@ class A2aRemoteAgent(ConversableAgent):
         silent: bool | None = None,
         client: ClientFactory | None = None,
         client_config: ClientConfig | None = None,
-        interceptors: Sequence[ClientCallInterceptor] = (),
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
+        interceptors: Sequence[ClientCallInterceptor] = (),
+        transports: dict[str, TransportProducer] | None = None,
     ) -> None:
         self.url = url  # make it public for backward compatibility
 
         self._httpx_client_factory = client or EmptyClientFactory()
+        self._transports = transports or {}
         self._card_resolver = A2ACardResolver(
             httpx_client=self._httpx_client_factory(),
             base_url=url,
@@ -104,6 +109,7 @@ class A2aRemoteAgent(ConversableAgent):
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
         interceptors: Sequence[ClientCallInterceptor] = (),
+        transports: dict[str, TransportProducer] | None = None,
     ) -> Self:
         """Creates an A2aRemoteAgent instance from an existing AgentCard.
 
@@ -121,6 +127,7 @@ class A2aRemoteAgent(ConversableAgent):
             max_reconnects: Maximum number of reconnection attempts before giving up.
             polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
             interceptors: A list of interceptors to use for the client.
+            transports: A dictionary of transport producers to use for the client.
 
         Returns:
             Self: An instance of the A2aRemoteAgent configured with the provided card.
@@ -134,6 +141,7 @@ class A2aRemoteAgent(ConversableAgent):
             max_reconnects=max_reconnects,
             polling_interval=polling_interval,
             interceptors=interceptors,
+            transports=transports,
         )
         instance._agent_card = card
         return instance
@@ -162,7 +170,11 @@ class A2aRemoteAgent(ConversableAgent):
 
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
-            agent_client = A2AClientFactory(self._client_config).create(
+            factory = A2AClientFactory(self._client_config)
+            for transport_name, transport_class in self._transports.items():
+                factory.register(transport_name, transport_class)
+
+            agent_client = factory.create(
                 self._agent_card,
                 interceptors=self._interceptors,
             )
@@ -235,7 +247,7 @@ class A2aRemoteAgent(ConversableAgent):
                 yield event
                 completed = _is_event_completed(event)
 
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
+        except (httpx.ConnectError, A2AClientTimeoutError, A2AClientHTTPError) as e:
             if not started_task:
                 if not self._agent_card:
                     raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
@@ -258,7 +270,7 @@ class A2aRemoteAgent(ConversableAgent):
                         yield event
                         completed = _is_event_completed(event)
 
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
+                except (httpx.ConnectError, A2AClientTimeoutError, A2AClientHTTPError) as e:
                     connection_attemps += 1
                     if connection_attemps >= self._max_reconnects:
                         if not self._agent_card:
@@ -278,7 +290,7 @@ class A2aRemoteAgent(ConversableAgent):
                 if _is_event_completed(event):
                     completed = True
 
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
+        except (httpx.ConnectError, A2AClientTimeoutError, A2AClientHTTPError) as e:
             if not started_task:
                 if not self._agent_card:
                     raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
@@ -300,7 +312,7 @@ class A2aRemoteAgent(ConversableAgent):
                     task = await client.get_task(TaskQueryParams(id=started_task.id))
                     completed = _is_task_completed(task)
 
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
+                except (httpx.ConnectError, A2AClientTimeoutError, A2AClientHTTPError) as e:
                     connection_attemps += 1
                     if connection_attemps >= self._max_reconnects:
                         if not self._agent_card:
