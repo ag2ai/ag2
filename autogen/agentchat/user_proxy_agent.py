@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,7 +20,7 @@ class UserProxyAgent(ConversableAgent):
         UserProxyAgent is a subclass of ConversableAgent configured with `human_input_mode` to ALWAYS\n
         and `llm_config` to False. By default, the agent will prompt for human input every time a message is received.\n
         Code execution is enabled by default. LLM-based auto reply is disabled by default.\n
-        To modify auto reply, register a method with [`register_reply`](../ConversableAgent#register-reply).\n
+        To modify auto reply, register a method with [`register_reply`](ConversableAgent.md#autogen.ConversableAgent.register_reply).\n
         To modify the way to get human input, override `get_human_input` method.\n
         To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`,\n
         `run_code`, and `execute_function` methods respectively.\n

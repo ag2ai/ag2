@@ -86,9 +86,13 @@ uvicorn run_ag_ui:app --reload --port 8000
 !!! note "Simpler way"
     If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
 
+<<<<<<< codex/ag-ui-doc-conformance
     ```python linenums="1" hl_lines="5-6"
     from autogen.ag_ui import AGUIStream
     from fastapi import FastAPI
+=======
+You can pass this information into your agent's tools using the standard ([`ContextVariables`](/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables)) way, passing it as a parameter to the tool function.
+>>>>>>> main
 
     app = FastAPI()
     stream = AGUIStream(agent)

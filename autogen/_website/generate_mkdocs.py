@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -171,12 +171,6 @@ def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_do
             else f"{abs_file_url}/AfterWork"
         )
 
-    # Handle API reference URLs with hash fragments
-    if abs_file_url.startswith("/docs/api-reference/") and "#" in abs_file_url:
-        base_url, fragment = abs_file_url.split("#")
-        module_prefix = base_url.replace("/docs/api-reference/", "").replace("/", ".")
-        return f"{base_url}#{module_prefix}.{fragment.replace('-', '_')}"
-
     file_path = mkdocs_docs_dir / (abs_file_url.lstrip("/") + ".md")
     if file_path.is_file():
         return abs_file_url
@@ -194,30 +188,109 @@ def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_do
 def absolute_to_relative(source_path: str, dest_path: str) -> str:
     """Convert an absolute path to a relative path from the source directory.
 
+    MkDocs resolves relative links at the source level (relative to the source file's
+    directory), so paths should NOT include extra '../' to compensate for use_directory_urls.
+
     Args:
         source_path: The source file's absolute path (e.g., "/docs/home/quick-start.md")
         dest_path: The destination file's absolute path (e.g., "/docs/user-guide/basic-concepts/installing-ag2")
 
     Returns:
-        A relative path from source to destination (e.g., "../../user-guide/basic-concepts/installing-ag2")
+        A relative path from source to destination (e.g., "../user-guide/basic-concepts/installing-ag2")
     """
     sep = os.sep
+    source_dir = os.path.dirname(source_path) if os.path.basename(source_path) != "" else source_path
+    is_index = Path(source_path).stem == "index"
+
     try:
         # Primary approach: Use pathlib for clean path calculation
-        rel_path = str(Path(dest_path).relative_to(Path(source_path).parent))
-        return f".{sep}{rel_path}" if Path(source_path).stem == "index" else f"..{sep}{rel_path}"
+        rel_path = str(Path(dest_path).relative_to(Path(source_dir)))
+        return f".{sep}{rel_path}" if is_index else rel_path
     except ValueError:
-        # Fallback approach: Use os.path.relpath when paths don't share a common parent
-        rel_path = os.path.relpath(dest_path, source_path)
+        # Fallback approach: Use os.path.relpath from the source's directory
+        rel_path = os.path.relpath(dest_path, source_dir)
 
-        # Special case for blog directories: add deeper path traversal
-        ret_val = os.path.join("..", "..", "..", rel_path) if "blog" in source_path else rel_path
-
-        # Special case for index files: strip leading "../"
-        if Path(source_path).stem == "index":
-            ret_val = ret_val[3:]
+        # Special case for blog directories: add one extra level of path traversal
+        # Blog sources are at _blogs/SLUG/ (2 levels from docs/) but the final output
+        # is at blog/posts/SLUG/ (3 levels from docs/), so we need 1 extra ../
+        ret_val = os.path.join("..", rel_path) if "_blog" in source_path else rel_path
 
         return ret_val
+
+
+def _ensure_md_extension(relative_link: str) -> str:
+    """Append .md extension to a relative link if it doesn't already have a file extension.
+
+    MkDocs requires .md extensions on relative links to resolve them properly.
+    Handles fragment identifiers (#) by inserting .md before the fragment.
+
+    Args:
+        relative_link: A relative path like "../overview" or "../overview#section"
+
+    Returns:
+        The link with .md appended if needed, e.g. "../overview.md" or "../overview.md#section"
+    """
+    # Split off any fragment identifier
+    if "#" in relative_link:
+        path_part, fragment = relative_link.split("#", 1)
+    else:
+        path_part, fragment = relative_link, None
+
+    # If path ends with /, it's a directory reference - convert to explicit index.md
+    # so MkDocs can resolve it at the file level (not left for browser URL resolution)
+    if path_part.endswith("/"):
+        path_part = f"{path_part}index.md"
+        if fragment is not None:
+            return f"{path_part}#{fragment}"
+        return path_part
+
+    # Check if the path already has a file extension
+    last_segment = path_part.rsplit("/", 1)[-1] if "/" in path_part else path_part.rsplit(os.sep, 1)[-1]
+    if "." in last_segment:
+        # Already has an extension, return as-is
+        if fragment is not None:
+            return f"{path_part}#{fragment}"
+        return relative_link
+
+    # Append .md extension
+    path_part = f"{path_part}.md"
+
+    if fragment is not None:
+        return f"{path_part}#{fragment}"
+    return path_part
+
+
+def _transform_api_anchor(absolute_link: str, fragment: str) -> str:
+    """Transform API reference anchors from kebab-case to mkdocstrings dotted format.
+
+    mkdocstrings generates anchors using the full dotted Python path (e.g.,
+    ``autogen.ConversableAgent.initiate_chat``), but source docs use kebab-case
+    (e.g., ``#initiate-chat``). This converts the latter to the former.
+
+    Class-level anchors (e.g., ``#conversableagent``) map to just the dotted class
+    path (e.g., ``autogen.ConversableAgent``).
+
+    Args:
+        absolute_link: The absolute URL path (e.g., ``/docs/api-reference/autogen/ConversableAgent``)
+        fragment: The anchor fragment without ``#`` (e.g., ``initiate-chat``)
+
+    Returns:
+        The transformed fragment (e.g., ``autogen.ConversableAgent.initiate_chat``)
+    """
+    if not absolute_link.startswith("/docs/api-reference/"):
+        return fragment
+    # If the fragment already contains a dot, it's already in mkdocstrings format
+    if "." in fragment:
+        return fragment
+    module_prefix = absolute_link.rstrip("/").replace("/docs/api-reference/", "").replace("/", ".")
+    # Extract the class/module name (last non-empty path segment) for comparison
+    last_segment = absolute_link.rstrip("/").rsplit("/", 1)[-1]
+    # Strip trailing disambiguation suffixes like -2, -3 (from Mintlify anchors)
+    clean_fragment = re.sub(r"-\d+$", "", fragment)
+    # If the fragment matches the class name (case-insensitive), it's a class-level anchor
+    if clean_fragment.replace("-", "").replace("_", "").lower() == last_segment.lower():
+        return module_prefix
+    return f"{module_prefix}.{clean_fragment.replace('-', '_')}"
 
 
 def fix_internal_links(source_path: str, content: str) -> str:
@@ -233,11 +306,14 @@ def fix_internal_links(source_path: str, content: str) -> str:
     # Define regex patterns for HTML and Markdown links
     html_link_pattern = r'href="(/docs/[^"]*)"'
     html_img_src_pattern = r'src="(/snippets/[^"]+)"'
-    html_assets_src_pattern = r'src="(/assets/[^"]+)"'
+    # Note: /assets/... paths are static assets served at the root; they are
+    # already absolute and must NOT be converted to relative paths (with
+    # use_directory_urls=True the browser would resolve them relative to the
+    # URL depth, not the file-system path, producing broken 404 URLs).
 
     markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
     markdown_img_pattern = r"!\[([^\]]*)\]\((/snippets/[^)]+)\)"
-    markdown_assets_pattern = r"!\[([^\]]*)\]\((/assets/[^)]+)\)"
+    # Note: /assets/... markdown images are left as-is (absolute) for the same reason.
 
     def handle_blog_url(url: str) -> str:
         """Special handling for blog URLs, converting date format from YYYY-MM-DD to YYYY/MM/DD.
@@ -255,14 +331,40 @@ def fix_internal_links(source_path: str, content: str) -> str:
 
         return url
 
+    # Blog URL paths like /docs/blog/YYYY/MM/DD/SLUG are virtual (served by the
+    # blog plugin at runtime) and don't correspond to actual files on disk.
+    # They must be kept as absolute URLs, not converted to relative .md paths.
+    blog_url_pattern = re.compile(r"^/docs/blog/\d{4}/\d{2}/\d{2}/")
+
     # Convert HTML links
     def replace_html(match: re.Match[str], attr_type: str) -> str:
         # There's only one group in the pattern, which is the path
         absolute_link = match.group(1)
 
+        # Split off fragment before path resolution (filesystem functions don't understand #)
+        fragment = None
+        if "#" in absolute_link:
+            absolute_link, fragment = absolute_link.split("#", 1)
+
+        # Convert blog date format (YYYY-MM-DD-SLUG → YYYY/MM/DD/SLUG) before checking
         absolute_link = handle_blog_url(absolute_link)
+
+        # Blog URL paths are virtual (served by blog plugin at runtime) — keep as absolute
+        if blog_url_pattern.match(absolute_link):
+            if fragment is not None:
+                absolute_link = f"{absolute_link}#{fragment}"
+            return f'{attr_type}="{absolute_link}"'
+
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
+        # Append .md extension for doc links (href), but not for assets/snippets (src)
+        if attr_type == "href":
+            relative_link = _ensure_md_extension(relative_link)
+
+        # Reattach fragment (transforming API reference anchors to mkdocstrings format)
+        if fragment is not None:
+            fragment = _transform_api_anchor(absolute_link, fragment)
+            relative_link = f"{relative_link}#{fragment}"
         return f'{attr_type}="{relative_link}"'
 
     # Convert Markdown links
@@ -270,20 +372,40 @@ def fix_internal_links(source_path: str, content: str) -> str:
         text = match.group(1)
         absolute_link = match.group(2)
 
+        # Split off fragment before path resolution (filesystem functions don't understand #)
+        fragment = None
+        if "#" in absolute_link:
+            absolute_link, fragment = absolute_link.split("#", 1)
+
+        # Convert blog date format (YYYY-MM-DD-SLUG → YYYY/MM/DD/SLUG) before checking
         absolute_link = handle_blog_url(absolute_link)
+
+        # Blog URL paths are virtual (served by blog plugin at runtime) — keep as absolute
+        if blog_url_pattern.match(absolute_link):
+            if fragment is not None:
+                absolute_link = f"{absolute_link}#{fragment}"
+            prefix = "!" if is_image else ""
+            return f"{prefix}[{text}]({absolute_link})"
+
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
+        # Append .md extension for doc links (not images)
+        if not is_image:
+            relative_link = _ensure_md_extension(relative_link)
+
+        # Reattach fragment (transforming API reference anchors to mkdocstrings format)
+        if fragment is not None:
+            fragment = _transform_api_anchor(absolute_link, fragment)
+            relative_link = f"{relative_link}#{fragment}"
         prefix = "!" if is_image else ""
         return f"{prefix}[{text}]({relative_link})"
 
     # Apply replacements
     content = re.sub(html_link_pattern, lambda match: replace_html(match, "href"), content)
     content = re.sub(html_img_src_pattern, lambda match: replace_html(match, "src"), content)
-    content = re.sub(html_assets_src_pattern, lambda match: replace_html(match, "src"), content)
 
     content = re.sub(markdown_link_pattern, lambda match: replace_markdown(match, False), content)
     content = re.sub(markdown_img_pattern, lambda match: replace_markdown(match, True), content)
-    content = re.sub(markdown_assets_pattern, lambda match: replace_markdown(match, True), content)
 
     return content
 
@@ -683,6 +805,10 @@ def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets
 
     # Copy files from source to target
     copy_files(src_blog_dir, target_posts_dir, files_to_copy)
+
+    # Remove the _blogs/ source directory so MkDocs only validates links
+    # at the final blog/posts/ location (where relative paths are correct)
+    shutil.rmtree(src_blog_dir)
 
     # Copy snippets directory
     snippets_files_to_copy = list(snippets_src_path.rglob("*"))

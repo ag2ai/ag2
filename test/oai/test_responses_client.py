@@ -1865,6 +1865,113 @@ def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_cl
     assert len(input_items) == 0
 
 
+def test_convert_messages_to_input_null_content_assistant_message(mocked_openai_client):
+    """Test _convert_messages_to_input handles assistant message with None content (Issue #2297).
+
+    When the assistant response contains only tool calls and no text, message_retrieval
+    sets content to None. When this message is later converted back to API input format,
+    the text field must be an empty string, not null/None, or the Responses API rejects it.
+    """
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # This is what message_retrieval produces for a tool-call-only response
+    messages = [
+        {"role": "user", "content": "What is 1 + 2?"},
+        {
+            "role": "assistant",
+            "id": "resp_123",
+            "content": None,  # tool-call-only response has None content
+            "tool_calls": [
+                {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {"name": "calculator", "arguments": '{"a":1,"b":2,"operator":"+"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_abc", "content": "3"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
+
+    # Find the assistant message in input_items
+    assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+    assert len(assistant_items) == 1
+
+    # The text field must be an empty string, NOT None
+    text_block = assistant_items[0]["content"][0]
+    assert text_block["type"] == "output_text"
+    assert text_block["text"] == ""
+    assert text_block["text"] is not None
+
+
+def test_convert_messages_to_input_empty_string_content_assistant_message(mocked_openai_client):
+    """Test _convert_messages_to_input handles assistant message with empty string content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_xyz",
+                    "type": "function",
+                    "function": {"name": "some_tool", "arguments": "{}"},
+                }
+            ],
+        },
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
+
+    assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+    assert len(assistant_items) == 1
+
+    text_block = assistant_items[0]["content"][0]
+    assert text_block["type"] == "output_text"
+    assert text_block["text"] == ""
+    assert text_block["text"] is not None
+
+
+def test_message_retrieval_tool_call_only_produces_none_content():
+    """Test that message_retrieval sets content to None for tool-call-only responses.
+
+    This verifies the upstream behavior that causes Issue #2297 — the fix is in
+    _convert_messages_to_input which must handle None content gracefully.
+    """
+
+    class _Block:
+        def __init__(self, d):
+            self._d = d
+
+        def model_dump(self):
+            return self._d
+
+    # Response with only a function call, no text output
+    output = [
+        _Block({"type": "function_call", "name": "calculator", "arguments": '{"a":1}', "call_id": "call_1"}),
+    ]
+
+    resp = _FakeResponse(output=output)
+    client = OpenAIResponsesClient(MagicMock())
+
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    msg = msgs[0]
+    assert msg["role"] == "assistant"
+    # content is None for tool-call-only responses
+    assert msg["content"] is None
+    # tool_calls should be populated
+    assert len(msg["tool_calls"]) == 1
+    assert msg["tool_calls"][0]["function"]["name"] == "calculator"
+
+
 def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):
     """Test _convert_messages_to_input adds messages in reverse order."""
     client = OpenAIResponsesClient(mocked_openai_client)
