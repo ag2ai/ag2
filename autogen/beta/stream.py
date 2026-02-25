@@ -1,14 +1,14 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Protocol, TypeAlias, overload
 from uuid import UUID, uuid4
 
-from autogen.beta.events import HITL, BaseEvent, UserMessage
-from autogen.beta.events.conditions import ClassInfo, Condition, TypeCondition
-from autogen.beta.history import History, MemoryStorage, Storage, StreamId
+from .events import HITL, BaseEvent, UserMessage
+from .events.conditions import ClassInfo, Condition, TypeCondition
+from .history import History, MemoryStorage, Storage, StreamId
 
 SubId: TypeAlias = UUID
 
@@ -17,7 +17,6 @@ SubId: TypeAlias = UUID
 class Context:
     stream: "Stream"
     subscriber_id: SubId | None = None
-    data: dict[str, Any] = field(default_factory=dict)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         async with self.stream.get(UserMessage) as response:
@@ -90,8 +89,13 @@ class StreamInterface(Protocol):
 
 
 class Stream(StreamInterface):
-    def __init__(self, storage: Storage | None = None) -> None:
-        self.id: StreamId = uuid4()
+    def __init__(
+        self,
+        storage: Storage | None = None,
+        *,
+        id: StreamId | None = None,
+    ) -> None:
+        self.id: StreamId = id or uuid4()
 
         self._subscribers: dict[SubId, Subscriber] = {}
         # ordered dict

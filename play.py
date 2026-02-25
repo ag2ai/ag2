@@ -38,15 +38,16 @@ async def hitl_subscriber(event: HITL, ctx: Context) -> None:
 stream = Stream()
 
 
-@stream.where(ToolCall).subscribe(interrupt=True)
-async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
-    print("interrupt:", event.arguments)
-    return event
+# @stream.where(ToolCall).subscribe(interrupt=True)
+# async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
+#     print("interrupt:", event.arguments)
+#     return event
 
 
 @tool
 async def func(arguments: str, ctx: Context) -> str:
-    r = await ctx.input(arguments, timeout=1.0)
+    print()
+    r = await ctx.input(arguments, timeout=10.0)
     print()
     return r
 
@@ -60,20 +61,26 @@ agent = Agent(
 
 async def main() -> None:
     with stream.where(HITL).sub_scope(hitl_subscriber):
-        result = await agent.ask("Hi, agent!")
+        conversation = await agent.ask("Hi, agent!", stream=stream)
+        print("\nFinal history:")
+        final_events = list(await conversation.history.get_events())
+        pprint(final_events)
+        print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
 
-        # print("\nFinal history:")
-        # final_events = list(await stream.history.get_events())
-        # pprint(final_events)
-        print("\nResult:", result, "\n", "=" * 80, "\n")
+        result = await conversation.ask("Next turn")
+        print("\nResult:", result.message, "\n", "=" * 80, "\n")
+
+        # alternatively
+        # result = await agent.ask("Next turn", stream=conversation.stream)
+        # print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
         # restore process from partialhistory
-        # await stream.history.replace(final_events[:-4])
-        # pprint(await stream.history.get_events())
-        # result = await agent.restore()
+        # await conversation.stream.history.replace(final_events[:-4])
+        # pprint(await conversation.stream.history.get_events())
+        # result = await agent.restore(stream=stream)
         # print("\nFinal history:")
         # pprint(await stream.history.get_events())
-        # print("\nResult", result, "\n", "=" * 80, "\n")
+        # print("\nResult", result.message, "\n", "=" * 80, "\n")
 
 
 asyncio.run(main())

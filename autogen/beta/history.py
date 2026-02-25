@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from typing import Protocol, TypeAlias
 from uuid import UUID
 
-from autogen.beta.events import BaseEvent
+from .events import BaseEvent
 
 StreamId: TypeAlias = UUID
 

@@ -1,8 +1,8 @@
 from collections.abc import Awaitable, Callable
 from functools import wraps
 
-from autogen.beta.events import ToolCall, ToolResult
-from autogen.beta.stream import Context, Subscriber
+from .events import ToolCall, ToolResult
+from .stream import Context, Subscriber
 
 
 def tool(func: Callable[[str, Context], Awaitable[str]]) -> Subscriber:

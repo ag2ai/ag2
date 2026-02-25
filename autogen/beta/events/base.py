@@ -60,11 +60,11 @@ class EventMeta(type):
 
         return super().__new__(mcs, name, bases, namespace)
 
-    def __or__(self, other: Any) -> Any:
-        return TypeCondition(self) | other
+    def __or__(cls, other: Any) -> Any:
+        return TypeCondition(cls) | other
 
-    def or_(self, other: Any) -> OrCondition:
-        return TypeCondition(self) | other
+    def or_(cls, other: Any) -> OrCondition:
+        return TypeCondition(cls) | other
 
 
 class BaseEvent(metaclass=EventMeta):

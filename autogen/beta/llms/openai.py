@@ -12,8 +12,9 @@ from autogen.beta.events import (
     ToolResult,
     UserMessage,
 )
-from autogen.beta.llms.client import LLMClient
 from autogen.beta.stream import Stream
+
+from .client import LLMClient
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
