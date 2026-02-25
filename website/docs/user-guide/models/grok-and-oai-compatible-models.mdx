@@ -251,6 +251,7 @@ llm_config = LLMConfig({
 - Use the correct `api_type` for your provider (`"openai"` for most compatible services)
 - Place common parameters like `temperature` at the top level of `LLMConfig`
 - Use `extra_body` for provider-specific features like Grok's search parameters
+- Use `extra_headers` for custom HTTP headers required by your server (e.g., authentication tokens, routing headers for [VLLM](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers) or other OpenAI-compatible servers)
 
 ### 3. Function Registration
 - Register functions with `ConversableAgent.functions`, not `LLMConfig.tools`

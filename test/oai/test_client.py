@@ -1085,3 +1085,50 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
+
+
+def test_openai_llm_config_entry_extra_headers():
+    """Test that extra_headers is stored correctly on OpenAILLMConfigEntry."""
+    headers = {"X-Custom-Header": "test-value", "Authorization": "Bearer token123"}
+    entry = OpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        extra_headers=headers,
+    )
+    assert entry.extra_headers == headers
+
+
+def test_openai_llm_config_entry_extra_headers_default_none():
+    """Test that extra_headers defaults to None."""
+    entry = OpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+    )
+    assert entry.extra_headers is None
+
+
+def test_azure_llm_config_entry_extra_headers():
+    """Test that extra_headers is stored correctly on AzureOpenAILLMConfigEntry."""
+    headers = {"X-Custom-Header": "test-value"}
+    entry = AzureOpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        base_url="https://api.openai.com/v1",
+        api_version="2024-02-01",
+        extra_headers=headers,
+    )
+    assert entry.extra_headers == headers
+
+
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
+def test_extra_headers_chat_completion(credentials_gpt_4o_mini: Credentials):
+    """Test that extra_headers flows through to the API without error."""
+    config_list = [
+        {**config, "extra_headers": {"X-Custom-Test": "ag2-extra-headers"}}
+        for config in credentials_gpt_4o_mini.config_list
+    ]
+    client = OpenAIWrapper(config_list=config_list)
+    response = client.create(messages=[{"role": "user", "content": "1+1="}], cache_seed=None)
+    print(response)
+    print(client.extract_text_or_completion_object(response))

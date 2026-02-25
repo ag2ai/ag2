@@ -25,8 +25,8 @@ WIKIPEDIA_STRING = "Redmond"
 PLAIN_TEXT_URL = "https://raw.githubusercontent.com/ag2ai/ag2/main/README.md"
 IMAGE_URL = "https://github.com/afourney.png"
 
-PDF_URL = "https://arxiv.org/pdf/2308.08155.pdf"
-PDF_STRING = "Figure 1: AutoGen enables diverse LLM-based applications using multi-agent conversations."
+PDF_URL = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+PDF_STRING = "Dummy PDF file"
 
 BING_QUERY = "Microsoft"
 BING_TITLE = f"{BING_QUERY} - Search"

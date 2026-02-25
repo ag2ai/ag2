@@ -240,6 +240,84 @@ class TestGeminiClient:
         assert converted_messages[2].role == "user", "Message without role should default to 'user'"
         assert converted_messages[2].parts[0].text == "Another message without role"
 
+    def test_parallel_function_responses_merged(self, gemini_client):
+        """Test that consecutive tool response messages are merged into a single Content object.
+
+        Gemini requires that the number of FunctionResponse parts equals the number of
+        FunctionCall parts in the preceding model turn. When parallel function calls are
+        made, AG2 unrolls the tool_responses into separate messages, but they must be
+        recombined into a single Content for Gemini.
+        """
+
+        # Set up tool_call_function_map as would happen during a real conversation
+        gemini_client.tool_call_function_map["1777"] = "timer"
+        gemini_client.tool_call_function_map["1778"] = "stopwatch"
+
+        messages = [
+            {"role": "user", "content": "Create a timer for 1 second and then a stopwatch for 2 seconds."},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "1777",
+                        "type": "function",
+                        "function": {"name": "timer", "arguments": '{"num_seconds": "1"}'},
+                    },
+                    {
+                        "id": "1778",
+                        "type": "function",
+                        "function": {"name": "stopwatch", "arguments": '{"num_seconds": "2"}'},
+                    },
+                ],
+            },
+            # These are the unrolled tool_responses — two separate messages
+            {"role": "tool", "tool_call_id": "1777", "content": "Timer is done!"},
+            {"role": "tool", "tool_call_id": "1778", "content": "Stopwatch is done!"},
+        ]
+
+        converted = gemini_client._oai_messages_to_gemini_messages(messages)
+
+        # Should be: user message, model tool_call, single user with 2 FunctionResponse parts
+        assert len(converted) == 3, f"Expected 3 Content objects, got {len(converted)}"
+
+        # The third Content should have 2 FunctionResponse parts merged together
+        tool_response_content = converted[2]
+        assert tool_response_content.role == "user"
+        assert len(tool_response_content.parts) == 2, (
+            f"Expected 2 FunctionResponse parts in one Content, got {len(tool_response_content.parts)}"
+        )
+        assert tool_response_content.parts[0].function_response.name == "timer"
+        assert tool_response_content.parts[1].function_response.name == "stopwatch"
+
+    def test_single_function_response_not_affected(self, gemini_client):
+        """Test that a single tool response still works correctly."""
+        gemini_client.tool_call_function_map["123"] = "my_func"
+
+        messages = [
+            {"role": "user", "content": "Call my_func"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "123",
+                        "type": "function",
+                        "function": {"name": "my_func", "arguments": "{}"},
+                    },
+                ],
+            },
+            {"role": "tool", "tool_call_id": "123", "content": "done"},
+        ]
+
+        converted = gemini_client._oai_messages_to_gemini_messages(messages)
+
+        assert len(converted) == 3
+        tool_response_content = converted[2]
+        assert tool_response_content.role == "user"
+        assert len(tool_response_content.parts) == 1
+        assert tool_response_content.parts[0].function_response.name == "my_func"
+
     def test_vertexai_safety_setting_conversion(self):
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -1101,6 +1179,101 @@ class TestGeminiClient:
             assert result == tools_list
         else:
             assert result != tools_list
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_response_format_uses_response_json_schema_for_non_vertexai(
+        self, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that non-VertexAI path uses response_json_schema instead of response_schema.
+
+        This is the fix for issue #2348: Pydantic models with dict[str, SomeModel]
+        generate additionalProperties in the JSON schema, which the Google GenAI SDK
+        rejects via response_schema but accepts via response_json_schema.
+        """
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert "response_json_schema" in config_kwargs, "Non-VertexAI path should use response_json_schema"
+        assert "response_schema" not in config_kwargs, "Non-VertexAI path should NOT use response_schema"
+        assert config_kwargs["response_mime_type"] == "application/json"
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.GenerationConfig")
+    def test_response_format_uses_response_schema_for_vertexai(
+        self, mock_generation_config, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that VertexAI path still uses response_schema (not response_json_schema)."""
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=VertexAIGenerationResponse)
+        mock_response.candidates = [mock_candidate]
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client_with_credentials.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generation_config.call_args.kwargs
+        assert "response_schema" in config_kwargs, "VertexAI path should use response_schema"
+        assert "response_json_schema" not in config_kwargs, "VertexAI path should NOT use response_json_schema"
 
     def test_thought_signature_initialized_in_init(self, gemini_client):
         """Test that thought signature mapping is initialized in __init__"""
