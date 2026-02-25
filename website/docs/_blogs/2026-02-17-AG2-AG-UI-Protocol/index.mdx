@@ -121,7 +121,16 @@ agent = ConversableAgent(
 
 # --- AG-UI integration ---
 stream = AGUIStream(agent) # (1) Wrap the agent
+
+# FastAPI, including CORS middleware for localhost access (not for production)
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/chat", stream.build_asgi()) # (2) Mount as an ASGI endpoint
 
 
