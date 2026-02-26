@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Protocol, TypeAlias, overload
 from uuid import UUID, uuid4
@@ -17,11 +17,15 @@ SubId: TypeAlias = UUID
 class Context:
     stream: "Stream"
     subscriber_id: SubId | None = None
+    prompt: list[str] = field(default_factory=list)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         async with self.stream.get(UserMessage) as response:
-            await self.stream.send(HITL(message=message))
+            await self.send(HITL(message=message))
             return (await asyncio.wait_for(response, timeout)).content
+
+    async def send(self, event: BaseEvent) -> None:
+        await self.stream.send(event, self)
 
 
 class Subscriber(Protocol):
@@ -146,10 +150,8 @@ class Stream(StreamInterface):
     async def send(
         self,
         event: BaseEvent,
-        ctx: Context | None = None,
+        ctx: Context,
     ) -> None:
-        ctx = ctx or Context(self)
-
         # interrupters should follow registration order
         for sub_id, interrupter in self._interrupters.copy().items():
             ctx.subscriber_id = sub_id

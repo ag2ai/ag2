@@ -17,22 +17,22 @@ from autogen.beta.tools import tool
 
 
 class MockClient(LLMClient):
-    async def __call__(self, *messages: BaseEvent, stream: Stream) -> None:
+    async def __call__(self, *messages: BaseEvent, ctx: Context) -> None:
         print("Model call:")
         pprint(messages)
         last_msg = messages[-1]
         if isinstance(last_msg, ModelRequest):
-            await stream.send(ToolCall(name="func", arguments="Call me a user\n"))
+            await ctx.send(ToolCall(name="func", arguments='{"cmd": "Call me a user\\n"}'))
         elif isinstance(last_msg, ToolResult):
-            await stream.send(ModelResponse(response="generated text"))
+            await ctx.send(ModelResponse(response="generated text"))
         elif isinstance(last_msg, UserMessage):
-            await stream.send(ModelResponse(response="Hi, user!"))
+            await ctx.send(ModelResponse(response="Hi, user!"))
 
 
 async def hitl_subscriber(event: HITL, ctx: Context) -> None:
     user_message = input(event.message)
     event = UserMessage(content=user_message)
-    await ctx.stream.send(event)
+    await ctx.send(event)
 
 
 stream = Stream()
@@ -45,16 +45,17 @@ stream = Stream()
 
 
 @tool
-async def func(arguments: str, ctx: Context) -> str:
+async def func(cmd: str, ctx: Context) -> str:
     print()
-    r = await ctx.input(arguments, timeout=10.0)
+    r = await ctx.input(cmd, timeout=10.0)
     print()
     return r
 
 
 agent = Agent(
-    client=OpenAIClient("gpt-5", reasoning_effort="high"),
-    stream=stream,
+    "test",
+    # client=OpenAIClient("gpt-5", reasoning_effort="high"),
+    client=MockClient(),
     tools=[func],
 )
 

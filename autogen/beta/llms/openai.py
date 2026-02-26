@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from typing import Any, Literal
 
 from openai import AsyncOpenAI, AsyncStream
@@ -12,7 +13,7 @@ from autogen.beta.events import (
     ToolResult,
     UserMessage,
 )
-from autogen.beta.stream import Stream
+from autogen.beta.stream import Context
 
 from .client import LLMClient
 
@@ -26,35 +27,47 @@ class OpenAIClient(LLMClient):
         api_key: str | None = None,
         base_url: str | None = None,
         *,
+        streaming: bool = False,
         reasoning_effort: ReasoningEffort | None = None,
         **kwargs: Any,
     ) -> None:
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, **kwargs)
         self._model = model
         self._reasoning_effort = reasoning_effort
+        self._streaming = streaming
 
-    async def __call__(self, *messages: BaseEvent, stream: Stream) -> None:
-        openai_messages = self._convert_messages(messages)
-
-        should_stream = True
+    async def __call__(
+        self,
+        *messages: BaseEvent,
+        ctx: Context,
+    ) -> None:
+        openai_messages = self._convert_messages(ctx.prompt, messages)
+        print(openai_messages)
 
         create_kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": openai_messages,
-            "stream": should_stream,
+            "stream": self._streaming,
         }
         if self._reasoning_effort is not None:
             create_kwargs["reasoning_effort"] = self._reasoning_effort
 
-        response = await self._client.chat.completions.create(**create_kwargs)
+        response = await self._client.chat.completions.create(
+            **create_kwargs,
+            tools=[],
+        )
 
-        if should_stream:
-            await self._process_stream(response, stream)
+        if self._streaming:
+            await self._process_stream(response, ctx)
         else:
-            await self._process_completion(response, stream)
+            await self._process_completion(response, ctx)
 
-    def _convert_messages(self, messages: tuple[BaseEvent, ...]) -> list[dict[str, str]]:
-        result: list[dict[str, str]] = []
+    def _convert_messages(
+        self,
+        system_prompt: Iterable[str],
+        messages: tuple[BaseEvent, ...],
+    ) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = [{"content": p, "role": "developer"} for p in system_prompt]
 
         for message in messages:
             if isinstance(message, UserMessage):
@@ -62,7 +75,7 @@ class OpenAIClient(LLMClient):
             elif isinstance(message, ModelRequest):
                 result.append({"role": "user", "content": message.prompt})
             elif isinstance(message, ModelResponse):
-                result.append({"role": "assistant", "content": message.response})
+                result.append({"role": "assistant", "content": message.content})
             elif isinstance(message, ToolResult):
                 result.append({
                     "role": "tool",
@@ -75,21 +88,21 @@ class OpenAIClient(LLMClient):
     async def _process_completion(
         self,
         completion: ChatCompletion,
-        stream: Stream,
+        ctx: Context,
     ) -> None:
         for choice in completion.choices:
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
-                await stream.send(ModelReasoning(reasoning=r))
+                await ctx.send(ModelReasoning(content=r))
 
             if c := msg.content:
-                await stream.send(ModelResponse(content=c))
+                await ctx.send(ModelResponse(content=c))
 
     async def _process_stream(
         self,
         response_stream: AsyncStream[ChatCompletionChunk],
-        stream: Stream,
+        ctx: Context,
     ) -> None:
         full_content: str = ""
 
@@ -98,21 +111,21 @@ class OpenAIClient(LLMClient):
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
-                    await stream.send(ModelReasoning(reasoning=r))
+                    await ctx.send(ModelReasoning(content=r))
 
                 if c := delta.content:
                     full_content += c
-                    await stream.send(StreamModelResult(content=c))
+                    await ctx.send(StreamModelResult(content=c))
 
         if full_content:
-            await stream.send(ModelResponse(content=full_content))
+            await ctx.send(ModelResponse(content=full_content))
 
         #     delta = chunk.choices[0].delta
         #
         #     if delta.content:
         #         content = delta.content
         #         full_content += content
-        #         await stream.send(StreamModelResult(result=content))
+        #         await stream.ctx(StreamModelResult(result=content))
         #
         #     if delta.tool_calls:
         #         for tool_call in delta.tool_calls:
@@ -124,13 +137,13 @@ class OpenAIClient(LLMClient):
         #                     }
         #                 if tool_call.function.arguments:
         #                     current_tool_call["arguments"] += tool_call.function.arguments
-        #                     await stream.send(StreamToolCall(
+        #                     await stream.ctx(StreamToolCall(
         #                         name=current_tool_call["name"],
         #                         arguments=tool_call.function.arguments,
         #                     ))
         #
         # if current_tool_call and current_tool_call["name"]:
-        #     await stream.send(ToolCall(
+        #     await stream.ctx(ToolCall(
         #         name=current_tool_call["name"],
         #         arguments=current_tool_call["arguments"],
         #     ))

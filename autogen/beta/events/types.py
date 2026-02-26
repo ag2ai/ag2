@@ -36,7 +36,7 @@ class ModelRequest(BaseEvent):
 
 
 class ModelReasoning(BaseEvent):
-    reasoning: str
+    content: str
 
 
 class ModelResponse(BaseEvent):
