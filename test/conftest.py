@@ -322,6 +322,15 @@ def credentials_responses_gpt_4o_mini() -> Credentials:
 
 
 @pytest.fixture
+def credentials_responses_gpt_4o() -> Credentials:
+    return get_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4o",
+        api_type="responses",
+    )
+
+
+@pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
     return get_credentials(
         "GEMINI_API_KEY", model="gemini-2.5-flash", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
