@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 from typing import Protocol
 
 from autogen.beta.events import BaseEvent
@@ -10,5 +9,4 @@ class LLMClient(Protocol):
         self,
         *messages: BaseEvent,
         ctx: Context,
-        system_prompt: Iterable[str] = (),
     ) -> None: ...

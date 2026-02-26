@@ -42,7 +42,6 @@ class OpenAIClient(LLMClient):
         ctx: Context,
     ) -> None:
         openai_messages = self._convert_messages(ctx.prompt, messages)
-        print(openai_messages)
 
         create_kwargs: dict[str, Any] = {
             "model": self._model,

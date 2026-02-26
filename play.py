@@ -12,7 +12,6 @@ from autogen.beta.events import (
     UserMessage,
 )
 from autogen.beta.llms import LLMClient
-from autogen.beta.llms.openai import OpenAIClient
 from autogen.beta.tools import tool
 
 
