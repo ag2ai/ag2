@@ -181,6 +181,8 @@ def test_message_retrieval_handles_various_item_types():
 
     # 1) Plain text block
     assert blocks[0]["text"] == "Hi"
+    # Only expected keys should be present (no raw message fields leaking through)
+    assert set(blocks[0].keys()) == {"type", "role", "text"}
 
     # 2) Tool-call block (web_search)
     assert blocks[1]["name"] == "web_search"
@@ -190,6 +192,41 @@ def test_message_retrieval_handles_various_item_types():
     assert len(tool_calls) == 1
     func_call = tool_calls[0]
     assert func_call["function"]["name"] == "foo"
+
+
+def test_message_retrieval_strips_extra_fields():
+    """message_retrieval() must not leak raw message fields like phase, status, id."""
+
+    output = [
+        _FakeResponse(
+            output=[
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "hello"}],
+                    "phase": None,
+                    "status": "completed",
+                    "id": "msg_abc123",
+                    "role": "assistant",
+                }
+            ]
+        ).output[0],
+    ]
+
+    resp = _FakeResponse(output=output)
+    client = OpenAIResponsesClient(MagicMock())
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    text_block = msgs[0]["content"][0]
+
+    # Only the fields we explicitly construct should be present
+    assert set(text_block.keys()) == {"type", "role", "text"}
+    assert text_block["text"] == "hello"
+
+    # Specifically verify no raw fields leaked through
+    assert "phase" not in text_block
+    assert "status" not in text_block
+    assert "id" not in text_block
 
 
 # -----------------------------------------------------------------------------
