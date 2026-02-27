@@ -12,8 +12,8 @@ from autogen.agentchat.group.events.transition_events import OnConditionLLMTrans
 from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 
-from ...oai import OpenAIWrapper
 from ...fast_depends.utils import is_coroutine_callable
+from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
@@ -101,6 +101,7 @@ class GroupToolExecutor(ConversableAgent):
 
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 return await f(*args, **kwargs)
+
         else:
 
             def wrapper(*args: Any, **kwargs: Any) -> Any:
