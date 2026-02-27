@@ -81,42 +81,42 @@ jobs:
           - "google-api"
           - "wikipedia-api"
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Run tests only for py versions 3.10, 3.13
-        python-version: ["3.10", "3.13"]
+        # Run tests only for py versions 3.10, 3.14
+        python-version: ["3.10", "3.14"]
         # add more if needed
         exclude:
-          # Issues with installing retrievechat-qdrant in python 3.13
-          - python-version: "3.13"
+          # Issues with installing retrievechat-qdrant in python 3.14
+          - python-version: "3.14"
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
           - python-version: "3.10"
             optional-dependencies: "browser-use"
-          # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
+          # Skip if os is mac or windows, python version is 3.14 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat"
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-pgvector"
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-mongodb"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-pgvector"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-mongodb"
-          # Skip RAG tests on macOS and Windows with Python 3.13 due to issues with dependencies like PyTorch and sentence_transformers
+          # Skip RAG tests on macOS and Windows with Python 3.14 due to issues with dependencies like PyTorch and sentence_transformers
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "rag"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "rag"
     steps:
       - uses: actions/checkout@v6
