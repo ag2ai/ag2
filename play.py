@@ -90,6 +90,7 @@ async def main() -> None:
         result = await conversation.ask("And one more time")
         print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
+
 #         # alternatively
 #         # result = await agent.ask("Next turn", stream=conversation.stream)
 #         # print("\nResult:", result.message, "\n", "=" * 80, "\n")
@@ -101,7 +102,6 @@ async def main() -> None:
 #         # print("\nFinal history:")
 #         # pprint(await stream.history.get_events())
 #         # print("\nResult", result.message, "\n", "=" * 80, "\n")
-
 
 
 if __name__ == "__main__":

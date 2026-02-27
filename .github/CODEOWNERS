@@ -1,14 +1,16 @@
 # AG2 code owners
 # About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# A2A, AG-UI, and Remote
+# A2A, AG-UI, beta and Remote
 /autogen/a2a/ @Lancetnik
 /autogen/ag_ui/ @Lancetnik
 /autogen/agentchat/remote/ @Lancetnik
+/autogen/beta/ @Lancetnik
 
 /test/a2a/ @Lancetnik
 /test/ag_ui/ @Lancetnik
 /test/agentchat/remote/ @Lancetnik
+/test/beta/ @Lancetnik
 
 /website/docs/user-guide/a2a/ @Lancetnik
 /website/docs/user-guide/ag-ui/ @Lancetnik
