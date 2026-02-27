@@ -145,6 +145,55 @@ def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai
     )
 
 
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_user_agent_header_is_set(monkeypatch):
+    """Test that User-Agent header with ag2/ prefix is passed to all Anthropic client types."""
+    from unittest.mock import MagicMock, patch
+
+    from anthropic import __version__ as anthropic_sdk_version
+
+    from autogen.version import __version__ as ag2_version
+
+    expected_user_agent = f"ag2/{ag2_version} Anthropic/Python {anthropic_sdk_version}"
+
+    # Test 1: Standard Anthropic client (api_key path)
+    with patch("autogen.oai.anthropic.Anthropic") as mock_anthropic:
+        mock_anthropic.return_value = MagicMock()
+        AnthropicClient(api_key="dummy_api_key")
+        mock_anthropic.assert_called_once()
+        call_kwargs = mock_anthropic.call_args[1]
+        assert "default_headers" in call_kwargs, "default_headers should be passed to Anthropic client"
+        assert call_kwargs["default_headers"]["User-Agent"] == expected_user_agent
+
+    # Test 2: AnthropicBedrock client (AWS credentials path)
+    with patch("autogen.oai.anthropic.AnthropicBedrock") as mock_bedrock:
+        mock_bedrock.return_value = MagicMock()
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        AnthropicClient(
+            aws_access_key="dummy_access_key",
+            aws_secret_key="dummy_secret_key",
+            aws_region="us-west-2",
+        )
+        mock_bedrock.assert_called_once()
+        call_kwargs = mock_bedrock.call_args[1]
+        assert "default_headers" in call_kwargs, "default_headers should be passed to AnthropicBedrock client"
+        assert call_kwargs["default_headers"]["User-Agent"] == expected_user_agent
+
+    # Test 3: AnthropicVertex client (GCP credentials path)
+    with patch("autogen.oai.anthropic.AnthropicVertex") as mock_vertex:
+        mock_vertex.return_value = MagicMock()
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        AnthropicClient(
+            gcp_project_id="dummy_project_id",
+            gcp_region="us-west-2",
+            gcp_auth_token="dummy_auth_token",
+        )
+        mock_vertex.assert_called_once()
+        call_kwargs = mock_vertex.call_args[1]
+        assert "default_headers" in call_kwargs, "default_headers should be passed to AnthropicVertex client"
+        assert call_kwargs["default_headers"]["User-Agent"] == expected_user_agent
+
+
 # Test cost calculation
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_cost_calculation(mock_completion):
