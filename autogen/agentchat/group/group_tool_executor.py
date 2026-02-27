@@ -99,13 +99,16 @@ class GroupToolExecutor(ConversableAgent):
 
         if is_coroutine_callable(f):
 
-            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            async def _async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return await f(*args, **kwargs)
 
+            wrapper: Callable[..., Any] = _async_wrapper
         else:
 
-            def wrapper(*args: Any, **kwargs: Any) -> Any:
+            def _sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return f(*args, **kwargs)
+
+            wrapper = _sync_wrapper
 
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
