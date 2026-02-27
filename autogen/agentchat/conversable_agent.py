@@ -3597,6 +3597,8 @@ class ConversableAgent(LLMAgent):
                     else:
                         # Fallback to sync function if the function is not async
                         content = func(**arguments)
+                    if inspect.isawaitable(content):
+                        content = await content
                     is_exec_success = True
                 except Exception as e:
                     content = f"Error: {e}"
