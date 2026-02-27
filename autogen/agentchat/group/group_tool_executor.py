@@ -13,6 +13,7 @@ from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 
 from ...oai import OpenAIWrapper
+from ...fast_depends.utils import is_coroutine_callable
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
@@ -96,8 +97,14 @@ class GroupToolExecutor(ConversableAgent):
         """
         sig = inspect.signature(f)
 
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return f(*args, **kwargs)
+        if is_coroutine_callable(f):
+
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await f(*args, **kwargs)
+        else:
+
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                return f(*args, **kwargs)
 
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
