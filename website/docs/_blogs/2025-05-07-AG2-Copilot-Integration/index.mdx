@@ -147,22 +147,33 @@ The frontend integration consists of three main parts:
 **1. API Route Configuration** (`ui/app/api/copilotkit/route.ts`):
 
 ```tsx
-import { CopilotRuntime, CustomHttpAgent } from "@copilotkit/runtime";
-import { copilotRuntimeHandler } from "@copilotkit/runtime/nextjs";
+import {
+    CopilotRuntime,
+    ExperimentalEmptyAdapter,
+    copilotRuntimeNextJSAppRouterEndpoint,
+} from "@copilotkit/runtime";
+import { HttpAgent } from "@ag-ui/client";
+import { NextRequest } from "next/server";
 
 // Connect to the AG2 backend server
 const BASE_URL = "http://127.0.0.1:8008";
-
-const agenticChatAgent = new CustomHttpAgent({
-    url: `${BASE_URL}/fastagency/awp`,
-});
+const serviceAdapter = new ExperimentalEmptyAdapter();
 
 const runtime = new CopilotRuntime({
-	agents: {
-        agenticChatAgent,
+    agents: {
+        agentic_chat: new HttpAgent({ url: `${BASE_URL}/fastagency/awp` }),
     },
 });
-export const { GET, POST } = copilotRuntimeHandler(runtime);
+
+export const POST = async (req: NextRequest) => {
+    const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
+        runtime,
+        serviceAdapter,
+        endpoint: "/api/copilotkit",
+    });
+
+    return handleRequest(req);
+};
 ```
 
 This code:
@@ -175,14 +186,14 @@ This code:
 
 ```tsx
 import { CopilotKit } from "@copilotkit/react-core";
-import "@copilotkit/react-ui/styles.css";
+import "@copilotkit/react-core/v2/styles.css";
 
 export default function RootLayout({ children }: { children: any }) {
     return (
         <html lang="en">
             <body>
                 <CopilotKit
-                    agent="agenticChatAgent"
+                    agent="agentic_chat"
                     runtimeUrl="/api/copilotkit"
                     showDevConsole={false}
                 >
@@ -200,7 +211,7 @@ This wraps our application with the CopilotKit provider, connecting it to our ag
 ```tsx
 "use client";
 
-import { CopilotSidebar } from "@copilotkit/react-ui";
+import { CopilotSidebar } from "@copilotkit/react-core/v2";
 
 export default function Home() {
     return (
