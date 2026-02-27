@@ -6,14 +6,17 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from autogen.beta.events import (
     BaseEvent,
+    ModelMessage,
+    ModelMessageChunk,
     ModelReasoning,
     ModelRequest,
     ModelResponse,
-    StreamModelResult,
-    ToolResult,
-    UserMessage,
+    ToolCall,
+    ToolCalls,
+    ToolResults,
 )
 from autogen.beta.stream import Context
+from autogen.beta.tools import Tool
 
 from .client import LLMClient
 
@@ -40,6 +43,7 @@ class OpenAIClient(LLMClient):
         self,
         *messages: BaseEvent,
         ctx: Context,
+        tools: Iterable[Tool],
     ) -> None:
         openai_messages = self._convert_messages(ctx.prompt, messages)
 
@@ -53,7 +57,7 @@ class OpenAIClient(LLMClient):
 
         response = await self._client.chat.completions.create(
             **create_kwargs,
-            tools=[],
+            tools=[t.schema.to_api() for t in tools],
         )
 
         if self._streaming:
@@ -69,18 +73,37 @@ class OpenAIClient(LLMClient):
         result: list[dict[str, str]] = [{"content": p, "role": "developer"} for p in system_prompt]
 
         for message in messages:
-            if isinstance(message, UserMessage):
-                result.append({"role": "user", "content": message.content})
-            elif isinstance(message, ModelRequest):
-                result.append({"role": "user", "content": message.prompt})
-            elif isinstance(message, ModelResponse):
-                result.append({"role": "assistant", "content": message.content})
-            elif isinstance(message, ToolResult):
+            if isinstance(message, ModelRequest):
                 result.append({
-                    "role": "tool",
-                    "tool_call_id": message.name,
-                    "content": message.result,
+                    "role": "user",
+                    "content": message.content,
                 })
+            elif isinstance(message, ModelResponse):
+                msg = {
+                    "role": "assistant",
+                    "content": message.message.content if message.message else None,
+                }
+                tool_calls = [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {
+                            "arguments": c.arguments,
+                            "name": c.name,
+                        },
+                    }
+                    for c in message.tool_calls.calls
+                ]
+                if tool_calls:
+                    msg["tool_calls"] = tool_calls
+                result.append(msg)
+            elif isinstance(message, ToolResults):
+                for r in message.results:
+                    result.append({
+                        "role": "tool",
+                        "tool_call_id": r.id,
+                        "content": r.content,
+                    })
 
         return result
 
@@ -88,23 +111,42 @@ class OpenAIClient(LLMClient):
         self,
         completion: ChatCompletion,
         ctx: Context,
-    ) -> None:
+    ) -> ToolCalls | ModelMessage:
         for choice in completion.choices:
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
                 await ctx.send(ModelReasoning(content=r))
 
+            model_msg: ModelMessage | None = None
             if c := msg.content:
-                await ctx.send(ModelResponse(content=c))
+                model_msg = ModelMessage(content=c)
+                await ctx.send(model_msg)
+
+            calls = [
+                ToolCall(
+                    id=c.id,
+                    name=c.function.name,
+                    arguments=c.function.arguments,
+                )
+                for c in (msg.tool_calls or ())
+            ]
+
+            await ctx.send(
+                ModelResponse(
+                    message=model_msg,
+                    tool_calls=ToolCalls(calls=calls),
+                )
+            )
 
     async def _process_stream(
         self,
         response_stream: AsyncStream[ChatCompletionChunk],
         ctx: Context,
-    ) -> None:
+    ) -> ToolCalls | ModelMessage:
         full_content: str = ""
 
+        calls = []
         async for chunk in response_stream:
             for choice in chunk.choices:
                 delta = choice.delta
@@ -114,35 +156,25 @@ class OpenAIClient(LLMClient):
 
                 if c := delta.content:
                     full_content += c
-                    await ctx.send(StreamModelResult(content=c))
+                    await ctx.send(ModelMessageChunk(content=c))
 
+                for c in delta.tool_calls or []:
+                    calls.append(
+                        ToolCall(
+                            id=c.id,
+                            name=c.function.name,
+                            arguments=c.function.arguments,
+                        )
+                    )
+
+        message: ModelMessage | None = None
         if full_content:
-            await ctx.send(ModelResponse(content=full_content))
+            message = ModelMessage(content=full_content)
+            await ctx.send(message)
 
-        #     delta = chunk.choices[0].delta
-        #
-        #     if delta.content:
-        #         content = delta.content
-        #         full_content += content
-        #         await stream.ctx(StreamModelResult(result=content))
-        #
-        #     if delta.tool_calls:
-        #         for tool_call in delta.tool_calls:
-        #             if tool_call.function:
-        #                 if current_tool_call is None:
-        #                     current_tool_call = {
-        #                         "name": tool_call.function.name or "",
-        #                         "arguments": "",
-        #                     }
-        #                 if tool_call.function.arguments:
-        #                     current_tool_call["arguments"] += tool_call.function.arguments
-        #                     await stream.ctx(StreamToolCall(
-        #                         name=current_tool_call["name"],
-        #                         arguments=tool_call.function.arguments,
-        #                     ))
-        #
-        # if current_tool_call and current_tool_call["name"]:
-        #     await stream.ctx(ToolCall(
-        #         name=current_tool_call["name"],
-        #         arguments=current_tool_call["arguments"],
-        #     ))
+        await ctx.send(
+            ModelResponse(
+                message=message,
+                tool_calls=ToolCalls(calls=calls),
+            )
+        )

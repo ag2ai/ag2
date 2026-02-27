@@ -25,6 +25,7 @@ class Tool:
         name: str,
         description: str,
         schema: FunctionParameters,
+        strict: bool | None,
     ) -> None:
         self.model = model
 
@@ -35,6 +36,7 @@ class Tool:
                 name=self.name,
                 description=self.description,
                 parameters=schema,
+                strict=strict,
             )
         )
 
@@ -66,6 +68,7 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: FunctionParameters | None = None,
+    strict: bool | None = True,
     sync_to_thread: bool = True,
 ) -> Tool: ...
 
@@ -77,6 +80,7 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: FunctionParameters | None = None,
+    strict: bool | None = True,
     sync_to_thread: bool = True,
 ) -> Callable[[Callable[..., Any]], Tool]: ...
 
@@ -87,6 +91,7 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: FunctionParameters | None = None,
+    strict: bool | None = True,
     sync_to_thread: bool = True,
 ) -> Tool | Callable[[Callable[..., Any]], Tool]:
     def make_tool(f: Callable[..., Any]) -> Tool:
@@ -108,6 +113,7 @@ def tool(
                 call_model,
                 exclude=(CONTEXT_OPTION_NAME,),
             ),
+            strict=strict,
         )
 
     if function:

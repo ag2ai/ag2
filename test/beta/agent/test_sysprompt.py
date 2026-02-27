@@ -1,10 +1,11 @@
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, Stream
+from autogen.beta import Agent, Context, MemoryStream
+from autogen.beta.config import LLMClient
 from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.llms import LLMClient
 
 
 class CustomEvent(BaseEvent):
@@ -15,7 +16,10 @@ class MockClient(LLMClient):
     def __init__(self, mock: MagicMock) -> None:
         self.mock = mock
 
-    async def __call__(self, *messages: BaseEvent, ctx: Context) -> None:
+    def create(self) -> "MockClient":
+        return self
+
+    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
         await ctx.send(CustomEvent())
         self.mock(ctx.prompt)
         await ctx.send(ModelResponse(response="Hi, user!"))
@@ -26,7 +30,7 @@ async def test_sysprompt(mock: MagicMock):
     agent = Agent(
         "test",
         prompt="You are a helpful agent!",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     conversation = await agent.ask("Hi, agent!")
@@ -40,7 +44,7 @@ async def test_multiple_sysprompts(mock: MagicMock):
     agent = Agent(
         "test",
         prompt=["1", "2"],
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     conversation = await agent.ask("Hi, agent!")
@@ -54,7 +58,7 @@ async def test_sysprompt_reuse(mock: MagicMock):
     agent = Agent(
         "test",
         prompt="You are a helpful agent!",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     conversation = await agent.ask("Hi, agent!")
@@ -69,7 +73,7 @@ async def test_sysprompt_override_with_call(mock: MagicMock):
     agent = Agent(
         "test",
         prompt="You are a helpful agent!",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     await agent.ask("Hi, agent!", prompt=["1"])
@@ -84,7 +88,7 @@ async def test_callable_sysprompt(mock: MagicMock):
     agent = Agent(
         "test",
         prompt=sysprompt,
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     await agent.ask("Hi, agent!")
@@ -100,7 +104,7 @@ async def test_callable_sysprompt_called_once(mock: MagicMock):
     agent = Agent(
         "test",
         prompt=sysprompt,
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     conversation = await agent.ask("Hi, agent!")
@@ -113,7 +117,7 @@ async def test_callable_sysprompt_called_once(mock: MagicMock):
 async def test_decorator_sysprompt(mock: MagicMock):
     agent = Agent(
         "test",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     @agent.prompt
@@ -133,7 +137,7 @@ async def test_mixed_sysprompts(mock: MagicMock):
     agent = Agent(
         "test",
         prompt=["1", sysprompt],
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     await agent.ask("Hi, agent!")
@@ -146,7 +150,7 @@ async def test_prompt_mutation(mock: MagicMock):
     agent = Agent(
         "test",
         prompt="1",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
     # test first call
@@ -172,10 +176,10 @@ async def test_prompt_mutation_from_subscriber(mock: MagicMock):
     agent = Agent(
         "test",
         prompt="1",
-        client=MockClient(mock),
+        config=MockClient(mock),
     )
 
-    stream = Stream()
+    stream = MemoryStream()
 
     @stream.where(CustomEvent).subscribe()
     async def mutate_prompt(event: CustomEvent, ctx: Context) -> None:

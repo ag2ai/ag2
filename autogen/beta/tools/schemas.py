@@ -2,24 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
-
-class FunctionParameters(BaseModel):
-    type: Literal["object"] = "object"
-    properties: dict[str, Any] = Field(default_factory=dict)
-    required: list[str] = Field(default_factory=list)
+FunctionParameters: TypeAlias = dict[str, Any]
 
 
 class FunctionDefinition(BaseModel):
     name: str = Field(description="Name of the function to call.")
     description: str = Field(default="", description="Description of what the function does.")
     parameters: FunctionParameters = Field(
-        default_factory=FunctionParameters,
+        default_factory=dict,
         description="JSON Schema for the function parameters.",
     )
+    strict: bool | None = True
+
+    def model_post_init(self, context: Any) -> None:
+        self.parameters.pop("title", None)
+        if self.strict is not None:
+            self.parameters = {"additionalProperties": not self.strict} | self.parameters
 
 
 class FunctionTool(BaseModel):

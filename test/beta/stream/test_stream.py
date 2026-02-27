@@ -2,14 +2,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autogen.beta import Context, MemoryStream
 from autogen.beta.events import ModelResponse, ToolCall
-from autogen.beta.stream import Context, Stream
 
 
 class TestStreamSend:
     @pytest.mark.asyncio
     async def test_send_event_to_single_subscriber(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.subscribe(lambda ev, _: async_mock(ev))
         event = ToolCall(name="func1", arguments="test")
@@ -19,7 +19,7 @@ class TestStreamSend:
 
     @pytest.mark.asyncio
     async def test_send_event_to_multiple_subscribers(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.subscribe(lambda ev, _: async_mock.listener1(ev))
         stream.subscribe(lambda ev, _: async_mock.listener2(ev))
@@ -31,7 +31,7 @@ class TestStreamSend:
 
     @pytest.mark.asyncio
     async def test_send_multiple_events(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.subscribe(async_mock)
         event1 = ToolCall(name="func1", arguments="test1")
@@ -48,7 +48,7 @@ class TestStreamSend:
 class TestStreamWhereTypeFilter:
     @pytest.mark.asyncio
     async def test_where_type_filter_by_type(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         tool_stream.subscribe(async_mock)
@@ -64,7 +64,7 @@ class TestStreamWhereTypeFilter:
 
     @pytest.mark.asyncio
     async def test_where_type_filter_by_union_type(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall | ModelResponse)
         tool_stream.subscribe(async_mock)
@@ -78,7 +78,7 @@ class TestStreamWhereTypeFilter:
 
     @pytest.mark.asyncio
     async def test_where_type_filter_no_match(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         tool_stream.subscribe(async_mock)
@@ -92,7 +92,7 @@ class TestStreamWhereTypeFilter:
 class TestStreamWhereConditionFilter:
     @pytest.mark.asyncio
     async def test_where_condition_filter_by_condition(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         func1_stream = tool_stream.where(ToolCall.name == "func1")
@@ -109,7 +109,7 @@ class TestStreamWhereConditionFilter:
 
     @pytest.mark.asyncio
     async def test_where_condition_filter_toolcall_name_no_match(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         func1_stream = tool_stream.where(ToolCall.name == "func1")
@@ -125,7 +125,7 @@ class TestStreamWhereConditionFilter:
 class TestStreamChainedFilters:
     @pytest.mark.asyncio
     async def test_chained_type_and_condition_filters(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.subscribe(async_mock.all)
         tool_stream = stream.where(ToolCall)
@@ -142,7 +142,7 @@ class TestStreamChainedFilters:
 
     @pytest.mark.asyncio
     async def test_unreachable_filter_scenario(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.where(ToolCall).where(ModelResponse).subscribe(async_mock)
 
@@ -156,7 +156,7 @@ class TestStreamChainedFilters:
 class TestStreamMultipleSubscribers:
     @pytest.mark.asyncio
     async def test_multiple_subscribers_same_stream(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         stream.subscribe(async_mock.one)
         stream.subscribe(async_mock.two)
@@ -171,7 +171,7 @@ class TestStreamMultipleSubscribers:
 class TestStreamPlayScenario:
     @pytest.mark.asyncio
     async def test_play_py_scenario(self):
-        stream = Stream()
+        stream = MemoryStream()
         all_listener = AsyncMock()
         tool_listener = AsyncMock()
         tool_func1_listener = AsyncMock()
@@ -213,7 +213,7 @@ class TestStreamPlayScenario:
 class TestStreamUnsubscribe:
     @pytest.mark.asyncio
     async def test_unsubscribe_stops_receiving_events(self, async_mock: AsyncMock):
-        stream = Stream()
+        stream = MemoryStream()
 
         sub_id = stream.subscribe(lambda ev, _: async_mock(ev))
         event = ToolCall(name="func1", arguments="test1")
@@ -228,7 +228,7 @@ class TestStreamUnsubscribe:
 class TestStreamContextPropagation:
     @pytest.mark.asyncio
     async def test_context_propagates_to_substream(self):
-        stream = Stream()
+        stream = MemoryStream()
         listener = AsyncMock()
 
         tool_stream = stream.where(ToolCall)

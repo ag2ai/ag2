@@ -1,81 +1,63 @@
 from .base import BaseEvent
 
 
+class ToolCalls(BaseEvent):
+    calls: list["ToolCall"]
+
+    def __len__(self) -> int:
+        return len(self.calls)
+
+
+class ToolResults(BaseEvent):
+    results: list["ToolResult | ToolError"]
+
+
 class ToolCall(BaseEvent):
-    name: str
-    arguments: str
-
-
-class StreamToolCall(BaseEvent):
+    id: str
     name: str
     arguments: str
 
 
 class ToolResult(BaseEvent):
+    id: str
     name: str
-    result: str
+    content: str
 
 
 class ToolError(BaseEvent):
+    id: str
     name: str
-    error: str
-
-
-class StreamToolResult(BaseEvent):
-    name: str
-    result: str
-
-
-class MoveSpeaker(BaseEvent):
-    speaker: str
-    context: str
+    content: str
 
 
 class ModelRequest(BaseEvent):
-    prompt: str
+    content: str
 
 
 class ModelReasoning(BaseEvent):
     content: str
 
 
-class ModelResponse(BaseEvent):
+class ModelMessage(BaseEvent):
     content: str
 
 
-class StreamModelResult(BaseEvent):
+class ModelResponse(BaseEvent):
+    """Final ModelMessage."""
+
+    message: ModelMessage | None
+    tool_calls: ToolCalls
+
+
+class ModelMessageChunk(BaseEvent):
     content: str
 
 
 class HITL(BaseEvent):
-    message: str
-
-
-class UserMessage(BaseEvent):
     content: str
 
 
-class ThreadStarted(BaseEvent):
-    thread_id: str
+class UserMessage(BaseEvent):
+    """HITL Response."""
 
-
-class ThreadComplete(BaseEvent):
-    thread_id: str
-
-
-class ThreadError(BaseEvent):
-    thread_id: str
-    error: str
-
-
-class RunStarted(BaseEvent):
-    run_id: str
-
-
-class RunComplete(BaseEvent):
-    run_id: str
-
-
-class RunError(BaseEvent):
-    run_id: str
-    error: str
+    content: str

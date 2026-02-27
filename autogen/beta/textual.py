@@ -3,15 +3,15 @@ from textual.app import App, ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Header, Input, Markdown
 
-from autogen.beta import Agent, Context, Conversation, Stream
-from autogen.beta.events import ModelReasoning, StreamModelResult
+from autogen.beta import Agent, Context, Conversation, MemoryStream
+from autogen.beta.events import ModelMessageChunk, ModelReasoning
 
 
 class TUIAgent(App):
     def __init__(self, agent: Agent):
         super().__init__()
 
-        self.stream = Stream()
+        self.stream = MemoryStream()
         self.agent = agent
         self.conversation: Conversation | None = None
 
@@ -53,7 +53,7 @@ class TUIAgent(App):
             assistant_message = Markdown(f"**{self.agent.name}:** ", classes="assistant-message")
             text_mounted = False
 
-            async def put_message_chunk(event: StreamModelResult, ctx: Context) -> None:
+            async def put_message_chunk(event: ModelMessageChunk, ctx: Context) -> None:
                 nonlocal text_mounted
                 if not text_mounted:
                     await thinking_block.remove()
@@ -65,7 +65,7 @@ class TUIAgent(App):
 
             try:
                 with (
-                    self.stream.where(StreamModelResult).sub_scope(put_message_chunk),
+                    self.stream.where(ModelMessageChunk).sub_scope(put_message_chunk),
                     self.stream.where(ModelReasoning).sub_scope(put_reasoning_chunk),
                 ):
                     c = self.conversation = await (

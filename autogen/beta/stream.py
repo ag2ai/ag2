@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Protocol, TypeAlias, overload
+from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
 from uuid import UUID, uuid4
 
 from .events import HITL, BaseEvent, UserMessage
@@ -16,12 +16,12 @@ SubId: TypeAlias = UUID
 @dataclass(slots=True)
 class Context:
     stream: "Stream"
-    subscriber_id: SubId | None = None
+
     prompt: list[str] = field(default_factory=list)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         async with self.stream.get(UserMessage) as response:
-            await self.send(HITL(message=message))
+            await self.send(HITL(content=message))
             return (await asyncio.wait_for(response, timeout)).content
 
     async def send(self, event: BaseEvent) -> None:
@@ -36,7 +36,8 @@ class Interrupter(Protocol):
     async def __call__(self, event: BaseEvent, ctx: Context) -> BaseEvent | None: ...
 
 
-class StreamInterface(Protocol):
+@runtime_checkable
+class Stream(Protocol):
     @overload
     def subscribe(
         self,
@@ -73,7 +74,7 @@ class StreamInterface(Protocol):
     def where(
         self,
         condition: ClassInfo | Condition,
-    ) -> "StreamInterface":
+    ) -> "Stream":
         if not isinstance(condition, Condition):
             condition = TypeCondition(condition)
         return SubStream(self, condition)
@@ -92,7 +93,7 @@ class StreamInterface(Protocol):
             yield result
 
 
-class Stream(StreamInterface):
+class MemoryStream(Stream):
     def __init__(
         self,
         storage: Storage | None = None,
@@ -153,21 +154,19 @@ class Stream(StreamInterface):
         ctx: Context,
     ) -> None:
         # interrupters should follow registration order
-        for sub_id, interrupter in self._interrupters.copy().items():
-            ctx.subscriber_id = sub_id
+        for interrupter in self._interrupters.values():
             if not (e := await interrupter(event, ctx)):
                 return
             event = e
 
-        for sub_id, s in self._subscribers.copy().items():
-            ctx.subscriber_id = sub_id
+        for s in self._subscribers.values():
             await s(event, ctx)
 
 
-class SubStream(StreamInterface):
+class SubStream(Stream):
     def __init__(
         self,
-        parent: StreamInterface,
+        parent: Stream,
         condition: Condition,
     ) -> None:
         self._filter_condition = condition
