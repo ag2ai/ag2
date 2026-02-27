@@ -193,7 +193,7 @@ class SocietyOfMindAgent(ConversableAgent):
 
         try:
             self.initiate_chat(self.chat_manager, message=messages[-1], clear_history=False)
-        except Exception:
+        except:
             traceback.print_exc()
 
         response_preparer = self.response_preparer
