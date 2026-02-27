@@ -40,9 +40,9 @@ async def hitl_subscriber(event: HITL, ctx: Context) -> None:
 stream = MemoryStream()
 
 
-# @stream.subscribe()
-# async def log_all_event(event: BaseEvent, ctx: Context):
-#     print("event:", event)
+@stream.subscribe()
+async def log_all_event(event: BaseEvent, ctx: Context):
+    print("event:", event)
 
 
 @stream.where(ToolCall).subscribe(interrupt=True)
@@ -67,7 +67,11 @@ async def get_prompt(event: BaseEvent, ctx: Context) -> str:
 agent = Agent(
     "test",
     prompt=["You are a helpful agent!", get_prompt],
-    config=OpenAIConfig("gpt-5", reasoning_effort="high"),
+    config=OpenAIConfig(
+        "gpt-5-nano",
+        reasoning_effort="low",
+        streaming=True,
+    ),
     # config=MockClient(),
     tools=[func],
 )
@@ -86,17 +90,24 @@ async def main() -> None:
         result = await conversation.ask("And one more time")
         print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
-        # alternatively
-        # result = await agent.ask("Next turn", stream=conversation.stream)
-        # print("\nResult:", result.message, "\n", "=" * 80, "\n")
+#         # alternatively
+#         # result = await agent.ask("Next turn", stream=conversation.stream)
+#         # print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
-        # restore process from partialhistory
-        # await conversation.stream.history.replace(final_events[:-4])
-        # pprint(await conversation.stream.history.get_events())
-        # result = await agent.restore(stream=stream)
-        # print("\nFinal history:")
-        # pprint(await stream.history.get_events())
-        # print("\nResult", result.message, "\n", "=" * 80, "\n")
+#         # restore process from partialhistory
+#         # await conversation.stream.history.replace(final_events[:-4])
+#         # pprint(await conversation.stream.history.get_events())
+#         # result = await agent.restore(stream=stream)
+#         # print("\nFinal history:")
+#         # pprint(await stream.history.get_events())
+#         # print("\nResult", result.message, "\n", "=" * 80, "\n")
 
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+#     from autogen.beta.textual import TUIAgent
+
+#     agent = TUIAgent(agent)
+#     agent.run()

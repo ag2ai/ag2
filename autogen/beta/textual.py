@@ -75,23 +75,10 @@ class TUIAgent(App):
                         await thinking_block.remove()
                         await chat_container.mount(assistant_message)
 
-                    final_content = c.message.content
+                    final_content = c.message.message.content
                     await assistant_message.update(f"**{self.agent.name}:** {final_content}")
                     assistant_message.scroll_visible(immediate=True)
 
             finally:
                 inp.disabled = False
                 inp.focus()
-
-
-# usage example
-# from autogen.beta.llms.openai import OpenAIClient
-
-# agent = Agent(
-#     "test-agent",
-#     client=OpenAIClient("gpt-5"),
-# )
-
-# if __name__ == "__main__":
-#     app = TUIAgent(agent)
-#     app.run()

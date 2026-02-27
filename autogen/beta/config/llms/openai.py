@@ -54,6 +54,8 @@ class OpenAIClient(LLMClient):
         }
         if self._reasoning_effort is not None:
             create_kwargs["reasoning_effort"] = self._reasoning_effort
+        if self._streaming:
+            create_kwargs["stream_options"] = {"include_usage": True}
 
         response = await self._client.chat.completions.create(
             **create_kwargs,
@@ -136,6 +138,7 @@ class OpenAIClient(LLMClient):
                 ModelResponse(
                     message=model_msg,
                     tool_calls=ToolCalls(calls=calls),
+                    usage=completion.usage.model_dump() if completion.usage else {},
                 )
             )
 
@@ -145,9 +148,16 @@ class OpenAIClient(LLMClient):
         ctx: Context,
     ) -> ToolCalls | ModelMessage:
         full_content: str = ""
+        usage: dict[str, Any] = {}
 
-        calls = []
+        # Accumulate tool calls by index (streaming sends partial updates per index)
+        full_tool_calls: list[dict[str, str]] = []
+
         async for chunk in response_stream:
+            # Usage is available only in the last chunk
+            if chunk.usage:
+                usage = chunk.usage.model_dump()
+
             for choice in chunk.choices:
                 delta = choice.delta
 
@@ -158,23 +168,43 @@ class OpenAIClient(LLMClient):
                     full_content += c
                     await ctx.send(ModelMessageChunk(content=c))
 
-                for c in delta.tool_calls or []:
-                    calls.append(
-                        ToolCall(
-                            id=c.id,
-                            name=c.function.name,
-                            arguments=c.function.arguments,
+                for tc in delta.tool_calls or []:
+                    ix = tc.index
+                    if ix >= len(full_tool_calls):
+                        full_tool_calls.extend(
+                            {
+                                "id": "",
+                                "name": "",
+                                "arguments": "",
+                            }
+                            for _ in range(ix - len(full_tool_calls) + 1)
                         )
-                    )
+                    acc = full_tool_calls[ix]
+                    if tc.id is not None:
+                        acc["id"] = tc.id
+                    if getattr(tc.function, "name", None):
+                        acc["name"] = tc.function.name
+                    args_chunk = getattr(tc.function, "arguments", None) or ""
+                    acc["arguments"] += args_chunk
 
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
+        calls = [
+            ToolCall(
+                id=acc["id"],
+                name=acc["name"],
+                arguments=acc["arguments"],
+            )
+            for acc in full_tool_calls
+        ]
+
         await ctx.send(
             ModelResponse(
                 message=message,
                 tool_calls=ToolCalls(calls=calls),
+                usage=usage,
             )
         )

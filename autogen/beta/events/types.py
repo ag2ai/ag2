@@ -47,6 +47,7 @@ class ModelResponse(BaseEvent):
 
     message: ModelMessage | None
     tool_calls: ToolCalls
+    usage: dict[str, float]
 
 
 class ModelMessageChunk(BaseEvent):
