@@ -92,9 +92,29 @@ class Agent(Askable):
     def tools(self) -> tuple[Tool, ...]:
         return tuple(self.__tools_executor.tools.values())
 
-    def prompt(self, func: PromptHook) -> PromptHook:
-        self._dynamic_prompt.append(func)
-        return func
+    @overload
+    def prompt(
+        self,
+        func: None = None,
+    ) -> Callable[[PromptHook], PromptHook]: ...
+
+    @overload
+    def prompt(
+        self,
+        func: PromptHook,
+    ) -> PromptHook: ...
+
+    def prompt(
+        self,
+        func: PromptHook | None = None,
+    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
+        def wrapper(f: PromptHook) -> PromptHook:
+            self._dynamic_prompt.append(f)
+            return f
+
+        if func:
+            return wrapper(func)
+        return wrapper
 
     @overload
     def tool(

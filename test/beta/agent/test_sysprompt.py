@@ -115,12 +115,21 @@ async def test_callable_sysprompt_called_once(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_decorator_sysprompt(mock: MagicMock):
-    agent = Agent(
-        "test",
-        config=MockClient(mock),
-    )
+    agent = Agent("test", config=MockClient(mock))
 
     @agent.prompt
+    async def sysprompt(event: BaseEvent, ctx: Context) -> str:
+        return "1"
+
+    await agent.ask("Hi, agent!")
+    mock.assert_called_once_with(["1"])
+
+
+@pytest.mark.asyncio()
+async def test_callable_sysprompt_decorator(mock: MagicMock):
+    agent = Agent("test", config=MockClient(mock))
+
+    @agent.prompt()
     async def sysprompt(event: BaseEvent, ctx: Context) -> str:
         return "1"
 
