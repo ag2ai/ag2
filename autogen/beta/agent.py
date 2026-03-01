@@ -69,10 +69,12 @@ class Agent(Askable):
         *,
         config: ModelConfig,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        dependencies: dict[Any, Any] | None = {},
     ):
         self.name = name
         self.config = config
 
+        self._agent_dependencies = dependencies
         self.dependency_provider = Provider()
         self.__tools_executor = ToolsExecutor(Tool.ensure_tool(t, provider=self.dependency_provider) for t in tools)
 
@@ -174,12 +176,17 @@ class Agent(Askable):
         *,
         stream: Stream | None = None,
         prompt: Iterable[str] = (),
+        dependencies: dict[Any, Any] | None = None,
     ) -> "Conversation":
         stream = stream or MemoryStream()
 
         initial_event = ModelRequest(content=msg)
 
-        ctx = Context(stream, prompt=list(prompt))
+        ctx = Context(
+            stream,
+            prompt=list(prompt),
+            container=self._agent_dependencies | (dependencies or {}),
+        )
 
         if not ctx.prompt:
             ctx.prompt.extend(self._system_prompt)

@@ -112,3 +112,18 @@ async def test_tool_get_context(mock: MagicMock) -> None:
         )
         == b'"1"'
     )
+
+
+@pytest.mark.asyncio
+async def test_tool_get_context_by_random_name(mock: MagicMock) -> None:
+    @tool
+    def my_func(a: str, c: Context) -> str:
+        return "".join(c.prompt)
+
+    assert (
+        await my_func.execute(
+            json.dumps({"a": "1"}),
+            ctx=Context(mock, prompt=["1"]),
+        )
+        == b'"1"'
+    )

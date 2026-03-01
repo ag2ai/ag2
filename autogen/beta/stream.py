@@ -22,6 +22,7 @@ class Context:
     stream: "Stream"
 
     prompt: list[str] = field(default_factory=list)
+    container: dict[Any, Any] = field(default_factory=dict)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         async with self.stream.get(UserMessage) as response:

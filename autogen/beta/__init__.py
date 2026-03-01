@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .agent import Agent, Conversation
-from .stream import Context, MemoryStream, Stream
+from .annotations import Context, Inject
+from .stream import MemoryStream, Stream
 from .tools.tool import tool
 
 __all__ = (
     "Agent",
     "Context",
     "Conversation",
+    "Inject",
     "MemoryStream",
     "Stream",
     "tool",

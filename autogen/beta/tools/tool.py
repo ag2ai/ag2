@@ -18,7 +18,7 @@ from autogen.beta.stream import Context
 
 from .schemas import FunctionDefinition, FunctionParameters, FunctionTool
 
-CONTEXT_OPTION_NAME = "ctx"
+CONTEXT_OPTION_NAME = "__ctx__"
 
 
 class Tool:
@@ -52,6 +52,9 @@ class Tool:
     ) -> "Tool":
         t = func if isinstance(func, Tool) else tool(func)
         if provider:
+            # copy dependencies from current provider to a new one
+            # it is required to support annotations
+            provider.dependencies = t.model.dependency_provider.dependencies | provider.dependencies
             t.model.dependency_provider = provider
         return t
 
