@@ -1,0 +1,675 @@
+---
+title: "Structured Outputs with Amazon Bedrock in AG2: Type-Safe LLM Responses"
+
+authors: [priyansh4320]
+
+tags: [Bedrock, Structured Output, Amazon, AWS, Pydantic, Type Safety, Tool Use, Function Calling]
+
+---
+
+AG2's integration with Amazon Bedrock now supports **structured outputs**, enabling you to define precise JSON schemas that models must follow. Instead of parsing free-form text responses, you can now get guaranteed, type-safe, and validated responses that match your exact specifications.
+
+This article explores how to leverage Bedrock's structured output capabilities in AG2, using Pydantic models and dict schemas to build reliable, production-ready agent workflows with consistent response formats.
+
+{/* more */}
+
+Traditional LLM interactions return unstructured text that requires parsing, validation, and error handling. While this works for simple use cases, it becomes challenging when you need:
+
+- **Consistent data formats**: Ensuring responses always match your expected structure
+- **Type safety**: Validating responses against schemas before processing
+- **Parseable results**: Guaranteeing valid JSON that can be directly consumed
+- **Production reliability**: Reducing errors from malformed or unexpected responses
+
+Bedrock's structured outputs solve these challenges by leveraging **Tool Use** (Function Calling) to enforce schema compliance. When you provide a `response_format`, AG2 automatically converts your schema into a Bedrock tool definition and forces the model to use it, ensuring every response matches your specification.
+
+**Key Features:**
+
+- **Schema Enforcement**: Define Pydantic models or JSON schemas that models must follow exactly
+
+- **Automatic Validation**: Responses are automatically validated against your schema before being returned
+
+- **Type Safety**: Use Pydantic models for full type checking and IDE autocomplete support
+
+- **Flexible Schemas**: Support both Pydantic models and plain dictionary schemas
+
+- **Tool Use Integration**: Leverages Bedrock's Tool Use API for reliable schema compliance
+
+- **Custom Formatting**: Add custom `format()` methods to Pydantic models for human-readable output
+
+- **Production Ready**: Built-in error handling and validation for reliable workflows
+
+**Why This Matters:**
+
+Building production agent systems requires predictable, structured data. Without structured outputs, you're left parsing free-form text, handling edge cases, and writing extensive validation logic. Bedrock structured outputs eliminate this complexity by guaranteeing that every response matches your schema, reducing errors and making your agents more reliable.
+
+**When to Use Structured Outputs:**
+
+Use structured outputs when you need:
+
+- **Data Extraction**: Extract structured information from unstructured queries
+- **API Integration**: Generate responses that match specific API contracts
+- **Multi-Agent Workflows**: Ensure consistent message formats between agents
+- **Type-Safe Processing**: Validate and type-check responses before use
+- **Production Systems**: Build reliable systems with guaranteed response formats
+
+Don't use structured outputs for:
+- Free-form conversational responses where structure isn't needed
+- Simple text generation tasks without specific format requirements
+- Workflows that benefit from creative, unstructured responses
+
+## Understanding Bedrock Structured Outputs
+
+Bedrock implements structured outputs using **Tool Use** (Function Calling). When you provide a `response_format` parameter, AG2:
+
+1. **Converts your schema to a tool**: Your Pydantic model or dict schema becomes a Bedrock tool definition
+2. **Forces tool usage**: Sets `toolChoice` to require the model to call the structured output tool
+3. **Extracts the data**: Gets the structured data from the tool call's input
+4. **Validates**: If using Pydantic, validates the data against your model
+5. **Formats**: Returns the JSON string (or formatted string if your model has a `format()` method)
+
+This approach is based on the [AWS Bedrock Converse API](https://aws.amazon.com/blogs/machine-learning/structured-data-response-with-amazon-bedrock-prompt-engineering-and-tool-use/) and ensures reliable schema compliance.
+
+### Key Components
+
+**1. Pydantic Models**: Type-safe schema definitions with automatic validation
+   - Define models using Python classes with type hints
+   - Automatic JSON schema generation
+   - Built-in validation and serialization
+   - Support for custom formatting methods
+
+**2. Dict Schemas**: Flexible JSON Schema definitions
+   - Plain dictionary-based schemas
+   - No external dependencies
+   - Dynamic schema generation
+   - Full JSON Schema specification support
+
+**3. LLMConfig**: Configuration object that accepts `response_format`
+   - Supports both Pydantic models and dict schemas
+   - Automatically converts schemas to Bedrock tools
+   - Handles tool creation and enforcement
+
+**4. BedrockClient**: The underlying client that implements structured outputs
+   - Creates `__structured_output` tool from your schema
+   - Manages tool choice enforcement
+   - Extracts and validates responses
+
+## Basic Setup
+
+The simplest way to use structured outputs is to define a Pydantic model and pass it to `LLMConfig`:
+
+```python
+from pydantic import BaseModel
+from autogen import ConversableAgent, LLMConfig
+import os
+
+# Define structured output model
+class Step(BaseModel):
+    """Represents a single step in solving a math problem."""
+    explanation: str  # What operation or reasoning is being performed
+    output: str  # The result of this step
+
+class MathReasoning(BaseModel):
+    """Complete structured response for a math problem solution."""
+    steps: list[Step]  # List of all steps taken
+    final_answer: str  # The final answer
+
+# Configure LLM with Bedrock and structured outputs
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "api_key": os.getenv("BEDROCK_API_KEY"),
+        "aws_region": os.getenv("AWS_REGION"),
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY"),
+        "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "response_format": MathReasoning,  # Enable structured outputs
+    },
+)
+
+# Create agent with structured output capability
+math_agent = ConversableAgent(
+    name="math_assistant",
+    llm_config=llm_config,
+    system_message="You are a helpful math assistant that solves problems step by step.",
+    max_consecutive_auto_reply=1,
+    human_input_mode="NEVER",
+)
+
+# Use the agent
+result = math_agent.run(
+    message="Solve the equation: 2x + 5 = -25.",
+    max_turns=5,
+).process()
+```
+
+This pattern ensures:
+- Responses always match your schema
+- Automatic validation against the Pydantic model
+- Type-safe access to response fields
+- Clean, parseable JSON output
+
+## Model Compatibility
+
+Not all Bedrock models support Tool Use, which is required for structured outputs. Models that **do support** structured outputs include:
+
+- `anthropic.claude-3-5-sonnet-20241022-v2:0`
+- `anthropic.claude-3-sonnet-20240229-v1:0`
+- `anthropic.claude-3-opus-20240229-v1:0`
+- `anthropic.claude-3-haiku-20240307-v1:0`
+
+Check the [Bedrock model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) for the latest list of models supporting Tool Use.
+
+## Practical Examples
+
+### Example 1: Simple Math Problem with Pydantic
+
+Define a Pydantic model and use it for structured responses:
+
+```python
+from pydantic import BaseModel
+from autogen import ConversableAgent, LLMConfig
+
+class Step(BaseModel):
+    explanation: str
+    output: str
+
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
+
+    def format(self) -> str:
+        """Format the structured output for human-readable display."""
+        steps_output = "\n".join(
+            f"Step {i + 1}: {step.explanation}\n  Output: {step.output}"
+            for i, step in enumerate(self.steps)
+        )
+        return f"{steps_output}\n\nFinal Answer: {self.final_answer}"
+
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "api_key": os.getenv("BEDROCK_API_KEY"),
+        "aws_region": os.getenv("AWS_REGION"),
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY"),
+        "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "response_format": MathReasoning,
+    },
+)
+
+math_agent = ConversableAgent(
+    name="math_assistant",
+    llm_config=llm_config,
+    system_message="You are a helpful math assistant that solves problems step by step.",
+    max_consecutive_auto_reply=1,
+    human_input_mode="NEVER",
+)
+
+result = math_agent.run(
+    message="Solve the equation: 2x + 5 = -25.",
+    max_turns=5,
+).process()
+```
+
+### Example 2: Using Dict Schema
+
+You can also use a plain dictionary schema instead of Pydantic:
+
+```python
+import json
+from autogen import ConversableAgent, LLMConfig
+
+# Define schema as a dictionary (JSON Schema format)
+dict_schema = {
+    "type": "object",
+    "properties": {
+        "problem": {"type": "string", "description": "The math problem being solved"},
+        "solution_steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "step": {"type": "string"},
+                    "result": {"type": "string"}
+                },
+                "required": ["step", "result"],
+            },
+        },
+        "answer": {"type": "string"},
+    },
+    "required": ["problem", "solution_steps", "answer"],
+}
+
+llm_config_dict = LLMConfig(
+    config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "api_key": os.getenv("BEDROCK_API_KEY"),
+        "aws_region": os.getenv("AWS_REGION", "us-east-1"),
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY_ID"),
+        "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "response_format": dict_schema,  # Using dict schema
+    },
+)
+
+math_agent_dict = ConversableAgent(
+    name="math_assistant_dict",
+    llm_config=llm_config_dict,
+    system_message="You are a helpful math assistant.",
+    max_consecutive_auto_reply=1,
+    human_input_mode="NEVER",
+)
+
+result = math_agent_dict.run(
+    message="Solve: x^2 - 5x + 6 = 0",
+    max_turns=5,
+).process()
+```
+
+### Example 3: Advanced Custom Formatting
+
+Add custom formatting methods to your Pydantic models:
+
+```python
+class DetailedMathReasoning(BaseModel):
+    """Enhanced math reasoning with custom formatting."""
+    problem: str
+    steps: list[Step]
+    final_answer: str
+    verification: str | None = None
+
+    def format(self) -> str:
+        """Custom formatted output with problem statement."""
+        output = f"Problem: {self.problem}\n\n"
+        output += "Solution Steps:\n"
+        for i, step in enumerate(self.steps, 1):
+            output += f"  {i}. {step.explanation}\n"
+            output += f"     → {step.output}\n"
+        output += f"\nFinal Answer: {self.final_answer}"
+        if self.verification:
+            output += f"\n\nVerification: {self.verification}"
+        return output
+
+    def to_markdown(self) -> str:
+        """Export as Markdown format."""
+        md = f"## Problem\n\n{self.problem}\n\n"
+        md += "## Solution\n\n"
+        for i, step in enumerate(self.steps, 1):
+            md += f"### Step {i}\n\n"
+            md += f"**Explanation**: {step.explanation}\n\n"
+            md += f"**Result**: `{step.output}`\n\n"
+        md += f"## Final Answer\n\n`{self.final_answer}`"
+        return md
+
+enhanced_llm_config = LLMConfig(
+    config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "aws_region": os.getenv("AWS_REGION", "us-east-1"),
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY_ID"),
+        "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "response_format": DetailedMathReasoning,
+    },
+)
+
+enhanced_agent = ConversableAgent(
+    name="enhanced_math_assistant",
+    llm_config=enhanced_llm_config,
+    system_message="You are a detailed math assistant. Always verify your answers.",
+    max_consecutive_auto_reply=1,
+)
+```
+
+### Example 4: Multi-Agent Workflow with Structured Outputs
+
+Use structured outputs in group chats for consistent message formats:
+
+```python
+from autogen import ConversableAgent, LLMConfig, UserProxyAgent
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns.auto import AutoPattern
+
+class RoutingDecision(BaseModel):
+    """Structured routing decision from the orchestrator."""
+    request_analysis: str
+    task_details: dict
+    selected_agent: str
+    routing_reason: str
+    expected_outcome: str
+    next_steps: list[str] = []
+
+    def format(self) -> str:
+        """Format the structured output for human-readable display."""
+        output = "🎯 Pipeline Orchestration Decision\n"
+        output += f"{'=' * 60}\n\n"
+        output += f"Request Analysis:\n{self.request_analysis}\n\n"
+        output += f"Selected Agent: {self.selected_agent}\n"
+        output += f"Reason: {self.routing_reason}\n"
+        output += f"Expected Outcome: {self.expected_outcome}\n"
+        if self.next_steps:
+            output += "\nNext Steps:\n"
+            for i, step in enumerate(self.next_steps, 1):
+                output += f"  {i}. {step}\n"
+        return output
+
+orchestrator_llm_config = LLMConfig(
+    config_list={
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "api_key": os.getenv("BEDROCK_API_KEY"),
+        "aws_region": os.getenv("AWS_REGION"),
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY"),
+        "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "response_format": RoutingDecision,
+    },
+)
+
+orchestrator = ConversableAgent(
+    name="pipeline_orchestrator",
+    system_message="""You are the Pipeline Orchestrator. Analyze user requests
+    and provide structured routing decisions.""",
+    llm_config=orchestrator_llm_config,
+)
+
+# Other agents with regular configs...
+# Use AutoPattern for group chat
+pattern = AutoPattern(
+    initial_agent=orchestrator,
+    agents=[orchestrator, project_creator, code_developer],
+    group_manager_args={"llm_config": orchestrator_llm_config},
+)
+```
+
+## Advanced Patterns
+
+### Pattern 1: Understanding How It Works
+
+Inspect the tool that gets created from your schema:
+
+```python
+from autogen.oai.bedrock import BedrockClient
+import json
+
+# Create a temporary client to see the tool creation
+temp_client = BedrockClient(
+    aws_region=os.getenv("AWS_REGION", "us-east-1"),
+    aws_access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    response_format=MathReasoning,
+)
+
+# See how the schema is converted to a tool
+tool = temp_client._create_structured_output_tool(MathReasoning)
+
+print("Tool definition created from MathReasoning schema:")
+print(json.dumps(tool, indent=2))
+```
+
+Notice that:
+- The tool name is `"__structured_output"` (a reserved name)
+- The `inputSchema` contains your JSON schema
+- The description explains it's for structured output generation
+
+### Pattern 2: Error Handling
+
+Add robust error handling for production use:
+
+```python
+from typing import Optional
+
+async def safe_structured_query(
+    agent: ConversableAgent,
+    message: str,
+    max_retries: int = 3,
+) -> Optional[dict]:
+    """Execute query with retry logic and error handling."""
+    for attempt in range(max_retries):
+        try:
+            result = await agent.a_run(
+                message=message,
+                max_turns=5,
+            )
+            processed = await result.process()
+            return processed
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                continue
+            else:
+                print(f"All attempts failed: {e}")
+                return None
+    return None
+```
+
+### Pattern 3: Schema Validation
+
+Validate schemas before using them:
+
+```python
+def validate_schema(model: type[BaseModel]) -> bool:
+    """Validate that a Pydantic model can be used as a response format."""
+    try:
+        schema = model.model_json_schema()
+        # Check required fields
+        if "properties" not in schema:
+            return False
+        return True
+    except Exception as e:
+        print(f"Schema validation failed: {e}")
+        return False
+
+# Validate before use
+if validate_schema(MathReasoning):
+    llm_config = LLMConfig(
+        config_list={
+            # ... config with response_format=MathReasoning
+        },
+    )
+```
+
+## Best Practices
+
+### 1. Choose the Right Model
+
+- Use Claude models (they have excellent tool use support)
+- Check model compatibility before using structured outputs
+- Verify the model supports Tool Use in the Bedrock documentation
+
+### 2. Schema Design
+
+- Keep schemas simple and focused
+- Use descriptive field names and descriptions
+- Make required fields explicit
+- Avoid deeply nested structures when possible
+
+### 3. Pydantic vs Dict Schema
+
+- **Use Pydantic** when you need:
+  - Type validation
+  - Automatic serialization/deserialization
+  - IDE autocomplete
+  - Custom formatting methods
+- **Use Dict Schema** when you need:
+  - Dynamic schemas
+  - Simpler setup
+  - No external dependencies
+
+### 4. Error Handling
+
+- Always wrap parsing in try/except blocks
+- Provide fallback behavior when structured output fails
+- Log errors for debugging
+- Validate responses before processing
+
+### 5. Performance Considerations
+
+- Structured outputs add a small overhead (tool call)
+- Consider caching for repeated queries
+- Use `cache_seed` for reproducible results during development
+- Monitor response times and adjust as needed
+
+### 6. Custom Formatting
+
+- Add `format()` methods to Pydantic models for better display
+- Use custom methods like `to_markdown()` for different output formats
+- Keep formatting logic separate from validation
+
+## Troubleshooting
+
+### Common Issues
+
+**1. Model Doesn't Support Tool Use**
+
+Verify your model supports Tool Use:
+
+```python
+# Check model compatibility
+supported_models = [
+    "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "anthropic.claude-3-sonnet-20240229-v1:0",
+    # ... other supported models
+]
+
+if model not in supported_models:
+    raise ValueError(f"Model {model} does not support Tool Use")
+```
+
+**2. Schema Validation Errors**
+
+Ensure your schema is valid:
+
+```python
+# Test schema generation
+try:
+    schema = MathReasoning.model_json_schema()
+    print("Schema is valid")
+except Exception as e:
+    print(f"Schema error: {e}")
+```
+
+**3. Response Doesn't Match Schema**
+
+Check that your system message guides the model:
+
+```python
+system_message = """You are a helpful assistant.
+Always provide responses in the exact format specified by the structured output schema.
+Ensure all required fields are present and correctly formatted."""
+```
+
+**4. AWS Credentials Issues**
+
+Verify AWS credentials are configured:
+
+```python
+import boto3
+
+# Test credentials
+try:
+    session = boto3.Session(
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION"),
+    )
+    # Test Bedrock access
+    bedrock = session.client("bedrock")
+    print("AWS credentials valid")
+except Exception as e:
+    print(f"Credentials error: {e}")
+```
+
+**5. Tool Creation Fails**
+
+Inspect the tool being created:
+
+```python
+from autogen.oai.bedrock import BedrockClient
+
+client = BedrockClient(
+    response_format=MathReasoning,
+    # ... other config
+)
+
+tool = client._create_structured_output_tool(MathReasoning)
+print(json.dumps(tool, indent=2))
+```
+
+## Benefits Summary
+
+- **Type Safety**: Pydantic models provide full type checking and validation
+- **Consistency**: Every response matches your exact schema specification
+- **Reliability**: Automatic validation reduces errors from malformed responses
+- **Developer Experience**: IDE autocomplete and type hints improve productivity
+- **Production Ready**: Built-in error handling and validation for reliable workflows
+- **Flexibility**: Support for both Pydantic models and dict schemas
+- **Custom Formatting**: Add custom methods for different output formats
+
+## Getting Started
+
+1. **Install required packages**:
+
+   ```bash
+   pip install ag2 boto3 pydantic --upgrade
+   ```
+   2. **Configure AWS credentials**:
+
+   ```python
+   import os
+   from dotenv import load_dotenv
+
+   load_dotenv()
+   # Set AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, AWS_REGION
+   ```
+   3. **Define your schema**:
+
+   ```python
+   from pydantic import BaseModel
+
+   class MyResponse(BaseModel):
+       field1: str
+       field2: int
+   ```
+   4. **Configure LLM with structured outputs**:
+
+   ```python
+   from autogen import LLMConfig
+
+   llm_config = LLMConfig(
+       config_list={
+           "api_type": "bedrock",
+           "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+           "aws_region": os.getenv("AWS_REGION"),
+           "aws_access_key": os.getenv("AWS_ACCESS_KEY"),
+           "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+           "response_format": MyResponse,
+       },
+   )
+   ```
+   5. **Create and use your agent**:
+
+   ```python
+   from autogen import ConversableAgent
+
+   agent = ConversableAgent(
+       name="my_agent",
+       llm_config=llm_config,
+       system_message="You are a helpful assistant.",
+   )
+
+   result = agent.run(message="Your query here").process()
+   ```
+
+6. **Review the documentation**: [AG2 Bedrock Documentation](https://docs.ag2.ai)
+
+## Additional Resources
+
+- [AG2 Documentation](https://docs.ag2.ai)
+- [Bedrock Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)
+- [AWS Blog: Structured Data with Bedrock](https://aws.amazon.com/blogs/machine-learning/structured-data-response-with-amazon-bedrock-prompt-engineering-and-tool-use/)
+- [Pydantic Documentation](https://docs.pydantic.dev/)
+- [Bedrock Model IDs](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html)
+- [Structured Outputs Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_bedrock_client_structured_output.ipynb)
+
+---
+
+Bedrock structured outputs transform how you build production agent systems in AG2. By enabling type-safe, validated responses that always match your schema, they eliminate the complexity of parsing and validating free-form text. Start building reliable, structured agent workflows today and experience the power of guaranteed response formats.
