@@ -16,6 +16,17 @@ if TYPE_CHECKING:
     from .targets.transition_target import TransitionTarget
 
 
+class GuardrailCheckResponse(BaseModel):
+    """LLM response schema for guardrail checks. Only contains fields the LLM can produce.
+
+    Used as response_format for LLMGuardrail so the client never validates or generates
+    schema for the non-serializable Guardrail type.
+    """
+
+    activated: bool
+    justification: str = Field(default="No justification provided")
+
+
 class Guardrail(ABC):
     """Abstract base class for guardrails."""
 
@@ -62,7 +73,7 @@ class LLMGuardrail(Guardrail):
             raise ValueError("LLMConfig is required.")
 
         self.llm_config = llm_config.deepcopy()
-        setattr(self.llm_config, "response_format", GuardrailResult)
+        setattr(self.llm_config, "response_format", GuardrailCheckResponse)
         self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
         self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
@@ -94,7 +105,58 @@ You will activate the guardrail only if the condition is met.
             raise ValueError("Context must be a string or a list of messages.")
         # Call the LLM with the check messages
         response = self.client.create(messages=check_messages)
-        return GuardrailResult.parse(response.choices[0].message.content, guardrail=self)  # type: ignore
+        content = response.choices[0].message.content  # type: ignore[union-attr]
+        if not isinstance(content, str):
+            raise ValueError("Guardrail LLM response content must be a JSON string")
+        parsed = GuardrailCheckResponse.model_validate_json(content)
+        return GuardrailResult(
+            activated=parsed.activated,
+            justification=parsed.justification,
+            guardrail=self,
+        )
+
+
+class ToolCallLLMGuardrail(LLMGuardrail):
+    """LLM Guardrail for inspecting tool call inputs/arguments from agent messages."""
+
+    def __init__(
+        self,
+        name: str,
+        condition: str,
+        target: "TransitionTarget",
+        llm_config: "LLMConfig",
+        activation_message: str | None = None,
+    ) -> None:
+        condition = f"Here are arguments to a Tool call function. {condition}"
+        super().__init__(name, condition, target, llm_config, activation_message)
+
+    def check(
+        self,
+        context: str | list[dict[str, Any]],
+    ) -> "GuardrailResult":
+        tool_call_data = self._extract_tool_calls(context)
+        if not tool_call_data:
+            return GuardrailResult(activated=False, guardrail=self)
+        return super().check(tool_call_data)
+
+    def _extract_tool_calls(self, context: str | list[dict[str, Any]]) -> str | None:
+        if isinstance(context, list):
+            if context and isinstance(context[-1], dict):
+                last_msg = context[-1]
+                if "tool_calls" in last_msg:
+                    return self._parse_tool_call_info(last_msg["tool_calls"])
+        elif isinstance(context, dict) and "tool_calls" in context:
+            return self._parse_tool_call_info(context["tool_calls"])
+        return None
+
+    def _parse_tool_call_info(self, tool_calls: list[dict[str, Any]]) -> str:
+        parts = []
+        for tc in tool_calls or []:
+            fn = tc.get("function") or {}
+            name = fn.get("name", "")
+            args = fn.get("arguments", "{}")
+            parts.append(f"name={name!r} arguments={args}")
+        return "\n".join(parts)
 
 
 class RegexGuardrail(Guardrail):

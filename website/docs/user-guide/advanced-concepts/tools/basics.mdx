@@ -79,6 +79,40 @@ def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     return date.strftime('%A')
 ```
 
+### Tool call guardrails
+
+When agents suggest tool calls, you may want to check the **arguments** of those calls (e.g. for safety, policy, or sensitive data) before they are executed. AG2's **Tool call LLM guardrail** inspects the tool name and arguments extracted from agent messages and runs an LLM-based check against a condition you define.
+
+- **As an output guardrail**: It runs when the agent's reply contains `tool_calls`. The guardrail sees the suggested tool name(s) and argument payload(s) and can block or redirect (e.g. via a [transition target](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails)) if the condition is met.
+- **As an input guardrail**: It runs when the last message in the context contains `tool_calls`, so you can screen tool calls before the next agent acts on them.
+
+You provide a **condition** (e.g. "arguments contain PII or dangerous commands") and an **LLM config**; the guardrail prepends "Here are arguments to a Tool call function." to your condition and uses that to call the LLM. If there are no tool calls in the context, the guardrail does not activate.
+
+Example: register a tool-call guardrail on an assistant in a group chat so that every time the assistant suggests a tool call, its arguments are checked before execution.
+
+```python
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen.agentchat.group.guardrails import ToolCallLLMGuardrail
+from autogen.agentchat.group.targets.transition_target import StayTarget
+from autogen.llm_config import LLMConfig
+
+llm_config = LLMConfig(model="gpt-4o-mini", api_key="...", api_type="openai")
+
+tool_call_guardrail = ToolCallLLMGuardrail(
+    name="tool_safety",
+    condition="arguments contain harmful or illegal content.",
+    target=TransitionTarget(),
+    llm_config=llm_config,
+)
+
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+assistant.register_output_guardrail(tool_call_guardrail)
+
+# Use the assistant in a GroupChat; when it replies with tool_calls, the guardrail runs.
+```
+
+For more on guardrail placement (input vs output), targets, and other guardrail types, see [Guardrails](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails).
+
 ### Client-specific built-in tools
 
 AG2's OpenAI Responses client offers support for the following tools through the `built_in_tools` parameter in `LLMConfig`:
