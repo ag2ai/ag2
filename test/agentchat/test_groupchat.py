@@ -638,6 +638,236 @@ def test_send_intros():
         assert messages[1]["content"] == agent1._default_auto_reply
 
 
+def test_isolate_agent_views(monkeypatch: MonkeyPatch):
+    """Test that when isolate_agent_views=True, agents only see their own messages."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        description="The first agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        description="The second agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+    agent3 = autogen.ConversableAgent(
+        "sam",
+        description="The third agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is sam speaking.",
+    )
+
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent2)
+
+    # Test with isolate_agent_views=True
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        speaker_selection_method="round_robin",
+        max_round=3,
+        isolate_agent_views=True,
+    )
+
+    group_chat_manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config=False,
+    )
+
+    agent1.initiate_chat(group_chat_manager, message="Hello from alice")
+
+    # Verify groupchat.messages contains all messages (manager's view)
+    assert len(groupchat.messages) == 3
+    assert groupchat.messages[0]["name"] == "alice"
+    assert groupchat.messages[1]["name"] == "bob"
+    assert groupchat.messages[2]["name"] == "sam"
+
+    # Verify agent1 only sees its own messages (not messages from agent2 or agent3)
+    # With isolate_agent_views=True, agent1 should not see messages broadcast from agent2 or agent3
+    agent1_messages = agent1.chat_messages[group_chat_manager]
+    # Agent1 sends initial message, then gets selected again and sends reply
+    # It should NOT see agent2's or agent3's messages
+    assert len(agent1_messages) == 2  # Initial message + alice's reply
+    assert agent1_messages[0]["content"] == "Hello from alice"
+    assert agent1_messages[1]["content"] == "This is alice speaking."
+    # Verify agent1 doesn't see bob's or sam's messages
+    assert not any(msg.get("name") == "bob" for msg in agent1_messages)
+    assert not any(msg.get("name") == "sam" for msg in agent1_messages)
+
+    # Verify agent2 only sees its own messages (not messages from agent1 or agent3)
+    agent2_messages = agent2.chat_messages[group_chat_manager]
+    # Agent2 should only see its own message, not agent1's or agent3's
+    assert len(agent2_messages) == 1  # Only bob's own message
+    assert agent2_messages[0]["content"] == "This is bob speaking."
+    assert agent2_messages[0]["name"] == "bob"
+    # Verify agent2 doesn't see alice's or sam's messages
+    assert not any(msg.get("name") == "alice" for msg in agent2_messages)
+    assert not any(msg.get("name") == "sam" for msg in agent2_messages)
+
+    # Verify agent3 only sees its own messages (not messages from agent1 or agent2)
+    agent3_messages = agent3.chat_messages[group_chat_manager]
+    # Agent3 should only see its own message, not agent1's or agent2's
+    assert len(agent3_messages) == 1  # Only sam's own message
+    assert agent3_messages[0]["content"] == "This is sam speaking."
+    assert agent3_messages[0]["name"] == "sam"
+    # Verify agent3 doesn't see alice's or bob's messages
+    assert not any(msg.get("name") == "alice" for msg in agent3_messages)
+    assert not any(msg.get("name") == "bob" for msg in agent3_messages)
+
+    # Reset agents for next test
+    agent1.reset()
+    agent2.reset()
+    agent3.reset()
+
+    # Test with isolate_agent_views=True and send_introductions=True
+    groupchat2 = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        speaker_selection_method="round_robin",
+        max_round=2,
+        isolate_agent_views=True,
+        send_introductions=True,
+    )
+
+    group_chat_manager2 = autogen.GroupChatManager(
+        groupchat=groupchat2,
+        llm_config=False,
+        is_termination_msg=lambda x: x.get("content", "").rstrip().find("TERMINATE") >= 0,
+    )
+
+    group_chat_manager2.initiate_chat(group_chat_manager2, message="The initiating message.")
+
+    # Verify introductions were NOT sent to agents when isolate_agent_views=True
+    for a in [agent1, agent2, agent3]:
+        messages = a.chat_messages[group_chat_manager2]
+        # Should only have the initiating message and their own reply, no intro
+        assert len(messages) == 2
+        assert messages[0]["content"] == "The initiating message."
+        # Each agent should only see their own reply
+        if a == agent1:
+            assert messages[1]["content"] == agent1._default_auto_reply
+        elif a == agent2:
+            assert messages[1]["content"] == agent2._default_auto_reply
+        else:
+            assert messages[1]["content"] == agent3._default_auto_reply
+
+    # Reset agents for comparison test
+    agent1.reset()
+    agent2.reset()
+    agent3.reset()
+
+    # Test with isolate_agent_views=False (default) for comparison
+    groupchat3 = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        speaker_selection_method="round_robin",
+        max_round=2,
+        isolate_agent_views=False,
+    )
+
+    group_chat_manager3 = autogen.GroupChatManager(
+        groupchat=groupchat3,
+        llm_config=False,
+        is_termination_msg=lambda x: x.get("content", "").rstrip().find("TERMINATE") >= 0,
+    )
+
+    agent1.initiate_chat(group_chat_manager3, message="Hello from alice")
+
+    # Verify that with isolate_agent_views=False, agents DO see messages from other agents
+    agent1_messages = agent1.chat_messages[group_chat_manager3]
+    # Should see: initial message, alice's reply, bob's message
+    assert len(agent1_messages) >= 2
+    assert agent1_messages[0]["content"] == "Hello from alice"
+    # Should see bob's message (broadcast)
+    assert any(msg.get("name") == "bob" for msg in agent1_messages)
+
+
+@pytest.mark.asyncio
+async def test_isolate_agent_views_async():
+    """Test that when isolate_agent_views=True, agents only see their own messages in async mode."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        description="The first agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        description="The second agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+    agent3 = autogen.ConversableAgent(
+        "sam",
+        description="The third agent.",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is sam speaking.",
+    )
+
+    # Test with isolate_agent_views=True using round_robin (doesn't need LLM)
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        speaker_selection_method="round_robin",
+        max_round=3,
+        isolate_agent_views=True,
+    )
+
+    group_chat_manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config=False,
+    )
+
+    await agent1.a_initiate_chat(group_chat_manager, message="Hello from alice")
+
+    # Verify groupchat.messages contains all messages (manager's view)
+    assert len(groupchat.messages) == 3
+    assert groupchat.messages[0]["name"] == "alice"
+    assert groupchat.messages[1]["name"] == "bob"
+    assert groupchat.messages[2]["name"] == "sam"
+
+    # Verify agent1 only sees its own messages (not messages from agent2 or agent3)
+    agent1_messages = agent1.chat_messages[group_chat_manager]
+    assert len(agent1_messages) == 2  # Initial message + alice's reply
+    assert agent1_messages[0]["content"] == "Hello from alice"
+    assert agent1_messages[1]["content"] == "This is alice speaking."
+    # Verify agent1 doesn't see bob's or sam's messages
+    assert not any(msg.get("name") == "bob" for msg in agent1_messages)
+    assert not any(msg.get("name") == "sam" for msg in agent1_messages)
+
+    # Verify agent2 only sees its own messages (not messages from agent1 or agent3)
+    agent2_messages = agent2.chat_messages[group_chat_manager]
+    assert len(agent2_messages) == 1  # Only bob's own message
+    assert agent2_messages[0]["content"] == "This is bob speaking."
+    assert agent2_messages[0]["name"] == "bob"
+    # Verify agent2 doesn't see alice's or sam's messages
+    assert not any(msg.get("name") == "alice" for msg in agent2_messages)
+    assert not any(msg.get("name") == "sam" for msg in agent2_messages)
+
+    # Verify agent3 only sees its own messages (not messages from agent1 or agent2)
+    agent3_messages = agent3.chat_messages[group_chat_manager]
+    assert len(agent3_messages) == 1  # Only sam's own message
+    assert agent3_messages[0]["content"] == "This is sam speaking."
+    assert agent3_messages[0]["name"] == "sam"
+    # Verify agent3 doesn't see alice's or bob's messages
+    assert not any(msg.get("name") == "alice" for msg in agent3_messages)
+    assert not any(msg.get("name") == "bob" for msg in agent3_messages)
+
+
 def test_selection_helpers():
     agent1 = autogen.ConversableAgent(
         "alice",

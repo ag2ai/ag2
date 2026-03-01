@@ -76,6 +76,7 @@ class Pattern(ABC):
         self,
         max_rounds: int,
         messages: list[dict[str, Any]] | str,
+        isolate_agent_views: bool = False,
     ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
@@ -99,6 +100,10 @@ class Pattern(ABC):
         Args:
             max_rounds: Maximum number of conversation rounds.
             messages: Initial message(s) to start the conversation.
+            isolate_agent_views: If True, agents will only maintain their own message history
+                and will not receive messages from other agents. When False (default), all agents
+                receive all messages. When True, messages are still stored in groupchat.messages
+                for the GroupChatManager's view, but are not broadcast to other agents.
 
         Returns:
             Tuple containing:
@@ -147,6 +152,7 @@ class Pattern(ABC):
             messages=[],
             max_round=max_rounds,
             speaker_selection_method=group_transition,
+            isolate_agent_views=isolate_agent_views,
         )
 
         # Create the group manager
@@ -230,6 +236,7 @@ class DefaultPattern(Pattern):
         self,
         max_rounds: int,
         messages: list[dict[str, Any]] | str,
+        isolate_agent_views: bool = False,
     ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
@@ -253,6 +260,10 @@ class DefaultPattern(Pattern):
         Args:
             max_rounds: Maximum number of conversation rounds.
             messages: Initial message(s) to start the conversation.
+            isolate_agent_views: If True, agents will only maintain their own message history
+                and will not receive messages from other agents. When False (default), all agents
+                receive all messages. When True, messages are still stored in groupchat.messages
+                for the GroupChatManager's view, but are not broadcast to other agents.
 
         Returns:
             Tuple containing all necessary components for the group chat.
@@ -275,6 +286,7 @@ class DefaultPattern(Pattern):
         ) = super().prepare_group_chat(
             max_rounds=max_rounds,
             messages=messages,
+            isolate_agent_views=isolate_agent_views,
         )
 
         # Return all components with our group_after_work
