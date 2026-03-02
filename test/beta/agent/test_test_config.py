@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Agent
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCall, ToolCalls
-from autogen.beta.exceptions import ToolNotFoundError
+from autogen.beta.exceptions import ConfigNotProvidedError, ToolNotFoundError
 from autogen.beta.testing import TestConfig
 
 
@@ -54,4 +54,24 @@ async def test_tool_not_found(
     agent = Agent("", config=test_config)
 
     with pytest.raises(ToolNotFoundError, match="Tool `my_tool` not found"):
+        await agent.ask("Hi!")
+
+
+@pytest.mark.asyncio()
+async def test_ask_with_explicit_config_option(test_config: TestConfig) -> None:
+    agent = Agent("")
+
+    res = await agent.ask(
+        "Hi!",
+        config=TestConfig(ModelResponse(message=ModelMessage(content="result"))),
+    )
+
+    assert res.message.message.content == "result"
+
+
+@pytest.mark.asyncio()
+async def test_ask_without_any_config() -> None:
+    agent = Agent("")
+
+    with pytest.raises(ConfigNotProvidedError):
         await agent.ask("Hi!")
