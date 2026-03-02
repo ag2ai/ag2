@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from typing import Any, Literal
+from typing import Any, Literal, Required, TypedDict
 
-from openai import AsyncOpenAI, AsyncStream
+import httpx
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from autogen.beta.context import Context
@@ -27,21 +28,70 @@ from .client import LLMClient
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
+class CreateOptions(TypedDict, total=False):
+    model: Required[str]
+
+    temperature: float | None
+    top_p: float | None
+    max_tokens: int | None
+    max_completion_tokens: int | None
+    response_format: dict[str, Any] | None
+    frequency_penalty: float | None
+    presence_penalty: float | None
+    seed: int | None
+    stop: str | list[str] | None
+    n: int | None
+    user: str
+    logprobs: bool | None
+    top_logprobs: int | None
+    tool_choice: str | dict[str, Any]
+    parallel_tool_calls: bool
+    logit_bias: dict[str, int] | None
+    metadata: dict[str, str] | None
+    modalities: list[str] | None
+    prediction: dict[str, Any] | None
+    prompt_cache_key: str
+    prompt_cache_retention: str | None
+    safety_identifier: str
+    service_tier: str | None
+    store: bool | None
+    verbosity: str | None
+    web_search_options: dict[str, Any]
+    stream: bool
+    stream_options: dict[str, Any]
+    reasoning_effort: ReasoningEffort
+
+
 class OpenAIClient(LLMClient):
     def __init__(
         self,
-        model: str = "gpt-4o",
         api_key: str | None = None,
+        organization: str | None = None,
+        project: str | None = None,
         base_url: str | None = None,
-        *,
-        streaming: bool = False,
-        reasoning_effort: ReasoningEffort | None = None,
-        **kwargs: Any,
+        websocket_base_url: str | None = None,
+        timeout: Any = not_given,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        default_headers: dict[str, str] | None = None,
+        default_query: dict[str, object] | None = None,
+        http_client: httpx.AsyncClient | None = None,
+        create_options: CreateOptions | None = None,
     ) -> None:
-        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, **kwargs)
-        self._model = model
-        self._reasoning_effort = reasoning_effort
-        self._streaming = streaming
+        self._client = AsyncOpenAI(
+            api_key=api_key,
+            organization=organization,
+            project=project,
+            base_url=base_url,
+            websocket_base_url=websocket_base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            default_headers=default_headers,
+            default_query=default_query,
+            http_client=http_client,
+        )
+
+        self._create_options = create_options or {}
+        self._streaming = self._create_options.get("stream", False)
 
     async def __call__(
         self,
@@ -51,18 +101,9 @@ class OpenAIClient(LLMClient):
     ) -> None:
         openai_messages = self._convert_messages(ctx.prompt, messages)
 
-        create_kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": openai_messages,
-            "stream": self._streaming,
-        }
-        if self._reasoning_effort is not None:
-            create_kwargs["reasoning_effort"] = self._reasoning_effort
-        if self._streaming:
-            create_kwargs["stream_options"] = {"include_usage": True}
-
         response = await self._client.chat.completions.create(
-            **create_kwargs,
+            **self._create_options,
+            messages=openai_messages,
             tools=[t.schema.to_api() for t in tools],
         )
 
