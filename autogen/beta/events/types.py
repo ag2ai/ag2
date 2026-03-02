@@ -41,7 +41,7 @@ class ToolError(ToolEvent):
     error: Exception
 
 
-class ToolNotFoundErrorEvent(ToolEvent):
+class ToolNotFoundErrorEvent(ToolError):  # noqa: N818
     pass
 
 
