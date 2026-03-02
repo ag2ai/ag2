@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import BaseEvent
+from .base import BaseEvent, Field
 from .conditions import Condition
 from .types import (
-    HITL,
+    HumanInputRequest,
+    HumanMessage,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
@@ -14,15 +15,17 @@ from .types import (
     ToolCall,
     ToolCalls,
     ToolError,
+    ToolNotFoundErrorEvent,
     ToolResult,
     ToolResults,
-    UserMessage,
 )
 
 __all__ = [
-    "HITL",
     "BaseEvent",
     "Condition",
+    "Field",
+    "HumanInputRequest",
+    "HumanMessage",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
@@ -31,7 +34,7 @@ __all__ = [
     "ToolCall",
     "ToolCalls",
     "ToolError",
+    "ToolNotFoundErrorEvent",
     "ToolResult",
     "ToolResults",
-    "UserMessage",
 ]

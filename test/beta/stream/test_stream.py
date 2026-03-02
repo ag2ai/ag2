@@ -1,182 +1,186 @@
-from unittest.mock import AsyncMock
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from unittest.mock import MagicMock
 
 import pytest
 
 from autogen.beta import Context, MemoryStream
-from autogen.beta.events import ModelResponse, ToolCall
+from autogen.beta.events import ModelMessage, ToolCall
 
 
 class TestStreamSend:
     @pytest.mark.asyncio
-    async def test_send_event_to_single_subscriber(self, async_mock: AsyncMock):
+    async def test_send_event_to_single_subscriber(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.subscribe(lambda ev, _: async_mock(ev))
+        stream.subscribe(lambda ev: mock(ev))
         event = ToolCall(name="func1", arguments="test")
         await stream.send(event, ctx=Context(stream))
 
-        async_mock.assert_awaited_once_with(event)
+        mock.assert_called_once_with(event)
 
     @pytest.mark.asyncio
-    async def test_send_event_to_multiple_subscribers(self, async_mock: AsyncMock):
+    async def test_send_event_to_multiple_subscribers(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.subscribe(lambda ev, _: async_mock.listener1(ev))
-        stream.subscribe(lambda ev, _: async_mock.listener2(ev))
+        stream.subscribe(lambda ev: mock.listener1(ev))
+        stream.subscribe(lambda ev: mock.listener2(ev))
         event = ToolCall(name="func1", arguments="test")
         await stream.send(event, ctx=Context(stream))
 
-        async_mock.listener1.assert_awaited_once_with(event)
-        async_mock.listener2.assert_awaited_once_with(event)
+        mock.listener1.assert_called_once_with(event)
+        mock.listener2.assert_called_once_with(event)
 
     @pytest.mark.asyncio
-    async def test_send_multiple_events(self, async_mock: AsyncMock):
+    async def test_send_multiple_events(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.subscribe(async_mock)
+        stream.subscribe(mock)
         event1 = ToolCall(name="func1", arguments="test1")
         event2 = ToolCall(name="func2", arguments="test2")
-        event3 = ModelResponse(response="response")
+        event3 = ModelMessage(content="response")
 
         await stream.send(event1, ctx=Context(stream))
         await stream.send(event2, ctx=Context(stream))
         await stream.send(event3, ctx=Context(stream))
 
-        assert [c[0][0] for c in async_mock.await_args_list] == [event1, event2, event3]
+        assert [c[0][0] for c in mock.call_args_list] == [event1, event2, event3]
 
 
 class TestStreamWhereTypeFilter:
     @pytest.mark.asyncio
-    async def test_where_type_filter_by_type(self, async_mock: AsyncMock):
+    async def test_where_type_filter_by_type(self, mock: MagicMock):
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
-        tool_stream.subscribe(async_mock)
+        tool_stream.subscribe(mock)
 
         event1 = ToolCall(name="func1", arguments="test1")
-        event2 = ModelResponse(response="response")
+        event2 = ModelMessage(content="response")
         event3 = ToolCall(name="func2", arguments="test2")
         await stream.send(event1, ctx=Context(stream))
         await stream.send(event2, ctx=Context(stream))
         await stream.send(event3, ctx=Context(stream))
 
-        assert [c[0][0] for c in async_mock.await_args_list] == [event1, event3]
+        assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
     @pytest.mark.asyncio
-    async def test_where_type_filter_by_union_type(self, async_mock: AsyncMock):
+    async def test_where_type_filter_by_union_type(self, mock: MagicMock):
         stream = MemoryStream()
 
-        tool_stream = stream.where(ToolCall | ModelResponse)
-        tool_stream.subscribe(async_mock)
+        tool_stream = stream.where(ToolCall | ModelMessage)
+        tool_stream.subscribe(mock)
 
         event1 = ToolCall(name="func1", arguments="test1")
-        event2 = ModelResponse(response="response")
+        event2 = ModelMessage(content="response")
         await stream.send(event1, ctx=Context(stream))
         await stream.send(event2, ctx=Context(stream))
 
-        assert [c[0][0] for c in async_mock.await_args_list] == [event1, event2]
+        assert [c[0][0] for c in mock.call_args_list] == [event1, event2]
 
     @pytest.mark.asyncio
-    async def test_where_type_filter_no_match(self, async_mock: AsyncMock):
+    async def test_where_type_filter_no_match(self, mock: MagicMock):
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
-        tool_stream.subscribe(async_mock)
+        tool_stream.subscribe(mock)
 
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="response2"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response2"), ctx=Context(stream))
 
-        async_mock.assert_not_called()
+        mock.assert_not_called()
 
 
 class TestStreamWhereConditionFilter:
     @pytest.mark.asyncio
-    async def test_where_condition_filter_by_condition(self, async_mock: AsyncMock):
+    async def test_where_condition_filter_by_condition(self, mock: MagicMock):
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         func1_stream = tool_stream.where(ToolCall.name == "func1")
-        func1_stream.subscribe(async_mock)
+        func1_stream.subscribe(mock)
 
         event1 = ToolCall(name="func1", arguments="test1")
         event3 = ToolCall(name="func1", arguments="test3")
         await stream.send(event1, ctx=Context(stream))
         await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
         await stream.send(event3, ctx=Context(stream))
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
 
-        assert [c[0][0] for c in async_mock.await_args_list] == [event1, event3]
+        assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
     @pytest.mark.asyncio
-    async def test_where_condition_filter_toolcall_name_no_match(self, async_mock: AsyncMock):
+    async def test_where_condition_filter_toolcall_name_no_match(self, mock: MagicMock):
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
         func1_stream = tool_stream.where(ToolCall.name == "func1")
-        func1_stream.subscribe(async_mock)
+        func1_stream.subscribe(mock)
 
         await stream.send(ToolCall(name="func2", arguments="test1"), ctx=Context(stream))
         await stream.send(ToolCall(name="func3", arguments="test2"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
 
-        async_mock.assert_not_called()
+        mock.assert_not_called()
 
 
 class TestStreamChainedFilters:
     @pytest.mark.asyncio
-    async def test_chained_type_and_condition_filters(self, async_mock: AsyncMock):
+    async def test_chained_type_and_condition_filters(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.subscribe(async_mock.all)
+        stream.subscribe(mock.all)
         tool_stream = stream.where(ToolCall)
-        tool_stream.subscribe(async_mock.tool)
-        tool_stream.where(ToolCall.name == "func1").subscribe(async_mock.func)
+        tool_stream.subscribe(mock.tool)
+        tool_stream.where(ToolCall.name == "func1").subscribe(mock.func)
 
         await stream.send(ToolCall(name="func1", arguments="test1"), ctx=Context(stream))
         await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
 
-        assert async_mock.all.call_count == 3
-        assert async_mock.tool.call_count == 2
-        assert async_mock.func.call_count == 1
+        assert mock.all.call_count == 3
+        assert mock.tool.call_count == 2
+        assert mock.func.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_unreachable_filter_scenario(self, async_mock: AsyncMock):
+    async def test_unreachable_filter_scenario(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.where(ToolCall).where(ModelResponse).subscribe(async_mock)
+        stream.where(ToolCall).where(ModelMessage).subscribe(mock)
 
         await stream.send(ToolCall(name="func1", arguments="test1"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
         await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
 
-        async_mock.assert_not_called()
+        mock.assert_not_called()
 
 
 class TestStreamMultipleSubscribers:
     @pytest.mark.asyncio
-    async def test_multiple_subscribers_same_stream(self, async_mock: AsyncMock):
+    async def test_multiple_subscribers_same_stream(self, mock: MagicMock):
         stream = MemoryStream()
 
-        stream.subscribe(async_mock.one)
-        stream.subscribe(async_mock.two)
+        stream.subscribe(mock.one)
+        stream.subscribe(mock.two)
 
         await stream.send(ToolCall(name="func1", arguments="test"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="response"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
 
-        assert async_mock.one.call_count == 2
-        assert async_mock.two.call_count == 2
+        assert mock.one.call_count == 2
+        assert mock.two.call_count == 2
 
 
 class TestStreamPlayScenario:
     @pytest.mark.asyncio
     async def test_play_py_scenario(self):
         stream = MemoryStream()
-        all_listener = AsyncMock()
-        tool_listener = AsyncMock()
-        tool_func1_listener = AsyncMock()
-        model_listener = AsyncMock()
-        unreachable_listener = AsyncMock()
+        all_listener = MagicMock()
+        tool_listener = MagicMock()
+        tool_func1_listener = MagicMock()
+        model_listener = MagicMock()
+        unreachable_listener = MagicMock()
 
         stream.subscribe(all_listener)
 
@@ -184,12 +188,12 @@ class TestStreamPlayScenario:
         tool_stream.subscribe(tool_listener)
         tool_stream.where(ToolCall.name == "func1").subscribe(tool_func1_listener)
 
-        stream.where(ModelResponse).subscribe(model_listener)
-        tool_stream.where(ModelResponse).subscribe(unreachable_listener)
+        stream.where(ModelMessage).subscribe(model_listener)
+        tool_stream.where(ModelMessage).subscribe(unreachable_listener)
 
         await stream.send(ToolCall(name="func1", arguments="Wtf1"), ctx=Context(stream))
         await stream.send(ToolCall(name="func2", arguments="Wtf2"), ctx=Context(stream))
-        await stream.send(ModelResponse(response="Test"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="Test"), ctx=Context(stream))
 
         assert all_listener.call_count == 3
         assert tool_listener.call_count == 2
@@ -200,36 +204,38 @@ class TestStreamPlayScenario:
         all_calls = all_listener.call_args_list
         assert all_calls[0][0][0].name == "func1"
         assert all_calls[1][0][0].name == "func2"
-        assert all_calls[2][0][0].response == "Test"
+        assert all_calls[2][0][0].content == "Test"
 
         tool_calls = tool_listener.call_args_list
         assert tool_calls[0][0][0].name == "func1"
         assert tool_calls[1][0][0].name == "func2"
 
         assert tool_func1_listener.call_args[0][0].name == "func1"
-        assert model_listener.call_args[0][0].response == "Test"
+        assert model_listener.call_args[0][0].content == "Test"
 
 
 class TestStreamUnsubscribe:
     @pytest.mark.asyncio
-    async def test_unsubscribe_stops_receiving_events(self, async_mock: AsyncMock):
+    async def test_unsubscribe_stops_receiving_events(self, mock: MagicMock):
         stream = MemoryStream()
 
-        sub_id = stream.subscribe(lambda ev, _: async_mock(ev))
+        sub_id = stream.subscribe(lambda ev: mock(ev))
         event = ToolCall(name="func1", arguments="test1")
         await stream.send(event, ctx=Context(stream))
 
         stream.unsubscribe(sub_id)
         await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
 
-        async_mock.assert_awaited_once_with(event)
+        mock.assert_called_once_with(event)
 
 
 class TestStreamContextPropagation:
     @pytest.mark.asyncio
-    async def test_context_propagates_to_substream(self):
+    async def test_context_propagates_to_substream(self, mock: MagicMock):
         stream = MemoryStream()
-        listener = AsyncMock()
+
+        def listener(ctx: Context):
+            mock(ctx)
 
         tool_stream = stream.where(ToolCall)
         tool_stream.subscribe(listener)
@@ -237,5 +243,4 @@ class TestStreamContextPropagation:
         custom_ctx = Context(stream)
         await stream.send(ToolCall(name="func1", arguments="test"), custom_ctx)
 
-        listener.assert_called_once()
-        assert listener.call_args[0][1] is custom_ctx
+        mock.assert_called_once_with(custom_ctx)

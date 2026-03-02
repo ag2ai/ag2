@@ -2,11 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import BaseEvent
+from uuid import uuid4
+
+from .base import BaseEvent, Field
 
 
 class ToolCalls(BaseEvent):
-    calls: list["ToolCall"]
+    calls: list["ToolCall"] = Field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.calls)
@@ -16,53 +18,66 @@ class ToolResults(BaseEvent):
     results: list["ToolResult | ToolError"]
 
 
-class ToolCall(BaseEvent):
-    id: str
+class ToolEvent(BaseEvent):
+    pass
+
+
+class ToolCall(ToolEvent):
+    id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str
 
 
-class ToolResult(BaseEvent):
-    id: str
+class ToolResult(ToolEvent):
+    parent_id: str
     name: str
     content: str
 
 
-class ToolError(BaseEvent):
-    id: str
+class ToolError(ToolEvent):
+    parent_id: str
     name: str
     content: str
+    error: Exception
+
+
+class ToolNotFoundErrorEvent(ToolEvent):
+    pass
 
 
 class ModelRequest(BaseEvent):
     content: str
 
 
-class ModelReasoning(BaseEvent):
+class ModelEvent(ToolEvent):
+    pass
+
+
+class ModelReasoning(ModelEvent):
     content: str
 
 
-class ModelMessage(BaseEvent):
+class ModelMessage(ModelEvent):
     content: str
 
 
-class ModelResponse(BaseEvent):
+class ModelResponse(ModelEvent):
     """Final ModelMessage."""
 
-    message: ModelMessage | None
-    tool_calls: ToolCalls
-    usage: dict[str, float]
+    message: ModelMessage | None = None
+    tool_calls: ToolCalls = Field(default_factory=ToolCalls)
+    usage: dict[str, float] = Field(default_factory=dict)
 
 
-class ModelMessageChunk(BaseEvent):
+class ModelMessageChunk(ModelEvent):
     content: str
 
 
-class HITL(BaseEvent):
+class HumanInputRequest(BaseEvent):
     content: str
 
 
-class UserMessage(BaseEvent):
-    """HITL Response."""
+class HumanMessage(BaseEvent):
+    """HumanInputRequest Response."""
 
     content: str

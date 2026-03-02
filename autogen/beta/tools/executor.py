@@ -5,8 +5,9 @@
 from collections.abc import Iterable
 from traceback import format_exc
 
-from autogen.beta.events import ToolCall, ToolCalls, ToolError, ToolResult, ToolResults
-from autogen.beta.stream import Context
+from autogen.beta.annotations import Context
+from autogen.beta.events import ToolCall, ToolCalls, ToolError, ToolNotFoundErrorEvent, ToolResult, ToolResults
+from autogen.beta.exceptions import ToolNotFoundError
 
 from .tool import Tool
 
@@ -22,7 +23,7 @@ class ToolsExecutor:
         results = []
 
         for call in event.calls:
-            async with ctx.stream.get((ToolError.id == call.id) | (ToolResult.id == call.id)) as result:
+            async with ctx.stream.get((ToolError.parent_id == call.id) | (ToolResult.parent_id == call.id)) as result:
                 await ctx.send(call)
                 results.append(await result)
 
@@ -37,11 +38,26 @@ class ToolsExecutor:
             try:
                 result = await tool.execute(event.arguments, ctx)
 
-            except Exception:
-                return ToolError(id=event.id, name=event.name, content=format_exc(limit=3))
+            except Exception as e:
+                return ToolError(
+                    parent_id=event.id,
+                    name=event.name,
+                    content=format_exc(limit=3),
+                    error=e,
+                )
 
             else:
-                return ToolResult(id=event.id, name=event.name, content=result.decode())
+                return ToolResult(
+                    parent_id=event.id,
+                    name=event.name,
+                    content=result.decode(),
+                )
 
         else:
-            return ToolError(id=event.id, name=event.name, content="Tool not found")
+            err = ToolNotFoundError(event.name)
+            return ToolNotFoundErrorEvent(
+                parent_id=event.id,
+                name=event.name,
+                content=repr(err),
+                error=err,
+            )

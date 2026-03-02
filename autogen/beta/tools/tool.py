@@ -5,20 +5,17 @@
 import json
 from collections.abc import Callable
 from contextlib import AsyncExitStack
-from functools import wraps
 from typing import Any, overload
 
-from fast_depends import Provider, dependency_provider
-from fast_depends.core import CallModel, build_call_model
+from fast_depends import Provider
+from fast_depends.core import CallModel
 from fast_depends.pydantic import PydanticSerializer
 from fast_depends.pydantic.schema import get_schema
-from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 
-from autogen.beta.stream import Context
+from autogen.beta.context import Context
+from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from .schemas import FunctionDefinition, FunctionParameters, FunctionTool
-
-CONTEXT_OPTION_NAME = "__ctx__"
 
 
 class Tool:
@@ -44,6 +41,8 @@ class Tool:
             )
         )
 
+        self.provider: Provider | None = None
+
     @staticmethod
     def ensure_tool(
         func: "Tool | Callable[..., Any]",
@@ -51,11 +50,7 @@ class Tool:
         provider: Provider | None = None,
     ) -> "Tool":
         t = func if isinstance(func, Tool) else tool(func)
-        if provider:
-            # copy dependencies from current provider to a new one
-            # it is required to support annotations
-            provider.dependencies = t.model.dependency_provider.dependencies | provider.dependencies
-            t.model.dependency_provider = provider
+        t.provider = provider
         return t
 
     async def execute(self, arguments: str, ctx: Context) -> bytes:
@@ -64,6 +59,7 @@ class Tool:
                 **(json.loads(arguments) | {CONTEXT_OPTION_NAME: ctx}),
                 stack=stack,
                 cache_dependencies={},
+                dependency_provider=self.provider,
             )
             return PydanticSerializer.encode(result)
 
@@ -102,14 +98,7 @@ def tool(
     sync_to_thread: bool = True,
 ) -> Tool | Callable[[Callable[..., Any]], Tool]:
     def make_tool(f: Callable[..., Any]) -> Tool:
-        call_model = build_call_model(
-            _to_async(f, sync_to_thread=sync_to_thread),
-            dependency_provider=dependency_provider,
-            serializer_cls=PydanticSerializer(
-                pydantic_config={"arbitrary_types_allowed": True},
-                use_fastdepends_errors=False,
-            ),
-        )
+        call_model = build_model(f, sync_to_thread=sync_to_thread)
 
         return Tool(
             call_model,
@@ -126,26 +115,3 @@ def tool(
     if function:
         return make_tool(function)
     return make_tool
-
-
-def _to_async(
-    func: Callable[..., Any],
-    *,
-    sync_to_thread: bool = True,
-) -> Callable[..., Any]:
-    if is_coroutine_callable(func):
-        return func
-
-    if sync_to_thread:
-
-        @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return await run_in_threadpool(func, *args, **kwargs)
-
-    else:
-
-        @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-
-    return async_wrapper

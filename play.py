@@ -4,13 +4,13 @@ from pprint import pprint
 from autogen.beta import Agent, Context, MemoryStream
 from autogen.beta.config import LLMClient, OpenAIConfig
 from autogen.beta.events import (
-    HITL,
     BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
     ModelRequest,
     ModelResponse,
     ToolCall,
     ToolResult,
-    UserMessage,
 )
 from autogen.beta.tools import tool
 
@@ -19,7 +19,7 @@ class MockClient(LLMClient):
     def create(self) -> "MockClient":
         return self
 
-    async def __call__(self, *messages: BaseEvent, ctx: Context) -> None:
+    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs) -> None:
         print("Model call:")
         pprint(messages)
         last_msg = messages[-1]
@@ -27,14 +27,13 @@ class MockClient(LLMClient):
             await ctx.send(ToolCall(name="func", arguments='{"cmd": "Call me a user\\n"}'))
         elif isinstance(last_msg, ToolResult):
             await ctx.send(ModelResponse(response="generated text"))
-        elif isinstance(last_msg, UserMessage):
+        elif isinstance(last_msg, HumanMessage):
             await ctx.send(ModelResponse(response="Hi, user!"))
 
 
-async def hitl_subscriber(event: HITL, ctx: Context) -> None:
+def hitl_subscriber(event: HumanInputRequest) -> HumanMessage:
     user_message = input(event.content)
-    event = UserMessage(content=user_message)
-    await ctx.send(event)
+    return HumanMessage(content=user_message)
 
 
 stream = MemoryStream()
@@ -55,7 +54,7 @@ async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
 async def func(cmd: str, ctx: Context) -> str:
     """Just a test tool. Call it each time to let me testing tools."""
     print()
-    r = await ctx.input(cmd, timeout=1.0)
+    r = await ctx.input(cmd, timeout=0.0)
     print()
     return r
 
@@ -72,23 +71,21 @@ agent = Agent(
         reasoning_effort="low",
         streaming=True,
     ),
+    hitl_hook=hitl_subscriber,
     # config=MockClient(),
     tools=[func],
 )
 
 
 async def main() -> None:
-    with stream.where(HITL).sub_scope(hitl_subscriber):
-        conversation = await agent.ask(
-            "Hi, agent! Please, call me `func` tool with `test` cmd to test it.", stream=stream
-        )
-        # print("\nFinal history:")
-        # final_events = list(await conversation.history.get_events())
-        # pprint(final_events)
-        print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
+    conversation = await agent.ask("Hi, agent! Please, call me `func` tool with `test` cmd to test it.", stream=stream)
+    # print("\nFinal history:")
+    # final_events = list(await conversation.history.get_events())
+    # pprint(final_events)
+    print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
 
-        result = await conversation.ask("And one more time")
-        print("\nResult:", result.message, "\n", "=" * 80, "\n")
+    result = await conversation.ask("And one more time")
+    print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
 
 #         # alternatively

@@ -3,14 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
+from collections.abc import Callable
+from types import EllipsisType
 from typing import Any
 
 from .conditions import Condition, OpCondition, OrCondition, TypeCondition, check_eq
 
 
 class Field:
-    def __init__(self, name: str) -> None:
-        self.name = name
+    def __init__(
+        self, default: Any = Ellipsis, *, default_factory: Callable[[], Any] | EllipsisType = Ellipsis
+    ) -> None:
+        self.name = ""
+
+        self.__default = default
+        self.__default_factory = default_factory
+
+    def get_default(self) -> Any:
+        if self.__default_factory is not Ellipsis:
+            return self.__default_factory()
+        return self.__default
 
     def __get__(self, instance: Any | None, owner: type) -> Any:
         self.event_class = owner
@@ -47,10 +59,25 @@ class EventMeta(type):
     def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]) -> type:
         annotations = namespace.get("__annotations__", {})
 
+        fields: dict[str, Field] = {}
         for field_name in annotations:
-            namespace[field_name] = Field(field_name)
+            if not (default := namespace.get(field_name)):
+                field = Field()
+            elif isinstance(default, Field):
+                field = default
+            else:
+                field = Field(default)
+
+            if not field.name:
+                field.name = field_name
+
+            fields[field_name] = namespace[field_name] = field
 
         def __init__(self, **kwargs: Any) -> None:
+            kwargs = {
+                name: default for name, f in fields.items() if (default := f.get_default()) is not Ellipsis
+            } | kwargs
+
             for key, value in kwargs.items():
                 setattr(self, key, value)
 

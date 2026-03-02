@@ -2,17 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from fast_depends import Depends
+
 from .agent import Agent, Conversation
-from .annotations import Context, Inject
-from .stream import MemoryStream, Stream
-from .tools.tool import tool
+from .annotations import Context, Inject, Variable
+from .stream import MemoryStream
+from .tools import tool
 
 __all__ = (
     "Agent",
     "Context",
     "Conversation",
+    "Depends",
     "Inject",
     "MemoryStream",
-    "Stream",
+    "Variable",
     "tool",
 )

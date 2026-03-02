@@ -4,51 +4,30 @@
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
-from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass, field
-from functools import wraps
-from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from typing import Any, TypeAlias, overload
 from uuid import UUID, uuid4
 
-from .events import HITL, BaseEvent, UserMessage
+from fast_depends.core import CallModel
+
+from .context import Context, StreamId, WritableStream
+from .events import BaseEvent
 from .events.conditions import ClassInfo, Condition, TypeCondition
-from .history import History, MemoryStorage, Storage, StreamId
+from .history import History, MemoryStorage, Storage
+from .utils import CONTEXT_OPTION_NAME, build_model
 
 SubId: TypeAlias = UUID
 
 
-@dataclass(slots=True)
-class Context:
-    stream: "Stream"
-
-    prompt: list[str] = field(default_factory=list)
-    container: dict[Any, Any] = field(default_factory=dict)
-
-    async def input(self, message: str, timeout: float | None = None) -> str:
-        async with self.stream.get(UserMessage) as response:
-            await self.send(HITL(content=message))
-            return (await asyncio.wait_for(response, timeout)).content
-
-    async def send(self, event: BaseEvent) -> None:
-        await self.stream.send(event, self)
-
-
-class Subscriber(Protocol):
-    async def __call__(self, event: BaseEvent, ctx: Context) -> Any: ...
-
-
-class Interrupter(Protocol):
-    async def __call__(self, event: BaseEvent, ctx: Context) -> BaseEvent | None: ...
-
-
-@runtime_checkable
-class Stream(Protocol):
+class Stream(WritableStream):
     @overload
     def subscribe(
         self,
-        func: Subscriber,
+        func: Callable[..., Any],
         *,
         interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
     ) -> SubId: ...
 
     @overload
@@ -57,19 +36,23 @@ class Stream(Protocol):
         func: None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId]: ...
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
 
     def subscribe(
         self,
-        func: Subscriber | None = None,
+        func: Callable[..., Any] | None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId] | SubId: ...
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId: ...
 
     def unsubscribe(self, sub_id: SubId) -> None: ...
 
     @contextmanager
-    def sub_scope(self, func: Subscriber) -> Iterator[None]:
+    def sub_scope(self, func: Callable[..., Any]) -> Iterator[None]:
         sub_id = self.subscribe(func)
         try:
             yield
@@ -91,7 +74,7 @@ class Stream(Protocol):
     ) -> AsyncIterator[asyncio.Future[BaseEvent]]:
         result = asyncio.Future[BaseEvent]()
 
-        async def wait_result(event: BaseEvent, ctx: Context) -> None:
+        async def wait_result(event: BaseEvent) -> None:
             result.set_result(event)
 
         with self.where(condition).sub_scope(wait_result):
@@ -107,20 +90,22 @@ class MemoryStream(Stream):
     ) -> None:
         self.id: StreamId = id or uuid4()
 
-        self._subscribers: dict[SubId, Subscriber] = {}
+        self._subscribers: dict[SubId, tuple[Condition | None, CallModel]] = {}
         # ordered dict
-        self._interrupters: dict[SubId, Interrupter] = {}
+        self._interrupters: dict[SubId, tuple[Condition | None, CallModel]] = {}
 
         storage = storage or MemoryStorage()
         self.history = History(self.id, storage)
-        self.subscribe(lambda ev, ctx: storage.save_event(ctx.stream.id, ev))
+        self.subscribe(storage.save_event)
 
     @overload
     def subscribe(
         self,
-        func: Subscriber,
+        func: Callable[..., Any],
         *,
         interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
     ) -> SubId: ...
 
     @overload
@@ -129,20 +114,25 @@ class MemoryStream(Stream):
         func: None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId]: ...
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
 
     def subscribe(
         self,
-        func: Subscriber | None = None,
+        func: Callable[..., Any] | None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId] | SubId:
-        def sub(s: Subscriber) -> SubId:
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId:
+        def sub(s: Callable[..., Any]) -> SubId:
             sub_id = uuid4()
+            model = build_model(s, sync_to_thread=sync_to_thread, serialize_result=False)
             if interrupt:
-                self._interrupters[sub_id] = s
+                self._interrupters[sub_id] = (condition, model)
             else:
-                self._subscribers[sub_id] = s
+                self._subscribers[sub_id] = (condition, model)
             return sub_id
 
         if func:
@@ -156,16 +146,39 @@ class MemoryStream(Stream):
     async def send(
         self,
         event: BaseEvent,
-        ctx: Context,
+        ctx: "Context",
     ) -> None:
         # interrupters should follow registration order
-        for interrupter in self._interrupters.values():
-            if not (e := await interrupter(event, ctx)):
-                return
+        for condition, interrupter in self._interrupters.values():
+            if condition and not condition(event):
+                continue
+
+            async with AsyncExitStack() as stack:
+                if not (
+                    e := await interrupter.asolve(
+                        event,
+                        cache_dependencies={},
+                        stack=stack,
+                        dependency_provider=ctx.dependency_provider,
+                        **{CONTEXT_OPTION_NAME: ctx},
+                    )
+                ):
+                    return
+
             event = e
 
-        for s in self._subscribers.values():
-            await s(event, ctx)
+        for condition, s in self._subscribers.values():
+            if condition and not condition(event):
+                continue
+
+            async with AsyncExitStack() as stack:
+                await s.asolve(
+                    event,
+                    cache_dependencies={},
+                    stack=stack,
+                    dependency_provider=ctx.dependency_provider,
+                    **{CONTEXT_OPTION_NAME: ctx},
+                )
 
 
 class SubStream(Stream):
@@ -180,9 +193,11 @@ class SubStream(Stream):
     @overload
     def subscribe(
         self,
-        func: Subscriber,
+        func: Callable[..., Any],
         *,
         interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
     ) -> SubId: ...
 
     @overload
@@ -191,22 +206,29 @@ class SubStream(Stream):
         func: None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId]: ...
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
 
     def subscribe(
         self,
-        func: Subscriber | None = None,
+        func: Callable[..., Any] | None = None,
         *,
         interrupt: bool = False,
-    ) -> Callable[[Subscriber], SubId] | SubId:
-        def sub(s: Subscriber) -> SubId:
-            @wraps(s)
-            async def final_subscriber(event: BaseEvent, ctx: Context) -> Any:
-                if self._filter_condition(event):
-                    return await s(event, ctx)
-                return event
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId:
+        def sub(s: Callable[..., Any]) -> SubId:
+            c = self._filter_condition
+            if condition:
+                c = c & condition
 
-            return self._parent.subscribe(final_subscriber, interrupt=interrupt)
+            return self._parent.subscribe(
+                s,
+                condition=c,
+                interrupt=interrupt,
+                sync_to_thread=sync_to_thread,
+            )
 
         if func:
             return sub(func)

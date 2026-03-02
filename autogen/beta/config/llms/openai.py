@@ -8,6 +8,7 @@ from typing import Any, Literal
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
+from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -19,7 +20,6 @@ from autogen.beta.events import (
     ToolCalls,
     ToolResults,
 )
-from autogen.beta.stream import Context
 from autogen.beta.tools import Tool
 
 from .client import LLMClient
@@ -107,7 +107,7 @@ class OpenAIClient(LLMClient):
                 for r in message.results:
                     result.append({
                         "role": "tool",
-                        "tool_call_id": r.id,
+                        "tool_call_id": r.parent_id,
                         "content": r.content,
                     })
 

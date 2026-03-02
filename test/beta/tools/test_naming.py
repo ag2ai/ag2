@@ -1,9 +1,14 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Annotated, Any
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import Field
 
+from autogen.beta import Depends, Inject
 from autogen.beta.tools import Tool, tool
 
 DEFAULT_SCHEMA = {
@@ -37,6 +42,22 @@ DEFAULT_SCHEMA = {
 def test_simple_tool() -> None:
     @tool
     def my_tool(a: str, b: int) -> str:
+        """Tool description."""
+        return ""
+
+    assert my_tool.schema.to_api() == DEFAULT_SCHEMA
+
+
+def test_tool_schema_ignores_di() -> None:
+    def get_dep(b: int) -> int:
+        return b
+
+    @tool
+    def my_tool(
+        a: str,
+        depends: Annotated[int, Depends(get_dep)],
+        dep: Annotated[str, Inject()],
+    ) -> str:
         """Tool description."""
         return ""
 

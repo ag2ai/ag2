@@ -2,15 +2,28 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Callable, Iterable
 from contextlib import ExitStack
 from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
 
 from fast_depends import Provider
 
+from .annotations import Context
 from .config import LLMClient, ModelConfig
-from .events import BaseEvent, ModelRequest, ModelResponse, ToolCall, ToolCalls, ToolResults
-from .stream import Context, History, MemoryStream, Stream
+from .events import (
+    BaseEvent,
+    HumanInputRequest,
+    ModelRequest,
+    ModelResponse,
+    ToolCall,
+    ToolCalls,
+    ToolResults,
+)
+from .exceptions import ConfigNotProvidedError
+from .history import History
+from .hitl import HumanHook, default_hitl_hook, wrap_hitl
+from .stream import MemoryStream, Stream
 from .tools import FunctionParameters, Tool, ToolsExecutor, tool
 
 
@@ -67,16 +80,21 @@ class Agent(Askable):
         name: str,
         prompt: PromptType | Iterable[PromptType] = (),
         *,
-        config: ModelConfig,
+        config: ModelConfig | None = None,
+        hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
-        dependencies: dict[Any, Any] | None = {},
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
     ):
         self.name = name
         self.config = config
 
-        self._agent_dependencies = dependencies
+        self._agent_dependencies = dependencies or {}
+        self._agent_variables = variables or {}
+
         self.dependency_provider = Provider()
         self.__tools_executor = ToolsExecutor(Tool.ensure_tool(t, provider=self.dependency_provider) for t in tools)
+        self.__hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else default_hitl_hook
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[PromptHook] = []
@@ -89,6 +107,17 @@ class Agent(Askable):
                 self._system_prompt.append(p)
             else:
                 self._dynamic_prompt.append(p)
+
+    def hitl_hook(self, func: HumanHook) -> HumanHook:
+        if self.__hitl_hook is not default_hitl_hook:
+            warnings.warn(
+                "You already set HITL hook, provided value overrides it",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+
+        self.__hitl_hook = wrap_hitl(func)
+        return func
 
     @property
     def tools(self) -> tuple[Tool, ...]:
@@ -175,9 +204,16 @@ class Agent(Askable):
         msg: str,
         *,
         stream: Stream | None = None,
+        config: ModelConfig | None = None,
         prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
     ) -> "Conversation":
+        config = config or self.config
+        if not config:
+            raise ConfigNotProvidedError()
+        client = config.create()
+
         stream = stream or MemoryStream()
 
         initial_event = ModelRequest(content=msg)
@@ -185,7 +221,9 @@ class Agent(Askable):
         ctx = Context(
             stream,
             prompt=list(prompt),
-            container=self._agent_dependencies | (dependencies or {}),
+            dependencies=self._agent_dependencies | (dependencies or {}),
+            variables=self._agent_variables | (variables or {}),
+            dependency_provider=self.dependency_provider,
         )
 
         if not ctx.prompt:
@@ -194,8 +232,6 @@ class Agent(Askable):
             for dp in self._dynamic_prompt:
                 p = await dp(initial_event, ctx)
                 ctx.prompt.append(p)
-
-        client = self.config.create()
 
         return await self._execute(
             initial_event,
@@ -216,11 +252,14 @@ class Agent(Askable):
                 ctx=ctx,
                 tools=self.tools,
             )
+            return None
 
         with ExitStack() as stack:
             stack.enter_context(
                 ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
             )
+
+            stack.enter_context(ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook))
 
             stack.enter_context(
                 ctx.stream.where(ToolCall).sub_scope(self.__tools_executor.execute_tool),

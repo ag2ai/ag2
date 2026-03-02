@@ -1,47 +1,29 @@
-from typing import Annotated, Any
+from typing import Annotated
 from unittest.mock import MagicMock
-from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
-from autogen.beta import Agent, Context, Inject, MemoryStream
-from autogen.beta.config import LLMClient
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCall, ToolCalls, ToolError
-
-
-class TestConfig(LLMClient):
-    __test__ = False
-
-    def __init__(self, *events: BaseEvent) -> None:
-        self.events = iter(events)
-
-    def create(self) -> "TestConfig":
-        return self
-
-    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
-        await ctx.send(next(self.events))
+from autogen.beta import Agent, Context, Depends, Inject
+from autogen.beta.events import ModelMessage, ModelResponse, ToolCall, ToolCalls
+from autogen.beta.testing import TestConfig
 
 
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
         ModelResponse(
-            message=None,
             tool_calls=ToolCalls(
                 calls=[
                     ToolCall(
-                        id=uuid4(),
                         name="my_tool",
                         arguments="{}",
                     )
                 ]
             ),
-            usage={},
         ),
         ModelResponse(
             message=ModelMessage(content="result"),
-            tool_calls=[],
-            usage={},
         ),
     )
 
@@ -52,7 +34,7 @@ async def test_call_tool_with_injected_object(
     test_config: TestConfig,
 ) -> None:
     def my_tool(ctx: Context) -> str:
-        mock(ctx.container["dep"])
+        mock(ctx.dependencies["dep"])
         return ""
 
     agent = Agent(
@@ -74,7 +56,7 @@ async def test_call_tool_with_agent_dependency(
     test_config: TestConfig,
 ) -> None:
     def my_tool(ctx: Context) -> str:
-        mock(ctx.container["dep"])
+        mock(ctx.dependencies["dep"])
         return ""
 
     dependency = object()
@@ -161,10 +143,7 @@ async def test_inject_with_default(
 
 
 @pytest.mark.asyncio()
-async def test_miss_injection(
-    mock: MagicMock,
-    test_config: TestConfig,
-) -> None:
+async def test_miss_injection(test_config: TestConfig) -> None:
     def my_tool(
         dep: Annotated[str, Inject()],
     ) -> str:
@@ -176,11 +155,32 @@ async def test_miss_injection(
         tools=[my_tool],
     )
 
-    stream = MemoryStream()
+    with pytest.raises(ValidationError):
+        await agent.ask("Hi!")
 
-    @stream.where(ToolError).subscribe()
-    async def catch_error(ev: ToolError, ctx: Context) -> None:
-        mock("Field required" in ev.content)
 
-    await agent.ask("Hi!", stream=stream)
-    mock.assert_called_once_with(True)
+@pytest.mark.asyncio()
+async def test_depends_override(mock: MagicMock, test_config: TestConfig) -> None:
+    def dep1():
+        raise ValueError
+
+    def dep2():
+        return "1"
+
+    def my_tool(
+        dep: Annotated[str, Depends(dep1)],
+    ) -> str:
+        mock(dep)
+        return dep
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+    )
+
+    agent.dependency_provider.override(dep1, dep2)
+
+    await agent.ask("Hi")
+
+    mock.assert_called_once_with("1")
