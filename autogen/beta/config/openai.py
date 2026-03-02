@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, TypedDict, Unpack
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, not_given, omit
@@ -11,6 +11,48 @@ from openai._types import Omit
 
 from .config import ModelConfig
 from .llms.openai import CreateOptions, OpenAIClient, ReasoningEffort
+
+
+class OpenAIConfigOverrides(TypedDict, total=False):
+    model: str
+    api_key: str | None
+    base_url: str | None
+    temperature: float | None | Omit
+    top_p: float | None | Omit
+    streaming: bool
+    max_tokens: int | None | Omit
+    max_completion_tokens: int | None | Omit
+    response_format: dict[str, Any] | None | Omit
+    websocket_base_url: str | None
+    organization: str | None
+    project: str | None
+    timeout: Any
+    max_retries: int
+    default_headers: dict[str, str] | None
+    default_query: dict[str, object] | None
+    http_client: httpx.AsyncClient | None
+    frequency_penalty: float | None | Omit
+    presence_penalty: float | None | Omit
+    seed: int | None | Omit
+    stop: str | list[str] | None | Omit
+    n: int | None | Omit
+    user: str | Omit
+    logprobs: bool | None | Omit
+    top_logprobs: int | None | Omit
+    tool_choice: str | dict[str, Any] | Omit
+    parallel_tool_calls: bool | Omit
+    reasoning_effort: ReasoningEffort | None | Omit
+    logit_bias: dict[str, int] | None | Omit
+    metadata: dict[str, str] | None | Omit
+    modalities: list[str] | None | Omit
+    prediction: dict[str, Any] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_retention: str | None | Omit
+    safety_identifier: str | Omit
+    service_tier: str | None | Omit
+    store: bool | None | Omit
+    verbosity: str | None | Omit
+    web_search_options: dict[str, Any] | Omit
 
 
 @dataclass(slots=True)
@@ -55,48 +97,8 @@ class OpenAIConfig(ModelConfig):
     verbosity: str | None | Omit = omit
     web_search_options: dict[str, Any] | Omit = omit
 
-    def copy(self) -> "OpenAIConfig":
-        return OpenAIConfig(
-            model=self.model,
-            api_key=self.api_key,
-            organization=self.organization,
-            project=self.project,
-            base_url=self.base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
-            max_retries=self.max_retries,
-            default_headers=self.default_headers,
-            default_query=self.default_query,
-            http_client=self.http_client,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            max_tokens=self.max_tokens,
-            max_completion_tokens=self.max_completion_tokens,
-            response_format=self.response_format,
-            frequency_penalty=self.frequency_penalty,
-            presence_penalty=self.presence_penalty,
-            seed=self.seed,
-            stop=self.stop,
-            n=self.n,
-            user=self.user,
-            logprobs=self.logprobs,
-            top_logprobs=self.top_logprobs,
-            tool_choice=self.tool_choice,
-            parallel_tool_calls=self.parallel_tool_calls,
-            logit_bias=self.logit_bias,
-            metadata=self.metadata,
-            modalities=self.modalities,
-            prediction=self.prediction,
-            prompt_cache_key=self.prompt_cache_key,
-            prompt_cache_retention=self.prompt_cache_retention,
-            safety_identifier=self.safety_identifier,
-            service_tier=self.service_tier,
-            store=self.store,
-            verbosity=self.verbosity,
-            web_search_options=self.web_search_options,
-            streaming=self.streaming,
-            reasoning_effort=self.reasoning_effort,
-        )
+    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
+        return replace(self, **overrides)
 
     def create(self) -> OpenAIClient:
         options = CreateOptions(

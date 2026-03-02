@@ -32,11 +32,11 @@ Suggested API:
     model = OpenAIModel(api_key="sk-...", base_url="https:/...")
 
     agent1 = Agent(
-        model=model.update(model="gpt-5"),  # creates a new updated instance
+        model=model.copy(model="gpt-5"),  # creates a new updated instance
     )
 
     agent1 = Agent(
-        model=model.update(model="gpt-5-mini", temperature=0.8),
+        model=model.copy(model="gpt-5-mini", temperature=0.8),
     )
     ```
 
@@ -62,8 +62,8 @@ Suggested API:
     model = OpenAIModel(model="gpt-5")
 
     agent = Agent(model=ModelComposition(
-        model.update(api_key="sk-...", base_url="https://..."),
-        model.update(api_key="sk-...", base_url="https://proxy.com"),  # fallback model
+        model.copy(api_key="sk-...", base_url="https://..."),
+        model.copy(api_key="sk-...", base_url="https://proxy.com"),  # fallback model
     ))
     ```
 
@@ -109,7 +109,7 @@ Suggested API:
     model = OpenAIModel(model="gpt-5")
     agent = Agent(model=model)
 
-    agent.ask("Hi!", model=model.update("gpt-4"))  # replace original "gpt-5" model
+    agent.ask("Hi!", model=model.copy("gpt-4"))  # replace original "gpt-5" model
     ```
 
     But sometimes we want to update current configuration on call (tune prompt / temp / etc from admin UI).
@@ -127,7 +127,7 @@ Suggested API:
         new_system_message: str,
         user_api_key: str,
     ):
-        user_agent = agent.update(  # creates a new instance
+        user_agent = agent.copy(  # creates a new instance
             model=OpenAIModel(api_key=user_api_key),
             tools=[tool2]  # client-side additional tools
         )
@@ -237,7 +237,7 @@ class OpenAIModel(ModelConfig):
     def __or__(self, other: "ModelInterface") -> "OpenAIModel":
         if not isinstance(other, OpenAIModel):
             return NotImplemented
-        return self.update(**asdict(other))
+        return self.copy(**asdict(other))
 
 
 # Agent config usage
