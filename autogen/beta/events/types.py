@@ -8,6 +8,8 @@ from .base import BaseEvent, Field
 
 
 class ToolCalls(BaseEvent):
+    """Container event holding a collection of tool calls."""
+
     calls: list["ToolCall"] = Field(default_factory=list)
 
     def __len__(self) -> int:
@@ -15,26 +17,34 @@ class ToolCalls(BaseEvent):
 
 
 class ToolResults(BaseEvent):
+    """Container event holding results (or errors) produced by tools."""
+
     results: list["ToolResult | ToolError"]
 
 
 class ToolEvent(BaseEvent):
-    pass
+    """Base class for all tool-related events."""
 
 
 class ToolCall(ToolEvent):
+    """Represents a single tool invocation requested by the model."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str
 
 
 class ToolResult(ToolEvent):
+    """Represents a successful tool execution result."""
+
     parent_id: str
     name: str
     content: str
 
 
 class ToolError(ToolEvent):
+    """Represents a failed tool execution with an associated error."""
+
     parent_id: str
     name: str
     content: str
@@ -42,27 +52,33 @@ class ToolError(ToolEvent):
 
 
 class ToolNotFoundErrorEvent(ToolError):  # noqa: N818
-    pass
+    """ToolError raised when the requested tool cannot be found."""
 
 
 class ModelRequest(BaseEvent):
+    """Event representing an input request sent to the model."""
+
     content: str
 
 
-class ModelEvent(ToolEvent):
-    pass
+class ModelEvent(BaseEvent):
+    """Base class for all model-related events."""
 
 
 class ModelReasoning(ModelEvent):
+    """Intermediate reasoning content emitted by the model."""
+
     content: str
 
 
 class ModelMessage(ModelEvent):
+    """Single message emitted by the model."""
+
     content: str
 
 
 class ModelResponse(ModelEvent):
-    """Final ModelMessage."""
+    """Final model response produced for a given request."""
 
     message: ModelMessage | None = None
     tool_calls: ToolCalls = Field(default_factory=ToolCalls)
@@ -70,14 +86,18 @@ class ModelResponse(ModelEvent):
 
 
 class ModelMessageChunk(ModelEvent):
+    """Chunk of a streamed model message."""
+
     content: str
 
 
 class HumanInputRequest(BaseEvent):
+    """Event requesting input from a human user."""
+
     content: str
 
 
 class HumanMessage(BaseEvent):
-    """HumanInputRequest Response."""
+    """Event representing a human user's response."""
 
     content: str
