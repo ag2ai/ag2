@@ -51,7 +51,7 @@ When defining a handoff, you specify a transition target - the destination where
 
 - [`AgentNameTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentNameTarget): Transfer control to an agent by name
 - [`AgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentTarget): Transfer control to a specific agent instance
-- [`FunctionTarget`](/docs.ag2.ai/latest/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTarget/): Transfer control to a custom function that can run logic before determining the next transition
+- [`FunctionTarget`](/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTarget): Transfer control to a custom function that can run logic before determining the next transition
 - [`AskUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AskUserTarget): Ask the user to select the next speaker
 - [`NestedChatTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/NestedChatTarget): Target that represents a nested chat configuration
 - [`GroupManagerTarget`](/docs/api-reference/autogen/agentchat/group/targets/group_manager_target/GroupManagerTarget): Transfer control to the group manager who will select the next speaker
@@ -86,7 +86,7 @@ The function receives:
 - The shared `ContextVariables`
 - Optionally extra arguments
 
-It can perform any custom logic, and then returns a [`FunctionTargetResult`](/docs.ag2.ai/latest/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTargetResult/) that specifies the next transition target and includes a message for the next agent.
+It can perform any custom logic, and then returns a [`FunctionTargetResult`](/docs/api-reference/autogen/agentchat/group/targets/function_target/FunctionTargetResult) that specifies the next transition target and includes a message for the next agent.
 
 Some common use cases for `FunctionTarget` include:
 

@@ -1,0 +1,476 @@
+---
+title: "Give Your AG2 Agent its own UI with AG-UI"
+authors: [marklysze]
+tags:
+    - AG-UI
+    - Frontend
+    - Streaming
+    - Tools
+    - UI
+categories:
+    - AG-UI
+    - Frontend
+    - Streaming
+    - Tools
+date: 2026-02-17
+slug: AG2-AG-UI-Protocol
+---
+
+![AG2 x AG-UI](img/ag2-ag-ui.webp)
+
+You've built an agent with AG2. It reasons, calls tools, and streams responses. But right now it lives in a terminal or a script. The moment you want to put it in front of a user (like for a blog, perhaps) and stream text token by token, show tool activity as it happens, and handle errors gracefully you're building custom plumbing: WebSocket handlers, bespoke JSON formats, state synchronization logic.
+
+[AG-UI](https://docs.ag-ui.com/introduction) (Agent-User Interaction Protocol) is an open, lightweight, event-based protocol that standardizes this agent-to-UI layer. AG2 now supports AG-UI natively, meaning you can connect any `ConversableAgent` to an AG-UI-compatible frontend with just a couple of lines of code.
+
+In this post, we'll look under the hood at how the protocol works by building a working agent chat application from scratch using a `ConversableAgent` with a weather tool, sending AG-UI events to a browser frontend that renders streaming text and an interactive tool card. Simple HTML, no frontend framework required.
+
+![AG2 Agent Chat powered by AG-UI](img/ag2-ag-ui-demo.gif)
+
+## What is AG-UI?
+
+AG-UI is an open protocol created by [CopilotKit](https://www.copilotkit.ai/) that defines how AI agents communicate with frontend applications. Rather than each framework inventing its own streaming format, AG-UI provides a standard set of event types that any agent backend can emit and any frontend can consume.
+
+The protocol uses **Server-Sent Events (SSE)** over HTTP where each event is a JSON object with a `type` field that tells the frontend what's happening:
+
+- **Lifecycle events** -- `RUN_STARTED`, `RUN_FINISHED`, `RUN_ERROR` -- signal when the agent begins and ends work
+- **Text message events** -- `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` -- stream text token by token
+- **Tool call events** -- `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END` -- report tool activity in real time
+- **State events** -- `STATE_SNAPSHOT`, `STATE_DELTA` -- synchronize shared state between backend and frontend
+
+This event-driven approach means the frontend can react to each event as it arrives: render text as it streams, show a loading card when a tool starts, populate it with results when the tool finishes, and display errors immediately if something goes wrong.
+
+For a deep dive into the protocol, see the [AG-UI documentation](https://docs.ag-ui.com/introduction).
+
+## The Backend: Three Lines to an AG-UI Endpoint
+
+AG2's AG-UI integration centers on one class: `AGUIStream`. It wraps a `ConversableAgent` and translates its behavior (text responses, tool calls, context updates, errors) into the AG-UI event stream.
+
+Let's build a weather agent. First, install AG2 with the AG-UI extra, plus `fastapi` and `uvicorn` for the web server, `httpx` for the weather API calls, and `python-dotenv` for loading your API key from a `.env` file:
+
+```bash
+pip install "ag2[openai,ag-ui]" fastapi uvicorn httpx python-dotenv
+```
+
+Here's the complete backend:
+
+```python title="backend.py"
+from __future__ import annotations
+
+from typing import Annotated
+
+import httpx
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+# A regular AG2 tool -- nothing AG-UI-specific here.
+# The type annotations and docstring become the tool schema for the LLM.
+async def get_weather(
+    location: Annotated[str, "City name to get weather for"],
+) -> dict[str, str | float]:
+    """Get current weather for a location using the Open-Meteo API."""
+    async with httpx.AsyncClient() as client:
+        geocoding_url = (
+            f"https://geocoding-api.open-meteo.com/v1/search"
+            f"?name={location}&count=1"
+        )
+        geo = (await client.get(geocoding_url)).json()
+
+        if not geo.get("results"):
+            return {"error": f"Location '{location}' not found"}
+
+        result = geo["results"][0]
+        lat, lon, name = result["latitude"], result["longitude"], result["name"]
+
+        weather_url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat}&longitude={lon}"
+            f"&current=temperature_2m,apparent_temperature,"
+            f"relative_humidity_2m,wind_speed_10m,weather_code"
+        )
+        current = (await client.get(weather_url)).json()["current"]
+
+        return {
+            "temperature": current["temperature_2m"],
+            "feelsLike": current["apparent_temperature"],
+            "humidity": current["relative_humidity_2m"],
+            "windSpeed": current["wind_speed_10m"],
+            "conditions": current["weather_code"],
+            "location": name,
+        }
+
+
+# Create a ConversableAgent exactly as you normally would.
+# Include stream=True in LLMConfig so the UI can stream out
+# your agent's response.
+agent = ConversableAgent(
+    name="weather_agent",
+    system_message=(
+        "You are a helpful weather assistant. Use the get_weather tool "
+        "to look up current conditions for any city."
+    ),
+    llm_config=LLMConfig({"model": "gpt-4o-mini", "stream": True}),
+    functions=[get_weather],
+)
+
+# --- AG-UI integration ---
+stream = AGUIStream(agent) # (1) Wrap the agent
+
+# FastAPI, including CORS middleware for localhost access (not for production)
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/chat", stream.build_asgi()) # (2) Mount as an ASGI endpoint
+
+
+# Serve the frontend at the root URL (for this demo only)
+@app.get("/")
+async def serve_frontend():
+    return FileResponse("frontend.html")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8456) # (3)
+```
+
+That's it. Line **(1)** wraps the agent in an `AGUIStream`. Line **(2)** mounts it as an ASGI endpoint. Line **(3)** runs the server. The `AGUIStream` handles all the event encoding internally, translating the agent's streaming text, tool calls, context variable changes, and errors into properly formatted AG-UI events.
+
+Run it with:
+
+```bash
+python backend.py
+```
+
+Your agent is now serving AG-UI events at `http://localhost:8456/chat`.
+
+## What Flows Over the Wire
+
+When a frontend sends a message to the `/chat` endpoint, it receives an SSE stream of JSON events. Here's what a typical weather query produces:
+
+```
+data: {"type":"RUN_STARTED","timestamp":1771292585500,"threadId":"blog-capture","runId":"run-1"}
+
+data: {"type":"TOOL_CALL_START","timestamp":1771292587080,"toolCallId":"call_YF2vCJvd4paLkHKtyK6DvZDH","toolCallName":"get_weather"}
+data: {"type":"TOOL_CALL_ARGS","timestamp":1771292587080,"toolCallId":"call_YF2vCJvd4paLkHKtyK6DvZDH","delta":"{\"location\":\"Tokyo\"}"}
+data: {"type":"TOOL_CALL_RESULT","timestamp":1771292589703,"messageId":"26a835e1-...","toolCallId":"call_YF2vCJvd4paLkHKtyK6DvZDH","content":"{'temperature': 4.6, 'feelsLike': 1.6, 'humidity': 68, 'windSpeed': 5.0, 'windGust': 19.8, 'conditions': 'Partly cloudy', 'location': 'Tokyo'}","role":"tool"}
+data: {"type":"TOOL_CALL_END","timestamp":1771292589703,"toolCallId":"call_YF2vCJvd4paLkHKtyK6DvZDH"}
+
+data: {"type":"TEXT_MESSAGE_START","timestamp":1771292590776,"messageId":"e550e431-...","role":"assistant"}
+data: {"type":"TEXT_MESSAGE_CONTENT","timestamp":1771292590776,"messageId":"e550e431-...","delta":"Current"}
+data: {"type":"TEXT_MESSAGE_CONTENT","timestamp":1771292590776,"messageId":"e550e431-...","delta":" weather"}
+data: {"type":"TEXT_MESSAGE_CONTENT","timestamp":1771292590809,"messageId":"e550e431-...","delta":" in"}
+data: {"type":"TEXT_MESSAGE_CONTENT","timestamp":1771292590809,"messageId":"e550e431-...","delta":" Tokyo"}
+  ... (more TEXT_MESSAGE_CONTENT events, one per token) ...
+data: {"type":"TEXT_MESSAGE_END","timestamp":1771292591288,"messageId":"e550e431-..."}
+
+data: {"type":"RUN_FINISHED","timestamp":1771292591288,"threadId":"blog-capture","runId":"run-1"}
+```
+
+Each event has a `type` that tells the frontend exactly what to do. The frontend doesn't need to understand AG2 internals as it just reacts to a standardized event stream.
+
+## The Frontend: Consuming AG-UI Events
+
+To understand what AG-UI gives you, we'll consume the event stream directly using just `fetch` and a `switch` statement. This low-level approach allows you to see every event the protocol produces. (For production frontends with pre-built UI components, see [Frontend Libraries](#frontend-libraries) below.)
+
+The frontend is a single HTML file, save it as `frontend.html` next to `backend.py`. It has minimal styling and an **event log** panel so you can see every AG-UI event as it arrives.
+
+The core pattern: POST a `RunAgentInput` payload, read the SSE stream line by line, parse each `data:` line as JSON, and `switch` on the event type.
+
+<details markdown="1">
+<summary>frontend.html — full source (click to expand)</summary>
+
+```html title="frontend.html"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AG2 + AG-UI Demo</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; display: flex; height: 100vh; }
+
+        /* Left: chat panel */
+        .chat { flex: 1; display: flex; flex-direction: column; padding: 16px; }
+        .chat h2 { margin-bottom: 12px; }
+        .messages { flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+        .msg { margin-bottom: 10px; }
+        .msg.user { color: #1a73e8; }
+        .msg.assistant { color: #333; }
+        .msg.tool { color: #e67e22; font-family: monospace; font-size: 13px; }
+        .msg .label { font-weight: 600; font-size: 12px; text-transform: uppercase; }
+        .input-row { display: flex; gap: 8px; }
+        .input-row input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .input-row button { padding: 8px 20px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+        .input-row button:disabled { opacity: 0.5; }
+        .status { font-size: 12px; color: #999; margin-top: 6px; }
+
+        /* Right: event log */
+        .event-log { width: 420px; display: flex; flex-direction: column; border-left: 1px solid #ddd; padding: 16px; background: #f9f9f9; }
+        .event-log h2 { margin-bottom: 12px; }
+        .events { flex: 1; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; }
+        .event-entry { padding: 3px 0; border-bottom: 1px solid #eee; word-break: break-all; }
+        .event-type { font-weight: 700; }
+        .event-type.lifecycle { color: #8e44ad; }
+        .event-type.text { color: #27ae60; }
+        .event-type.tool { color: #e67e22; }
+        .event-type.state { color: #2980b9; }
+    </style>
+</head>
+<body>
+    <!-- Chat panel -->
+    <div class="chat">
+        <h2>AG2 Weather Agent</h2>
+        <div class="messages" id="messages"></div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Ask about the weather..." autofocus>
+            <button id="send" onclick="sendMessage()">Send</button>
+        </div>
+        <div class="status" id="status">Ready</div>
+    </div>
+
+    <!-- Event log panel -->
+    <div class="event-log">
+        <h2>AG-UI Event Log</h2>
+        <div class="events" id="events"></div>
+    </div>
+
+    <script>
+    const messagesEl = document.getElementById('messages');
+    const eventsEl = document.getElementById('events');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+
+    const messages = [];
+    let msgSeq = 0;
+
+    // --- Event log: shows every AG-UI event as it arrives ---
+    function logEvent(event) {
+        const entry = document.createElement('div');
+        entry.className = 'event-entry';
+
+        // Color-code by category
+        let cat = 'lifecycle';
+        if (event.type.startsWith('TEXT_MESSAGE')) cat = 'text';
+        else if (event.type.startsWith('TOOL_CALL')) cat = 'tool';
+        else if (event.type.startsWith('STATE')) cat = 'state';
+
+        // Show type + key fields (skip verbose ones)
+        const details = {...event};
+        delete details.type;
+        delete details.timestamp;
+        const extra = Object.keys(details).length
+            ? ' ' + JSON.stringify(details)
+            : '';
+
+        entry.innerHTML = `<span class="event-type ${cat}">${event.type}</span>${extra}`;
+        eventsEl.appendChild(entry);
+        eventsEl.scrollTop = eventsEl.scrollHeight;
+    }
+
+    // --- Add a message to the chat panel ---
+    function addMessage(role, text) {
+        const div = document.createElement('div');
+        div.className = `msg ${role}`;
+        div.innerHTML = `<div class="label">${role}</div><div>${text}</div>`;
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return div;
+    }
+
+    // --- Main: send a message and process the AG-UI event stream ---
+    async function sendMessage() {
+        const content = inputEl.value.trim();
+        if (!content) return;
+
+        // Show user message and add to conversation history
+        addMessage('user', content);
+        messages.push({ id: String(++msgSeq), role: 'user', content });
+        inputEl.value = '';
+        sendBtn.disabled = true;
+        statusEl.textContent = 'Agent running...';
+
+        // Prepare the AG-UI RunAgentInput payload
+        const payload = {
+            threadId: 'demo-thread',
+            runId: 'run-' + msgSeq,
+            messages,
+            tools: [],
+            context: [],
+            state: {},
+            forwardedProps: {},
+        };
+
+        let assistantText = '';
+        let assistantDiv = null;
+        let toolName = '';
+
+        try {
+            // POST to the AG-UI endpoint and read the SSE stream
+            const response = await fetch('/chat/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
+
+                    try {
+                        const event = JSON.parse(data);
+
+                        // Log every event to the right panel
+                        logEvent(event);
+
+                        // Handle each event type
+                        switch (event.type) {
+                            case 'TEXT_MESSAGE_START':
+                                assistantText = '';
+                                assistantDiv = addMessage('assistant', '');
+                                break;
+
+                            case 'TEXT_MESSAGE_CONTENT':
+                                assistantText += event.delta || '';
+                                assistantDiv.querySelector('div:last-child').textContent = assistantText;
+                                break;
+
+                            case 'TEXT_MESSAGE_CHUNK':
+                                // Non-streaming fallback: full message in one event
+                                addMessage('assistant', event.delta || '');
+                                assistantText = event.delta || '';
+                                break;
+
+                            case 'TOOL_CALL_START':
+                                toolName = event.toolCallName;
+                                addMessage('tool', `Calling ${toolName}...`);
+                                break;
+
+                            case 'TOOL_CALL_ARGS':
+                                addMessage('tool', `  args: ${event.delta}`);
+                                break;
+
+                            case 'TOOL_CALL_RESULT':
+                                addMessage('tool', `  result: ${event.content}`);
+                                break;
+
+                            case 'RUN_ERROR':
+                                addMessage('assistant', `Error: ${event.message}`);
+                                break;
+                        }
+                    } catch (e) { /* skip parse errors */ }
+                }
+            }
+
+            // Add assistant response to conversation history
+            if (assistantText) {
+                messages.push({ id: String(++msgSeq), role: 'assistant', content: assistantText });
+            }
+
+        } catch (error) {
+            addMessage('assistant', `Connection error: ${error.message}`);
+        }
+
+        sendBtn.disabled = false;
+        statusEl.textContent = 'Ready';
+        inputEl.focus();
+    }
+
+    inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') sendMessage();
+    });
+    </script>
+</body>
+</html>
+```
+
+</details>
+
+The key parts to notice:
+
+- **The payload** follows the AG-UI `RunAgentInput` schema, `messages` carries the conversation history, and `Accept: text/event-stream` tells the server to stream SSE
+- **The `switch` on `event.type`** is the entire integration logic, the frontend reacts to each event type as it arrives
+- **Tool events** (`TOOL_CALL_START` → `TOOL_CALL_ARGS` → `TOOL_CALL_RESULT`) show up in the chat as they happen, giving the user visibility into what the agent is doing
+
+Open `http://localhost:8456` in your browser, the backend serves both the frontend and the AG-UI event stream.
+
+The page is split into two panels. On the left, a simple chat interface. On the right, every AG-UI event is logged as it arrives -- color-coded by category (purple for lifecycle, green for text, orange for tool calls). This lets you see exactly what the protocol is doing in real time.
+
+![Sample Output](img/demo-ui.webp)
+
+## Try It Yourself
+
+The complete working code is available in the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository:
+
+- **[Weather Agent](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/weather)** is a single-agent chat with a weather tool, as above, with our signature AG2 styling
+
+## Frontend Libraries
+
+The HTML approach above is great for understanding the protocol, but AG-UI's ecosystem includes frontend libraries that handle event consumption and provide pre-built UI components.
+
+**[CopilotKit](https://www.copilotkit.ai/)**, the team behind AG-UI, provides React components, hooks for bidirectional state sync, and human-in-the-loop patterns. Works with AG2 out of the box via [`@ag-ui/client`](https://docs.ag-ui.com/sdk/js/client/overview). See the [CopilotKit AG2 guide](https://docs.copilotkit.ai/ag2) to get started.
+
+With CopilotKit, for example, the entire frontend becomes:
+
+```tsx
+import { CopilotKit } from "@copilotkit/react-core";
+import { CopilotChat } from "@copilotkit/react-ui";
+
+<CopilotKit runtimeUrl="/api/copilotkit" agent="weather_agent">
+  <CopilotChat />
+</CopilotKit>
+```
+
+All the SSE parsing, event routing, and streaming text rendering from our manual frontend is handled for you. The backend stays exactly the same with `AGUIStream` serving the same AG-UI events regardless of which frontend consumes them.
+
+## What About Multi-Agent?
+
+Today's AG-UI integration works with a single `ConversableAgent`. This gives you streaming text, tool visualization, state synchronization, and error handling out of the box. But the real strength of AG2 is multi-agent workflows: group chats, handoffs, sequential pipelines, and nested conversations. So how do you visualize those?
+
+AG-UI doesn't natively support multi-agent workflows yet -- it sees a single agent on the backend. But you can simulate a multi-agent pipeline today using `ContextVariables` and `STATE_SNAPSHOT` events. The approach:
+
+1. **A single orchestrator agent** with stage-specific tools (e.g. `submit_plan`, `submit_draft`, `submit_review`)
+2. **Each tool sets `context_variables["active_agent"]`** and `context_variables["stage"]`** to signal which "agent" is working and what phase the pipeline is in
+3. **AG2's `AGUIStream` automatically emits a `STATE_SNAPSHOT`** event whenever `ContextVariables` change, delivering the updated state to the frontend over SSE
+4. **The frontend reads `active_agent` and `stage`** from the snapshot to update the UI -- highlighting the active agent, showing pipeline progress, and rendering stage-appropriate content
+
+This keeps all transition logic in the backend as the single source of truth. The frontend just reacts to state changes.
+
+We built a full working example of this pattern -- the [Feedback Factory](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/factory) -- a multi-stage document creation pipeline with a 3-panel UI showing agent pipeline, document preview, and conversation log.
+
+**Native multi-agent support is an active focus for us.** We're working with the CopilotKit team on bringing first-class multi-agent patterns to the AG-UI protocol so you won't need the orchestrator workaround. If you're interested in this direction, watch the [AG2 repository](https://github.com/ag2ai/ag2) for updates and join the conversation on [Discord](https://discord.gg/pAbnFJrkgZ).
+
+## Learn More
+
+- [AG2 AG-UI User Guide](https://docs.ag2.ai/latest/docs/user-guide/ag-ui/) -- Full integration documentation including authentication, context variables, and frontend tools
+- [AG2 @ CopilotKit](https://docs.copilotkit.ai/ag2) -- CopilotKit's AG-UI and AG2 documentation
+- [AG-UI Protocol Documentation](https://docs.ag-ui.com/introduction) -- Protocol specification and event type reference
+- [AG-UI Dojo](https://dojo.ag-ui.com/ag2/feature/agentic_chat) -- Interactive playground for testing AG-UI integrations across frameworks

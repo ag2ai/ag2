@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -22,6 +22,7 @@ from .targets.group_manager_target import GroupManagerTarget
 from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
+    RandomAgentTarget,
     TransitionTarget,
 )
 
@@ -196,29 +197,33 @@ def create_on_condition_handoff_functions(agent: "ConversableAgent") -> None:
         )
 
 
+def _validate_handoff_target(target: TransitionTarget, agent_names: list[str], context: str) -> None:
+    """Validate that a handoff target references agents within the group.
+
+    Args:
+        target: The transition target to validate.
+        agent_names: Names of agents in the group.
+        context: Description of where this target appears, used in error messages.
+    """
+    if isinstance(target, (AgentTarget, AgentNameTarget)):
+        if target.agent_name not in agent_names:
+            raise ValueError(f"Agent in {context} Hand-offs must be in the agents list")
+    elif isinstance(target, RandomAgentTarget):
+        for name in target.agent_names:
+            if name not in agent_names:
+                raise ValueError(f"Agent '{name}' in RandomAgentTarget Hand-offs must be in the agents list")
+
+
 def ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
     """Ensure the agents in handoffs are in the group chat."""
     agent_names = [agent.name for agent in agents]
     for agent in agents:
         for llm_conditions in agent.handoffs.llm_conditions:
-            if (
-                isinstance(llm_conditions.target, (AgentTarget, AgentNameTarget))
-                and llm_conditions.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in OnCondition Hand-offs must be in the agents list")
+            _validate_handoff_target(llm_conditions.target, agent_names, "OnCondition")
         for context_conditions in agent.handoffs.context_conditions:
-            if (
-                isinstance(context_conditions.target, (AgentTarget, AgentNameTarget))
-                and context_conditions.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in OnContextCondition Hand-offs must be in the agents list")
-        # Check after_works targets
+            _validate_handoff_target(context_conditions.target, agent_names, "OnContextCondition")
         for after_work_condition in agent.handoffs.after_works:
-            if (
-                isinstance(after_work_condition.target, (AgentTarget, AgentNameTarget))
-                and after_work_condition.target.agent_name not in agent_names
-            ):
-                raise ValueError("Agent in after work target Hand-offs must be in the agents list")
+            _validate_handoff_target(after_work_condition.target, agent_names, "after work target")
 
 
 def ensure_guardrail_agents_in_group(agents: list["ConversableAgent"]) -> None:

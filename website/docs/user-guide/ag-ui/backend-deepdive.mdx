@@ -1,0 +1,140 @@
+---
+sidebarTitle: Backend deep dive
+title: "AG-UI backend deep dive"
+description: "Authentication, tools, and tools context for AG-UI endpoints in AG2."
+---
+
+This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
+
+If you haven’t set up an AG-UI endpoint yet, start with the [AG-UI overview](../){.internal-link}.
+
+## Authentication
+
+Because AG-UI integration works on top of simple HTTP SSE endpoints, you can use the same authentication mechanisms as you would for any other HTTP endpoint - validate headers/tokens before streaming events.
+
+Example: protect `/chat` with a shared token header.
+
+```python title="run_ag_ui_auth.py" linenums="1" hl_lines="21 24-25"
+from typing import Annotated
+
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream, RunAgentInput
+
+agent = ConversableAgent(
+    name="support_bot",
+    system_message="You help users with billing questions.",
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+
+stream = AGUIStream(agent)
+app = FastAPI()
+
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    token: Annotated[str, Header(..., description="Authentication token")],
+    accept: str | None = Header(None),
+) -> StreamingResponse:
+    if token != "1234567890":
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return StreamingResponse(
+        stream.dispatch(message, accept=accept),
+        media_type=accept or "text/event-stream",
+    )
+```
+
+Notes:
+
+- **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
+- If you don’t need auth/middleware, you can mount the generated ASGI endpoint with `AGUIStream.build_asgi()`, but you’ll have less control over request handling.
+
+## Tools context
+
+You often need to pass **per-request context** (user ID, org ID, plan, permissions) into tools without baking it into prompts or trusting client-provided text.
+
+AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
+
+```python title="tools_context.py" linenums="1" hl_lines="1 4 18"
+from autogen import ContextVariables, ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream, RunAgentInput
+
+
+def get_user_profile(context: ContextVariables) -> str:
+    user_id = context.get("user_id")
+    return f"User profile for user {user_id}"
+
+
+agent = ConversableAgent(
+    name="profile_bot",
+    system_message="You can look up a user profile when needed.",
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+    functions=[get_user_profile],
+)
+
+stream = AGUIStream(agent)
+
+
+async def dispatch_with_context(message: RunAgentInput):
+    return stream.dispatch(message, context={"user_id": "1234567890"})
+```
+
+## Backend tools (Python functions)
+
+Backend tools are regular Python callables registered on the agent (for example via `functions=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
+
+Example backend tool:
+
+```python title="backend_tools.py" linenums="1"
+from typing import Annotated
+
+from autogen import ConversableAgent, LLMConfig
+
+
+def calculate_sum(
+    a: Annotated[int, "First number"],
+    b: Annotated[int, "Second number"],
+) -> int:
+    return a + b
+
+
+agent = ConversableAgent(
+    "calculator",
+    functions=[calculate_sum],
+    llm_config=LLMConfig({"model": "gpt-4o-mini"}),
+)
+```
+
+In an AG-UI-compatible UI, you typically render these as:
+
+- Status updates (tool started / finished)
+- Structured result cards (e.g., “Weather in Tokyo”)
+- Debug panels in development
+
+## Frontend tools (UI-driven actions)
+
+Frontend tools are defined by the UI/client and sent to the agent as part of the run payload (for example, CopilotKit “actions” / GenUI tools). They are useful for:
+
+- **Generative UI** (custom cards, lists, buttons rendered from tool calls)
+- **HITL** (human-in-the-loop) input flows (buttons, forms, confirmations)
+
+In this setup:
+
+- The **frontend** advertises available tools in `RunAgentInput.tools`.
+- The **agent** can call those tools during the run.
+- The **frontend** executes/handles the tool and renders the UI.
+
+For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](../copilotkit-quickstart){.internal-link} and CopilotKit’s docs on:
+
+- [Backend tools](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"}
+- [Frontend tools](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"}
+- [Shared state](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"}
+
+## See also
+
+- [AG-UI overview](../){.internal-link}
+- [CopilotKit quickstart](../copilotkit-quickstart){.internal-link}

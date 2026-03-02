@@ -11,6 +11,8 @@ from textwrap import dedent
 import pytest
 
 from autogen._website.generate_mkdocs import (
+    _ensure_md_extension,
+    _transform_api_anchor,
     absolute_to_relative,
     add_api_ref_to_mkdocs_template,
     add_authors_info_to_user_stories,
@@ -1258,10 +1260,59 @@ def test_fix_internal_references() -> None:
 
         assert actual == expected
 
+        # fix_internal_references only resolves paths; fragments are not its concern.
+        # In fix_internal_links the fragment is split off before calling this function,
+        # then transformed separately via _transform_api_anchor.
         actual = fix_internal_references("/docs/api-reference/autogen/ConversableAgent#initiate-all-chats", tmpdir_path)
-        expected = "/docs/api-reference/autogen/ConversableAgent#autogen.ConversableAgent.initiate_all_chats"
+        expected = "/docs/api-reference/autogen/ConversableAgent#initiate-all-chats"
 
         assert actual == expected
+
+
+def test_transform_api_anchor() -> None:
+    # Method anchor: kebab-case → full dotted mkdocstrings path
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "initiate-all-chats")
+        == "autogen.ConversableAgent.initiate_all_chats"
+    )
+    # Class-level anchor (fragment matches class name) → module_prefix only
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "conversableagent")
+        == "autogen.ConversableAgent"
+    )
+    # Non-API-reference link → fragment unchanged
+    assert _transform_api_anchor("/docs/home/quickstart", "some-section") == "some-section"
+    # Already in dotted format → unchanged
+    assert (
+        _transform_api_anchor("/docs/api-reference/autogen/ConversableAgent", "autogen.ConversableAgent.initiate_chat")
+        == "autogen.ConversableAgent.initiate_chat"
+    )
+
+
+class TestEnsureMdExtension:
+    def test_no_extension_adds_md(self) -> None:
+        assert _ensure_md_extension("../overview") == "../overview.md"
+
+    def test_existing_md_extension_unchanged(self) -> None:
+        assert _ensure_md_extension("../overview.md") == "../overview.md"
+
+    def test_other_extension_unchanged(self) -> None:
+        assert _ensure_md_extension("../image.png") == "../image.png"
+
+    def test_fragment_without_extension(self) -> None:
+        assert _ensure_md_extension("../overview#section") == "../overview.md#section"
+
+    def test_fragment_with_extension(self) -> None:
+        assert _ensure_md_extension("../overview.md#section") == "../overview.md#section"
+
+    def test_deep_path_no_extension(self) -> None:
+        assert (
+            _ensure_md_extension("../../user-guide/basic-concepts/installing-ag2")
+            == "../../user-guide/basic-concepts/installing-ag2.md"
+        )
+
+    def test_relative_dot_path(self) -> None:
+        assert _ensure_md_extension("./overview") == "./overview.md"
 
 
 class TestFixInternalLinks:
@@ -1269,15 +1320,16 @@ class TestFixInternalLinks:
         source_path = os.path.join("docs", "home", "quick-start.md")
         content = os.path.join("docs", "user-guide", "basic-concepts", "installing-ag2")
 
-        expected = os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2")
+        expected = os.path.join("..", "user-guide", "basic-concepts", "installing-ag2")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = os.path.join("docs", "blog", "2025-02-05-Communication-Agents")
+        # Blog posts are at docs/blog/posts/SLUG/index.md in the mkdocs output
+        source_path = os.path.join("docs", "blog", "posts", "2025-02-05-Communication-Agents", "index.md")
         content = os.path.join("docs", "api-reference", "autogen", "UserProxyAgent")
 
-        expected = os.path.join("..", "..", "..", "..", "..", "api-reference", "autogen", "UserProxyAgent")
+        expected = os.path.join("..", "..", "..", "api-reference", "autogen", "UserProxyAgent")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
@@ -1301,7 +1353,7 @@ class TestFixInternalLinks:
         source_path = os.path.join("docs", "home", "home.md")
         content = os.path.join("docs", "home", "quick-start")
 
-        expected = os.path.join("..", "quick-start")
+        expected = "quick-start"
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
@@ -1309,7 +1361,7 @@ class TestFixInternalLinks:
         source_path = os.path.join("docs", "contributor-guide", "how-ag2-works", "hooks.md")
         content = os.path.join("docs", "contributor-guide", "how-ag2-works", "initiate-chat")
 
-        expected = os.path.join("..", "initiate-chat")
+        expected = "initiate-chat"
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
@@ -1370,21 +1422,19 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 
 ![DeepResearchAgent workflow]({})
 
-<img class="hero-logo" noZoom src="{}" alt="AG2 Logo" />
+<img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
 
-[Cross-Framework LLM Tool Integration]({})
+[Cross-Framework LLM Tool Integration](/docs/blog/2024/12/20/Tools-interoperability)
 
 """.format(
-                os.path.join("..", "..", "user-guide", "basic-concepts", "llm-configuration.md"),
-                os.path.join("..", "slow-start.md"),
-                os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2"),
-                os.path.join("..", "..", "user-guide", "advanced-concepts", "rag"),
-                os.path.join("..", "..", "api-reference", "autogen", "overview"),
-                os.path.join("..", "..", "contributor-guide", "contributing"),
-                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
-                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
-                os.path.join("..", "..", "..", "assets", "img", "ag2.svg"),
-                os.path.join("..", "..", "blog", "2024", "12", "20", "Tools-interoperability"),
+                os.path.join("..", "user-guide", "basic-concepts", "llm-configuration.md"),
+                "slow-start.md",
+                os.path.join("..", "user-guide", "basic-concepts", "installing-ag2.md"),
+                os.path.join("..", "user-guide", "advanced-concepts", "rag.md"),
+                os.path.join("..", "api-reference", "autogen", "overview.md"),
+                os.path.join("..", "contributor-guide", "contributing.md"),
+                os.path.join("..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
+                os.path.join("..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
             )
         )
         actual = fix_internal_links(source_path, content)

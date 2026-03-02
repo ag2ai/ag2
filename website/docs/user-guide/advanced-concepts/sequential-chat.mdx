@@ -8,7 +8,7 @@ As a sequence of chats between two agents chained together by a mechanism called
 
 The figure below illustrates how this pattern works.
 
-![initiate_chats](../assets/sequential-two-agent-chat.png)
+![initiate_chats](assets/sequential-two-agent-chat.png)
 
 In this pattern, a pair of agents start a two-agent chat, then the summary of the conversation becomes a *carryover* for the next two-agent chat. The next chat passes the carryover to the `carryover` parameter of the context to generate its initial message.
 
@@ -26,7 +26,7 @@ A teacher agent will engage three agents sequentially:
 2. A lesson planner will design the lesson with two iterations given feedback from the teacher
 3. A formatter will format the lesson
 
-![sequential_orchestration](../assets/sequential_orchestration.png)
+![sequential_orchestration](assets/sequential_process.png)
 
 
 import Example from "/snippets/python-examples/sequentialchat.mdx";
@@ -43,4 +43,4 @@ The result of the [`initiate_chats`](/docs/api-reference/autogen/ConversableAgen
 
 ### Different senders
 
-In the above example, the teacher agent was the sender in each chat, however you can use the high-level [`initiate_chats`](/docs/api-reference/autogen/initiate_chats) function to start a sequence of two-agent chats with different sender agents. See this [notebook](/docs/use-cases/notebooks/notebooks/agentchats_sequential_chats#example-1%3A-solve-tasks-with-a-series-of-chats) for an example.
+In the above example, the teacher agent was the sender in each chat, however you can use the high-level [`initiate_chats`](/docs/api-reference/autogen/initiate_chats) function to start a sequence of two-agent chats with different sender agents. See this [notebook](/docs/use-cases/notebooks/notebooks/agentchat_sequential_chats#example-1-solve-tasks-with-a-series-of-chats) for an example.

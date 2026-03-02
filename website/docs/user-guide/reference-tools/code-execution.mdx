@@ -45,15 +45,15 @@ In terms of isolation and security:
 
 ### System Environment
 
-The [`SystemPythonEnvironment`](/docs/api-reference/autogen/environments/SystemPythonEnvironment) uses the operating system's Python environment. It allows you to run code with all the installed packages.
+The `SystemPythonEnvironment` uses the operating system's Python environment. It allows you to run code with all the installed packages.
 
-There is only one, optional, parameter for the [`SystemPythonEnvironment`](/docs/api-reference/autogen/environments/SystemPythonEnvironment) and that's `executable` which can be a path (including filename) to the Python executable. This is useful if you have multiple Python interpreters installed and want to execute the code with a specific Python one.
+There is only one, optional, parameter for the `SystemPythonEnvironment` and that's `executable` which can be a path (including filename) to the Python executable. This is useful if you have multiple Python interpreters installed and want to execute the code with a specific Python one.
 
 ### Venv Environment
 
-The [`VenvPythonEnvironment`](/docs/api-reference/autogen/environments/VenvPythonEnvironment) uses or creates a virtual environment to run the code in. This provides package isolation from the operating system Python environment.
+The `VenvPythonEnvironment` uses or creates a virtual environment to run the code in. This provides package isolation from the operating system Python environment.
 
-The parameters for the [`VenvPythonEnvironment`](/docs/api-reference/autogen/environments/VenvPythonEnvironment) allow you to use existing, or create new, virtual environments.
+The parameters for the `VenvPythonEnvironment` allow you to use existing, or create new, virtual environments.
 
 | Parameter | Description |
 | --- | --- |
@@ -69,9 +69,9 @@ Note: The virtual environment directory will not be removed by the tool.
 
 ### Docker Environment
 
-The [`DockerPythonEnvironment`](/docs/api-reference/autogen/environments/DockerPythonEnvironment) executes code within Docker containers, providing stronger isolation from the host system and greater flexibility in environment configuration.
+The `DockerPythonEnvironment` executes code within Docker containers, providing stronger isolation from the host system and greater flexibility in environment configuration.
 
-Key parameters for the [`DockerPythonEnvironment`](/docs/api-reference/autogen/environments/DockerPythonEnvironment) include:
+Key parameters for the `DockerPythonEnvironment` include:
 
 | Parameter | Description |
 | --- | --- |
@@ -91,9 +91,9 @@ Note: Docker must be installed and running on your system to use this environmen
 
 ## Working Directory
 
-The tool will create a `script.py` file with the code and execute it. The location of this file is specified by passing in a [`WorkingDirectory`](/docs/api-reference/autogen/environments/WorkingDirectory) to the `working_directory` parameter of the [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool).
+The tool will create a `script.py` file with the code and execute it. The location of this file is specified by passing in a `WorkingDirectory` to the `working_directory` parameter of the [`PythonCodeExecutionTool`](/docs/api-reference/autogen/tools/experimental/PythonCodeExecutionTool).
 
-If you don't want to specify a directory you can use [`WorkingDirectory`](/docs/api-reference/autogen/environments/WorkingDirectory)'s `create_tmp` method to create a temporary one.
+If you don't want to specify a directory you can use `WorkingDirectory`'s `create_tmp` method to create a temporary one.
 
 With Docker environments, the working directory is mounted inside the container, allowing files to be shared between the host and the container.
 

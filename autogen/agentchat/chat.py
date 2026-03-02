@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -160,7 +160,7 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
     Args:
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.\n
             Each dictionary should contain the input arguments for
-            [`ConversableAgent.initiate_chat`](../ConversableAgent#initiate-chat).\n
+            [`ConversableAgent.initiate_chat`](ConversableAgent.md#autogen.ConversableAgent.initiate_chat).\n
             For example:\n
                 - `"sender"` - the sender agent.\n
                 - `"recipient"` - the recipient agent.\n
@@ -271,7 +271,7 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
 
             Each dictionary should contain the input arguments for
-            [`ConversableAgent.initiate_chat`](../../../ConversableAgent#initiate-chat).
+            [`ConversableAgent.initiate_chat`](../../ConversableAgent.md#autogen.ConversableAgent.initiate_chat).
             For example:
                 - `"sender"` - the sender agent.
                 - `"recipient"` - the recipient agent.

@@ -21,7 +21,7 @@ Here’s why dependency injection is a game-changer for secure LLM workflows:
 
 In this guide, we’ll explore how to set up dependency injection and build secure workflows. Let’s dive in!
 
-**Note:** This blog builds upon the concepts covered in the following [notebook](/docs/use-cases/notebooks/notebooks/tools_dependency_injection).
+**Note:** This blog builds upon the concepts covered in the following [notebook](/docs/use-cases/notebooks/notebooks/agentchat_tools_dependency_injection).
 
 ## Installation
 
@@ -45,7 +45,7 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 
 ## Imports
 
-The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/reference/tools/dependency_injection) module. This module provides key components for dependency injection:
+The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/use-cases/notebooks/notebooks/agentchat_tools_dependency_injection) module. This module provides key components for dependency injection:
 
 - [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
 - [`Depends`](/docs/api-reference/autogen/tools/Depends#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.

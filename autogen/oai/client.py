@@ -254,6 +254,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     verbosity: Literal["low", "medium", "high"] | None
     extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
 
@@ -274,6 +275,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     extra_body: dict[str, Any] | None = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
+    extra_headers: dict[str, str] | None = (
+        None  # For VLLM and other OpenAI-compatible servers - See: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers
+    )
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None = None
     max_completion_tokens: int | None = None
@@ -289,6 +293,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
@@ -300,6 +305,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     tool_choice: Literal["none", "auto", "required"] | None = None
     user: str | None = None
+    extra_headers: dict[str, str] | None = None
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview

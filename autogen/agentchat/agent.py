@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -113,7 +113,6 @@ class Agent(Protocol):
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
-            **kwargs: Additional keyword arguments.
 
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.
@@ -131,7 +130,6 @@ class Agent(Protocol):
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
-            **kwargs: Additional keyword arguments.
 
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.
