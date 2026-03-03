@@ -43,7 +43,8 @@ class SelectionContext:
     """Name of the last speaker, or None if this is the first round."""
 
     participants: tuple[str, ...]
-    """Names of all registered participants in the GroupChat."""
+    """Names of all registered participants in the GroupChat (the full roster,
+    not the filtered candidate set at the point of this call)."""
 
 
 @export_module("autogen")

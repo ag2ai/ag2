@@ -292,7 +292,7 @@ class TestAdversarialGroupChatEligibility:
         result = gc._prepare_and_select_agents(alice)
         selected = result[0] if isinstance(result, tuple) else result
         candidates = result[1] if isinstance(result, tuple) else result
-        assert len(candidates) >= 1
+        assert len(candidates) == 2  # both alice and bob pass the truthy policy
 
     def test_policy_returns_falsy_non_bool(self):
         """Policy returning 0 (falsy) should exclude the agent."""
@@ -336,3 +336,27 @@ class TestAdversarialGroupChatEligibility:
         )
         with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._prepare_and_select_agents(alice)
+
+
+def test_callable_speaker_selection_bypasses_policies():
+    """When speaker_selection_method is a Callable returning an Agent, eligibility_policies
+    are NOT applied — the caller has explicit control over the selection."""
+    alice, bob = _make_agent("alice"), _make_agent("bob")
+
+    class _BlockAll:
+        def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+            return False
+
+    def _always_alice(last_speaker, gc):  # type: ignore[return-value]
+        return alice
+
+    gc = GroupChat(
+        agents=[alice, bob],
+        messages=[],
+        max_round=5,
+        speaker_selection_method=_always_alice,
+        eligibility_policies=[_BlockAll()],
+    )
+    # Should NOT raise NoEligibleSpeakerError — Callable path returns before policy application
+    selected, candidates, _ = gc._prepare_and_select_agents(bob)
+    assert selected.name == "alice"

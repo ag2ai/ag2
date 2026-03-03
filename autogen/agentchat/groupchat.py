@@ -568,6 +568,10 @@ class GroupChat:
             # find agents with the right function_map which contains the function name
             agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
             if agents:
+                # Eligibility policies are applied before allow_repeat_speaker exclusion
+                # (line below). Policies are therefore evaluated against last_speaker even
+                # when allow_repeat_speaker=False; the repeat exclusion removes last_speaker
+                # from the final candidate set afterwards regardless.
                 agents = self._apply_eligibility_policies(
                     agents,
                     last_speaker=last_speaker,
