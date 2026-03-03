@@ -209,6 +209,26 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
+@pytest.mark.asyncio
+async def test_a_execute_function_awaits_awaitable_returned_by_sync_callable():
+    from autogen.agentchat import UserProxyAgent
+
+    async def add_num_async(num_to_be_added):
+        await asyncio.sleep(0)
+        return str(num_to_be_added + 10)
+
+    def add_num(num_to_be_added):
+        return add_num_async(num_to_be_added)
+
+    user = UserProxyAgent(name="test", function_map={"add_num": add_num})
+    func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
+
+    is_success, result = await user.a_execute_function(func_call=func_call)
+
+    assert is_success is True
+    assert result["content"] == "15"
+
+
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.10"),
