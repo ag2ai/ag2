@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -17,12 +18,17 @@ class SelectionContext:
     """
 
     round: int
-    """Current round index (0-based)."""
+    """Number of messages spoken so far.
+
+    Equals 1 during the first speaker selection (the initial message is appended
+    before ``select_speaker`` is called), not 0. Use ``round == 1`` to detect
+    the first selection, not ``round == 0``.
+    """
 
     last_speaker: str | None
     """Name of the last speaker, or None if this is the first round."""
 
-    participants: list[str]
+    participants: tuple[str, ...]
     """Names of all registered participants in the GroupChat."""
 
 
@@ -79,17 +85,20 @@ class DescriptionMutationMixin:
     def __init__(self, agent: "Agent") -> None:
         self._agent = agent
         self._original_description: str | None = None
+        self._lock = threading.Lock()
 
     def mark_unavailable(self) -> None:
-        """Prepend [UNAVAILABLE] to agent.description (idempotent)."""
-        current = self._agent.description or ""
-        if current.startswith(_UNAVAILABLE_PREFIX):
-            return
-        self._original_description = current
-        self._agent.description = _UNAVAILABLE_PREFIX + current
+        """Prepend [UNAVAILABLE] to agent.description (idempotent, thread-safe)."""
+        with self._lock:
+            current = self._agent.description or ""
+            if current.startswith(_UNAVAILABLE_PREFIX):
+                return
+            self._original_description = current
+            self._agent.description = _UNAVAILABLE_PREFIX + current
 
     def mark_available(self) -> None:
-        """Restore original description (no-op if not marked)."""
-        if self._original_description is not None:
-            self._agent.description = self._original_description
-            self._original_description = None
+        """Restore original description (no-op if not marked, thread-safe)."""
+        with self._lock:
+            if self._original_description is not None:
+                self._agent.description = self._original_description
+                self._original_description = None

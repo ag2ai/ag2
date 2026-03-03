@@ -22,32 +22,32 @@ class _NeverEligible:
 
 
 def test_selection_context_fields():
-    ctx = SelectionContext(round=1, last_speaker="alice", participants=["alice", "bob"])
+    ctx = SelectionContext(round=1, last_speaker="alice", participants=("alice", "bob"))
     assert ctx.round == 1
     assert ctx.last_speaker == "alice"
-    assert ctx.participants == ["alice", "bob"]
+    assert ctx.participants == ("alice", "bob")
 
 
 def test_selection_context_no_last_speaker():
-    ctx = SelectionContext(round=0, last_speaker=None, participants=["alice"])
+    ctx = SelectionContext(round=0, last_speaker=None, participants=("alice",))
     assert ctx.last_speaker is None
 
 
 def test_selection_context_frozen():
-    ctx = SelectionContext(round=1, last_speaker=None, participants=["alice"])
+    ctx = SelectionContext(round=1, last_speaker=None, participants=("alice",))
     with pytest.raises((AttributeError, TypeError)):
         ctx.round = 2  # type: ignore[misc]
 
 
 def test_always_eligible_satisfies_protocol():
     policy: AgentEligibilityPolicy = _AlwaysEligible()
-    ctx = SelectionContext(round=1, last_speaker=None, participants=["alice"])
+    ctx = SelectionContext(round=1, last_speaker=None, participants=("alice",))
     assert policy.is_eligible(object(), ctx) is True
 
 
 def test_never_eligible_satisfies_protocol():
     policy: AgentEligibilityPolicy = _NeverEligible()
-    ctx = SelectionContext(round=1, last_speaker=None, participants=["alice"])
+    ctx = SelectionContext(round=1, last_speaker=None, participants=("alice",))
     assert policy.is_eligible(object(), ctx) is False
 
 
@@ -131,14 +131,14 @@ class TestAdversarialEligibilityPolicy:
         mixin.mark_available()
         assert agent.description == ""
 
-    def test_selection_context_participants_empty_list(self):
-        """SelectionContext with empty participants list is valid."""
-        ctx = SelectionContext(round=0, last_speaker=None, participants=[])
-        assert ctx.participants == []
+    def test_selection_context_participants_empty_tuple(self):
+        """SelectionContext with empty participants tuple is valid."""
+        ctx = SelectionContext(round=0, last_speaker=None, participants=())
+        assert ctx.participants == ()
 
     def test_selection_context_negative_round(self):
         """Negative round index is technically allowed (no validation in dataclass)."""
-        ctx = SelectionContext(round=-1, last_speaker=None, participants=["a"])
+        ctx = SelectionContext(round=-1, last_speaker=None, participants=("a",))
         assert ctx.round == -1
 
     def test_concurrent_is_eligible_calls(self):
@@ -155,7 +155,7 @@ class TestAdversarialEligibilityPolicy:
                 return True
 
         policy = _CountingPolicy()
-        ctx = SelectionContext(round=1, last_speaker=None, participants=["a"])
+        ctx = SelectionContext(round=1, last_speaker=None, participants=("a",))
 
         def call_policy():
             try:
@@ -171,3 +171,31 @@ class TestAdversarialEligibilityPolicy:
 
         assert not errors, f"Concurrent calls raised: {errors}"
         assert call_count == 50
+
+
+def test_description_mutation_thread_safety():
+    """Concurrent mark_unavailable/mark_available must not corrupt description."""
+    import threading
+
+    agent = MagicMock()
+    agent.description = "original"
+    mixin = DescriptionMutationMixin(agent)
+    errors = []
+
+    def toggle():
+        try:
+            for _ in range(100):
+                mixin.mark_unavailable()
+                mixin.mark_available()
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=toggle) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    # Final state: either original or unavailable — not corrupted
+    assert agent.description in ("original", "[UNAVAILABLE] original")
