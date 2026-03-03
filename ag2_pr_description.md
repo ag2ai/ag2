@@ -3,16 +3,16 @@
 - Add `AgentEligibilityPolicy` Protocol to `GroupChat`, enabling runtime filtering
   of speaker candidates based on agent health or business logic.
 - `SelectionContext` dataclass provides minimal, decoupled context to policies.
-- `DescriptionMutationMixin` provides soft-signal support for LLM-based selection.
+- `AgentDescriptionGuard` provides soft-signal support for LLM-based selection.
 
 ## Changes
 
 - `autogen/agentchat/eligibility_policy.py` (new): `SelectionContext` frozen dataclass,
-  `AgentEligibilityPolicy` Protocol (`@runtime_checkable`), `DescriptionMutationMixin`.
+  `AgentEligibilityPolicy` Protocol (`@runtime_checkable`), `AgentDescriptionGuard`.
 - `autogen/agentchat/groupchat.py`: `eligibility_policies: list[AgentEligibilityPolicy]`
   field (default `[]`) + `_apply_eligibility_policies()` called inside
   `_prepare_and_select_agents`.
-- `autogen/agentchat/__init__.py`: export `AgentEligibilityPolicy`, `SelectionContext`.
+- `autogen/agentchat/__init__.py`: export `AgentEligibilityPolicy`, `SelectionContext`, `AgentDescriptionGuard`.
 - `test/agentchat/test_eligibility_policy.py` (new): unit tests for Protocol and mixin.
 - `test/agentchat/test_groupchat_eligibility.py` (new): integration tests incl.
   @marklysze's `cheap_planner` scenario.
@@ -38,6 +38,6 @@
 
 ## Test Plan
 
-- [x] `pytest test/agentchat/test_eligibility_policy.py` -- Protocol + mixin unit tests
+- [x] `pytest test/agentchat/test_eligibility_policy.py` -- Protocol + AgentDescriptionGuard unit tests
 - [x] `pytest test/agentchat/test_groupchat_eligibility.py` -- integration tests (msze scenario)
 - [x] `pytest test/agentchat/test_groupchat.py` -- existing tests unaffected
