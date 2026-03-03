@@ -319,7 +319,7 @@ class GroupChat:
             Filtered list of agents. All input agents if no policies registered.
 
         Raises:
-            ValueError: If all agents are filtered out by eligibility policies.
+            NoEligibleSpeakerError: If all agents are filtered out by eligibility policies.
         """
         if not self.eligibility_policies:
             return agents

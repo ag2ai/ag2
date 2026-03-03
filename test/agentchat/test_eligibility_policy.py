@@ -101,7 +101,7 @@ class TestAdversarialEligibilityPolicy:
                 raise RuntimeError("policy failure")
 
         policy = _RaisingPolicy()
-        ctx = SelectionContext(round=0, last_speaker=None, participants=["a"])
+        ctx = SelectionContext(round=0, last_speaker=None, participants=("a",))
         with pytest.raises(RuntimeError, match="policy failure"):
             policy.is_eligible(object(), ctx)
 
