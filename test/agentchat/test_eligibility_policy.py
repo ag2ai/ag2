@@ -93,6 +93,39 @@ def test_mark_available_noop_when_not_marked():
 class TestAdversarialEligibilityPolicy:
     """Adversarial tests — attacker mindset."""
 
+    def test_selection_context_last_speaker_not_in_participants(self):
+        """last_speaker name absent from participants is a valid but inconsistent ctx state.
+        The dataclass must accept it without validation (callers are responsible)."""
+        ctx = SelectionContext(round=2, last_speaker="ghost", participants=("alice", "bob"))
+        assert ctx.last_speaker == "ghost"
+        assert "ghost" not in ctx.participants
+
+    def test_guard_thundering_herd_mark_unavailable(self):
+        """100 threads all calling mark_unavailable simultaneously.
+        Exactly one [UNAVAILABLE] prefix must appear — not zero, not two."""
+        import threading
+
+        agent = MagicMock()
+        agent.description = "original"
+        guard = AgentDescriptionGuard(agent)
+        errors: list[Exception] = []
+
+        def call():
+            try:
+                guard.mark_unavailable()
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=call) for _ in range(100)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Thundering herd raised: {errors}"
+        assert agent.description.count("[UNAVAILABLE]") == 1
+        assert "original" in agent.description
+
     def test_policy_raises_exception_propagates(self):
         """Policy that raises should propagate, not silently pass."""
 

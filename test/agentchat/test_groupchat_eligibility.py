@@ -360,3 +360,107 @@ def test_callable_speaker_selection_bypasses_policies():
     # Should NOT raise NoEligibleSpeakerError — Callable path returns before policy application
     selected, candidates, _ = gc._prepare_and_select_agents(bob)
     assert selected.name == "alice"
+
+
+class TestAdversarialGroupChatEligibilityDeep:
+    """Second-wave adversarial tests — deeper attacker scenarios."""
+
+    def test_policy_returns_none_excluded(self):
+        """Policy returning None (falsy non-bool) must exclude the agent."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        class _NoneForAlice:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return None if agent.name == "alice" else True  # type: ignore[return-value]
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+            eligibility_policies=[_NoneForAlice()],
+        )
+        names = _get_candidates(gc, bob)
+        assert "alice" not in names
+        assert "bob" in names
+
+    def test_policy_raises_on_second_agent_propagates(self):
+        """Partial failure: first agent passes, second raises — exception propagates."""
+        alice, bob, carol = _make_agent("alice"), _make_agent("bob"), _make_agent("carol")
+
+        class _RaisesOnBob:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                if agent.name == "bob":
+                    raise RuntimeError("bob exploded")
+                return True
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+            eligibility_policies=[_RaisesOnBob()],
+        )
+        with pytest.raises(RuntimeError, match="bob exploded"):
+            gc._prepare_and_select_agents(carol)
+
+    def test_concurrent_prepare_and_select_agents(self):
+        """20 threads calling _prepare_and_select_agents simultaneously must not crash."""
+        import threading
+
+        agents = [_make_agent(f"agent{i}") for i in range(5)]
+        gc = GroupChat(
+            agents=agents,
+            messages=[],
+            max_round=100,
+            speaker_selection_method="random",
+            eligibility_policies=[_PolicyAllowAll()],
+        )
+        errors: list[Exception] = []
+        results: list[object] = []
+
+        def call() -> None:
+            try:
+                r = gc._prepare_and_select_agents(agents[0])
+                results.append(r)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=call) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Concurrent prepare_and_select raised: {errors}"
+        assert len(results) == 20
+
+    def test_single_agent_groupchat_underpopulated_guard_fires_first(self):
+        """GroupChat with 1 agent raises ValueError('underpopulated') before policy is applied.
+        The built-in guard fires first — policies are not evaluated."""
+        alice = _make_agent("alice")
+        gc = GroupChat(
+            agents=[alice],
+            messages=[],
+            max_round=5,
+            eligibility_policies=[_PolicyBlockByName("alice")],
+        )
+        with pytest.raises(ValueError, match="underpopulated"):
+            gc._prepare_and_select_agents(alice)
+
+    def test_two_agents_both_blocked_raises_no_eligible_speaker(self):
+        """All agents blocked by policy in a properly-populated GroupChat raises NoEligibleSpeakerError."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        class _BlockAll:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return False
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            eligibility_policies=[_BlockAll()],
+        )
+        with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
+            gc._prepare_and_select_agents(alice)
