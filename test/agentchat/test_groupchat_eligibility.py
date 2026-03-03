@@ -6,9 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from autogen import ConversableAgent, NoEligibleSpeakerError
-from autogen.agentchat.groupchat import GroupChat
-from autogen.agentchat.eligibility_policy import AgentEligibilityPolicy, SelectionContext
+from autogen import AgentEligibilityPolicy, ConversableAgent, GroupChat, NoEligibleSpeakerError, SelectionContext
 
 
 def _make_agent(name: str) -> ConversableAgent:
@@ -104,7 +102,7 @@ def test_all_agents_ineligible_raises():
         max_round=5,
         eligibility_policies=[_BlockAll()],
     )
-    with pytest.raises((NoEligibleSpeakerError, ValueError), match="No eligible agents"):
+    with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
         gc._prepare_and_select_agents(alice)
 
 
@@ -232,7 +230,7 @@ class TestAdversarialGroupChatEligibility:
             eligibility_policies=[_AllowAll()],
         )
         # Empty input list -> no eligible agents -> NoEligibleSpeakerError (Bug 1 fix)
-        with pytest.raises((NoEligibleSpeakerError, ValueError), match="No eligible agents"):
+        with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._apply_eligibility_policies([], last_speaker=None, round_index=0)
 
     def test_apply_eligibility_policies_empty_input_no_policies_returns_empty(self):
@@ -336,5 +334,5 @@ class TestAdversarialGroupChatEligibility:
             speaker_transitions_type="allowed",
             eligibility_policies=[_BlockBob()],
         )
-        with pytest.raises((NoEligibleSpeakerError, ValueError)):
+        with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._prepare_and_select_agents(alice)

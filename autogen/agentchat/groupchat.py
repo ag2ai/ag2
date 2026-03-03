@@ -174,6 +174,7 @@ class GroupChat:
     select_speaker_auto_model_client_cls: ModelClient | list[ModelClient] | None = None
     select_speaker_auto_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None
     role_for_select_speaker_messages: str | None = "system"
+    eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
     _VALID_SPEAKER_TRANSITIONS_TYPE = ["allowed", "disallowed", None]
@@ -183,7 +184,6 @@ class GroupChat:
         "Hello everyone. We have assembled a great team today to answer questions and solve tasks. In attendance are:"
     )
 
-    eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
     allowed_speaker_transitions_dict: dict[str, list[Agent]] = field(init=False)
     _inter_agent_guardrails: list = field(default_factory=list, init=False)
 

@@ -8,11 +8,11 @@ import logging
 
 from .agentchat import (
     Agent,
+    AgentDescriptionGuard,
     AgentEligibilityPolicy,
     AssistantAgent,
     ChatResult,
     ConversableAgent,
-    DescriptionMutationMixin,
     GroupChat,
     GroupChatManager,
     SelectionContext,
@@ -55,6 +55,7 @@ __all__ = [
     "DEFAULT_MODEL",
     "FAST_MODEL",
     "Agent",
+    "AgentDescriptionGuard",
     "AgentEligibilityPolicy",
     "AgentNameConflictError",
     "AssistantAgent",
@@ -62,7 +63,6 @@ __all__ = [
     "ChatResult",
     "ContextExpression",
     "ConversableAgent",
-    "DescriptionMutationMixin",
     "GroupChat",
     "GroupChatManager",
     "InvalidCarryOverTypeError",

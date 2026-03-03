@@ -30,6 +30,13 @@ class SelectionContext:
     Equals 1 during the first speaker selection (the initial message is appended
     before ``select_speaker`` is called), not 0. Use ``round == 1`` to detect
     the first selection, not ``round == 0``.
+
+    Example::
+
+        def is_eligible(self, agent, ctx):
+            if ctx.round == 1:
+                return agent.name != "expensive_agent"  # skip on opening turn
+            return True
     """
 
     last_speaker: str | None
@@ -88,12 +95,12 @@ _UNAVAILABLE_PREFIX = "[UNAVAILABLE] "
 
 
 @export_module("autogen")
-class DescriptionMutationMixin:
+class AgentDescriptionGuard:
     """Manages soft-signal description mutation for LLM-based speaker selection.
 
-    When an agent becomes unavailable (e.g. circuit breaker opens), prepend
-    [UNAVAILABLE] to the agent description so LLM-based auto-selection
-    is less likely to choose it.  Restore on recovery.
+    Wraps an agent via composition and toggles an ``[UNAVAILABLE]`` prefix on
+    its description so that LLM-based auto-selection is less likely to choose it
+    when it is unavailable (e.g. circuit breaker open).  Restore on recovery.
     """
 
     def __init__(self, agent: "Agent") -> None:

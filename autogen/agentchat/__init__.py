@@ -7,7 +7,7 @@
 from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
-from .eligibility_policy import AgentEligibilityPolicy, DescriptionMutationMixin, SelectionContext
+from .eligibility_policy import AgentDescriptionGuard, AgentEligibilityPolicy, SelectionContext
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
@@ -36,7 +36,7 @@ __all__ = [
     "ChatResult",
     "ContextVariables",
     "ConversableAgent",
-    "DescriptionMutationMixin",
+    "AgentDescriptionGuard",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",

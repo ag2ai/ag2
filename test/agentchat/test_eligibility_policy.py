@@ -8,11 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.agentchat.eligibility_policy import (
-    AgentEligibilityPolicy,
-    DescriptionMutationMixin,
-    SelectionContext,
-)
+from autogen import AgentDescriptionGuard, AgentEligibilityPolicy, SelectionContext
 
 
 class _AlwaysEligible:
@@ -62,7 +58,7 @@ def test_runtime_checkable_isinstance():
 def test_description_mutation_on_unavailable():
     agent = MagicMock()
     agent.description = "A helpful planner"
-    mixin = DescriptionMutationMixin(agent)
+    mixin = AgentDescriptionGuard(agent)
     mixin.mark_unavailable()
     assert agent.description.startswith("[UNAVAILABLE]")
     assert "A helpful planner" in agent.description
@@ -71,7 +67,7 @@ def test_description_mutation_on_unavailable():
 def test_description_restore_on_available():
     agent = MagicMock()
     agent.description = "A helpful planner"
-    mixin = DescriptionMutationMixin(agent)
+    mixin = AgentDescriptionGuard(agent)
     mixin.mark_unavailable()
     mixin.mark_available()
     assert agent.description == "A helpful planner"
@@ -80,7 +76,7 @@ def test_description_restore_on_available():
 def test_double_mark_unavailable_idempotent():
     agent = MagicMock()
     agent.description = "A helpful planner"
-    mixin = DescriptionMutationMixin(agent)
+    mixin = AgentDescriptionGuard(agent)
     mixin.mark_unavailable()
     mixin.mark_unavailable()
     assert agent.description.count("[UNAVAILABLE]") == 1
@@ -89,7 +85,7 @@ def test_double_mark_unavailable_idempotent():
 def test_mark_available_noop_when_not_marked():
     agent = MagicMock()
     agent.description = "A helpful planner"
-    mixin = DescriptionMutationMixin(agent)
+    mixin = AgentDescriptionGuard(agent)
     mixin.mark_available()
     assert agent.description == "A helpful planner"
 
@@ -113,7 +109,7 @@ class TestAdversarialEligibilityPolicy:
         """Agent with description=None must not crash mark_unavailable."""
         agent = MagicMock()
         agent.description = None
-        mixin = DescriptionMutationMixin(agent)
+        mixin = AgentDescriptionGuard(agent)
         mixin.mark_unavailable()
         assert "[UNAVAILABLE]" in agent.description
 
@@ -121,7 +117,7 @@ class TestAdversarialEligibilityPolicy:
         """Agent with description='' must get [UNAVAILABLE] prefix."""
         agent = MagicMock()
         agent.description = ""
-        mixin = DescriptionMutationMixin(agent)
+        mixin = AgentDescriptionGuard(agent)
         mixin.mark_unavailable()
         assert agent.description.startswith("[UNAVAILABLE]")
 
@@ -129,7 +125,7 @@ class TestAdversarialEligibilityPolicy:
         """Restoring after None description: original was treated as '' so restores to ''."""
         agent = MagicMock()
         agent.description = None
-        mixin = DescriptionMutationMixin(agent)
+        mixin = AgentDescriptionGuard(agent)
         mixin.mark_unavailable()
         # mark_unavailable stores "" (via `description or ""`), so restore is ""
         mixin.mark_available()
@@ -183,7 +179,7 @@ def test_description_mutation_thread_safety():
 
     agent = MagicMock()
     agent.description = "original"
-    mixin = DescriptionMutationMixin(agent)
+    mixin = AgentDescriptionGuard(agent)
     errors = []
 
     def toggle():
