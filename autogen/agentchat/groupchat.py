@@ -93,6 +93,7 @@ class GroupChat:
                 1. an `Agent` class, it must be one of the agents in the group chat.
                 2. a string from ['auto', 'manual', 'random', 'round_robin'] to select a default method to use.
                 3. None, which would terminate the conversation gracefully.
+            When this is a Callable that returns an Agent directly, eligibility_policies are not applied to that agent.
             ```python
             def custom_speaker_selection_func(
                 last_speaker: Agent, groupchat: GroupChat
@@ -129,6 +130,13 @@ class GroupChat:
     - select_speaker_auto_model_client_cls: Custom model client class for the internal speaker select agent used during 'auto' speaker selection (optional)
     - select_speaker_auto_llm_config: LLM config for the internal speaker select agent used during 'auto' speaker selection (optional)
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
+    - eligibility_policies: list of :class:`AgentEligibilityPolicy` to filter candidate
+        agents before speaker selection. All policies must return ``True`` for an agent
+        to be considered eligible (AND semantics). Default is ``[]`` (no filtering).
+
+        Note:
+            Policies are **not** applied when ``speaker_selection_method`` is a
+            Callable that returns an :class:`Agent` directly.
     """
 
     agents: list[Agent]
@@ -543,6 +551,7 @@ class GroupChat:
                 "or use direct communication, unless repeated speaker is desired."
             )
 
+        _policies_applied = False  # track if policies already applied in func_call_filter path
         if (
             self.func_call_filter
             and self.messages
@@ -564,6 +573,7 @@ class GroupChat:
                     last_speaker=last_speaker,
                     round_index=len(self.messages),
                 )
+                _policies_applied = True
                 if len(agents) == 1:
                     # only one agent can execute the function
                     return agents[0], agents, None
@@ -576,6 +586,7 @@ class GroupChat:
                         last_speaker=last_speaker,
                         round_index=len(self.messages),
                     )
+                    _policies_applied = True
                     if len(agents) == 1:
                         return agents[0], agents, None
                 else:
@@ -611,11 +622,12 @@ class GroupChat:
         # Apply eligibility policies (runtime filtering)
         # When graph_eligible_agents is None, all agents are eligible per graph rules
         candidates = graph_eligible_agents if graph_eligible_agents is not None else agents
-        candidates = self._apply_eligibility_policies(
-            candidates,
-            last_speaker=last_speaker,
-            round_index=len(self.messages),
-        )
+        if not _policies_applied:
+            candidates = self._apply_eligibility_policies(
+                candidates,
+                last_speaker=last_speaker,
+                round_index=len(self.messages),
+            )
         graph_eligible_agents = candidates
 
         # If there is only one eligible agent after policy filtering, just return it to avoid the speaker selection prompt
