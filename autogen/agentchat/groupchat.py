@@ -327,7 +327,7 @@ class GroupChat:
         ctx = SelectionContext(
             round=round_index,
             last_speaker=last_speaker.name if last_speaker is not None else None,
-            participants=[a.name for a in self.agents],
+            participants=tuple(a.name for a in self.agents),
         )
 
         eligible = [
@@ -337,7 +337,7 @@ class GroupChat:
         ]
 
         if not eligible:
-            raise ValueError(
+            raise NoEligibleSpeakerError(
                 f"No eligible agents after applying eligibility policies. "
                 f"Checked {len(agents)} candidates: {[a.name for a in agents]}. "
                 f"Applied {len(self.eligibility_policies)} policy/policies."
@@ -558,15 +558,27 @@ class GroupChat:
 
             # find agents with the right function_map which contains the function name
             agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
-            if len(agents) == 1:
-                # only one agent can execute the function
-                return agents[0], agents, None
-            elif not agents:
+            if agents:
+                agents = self._apply_eligibility_policies(
+                    agents,
+                    last_speaker=last_speaker,
+                    round_index=len(self.messages),
+                )
+                if len(agents) == 1:
+                    # only one agent can execute the function
+                    return agents[0], agents, None
+            else:
                 # find all the agents with function_map
                 agents = [agent for agent in self.agents if agent.function_map]
-                if len(agents) == 1:
-                    return agents[0], agents, None
-                elif not agents:
+                if agents:
+                    agents = self._apply_eligibility_policies(
+                        agents,
+                        last_speaker=last_speaker,
+                        round_index=len(self.messages),
+                    )
+                    if len(agents) == 1:
+                        return agents[0], agents, None
+                else:
                     raise ValueError(
                         f"No agent can execute the function {', '.join(funcs)}. "
                         "Please check the function_map of the agents."
@@ -592,10 +604,6 @@ class GroupChat:
                 agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
             ]
 
-        # If there is only one eligible agent, just return it to avoid the speaker selection prompt
-        if len(graph_eligible_agents) == 1:
-            return graph_eligible_agents[0], graph_eligible_agents, None
-
         # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
         if len(graph_eligible_agents) == 0:
             graph_eligible_agents = None
@@ -609,6 +617,10 @@ class GroupChat:
             round_index=len(self.messages),
         )
         graph_eligible_agents = candidates
+
+        # If there is only one eligible agent after policy filtering, just return it to avoid the speaker selection prompt
+        if len(graph_eligible_agents) == 1:
+            return graph_eligible_agents[0], graph_eligible_agents, None
 
         # Use the selected speaker selection method
         select_speaker_messages = None

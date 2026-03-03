@@ -5,6 +5,7 @@ import pytest
 from autogen import ConversableAgent
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.eligibility_policy import AgentEligibilityPolicy, SelectionContext
+from autogen.exception_utils import NoEligibleSpeakerError
 
 
 def _make_agent(name: str) -> ConversableAgent:
@@ -100,7 +101,7 @@ def test_all_agents_ineligible_raises():
         max_round=5,
         eligibility_policies=[_BlockAll()],
     )
-    with pytest.raises(ValueError, match="No eligible agents"):
+    with pytest.raises((NoEligibleSpeakerError, ValueError), match="No eligible agents"):
         gc._prepare_and_select_agents(alice)
 
 
@@ -227,8 +228,8 @@ class TestAdversarialGroupChatEligibility:
             max_round=5,
             eligibility_policies=[_AllowAll()],
         )
-        # Empty input list -> no eligible agents -> ValueError
-        with pytest.raises(ValueError, match="No eligible agents"):
+        # Empty input list -> no eligible agents -> NoEligibleSpeakerError (Bug 1 fix)
+        with pytest.raises((NoEligibleSpeakerError, ValueError), match="No eligible agents"):
             gc._apply_eligibility_policies([], last_speaker=None, round_index=0)
 
     def test_apply_eligibility_policies_empty_input_no_policies_returns_empty(self):
@@ -309,3 +310,28 @@ class TestAdversarialGroupChatEligibility:
         )
         names = _get_candidates(gc, alice)
         assert "bob" not in names
+
+    def test_transitions_plus_policy_not_bypassed(self):
+        """When transition rules constrain to 1 candidate, eligibility policy must still run.
+
+        Bug 2 regression test: single-agent early return was bypassing policies.
+        Transition: alice -> bob only. Policy: bob is blocked.
+        Expected: NoEligibleSpeakerError (not bob silently selected).
+        """
+        alice, bob, carol = _make_agent("alice"), _make_agent("bob"), _make_agent("carol")
+
+        class _BlockBob:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return agent.name != "bob"
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="round_robin",
+            allowed_or_disallowed_speaker_transitions={alice: [bob]},
+            speaker_transitions_type="allowed",
+            eligibility_policies=[_BlockBob()],
+        )
+        with pytest.raises((NoEligibleSpeakerError, ValueError)):
+            gc._prepare_and_select_agents(alice)
