@@ -7,6 +7,7 @@
 from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
+from .eligibility_policy import AgentEligibilityPolicy, DescriptionMutationMixin, SelectionContext
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
@@ -30,14 +31,17 @@ from .utils import gather_usage_summary
 
 __all__ = [
     "Agent",
+    "AgentEligibilityPolicy",
     "AssistantAgent",
     "ChatResult",
     "ContextVariables",
     "ConversableAgent",
+    "DescriptionMutationMixin",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",
     "ReplyResult",
+    "SelectionContext",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "a_initiate_chats",
