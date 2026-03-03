@@ -36,6 +36,7 @@ from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
 from .contrib.capabilities import transform_messages
 from .conversable_agent import ConversableAgent
+from .eligibility_policy import AgentEligibilityPolicy, SelectionContext
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ class GroupChat:
         "Hello everyone. We have assembled a great team today to answer questions and solve tasks. In attendance are:"
     )
 
+    eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
     allowed_speaker_transitions_dict: dict[str, list[Agent]] = field(init=False)
     _inter_agent_guardrails: list = field(default_factory=list, init=False)
 
@@ -299,6 +301,49 @@ class GroupChat:
         # Validate select_speaker_auto_verbose
         if self.select_speaker_auto_verbose is None or not isinstance(self.select_speaker_auto_verbose, bool):
             raise ValueError("select_speaker_auto_verbose cannot be None or non-bool")
+
+    def _apply_eligibility_policies(
+        self,
+        agents: list["Agent"],
+        last_speaker: "Agent | None",
+        round_index: int,
+    ) -> list["Agent"]:
+        """Filter agents through registered eligibility policies (AND semantics).
+
+        Args:
+            agents: Current candidate agent list.
+            last_speaker: The agent that spoke last, or None for first round.
+            round_index: The current round index (number of messages so far).
+
+        Returns:
+            Filtered list of agents. All input agents if no policies registered.
+
+        Raises:
+            ValueError: If all agents are filtered out by eligibility policies.
+        """
+        if not self.eligibility_policies:
+            return agents
+
+        ctx = SelectionContext(
+            round=round_index,
+            last_speaker=last_speaker.name if last_speaker is not None else None,
+            participants=[a.name for a in self.agents],
+        )
+
+        eligible = [
+            agent
+            for agent in agents
+            if all(policy.is_eligible(agent, ctx) for policy in self.eligibility_policies)
+        ]
+
+        if not eligible:
+            raise ValueError(
+                f"No eligible agents after applying eligibility policies. "
+                f"Checked {len(agents)} candidates: {[a.name for a in agents]}. "
+                f"Applied {len(self.eligibility_policies)} policy/policies."
+            )
+
+        return eligible
 
     @property
     def agent_names(self) -> list[str]:
@@ -554,6 +599,16 @@ class GroupChat:
         # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
         if len(graph_eligible_agents) == 0:
             graph_eligible_agents = None
+
+        # Apply eligibility policies (runtime filtering)
+        # When graph_eligible_agents is None, all agents are eligible per graph rules
+        candidates = graph_eligible_agents if graph_eligible_agents is not None else agents
+        candidates = self._apply_eligibility_policies(
+            candidates,
+            last_speaker=last_speaker,
+            round_index=len(self.messages),
+        )
+        graph_eligible_agents = candidates
 
         # Use the selected speaker selection method
         select_speaker_messages = None
