@@ -1,13 +1,20 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from ..doc_utils import export_module
+
 if TYPE_CHECKING:
     from autogen.agentchat.agent import Agent
 
 
+@export_module("autogen")
 @dataclass(frozen=True)
 class SelectionContext:
     """Minimal context passed to AgentEligibilityPolicy.is_eligible().
@@ -32,6 +39,7 @@ class SelectionContext:
     """Names of all registered participants in the GroupChat."""
 
 
+@export_module("autogen")
 @runtime_checkable
 class AgentEligibilityPolicy(Protocol):
     """Protocol for runtime eligibility filters in GroupChat speaker selection.
@@ -56,6 +64,11 @@ class AgentEligibilityPolicy(Protocol):
 
     Multiple policies can be registered on a GroupChat; all must return True
     for an agent to be considered eligible (AND semantics).
+
+    Note:
+        ``isinstance(obj, AgentEligibilityPolicy)`` only checks that ``is_eligible``
+        exists as an attribute — it does **not** verify the method signature.
+        A class with the wrong arity will fail at call time, not at registration.
     """
 
     def is_eligible(self, agent: "Agent", ctx: SelectionContext) -> bool:
@@ -74,6 +87,7 @@ class AgentEligibilityPolicy(Protocol):
 _UNAVAILABLE_PREFIX = "[UNAVAILABLE] "
 
 
+@export_module("autogen")
 class DescriptionMutationMixin:
     """Manages soft-signal description mutation for LLM-based speaker selection.
 
@@ -88,7 +102,13 @@ class DescriptionMutationMixin:
         self._lock = threading.Lock()
 
     def mark_unavailable(self) -> None:
-        """Prepend [UNAVAILABLE] to agent.description (idempotent, thread-safe)."""
+        """Prepend [UNAVAILABLE] to agent.description (idempotent, thread-safe).
+
+        Note:
+            If ``agent.description`` is ``None``, it is treated as ``""`` internally.
+            After a ``mark_unavailable`` / ``mark_available`` round-trip, the description
+            will be restored to ``""`` rather than ``None``.
+        """
         with self._lock:
             current = self._agent.description or ""
             if current.startswith(_UNAVAILABLE_PREFIX):
