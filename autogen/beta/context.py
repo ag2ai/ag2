@@ -3,27 +3,80 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
 
 from .events import BaseEvent, HumanInputRequest, HumanMessage
+from .events.conditions import ClassInfo, Condition
 
 StreamId: TypeAlias = UUID
+SubId: TypeAlias = UUID
 
 
 @runtime_checkable
-class WritableStream(Protocol):
+class Stream(Protocol):
     id: StreamId
 
     async def send(self, event: BaseEvent, ctx: "Context") -> None: ...
 
+    def where(self, condition: ClassInfo | Condition) -> "Stream": ...
+
+    @overload
+    def subscribe(
+        self,
+        func: Callable[..., Any],
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> SubId: ...
+
+    @overload
+    def subscribe(
+        self,
+        func: None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId]: ...
+
+    def subscribe(
+        self,
+        func: Callable[..., Any] | None = None,
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Callable[[Callable[..., Any]], SubId] | SubId: ...
+
+    def unsubscribe(self, sub_id: SubId) -> None: ...
+
+    @contextmanager
+    def sub_scope(
+        self,
+        func: Callable[..., Any],
+        *,
+        interrupt: bool = False,
+        sync_to_thread: bool = True,
+        condition: Condition | None = None,
+    ) -> Iterator[None]: ...
+
+    @asynccontextmanager
+    async def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AsyncIterator[asyncio.Future[BaseEvent]]: ...
+
 
 @dataclass(slots=True)
 class Context:
-    stream: WritableStream
+    stream: Stream
     dependency_provider: "Provider | None" = None
 
     prompt: list[str] = field(default_factory=list)

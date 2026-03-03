@@ -16,15 +16,13 @@ class FunctionDefinition(BaseModel):
         default_factory=dict,
         description="JSON Schema for the function parameters.",
     )
-    strict: bool | None = True
 
     def model_post_init(self, context: Any) -> None:
         self.parameters.pop("title", None)
-        if self.strict is not None:
-            self.parameters = {"additionalProperties": not self.strict} | self.parameters
+        self.parameters = {"additionalProperties": False} | self.parameters
 
 
-class FunctionTool(BaseModel):
+class FunctionToolSchema(BaseModel):
     type: Literal["function"] = "function"
     function: FunctionDefinition = Field(description="The function definition.")
 
@@ -35,5 +33,5 @@ class FunctionTool(BaseModel):
 __all__ = [
     "FunctionDefinition",
     "FunctionParameters",
-    "FunctionTool",
+    "FunctionToolSchema",
 ]

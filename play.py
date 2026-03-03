@@ -1,6 +1,8 @@
 import asyncio
 from pprint import pprint
 
+import httpx
+
 from autogen.beta import Agent, Context, MemoryStream
 from autogen.beta.config import LLMClient, OpenAIConfig
 from autogen.beta.events import (

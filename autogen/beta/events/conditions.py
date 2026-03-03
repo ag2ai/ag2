@@ -15,26 +15,26 @@ class Condition(ABC):
         raise NotImplementedError
 
     def __and__(self, other: Any) -> "AndCondition":
+        return self.and_(other)
+
+    def and_(self, other: Any) -> "AndCondition":
         if not isinstance(other, Condition):
             other = TypeCondition(other)
         return AndCondition(self, other)
 
-    def and_(self, other: Any) -> "AndCondition":
-        return self & other
-
     def __or__(self, other: Any) -> "OrCondition":
+        return self.or_(other)
+
+    def or_(self, other: Any) -> "OrCondition":
         if not isinstance(other, Condition):
             other = TypeCondition(other)
         return OrCondition(self, other)
 
-    def or_(self, other: Any) -> "OrCondition":
-        return self | other
-
     def __invert__(self) -> "NotCondition":
-        return NotCondition(self)
+        return self.not_()
 
     def not_(self) -> "NotCondition":
-        return ~self
+        return NotCondition(self)
 
 
 ClassInfo: TypeAlias = type | types.UnionType | tuple["ClassInfo", ...]

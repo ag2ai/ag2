@@ -5,55 +5,35 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import Any, TypeAlias, overload
-from uuid import UUID, uuid4
+from typing import Any, overload
+from uuid import uuid4
 
 from fast_depends.core import CallModel
 
-from .context import Context, StreamId, WritableStream
+from .context import Context, Stream, StreamId, SubId
 from .events import BaseEvent
 from .events.conditions import ClassInfo, Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, build_model
 
-SubId: TypeAlias = UUID
 
-
-class Stream(WritableStream):
-    @overload
-    def subscribe(
+class ABCStream(Stream):
+    @contextmanager
+    def sub_scope(
         self,
         func: Callable[..., Any],
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
         condition: Condition | None = None,
-    ) -> SubId: ...
+    ) -> Iterator[None]:
+        sub_id = self.subscribe(
+            func,
+            interrupt=interrupt,
+            sync_to_thread=sync_to_thread,
+            condition=condition,
+        )
 
-    @overload
-    def subscribe(
-        self,
-        func: None = None,
-        *,
-        interrupt: bool = False,
-        sync_to_thread: bool = True,
-        condition: Condition | None = None,
-    ) -> Callable[[Callable[..., Any]], SubId]: ...
-
-    def subscribe(
-        self,
-        func: Callable[..., Any] | None = None,
-        *,
-        interrupt: bool = False,
-        sync_to_thread: bool = True,
-        condition: Condition | None = None,
-    ) -> Callable[[Callable[..., Any]], SubId] | SubId: ...
-
-    def unsubscribe(self, sub_id: SubId) -> None: ...
-
-    @contextmanager
-    def sub_scope(self, func: Callable[..., Any]) -> Iterator[None]:
-        sub_id = self.subscribe(func)
         try:
             yield
         finally:
@@ -81,7 +61,7 @@ class Stream(WritableStream):
             yield result
 
 
-class MemoryStream(Stream):
+class MemoryStream(ABCStream):
     def __init__(
         self,
         storage: Storage | None = None,
@@ -181,7 +161,7 @@ class MemoryStream(Stream):
                 )
 
 
-class SubStream(Stream):
+class SubStream(ABCStream):
     def __init__(
         self,
         parent: Stream,

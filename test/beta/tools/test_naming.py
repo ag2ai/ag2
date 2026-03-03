@@ -9,7 +9,7 @@ from dirty_equals import IsPartialDict
 from pydantic import Field
 
 from autogen.beta import Depends, Inject
-from autogen.beta.tools import Tool, tool
+from autogen.beta.tools import FunctionTool, tool
 
 DEFAULT_SCHEMA = {
     "function": {
@@ -33,7 +33,6 @@ DEFAULT_SCHEMA = {
             "type": "object",
             "additionalProperties": False,
         },
-        "strict": True,
     },
     "type": "function",
 }
@@ -84,7 +83,7 @@ def test_ensure_tools() -> None:
         """Tool description."""
         return ""
 
-    assert Tool.ensure_tool(my_tool).schema.to_api() == DEFAULT_SCHEMA
+    assert FunctionTool.ensure_tool(my_tool).schema.to_api() == DEFAULT_SCHEMA
 
 
 def test_ensure_tool_from_tool() -> None:
@@ -93,23 +92,11 @@ def test_ensure_tool_from_tool() -> None:
         """Tool description."""
         return ""
 
-    assert Tool.ensure_tool(my_tool).schema.to_api() == DEFAULT_SCHEMA
-
-
-def test_create_not_strict() -> None:
-    @tool(strict=False)
-    def my_tool(a: str, b: int) -> str:
-        """Tool description."""
-        return ""
-
-    assert Tool.ensure_tool(my_tool).schema.to_api() == {
-        "function": IsPartialDict({"parameters": IsPartialDict({"additionalProperties": True}), "strict": False}),
-        "type": "function",
-    }
+    assert FunctionTool.ensure_tool(my_tool).schema.to_api() == DEFAULT_SCHEMA
 
 
 def test_option_description() -> None:
-    @tool(strict=False)
+    @tool
     def my_tool(
         a: Annotated[str, Field(..., description="Just A")],
         b: int = Field(..., description="Just B"),
@@ -117,7 +104,7 @@ def test_option_description() -> None:
         """Tool description."""
         return ""
 
-    assert Tool.ensure_tool(my_tool).schema.to_api() == {
+    assert FunctionTool.ensure_tool(my_tool).schema.to_api() == {
         "function": IsPartialDict({
             "parameters": IsPartialDict({
                 "properties": {
@@ -144,7 +131,7 @@ def test_empty_args() -> None:
         """Tool description."""
         return ""
 
-    assert Tool.ensure_tool(my_tool).schema.to_api() == {
+    assert FunctionTool.ensure_tool(my_tool).schema.to_api() == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",
@@ -152,7 +139,6 @@ def test_empty_args() -> None:
                 "additionalProperties": False,
                 "type": "null",
             },
-            "strict": True,
         },
         "type": "function",
     }
@@ -165,7 +151,7 @@ def test_create_dynamic_options() -> None:
         """Tool description."""
         return ""
 
-    assert Tool.ensure_tool(my_tool).schema.to_api() == {
+    assert FunctionTool.ensure_tool(my_tool).schema.to_api() == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",
@@ -183,7 +169,6 @@ def test_create_dynamic_options() -> None:
                 "type": "object",
                 "additionalProperties": True,
             },
-            "strict": False,
         },
         "type": "function",
     }

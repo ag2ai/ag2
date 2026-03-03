@@ -5,7 +5,7 @@
 import warnings
 from collections.abc import Callable, Iterable
 from contextlib import ExitStack
-from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload, runtime_checkable
 
 from fast_depends import Provider
 
@@ -16,15 +16,16 @@ from .events import (
     HumanInputRequest,
     ModelRequest,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
     ToolResults,
 )
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .stream import MemoryStream, Stream
-from .tools import FunctionParameters, Tool, ToolsExecutor, tool
+from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+
+if TYPE_CHECKING:
+    from .conversable import ConversableAdapter
 
 
 class Askable(Protocol):
@@ -53,12 +54,30 @@ class Conversation(Askable):
     async def ask(
         self,
         msg: str,
+        *,
+        config: ModelConfig | None = None,
+        prompt: Iterable[str] = (),
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        tools: Iterable[Tool] = (),
     ) -> "Conversation":
         initial_event = ModelRequest(content=msg)
+
+        ctx = self.ctx
+        if dependencies:
+            ctx.dependencies.update(dependencies)
+        if variables:
+            ctx.variables.update(variables)
+        if prompt:
+            ctx.prompt = list(prompt)
+
+        client = config.create() if config else self.__client
+
         return await self.__agent._execute(
             initial_event,
-            ctx=self.ctx,
-            client=self.__client,
+            ctx=ctx,
+            client=client,
+            additional_tools=tools,
         )
 
     @property
@@ -93,8 +112,10 @@ class Agent(Askable):
         self._agent_variables = variables or {}
 
         self.dependency_provider = Provider()
-        self.__tools_executor = ToolsExecutor(Tool.ensure_tool(t, provider=self.dependency_provider) for t in tools)
+        self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
+
         self.__hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else default_hitl_hook
+        self.__tool_executor = ToolExecutor()
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[PromptHook] = []
@@ -118,10 +139,6 @@ class Agent(Askable):
 
         self.__hitl_hook = wrap_hitl(func)
         return func
-
-    @property
-    def tools(self) -> tuple[Tool, ...]:
-        return tuple(self.__tools_executor.tools.values())
 
     @overload
     def prompt(
@@ -155,7 +172,6 @@ class Agent(Askable):
         name: str | None = None,
         description: str | None = None,
         schema: FunctionParameters | None = None,
-        strict: bool | None = True,
         sync_to_thread: bool = True,
     ) -> Tool: ...
 
@@ -167,7 +183,6 @@ class Agent(Askable):
         name: str | None = None,
         description: str | None = None,
         schema: FunctionParameters | None = None,
-        strict: bool | None = True,
         sync_to_thread: bool = True,
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
@@ -178,7 +193,6 @@ class Agent(Askable):
         name: str | None = None,
         description: str | None = None,
         schema: FunctionParameters | None = None,
-        strict: bool | None = True,
         sync_to_thread: bool = True,
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
@@ -187,11 +201,10 @@ class Agent(Askable):
                 name=name,
                 description=description,
                 schema=schema,
-                strict=strict,
                 sync_to_thread=sync_to_thread,
             )
-            t = Tool.ensure_tool(t, provider=self.dependency_provider)
-            self.__tools_executor.add_tool(t)
+            t = FunctionTool.ensure_tool(t, provider=self.dependency_provider)
+            self.tools.append(t)
             return t
 
         if function:
@@ -208,6 +221,7 @@ class Agent(Askable):
         prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
+        tools: Iterable[Tool] = (),
     ) -> "Conversation":
         config = config or self.config
         if not config:
@@ -237,6 +251,7 @@ class Agent(Askable):
             initial_event,
             ctx=ctx,
             client=client,
+            additional_tools=tools,
         )
 
     async def _execute(
@@ -245,12 +260,15 @@ class Agent(Askable):
         *,
         ctx: Context,
         client: LLMClient,
+        additional_tools: Iterable[Tool] = (),
     ) -> "Conversation":
+        all_tools = self.tools + list(additional_tools)
+
         async def _call_client(event: BaseEvent, ctx: Context) -> None:
             await client(
                 *await ctx.stream.history.get_events(),
                 ctx=ctx,
-                tools=self.tools,
+                tools=all_tools,
             )
             return None
 
@@ -259,21 +277,17 @@ class Agent(Askable):
                 ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
             )
 
-            stack.enter_context(ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook))
-
             stack.enter_context(
-                ctx.stream.where(ToolCall).sub_scope(self.__tools_executor.execute_tool),
+                ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
             )
 
-            stack.enter_context(
-                ctx.stream.where(ToolCalls).sub_scope(self.__tools_executor.execute_tools),
-            )
+            self.__tool_executor.register(stack, ctx, tools=all_tools)
 
             async with ctx.stream.get(ModelResponse) as result:
                 await ctx.send(event)
                 message = await result
 
-            while message.tool_calls:
+            while message.tool_calls and not message.response_force:
                 async with ctx.stream.get(ModelResponse) as result:
                     await ctx.send(message.tool_calls)
                     message = await result
@@ -284,3 +298,8 @@ class Agent(Askable):
                 agent=self,
                 client=client,
             )
+
+    def as_conversable(self) -> "ConversableAdapter":
+        from .conversable import ConversableAdapter
+
+        return ConversableAdapter(self)

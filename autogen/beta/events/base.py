@@ -7,7 +7,7 @@ from collections.abc import Callable
 from types import EllipsisType
 from typing import Any
 
-from .conditions import Condition, OpCondition, OrCondition, TypeCondition, check_eq
+from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq
 
 
 class Field:
@@ -92,10 +92,13 @@ class EventMeta(type):
         return super().__new__(mcs, name, bases, namespace)
 
     def __or__(cls, other: Any) -> Any:
-        return TypeCondition(cls) | other
+        return TypeCondition(cls).or_(other)
 
     def or_(cls, other: Any) -> OrCondition:
-        return TypeCondition(cls) | other
+        return TypeCondition(cls).or_(other)
+
+    def not_(cls) -> NotCondition:
+        return TypeCondition(cls).not_()
 
 
 class BaseEvent(metaclass=EventMeta):

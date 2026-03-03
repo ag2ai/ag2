@@ -30,7 +30,6 @@ DEFAULT_SCHEMA = {
             "type": "object",
             "additionalProperties": False,
         },
-        "strict": True,
     },
     "type": "function",
 }
@@ -43,7 +42,7 @@ def test_agent_with_function(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert agent.tools[0].schema.to_api() == DEFAULT_SCHEMA
+    assert list(agent.tools)[0].schema.to_api() == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool(mock: MagicMock) -> None:
@@ -54,7 +53,7 @@ def test_agent_with_tool(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert agent.tools[0].schema.to_api() == DEFAULT_SCHEMA
+    assert list(agent.tools)[0].schema.to_api() == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator(mock: MagicMock) -> None:
@@ -65,18 +64,18 @@ def test_agent_with_tool_decorator(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    assert agent.tools[0].schema.to_api() == DEFAULT_SCHEMA
+    assert list(agent.tools)[0].schema.to_api() == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
     agent = Agent("", config=mock)
 
-    @agent.tool(name="another_name", description="another_description", strict=True)
+    @agent.tool(name="another_name", description="another_description")
     def my_tool(a: str, b: int) -> str:
         """Tool description."""
         return ""
 
-    assert agent.tools[0].schema.to_api() == {
+    assert list(agent.tools)[0].schema.to_api() == {
         "function": IsPartialDict({
             "description": "another_description",
             "name": "another_name",

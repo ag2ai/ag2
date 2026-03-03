@@ -2,62 +2,78 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
-from traceback import format_exc
+from collections.abc import Callable, Iterable
+from contextlib import ExitStack
+from typing import Any
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import ToolCall, ToolCalls, ToolError, ToolNotFoundErrorEvent, ToolResult, ToolResults
+from autogen.beta.events import (
+    ClientToolCall,
+    ModelResponse,
+    ToolCall,
+    ToolCalls,
+    ToolError,
+    ToolNotFoundEvent,
+    ToolResult,
+    ToolResults,
+)
 from autogen.beta.exceptions import ToolNotFoundError
 
 from .tool import Tool
 
 
-class ToolsExecutor:
-    def __init__(self, tools: Iterable[Tool] = ()) -> None:
-        self.tools = {t.name: t for t in tools}
+class ToolExecutor:
+    def register(self, stack: "ExitStack", ctx: "Context", *, tools: Iterable[Tool] = ()) -> None:
+        stack.enter_context(ctx.stream.where(ToolCalls).sub_scope(self.execute_tools))
 
-    def add_tool(self, tool: Tool) -> None:
-        self.tools[tool.name] = tool
+        known_tools: set[str] = set()
+        for tool in tools:
+            known_tools.add(tool.name)
+            tool.register(stack, ctx)
+
+        # fallback subscriber to raise NotFound event
+        stack.enter_context(
+            ctx.stream.where(ToolCall).sub_scope(_tool_not_found(known_tools)),
+        )
 
     async def execute_tools(self, event: ToolCalls, ctx: Context) -> None:
         results = []
+        client_calls = []
 
         for call in event.calls:
-            async with ctx.stream.get((ToolError.parent_id == call.id) | (ToolResult.parent_id == call.id)) as result:
+            async with ctx.stream.get(
+                (ToolError.parent_id == call.id) | (ToolResult.parent_id == call.id) | ClientToolCall
+            ) as result:
                 await ctx.send(call)
-                results.append(await result)
 
-        await ctx.send(ToolResults(results=results))
+                match await result:
+                    case ClientToolCall() as ev:
+                        client_calls.append(ev)
+                    case ev:
+                        results.append(ev)
 
-    async def execute_tool(self, event: ToolCall, ctx: Context) -> None:
-        result = await self._execute(event, ctx)
-        await ctx.send(result)
-
-    async def _execute(self, event: ToolCall, ctx: Context) -> ToolError | ToolResult:
-        if tool := self.tools.get(event.name):
-            try:
-                result = await tool.execute(event.arguments, ctx)
-
-            except Exception as e:
-                return ToolError(
-                    parent_id=event.id,
-                    name=event.name,
-                    content=format_exc(limit=3),
-                    error=e,
+        if client_calls:
+            await ctx.send(
+                ModelResponse(
+                    tool_calls=ToolCalls(calls=client_calls),
+                    response_force=True,
                 )
-
-            else:
-                return ToolResult(
-                    parent_id=event.id,
-                    name=event.name,
-                    content=result.decode(),
-                )
+            )
 
         else:
+            await ctx.send(ToolResults(results=results))
+
+
+def _tool_not_found(known_tools: set[str]) -> Callable[..., Any]:
+    async def _tool_not_found(event: "ToolCall", ctx: "Context") -> None:
+        if event.name not in known_tools:
             err = ToolNotFoundError(event.name)
-            return ToolNotFoundErrorEvent(
+            event = ToolNotFoundEvent(
                 parent_id=event.id,
                 name=event.name,
                 content=repr(err),
                 error=err,
             )
+            await ctx.send(event)
+
+    return _tool_not_found

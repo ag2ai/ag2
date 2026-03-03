@@ -117,40 +117,15 @@ class OpenAIClient(LLMClient):
         system_prompt: Iterable[str],
         messages: tuple[BaseEvent, ...],
     ) -> list[dict[str, str]]:
-        result: list[dict[str, str]] = [{"content": p, "role": "developer"} for p in system_prompt]
+        # legacy prompt message format
+        result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
         for message in messages:
-            if isinstance(message, ModelRequest):
-                result.append({
-                    "role": "user",
-                    "content": message.content,
-                })
-            elif isinstance(message, ModelResponse):
-                msg = {
-                    "role": "assistant",
-                    "content": message.message.content if message.message else None,
-                }
-                tool_calls = [
-                    {
-                        "id": c.id,
-                        "type": "function",
-                        "function": {
-                            "arguments": c.arguments,
-                            "name": c.name,
-                        },
-                    }
-                    for c in message.tool_calls.calls
-                ]
-                if tool_calls:
-                    msg["tool_calls"] = tool_calls
-                result.append(msg)
+            if isinstance(message, (ModelRequest, ModelResponse)):
+                result.append(message.to_api())
             elif isinstance(message, ToolResults):
                 for r in message.results:
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": r.parent_id,
-                        "content": r.content,
-                    })
+                    result.append(r.to_api())
 
         return result
 
@@ -159,7 +134,7 @@ class OpenAIClient(LLMClient):
         completion: ChatCompletion,
         ctx: Context,
     ) -> ToolCalls | ModelMessage:
-        for choice in completion.choices:
+        for choice in completion.choices or ():
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):

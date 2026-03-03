@@ -1,0 +1,157 @@
+---
+title: AG2 Beta Agent Communication
+sidebarTitle: Beta Agent Communication
+---
+
+AG2 beta provides a lower-level, event-driven runtime for agent communication via `autogen.beta`.
+
+This page focuses on how the new `Agent` communicates across turns, tools, and human input.
+
+## Core Communication Primitives
+
+`autogen.beta` uses typed events and a stream-based runtime:
+
+```python
+from autogen.beta import Agent, Context, MemoryStream
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.tools import tool
+```
+
+- `Agent.ask(...)` starts a turn and returns a `Conversation`.
+- `Conversation.ask(...)` continues the same conversation context and history.
+- `Context.send(event)` emits events into the stream.
+- `Context.input(...)` requests human input through a `HumanInputRequest`.
+- `MemoryStream` routes events to subscribers and stores history.
+
+The final turn result is a `ModelResponse` available at `conversation.message`.
+
+## How a Turn Flows
+
+At runtime, the beta `Agent` orchestrates communication roughly like this:
+
+1. You call `await agent.ask("...")`, which emits a `ModelRequest`.
+2. The model client receives history and emits a `ModelResponse`.
+3. If the response contains `ToolCalls`, tools run and emit `ToolResults`.
+4. The model is called again with tool results until no more tool calls remain.
+5. The final `ModelResponse` is returned in the `Conversation`.
+
+This loop is built into `Agent._execute(...)` and runs automatically.
+
+## Basic Communication Example
+
+```python
+import asyncio
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig("gpt-5-nano"),
+)
+
+async def main() -> None:
+    conversation = await agent.ask("Give me one sentence about AG2 beta.")
+    print(conversation.message.message.content)
+
+    # Continue same conversation (same stream/context/history)
+    next_turn = await conversation.ask("Now make it shorter.")
+    print(next_turn.message.message.content)
+
+asyncio.run(main())
+```
+
+## Communication with Tools
+
+Tools are part of the same event loop. When the model emits `ToolCall` events, the runtime executes them and sends `ToolResult` events back before continuing model generation.
+
+```python
+import asyncio
+from autogen.beta import Agent, Context
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.tools import tool
+
+@tool
+async def echo(text: str, ctx: Context) -> str:
+    return f"echo: {text}"
+
+agent = Agent(
+    "assistant",
+    prompt="Use tools when helpful.",
+    config=OpenAIConfig("gpt-5-nano"),
+    tools=[echo],
+)
+
+async def main() -> None:
+    conversation = await agent.ask("Call the echo tool with 'hello'.")
+    print(conversation.message.message.content)
+
+asyncio.run(main())
+```
+
+## Communication with Human Input (HITL)
+
+Inside tools or hooks, call `ctx.input(...)` to ask the human for input. This emits `HumanInputRequest`, and your `hitl_hook` should return a `HumanMessage`.
+
+```python
+import asyncio
+from autogen.beta import Agent, Context
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import HumanInputRequest, HumanMessage
+from autogen.beta.tools import tool
+
+@tool
+async def ask_human(ctx: Context) -> str:
+    answer = await ctx.input("Please provide confirmation:")
+    return f"Human said: {answer}"
+
+def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    # Replace with your UI/input integration.
+    return HumanMessage(content="confirmed")
+
+agent = Agent(
+    "assistant",
+    prompt="Use ask_human when needed.",
+    config=OpenAIConfig("gpt-5-nano"),
+    tools=[ask_human],
+    hitl_hook=hitl_hook,
+)
+
+async def main() -> None:
+    conversation = await agent.ask("Request confirmation through the tool.")
+    print(conversation.message.message.content)
+
+asyncio.run(main())
+```
+
+<Warning>
+`autogen.beta` is under active development and may introduce breaking changes between releases.
+For production workloads, prefer the stable APIs documented in the User Guide and API References.
+</Warning>
+
+## Observe Communication with `MemoryStream`
+
+You can subscribe to all events or filtered event types:
+
+```python
+from autogen.beta import Context, MemoryStream
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
+
+stream = MemoryStream()
+
+@stream.subscribe()
+async def on_any_event(event: BaseEvent, ctx: Context) -> None:
+    print(type(event).__name__)
+
+@stream.where(ToolCall).subscribe()
+async def on_tool_call(event: ToolCall) -> None:
+    print("Tool requested:", event.name)
+
+@stream.where(ModelResponse).subscribe()
+async def on_final_response(event: ModelResponse) -> None:
+    if event.message:
+        print("Final message:", event.message.content)
+```
+
+For a runnable playground example, see `play.py`.
+For behavior details and edge cases, see tests in `test/beta/agent/` and `test/beta/stream/`.
