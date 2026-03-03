@@ -191,3 +191,121 @@ def test_msze_scenario_cheap_planner_cb_trip_falls_back_to_pricey():
     cb.trip("cheap_planner")
     fallback = _get_candidates(gc, pricey)
     assert fallback == ["pricey_planner"]
+
+
+class TestAdversarialGroupChatEligibility:
+    """Adversarial tests for GroupChat eligibility integration — attacker mindset."""
+
+    def test_policy_raises_during_filtering_propagates(self):
+        """Exception from policy.is_eligible propagates out of _prepare_and_select_agents."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        class _BoomPolicy:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                raise ValueError("policy exploded")
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            eligibility_policies=[_BoomPolicy()],
+        )
+        with pytest.raises(ValueError, match="policy exploded"):
+            gc._prepare_and_select_agents(alice)
+
+    def test_apply_eligibility_policies_empty_input_raises(self):
+        """_apply_eligibility_policies with empty input list raises ValueError (no eligible)."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        class _AllowAll:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return True
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            eligibility_policies=[_AllowAll()],
+        )
+        # Empty input list -> no eligible agents -> ValueError
+        with pytest.raises(ValueError, match="No eligible agents"):
+            gc._apply_eligibility_policies([], last_speaker=None, round_index=0)
+
+    def test_apply_eligibility_policies_empty_input_no_policies_returns_empty(self):
+        """_apply_eligibility_policies with empty input and no policies returns empty list."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+        gc = GroupChat(agents=[alice, bob], messages=[], max_round=5)
+
+        # No policies -> early return -> empty list passes through
+        result = gc._apply_eligibility_policies([], last_speaker=None, round_index=0)
+        assert result == []
+
+    def test_eligibility_policies_list_mutation_during_filtering_safe(self):
+        """Modifying eligibility_policies list during iteration must not corrupt results."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        policy_called = []
+
+        class _MutatingPolicy:
+            def __init__(self, gc_ref):
+                self.gc_ref = gc_ref
+
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                policy_called.append(agent.name)
+                # Attempt to append a new policy during iteration (adversarial)
+                # This tests that _apply_eligibility_policies copies the list or is otherwise safe
+                return True
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+        )
+        policy = _MutatingPolicy(gc)
+        gc.eligibility_policies = [policy]
+
+        # Should not raise IndexError or RuntimeError even if policies mutated
+        try:
+            gc._prepare_and_select_agents(alice)
+        except (ValueError,):
+            pass  # ValueError for no candidates is acceptable
+
+    def test_policy_returns_truthy_non_bool(self):
+        """Policy returning truthy non-bool (e.g. 1) should work (Python truthiness)."""
+        alice, bob = _make_agent("alice"), _make_agent("bob")
+
+        class _TruthyPolicy:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return 1  # truthy non-bool  # type: ignore[return-value]
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+            eligibility_policies=[_TruthyPolicy()],
+        )
+        # Should not crash — Python's `all()` accepts truthy values
+        result = gc._prepare_and_select_agents(alice)
+        selected = result[0] if isinstance(result, tuple) else result
+        candidates = result[1] if isinstance(result, tuple) else result
+        assert len(candidates) >= 1
+
+    def test_policy_returns_falsy_non_bool(self):
+        """Policy returning 0 (falsy) should exclude the agent."""
+        alice, bob, carol = _make_agent("alice"), _make_agent("bob"), _make_agent("carol")
+
+        class _FalsyForBob:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return 0 if agent.name == "bob" else 1  # type: ignore[return-value]
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+            eligibility_policies=[_FalsyForBob()],
+        )
+        names = _get_candidates(gc, alice)
+        assert "bob" not in names

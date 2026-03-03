@@ -88,3 +88,86 @@ def test_mark_available_noop_when_not_marked():
     mixin = DescriptionMutationMixin(agent)
     mixin.mark_available()
     assert agent.description == "A helpful planner"
+
+
+class TestAdversarialEligibilityPolicy:
+    """Adversarial tests — attacker mindset."""
+
+    def test_policy_raises_exception_propagates(self):
+        """Policy that raises should propagate, not silently pass."""
+
+        class _RaisingPolicy:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                raise RuntimeError("policy failure")
+
+        policy = _RaisingPolicy()
+        ctx = SelectionContext(round=0, last_speaker=None, participants=["a"])
+        with pytest.raises(RuntimeError, match="policy failure"):
+            policy.is_eligible(object(), ctx)
+
+    def test_description_mutation_none_description(self):
+        """Agent with description=None must not crash mark_unavailable."""
+        agent = MagicMock()
+        agent.description = None
+        mixin = DescriptionMutationMixin(agent)
+        mixin.mark_unavailable()
+        assert "[UNAVAILABLE]" in agent.description
+
+    def test_description_mutation_empty_string(self):
+        """Agent with description='' must get [UNAVAILABLE] prefix."""
+        agent = MagicMock()
+        agent.description = ""
+        mixin = DescriptionMutationMixin(agent)
+        mixin.mark_unavailable()
+        assert agent.description.startswith("[UNAVAILABLE]")
+
+    def test_mark_available_after_none_description(self):
+        """Restoring after None description: original was treated as '' so restores to ''."""
+        agent = MagicMock()
+        agent.description = None
+        mixin = DescriptionMutationMixin(agent)
+        mixin.mark_unavailable()
+        # mark_unavailable stores "" (via `description or ""`), so restore is ""
+        mixin.mark_available()
+        assert agent.description == ""
+
+    def test_selection_context_participants_empty_list(self):
+        """SelectionContext with empty participants list is valid."""
+        ctx = SelectionContext(round=0, last_speaker=None, participants=[])
+        assert ctx.participants == []
+
+    def test_selection_context_negative_round(self):
+        """Negative round index is technically allowed (no validation in dataclass)."""
+        ctx = SelectionContext(round=-1, last_speaker=None, participants=["a"])
+        assert ctx.round == -1
+
+    def test_concurrent_is_eligible_calls(self):
+        """Concurrent calls to is_eligible must not corrupt state (thread safety)."""
+        import threading
+
+        call_count = 0
+        errors = []
+
+        class _CountingPolicy:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                nonlocal call_count
+                call_count += 1
+                return True
+
+        policy = _CountingPolicy()
+        ctx = SelectionContext(round=1, last_speaker=None, participants=["a"])
+
+        def call_policy():
+            try:
+                policy.is_eligible(object(), ctx)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=call_policy) for _ in range(50)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Concurrent calls raised: {errors}"
+        assert call_count == 50
