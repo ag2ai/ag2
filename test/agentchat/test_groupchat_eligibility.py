@@ -1,11 +1,14 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import pytest
 
-from autogen import ConversableAgent
-from autogen.agentchat.groupchat import GroupChat, GroupChatManager
+from autogen import ConversableAgent, NoEligibleSpeakerError
+from autogen.agentchat.groupchat import GroupChat
 from autogen.agentchat.eligibility_policy import AgentEligibilityPolicy, SelectionContext
-from autogen.exception_utils import NoEligibleSpeakerError
 
 
 def _make_agent(name: str) -> ConversableAgent:
@@ -241,36 +244,36 @@ class TestAdversarialGroupChatEligibility:
         result = gc._apply_eligibility_policies([], last_speaker=None, round_index=0)
         assert result == []
 
-    def test_eligibility_policies_list_mutation_during_filtering_safe(self):
-        """Modifying eligibility_policies list during iteration must not corrupt results."""
-        alice, bob = _make_agent("alice"), _make_agent("bob")
+    def test_eligibility_policies_list_mutation_between_rounds_safe(self):
+        """Adding a policy to eligibility_policies between rounds does not corrupt state."""
+        alice, bob, carol = _make_agent("alice"), _make_agent("bob"), _make_agent("carol")
 
-        policy_called = []
+        call_log: list[str] = []
 
-        class _MutatingPolicy:
-            def __init__(self, gc_ref):
-                self.gc_ref = gc_ref
-
+        class _LoggingPolicy:
             def is_eligible(self, agent, ctx: SelectionContext) -> bool:
-                policy_called.append(agent.name)
-                # Attempt to append a new policy during iteration (adversarial)
-                # This tests that _apply_eligibility_policies copies the list or is otherwise safe
+                call_log.append(agent.name)
                 return True
 
         gc = GroupChat(
-            agents=[alice, bob],
+            agents=[alice, bob, carol],
             messages=[],
             max_round=5,
             speaker_selection_method="random",
+            eligibility_policies=[_LoggingPolicy()],
         )
-        policy = _MutatingPolicy(gc)
-        gc.eligibility_policies = [policy]
 
-        # Should not raise IndexError or RuntimeError even if policies mutated
-        try:
-            gc._prepare_and_select_agents(alice)
-        except (ValueError,):
-            pass  # ValueError for no candidates is acceptable
+        # Round 1: one policy
+        gc._prepare_and_select_agents(alice)
+        after_round1 = len(call_log)
+        assert after_round1 > 0
+
+        # Add another policy between rounds (runtime mutation)
+        gc.eligibility_policies.append(_LoggingPolicy())
+
+        # Round 2: two policies — should not crash, should call more times
+        gc._prepare_and_select_agents(alice)
+        assert len(call_log) > after_round1
 
     def test_policy_returns_truthy_non_bool(self):
         """Policy returning truthy non-bool (e.g. 1) should work (Python truthiness)."""
