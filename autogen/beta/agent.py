@@ -87,7 +87,7 @@ class Conversation(Askable):
 
 @runtime_checkable
 class PromptHook(Protocol):
-    async def __call__(self, event: BaseEvent, ctx: Context) -> str: ...
+    async def __call__(self, event: ModelRequest, ctx: Context) -> str: ...
 
 
 PromptType: TypeAlias = str | PromptHook
