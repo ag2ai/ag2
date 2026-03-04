@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config import OllamaConfig
-from autogen.beta.config.llms.ollama import OllamaClient
+from autogen.beta.config.ollama import OllamaClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

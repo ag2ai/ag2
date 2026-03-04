@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 import dashscope
 from dashscope.aigc.generation import AioGeneration
 
+from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -22,8 +23,6 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.tools import Tool
-
-from .client import LLMClient
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -144,7 +143,6 @@ class DashScopeClient(LLMClient):
         choice = response.output.choices[0]
         msg = choice.message
 
-        # Handle reasoning content (thinking models)
         # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
         # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
@@ -215,18 +213,15 @@ class DashScopeClient(LLMClient):
             for choice in chunk.output.choices:
                 msg = choice.message
 
-                # Reasoning chunks
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
                 # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
                 if rc := msg.get("reasoning_content"):
                     await ctx.send(ModelReasoning(content=rc))
 
-                # Content chunks
                 if c := msg.get("content"):
                     full_content += c
                     await ctx.send(ModelMessageChunk(content=c))
 
-                # Tool calls (typically in the final chunk)
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
                     calls.append(

@@ -8,6 +8,7 @@ from typing import Any, TypedDict
 
 from ollama import AsyncClient
 
+from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -21,8 +22,6 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.tools import Tool
-
-from .client import LLMClient
 
 OLLAMA_DEFAULT_HOST = "http://localhost:11434"
 

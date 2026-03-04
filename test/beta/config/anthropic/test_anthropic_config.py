@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.config.llms.anthropic import AnthropicClient
+from autogen.beta.config.anthropic import AnthropicClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

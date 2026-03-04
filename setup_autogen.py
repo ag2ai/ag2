@@ -32,6 +32,7 @@ setuptools.setup(
         "ag-ui": ["ag2[ag-ui]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
+        "dashscope": ["ag2[dashscope]==" + __version__],
         "openai-realtime": ["ag2[openai-realtime]==" + __version__],
         "jupyter-executor": ["ag2[jupyter-executor]==" + __version__],
         "retrievechat": ["ag2[retrievechat]==" + __version__],

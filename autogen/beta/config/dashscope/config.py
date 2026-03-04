@@ -5,13 +5,15 @@
 from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
-from .config import ModelConfig
-from .llms.ollama import OLLAMA_DEFAULT_HOST, CreateOptions, OllamaClient
+from autogen.beta.config.config import ModelConfig
+
+from .dashscope_client import DASHSCOPE_INTL_BASE_URL, CreateOptions, DashScopeClient
 
 
-class OllamaConfigOverrides(TypedDict, total=False):
+class DashScopeConfigOverrides(TypedDict, total=False):
     model: str
-    host: str
+    base_url: str
+    api_key: str | None
     temperature: float | None
     top_p: float | None
     streaming: bool
@@ -23,9 +25,10 @@ class OllamaConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class OllamaConfig(ModelConfig):
+class DashScopeConfig(ModelConfig):
     model: str
-    host: str = OLLAMA_DEFAULT_HOST
+    base_url: str = DASHSCOPE_INTL_BASE_URL
+    api_key: str | None = None
     temperature: float | None = None
     top_p: float | None = None
     streaming: bool = False
@@ -35,23 +38,24 @@ class OllamaConfig(ModelConfig):
     frequency_penalty: float | None = None
     presence_penalty: float | None = None
 
-    def copy(self, /, **overrides: Unpack[OllamaConfigOverrides]) -> "OllamaConfig":
+    def copy(self, /, **overrides: Unpack[DashScopeConfigOverrides]) -> "DashScopeConfig":
         return replace(self, **overrides)
 
-    def create(self) -> OllamaClient:
+    def create(self) -> DashScopeClient:
         options = CreateOptions(
             temperature=self.temperature,
             top_p=self.top_p,
-            num_predict=self.max_tokens,
+            max_tokens=self.max_tokens,
             stop=self.stop,
             seed=self.seed,
             frequency_penalty=self.frequency_penalty,
             presence_penalty=self.presence_penalty,
         )
 
-        return OllamaClient(
+        return DashScopeClient(
             model=self.model,
-            host=self.host,
+            api_key=self.api_key,
+            base_url=self.base_url,
             streaming=self.streaming,
             create_options=options,
         )

@@ -4,7 +4,7 @@
 
 from typing import Protocol, Self
 
-from .llms import LLMClient
+from .client import LLMClient
 
 
 class ModelConfig(Protocol):

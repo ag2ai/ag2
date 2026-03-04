@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config import GeminiConfig
-from autogen.beta.config.llms.gemini import GeminiClient
+from autogen.beta.config.gemini import GeminiClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

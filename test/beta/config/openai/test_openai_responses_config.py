@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config import OpenAIResponsesConfig
-from autogen.beta.config.llms.openai_responses import OpenAIResponsesClient
+from autogen.beta.config.openai import OpenAIResponsesClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

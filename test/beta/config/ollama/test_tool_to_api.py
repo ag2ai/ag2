@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.llms.ollama import OllamaClient
+from autogen.beta.config.ollama import OllamaClient
 
 from .._helpers import make_tool
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config import DashScopeConfig
-from autogen.beta.config.llms.dashscope import DashScopeClient
+from autogen.beta.config.dashscope import DashScopeClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

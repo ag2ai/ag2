@@ -18,6 +18,7 @@ from openai.types.responses import (
     ResponseTextDeltaEvent,
 )
 
+from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -31,8 +32,6 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.tools import Tool
-
-from .client import LLMClient
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.llms.dashscope import DashScopeClient
+from autogen.beta.config.dashscope import DashScopeClient
 
 from .._helpers import make_tool
 

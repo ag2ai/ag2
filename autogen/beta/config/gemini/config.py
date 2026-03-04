@@ -5,8 +5,9 @@
 from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
-from .config import ModelConfig
-from .llms.gemini import CreateConfig, GeminiClient
+from autogen.beta.config.config import ModelConfig
+
+from .gemini_client import CreateConfig, GeminiClient
 
 
 class GeminiConfigOverrides(TypedDict, total=False):

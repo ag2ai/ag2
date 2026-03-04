@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.llms.gemini import GeminiClient
+from autogen.beta.config.gemini import GeminiClient
 
 from .._helpers import make_tool
 

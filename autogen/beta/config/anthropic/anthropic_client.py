@@ -15,6 +15,7 @@ from anthropic.types import (
     ToolUseBlock,
 )
 
+from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -28,8 +29,6 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.tools import Tool
-
-from .client import LLMClient
 
 
 class CreateOptions(TypedDict, total=False):
@@ -185,7 +184,6 @@ class AnthropicClient(LLMClient):
         full_content: str = ""
         calls: list[ToolCall] = []
 
-        # Track tool use blocks being built
         current_tool: dict[str, Any] | None = None
 
         async for event in stream:
@@ -230,7 +228,6 @@ class AnthropicClient(LLMClient):
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
-        # Get usage from the final message
         final_message = await stream.get_final_message()
         usage = final_message.usage.model_dump() if final_message.usage else {}
 

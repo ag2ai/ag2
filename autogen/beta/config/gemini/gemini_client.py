@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 from google import genai
 from google.genai import types
 
+from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
@@ -22,8 +23,6 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.tools import Tool
-
-from .client import LLMClient
 
 
 class CreateConfig(TypedDict, total=False):

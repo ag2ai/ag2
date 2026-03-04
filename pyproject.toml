@@ -84,6 +84,10 @@ openai = [
     "openai>=1.99.3",
 ]
 
+dashscope = [
+    "dashscop>=1.25.0,<2.0.0",
+]
+
 openai-realtime = [
     "ag2[openai]",
     "openai[realtime]",

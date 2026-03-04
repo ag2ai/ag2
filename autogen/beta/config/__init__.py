@@ -4,8 +4,8 @@
 
 from unittest.mock import Mock
 
+from .client import LLMClient
 from .config import ModelConfig
-from .llms import LLMClient
 
 
 def _missing_optional_dependency_config(config_name: str, extra: str, error: ImportError) -> Mock:
@@ -18,13 +18,9 @@ def _missing_optional_dependency_config(config_name: str, extra: str, error: Imp
 
 
 try:
-    from .openai import OpenAIConfig
+    from .openai import OpenAIConfig, OpenAIResponsesConfig
 except ImportError as e:
     OpenAIConfig = _missing_optional_dependency_config("OpenAIConfig", "openai", e)
-
-try:
-    from .openai_responses import OpenAIResponsesConfig
-except ImportError as e:
     OpenAIResponsesConfig = _missing_optional_dependency_config("OpenAIResponsesConfig", "openai", e)
 
 try:

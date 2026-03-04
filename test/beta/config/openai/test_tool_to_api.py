@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.llms.openai import OpenAIClient
-from autogen.beta.config.llms.openai_responses import OpenAIResponsesClient
+from autogen.beta.config.openai import OpenAIClient, OpenAIResponsesClient
 
 from .._helpers import make_tool
 

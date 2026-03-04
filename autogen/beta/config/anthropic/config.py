@@ -7,8 +7,9 @@ from typing import TypedDict, Unpack
 
 import httpx
 
-from .config import ModelConfig
-from .llms.anthropic import AnthropicClient, CreateOptions
+from autogen.beta.config.config import ModelConfig
+
+from .anthropic_client import AnthropicClient, CreateOptions
 
 
 class AnthropicConfigOverrides(TypedDict, total=False):

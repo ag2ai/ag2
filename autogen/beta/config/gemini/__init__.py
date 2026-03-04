@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .client import LLMClient
+from .config import GeminiConfig
+from .gemini_client import GeminiClient
 
-__all__ = ("LLMClient",)
+__all__ = (
+    "GeminiClient",
+    "GeminiConfig",
+)

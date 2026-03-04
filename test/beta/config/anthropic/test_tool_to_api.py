@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.llms.anthropic import AnthropicClient
+from autogen.beta.config.anthropic import AnthropicClient
 
 from .._helpers import make_tool
 
