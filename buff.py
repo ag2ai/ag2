@@ -4,6 +4,7 @@ from autogen.beta import Agent
 from autogen.beta.events import ToolCall
 from autogen.beta.testing import TestConfig
 
+
 @pytest.mark.asyncio
 async def test_tool_raise_exc():
     # Define a tool that raises an error

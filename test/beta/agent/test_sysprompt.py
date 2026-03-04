@@ -86,7 +86,7 @@ async def test_sysprompt_override_with_call(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_callable_sysprompt(mock: MagicMock):
-    async def sysprompt(event: BaseEvent, ctx: Context) -> str:
+    async def sysprompt() -> str:
         return "1"
 
     agent = Agent(

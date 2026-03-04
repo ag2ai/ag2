@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from collections.abc import Callable, Iterable
-from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload, runtime_checkable
+from collections.abc import Awaitable, Callable, Iterable
+from contextlib import AsyncExitStack, ExitStack
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
+
+from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -85,11 +87,7 @@ class Conversation(Askable):
         return self.ctx.stream.history
 
 
-@runtime_checkable
-class PromptHook(Protocol):
-    async def __call__(self, event: ModelRequest, ctx: Context) -> str: ...
-
-
+PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
 PromptType: TypeAlias = str | PromptHook
 
 
@@ -118,16 +116,16 @@ class Agent(Askable):
         self.__tool_executor = ToolExecutor()
 
         self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[PromptHook] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
-        if isinstance(prompt, (str, PromptHook)):
+        if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
 
         for p in prompt:
             if isinstance(p, str):
                 self._system_prompt.append(p)
             else:
-                self._dynamic_prompt.append(p)
+                self._dynamic_prompt.append(_wrap_prompt_hook(p))
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
         if self.__hitl_hook is not default_hitl_hook:
@@ -303,3 +301,19 @@ class Agent(Askable):
         from .conversable import ConversableAdapter
 
         return ConversableAdapter(self)
+
+
+def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awaitable[str]]:
+    call_model = build_model(func)
+
+    async def wrapper(event: ModelRequest, ctx: Context) -> str:
+        async with AsyncExitStack() as stack:
+            return await call_model.asolve(
+                event,
+                stack=stack,
+                cache_dependencies={},
+                dependency_provider=ctx.dependency_provider,
+                **{CONTEXT_OPTION_NAME: ctx},
+            )
+
+    return wrapper
