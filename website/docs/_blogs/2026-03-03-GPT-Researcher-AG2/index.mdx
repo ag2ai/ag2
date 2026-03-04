@@ -40,7 +40,7 @@ Because the Human agent is backed by AG2's `UserProxyAgent`, human oversight is 
 
 When investigating multiple sub-topics, the Researcher agent spawns nested sub-graphs -- one per sub-question -- each with isolated state. This avoids race conditions when results are written back and significantly reduces total research time for multi-section reports.
 
-If you're already building AG2 workflows -- tool-calling agents, group chats, swarms -- the GPT Researcher pipeline slots in without a second orchestration framework. The Human agent, the streaming UI, and any other AG2 tools you want to add all work with the same primitives you already use. If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
+If you're already building AG2 workflows -- tool-calling agents and group chats -- the GPT Researcher pipeline slots in without a second orchestration framework. The Human agent, the streaming UI, and any other AG2 tools you want to add all work with the same primitives you already use. If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
 
 ## Getting the Sample Code
 
