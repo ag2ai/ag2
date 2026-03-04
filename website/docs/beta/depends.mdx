@@ -7,7 +7,7 @@ sidebarTitle: Depends
 
 The `Depends` mechanism allows you to calculate and inject dependencies dynamically at execution time. 
 
-The key difference with [Dependency Injection](../dependency_injection){.internal-link} is their execution model. `Inject` is used to retrieve static objects or configurations that have already been created (like an existing database connection or API key). `Depends`, on the other hand, executes a callable function *during* the tool's invocation to resolve the dependency. 
+The key difference with [Dependency Injection](../context/inject){.internal-link} is their execution model. `Inject` is used to retrieve static objects or configurations that have already been created (like an existing database connection or API key). `Depends`, on the other hand, executes a callable function *during* the tool's invocation to resolve the dependency. 
 
 Under the hood, `Depends` uses the exact same mechanism and design philosophy as [FastAPI's dependency injection system](https://fastapi.tiangolo.com/tutorial/dependencies/){.external-link target="_blank"}.
 

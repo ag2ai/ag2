@@ -221,6 +221,22 @@ This configuration generates the following detailed JSON schema, ensuring the LL
 }
 ```
 
-## Execution context
+## Execution Context
 
-Context, Inject, Variable, Human in the loop features
+Tools often need access to the broader execution context, such as injected dependencies, variables, or mechanisms for human-in-the-loop interactions. The AG2 framework supports these features natively.
+
+!!! note
+    Under the hood, these contextual capabilities are powered by the [FastDepends](https://github.com/Lancetnik/FastDepends){.external-link target="_blank"} library, ensuring robust and FastAPI-like dependency management.
+
+To access the execution context from within your tool, you can simply type-hint an argument with the `Context` object.
+
+```python linenums="1"
+from autogen.beta import Context, tool
+
+@tool
+async def my_tool(context: Context) -> str:
+    # Access context variables or dependencies here
+    return f"Execution context: {context}"
+```
+
+For more detailed information on specific context features, see [Dependency Injection](../context/inject), [Context Variables](../context/variables), [Depends](../depends), [Human-in-the-loop](../context/human_in_the_loop).
