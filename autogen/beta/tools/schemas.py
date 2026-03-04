@@ -25,9 +25,6 @@ class FunctionToolSchema(BaseModel):
     type: Literal["function"] = "function"
     function: FunctionDefinition = Field(description="The function definition.")
 
-    def to_api(self) -> dict[str, Any]:
-        return self.model_dump(exclude_none=True)
-
 
 __all__ = [
     "FunctionDefinition",
