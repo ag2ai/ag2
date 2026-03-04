@@ -78,6 +78,27 @@ async def test_call_tool_with_agent_dependency(
 
 
 @pytest.mark.asyncio()
+async def test_call_tool_with_mixed_dependencies(
+    mock: MagicMock,
+    test_config: TestConfig,
+) -> None:
+    def my_tool(ctx: Context) -> str:
+        mock(ctx.dependencies)
+        return ""
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        dependencies={"dep": "1"},
+    )
+
+    await agent.ask("Hi!", dependencies={"dep2": "2"})
+
+    mock.assert_called_once_with({"dep": "1", "dep2": "2"})
+
+
+@pytest.mark.asyncio()
 async def test_inject_alias(
     mock: MagicMock,
     test_config: TestConfig,

@@ -21,26 +21,22 @@ If a dependency is required across all conversations for a specific agent, you c
 from autogen.beta import Agent
 import aiohttp
 
-session = aiohttp.ClientSession()
-
 # The session object is available to all tool calls made by this agent
 agent = Agent(
     name="WebScraper",
-    dependencies={"http_session": session}
+    dependencies={"http_session": aiohttp.ClientSession()}
 )
 ```
 
 ### Conversation Dependencies
 
-If a dependency is only relevant for a single conversation turn, you can inject it dynamically when calling the `ask` method. 
+If a dependency is only relevant for a single conversation, you can inject it dynamically when calling the `ask` method. 
 
 ```python linenums="1"
-db_connection = create_db_connection()
-
-# The db_connection is injected only for this specific request
 await agent.ask(
     "Query the user database",
-    dependencies={"db": db_connection}
+    # The db_connection is injected only for this specific conversation
+    dependencies={"db": create_db_connection()}
 )
 ```
 
@@ -48,7 +44,7 @@ await agent.ask(
 
 When you provide both agent-level and conversation-level dependencies, the framework automatically merges them. If there is a key collision, the dependencies provided during the `ask` call take precedence and override the agent's default dependencies.
 
-```python linenums="1"
+```python linenums="1" hl_lines="3 9"
 agent = Agent(
     name="DataAgent",
     dependencies={"default_db": db_1, "active_db": db_1}
@@ -65,14 +61,14 @@ await agent.ask(
 
 The simplest way to access your dependencies inside a tool is through the `Context` object. By adding an argument annotated with `Context`, the framework injects the current execution context, which includes the `.dependencies` dictionary.
 
-```python linenums="1"
+```python linenums="1" hl_lines="1 4 6"
 from autogen.beta import Context, tool
 
 @tool
 def query_database(query: str, ctx: Context) -> str:
     # Access the complex dependency directly from the context
     db = ctx.dependencies.get("db")
-    
+
     result = db.execute(query)
     return f"Result: {result}"
 ```
@@ -81,11 +77,9 @@ def query_database(query: str, ctx: Context) -> str:
 
 Instead of passing the entire context object, you can explicitly request specific dependencies directly in your tool's function signature. This makes your tool's requirements clear and automatically handles validation.
 
-### Using Inject
-
 The `Inject` annotation allows you to pull a dependency from the dictionary by its key. By default, it looks for a key matching the argument's name.
 
-```python linenums="1"
+```python linenums="1" hl_lines="8"
 from typing import Annotated
 from autogen.beta import Inject, tool
 
@@ -100,7 +94,7 @@ def fetch_data(
 
 If your argument name differs from the dependency key, you can provide the key explicitly:
 
-```python linenums="1"
+```python linenums="1" hl_lines="5"
 @tool
 def fetch_data(
     url: str,
@@ -110,45 +104,42 @@ def fetch_data(
     pass
 ```
 
-You can also provide a fallback `default` value in case the dependency is missing. Without a default, a missing dependency will raise a `ValidationError`.
+!!! note
+    Improtant remark: all such annotations has no effect on the tool schema for the LLM.
+    It's just a technical detail for the framework to inject the dependency into the function.
 
-```python linenums="1"
+## Dependencies with Default Values
+
+Sometimes a dependency might not be provided by the user. You can define fallback behaviors directly within the `Inject` annotation using either `default` or `default_factory`. Without a default, a missing dependency will raise a `ValidationError`.
+
+### Static Defaults
+
+Use `default` for simple, immutable fallback values.
+
+```python linenums="1" hl_lines="4"
 @tool
 def process_data(
-    client: Annotated[object, Inject(default=None)]
+    # If "client" is not provided in dependencies, it defaults to None
+    client: Annotated[object | None, Inject(default=None)]
 ) -> str:
     if client is None:
         return "No client provided."
     return "Processing..."
 ```
 
-### Callable Dependencies (Depends)
+### Dynamic Defaults
 
-For advanced scenarios, you can define dependencies as functions and inject them using `Depends`. This is highly useful for testing, as it allows you to easily override the dependency without modifying your tools.
+For mutable objects or dependencies that need to be instantiated at runtime, use `default_factory`. The framework ensures that the factory function is called when the dependency is missing.
 
-```python linenums="1"
-from autogen.beta import Depends
-
-def get_db_client():
-    return ProductionDatabaseClient()
+```python linenums="1" hl_lines="7"
+def create_default_client() -> object:
+    return DefaultDatabaseClient()
 
 @tool
-def get_user(
-    user_id: int,
-    db: Annotated[object, Depends(get_db_client)]
+def update_record(
+    # Uses the dynamically created client if "db" wasn't provided
+    db: Annotated[object, Inject(default_factory=create_default_client)]
 ) -> str:
-    return db.query_user(user_id)
-```
-
-During testing, you can override the dependency function with a mock or a test double using the agent's `dependency_provider`.
-
-```python linenums="1"
-def get_test_db_client():
-    return TestDatabaseClient()
-
-# Override the production client with the test client
-agent.dependency_provider.override(get_db_client, get_test_db_client)
-
-# Now, when get_user is called, it will receive the TestDatabaseClient
-await agent.ask("Get user 123")
+    db.save()
+    return "Record updated"
 ```
