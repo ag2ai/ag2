@@ -371,6 +371,42 @@ class GroupToolExecutor(ConversableAgent):
             tool_message["tool_responses"] = tool_responses_inner
             tool_message["content"] = "\n".join(contents)
 
+            # When agent views are isolated, the tool executor's response never reaches
+            # the originating agent's history via the group manager broadcast. Copy the
+            # tool response into the originator's thread with the manager so subsequent
+            # LLM calls have the required tool messages.
+            if self._group_manager and self._group_manager.groupchat.isolate_agent_views:
+                originator = self._group_manager.groupchat.agent_by_name(agent_name)
+                if isinstance(originator, ConversableAgent):
+                    existing_ids: set[str] = set()
+                    history = originator._oai_messages.get(self._group_manager, [])
+
+                    for hist_msg in history:
+                        # Collect tool_call_ids from prior tool responses
+                        for resp in hist_msg.get("tool_responses", []):
+                            if resp.get("tool_call_id"):
+                                existing_ids.add(resp["tool_call_id"])
+                        # Some tool messages may store tool_call_id directly
+                        if hist_msg.get("tool_call_id"):
+                            existing_ids.add(hist_msg["tool_call_id"])
+
+                    new_tool_responses = [
+                        resp for resp in tool_message["tool_responses"] if resp.get("tool_call_id") not in existing_ids
+                    ]
+
+                    if new_tool_responses:
+                        deduped_tool_message = deepcopy(tool_message)
+                        deduped_tool_message["tool_responses"] = new_tool_responses
+                        deduped_tool_message["content"] = "\n".join(
+                            resp.get("content", "") for resp in new_tool_responses
+                        )
+                        originator._append_oai_message(
+                            deduped_tool_message,
+                            self._group_manager,
+                            role="user",
+                            name=self._group_manager.name,
+                        )
+
             return True, tool_message
         return False, None
 
