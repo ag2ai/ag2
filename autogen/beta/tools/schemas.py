@@ -19,7 +19,6 @@ class FunctionDefinition(BaseModel):
 
     def model_post_init(self, context: Any) -> None:
         self.parameters.pop("title", None)
-        self.parameters = {"additionalProperties": False} | self.parameters
 
 
 class FunctionToolSchema(BaseModel):

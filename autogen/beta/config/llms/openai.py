@@ -104,13 +104,19 @@ class OpenAIClient(LLMClient):
         response = await self._client.chat.completions.create(
             **self._create_options,
             messages=openai_messages,
-            tools=[t.schema.to_api() for t in tools],
+            tools=[self._tool_to_api(t) for t in tools],
         )
 
         if self._streaming:
             await self._process_stream(response, ctx)
         else:
             await self._process_completion(response, ctx)
+
+    @staticmethod
+    def _tool_to_api(t: Tool) -> dict[str, Any]:
+        d = t.schema.to_api()
+        d["function"]["parameters"] = {"additionalProperties": False} | d["function"]["parameters"]
+        return d
 
     def _convert_messages(
         self,

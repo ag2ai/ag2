@@ -28,7 +28,6 @@ DEFAULT_SCHEMA = {
                 "b",
             ],
             "type": "object",
-            "additionalProperties": False,
         },
     },
     "type": "function",

@@ -31,7 +31,6 @@ DEFAULT_SCHEMA = {
                 "b",
             ],
             "type": "object",
-            "additionalProperties": False,
         },
     },
     "type": "function",
@@ -136,7 +135,6 @@ def test_empty_args() -> None:
             "description": "Tool description.",
             "name": "my_tool",
             "parameters": {
-                "additionalProperties": False,
                 "type": "null",
             },
         },
