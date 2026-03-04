@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.dashscope import DashScopeConfig
+from autogen.beta.config import DashScopeConfig
+from autogen.beta.config.llms.dashscope import DashScopeClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -29,8 +30,6 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_create_returns_dashscope_client() -> None:
-    from autogen.beta.config.llms.dashscope import DashScopeClient
-
     config = DashScopeConfig(model="qwen-plus", api_key="test-key")
     client = config.create()
 

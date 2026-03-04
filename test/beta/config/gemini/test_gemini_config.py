@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.gemini import GeminiConfig
+from autogen.beta.config import GeminiConfig
+from autogen.beta.config.llms.gemini import GeminiClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -31,8 +32,6 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_create_returns_gemini_client() -> None:
-    from autogen.beta.config.llms.gemini import GeminiClient
-
     config = GeminiConfig(model="gemini-2.0-flash", api_key="test-key")
     client = config.create()
 

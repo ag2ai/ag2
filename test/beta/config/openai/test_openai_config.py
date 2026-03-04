@@ -1,4 +1,4 @@
-from autogen.beta.config.openai import OpenAIConfig
+from autogen.beta.config import OpenAIConfig
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:

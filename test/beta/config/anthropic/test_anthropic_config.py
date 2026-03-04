@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.anthropic import AnthropicConfig
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.config.llms.anthropic import AnthropicClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -31,8 +32,6 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_create_returns_anthropic_client() -> None:
-    from autogen.beta.config.llms.anthropic import AnthropicClient
-
     config = AnthropicConfig(model="claude-sonnet-4-6", api_key="test-key")
     client = config.create()
 

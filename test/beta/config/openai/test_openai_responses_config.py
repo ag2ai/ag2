@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.openai_responses import OpenAIResponsesConfig
+from autogen.beta.config import OpenAIResponsesConfig
+from autogen.beta.config.llms.openai_responses import OpenAIResponsesClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -31,8 +32,6 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_create_returns_openai_responses_client() -> None:
-    from autogen.beta.config.llms.openai_responses import OpenAIResponsesClient
-
     config = OpenAIResponsesConfig(model="gpt-5", api_key="test-key")
     client = config.create()
 

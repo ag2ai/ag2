@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.ollama import OllamaConfig
+from autogen.beta.config import OllamaConfig
+from autogen.beta.config.llms.ollama import OllamaClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -29,8 +30,6 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_create_returns_ollama_client() -> None:
-    from autogen.beta.config.llms.ollama import OllamaClient
-
     config = OllamaConfig(model="qwen3.5:latest")
     client = config.create()
 

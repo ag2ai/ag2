@@ -59,9 +59,7 @@ class GeminiClient(LLMClient):
         contents = self._convert_messages(messages)
         system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
-        tool_declarations = [
-            types.FunctionDeclaration(**self._tool_to_api(t)) for t in tools
-        ]
+        tool_declarations = [types.FunctionDeclaration(**self._tool_to_api(t)) for t in tools]
         gemini_tools = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else None
 
         config = types.GenerateContentConfig(
