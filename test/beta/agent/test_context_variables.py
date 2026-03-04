@@ -73,6 +73,27 @@ async def test_agent_variables(
 
 
 @pytest.mark.asyncio()
+async def test_mixed_variables(
+    mock: MagicMock,
+    test_config: TestConfig,
+) -> None:
+    def my_tool(ctx: Context) -> str:
+        mock(ctx.variables)
+        return ""
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        variables={"dep": "1"},
+    )
+
+    await agent.ask("Hi!", variables={"dep2": "2"})
+
+    mock.assert_called_once_with({"dep": "1", "dep2": "2"})
+
+
+@pytest.mark.asyncio()
 async def test_variable_alias(
     mock: MagicMock,
     test_config: TestConfig,

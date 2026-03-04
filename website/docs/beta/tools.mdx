@@ -111,7 +111,7 @@ LLMs perform best when they have precise constraints and detailed instructions. 
 
 You can override the basic properties directly in the decorator:
 
-```python linenums="1"
+```python linenums="1" hl_lines="2 3"
 @tool(
     name="custom_math_tool",
     description="Performs advanced mathematical operations.",
@@ -120,11 +120,14 @@ def math_op(a: int, b: int) -> int:
     return a + b
 ```
 
+!!! note
+    Explicitly setting the name and description overrides the automatically generated values.
+
 ### Deep Schema Customization with Pydantic
 
 Under the hood, arguments are serialized and validated using [Pydantic](https://docs.pydantic.dev/latest/){.external-link target="_blank"} schemas. This means you can use standard `pydantic.Field` annotations to deeply customize individual schema parameters, providing the LLM with strict guidelines on what values are acceptable.
 
-```python linenums="1"
+```python linenums="1" hl_lines="8-13 17-21"
 from typing import Annotated
 from pydantic import Field
 
@@ -132,11 +135,20 @@ from pydantic import Field
 def set_temperature(
     temp: Annotated[
         int,
-        Field(..., description="The target temperature.", ge=10, le=30)
+        Field(
+            ..., 
+            description="The target temperature.",
+            ge=10,
+            le=30,
+        ),
     ],
     mode: Annotated[
         str,
-        Field(..., description="The thermostat mode.", pattern="^(heat|cool|auto)$")
+        Field(
+            ..., 
+            description="The thermostat mode.",
+            pattern="^(heat|cool|auto)$",
+        ),
     ]
 ) -> str:
     """Sets the thermostat to a specific temperature and mode."""
@@ -147,7 +159,7 @@ def set_temperature(
 
 A complete example combining custom tool properties and strict parameter validation looks like this:
 
-```python linenums="1"
+```python linenums="1" hl_lines="6 7 12-17 21-25"
 from typing import Annotated
 from pydantic import Field
 from autogen.beta import tool
@@ -208,3 +220,7 @@ This configuration generates the following detailed JSON schema, ensuring the LL
     }
 }
 ```
+
+## Execution context
+
+## Human in the loop
