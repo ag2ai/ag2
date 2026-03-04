@@ -9,26 +9,15 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.beta import Agent, Context, Depends, Inject
-from autogen.beta.events import ModelMessage, ModelResponse, ToolCall, ToolCalls
+from autogen.beta.events import ToolCall
 from autogen.beta.testing import TestConfig
 
 
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ModelResponse(
-            tool_calls=ToolCalls(
-                calls=[
-                    ToolCall(
-                        name="my_tool",
-                        arguments="{}",
-                    )
-                ]
-            ),
-        ),
-        ModelResponse(
-            message=ModelMessage(content="result"),
-        ),
+        ToolCall(name="my_tool"),
+        "result",
     )
 
 

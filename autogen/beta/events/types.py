@@ -35,7 +35,7 @@ class ToolCall(ToolEvent):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
-    arguments: str
+    arguments: str = "{}"
 
     def to_api(self) -> dict[str, Any]:
         return {

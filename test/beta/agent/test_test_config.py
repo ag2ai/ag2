@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.events import ModelMessage, ModelResponse, ToolCall, ToolCalls
+from autogen.beta.events import ToolCall
 from autogen.beta.exceptions import ConfigNotProvidedError, ToolNotFoundError
 from autogen.beta.testing import TestConfig
 
@@ -15,19 +15,8 @@ from autogen.beta.testing import TestConfig
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ModelResponse(
-            tool_calls=ToolCalls(
-                calls=[
-                    ToolCall(
-                        name="my_tool",
-                        arguments="{}",
-                    )
-                ]
-            ),
-        ),
-        ModelResponse(
-            message=ModelMessage(content="result"),
-        ),
+        ToolCall(name="my_tool"),
+        "result",
     )
 
 
@@ -63,7 +52,7 @@ async def test_ask_with_explicit_config_option(test_config: TestConfig) -> None:
 
     res = await agent.ask(
         "Hi!",
-        config=TestConfig(ModelResponse(message=ModelMessage(content="result"))),
+        config=TestConfig("result"),
     )
 
     assert res.message.message.content == "result"

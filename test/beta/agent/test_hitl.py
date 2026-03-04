@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCall, ToolCalls
+from autogen.beta.events import HumanInputRequest, HumanMessage, ToolCall
 from autogen.beta.exceptions import HumanInputNotProvidedError
 from autogen.beta.testing import TestConfig
 
@@ -15,19 +15,8 @@ from autogen.beta.testing import TestConfig
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ModelResponse(
-            tool_calls=ToolCalls(
-                calls=[
-                    ToolCall(
-                        name="my_tool",
-                        arguments="{}",
-                    )
-                ]
-            ),
-        ),
-        ModelResponse(
-            message=ModelMessage(content="result"),
-        ),
+        ToolCall(name="my_tool"),
+        "result",
     )
 
 
