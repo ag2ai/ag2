@@ -38,6 +38,14 @@ The Human Review step is first-class in this pipeline, not optional. `present_fo
 
 If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
 
+## How Agents and UI Connect
+
+AG2's `DefaultPattern` coordinates the eight agents as a group chat. Rather than a single orchestrator deciding who speaks next, each agent makes that decision itself: when its tool function returns, the result includes a `target` naming the next agent by name. The pipeline sequence is deterministic by construction -- no LLM needed to decide the order -- though the Human Review agent does use LLM conditions to branch after human feedback: loop back to the Researcher if the user wants more research, or advance to the Writer if they approve. A shared `ContextVariables` dictionary flows through every tool call, carrying pipeline state -- active agent, stage, query, source count, and eventually the finished report -- readable and writable by any step in the chain.
+
+The frontend stays in sync through two parallel SSE streams that serve different kinds of information. The main `/research/` endpoint translates AG2 group chat events into AG-UI protocol: tool call start and end events as each tool runs, a state snapshot when the active agent changes, and an `INPUT_REQUEST` event when the pipeline pauses at Human Review waiting for the user. The second stream, `/logs`, carries everything that comes out of GPT Researcher itself -- live log lines as it searches the web, the report text chunk by chunk as the Writer runs, cost updates, and the structured summary that populates the Human Review panel.
+
+The bridge between them is a lightweight `StreamAdapter` class that mimics the WebSocket interface GPT Researcher expects, but routes its output to an asyncio queue instead of a network socket. The same GPT Researcher code that normally writes to a WebSocket writes to the queue, and the `/logs` endpoint drains that queue to the browser in real time. No WebSocket server needed.
+
 ## Running the Pipeline
 
 Clone the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository, navigate to the example, and install dependencies:
