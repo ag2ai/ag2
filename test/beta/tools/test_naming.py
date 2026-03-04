@@ -98,7 +98,7 @@ def test_option_description() -> None:
     @tool
     def my_tool(
         a: Annotated[str, Field(..., description="Just A")],
-        b: int = Field(..., description="Just B"),
+        b: int = Field(..., description="Just B", ge=1),
     ) -> str:
         """Tool description."""
         return ""
@@ -115,6 +115,7 @@ def test_option_description() -> None:
                     "b": {
                         "title": "B",
                         "description": "Just B",
+                        "minimum": 1,
                         "type": "integer",
                     },
                 }

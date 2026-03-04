@@ -3,9 +3,12 @@ title: AG2 Beta Agent Communication
 sidebarTitle: Beta Agent Communication
 ---
 
-AG2 beta provides a lower-level, event-driven runtime for agent communication via `autogen.beta`.
+<Warning>
+`autogen.beta` is under active development and may introduce breaking changes between releases.
+For production workloads, prefer the stable APIs documented in the User Guide and API References.
+</Warning>
 
-This page focuses on how the new `Agent` communicates across turns, tools, and human input.
+AG2 beta provides a lower-level, event-driven runtime for agent communication via `autogen.beta`.
 
 ## Core Communication Primitives
 
@@ -123,11 +126,6 @@ async def main() -> None:
 
 asyncio.run(main())
 ```
-
-<Warning>
-`autogen.beta` is under active development and may introduce breaking changes between releases.
-For production workloads, prefer the stable APIs documented in the User Guide and API References.
-</Warning>
 
 ## Observe Communication with `MemoryStream`
 

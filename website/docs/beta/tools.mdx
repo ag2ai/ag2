@@ -1,0 +1,155 @@
+---
+title: Agent Tools
+sidebarTitle: Agent Tools
+---
+
+# Agent Tools
+
+## Agent Tools creation
+
+Tools is a regular Python function that can be used to extend the capabilities of an agent.
+
+To create a regular tool, you can use the `tool` decorator.
+
+```python linenums="1"
+from autogen.beta import tool
+
+@tool
+def my_tool(a: str, b: int) -> str:
+    """Tool description."""
+    return ""
+```
+
+Then you can pass the tool to created agent.
+
+```python
+from autogen.beta import Agent
+
+agent = Agent(..., tools=[my_tool])
+```
+
+!!! note
+    In basic cases you can pass a tool function directly without decorating to the agent. It creates a regular tool under the hood.
+
+    ```python linenums="1"
+    from autogen.beta import Agent
+
+    def my_tool(a: str, b: int) -> str:
+        """Tool description."""
+        return ""
+
+    agent = Agent(..., tools=[my_tool])
+    ```
+
+### Decorator registration
+
+Alternatively, you can register tool as an agent method.
+
+```python linenums="1"
+from autogen.beta import Agent
+
+agent = Agent()
+
+@agent.tool
+def my_tool(a: str, b: int) -> str:
+    """Tool description."""
+    return ""
+```
+
+## Sync or async tools
+
+By default, tools are executed asynchronously. But you can decalre your function as synchronous or asynchronous both. Any synchronous will be called in a thread by default - it could be useful to prevent event loop blocking while CPU-bound operations are performed.
+
+```python linenums="1"
+# This tool will be called in a thread
+@tool
+def sync_tool(a: str, b: int) -> str:
+    """Tool description."""
+    return ""
+
+# This tool will be called as is, without updates
+@tool
+async def async_tool(a: str, b: int) -> str:
+    """Tool description."""
+    return ""
+```
+
+But, you can change this behavior by passing `sync_to_thread=False` to the `tool` decorator.
+
+```python linenums="1"
+# This tool will be called as is, without updates
+@tool(sync_to_thread=False)
+def sync_tool(a: str, b: int) -> str:
+    """Tool description."""
+    return ""
+```
+
+In this case, the tool will be called in asynchronous context without any updates. Be accurate with it - it could lead to event loop blocking until the tool completes.
+
+## Tools schema customization
+
+By default, tool schema will be generated from the function signature, name and docstring. But you can customize it manually if you want
+
+```python linenums="1"
+@tool(name="custom_name", description="Tool description.")
+def my_tool(a: str, b: int) -> str:
+    return ""
+```
+
+By default, we are using [pydantic](https://docs.pydantic.dev/latest/){.external-link target="_blank"} schemas to serialize arguments. Sp, you can use any `pydantic.Field` annotations to customize the schema parameters.
+
+```python linenums="1"
+from typing import Annotated
+from pydantic import Field
+
+@tool
+def my_tool(
+    a: Annotated[str, Field(..., description="A description.")],
+    b: Annotated[int, Field(..., description="B description.")],
+) -> str:
+    return ""
+```
+
+So, the full custom schema example should look like this:
+
+
+```python linenums="1"
+from autogen.beta import tool
+
+@tool(
+    name="custom_tool_name",
+    description="Tool description.",
+)
+def my_tool(
+    a: Annotated[str, Field(..., description="A description.")],
+    b: Annotated[int, Field(..., description="B description.", ge=1)],
+) -> str:
+    return ""
+```
+
+```json
+{
+    'description': 'Tool description.',
+    'name': 'custom_tool_name',
+    'parameters': {
+        'properties': {
+            'a': {
+                'description': 'A description.',
+                'title': 'A',
+                'type': 'string'
+            },
+            'b': {
+                'description': 'B description.',
+                'minimum': 1,
+                'title': 'B',
+                'type': 'integer'
+            }
+        },
+        'required': [
+            'a',
+            'b'
+        ],
+        'type': 'object'
+    }
+}
+```
