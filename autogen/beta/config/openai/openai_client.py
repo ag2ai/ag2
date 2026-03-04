@@ -16,13 +16,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     ToolCall,
     ToolCalls,
-    ToolResults,
 )
 from autogen.beta.tools import Tool
+
+from .mappers import convert_messages, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -98,41 +98,18 @@ class OpenAIClient(LLMClient):
         ctx: Context,
         tools: Iterable[Tool],
     ) -> None:
-        openai_messages = self._convert_messages(ctx.prompt, messages)
+        openai_messages = convert_messages(ctx.prompt, messages)
 
         response = await self._client.chat.completions.create(
             **self._create_options,
             messages=openai_messages,
-            tools=[self._tool_to_api(t) for t in tools],
+            tools=[tool_to_api(t) for t in tools],
         )
 
         if self._streaming:
             await self._process_stream(response, ctx)
         else:
             await self._process_completion(response, ctx)
-
-    @staticmethod
-    def _tool_to_api(t: Tool) -> dict[str, Any]:
-        d = t.schema.to_api()
-        d["function"]["parameters"] = {"additionalProperties": False} | d["function"]["parameters"]
-        return d
-
-    def _convert_messages(
-        self,
-        system_prompt: Iterable[str],
-        messages: tuple[BaseEvent, ...],
-    ) -> list[dict[str, str]]:
-        # legacy prompt message format
-        result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
-
-        for message in messages:
-            if isinstance(message, (ModelRequest, ModelResponse)):
-                result.append(message.to_api())
-            elif isinstance(message, ToolResults):
-                for r in message.results:
-                    result.append(r.to_api())
-
-        return result
 
     async def _process_completion(
         self,

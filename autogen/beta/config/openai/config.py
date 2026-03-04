@@ -11,8 +11,8 @@ from openai._types import Omit
 
 from autogen.beta.config.config import ModelConfig
 
-from .openai_client import CreateOptions, OpenAIClient
-from .openai_responses_client import OpenAIResponsesClient, ReasoningEffort
+from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
+from .openai_responses_client import OpenAIResponsesClient
 
 
 class OpenAIConfigOverrides(TypedDict, total=False):

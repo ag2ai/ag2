@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from typing import Any, Literal, Required, TypedDict
+from typing import Any, Required, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given, omit
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
@@ -33,7 +33,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools import Tool
 
-ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+from .mappers import tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -93,26 +93,17 @@ class OpenAIResponsesClient(LLMClient):
         input_items = self._convert_input(messages)
         instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
-        tools_list = [self._tool_to_api(t) for t in tools]
-
         response = await self._client.responses.create(
             **self._create_options,
             input=input_items,
             instructions=instructions,
-            tools=tools_list if tools_list else not_given,
+            tools=[tool_to_api(t) for t in tools] or omit,
         )
 
         if self._streaming:
             await self._process_stream(response, ctx)
         else:
             await self._process_response(response, ctx)
-
-    @staticmethod
-    def _tool_to_api(t: Tool) -> dict[str, Any]:
-        d = t.schema.function.model_dump(exclude_none=True)
-        d["type"] = "function"
-        d["parameters"] = {"additionalProperties": False} | d["parameters"]
-        return d
 
     def _convert_input(
         self,
