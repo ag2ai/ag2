@@ -15,13 +15,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     ToolCall,
     ToolCalls,
-    ToolResults,
 )
 from autogen.beta.tools import Tool
+
+from .mappers import convert_messages, tool_to_api
 
 OLLAMA_DEFAULT_HOST = "http://localhost:11434"
 
@@ -56,8 +56,8 @@ class OllamaClient(LLMClient):
         ctx: Context,
         tools: Iterable[Tool],
     ) -> None:
-        ollama_messages = self._convert_messages(ctx.prompt, messages)
-        tools_list = [self._tool_to_api(t) for t in tools]
+        ollama_messages = convert_messages(ctx.prompt, messages)
+        tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}
         if self._create_options:
@@ -70,53 +70,6 @@ class OllamaClient(LLMClient):
             await self._call_streaming(ollama_messages, kwargs, ctx)
         else:
             await self._call_non_streaming(ollama_messages, kwargs, ctx)
-
-    def _convert_messages(
-        self,
-        system_prompt: Iterable[str],
-        messages: tuple[BaseEvent, ...],
-    ) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
-
-        for message in messages:
-            if isinstance(message, ModelRequest):
-                result.append({"role": "user", "content": message.content})
-            elif isinstance(message, ModelResponse):
-                msg: dict[str, Any] = {
-                    "role": "assistant",
-                    "content": message.message.content if message.message else "",
-                }
-                tool_calls = [
-                    {
-                        "function": {
-                            "name": c.name,
-                            "arguments": json.loads(c.arguments) if c.arguments else {},
-                        },
-                    }
-                    for c in message.tool_calls.calls
-                ]
-                if tool_calls:
-                    msg["tool_calls"] = tool_calls
-                result.append(msg)
-            elif isinstance(message, ToolResults):
-                for r in message.results:
-                    result.append({
-                        "role": "tool",
-                        "content": r.content,
-                    })
-
-        return result
-
-    @staticmethod
-    def _tool_to_api(t: Tool) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": t.schema.function.name,
-                "description": t.schema.function.description,
-                "parameters": t.schema.function.parameters,
-            },
-        }
 
     async def _call_non_streaming(
         self,

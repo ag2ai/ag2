@@ -22,13 +22,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     ToolCall,
     ToolCalls,
-    ToolResults,
 )
 from autogen.beta.tools import Tool
+
+from .mappers import convert_messages, tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -72,10 +72,10 @@ class AnthropicClient(LLMClient):
         ctx: Context,
         tools: Iterable[Tool],
     ) -> None:
-        anthropic_messages = self._convert_messages(messages)
+        anthropic_messages = convert_messages(messages)
         system_prompt = "\n\n".join(ctx.prompt) if ctx.prompt else NOT_GIVEN
 
-        tools_list = [self._tool_to_api(t) for t in tools]
+        tools_list = [tool_to_api(t) for t in tools]
 
         if self._streaming:
             async with self._client.messages.stream(
@@ -93,52 +93,6 @@ class AnthropicClient(LLMClient):
                 tools=tools_list if tools_list else NOT_GIVEN,
             )
             await self._process_response(response, ctx)
-
-    @staticmethod
-    def _tool_to_api(t: Tool) -> dict[str, Any]:
-        return {
-            "name": t.schema.function.name,
-            "description": t.schema.function.description,
-            "input_schema": t.schema.function.parameters,
-        }
-
-    def _convert_messages(
-        self,
-        messages: tuple[BaseEvent, ...],
-    ) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-
-        for message in messages:
-            if isinstance(message, ModelRequest):
-                result.append({
-                    "role": "user",
-                    "content": message.content,
-                })
-            elif isinstance(message, ModelResponse):
-                content: list[dict[str, Any]] = []
-                if message.message:
-                    content.append({"type": "text", "text": message.message.content})
-                for call in message.tool_calls.calls:
-                    content.append({
-                        "type": "tool_use",
-                        "id": call.id,
-                        "name": call.name,
-                        "input": json.loads(call.arguments),
-                    })
-                if content:
-                    result.append({"role": "assistant", "content": content})
-            elif isinstance(message, ToolResults):
-                tool_results = [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": r.parent_id,
-                        "content": r.content,
-                    }
-                    for r in message.results
-                ]
-                result.append({"role": "user", "content": tool_results})
-
-        return result
 
     async def _process_response(
         self,

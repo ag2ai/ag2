@@ -16,13 +16,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     ToolCall,
     ToolCalls,
-    ToolResults,
 )
 from autogen.beta.tools import Tool
+
+from .mappers import convert_messages, tool_to_api
 
 
 class CreateConfig(TypedDict, total=False):
@@ -55,10 +55,10 @@ class GeminiClient(LLMClient):
         ctx: Context,
         tools: Iterable[Tool],
     ) -> None:
-        contents = self._convert_messages(messages)
+        contents = convert_messages(messages)
         system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
-        tool_declarations = [types.FunctionDeclaration(**self._tool_to_api(t)) for t in tools]
+        tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in tools]
         gemini_tools = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else None
 
         config = types.GenerateContentConfig(
@@ -82,55 +82,6 @@ class GeminiClient(LLMClient):
                 config=config,
             )
             await self._process_response(response, ctx)
-
-    @staticmethod
-    def _tool_to_api(t: Tool) -> dict[str, Any]:
-        return {
-            "name": t.schema.function.name,
-            "description": t.schema.function.description,
-            "parameters": t.schema.function.parameters,
-        }
-
-    def _convert_messages(
-        self,
-        messages: tuple[BaseEvent, ...],
-    ) -> list[types.Content]:
-        result: list[types.Content] = []
-
-        for message in messages:
-            if isinstance(message, ModelRequest):
-                result.append(
-                    types.Content(
-                        role="user",
-                        parts=[types.Part.from_text(text=message.content)],
-                    )
-                )
-            elif isinstance(message, ModelResponse):
-                parts: list[types.Part] = []
-                if message.message:
-                    parts.append(types.Part.from_text(text=message.message.content))
-                for call in message.tool_calls.calls:
-                    fc_part = types.Part.from_function_call(
-                        name=call.name,
-                        args=json.loads(call.arguments),
-                    )
-                    if "thought_signature" in call.provider_data:
-                        fc_part.thought_signature = call.provider_data["thought_signature"]
-                    parts.append(fc_part)
-                if parts:
-                    result.append(types.Content(role="model", parts=parts))
-            elif isinstance(message, ToolResults):
-                parts_list: list[types.Part] = []
-                for r in message.results:
-                    parts_list.append(
-                        types.Part.from_function_response(
-                            name=r.name if hasattr(r, "name") else "",
-                            response={"result": r.content},
-                        )
-                    )
-                result.append(types.Content(role="user", parts=parts_list))
-
-        return result
 
     async def _process_response(
         self,

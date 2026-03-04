@@ -27,6 +27,11 @@ def convert_messages(
 
 
 def tool_to_api(t: Tool) -> dict[str, Any]:
-    d = t.schema.to_api()
-    d["function"]["parameters"] = {"additionalProperties": False} | d["function"]["parameters"]
-    return d
+    return {
+        "type": "function",
+        "function": {
+            "name": t.schema.function.name,
+            "description": t.schema.function.description,
+            "parameters": {"additionalProperties": False} | t.schema.function.parameters,
+        },
+    }

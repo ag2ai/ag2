@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.dashscope import DashScopeClient
+from autogen.beta.config.dashscope.mappers import tool_to_api
 
 from .._helpers import make_tool
 
 
 def test_tool_to_api() -> None:
-    api_tool = DashScopeClient._tool_to_api(make_tool())
+    api_tool = tool_to_api(make_tool())
 
     assert api_tool == {
         "type": "function",
