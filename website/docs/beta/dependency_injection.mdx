@@ -11,7 +11,7 @@ Dependency Injection (DI) is a design pattern used to pass complex objects or se
 
 ## Dependencies
 
-The key difference between [Variables](./variables.mdx){.internal-link} and Dependencies is their intended use case. Variables are designed to pass lightweight, serializable state (like strings, flags, or configuration IDs) between the LLM, tools, and agents. Dependencies, on the other hand, are meant for complex objects that have specific behaviors and lifecycle management, such as database connections, HTTP sessions, or clients for external APIs.
+The key difference between [Variables](../variables){.internal-link} and Dependencies is their intended use case. Variables are designed to pass lightweight, serializable state (like strings, flags, or configuration IDs) between the LLM, tools, and agents. Dependencies, on the other hand, are meant for complex objects that have specific behaviors and lifecycle management, such as database connections, HTTP sessions, or clients for external APIs.
 
 ### Agent Dependencies
 
@@ -73,11 +73,11 @@ def query_database(query: str, ctx: Context) -> str:
     return f"Result: {result}"
 ```
 
-## Special Dependency Access
+## Accessing Dependencies with Inject
 
-Instead of passing the entire context object, you can explicitly request specific dependencies directly in your tool's function signature. This makes your tool's requirements clear and automatically handles validation.
+Instead of passing the entire context object, you can explicitly request specific dependencies directly in your tool's function signature. This approach clarifies your tool's requirements and automatically handles validation.
 
-The `Inject` annotation allows you to pull a dependency from the dictionary by its key. By default, it looks for a key matching the argument's name.
+Use the `Inject` annotation to pull a dependency from the context dictionary by its key. By default, `Inject` looks for a key that matches the argument's name.
 
 ```python linenums="1" hl_lines="8"
 from typing import Annotated
@@ -92,7 +92,7 @@ def fetch_data(
     pass
 ```
 
-If your argument name differs from the dependency key, you can provide the key explicitly:
+If your argument name differs from the dependency key, you can provide the exact key explicitly:
 
 ```python linenums="1" hl_lines="5"
 @tool
@@ -104,9 +104,8 @@ def fetch_data(
     pass
 ```
 
-!!! note
-    Improtant remark: all such annotations has no effect on the tool schema for the LLM.
-    It's just a technical detail for the framework to inject the dependency into the function.
+!!! note "LLM Tool Schema"
+    Dependency injection annotations (like `Inject` and `Depends`) do not affect the tool schema provided to the LLM. They are purely an internal framework mechanism for injecting dependencies into your functions.
 
 ## Dependencies with Default Values
 
