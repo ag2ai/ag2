@@ -23,6 +23,8 @@ This post walks through the [build-with-ag2](https://github.com/ag2ai/build-with
 
 ## The Research Pipeline
 
+![Research pipeline — eight agents in two rows with HITL feedback loop](img/pipeline.webp)
+
 The example uses AG2's `DefaultPattern` to run eight agents in sequence. Each is a separate `ConversableAgent` with its own system message and dedicated tool function. When a tool returns, it explicitly hands off to the next agent via `AgentNameTarget` -- the same pattern described in AG2's [pipeline cookbook](https://docs.ag2.ai/latest/docs/user-guide/agentchat/group-chat/sequential-chats):
 
 1. **Chief Editor** (`init_research`) — receives the query, creates a `GPTResearcher` instance
@@ -39,8 +41,6 @@ The Human Review step is first-class in this pipeline, not optional. `present_fo
 If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
 
 ## How Agents and UI Connect
-
-![Research pipeline — eight agents in two rows with HITL feedback loop](img/pipeline.svg)
 
 AG2's `DefaultPattern` coordinates the eight agents as a group chat. Rather than a single orchestrator deciding who speaks next, each agent makes that decision itself: when its tool function returns, the result includes a `target` naming the next agent by name. The pipeline sequence is deterministic by construction -- no LLM needed to decide the order -- though the Human Review agent does use LLM conditions to branch after human feedback: loop back to the Researcher if the user wants more research, or advance to the Writer if they approve. A shared `ContextVariables` dictionary flows through every tool call, carrying pipeline state -- active agent, stage, query, source count, and eventually the finished report -- readable and writable by any step in the chain.
 
@@ -970,10 +970,11 @@ The pipeline itself is straightforward to extend. Because each agent is a separa
 
 The human-in-the-loop step can also be extended. Right now there's one `RevertToUserTarget()` at the Human Review stage. Adding a second review checkpoint after the Writer produces a draft -- with its own approve/feedback cycle -- is a matter of another agent with the same pattern.
 
+**Clone and run it from AG2's [Build with AG2 repository](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/gpt-researcher) and make it your own!**
+
 ## Learn More
 
 - [GPT Researcher documentation](https://docs.gptr.dev/) — Assaf Elovic's full documentation for GPT Researcher
 - [AG2 integration guide](https://docs.gptr.dev/docs/gpt-researcher/multi_agents/ag2) — the original AG2 integration docs from the GPT Researcher team
-- [Sample code on GitHub](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/gpt-researcher)
 - [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) — DeepResearchTool vs. GPT Researcher comparison
 - [AG-UI protocol](/docs/user-guide/ag-ui/) — streaming agent state to a frontend
