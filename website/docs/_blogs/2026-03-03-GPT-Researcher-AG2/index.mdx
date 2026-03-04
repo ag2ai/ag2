@@ -1,0 +1,364 @@
+---
+title: "Building Research Reports with GPT Researcher and AG2"
+authors: [marklysze]
+tags:
+    - Research
+    - Multi-Agent
+    - GPT Researcher
+    - Tools
+    - AG-UI
+date: 2026-03-03
+slug: GPT-Researcher-AG2
+---
+
+![GPT Researcher x AG2](img/gpt-researcher-ag2.webp)
+
+Ask an LLM to research a topic and write a report. It'll produce something -- sometimes quite good. But probe the sources, check the claims, or ask for substantial revisions and the limitations show up fast. The agent that searched the web is also the one drawing conclusions from it. There's no review step between research and writing. Errors and gaps pass straight through to the final document.
+
+The fix isn't a better prompt. It's division of labor.
+
+[GPT Researcher](https://docs.gptr.dev/), created by [Assaf Elovic](https://github.com/assafelovic), is built on this idea: eight specialized agents, each with a distinct job, working through a five-stage pipeline. A researcher gathers, an editor outlines, a reviewer challenges the findings, a revisor incorporates the feedback, and a writer only touches finalized content. Every handoff is a quality check.
+
+This post walks through the [build-with-ag2](https://github.com/ag2ai/build-with-ag2/tree/main/gpt-researcher) example, which runs the full GPT Researcher pipeline with **AG2 as the orchestration layer**. The example ships with two run modes -- a terminal script and a web UI built on [AG-UI](https://docs.ag2.ai/latest/docs/user-guide/ag-ui/) that shows pipeline progress in real time and supports human-in-the-loop feedback from the browser.
+
+## The Research Pipeline
+
+The eight agents each have a distinct role:
+
+- **Chief Editor** — manages the team and keeps the process on track
+- **Researcher** — conducts autonomous investigation using GPT Researcher's search capabilities
+- **Editor** — structures the research outline before writing begins
+- **Reviewer** — validates gathered research against quality criteria
+- **Revisor** — implements the reviewer's feedback, looping back through the data
+- **Writer** — compiles the final report from the revised research
+- **Publisher** — formats and outputs the report in your chosen formats
+- **Human** — participates at any stage for oversight and course-correction
+
+Because the Human agent is backed by AG2's `UserProxyAgent`, human oversight is wired into the pipeline from the start -- not bolted on as a post-processing step. Set `"include_human_feedback": true` in `task.json` and the Chief Editor pauses at key stages, routing your feedback directly to the next agent before proceeding. You can redirect the research plan before data gathering begins, or steer a section that goes in an unexpected direction, and the pipeline responds accordingly. The web UI makes this interactive: the research plan appears in your browser for review, and your feedback is submitted directly from the UI.
+
+### Parallel Research with Isolated State
+
+When investigating multiple sub-topics, the Researcher agent spawns nested sub-graphs -- one per sub-question -- each with isolated state. This avoids race conditions when results are written back and significantly reduces total research time for multi-section reports.
+
+If you're already building AG2 workflows -- tool-calling agents, group chats, swarms -- the GPT Researcher pipeline slots in without a second orchestration framework. The Human agent, the streaming UI, and any other AG2 tools you want to add all work with the same primitives you already use. If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
+
+## Getting the Sample Code
+
+Clone the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository and navigate to the GPT Researcher example:
+
+```bash
+git clone https://github.com/ag2ai/build-with-ag2.git
+cd build-with-ag2/gpt-researcher
+pip install -r requirements.txt
+```
+
+You'll need two API keys: OpenAI for the LLM, and [Tavily](https://tavily.com/) for web search (Assaf's own search API, with a free tier):
+
+```bash
+export OPENAI_API_KEY=your_openai_key
+export TAVILY_API_KEY=your_tavily_key
+```
+
+## Running the Research
+
+The sample includes two run modes.
+
+### Terminal Mode
+
+Open `task.json`, set your query, and run:
+
+```bash
+python -m main
+```
+
+With `"verbose": true`, you'll see each agent's activity as it happens:
+
+```console
+Chief Editor: Planning research for "Is AI in a hype cycle?"
+Editor: Structuring research outline...
+Researcher: Investigating sub-topic 1 of 3...
+Researcher: Investigating sub-topic 2 of 3...
+Researcher: Investigating sub-topic 3 of 3...
+Reviewer: Validating research quality...
+Revisor: Applying reviewer feedback (revision 1/3)...
+Writer: Compiling final report...
+Publisher: Exporting to markdown, pdf, docx...
+```
+
+The finished report appears in your output directory in all configured formats.
+
+### Web UI Mode (AG-UI)
+
+For a live view of the pipeline as it runs, start the AG-UI server:
+
+```bash
+python -m server
+```
+
+Then open `http://localhost:8457` in your browser. The UI shows which agent is currently active, the current pipeline stage, and the final report when it's ready.
+
+The backend is a `ConversableAgent` orchestrator wrapped with `AGUIStream`. As the research pipeline progresses, it updates `ContextVariables` to track the active agent and stage -- AG-UI automatically broadcasts these as `STATE_SNAPSHOT` events to the frontend.
+
+```python title="server.py"
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Annotated
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.ag_ui import AGUIStream
+
+load_dotenv()
+
+
+def load_task() -> dict:
+    return json.loads(Path("task.json").read_text())
+
+
+async def run_research(
+    query: Annotated[str, "The research question to investigate"],
+    context_variables: dict,
+) -> str:
+    """Run the full GPT Researcher pipeline and return the completed report.
+
+    context_variables is injected by AG2 and mutated in place. AGUIStream detects
+    changes and emits STATE_SNAPSHOT events to the frontend automatically.
+    """
+    from multi_agents_ag2.agents.orchestrator import ChiefEditorAgent
+
+    task = {**load_task(), "query": query}
+
+    # Signal that research has started — the frontend highlights "Chief Editor"
+    # and shows "planning" as the current stage.
+    context_variables["stage"] = "planning"
+    context_variables["active_agent"] = "Chief Editor"
+
+    chief_editor = ChiefEditorAgent(task)
+    result = await chief_editor.run_research_task()
+
+    context_variables["stage"] = "complete"
+    context_variables["active_agent"] = "Publisher"
+    return result.get("report", "")
+
+
+# The orchestrator is a standard ConversableAgent. run_research is registered
+# as a tool — AG2 injects context_variables when it calls the function.
+orchestrator = ConversableAgent(
+    name="research_orchestrator",
+    system_message=(
+        "You are a research coordinator. When given a research topic, "
+        "call run_research and return the completed report to the user."
+    ),
+    llm_config=LLMConfig({"model": "gpt-4o", "stream": True}),
+    functions=[run_research],
+)
+
+# AGUIStream wraps the agent and translates its activity into AG-UI SSE events.
+stream = AGUIStream(orchestrator)
+
+app = FastAPI()
+app.mount("/research", stream.build_asgi())
+
+
+@app.get("/")
+async def serve_frontend() -> FileResponse:
+    return FileResponse("frontend.html")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8457)
+```
+
+The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress panel in real time:
+
+<details markdown="1">
+<summary>frontend.html — full source (click to expand)</summary>
+
+```html title="frontend.html"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GPT Researcher + AG2</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #f5f5f5; }
+
+        /* Left: research input and report output */
+        .main { flex: 1; display: flex; flex-direction: column; padding: 24px; gap: 16px; }
+        .main h2 { font-size: 20px; }
+        .input-row { display: flex; gap: 8px; }
+        .input-row input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; }
+        .input-row button { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
+        .input-row button:disabled { opacity: 0.5; }
+        .report { flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 16px; background: #fff; white-space: pre-wrap; font-size: 14px; line-height: 1.7; }
+
+        /* Right: pipeline progress panel */
+        .pipeline { width: 280px; display: flex; flex-direction: column; border-left: 1px solid #ddd; padding: 24px; background: #fff; gap: 12px; }
+        .pipeline h2 { font-size: 16px; }
+        .stage-label { font-size: 13px; color: #666; }
+        .stage-value { font-size: 15px; font-weight: 600; color: #1a73e8; }
+        .agents { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+        .agent { padding: 8px 12px; border-radius: 6px; font-size: 13px; border: 1px solid #eee; transition: all 0.2s; }
+        .agent.active { background: #e8f0fe; border-color: #1a73e8; font-weight: 600; color: #1a73e8; }
+    </style>
+</head>
+<body>
+    <div class="main">
+        <h2>GPT Researcher + AG2</h2>
+        <div class="input-row">
+            <input type="text" id="query" placeholder="Enter your research question..." autofocus>
+            <button id="run" onclick="startResearch()">Research</button>
+        </div>
+        <div class="report" id="report">Your report will appear here.</div>
+    </div>
+
+    <div class="pipeline">
+        <h2>Pipeline</h2>
+        <div class="stage-label">Current stage</div>
+        <div class="stage-value" id="stage">Waiting</div>
+        <div class="agents" id="agents">
+            <div class="agent" data-name="Chief Editor">Chief Editor</div>
+            <div class="agent" data-name="Editor">Editor</div>
+            <div class="agent" data-name="Researcher">Researcher</div>
+            <div class="agent" data-name="Reviewer">Reviewer</div>
+            <div class="agent" data-name="Revisor">Revisor</div>
+            <div class="agent" data-name="Writer">Writer</div>
+            <div class="agent" data-name="Publisher">Publisher</div>
+        </div>
+    </div>
+
+    <script>
+    const queryEl = document.getElementById('query');
+    const runBtn = document.getElementById('run');
+    const reportEl = document.getElementById('report');
+    const stageEl = document.getElementById('stage');
+
+    function setActiveAgent(name) {
+        document.querySelectorAll('.agent').forEach(el => {
+            el.classList.toggle('active', el.dataset.name === name);
+        });
+    }
+
+    function updateFromSnapshot(state) {
+        if (state.stage) stageEl.textContent = state.stage.replace('_', ' ');
+        if (state.active_agent) setActiveAgent(state.active_agent);
+    }
+
+    async function startResearch() {
+        const query = queryEl.value.trim();
+        if (!query) return;
+
+        runBtn.disabled = true;
+        reportEl.textContent = '';
+        stageEl.textContent = 'Starting...';
+
+        const payload = {
+            threadId: 'research-thread',
+            runId: 'run-' + Date.now(),
+            messages: [{ id: '1', role: 'user', content: query }],
+            state: {}, context: [], tools: [], forwardedProps: {},
+        };
+
+        let reportText = '';
+
+        try {
+            const response = await fetch('/research/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                body: JSON.stringify(payload),
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        switch (event.type) {
+                            // STATE_SNAPSHOT: update the pipeline panel
+                            case 'STATE_SNAPSHOT':
+                                updateFromSnapshot(event.snapshot);
+                                break;
+                            case 'TEXT_MESSAGE_CONTENT':
+                                reportText += event.delta || '';
+                                reportEl.textContent = reportText;
+                                break;
+                        }
+                    } catch (e) { /* skip parse errors */ }
+                }
+            }
+        } finally {
+            runBtn.disabled = false;
+            stageEl.textContent = 'Complete';
+            setActiveAgent('');
+        }
+    }
+
+    queryEl.addEventListener('keydown', e => { if (e.key === 'Enter') startResearch(); });
+    </script>
+</body>
+</html>
+```
+
+</details>
+
+The key part is the `STATE_SNAPSHOT` handler: whenever the pipeline transitions to a new agent or stage, the backend updates `context_variables` and AG-UI automatically pushes those changes to the browser. The frontend uses the `active_agent` value to highlight the current agent in the pipeline panel, and `stage` to update the status label -- no polling required.
+
+### Human in the Loop
+
+Set `"include_human_feedback": true` in `task.json` and the pipeline pauses for your input at key stages:
+
+```json
+{
+  "query": "Competitive landscape of vector databases in 2026",
+  "include_human_feedback": true,
+  "max_sections": 5,
+  "max_revisions": 2,
+  "model": "gpt-4o",
+  "publish_formats": { "markdown": true }
+}
+```
+
+In the web UI, the input field stays active while the pipeline is running. When the Human agent is invoked, the Chief Editor sends a message asking for your feedback, the UI displays it, and the pipeline waits. Your response goes directly to the next agent in the chain.
+
+## Customization and Next Steps
+
+**Tuning the output** via `task.json`:
+
+- **`max_sections`** — three sections gives a focused summary; increase to 6-8 for comprehensive analysis
+- **`max_revisions`** — more cycles mean more thorough review, at the cost of additional LLM calls
+- **`publish_formats`** — enable `pdf` and `docx` alongside `markdown` for distributable reports
+- **`follow_guidelines`** + **`guidelines`** — enforce formatting rules such as APA citations, specific languages, or required source linking
+- **`model`** — use a cheaper model for fast drafts, a more capable one for production
+
+**Extending the pipeline:**
+
+The AG2 orchestration layer makes it straightforward to add agents or tools. A few ideas:
+
+- A **fact-checking agent** that cross-references claims against trusted sources before the Reviewer sees them
+- A **citation formatter** tool registered to the Writer for automatic reference list generation
+- A **notification agent** that posts a summary to Slack or email when the report is complete -- AG2's [communication platform tools](/docs/user-guide/reference-tools/communication-platforms/slack) make this a few lines of code
+
+## Learn More
+
+- [GPT Researcher documentation](https://docs.gptr.dev/) — Assaf Elovic's full documentation for GPT Researcher
+- [AG2 integration guide](https://docs.gptr.dev/docs/gpt-researcher/multi_agents/ag2) — the original AG2 integration docs from the GPT Researcher team
+- [Sample code on GitHub](https://github.com/ag2ai/build-with-ag2/tree/main/gpt-researcher)
+- [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) — DeepResearchTool vs. GPT Researcher comparison
+- [AG-UI protocol](/docs/user-guide/ag-ui/) — streaming agent state to a frontend
