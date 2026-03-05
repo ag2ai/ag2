@@ -7,7 +7,6 @@
 from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
-from .eligibility_policy import AgentDescriptionGuard, AgentEligibilityPolicy, SelectionContext
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
@@ -16,6 +15,7 @@ from .contrib.swarm_agent import (
     run_swarm,
 )
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
+from .eligibility_policy import AgentDescriptionGuard, AgentEligibilityPolicy, SelectionContext
 from .group import ContextVariables, ReplyResult
 from .group.multi_agent_chat import (
     a_initiate_group_chat,
@@ -31,12 +31,12 @@ from .utils import gather_usage_summary
 
 __all__ = [
     "Agent",
+    "AgentDescriptionGuard",
     "AgentEligibilityPolicy",
     "AssistantAgent",
     "ChatResult",
     "ContextVariables",
     "ConversableAgent",
-    "AgentDescriptionGuard",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",

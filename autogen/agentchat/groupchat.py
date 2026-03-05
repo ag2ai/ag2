@@ -339,9 +339,7 @@ class GroupChat:
         )
 
         eligible = [
-            agent
-            for agent in agents
-            if all(policy.is_eligible(agent, ctx) for policy in self.eligibility_policies)
+            agent for agent in agents if all(policy.is_eligible(agent, ctx) for policy in self.eligibility_policies)
         ]
 
         if not eligible:

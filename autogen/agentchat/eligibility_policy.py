@@ -79,7 +79,7 @@ class AgentEligibilityPolicy(Protocol):
         A class with the wrong arity will fail at call time, not at registration.
     """
 
-    def is_eligible(self, agent: "Agent", ctx: SelectionContext) -> bool:
+    def is_eligible(self, agent: Agent, ctx: SelectionContext) -> bool:
         """Return True if agent should be included in the candidate set.
 
         Args:
@@ -104,7 +104,7 @@ class AgentDescriptionGuard:
     when it is unavailable (e.g. circuit breaker open).  Restore on recovery.
     """
 
-    def __init__(self, agent: "Agent") -> None:
+    def __init__(self, agent: Agent) -> None:
         self._agent = agent
         self._original_description: str | None = None
         self._lock = threading.Lock()

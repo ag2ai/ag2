@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from autogen import AgentEligibilityPolicy, ConversableAgent, GroupChat, NoEligibleSpeakerError, SelectionContext
+from autogen import ConversableAgent, GroupChat, NoEligibleSpeakerError, SelectionContext
 
 
 def _make_agent(name: str) -> ConversableAgent:
@@ -66,10 +66,7 @@ def _get_candidates(gc: GroupChat, last_speaker) -> list[str]:
     """Helper: call _prepare_and_select_agents and return names."""
     result = gc._prepare_and_select_agents(last_speaker)
     # result is a tuple (selected_agent, agents_list, messages)
-    if isinstance(result, tuple):
-        agents_list = result[1]
-    else:
-        agents_list = result
+    agents_list = result[1] if isinstance(result, tuple) else result
     if agents_list is None:
         return []
     return [a.name for a in agents_list]
@@ -108,12 +105,8 @@ def test_all_agents_ineligible_raises():
 
 def test_no_policies_all_agents_eligible():
     alice, bob = _make_agent("alice"), _make_agent("bob")
-    gc_with = GroupChat(
-        agents=[alice, bob], messages=[], max_round=5, speaker_selection_method="round_robin"
-    )
-    gc_without = GroupChat(
-        agents=[alice, bob], messages=[], max_round=5, speaker_selection_method="round_robin"
-    )
+    gc_with = GroupChat(agents=[alice, bob], messages=[], max_round=5, speaker_selection_method="round_robin")
+    gc_without = GroupChat(agents=[alice, bob], messages=[], max_round=5, speaker_selection_method="round_robin")
     # Both should not raise
     try:
         gc_with._prepare_and_select_agents(alice)
@@ -290,7 +283,6 @@ class TestAdversarialGroupChatEligibility:
         )
         # Should not crash — Python's `all()` accepts truthy values
         result = gc._prepare_and_select_agents(alice)
-        selected = result[0] if isinstance(result, tuple) else result
         candidates = result[1] if isinstance(result, tuple) else result
         assert len(candidates) == 2  # both alice and bob pass the truthy policy
 
