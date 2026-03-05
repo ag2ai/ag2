@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import copy
 import logging
 import os
 import warnings
@@ -1010,24 +1009,16 @@ class OpenAIResponsesClient:
                 continue
 
             if item_type == "message":
-                new_item = copy.deepcopy(item)
-                new_item["type"] = "text"
-                new_item["role"] = "assistant"
-
                 blocks = item.get("content", [])
-                if len(blocks) == 1 and blocks[0].get("type") == "output_text":
-                    new_item["text"] = blocks[0]["text"]
-                elif len(blocks) > 0:
-                    # Handle multiple content blocks
-                    text_parts = []
-                    for block in blocks:
-                        if block.get("type") == "output_text":
-                            text_parts.append(block.get("text", ""))
-                    new_item["text"] = " ".join(text_parts)
-
-                if "content" in new_item:
-                    del new_item["content"]
-                content.append(new_item)
+                text_parts = []
+                for block in blocks:
+                    if block.get("type") == "output_text":
+                        text_parts.append(block.get("text", ""))
+                content.append({
+                    "type": "text",
+                    "role": "assistant",
+                    "text": " ".join(text_parts) if text_parts else "",
+                })
                 continue
 
             # ------------------------------------------------------------------

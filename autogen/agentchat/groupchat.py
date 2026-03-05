@@ -1577,7 +1577,7 @@ class GroupChatManager(ConversableAgent):
 
         try:
             self._valid_resume_messages(messages)
-        except:
+        except Exception:
             raise
 
         # Load the messages into the group chat
@@ -1680,7 +1680,7 @@ class GroupChatManager(ConversableAgent):
 
         try:
             self._valid_resume_messages(messages)
-        except:
+        except Exception:
             raise
 
         # Load the messages into the group chat
