@@ -36,7 +36,6 @@ from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
 from .contrib.capabilities import transform_messages
 from .conversable_agent import ConversableAgent
-from .eligibility_policy import AgentEligibilityPolicy, SelectionContext
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,6 @@ class GroupChat:
                 1. an `Agent` class, it must be one of the agents in the group chat.
                 2. a string from ['auto', 'manual', 'random', 'round_robin'] to select a default method to use.
                 3. None, which would terminate the conversation gracefully.
-            When this is a Callable that returns an Agent directly, eligibility_policies are not applied to that agent.
             ```python
             def custom_speaker_selection_func(
                 last_speaker: Agent, groupchat: GroupChat
@@ -130,13 +128,6 @@ class GroupChat:
     - select_speaker_auto_model_client_cls: Custom model client class for the internal speaker select agent used during 'auto' speaker selection (optional)
     - select_speaker_auto_llm_config: LLM config for the internal speaker select agent used during 'auto' speaker selection (optional)
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
-    - eligibility_policies: list of :class:`AgentEligibilityPolicy` to filter candidate
-        agents before speaker selection. All policies must return ``True`` for an agent
-        to be considered eligible (AND semantics). Default is ``[]`` (no filtering).
-
-        Note:
-            Policies are **not** applied when ``speaker_selection_method`` is a
-            Callable that returns an :class:`Agent` directly.
     """
 
     agents: list[Agent]
@@ -174,7 +165,6 @@ class GroupChat:
     select_speaker_auto_model_client_cls: ModelClient | list[ModelClient] | None = None
     select_speaker_auto_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None
     role_for_select_speaker_messages: str | None = "system"
-    eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
     _VALID_SPEAKER_TRANSITIONS_TYPE = ["allowed", "disallowed", None]
@@ -309,47 +299,6 @@ class GroupChat:
         # Validate select_speaker_auto_verbose
         if self.select_speaker_auto_verbose is None or not isinstance(self.select_speaker_auto_verbose, bool):
             raise ValueError("select_speaker_auto_verbose cannot be None or non-bool")
-
-    def _apply_eligibility_policies(
-        self,
-        agents: list["Agent"],
-        last_speaker: "Agent | None",
-        round_index: int,
-    ) -> list["Agent"]:
-        """Filter agents through registered eligibility policies (AND semantics).
-
-        Args:
-            agents: Current candidate agent list.
-            last_speaker: The agent that spoke last, or None for first round.
-            round_index: The current round index (number of messages so far).
-
-        Returns:
-            Filtered list of agents. All input agents if no policies registered.
-
-        Raises:
-            NoEligibleSpeakerError: If all agents are filtered out by eligibility policies.
-        """
-        if not self.eligibility_policies:
-            return agents
-
-        ctx = SelectionContext(
-            round=round_index,
-            last_speaker=last_speaker.name if last_speaker is not None else None,
-            participants=tuple(a.name for a in self.agents),
-        )
-
-        eligible = [
-            agent for agent in agents if all(policy.is_eligible(agent, ctx) for policy in self.eligibility_policies)
-        ]
-
-        if not eligible:
-            raise NoEligibleSpeakerError(
-                f"No eligible agents after applying eligibility policies. "
-                f"Checked {len(agents)} candidates: {[a.name for a in agents]}. "
-                f"Applied {len(self.eligibility_policies)} policy/policies."
-            )
-
-        return eligible
 
     @property
     def agent_names(self) -> list[str]:
@@ -549,7 +498,6 @@ class GroupChat:
                 "or use direct communication, unless repeated speaker is desired."
             )
 
-        _policies_applied = False  # track if policies already applied in func_call_filter path
         if (
             self.func_call_filter
             and self.messages
@@ -565,33 +513,15 @@ class GroupChat:
 
             # find agents with the right function_map which contains the function name
             agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
-            if agents:
-                # Eligibility policies are applied before allow_repeat_speaker exclusion
-                # (line below). Policies are therefore evaluated against last_speaker even
-                # when allow_repeat_speaker=False; the repeat exclusion removes last_speaker
-                # from the final candidate set afterwards regardless.
-                agents = self._apply_eligibility_policies(
-                    agents,
-                    last_speaker=last_speaker,
-                    round_index=len(self.messages),
-                )
-                _policies_applied = True
-                if len(agents) == 1:
-                    # only one agent can execute the function
-                    return agents[0], agents, None
-            else:
+            if len(agents) == 1:
+                # only one agent can execute the function
+                return agents[0], agents, None
+            elif not agents:
                 # find all the agents with function_map
                 agents = [agent for agent in self.agents if agent.function_map]
-                if agents:
-                    agents = self._apply_eligibility_policies(
-                        agents,
-                        last_speaker=last_speaker,
-                        round_index=len(self.messages),
-                    )
-                    _policies_applied = True
-                    if len(agents) == 1:
-                        return agents[0], agents, None
-                else:
+                if len(agents) == 1:
+                    return agents[0], agents, None
+                elif not agents:
                     raise ValueError(
                         f"No agent can execute the function {', '.join(funcs)}. "
                         "Please check the function_map of the agents."
@@ -617,24 +547,13 @@ class GroupChat:
                 agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
             ]
 
+        # If there is only one eligible agent, just return it to avoid the speaker selection prompt
+        if len(graph_eligible_agents) == 1:
+            return graph_eligible_agents[0], graph_eligible_agents, None
+
         # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
         if len(graph_eligible_agents) == 0:
             graph_eligible_agents = None
-
-        # Apply eligibility policies (runtime filtering)
-        # When graph_eligible_agents is None, all agents are eligible per graph rules
-        candidates = graph_eligible_agents if graph_eligible_agents is not None else agents
-        if not _policies_applied:
-            candidates = self._apply_eligibility_policies(
-                candidates,
-                last_speaker=last_speaker,
-                round_index=len(self.messages),
-            )
-        graph_eligible_agents = candidates
-
-        # If there is only one eligible agent after policy filtering, just return it to avoid the speaker selection prompt
-        if len(graph_eligible_agents) == 1:
-            return graph_eligible_agents[0], graph_eligible_agents, None
 
         # Use the selected speaker selection method
         select_speaker_messages = None
@@ -1575,7 +1494,7 @@ class GroupChatManager(ConversableAgent):
 
         try:
             self._valid_resume_messages(messages)
-        except Exception:
+        except:
             raise
 
         # Load the messages into the group chat
@@ -1678,7 +1597,7 @@ class GroupChatManager(ConversableAgent):
 
         try:
             self._valid_resume_messages(messages)
-        except Exception:
+        except:
             raise
 
         # Load the messages into the group chat
