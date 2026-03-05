@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -32,7 +32,7 @@ from pydantic_core import to_jsonable_python
 
 from autogen import ConversableAgent
 from autogen.agentchat import ContextVariables
-from autogen.agentchat.remote import AgentService, RequestMessage
+from autogen.agentchat.remote import AgentService, RequestMessage, ServiceResponse
 from autogen.doc_utils import export_module
 
 try:
@@ -48,8 +48,14 @@ def _get_timestamp() -> int:
 
 @export_module("autogen.ag_ui")
 class AGUIStream:
-    def __init__(self, agent: ConversableAgent) -> None:
+    def __init__(
+        self,
+        agent: ConversableAgent,
+        *,
+        event_interceptors: Iterable[Callable[[ServiceResponse], AsyncIterator[BaseEvent]]] = (),
+    ) -> None:
         self.__agent = agent
+        self.__event_interceptors = event_interceptors
         self.service = AgentService(agent)
 
     async def dispatch(
@@ -76,6 +82,7 @@ class AGUIStream:
                 AGStreamInput(incoming=incoming, context=state),
                 self.service,
                 write_events_stream,
+                self.__event_interceptors,
             )
 
             # EventEncoder typed incompletely, so we need to ignore the type error
@@ -103,6 +110,7 @@ async def run_stream(
     command: AGStreamInput,
     service: AgentService,
     write_events_stream: MemoryObjectSendStream[BaseEvent],
+    event_interceptors: Iterable[Callable[[ServiceResponse], AsyncIterator[BaseEvent]]],
 ) -> None:
     client_tools = []
     client_tools_names: set[str] = set()
@@ -142,6 +150,10 @@ async def run_stream(
 
             streaming_msg_id: str | None = None
             async for response in service(request):
+                for interceptor in event_interceptors:
+                    async for r in interceptor(response):
+                        await write_events_stream.send(r)
+
                 if response.streaming_text:
                     if not streaming_msg_id:
                         streaming_msg_id = str(uuid4())
