@@ -2,8 +2,102 @@
 title: Deep Research
 ---
 
-We are excited to unveil [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool), a powerful autonomous research capability within our **AG2** framework. Inspired by [OpenAI's Deep Research](https://openai.com/index/introducing-deep-research), our tool is designed to tackle complex, multi-step research tasks efficiently, synthesizing insights from diverse online sources.
+AG2 recommends two approaches for autonomous deep research: the built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) and the [GPT Researcher](https://docs.gptr.dev/) multi-agent integration.
+
+**DeepResearchTool** is a composable AG2 tool that any agent can call directly. It is the right choice when you want research capabilities tightly integrated into your AG2-based agent, without a separate orchestration layer.
+
+**GPT Researcher** is a standalone research agent with a built-in orchestration pipeline optimized for recursive querying and structured report generation. It is a good choice when you want a pre-built, highly configurable research agent that can operate independently or alongside other AG2 agents.
+
+## DeepResearchTool
+
+Inspired by [OpenAI's Deep Research](https://openai.com/index/introducing-deep-research), [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is designed to tackle complex, multi-step research tasks, synthesizing insights from diverse online sources.
 
 import DeepResearch from "/snippets/reference-tools/deep-research.mdx";
 
 <DeepResearch/>
+
+## GPT Researcher
+
+[GPT Researcher](https://docs.gptr.dev/) is an autonomous research agent that orchestrates a team of specialized agents to produce comprehensive research reports. The [AG2 integration](https://docs.gptr.dev/docs/gpt-researcher/multi_agents/ag2) uses AG2 as the orchestration layer for the research pipeline.
+
+### Research Team
+
+The pipeline coordinates eight specialized agents:
+
+- **Chief Editor** — manages the team and oversees the research process
+- **Researcher** — conducts autonomous, in-depth topic investigation using GPT Researcher
+- **Editor** — plans the research structure and outline
+- **Reviewer** — validates results against established criteria
+- **Revisor** — refines findings based on reviewer feedback
+- **Writer** — compiles the final report
+- **Publisher** — outputs the report in multiple formats (Markdown, PDF, Docx)
+- **Human** — provides optional oversight and feedback at any stage
+
+### Installation
+
+Clone the GPT Researcher repository and install the dependencies:
+
+```bash
+git clone https://github.com/assafelovic/gpt-researcher.git
+cd gpt-researcher
+pip install -r requirements.txt
+pip install -r multi_agents_ag2/requirements.txt
+```
+
+### Environment Setup
+
+```bash
+export OPENAI_API_KEY={your_openai_key}
+export TAVILY_API_KEY={your_tavily_key}
+```
+
+A [Tavily API key](https://tavily.com/) is required for web search.
+
+### Configure the Research Task
+
+Customize the research task by editing `multi_agents_ag2/task.json`:
+
+```json
+{
+  "query": "Is AI in a hype cycle?",
+  "max_sections": 3,
+  "max_revisions": 3,
+  "publish_formats": {
+    "markdown": true,
+    "pdf": true,
+    "docx": true
+  },
+  "include_human_feedback": false,
+  "follow_guidelines": false,
+  "model": "gpt-4o",
+  "guidelines": [
+    "The report MUST be written in APA format",
+    "Each sub section MUST include supporting sources using hyperlinks."
+  ],
+  "verbose": true
+}
+```
+
+| Parameter | Description |
+|---|---|
+| `query` | The research question |
+| `max_sections` | Maximum number of report sections |
+| `max_revisions` | Maximum revision cycles per section |
+| `publish_formats` | Output formats: `markdown`, `pdf`, `docx` |
+| `include_human_feedback` | Whether to prompt for human input during research |
+| `model` | LLM model to use |
+| `follow_guidelines` | Whether to enforce the `guidelines` list |
+
+### Run the Research
+
+```bash
+python -m multi_agents_ag2.main
+```
+
+The pipeline runs through five stages: planning, data gathering and analysis, quality review and revision, writing, and publishing.
+
+### Resources
+
+- [GPT Researcher documentation](https://docs.gptr.dev/)
+- [AG2 integration guide](https://docs.gptr.dev/docs/gpt-researcher/multi_agents/ag2)
+- [Source code on GitHub](https://github.com/assafelovic/gpt-researcher/tree/main/multi_agents_ag2)

@@ -432,7 +432,7 @@ class TestBuiltInTools:
         # Verify tools were passed
         call_kwargs = client.client.responses.create.call_args[1]
         tools = call_kwargs.get("tools", [])
-        assert any(t.get("type") == "web_search_preview" for t in tools)
+        assert any(t.get("type") == "web_search" for t in tools)
 
         # Verify citations extracted
         citations = OpenAIResponsesV2Client.get_citations(response)
