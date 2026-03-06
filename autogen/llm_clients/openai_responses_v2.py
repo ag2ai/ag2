@@ -1711,7 +1711,7 @@ class OpenAIResponsesV2Client(ModelClient):
     ) -> dict[str, Any]:
         """Build web search tool configuration.
 
-        Creates the tool configuration dict for the web_search_preview built-in tool
+        Creates the tool configuration dict for the web_search built-in tool
         with optional parameters for customization.
 
         Args:
@@ -1729,9 +1729,9 @@ class OpenAIResponsesV2Client(ModelClient):
                 "user_location": {"type": "approximate", "city": "San Francisco"},
                 "search_context_size": "medium"
             })
-            # Returns: {"type": "web_search_preview", "user_location": {...}, "search_context_size": "medium"}
+            # Returns: {"type": "web_search", "user_location": {...}, "search_context_size": "medium"}
         """
-        tool_config: dict[str, Any] = {"type": "web_search_preview"}
+        tool_config: dict[str, Any] = {"type": "web_search"}
 
         # Merge instance-level web search params
         effective_config = {**self.web_search_params}
