@@ -1,0 +1,31 @@
+SAAS SUBSCRIPTION AGREEMENT
+Effective Date: January 15, 2025
+Between: Acme Corp ("Provider") and GlobalTech Inc ("Customer")
+
+1. SERVICES. Provider grants Customer a non-exclusive, non-transferable license
+to access the CloudSync Platform for the Subscription Term. Service availability
+target is 99.9% monthly uptime, measured excluding scheduled maintenance windows
+(Sundays 02:00-06:00 UTC).
+
+2. FEES. Customer shall pay $12,500/month, billed annually in advance ($150,000).
+Late payments accrue interest at 1.5% per month. Provider may suspend access after
+30 days of non-payment. Fees increase by up to 7% upon renewal unless negotiated.
+
+3. DATA. Customer retains all ownership of Customer Data. Provider may process
+Customer Data solely to deliver the Services. Upon termination, Provider shall
+export Customer Data in CSV format within 30 days, then delete all copies within
+90 days. Provider maintains SOC 2 Type II certification.
+
+4. TERM. Initial term is 24 months. Auto-renews for successive 12-month periods
+unless either party provides 90 days written notice of non-renewal. Early
+termination by Customer requires payment of 50% of remaining fees.
+
+5. LIABILITY. Provider's total aggregate liability shall not exceed fees paid in
+the 12 months preceding the claim. Neither party is liable for indirect,
+consequential, or punitive damages. This limitation does not apply to breaches
+of confidentiality or data protection obligations.
+
+6. INDEMNIFICATION. Provider indemnifies Customer against third-party IP
+infringement claims arising from use of the Platform as permitted herein.
+Customer indemnifies Provider against claims arising from Customer Data or
+Customer's violation of applicable law.

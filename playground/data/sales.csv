@@ -1,0 +1,62 @@
+date,product,region,category,units_sold,unit_price,cost_per_unit,customer_segment
+2025-01-05,Widget Pro,North America,Hardware,120,49.99,22.50,Enterprise
+2025-01-05,Widget Pro,Europe,Hardware,85,54.99,22.50,Enterprise
+2025-01-05,DataSync Lite,North America,Software,340,19.99,3.00,SMB
+2025-01-05,DataSync Lite,Asia Pacific,Software,210,17.99,3.00,SMB
+2025-01-12,Widget Pro,North America,Hardware,135,49.99,22.50,Enterprise
+2025-01-12,CloudBridge,Europe,Software,95,99.99,15.00,Enterprise
+2025-01-12,DataSync Lite,North America,Software,310,19.99,3.00,SMB
+2025-01-19,Widget Pro,Asia Pacific,Hardware,60,52.99,22.50,SMB
+2025-01-19,CloudBridge,North America,Software,120,99.99,15.00,Enterprise
+2025-01-19,DataSync Lite,Europe,Software,180,21.99,3.00,Consumer
+2025-01-26,Widget Pro,North America,Hardware,145,49.99,22.50,Enterprise
+2025-01-26,SensorPack,Asia Pacific,Hardware,75,34.99,18.00,Enterprise
+2025-01-26,CloudBridge,North America,Software,110,99.99,15.00,Enterprise
+2025-02-02,Widget Pro,Europe,Hardware,90,54.99,22.50,Enterprise
+2025-02-02,DataSync Lite,North America,Software,355,19.99,3.00,SMB
+2025-02-02,SensorPack,North America,Hardware,95,34.99,18.00,SMB
+2025-02-09,CloudBridge,Asia Pacific,Software,65,89.99,15.00,Enterprise
+2025-02-09,Widget Pro,North America,Hardware,150,49.99,22.50,Enterprise
+2025-02-09,DataSync Lite,Europe,Software,200,21.99,3.00,Consumer
+2025-02-16,Widget Pro,North America,Hardware,160,49.99,22.50,Enterprise
+2025-02-16,CloudBridge,North America,Software,130,99.99,15.00,Enterprise
+2025-02-16,SensorPack,Europe,Hardware,55,37.99,18.00,Enterprise
+2025-02-23,DataSync Lite,Asia Pacific,Software,225,17.99,3.00,SMB
+2025-02-23,Widget Pro,Europe,Hardware,78,54.99,22.50,SMB
+2025-02-23,CloudBridge,North America,Software,125,99.99,15.00,Enterprise
+2025-03-02,Widget Pro,North America,Hardware,175,49.99,22.50,Enterprise
+2025-03-02,DataSync Lite,North America,Software,380,19.99,3.00,SMB
+2025-03-02,SensorPack,Asia Pacific,Hardware,88,34.99,18.00,Enterprise
+2025-03-09,CloudBridge,Europe,Software,105,109.99,15.00,Enterprise
+2025-03-09,Widget Pro,Asia Pacific,Hardware,70,52.99,22.50,SMB
+2025-03-09,DataSync Lite,North America,Software,365,19.99,3.00,Consumer
+2025-03-16,Widget Pro,North America,Hardware,180,49.99,22.50,Enterprise
+2025-03-16,CloudBridge,North America,Software,140,99.99,15.00,Enterprise
+2025-03-16,SensorPack,North America,Hardware,102,34.99,18.00,SMB
+2025-03-23,DataSync Lite,Europe,Software,195,21.99,3.00,SMB
+2025-03-23,Widget Pro,Europe,Hardware,82,54.99,22.50,Enterprise
+2025-03-23,CloudBridge,Asia Pacific,Software,72,89.99,15.00,Enterprise
+2025-03-30,Widget Pro,North America,Hardware,155,49.99,22.50,Enterprise
+2025-03-30,DataSync Lite,Asia Pacific,Software,240,17.99,3.00,SMB
+2025-03-30,SensorPack,Europe,Hardware,60,37.99,18.00,Enterprise
+2025-04-06,CloudBridge,North America,Software,145,99.99,15.00,Enterprise
+2025-04-06,Widget Pro,North America,Hardware,165,49.99,22.50,Enterprise
+2025-04-06,DataSync Lite,North America,Software,390,19.99,3.00,SMB
+2025-04-13,Widget Pro,Europe,Hardware,88,54.99,22.50,SMB
+2025-04-13,SensorPack,Asia Pacific,Hardware,92,34.99,18.00,Enterprise
+2025-04-13,CloudBridge,Europe,Software,115,109.99,15.00,Enterprise
+2025-04-20,DataSync Lite,North America,Software,400,19.99,3.00,Consumer
+2025-04-20,Widget Pro,Asia Pacific,Hardware,75,52.99,22.50,SMB
+2025-04-20,CloudBridge,North America,Software,155,99.99,15.00,Enterprise
+2025-04-27,Widget Pro,North America,Hardware,190,49.99,22.50,Enterprise
+2025-04-27,SensorPack,North America,Hardware,110,34.99,18.00,Enterprise
+2025-04-27,DataSync Lite,Europe,Software,210,21.99,3.00,SMB
+2025-05-04,CloudBridge,North America,Software,160,99.99,15.00,Enterprise
+2025-05-04,Widget Pro,Europe,Hardware,95,54.99,22.50,Enterprise
+2025-05-04,DataSync Lite,Asia Pacific,Software,250,17.99,3.00,SMB
+2025-05-11,Widget Pro,North America,Hardware,200,49.99,22.50,Enterprise
+2025-05-11,SensorPack,Europe,Hardware,68,37.99,18.00,SMB
+2025-05-11,CloudBridge,Asia Pacific,Software,80,89.99,15.00,Enterprise
+2025-05-18,DataSync Lite,North America,Software,415,19.99,3.00,Consumer
+2025-05-18,Widget Pro,North America,Hardware,185,49.99,22.50,Enterprise
+2025-05-18,CloudBridge,North America,Software,165,99.99,15.00,Enterprise

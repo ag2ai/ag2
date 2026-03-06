@@ -1,0 +1,36 @@
+DATA PROCESSING AGREEMENT
+Effective Date: January 15, 2025
+Between: Acme Corp ("Processor") and GlobalTech Inc ("Controller")
+
+1. SCOPE. This DPA applies to all Personal Data processed by Processor on behalf
+of Controller under the SaaS Subscription Agreement dated January 15, 2025.
+Processing activities include storage, indexing, analytics, and backup of
+customer records containing names, email addresses, and usage metadata.
+
+2. OBLIGATIONS OF PROCESSOR. Processor shall: (a) process Personal Data only on
+documented instructions from Controller; (b) ensure personnel are bound by
+confidentiality; (c) implement appropriate technical and organizational security
+measures including AES-256 encryption at rest and TLS 1.3 in transit;
+(d) assist Controller with data subject access requests within 10 business days;
+(e) delete or return all Personal Data upon termination per the main Agreement.
+
+3. SUB-PROCESSORS. Processor currently uses: AWS (us-east-1, eu-west-1) for
+infrastructure, Datadog for monitoring, and Snowflake for analytics. Processor
+shall notify Controller 30 days before engaging new sub-processors. Controller
+may object within 14 days; unresolved objections entitle Controller to terminate
+the affected service without penalty.
+
+4. INTERNATIONAL TRANSFERS. Transfers outside the EEA rely on Standard
+Contractual Clauses (EU 2021/914, Module 2). Processor shall conduct Transfer
+Impact Assessments annually and notify Controller of government access requests
+unless legally prohibited.
+
+5. BREACH NOTIFICATION. Processor shall notify Controller of any Personal Data
+breach without undue delay and no later than 48 hours after becoming aware.
+Notification shall include nature of breach, categories of data affected,
+approximate number of records, and remediation measures taken.
+
+6. AUDIT RIGHTS. Controller may audit Processor's compliance once per year with
+30 days notice. Processor shall make available all information necessary to
+demonstrate compliance. Controller bears audit costs unless the audit reveals
+material non-compliance.

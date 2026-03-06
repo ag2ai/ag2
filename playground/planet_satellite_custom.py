@@ -137,7 +137,10 @@ async def main() -> None:
 
     async def _log(event: object) -> None:
         if isinstance(event, SatelliteFlag):
-            print(f"  [flag] [{event.severity}] {event.message}")
+            print(
+                f"  \033[33m[flag]\033[0m  [{event.severity}] {event.message}",
+                flush=True,
+            )
 
     stream.subscribe(_log)
 

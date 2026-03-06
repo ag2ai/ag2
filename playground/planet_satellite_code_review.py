@@ -137,15 +137,29 @@ async def main() -> None:
     print(f"{'=' * 70}\n")
 
     stream = MemoryStream()
+    _speaker = ""
 
     async def _log(event: object) -> None:
+        nonlocal _speaker
         if isinstance(event, TaskSatelliteRequest):
+            _speaker = ""
             label = event.task[:50].replace("\n", " ")
-            print(f"  [spawn] {event.satellite_name}: {label}...")
+            print(
+                f"\n  \033[32m[spawn]\033[0m {event.satellite_name}: {label}...",
+                flush=True,
+            )
         elif isinstance(event, TaskSatelliteResult):
-            print(f"  [done]  {event.satellite_name}: {len(event.result)} chars")
+            _speaker = ""
+            print(
+                f"\n  \033[32m[done]\033[0m  {event.satellite_name}: "
+                f"{len(event.result)} chars",
+                flush=True,
+            )
         elif isinstance(event, SatelliteFlag):
-            print(f"  [flag]  [{event.severity}] {event.message}")
+            print(
+                f"\n  \033[33m[flag]\033[0m  [{event.severity}] {event.message}",
+                flush=True,
+            )
 
     stream.subscribe(_log)
 

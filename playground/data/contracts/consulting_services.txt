@@ -1,0 +1,39 @@
+CONSULTING SERVICES AGREEMENT
+Effective Date: March 1, 2025
+Between: Acme Corp ("Consultant") and GlobalTech Inc ("Client")
+
+1. SERVICES. Consultant shall provide cloud migration advisory services as
+described in each Statement of Work ("SOW"). Initial SOW covers assessment and
+planning for migration of Client's on-premise ERP system to AWS, estimated at
+480 consultant-hours over 12 weeks.
+
+2. FEES. Consultant charges $275/hour for Senior Consultants and $175/hour for
+Associates. Invoiced monthly in arrears, net-30 payment terms. Travel expenses
+reimbursed at cost with prior approval for amounts exceeding $500. Total
+engagement cap for the initial SOW is $180,000 unless Client approves overruns
+in writing.
+
+3. DELIVERABLES. Key deliverables: (a) Current State Assessment (Week 4),
+(b) Migration Architecture Document (Week 8), (c) Risk Assessment and
+Mitigation Plan (Week 10), (d) Final Migration Roadmap (Week 12). Client has
+10 business days to review each deliverable. Acceptance is deemed granted if
+no written objection is received within the review period.
+
+4. INTELLECTUAL PROPERTY. All pre-existing IP remains with its owner. Work
+product created specifically for Client under this Agreement ("Deliverables")
+is owned by Client upon full payment. Consultant retains a license to use
+general methodologies, frameworks, and know-how developed during the engagement.
+
+5. CONFIDENTIALITY. Each party shall protect Confidential Information with the
+same degree of care as its own, but no less than reasonable care, for 3 years
+after disclosure. Confidential Information excludes information that is publicly
+available, independently developed, or rightfully received from a third party.
+
+6. TERMINATION. Either party may terminate with 30 days written notice. Client
+pays for all work completed and expenses incurred through the termination date.
+Consultant shall deliver all work-in-progress materials within 10 business days
+of termination. Non-solicitation of each other's employees applies for 12 months.
+
+7. LIABILITY. Consultant's liability is capped at the fees paid under the
+applicable SOW. Consultant carries professional liability insurance of at least
+$2,000,000 per occurrence.

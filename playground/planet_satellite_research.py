@@ -87,10 +87,6 @@ planet = PlanetAgent(
 # Run
 # ---------------------------------------------------------------------------
 
-# Track which satellites are currently writing (for parallel streaming)
-_active_satellites: dict[str, bool] = {}
-
-
 async def main() -> None:
     topic = (
         "The impact of AI on software engineering productivity in 2025: "
@@ -102,44 +98,51 @@ async def main() -> None:
     print(f"{'=' * 70}\n")
 
     stream = MemoryStream()
+    _speaker = ""
 
-    # Real-time event observer
     async def _on_event(event: object) -> None:
+        nonlocal _speaker
         if isinstance(event, SatelliteStarted):
             print(f"  [satellite] {event.name} attached", flush=True)
 
         elif isinstance(event, TaskSatelliteRequest):
-            _active_satellites[event.satellite_name] = True
+            _speaker = ""
             print(
-                f"\n  [spawn] {event.satellite_name}: "
+                f"\n  \033[32m[spawn]\033[0m {event.satellite_name}: "
                 f"{event.task[:60]}...",
                 flush=True,
             )
 
         elif isinstance(event, TaskSatelliteProgress):
-            # Stream satellite output token-by-token
+            if _speaker != event.satellite_name:
+                _speaker = event.satellite_name
+                print(
+                    f"\n\033[2m  [Satellite: {event.satellite_name}] >\033[0m\n",
+                    flush=True,
+                )
             sys.stdout.write(f"\033[2m{event.content}\033[0m")
             sys.stdout.flush()
 
         elif isinstance(event, TaskSatelliteResult):
-            _active_satellites.pop(event.satellite_name, None)
+            _speaker = ""
             print(
-                f"\n  [done]  {event.satellite_name}: "
+                f"\n  \033[32m[done]\033[0m  {event.satellite_name}: "
                 f"{len(event.result)} chars",
                 flush=True,
             )
 
-        elif isinstance(event, ModelMessageChunk):
-            # Stream planet's synthesis output
-            if not _active_satellites:  # only when planet is writing
-                sys.stdout.write(event.content)
-                sys.stdout.flush()
-
         elif isinstance(event, SatelliteFlag):
             print(
-                f"\n  [flag]  [{event.severity}] {event.message}",
+                f"\n  \033[33m[flag]\033[0m  [{event.severity}] {event.message}",
                 flush=True,
             )
+
+        elif isinstance(event, ModelMessageChunk):
+            if _speaker != "planet":
+                _speaker = "planet"
+                print(f"\n\033[1;36m  [Planet: Research Director] >\033[0m\n", flush=True)
+            sys.stdout.write(event.content)
+            sys.stdout.flush()
 
     stream.subscribe(_on_event)
 
