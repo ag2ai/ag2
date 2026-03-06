@@ -31,10 +31,11 @@ Each guardrail monitors specific conditions and takes appropriate action when th
 
 ## Types of Guardrails
 
-AG2 provides two main types of guardrails:
+AG2 provides three main types of guardrails:
 
 - **Regex (Regular Expression) Guardrails**: Use pattern matching to detect specific text patterns
 - **LLM Guardrails**: Use large language models to understand context and meaning
+- **Tool Call LLM Guardrails**: Check tool call names and arguments suggested by agents, using LLM-based inspection
 
 ### Regex Guardrails
 
@@ -80,6 +81,36 @@ privacy_violation_guardrail = LLMGuardrail(
     activation_message="Privacy violation detected - routing to security review"
 )
 ```
+
+### Tool Call LLM Guardrails
+
+Tool Call LLM Guardrails (`ToolCallLLMGuardrail`) allow you to inspect and control agent tool call suggestions, by reviewing the tool name and its arguments before execution. You define a condition (such as "arguments contain PII or dangerous commands") that is evaluated by an LLM, letting you block, allow, or redirect tool calls based on their details.
+
+This guardrail can be used as either an **output guardrail** (when the agent's reply contains tool_calls) or an **input guardrail** (when a message in context contains tool_calls to be screened before agent action).
+
+For example, you can register a tool-call guardrail on an assistant in a group chat such that all tool call arguments are checked before any tool is executed:
+
+```python
+from autogen import AssistantAgent
+from autogen.agentchat.group.guardrails import ToolCallLLMGuardrail
+from autogen.agentchat.group.targets.transition_target import StayTarget
+from autogen.llm_config import LLMConfig
+
+llm_config = LLMConfig(model="gpt-4o-mini", api_key="...", api_type="openai")
+
+tool_call_guardrail = ToolCallLLMGuardrail(
+    name="tool_safety",
+    condition="arguments contain harmful or illegal content.",
+    target=StayTarget(),
+    llm_config=llm_config,
+)
+
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+assistant.register_output_guardrail(tool_call_guardrail)
+# The guardrail will now inspect tool call arguments in the assistant's replies.
+```
+
+If condition is met, the guardrail prevents/redirects tool execution. See [Guardrails](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails) documentation for placement and type strategies.
 
 ## Guardrail Placement
 
@@ -190,12 +221,23 @@ data_leak_guardrail = LLMGuardrail(
     activation_message="Potential data leak detected - routing to compliance"
 )
 
+# Tool call guardrail to detect unsafe or unwanted tool call arguments
+tool_call_guardrail = ToolCallLLMGuardrail(
+    name="tool_safety",
+    condition="arguments contain PII or dangerous commands.",
+    target=AgentTarget(compliance_agent),
+    llm_config=llm_config,
+    activation_message="Unsafe tool call detected - routing to compliance review"
+)
+
 # Register input guardrails (monitor incoming messages for edge cases)
 support_agent.register_input_guardrail(sensitive_info_guardrail)
 support_agent.register_input_guardrail(inappropriate_request_guardrail)
 
 # Register output guardrails (monitor responses for accidental data exposure)
 support_agent.register_output_guardrail(data_leak_guardrail)
+# Register the tool call output guardrail (monitors tool call outputs)
+support_agent.register_output_guardrail(tool_call_guardrail)
 ```
 
 ### Running the System
@@ -280,6 +322,11 @@ flowchart LR
   - Complex policy enforcement
   - Nuanced content understanding
 
+- **Use Tool Call LLM guardrails for:**
+  - Validating tool name and argument content
+  - Preventing unsafe tool use or sensitive data exfiltration via tools
+  - Blocking or redirecting tool executions based on business/security rules
+
 ### Placement Strategy
 
 - **Input guardrails:** Use for preprocessing, content filtering, and routing
@@ -289,6 +336,7 @@ flowchart LR
 
 - Regex guardrails are faster and more predictable
 - LLM guardrails provide better accuracy but use more resources
+- Tool call LLM guardrails specifically act on tool call suggestions or executions
 - Consider using regex for initial filtering, then LLM for nuanced decisions
 
 ## Complete Example
@@ -299,7 +347,7 @@ Here's the full working example that demonstrates both guardrail types:
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
+from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail, ToolCallLLMGuardrail
 from autogen.agentchat.group import AgentTarget
 from dotenv import load_dotenv
 import os
@@ -352,10 +400,19 @@ data_leak_guardrail = LLMGuardrail(
     activation_message="Potential data leak detected - routing to compliance"
 )
 
+tool_call_guardrail = ToolCallLLMGuardrail(
+    name="tool_safety",
+    condition="arguments contain PII or dangerous commands.",
+    target=AgentTarget(compliance_agent),
+    llm_config=llm_config,
+    activation_message="Unsafe tool call detected - routing to compliance review"
+)
+
 # Register guardrails
 support_agent.register_input_guardrail(sensitive_info_guardrail)
 support_agent.register_input_guardrail(inappropriate_request_guardrail)
 support_agent.register_output_guardrail(data_leak_guardrail)
+support_agent.register_output_guardrail(tool_call_guardrail)
 
 # Set up pattern and run
 pattern = AutoPattern(
