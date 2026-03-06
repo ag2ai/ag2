@@ -49,13 +49,13 @@ from tools.web import browse_url, web_search
 # ---------------------------------------------------------------------------
 
 planet_config = OpenAIConfig(
-    model="gpt-4o",
+    model="gpt-5.4",
     api_key=os.environ.get("OPENAI_API_KEY"),
     streaming=True,
 )
 
 satellite_config = OpenAIConfig(
-    model="gpt-4o-mini",
+    model="gpt-5.2",
     api_key=os.environ.get("OPENAI_API_KEY"),
     streaming=True,
 )
