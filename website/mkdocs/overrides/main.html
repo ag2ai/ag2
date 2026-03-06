@@ -7,10 +7,16 @@
   {% elif page and page.title and not page.is_homepage %}
     {% set title = title ~ " - " ~ page.title | striptags %}
   {% endif %}
+  {% if page and page.meta and page.meta.description %}
+    {% set page_description = page.meta.description %}
+  {% else %}
+    {% set page_description = config.site_description %}
+  {% endif %}
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="description" content="{{ page_description }}" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="{{ title }}" />
-  <meta property="og:description" content="{{ config.site_description }}" />
+  <meta property="og:description" content="{{ page_description }}" />
   <meta property="og:url" content="{{ page.canonical_url }}" />
   <meta property="og:image" content="{{ config.extra.social_image }}" />
   <meta property="og:image:type" content="image/png" />
@@ -19,7 +25,7 @@
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{ title }}" />
-  <meta name="twitter:description" content="{{ config.site_description }}" />
+  <meta name="twitter:description" content="{{ page_description }}" />
   <meta name="twitter:image" content="{{ config.extra.social_image }}" />
 
   <!-- Default favicon (for browsers not supporting media queries) -->
