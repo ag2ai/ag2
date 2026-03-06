@@ -131,6 +131,8 @@ planet = PlanetAgent(
 async def main() -> None:
     print(f"{'=' * 70}")
     print("Market Analysis with Custom Satellite Monitoring")
+    print(f"  Planet model:    {planet_config.model}")
+    print(f"  Satellite model: {satellite_config.model}")
     print(f"{'=' * 70}\n")
 
     stream = MemoryStream()

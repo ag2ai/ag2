@@ -131,6 +131,8 @@ planet = PlanetAgent(
 async def main() -> None:
     print(f"{'=' * 70}")
     print("Multi-Perspective Code Review")
+    print(f"  Planet model:    {planet_config.model}")
+    print(f"  Satellite model: {satellite_config.model}")
     print(f"{'=' * 70}\n")
     print("Code under review:")
     print(CODE_SAMPLE)
@@ -145,7 +147,8 @@ async def main() -> None:
             _speaker = ""
             label = event.task[:50].replace("\n", " ")
             print(
-                f"\n  \033[32m[spawn]\033[0m {event.satellite_name}: {label}...",
+                f"\n  \033[32m[spawn]\033[0m {event.satellite_name} "
+                f"({satellite_config.model}): {label}...",
                 flush=True,
             )
         elif isinstance(event, TaskSatelliteResult):

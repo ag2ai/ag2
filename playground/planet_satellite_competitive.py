@@ -168,6 +168,8 @@ async def main() -> None:
     print(f"{'=' * 70}")
     print(f"Competitive Landscape Analysis")
     print(f"Topic: {topic}")
+    print(f"  Planet model:    {planet_config.model}")
+    print(f"  Satellite model: {satellite_config.model}")
     print(f"{'=' * 70}\n")
 
     stream = MemoryStream()
@@ -179,7 +181,8 @@ async def main() -> None:
             _speaker = ""
             label = event.task[:70].replace("\n", " ")
             print(
-                f"\n  \033[32m[spawn]\033[0m {event.satellite_name}: {label}...",
+                f"\n  \033[32m[spawn]\033[0m {event.satellite_name} "
+                f"({satellite_config.model}): {label}...",
                 flush=True,
             )
         elif isinstance(event, TaskSatelliteResult):
@@ -197,7 +200,7 @@ async def main() -> None:
         elif isinstance(event, ModelMessageChunk):
             if _speaker != "planet":
                 _speaker = "planet"
-                print(f"\n\033[1;36m  [Planet: Intelligence Analyst] >\033[0m\n", flush=True)
+                print(f"\n\033[1;36m  [Planet: Intelligence Analyst ({planet_config.model})] >\033[0m\n", flush=True)
             sys.stdout.write(event.content)
             sys.stdout.flush()
 
