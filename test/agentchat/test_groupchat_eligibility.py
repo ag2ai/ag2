@@ -499,6 +499,55 @@ class TestAdversarialGroupChatEligibilityDeep:
         with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._prepare_and_select_agents(bob)
 
+    def test_func_call_filter_fallback_applies_policies(self):
+        """func_call_filter fallback path: no agent can execute the specific function,
+        so GroupChat falls back to all agents with function_map. Policies must
+        still apply on this fallback set."""
+        # alice has function_map with "other_func" (not "do_stuff")
+        alice = _make_func_agent("alice", {"other_func": lambda: None})
+        # bob has function_map with "another_func" (not "do_stuff" either)
+        bob = _make_func_agent("bob", {"another_func": lambda: None})
+        carol = _make_agent("carol")
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[{"role": "assistant", "content": "", "function_call": {"name": "do_stuff"}}],
+            max_round=5,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_PolicyBlockByName("alice")],
+        )
+        # No agent can execute "do_stuff" -> fallback to all with function_map (alice, bob).
+        # Policy blocks alice -> only bob remains -> bob selected.
+        selected, candidates, _ = gc._prepare_and_select_agents(carol)
+        assert selected.name == "bob"
+        assert len(candidates) == 1
+
+    def test_func_call_filter_fallback_all_blocked_raises(self):
+        """Adversarial: func_call_filter fallback path where policy blocks ALL
+        agents with function_map. Must raise NoEligibleSpeakerError, not
+        silently fall through."""
+        alice = _make_func_agent("alice", {"other_func": lambda: None})
+        bob = _make_func_agent("bob", {"another_func": lambda: None})
+        carol = _make_agent("carol")
+
+        block_all = _PolicyBlockByName("alice")
+
+        class _BlockBoth:
+            def is_eligible(self, agent, ctx):
+                return agent.name not in ("alice", "bob")
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[{"role": "assistant", "content": "", "function_call": {"name": "do_stuff"}}],
+            max_round=5,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_BlockBoth()],
+        )
+        # No agent can execute "do_stuff" -> fallback to function_map holders (alice, bob).
+        # Policy blocks both -> NoEligibleSpeakerError.
+        with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
+            gc._prepare_and_select_agents(carol)
+
     def test_invalid_policy_rejected_at_construction(self):
         """GroupChat must reject objects that don't implement AgentEligibilityPolicy."""
         alice, bob = _make_agent("alice"), _make_agent("bob")
