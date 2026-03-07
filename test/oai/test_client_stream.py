@@ -214,9 +214,7 @@ def test__update_tool_calls_from_chunk_repeated_type() -> None:
             completion_tokens=completion_tokens,
         )
 
-    assert full_tool_call["type"] == "function", (
-        f"type should stay 'function' but got '{full_tool_call['type']}'"
-    )
+    assert full_tool_call["type"] == "function", f"type should stay 'function' but got '{full_tool_call['type']}'"
     assert full_tool_call["function"]["name"] == "my_tool"
     assert full_tool_call["function"]["arguments"] == '{"x": 1}'
 
