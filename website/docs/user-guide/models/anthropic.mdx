@@ -100,7 +100,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config_claude = autogen.LLMConfig(config_list={
+llm_config_claude = autogen.LLMConfig({
     # Choose your model name.
     "model": "claude-sonnet-4-5",
     # You need to provide your API key here.
@@ -321,17 +321,17 @@ TERMINATE
 ```python
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
-llm_config_gpt4 = autogen.LLMConfig(config_list={
+llm_config_gpt4o = autogen.LLMConfig({
     # Choose your model name.
-    "model": "gpt-4",
+    "model": "gpt-4o",
     # You need to provide your API key here.
     "api_key": os.getenv("OPENAI_API_KEY"),
     "api_type": "openai",
 })
 
-llm_config_gpt35 = autogen.LLMConfig(config_list={
+llm_config_gpt4o_mini = autogen.LLMConfig({
     # Choose your model name.
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o-mini",
     # You need to provide your API key here.
     "api_key": os.getenv("OPENAI_API_KEY"),
     "api_type": "openai",
@@ -340,13 +340,13 @@ llm_config_gpt35 = autogen.LLMConfig(config_list={
 alice = AssistantAgent(
     "Openai_agent",
     system_message="You are from OpenAI. You make arguments to support your company's position.",
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 dan = AssistantAgent(
     "Judge",
     system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 bob = autogen.AssistantAgent(
@@ -358,7 +358,7 @@ bob = autogen.AssistantAgent(
 charlie = AssistantAgent(
     "Research_Assistant",
     system_message="You are a helpful assistant to research the latest news and headlines.",
-    llm_config=llm_config_gpt35,
+    llm_config=llm_config_gpt4o_mini,
 )
 
 code_interpreter = UserProxyAgent(
@@ -394,7 +394,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 task = "Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024."
@@ -596,7 +596,7 @@ groupchat = GroupChat(
 manager = GroupChatManager(
     groupchat=groupchat,
     # is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 user_proxy.initiate_chat(manager, message=task)
@@ -818,22 +818,18 @@ As always, it will be crucial to balance the pursuit of technological advancemen
 
 You can utilize Anthropic's thinking mode by setting it in the configuration.
 
-```
-from autogen import ConversableAgent
+```python
+from autogen import ConversableAgent, LLMConfig
 
 # Here we configure the thinking mode and the token budget for thinking
-llm_config = {
-    "config_list": [
-        {
-            "model": "claude-sonnet-4-5",
-            "api_type": "anthropic",
-            "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
-            "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
-            "thinking": {"type": "enabled", "budget_tokens": 2048},
-        }
-    ],
-    # Note: don't pass in temperature or top_p to avoid exceptions in thinking mode
-}
+llm_config = LLMConfig({
+    "model": "claude-sonnet-4-5",
+    "api_type": "anthropic",
+    "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
+    "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
+    "thinking": {"type": "enabled", "budget_tokens": 2048},
+})
+# Note: don't pass in temperature or top_p to avoid exceptions in thinking mode
 
 agent = ConversableAgent(
     name="test",
