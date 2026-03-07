@@ -186,7 +186,6 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 @run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
 def test__update_tool_calls_from_chunk_repeated_type() -> None:
     """Regression test for gh-2058: some providers send type='function' in
     every chunk, which caused it to be concatenated into
@@ -202,7 +201,7 @@ def test__update_tool_calls_from_chunk_repeated_type() -> None:
             index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments='{"x"', name=None), type="function"
         ),
         ChoiceDeltaToolCall(
-            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments=': 1}', name=None), type="function"
+            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments=": 1}", name=None), type="function"
         ),
     ]
 
