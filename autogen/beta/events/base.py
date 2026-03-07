@@ -1,0 +1,105 @@
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import operator
+from collections.abc import Callable
+from types import EllipsisType
+from typing import Any
+
+from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq
+
+
+class Field:
+    def __init__(
+        self, default: Any = Ellipsis, *, default_factory: Callable[[], Any] | EllipsisType = Ellipsis
+    ) -> None:
+        self.name = ""
+
+        self.__default = default
+        self.__default_factory = default_factory
+
+    def get_default(self) -> Any:
+        if self.__default_factory is not Ellipsis:
+            return self.__default_factory()
+        return self.__default
+
+    def __get__(self, instance: Any | None, owner: type) -> Any:
+        self.event_class = owner
+        if instance is None:
+            return self
+        return instance.__dict__.get(self.name)
+
+    def __set__(self, instance: Any, value: Any) -> None:
+        instance.__dict__[self.name] = value
+
+    def __eq__(self, other: Any) -> Condition:  # type: ignore[override]
+        return OpCondition(check_eq, self.name, other, self.event_class)
+
+    def __ne__(self, other: Any) -> Condition:  # type: ignore[override]
+        return OpCondition(operator.ne, self.name, other, self.event_class)
+
+    def __lt__(self, other: Any) -> Condition:
+        return OpCondition(operator.lt, self.name, other, self.event_class)
+
+    def __le__(self, other: Any) -> Condition:
+        return OpCondition(operator.le, self.name, other, self.event_class)
+
+    def __gt__(self, other: Any) -> Condition:
+        return OpCondition(operator.gt, self.name, other, self.event_class)
+
+    def __ge__(self, other: Any) -> Condition:
+        return OpCondition(operator.ge, self.name, other, self.event_class)
+
+    def is_(self, other: Any) -> Condition:
+        return OpCondition(operator.is_, self.name, other, self.event_class)
+
+
+class EventMeta(type):
+    def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]) -> type:
+        annotations = namespace.get("__annotations__", {})
+
+        fields: dict[str, Field] = {}
+        for field_name in annotations:
+            if not (default := namespace.get(field_name)):
+                field = Field()
+            elif isinstance(default, Field):
+                field = default
+            else:
+                field = Field(default)
+
+            if not field.name:
+                field.name = field_name
+
+            fields[field_name] = namespace[field_name] = field
+
+        def __init__(self, **kwargs: Any) -> None:
+            kwargs = {
+                name: default for name, f in fields.items() if (default := f.get_default()) is not Ellipsis
+            } | kwargs
+
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        namespace["__init__"] = __init__
+
+        def __repr__(self) -> str:
+            fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items())
+            return f"{self.__class__.__name__}({fields})"
+
+        namespace["__repr__"] = __repr__
+
+        return super().__new__(mcs, name, bases, namespace)
+
+    def __or__(cls, other: Any) -> Any:
+        return TypeCondition(cls).or_(other)
+
+    def or_(cls, other: Any) -> OrCondition:
+        return TypeCondition(cls).or_(other)
+
+    def not_(cls) -> NotCondition:
+        return TypeCondition(cls).not_()
+
+
+class BaseEvent(metaclass=EventMeta):
+    pass

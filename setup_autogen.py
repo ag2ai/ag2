@@ -79,6 +79,7 @@ setuptools.setup(
         "cohere": ["ag2[cohere]==" + __version__],
         "ollama": ["ag2[ollama]==" + __version__],
         "bedrock": ["ag2[bedrock]==" + __version__],
+        "dashscope": ["ag2[dashscope]==" + __version__],
         "deepseek": ["ag2[deepseek]==" + __version__],
         "tracing": ["ag2[tracing]==" + __version__],
         "commsagent-discord": ["ag2[commsagent-discord]==" + __version__],

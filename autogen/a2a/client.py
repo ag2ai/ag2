@@ -219,9 +219,10 @@ class A2aRemoteAgent(ConversableAgent):
                     messages.append({"content": user_input, "role": "user"})
                     continue
 
-                if sender and reply.context:
+                if reply.context:
                     self.context_variables.update(reply.context)
-                    sender.context_variables.update(reply.context)
+                    if sender:
+                        sender.context_variables.update(reply.context)
 
                 return True, reply.messages[-1]
 

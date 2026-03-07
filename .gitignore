@@ -1,3 +1,6 @@
+.agents/skills
+skills-lock.json
+
 .docusaurus/
 node_modules/
 
