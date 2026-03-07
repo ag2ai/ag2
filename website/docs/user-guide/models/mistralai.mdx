@@ -14,7 +14,7 @@ You will need a Mistral.AI account and create an API key. [See their website for
 
 When using this client class, messages are automatically tailored to accommodate the specific requirements of Mistral AI's API (such as role orders), which have become more strict than OpenAI's API.
 
-Additionally, this client class provides support for function/tool calling and will track token usage and cost correctly as per Mistral AI's API costs (as of June 2024).
+Additionally, this client class provides support for function/tool calling and will track token usage and cost correctly as per Mistral AI's API costs.
 
 ## Getting started
 
@@ -43,27 +43,7 @@ See the sample `OAI_CONFIG_LIST` below showing how the Mistral AI client class i
 ```python
 [
     {
-        "model": "open-mistral-7b",
-        "api_key": "your Mistral AI API Key goes here",
-        "api_type": "mistral"
-    },
-    {
-        "model": "open-mixtral-8x7b",
-        "api_key": "your Mistral AI API Key goes here",
-        "api_type": "mistral"
-    },
-    {
-        "model": "open-mixtral-8x22b",
-        "api_key": "your Mistral AI API Key goes here",
-        "api_type": "mistral"
-    },
-    {
         "model": "mistral-small-latest",
-        "api_key": "your Mistral AI API Key goes here",
-        "api_type": "mistral"
-    },
-    {
-        "model": "mistral-medium-latest",
         "api_key": "your Mistral AI API Key goes here",
         "api_type": "mistral"
     },
@@ -73,7 +53,12 @@ See the sample `OAI_CONFIG_LIST` below showing how the Mistral AI client class i
         "api_type": "mistral"
     },
     {
-        "model": "codestral-latest",
+        "model": "open-mistral-nemo-2407",
+        "api_key": "your Mistral AI API Key goes here",
+        "api_type": "mistral"
+    },
+    {
+        "model": "codestral-2405",
         "api_key": "your Mistral AI API Key goes here",
         "api_type": "mistral"
     }
@@ -106,7 +91,7 @@ Example:
 ```python
 [
     {
-        "model": "codestral-latest",
+        "model": "codestral-2405",
         "api_key": "your Mistral AI API Key goes here",
         "api_type": "mistral",
         "temperature": 0.5,
@@ -122,7 +107,7 @@ Example:
 
 In this example, we run a two-agent chat with an AssistantAgent (primarily a coding agent) to generate code to count the number of prime numbers between 1 and 10,000 and then it will be executed.
 
-We'll use Mistral's Mixtral 8x22B model which is suitable for coding.
+We'll use Mistral AI's large model which is suitable for coding.
 
 ```python
 import os
@@ -141,8 +126,8 @@ code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
 
 # Setting up the LLM configuration
 llm_config = LLMConfig({
-    # Let's choose the Mixtral 8x22B model
-    "model": "open-mixtral-8x22b",
+    # Let's choose Mistral's large model
+    "model": "mistral-large-latest",
     # Provide your Mistral AI API key here or put it into the MISTRAL_API_KEY environment variable.
     "api_key": os.environ.get("MISTRAL_API_KEY"),
     # We specify the API Type as 'mistral' so it uses the Mistral AI client class

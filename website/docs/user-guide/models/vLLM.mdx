@@ -7,7 +7,7 @@ description: "How to use vLLM-served models with AG2. Configuration and examples
 
 [vLLM](https://github.com/vllm-project/vllm) is a locally run proxy and inference server, providing an OpenAI-compatible API. As it performs both the proxy and the inferencing, you don't need to install an additional inference server.
 
-Note: vLLM does not support OpenAI's [Function Calling](https://platform.openai.com/docs/guides/function-calling) (usable with AG2). However, it is in development and may be available by the time you read this.
+Note: vLLM supports OpenAI-compatible [Function Calling](https://platform.openai.com/docs/guides/function-calling) (tool use) when the server is started with `--enable-auto-tool-choice` and an appropriate `--tool-call-parser`. See the [vLLM tool calling documentation](https://docs.vllm.ai/en/latest/features/tool_calling.html) for supported models and configuration.
 
 Running this stack requires the installation of:
 1. AG2 ([installation instructions](/docs/user-guide/basic-concepts/installing-ag2))
@@ -68,8 +68,10 @@ starting point for your chat template. Just remember, the template may need to b
 To run vLLM with the chosen model and our chat template, in your terminal:
 
 ```bash
-python -m vllm.entrypoints.openai.api_server --model mistralai/Mistral-7B-Instruct-v0.2 --chat-template ag2mistraltemplate.jinja
+vllm serve mistralai/Mistral-7B-Instruct-v0.2 --chat-template ag2mistraltemplate.jinja
 ```
+
+Note: In older versions of vLLM, use `python -m vllm.entrypoints.openai.api_server` instead of `vllm serve`.
 
 By default, vLLM will run at 'http://0.0.0.0:8000'.
 
@@ -114,7 +116,7 @@ local_llm_config = LLMConfig({
 })
 
 # Create the agent that uses the LLM.
-assistant = ConversableAgent("agent", system_message="", llm_config=llm_config)
+assistant = ConversableAgent("agent", system_message="", llm_config=local_llm_config)
 
 # Create the agent that represents the user in the conversation.
 user_proxy = UserProxyAgent("user", code_execution_config=False,system_message="")

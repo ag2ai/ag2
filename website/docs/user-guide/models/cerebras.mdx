@@ -73,10 +73,10 @@ Example:
     {
         "model": "llama-3.3-70b",
         "api_key": "your Cerebras API Key goes here",
-        "api_type": "cerebras"
+        "api_type": "cerebras",
         "max_tokens": 10000,
         "seed": 1234,
-        "stream" True,
+        "stream": True,
         "temperature": 0.5,
         "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
     }
@@ -199,7 +199,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig(config_list={
+llm_config = autogen.LLMConfig({
     "model": "llama-3.3-70b",
     "api_key": os.environ.get("CEREBRAS_API_KEY"),
     "api_type": "cerebras",
