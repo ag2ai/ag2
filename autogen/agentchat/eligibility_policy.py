@@ -136,4 +136,4 @@ class AgentDescriptionGuard:
         with self._lock:
             current = self._agent.description or ""
             if current.startswith(_UNAVAILABLE_PREFIX):
-                self._agent.description = current[len(_UNAVAILABLE_PREFIX):]
+                self._agent.description = current[len(_UNAVAILABLE_PREFIX) :]

@@ -348,9 +348,7 @@ class GroupChat:
             participants=tuple(a.name for a in self.agents),
         )
 
-        eligible = [
-            agent for agent in agents if all(policy.is_eligible(agent, ctx) for policy in policies)
-        ]
+        eligible = [agent for agent in agents if all(policy.is_eligible(agent, ctx) for policy in policies)]
 
         if not eligible:
             raise NoEligibleSpeakerError(
