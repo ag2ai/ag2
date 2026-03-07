@@ -1785,6 +1785,10 @@
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/blog/2026/03/05/intelligent-agent-handoffs/</loc>
+         <lastmod>2026-03-07</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/community-talks/2025-04-10-NOVA/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
@@ -2530,6 +2534,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_tavily_search/</loc>
+         <lastmod>2026-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/tools_veronica_circuit_breaker/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
