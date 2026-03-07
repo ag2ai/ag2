@@ -7,4 +7,46 @@ title: AG2 Beta Agents
 For production workloads, prefer the stable APIs documented in the User Guide and API References.
 </Warning>
 
-AG2 beta provides a lower-level, event-driven runtime for agent communication via `autogen.beta`.
+## Why did we create AG2 Beta?
+
+The original **AutoGen** project was released in September 2023 in its first public preview, and **AG2** later diverged from that codebase in November 2024 to continue building on its core ideas.
+
+**AutoGen** was one of the earliest frameworks for building AI agents and orchestrating agent-to-agent collaboration. That early vision proved valuable: it enabled real-world systems, informed the design of many tools, and helped shape the agent ecosystem.
+
+Since then, the agent landscape has changed significantly. Over time, the community has established better practices, common protocols, and new interoperability standards. Capabilities that were once experimental are now becoming part of the expected foundation for agent platforms.
+
+Examples include:
+
+- [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-protocol), introduced in November 2024
+- [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/), introduced in April 2025
+- [AG-UI](https://docs.ag-ui.com/introduction), introduced in May 2025
+
+Not every part of the ecosystem is standardized yet, but the direction is clear. We increasingly found that the legacy architecture inherited from **AutoGen** was slowing down the adoption of new ideas. In some areas, shipping modern capabilities inside the original design would require too much complexity, too much migration effort, or too many compatibility compromises.
+
+This is not unique to **AG2**. **Microsoft** also chose to stop evolving the original **AutoGen** line and introduced a new framework in October 2025: [Microsoft Agent Framework](https://devblogs.microsoft.com/foundry/introducing-microsoft-agent-framework-the-open-source-engine-for-agentic-ai-apps/).
+
+We reached the same conclusion: AI agents are no longer an experiment. They are becoming standard application infrastructure. **AG2 Beta** is our way to move forward with a cleaner foundation while applying the lessons we learned from building and operating hundreds of agent systems based on **AG2**.
+
+## What is AG2 Beta?
+
+**AG2 Beta** is a new development track inside **AG2** where we build capabilities that would be difficult or impractical to introduce into the original framework architecture.
+
+As the beta matures, we expect it to become the primary foundation for future AG2 agent development.
+
+## Compatibility with AG2
+
+Where it is practical and beneficial, we aim to preserve compatibility with existing AG2 workflows.
+
+For example, **AG2 Beta** agents can still participate in established **AG2** multi-agent interaction patterns. This makes it possible to adopt **Beta** agents gradually within existing systems instead of rewriting everything at once.
+
+## Current Focus Areas
+
+At this stage, AG2 Beta is focused on:
+
+- improving the single-agent developer experience
+- providing stronger context and memory management primitives
+- simplifying integration with real applications, including TUI, web, ambient, and background runtimes
+- enabling new multi-agent coordination patterns that are not feasible in the current AG2 architecture
+- supporting emerging standards and protocols across the AI agent ecosystem
+
+We are building AG2 Beta to make agent development simpler, more modern, and easier to integrate into production-grade applications. Feedback is welcome as the API evolves.
