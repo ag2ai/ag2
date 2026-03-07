@@ -36,9 +36,11 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 There's no need to handle OpenAI or Google's GenAI packages separately; AG2 manages all of these for you. You can easily create different agents with various backend LLMs using the assistant agent. All models and agents are readily accessible at your fingertips.
 
 Support features:
+
+- Streaming
 - Function/tool calling
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
-- Token usage and cost correctly as per Google's API costs (as of December 2024)
+- Token usage and cost correctly as per Google's API costs
 
 
 ## Main Distinctions
@@ -60,7 +62,7 @@ Sample OAI_CONFIG_LIST
         "api_type": "google"
     },
     {
-        "model": "gemini-3-pro-preview",
+        "model": "gemini-3.1-pro-preview",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -85,7 +87,7 @@ from autogen.code_utils import content_str
 seed = 42  # for caching, use None for no caching
 llm_config = LLMConfig(
     config_list={
-        "model": "gemini-3-pro-preview",
+        "model": "gemini-3.1-pro-preview",
         "api_type": "google",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
@@ -159,6 +161,46 @@ ALL DONE
 --------------------------------------------------------------------------------
 ```
 
+## Gemini streaming example
+
+Enable streaming by setting `"stream": True` in your config. Use `run()` to iterate over events and process `StreamEvent` instances for real-time token output.
+
+```python
+import autogen
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen.events.client_events import StreamEvent
+
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": "your-api-key",
+        "stream": True,
+    }
+)
+
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent(
+    "user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=0,
+    code_execution_config=False,
+)
+
+response = user_proxy.run(
+    recipient=assistant,
+    message="Write a short poem about AI.",
+    silent=True,
+    max_turns=1,
+)
+
+for event in response.events:
+    if isinstance(event, StreamEvent):
+        inner = event.content
+        text = inner.content if hasattr(inner, "content") else str(inner)
+        print(text, end="", flush=True)
+```
+
 ## Gemini vision example
 
 Gemini's models have vision capabilitiesso we can create multimodal agents.
@@ -228,9 +270,10 @@ In summary, the image depicts a typical chat interface used for customer support
 ```
 
 
-## Ag2 Gemini Client Now Supports ThinkingConfig
+## ThinkingConfig
 
 ThinkConfig has three configuration:
+
 - `thinking budget`: Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.
 the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gemini-api/docs/thinking#:~:text=The%20following%20are%20thinkingBudget%20configuration%20details%20for%20each%20model%20type.%20You%20can%20disable%20thinking%20by%20setting%20thinkingBudget%20to%200.%20Setting%20the%20thinkingBudget%20to%20%2D1%20turns%20on%20dynamic%20thinking%2C%20meaning%20the%20model%20will%20adjust%20the%20budget%20based%20on%20the%20complexity%20of%20the%20request.)
 - `thinking level`: The level of thoughts tokens that the model should generate.
@@ -240,7 +283,7 @@ the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gem
 # example configuration for ThinkingConfig Support
 llm_config = LLMConfig(
     config_list={
-        "model": "gemini-3-pro-preview",
+        "model": "gemini-3.1-pro-preview",
         "api_type": "google",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
