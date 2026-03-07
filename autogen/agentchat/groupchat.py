@@ -612,9 +612,11 @@ class GroupChat:
                 f"GroupChat select_speaker failed to resolve the next speaker's name. This is because the speaker selection OAI call returned:\n{name}"
             )
 
-        # Return the result
+        # Return the result, but only if the agent is in the eligible list
         agent = self.agent_by_name(name)
-        return agent if agent else self.next_agent(last_speaker, agents)
+        if agent and (agents is None or agent in agents):
+            return agent
+        return self.next_agent(last_speaker, agents)
 
     def _register_client_from_config(self, agent: Agent, config: dict):
         model_client_cls_to_match = config.get("model_client_cls")
