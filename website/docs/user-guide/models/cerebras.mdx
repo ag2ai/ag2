@@ -1,6 +1,7 @@
 ---
-title: Cerebras
+title: Cerebras API Guide | Multi-Agent Framework
 sidebarTitle: Cerebras
+description: "How to use Cerebras fast inference with AG2. Configuration and code examples for building high-speed multi-agent systems."
 ---
 
 [Cerebras](https://cerebras.ai) has developed the world's largest and fastest AI processor, the Wafer-Scale Engine-3 (WSE-3). Notably, the CS-3 system can run large language models like Llama-3.1-8B and Llama-3.1-70B at extremely fast speeds, making it an ideal platform for demanding AI workloads.
@@ -72,10 +73,10 @@ Example:
     {
         "model": "llama-3.3-70b",
         "api_key": "your Cerebras API Key goes here",
-        "api_type": "cerebras"
+        "api_type": "cerebras",
         "max_tokens": 10000,
         "seed": 1234,
-        "stream" True,
+        "stream": True,
         "temperature": 0.5,
         "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
     }
@@ -198,7 +199,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig(config_list={
+llm_config = autogen.LLMConfig({
     "model": "llama-3.3-70b",
     "api_key": os.environ.get("CEREBRAS_API_KEY"),
     "api_type": "cerebras",

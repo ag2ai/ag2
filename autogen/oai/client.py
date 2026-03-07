@@ -1487,8 +1487,13 @@ class OpenAIWrapper:
         if tool_calls_chunk:
             if full_tool_call is None:
                 full_tool_call = {}
-            for field in ["index", "id", "type"]:
+            for field in ["index", "id"]:
                 completion_tokens += OpenAIWrapper._update_dict_from_chunk(tool_calls_chunk, full_tool_call, field)
+            # "type" is a fixed identifier (e.g. "function"), not a streamed
+            # delta — set it directly so repeated chunks don't concatenate it
+            # into "functionfunction..." (gh-2058)
+            if tool_calls_chunk.type:
+                full_tool_call["type"] = tool_calls_chunk.type
 
             if hasattr(tool_calls_chunk, "function") and tool_calls_chunk.function:
                 if "function" not in full_tool_call:

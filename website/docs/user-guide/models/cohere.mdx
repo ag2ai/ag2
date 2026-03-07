@@ -1,6 +1,7 @@
 ---
-title: Cohere
+title: Cohere API Guide | Multi-Agent Framework
 sidebarTitle: Cohere
+description: "How to use Cohere models with AG2. Configuration and code examples for building multi-agent systems with Cohere Command models."
 ---
 
 [Cohere](https://cohere.com/) is a cloud based platform serving their own LLMs, in particular the Command family of models.
@@ -13,7 +14,7 @@ You will need a Cohere account and create an API key. [See their website for fur
 
 When using this client class, AG2's messages are automatically tailored to accommodate the specific requirements of Cohere's API.
 
-Additionally, this client class provides support for function/tool calling and will track token usage and cost correctly as per Cohere's API costs (as of July 2024).
+Additionally, this client class provides support for function/tool calling and will track token usage and cost correctly as per Cohere's API costs.
 
 ## Getting started
 
@@ -42,18 +43,6 @@ See the sample `OAI_CONFIG_LIST` below showing how the Cohere client class is us
 ```python
 [
     {
-        "model": "gpt-35-turbo",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
-        "model": "gpt-4-vision-preview",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
-        "model": "dalle",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
         "model": "command-r-plus",
         "api_key": "your Cohere API Key goes here",
         "api_type": "cohere"
@@ -64,7 +53,7 @@ See the sample `OAI_CONFIG_LIST` below showing how the Cohere client class is us
         "api_type": "cohere"
     },
     {
-        "model": "command",
+        "model": "command-nightly",
         "api_key": "your Cohere API Key goes here",
         "api_type": "cohere"
     }
@@ -243,7 +232,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig(config_list={
+llm_config = autogen.LLMConfig({
     "api_type": "cohere",
     "model": "command-r-plus",
     "api_key": os.getenv("COHERE_API_KEY"),

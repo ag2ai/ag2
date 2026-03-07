@@ -1,11 +1,25 @@
 ---
-title: Grok and OpenAI-API-Compatible Models
+title: Grok API and OpenAI-Compatible Models Guide | Multi-Agent Framework
 sidebarTitle: Grok & OpenAI-API-Compatible
+description: "Step-by-step guide to using the Grok API and other OpenAI-compatible APIs with AG2. Includes configuration, code examples, and setup for any OpenAI-compatible endpoint."
 ---
 
-[Grok](https://x.ai/) is a powerful AI model developed by xAI that combines cutting-edge reasoning capabilities with real-time access to information via search integration. Grok-4 is among the most intelligent models available, offering native tool use capabilities and real-time search functionality.
+[Grok](https://x.ai/) is a family of AI models developed by xAI. Since Grok follows OpenAI's API specification, it works seamlessly with AG2's existing OpenAI client infrastructure — no extra dependencies needed.
 
-This guide demonstrates how to use Grok and other OpenAI-API-compatible models with AG2. Since Grok follows OpenAI's API specification, it works seamlessly with AG2's existing OpenAI client infrastructure.
+This guide shows how to configure Grok (and other OpenAI-compatible APIs) with AG2, including function calling.
+
+## Available Grok Models
+
+The table below lists popular Grok models available via the API (as of March 2026). See [xAI Models and Pricing](https://docs.x.ai/developers/models) for the full and up-to-date list.
+
+| Model ID | Context | Input / Output (per 1M tokens) | Capabilities |
+|----------|---------|-------------------------------|--------------|
+| `grok-4-1-fast-reasoning` | 2M | $0.20 / $0.50 | Reasoning, functions, structured output, vision |
+| `grok-4-1-fast-non-reasoning` | 2M | $0.20 / $0.50 | Functions, structured output, vision |
+| `grok-4-0709` | 256K | $3.00 / $15.00 | Reasoning, functions, structured output |
+| `grok-code-fast-1` | 256K | $0.20 / $1.50 | Reasoning, functions, structured output (code-optimized) |
+| `grok-3` | 131K | $3.00 / $15.00 | Functions, structured output |
+| `grok-3-mini` | 131K | $0.30 / $0.50 | Reasoning, functions, structured output |
 
 ## Requirements
 
@@ -46,7 +60,7 @@ from autogen import LLMConfig
 # Basic Grok configuration
 llm_config = LLMConfig(
     {
-        "model": "grok-4",
+        "model": "grok-4-1-fast-reasoning",
         "api_type": "openai",  # Grok is OpenAI-compatible
         "base_url": "https://api.x.ai/v1",
         "api_key": os.environ.get("XAI_API_KEY"),
@@ -55,28 +69,19 @@ llm_config = LLMConfig(
 )
 ```
 
-### Configuration with Real-time Search
+### Configuration with Web Search
 
-Grok's unique capability is its real-time access to information. You can enable and configure this using the `extra_body` parameter:
+Grok offers real-time web search (`web_search`) and X/Twitter search (`x_search`) tools through xAI's [Responses API](https://docs.x.ai/docs/guides/tools/search-tools). To use these with AG2, set `api_type` to `"responses"` and enable web search via `built_in_tools`. Requires AG2 >= 0.12:
 
 ```python
 llm_config = LLMConfig(
     {
-        "model": "grok-4",
-        "api_type": "openai",
+        "model": "grok-4-1-fast-reasoning",
+        "api_type": "responses",
         "base_url": "https://api.x.ai/v1",
         "api_key": os.environ.get("XAI_API_KEY"),
-        "extra_body": {
-            "search_enabled": True,
-            "real_time_data": True,
-            "search_parameters": {
-                "max_search_results": 5,
-                "include_citations": True,
-                "search_timeout": 10,
-                "return_citations": True
-            },
-        },
-    }
+        "built_in_tools": ["web_search"],
+    },
     temperature=0.5,
 )
 ```
@@ -97,29 +102,21 @@ Here's a simple example demonstrating a conversation with Grok:
 import os
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-# Configure Grok with real-time search
-grok_config = LLMConfig({
-    "model": "grok-4",
-    "api_type": "openai",
-    "base_url": "https://api.x.ai/v1",
-    "api_key": os.getenv("XAI_API_KEY"),
-    "max_tokens": 1000,
-    "temperature": 0.5,
-    "extra_body": {
-        "search_enabled": True,
-        "real_time_data": True,
-        "search_parameters": {
-            "max_search_results": 5,
-            "include_citations": True,
-            "search_timeout": 10
-        },
+grok_config = LLMConfig(
+    {
+        "model": "grok-4-1-fast-reasoning",
+        "api_type": "openai",
+        "base_url": "https://api.x.ai/v1",
+        "api_key": os.getenv("XAI_API_KEY"),
     },
-})
+    temperature=0.5,
+    max_tokens=1000,
+)
 
 # Create agents
 assistant = AssistantAgent(
     name="grok_assistant",
-    system_message="You are a helpful AI assistant powered by Grok. You have access to real-time information and can help with various tasks.",
+    system_message="You are a helpful AI assistant powered by Grok.",
     llm_config=grok_config,
 )
 
@@ -133,7 +130,7 @@ user_proxy = UserProxyAgent(
 # Start conversation
 user_proxy.initiate_chat(
     assistant,
-    message="What is the current date and what's happening in the tech world today?",
+    message="Explain the key differences between Python's asyncio and threading.",
     max_turns=2,
 )
 ```
@@ -154,7 +151,7 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 def get_weather(city: Annotated[str, "The city name"]) -> str:
     """Get current weather for a city."""
     # Mock function - in production, call a real weather API
-    return f"The current weather in {city} is sunny with a temperature of 22�C."
+    return f"The current weather in {city} is sunny with a temperature of 22°C."
 
 def calculate_math(expression: Annotated[str, "Mathematical expression to evaluate"]) -> str:
     """Calculate a mathematical expression safely."""
@@ -166,14 +163,16 @@ def calculate_math(expression: Annotated[str, "Mathematical expression to evalua
         return f"Could not evaluate the expression: {expression}"
 
 # Configure Grok for function calling
-function_config = LLMConfig({
-    "model": "grok-4",
-    "api_key": os.getenv("XAI_API_KEY"),
-    "base_url": "https://api.x.ai/v1",
-    "api_type": "openai",
-    "temperature": 0.3,
-    "max_tokens": 800,
-})
+function_config = LLMConfig(
+    {
+        "model": "grok-4-1-fast-reasoning",
+        "api_key": os.getenv("XAI_API_KEY"),
+        "base_url": "https://api.x.ai/v1",
+        "api_type": "openai",
+    },
+    temperature=0.3,
+    max_tokens=800,
+)
 
 # Create function-calling assistant
 function_assistant = AssistantAgent(
@@ -209,7 +208,7 @@ You can control how Grok uses functions with the `tool_choice` parameter:
 ```python
 # Automatic function calling (default)
 llm_config = LLMConfig({
-    "model": "grok-4",
+    "model": "grok-4-1-fast-reasoning",
     "api_type": "openai",
     "base_url": "https://api.x.ai/v1",
     "api_key": os.environ.get("XAI_API_KEY"),
@@ -235,7 +234,7 @@ Grok supports calling multiple functions simultaneously, which is enabled by def
 
 ```python
 llm_config = LLMConfig({
-    "model": "grok-4",
+    "model": "grok-4-1-fast-reasoning",
     # ... other config
     "parallel_tool_calls": True,  # Enable parallel function calls (default)
 })
@@ -250,7 +249,7 @@ llm_config = LLMConfig({
 ### 2. Configuration
 - Use the correct `api_type` for your provider (`"openai"` for most compatible services)
 - Place common parameters like `temperature` at the top level of `LLMConfig`
-- Use `extra_body` for provider-specific features like Grok's search parameters
+- Use `extra_body` for provider-specific features not covered by standard parameters
 - Use `extra_headers` for custom HTTP headers required by your server (e.g., authentication tokens, routing headers for [VLLM](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers) or other OpenAI-compatible servers)
 
 ### 3. Function Registration
@@ -278,6 +277,35 @@ llm_config = LLMConfig({
 **Model not found warnings**
 - **Cause:** AG2 doesn't recognize the model name for cost calculation
 - **Solution:** Add custom pricing with the `price` parameter or ignore the warning
+
+## Other OpenAI-Compatible Providers
+
+The configuration pattern above works with any service that implements the OpenAI chat completions API — just change `base_url` and `api_key`:
+
+```python
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    {
+        "model": "your-model-name",
+        "api_type": "openai",
+        "base_url": "https://your-provider.com/v1",  # swap this
+        "api_key": os.environ.get("YOUR_API_KEY"),    # and this
+    },
+    temperature=0.7,
+)
+```
+
+Some popular OpenAI-compatible providers:
+
+| Provider | `base_url` | Example models |
+|----------|-----------|----------------|
+| [Together AI](https://www.together.ai/) | `https://api.together.xyz/v1` | `meta-llama/Llama-3-70b-chat-hf` |
+| [Fireworks AI](https://fireworks.ai/) | `https://api.fireworks.ai/inference/v1` | `accounts/fireworks/models/llama-v3p1-70b-instruct` |
+| [Groq](https://groq.com/) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+
+For provider-specific features, use `extra_body` or `extra_headers` to pass additional parameters without changing the core configuration.
 
 ## Additional Resources
 

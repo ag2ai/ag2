@@ -1,5 +1,5 @@
 ---
-title: "Building Research Reports with GPT Researcher and AG2"
+title: "Deep Web Research with AG2 and GPT Researcher"
 authors: [marklysze]
 tags:
     - Research
@@ -17,38 +17,46 @@ Ask an LLM to research a topic and write a report. It'll produce something -- so
 
 The fix isn't a better prompt. It's division of labor.
 
-[GPT Researcher](https://docs.gptr.dev/), created by [Assaf Elovic](https://github.com/assafelovic), is built on this idea: eight specialized agents, each with a distinct job, working through a five-stage pipeline. A researcher gathers, an editor outlines, a reviewer challenges the findings, a revisor incorporates the feedback, and a writer only touches finalized content. Every handoff is a quality check.
+[GPT Researcher](https://docs.gptr.dev/), created by [Assaf Elovic](https://github.com/assafelovic), is built on this idea: specialized agents, each with a distinct job, working through a staged pipeline. A researcher gathers, an editor outlines, a reviewer challenges the findings, a revisor incorporates the feedback, and a writer only touches finalized content. Every handoff is a quality check.
 
-This post walks through the [build-with-ag2](https://github.com/ag2ai/build-with-ag2/tree/main/gpt-researcher) example, which runs the full GPT Researcher pipeline with **AG2 as the orchestration layer**. The example ships with two run modes -- a terminal script and a web UI built on [AG-UI](https://docs.ag2.ai/latest/docs/user-guide/ag-ui/) that shows pipeline progress in real time and supports human-in-the-loop feedback from the browser.
+This post walks through the [build-with-ag2](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/gpt-researcher) example, which runs the full pipeline with **AG2 as the orchestration layer**. The example ships with two run modes -- a terminal script and a web UI built on [AG-UI](https://docs.ag2.ai/latest/docs/user-guide/ag-ui/) that shows pipeline progress in real time and includes a human-in-the-loop review step before writing begins.
+
+<!-- more -->
 
 ## The Research Pipeline
 
-The eight agents each have a distinct role:
+![Research pipeline — eight agents in two rows with HITL feedback loop](img/pipeline.webp)
 
-- **Chief Editor** — manages the team and keeps the process on track
-- **Researcher** — conducts autonomous investigation using GPT Researcher's search capabilities
-- **Editor** — structures the research outline before writing begins
-- **Reviewer** — validates gathered research against quality criteria
-- **Revisor** — implements the reviewer's feedback, looping back through the data
-- **Writer** — compiles the final report from the revised research
-- **Publisher** — formats and outputs the report in your chosen formats
-- **Human** — participates at any stage for oversight and course-correction
+The example uses AG2's `DefaultPattern` to run eight agents in sequence. Each is a separate `ConversableAgent` with its own system message and dedicated tool function. When a tool returns, it explicitly hands off to the next agent via `AgentNameTarget` -- the same pattern described in AG2's [pipeline cookbook](https://docs.ag2.ai/latest/docs/user-guide/agentchat/group-chat/sequential-chats):
 
-Because the Human agent is backed by AG2's `UserProxyAgent`, human oversight is wired into the pipeline from the start -- not bolted on as a post-processing step. Set `"include_human_feedback": true` in `task.json` and the Chief Editor pauses at key stages, routing your feedback directly to the next agent before proceeding. You can redirect the research plan before data gathering begins, or steer a section that goes in an unexpected direction, and the pipeline responds accordingly. The web UI makes this interactive: the research plan appears in your browser for review, and your feedback is submitted directly from the UI.
+1. **Chief Editor** (`init_research`) — receives the query, creates a `GPTResearcher` instance
+2. **Editor** (`plan_sections`) — outlines 3-5 report sections
+3. **Researcher** (`do_research`) — calls `GPTResearcher.conduct_research()` to search and collect sources
+4. **Reviewer** (`evaluate_research`) — scores research quality 1-10 and identifies gaps
+5. **Revisor** (`do_revision`) — runs a supplementary `GPTResearcher` search if gaps were found
+6. **Human Review** (`present_for_review`) — presents findings and **pauses for human approval**
+7. **Writer** (`do_write_report`) — calls `GPTResearcher.write_report()` to compile the report
+8. **Publisher** (`do_publish`) — stamps the report with source count and date metadata
 
-### Parallel Research with Isolated State
+The Human Review step is first-class in this pipeline, not optional. `present_for_review` emits a structured summary to the browser -- quality score, gaps, report outline, sources, findings preview -- then returns `RevertToUserTarget()`. AG2 fires an `InputRequestEvent`, which the SSE endpoint converts to an `INPUT_REQUEST` event for the frontend. The browser shows an approve/feedback panel and the pipeline waits. When the user responds, the `human_review_agent` uses an LLM condition to decide: loop back to the Researcher, or advance to the Writer.
 
-When investigating multiple sub-topics, the Researcher agent spawns nested sub-graphs -- one per sub-question -- each with isolated state. This avoids race conditions when results are written back and significantly reduces total research time for multi-section reports.
+If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
 
-If you're already building AG2 workflows -- tool-calling agents and group chats -- the GPT Researcher pipeline slots in without a second orchestration framework. The Human agent, the streaming UI, and any other AG2 tools you want to add all work with the same primitives you already use. If you'd prefer a lighter-weight option, AG2's built-in [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is a composable tool that any agent can call directly -- the [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) covers when to use which.
+## How Agents and UI Connect
 
-## Getting the Sample Code
+AG2's `DefaultPattern` coordinates the eight agents as a group chat. Rather than a single orchestrator deciding who speaks next, each agent makes that decision itself: when its tool function returns, the result includes a `target` naming the next agent by name. The pipeline sequence is deterministic by construction -- no LLM needed to decide the order -- though the Human Review agent does use LLM conditions to branch after human feedback: loop back to the Researcher if the user wants more research, or advance to the Writer if they approve. A shared `ContextVariables` dictionary flows through every tool call, carrying pipeline state -- active agent, stage, query, source count, and eventually the finished report -- readable and writable by any step in the chain.
 
-Clone the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository and navigate to the GPT Researcher example:
+The frontend stays in sync through two parallel SSE streams that serve different kinds of information. The main `/research/` endpoint translates AG2 group chat events into AG-UI protocol: tool call start and end events as each tool runs, a state snapshot when the active agent changes, and an `INPUT_REQUEST` event when the pipeline pauses at Human Review waiting for the user. The second stream, `/logs`, carries everything that comes out of GPT Researcher itself -- live log lines as it searches the web, the report text chunk by chunk as the Writer runs, cost updates, and the structured summary that populates the Human Review panel.
+
+The bridge between them is a lightweight `StreamAdapter` class that mimics the WebSocket interface GPT Researcher expects, but routes its output to an asyncio queue instead of a network socket. The same GPT Researcher code that normally writes to a WebSocket writes to the queue, and the `/logs` endpoint drains that queue to the browser in real time. No WebSocket server needed.
+
+## Running the Pipeline
+
+Clone the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository, navigate to the example, and install dependencies:
 
 ```bash
 git clone https://github.com/ag2ai/build-with-ag2.git
-cd build-with-ag2/gpt-researcher
+cd build-with-ag2/ag-ui/gpt-researcher
 pip install -r requirements.txt
 ```
 
@@ -59,123 +67,218 @@ export OPENAI_API_KEY=your_openai_key
 export TAVILY_API_KEY=your_tavily_key
 ```
 
-## Running the Research
+Set your research question in `task.json`:
 
-The sample includes two run modes.
+```json
+{
+  "query": "Is AI in a hype cycle?",
+  "report_type": "research_report"
+}
+```
 
 ### Terminal Mode
 
-Open `task.json`, set your query, and run:
-
 ```bash
-python -m main
+python main.py
 ```
 
-With `"verbose": true`, you'll see each agent's activity as it happens:
-
-```console
-Chief Editor: Planning research for "Is AI in a hype cycle?"
-Editor: Structuring research outline...
-Researcher: Investigating sub-topic 1 of 3...
-Researcher: Investigating sub-topic 2 of 3...
-Researcher: Investigating sub-topic 3 of 3...
-Reviewer: Validating research quality...
-Revisor: Applying reviewer feedback (revision 1/3)...
-Writer: Compiling final report...
-Publisher: Exporting to markdown, pdf, docx...
-```
-
-The finished report appears in your output directory in all configured formats.
+`GPTResearcher` runs its web search and writes the report to stdout.
 
 ### Web UI Mode (AG-UI)
 
-For a live view of the pipeline as it runs, start the AG-UI server:
-
 ```bash
-python -m server
+python server.py
 ```
 
-Then open `http://localhost:8457` in your browser. The UI shows which agent is currently active, the current pipeline stage, and the final report when it's ready.
+Open `http://localhost:8457`. Enter your question and click **Research**. The pipeline panel on the right tracks each agent as it runs. When the Revisor finishes, the Human Review panel appears with a structured summary -- quality score, identified gaps, report outline, and a collapsible source list -- and the pipeline pauses until you approve or send feedback.
 
-The backend is a `ConversableAgent` orchestrator wrapped with `AGUIStream`. As the research pipeline progresses, it updates `ContextVariables` to track the active agent and stage -- AG-UI automatically broadcasts these as `STATE_SNAPSHOT` events to the frontend.
+Here's the core pattern from `server.py`. Each agent is a separate `ConversableAgent` with its own system message and tool. Handoffs are explicit: each tool function returns an `AgentNameTarget` pointing to the next agent. `DefaultPattern` and `a_run_group_chat` drive the group chat:
 
-```python title="server.py"
-from __future__ import annotations
+```python title="server.py (excerpts)"
+from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+from autogen.agentchat import a_run_group_chat
+from autogen.agentchat.group import (
+    AgentNameTarget, AgentTarget, ContextVariables, OnCondition,
+    ReplyResult, RevertToUserTarget, StringLLMCondition, TerminateTarget,
+)
+from autogen.agentchat.group.patterns import DefaultPattern
+from gpt_researcher import GPTResearcher
 
-import json
-from pathlib import Path
-from typing import Annotated
-
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-
-from autogen import ConversableAgent, LLMConfig
-from autogen.ag_ui import AGUIStream
-
-load_dotenv()
-
-
-def load_task() -> dict:
-    return json.loads(Path("task.json").read_text())
-
-
-async def run_research(
-    query: Annotated[str, "The research question to investigate"],
-    context_variables: dict,
-) -> str:
-    """Run the full GPT Researcher pipeline and return the completed report.
-
-    context_variables is injected by AG2 and mutated in place. AGUIStream detects
-    changes and emits STATE_SNAPSHOT events to the frontend automatically.
-    """
-    from multi_agents_ag2.agents.orchestrator import ChiefEditorAgent
-
-    task = {**load_task(), "query": query}
-
-    # Signal that research has started — the frontend highlights "Chief Editor"
-    # and shows "planning" as the current stage.
-    context_variables["stage"] = "planning"
-    context_variables["active_agent"] = "Chief Editor"
-
-    chief_editor = ChiefEditorAgent(task)
-    result = await chief_editor.run_research_task()
-
-    context_variables["stage"] = "complete"
-    context_variables["active_agent"] = "Publisher"
-    return result.get("report", "")
-
-
-# The orchestrator is a standard ConversableAgent. run_research is registered
-# as a tool — AG2 injects context_variables when it calls the function.
-orchestrator = ConversableAgent(
-    name="research_orchestrator",
-    system_message=(
-        "You are a research coordinator. When given a research topic, "
-        "call run_research and return the completed report to the user."
-    ),
-    llm_config=LLMConfig({"model": "gpt-4o", "stream": True}),
-    functions=[run_research],
+llm_config = LLMConfig(
+    {"model": "gpt-4o-mini", "parallel_tool_calls": False, "cache_seed": None}
 )
 
-# AGUIStream wraps the agent and translates its activity into AG-UI SSE events.
-stream = AGUIStream(orchestrator)
+researcher_agent = ConversableAgent(
+    name="researcher",
+    system_message="You are the Researcher. Call do_research to search the web and collect sources.",
+    functions=[do_research],
+    llm_config=llm_config,
+)
 
-app = FastAPI()
-app.mount("/research", stream.build_asgi())
+async def do_research(context_variables: ContextVariables) -> ReplyResult:
+    """Researcher: search the web and collect sources."""
+    context_variables["active_agent"] = "Researcher"
+    await _emit_state("Researcher", "researching")
+    await _researcher.conduct_research()
+    sources = _researcher.get_source_urls()
+    return ReplyResult(
+        message=f"Research complete. {len(sources)} sources. Reviewer, evaluate quality.",
+        context_variables=context_variables,
+        target=AgentNameTarget("reviewer"),  # explicit handoff to next agent
+    )
 
+# Human Review pauses the pipeline for human input
+async def present_for_review(context_variables: ContextVariables) -> ReplyResult:
+    """Human Review: present research findings for human approval."""
+    # Push structured summary to /logs — frontend renders the rich review panel
+    await _stream_adapter.emit({"type": "hitl_summary", "data": {
+        "query": query, "score": score, "gaps": gaps,
+        "sections": sections, "sources": source_urls[:10],
+        "findings_preview": context[:1500],
+    }})
+    return ReplyResult(
+        message="Research summary ready. Please review.",
+        context_variables=context_variables,
+        target=RevertToUserTarget(),  # AG2 fires InputRequestEvent → INPUT_REQUEST to frontend
+    )
 
-@app.get("/")
-async def serve_frontend() -> FileResponse:
-    return FileResponse("frontend.html")
+# After human responds, LLM conditions route back to Researcher or forward to Writer
+human_review_agent.handoffs.add_llm_condition(
+    OnCondition(
+        target=AgentTarget(researcher_agent),
+        condition=StringLLMCondition("The user wants changes, more research, or is not satisfied."),
+    )
+)
+human_review_agent.handoffs.add_llm_condition(
+    OnCondition(
+        target=AgentTarget(writer_agent),
+        condition=StringLLMCondition("The user approves or wants to proceed with writing."),
+    )
+)
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8457)
+# Wire agents together and run
+pattern = DefaultPattern(
+    initial_agent=chief_editor,
+    agents=[chief_editor, editor, researcher_agent, reviewer_agent,
+            revisor_agent, human_review_agent, writer_agent, publisher_agent],
+    user_agent=user,
+    context_variables=shared_context,
+)
+response = await a_run_group_chat(pattern, messages=query, max_rounds=50)
 ```
 
-The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress panel in real time:
+`GPTResearcher` expects a WebSocket for its internal streaming output. `StreamAdapter` mimics that interface, routing messages to an asyncio queue that the `/logs` SSE endpoint serves to the frontend:
+
+```python title="server.py — StreamAdapter and /logs endpoint"
+class StreamAdapter:
+    """Imitation WebSocket that gpt-researcher writes to via send_json().
+
+    Messages are pushed to an asyncio Queue and consumed by the /logs SSE
+    endpoint, giving the frontend real-time research progress, cost updates,
+    HITL summary data, and the final report.
+    """
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue = asyncio.Queue()
+
+    async def send_json(self, data: dict) -> None:
+        await self.queue.put(data)
+
+    async def emit(self, data: dict) -> None:
+        """Emit directly — used by pipeline tools for state and HITL data."""
+        await self.queue.put(data)
+
+_stream_adapter = StreamAdapter()
+
+# Pass the adapter as websocket when creating GPTResearcher:
+_researcher = GPTResearcher(query=query, websocket=_stream_adapter, ...)
+
+@app.get("/logs")
+async def logs_stream():
+    async def generate():
+        while True:
+            msg = await _stream_adapter.queue.get()
+            if msg is None:
+                break
+            yield f"data: {json.dumps(msg)}\n\n"
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+The main `/research/` POST endpoint translates AG2 group chat events into AG-UI protocol. The key moment is the `InputRequestEvent` that fires when `RevertToUserTarget()` pauses the pipeline at Human Review:
+
+```python title="server.py — /research/ endpoint (excerpt)"
+async for event in response.events:
+    if isinstance(event, ToolCallEvent):
+        for tc in event.content.tool_calls:
+            yield _sse({"type": "TOOL_CALL_START", "toolCallName": tc.function.name, ...})
+
+    elif isinstance(event, ExecutedFunctionEvent):
+        yield _sse({"type": "TOOL_CALL_END", "toolCallId": event.content.call_id, ...})
+
+    elif isinstance(event, InputRequestEvent):
+        # Pipeline is paused at Human Review — store respond() callable and notify frontend
+        _hitl_respond = event.content.respond
+        yield _sse({"type": "INPUT_REQUEST", "prompt": event.content.prompt, ...})
+```
+
+The `/research/respond` endpoint resumes the pipeline when the user submits input:
+
+```python title="server.py — HITL respond endpoint"
+@app.post("/research/respond")
+async def respond_endpoint(request: Request):
+    body = await request.json()
+    await _hitl_respond(body["response"])  # resumes the paused group chat
+    return {"status": "ok"}
+```
+
+The frontend connects two parallel streams. The `/research/` SSE fetch carries AG-UI events: tool call activity, `INPUT_REQUEST` to trigger the HITL panel, and agent state snapshots. The `/logs` EventSource carries everything from gpt-researcher -- research progress log entries, report text as it's written chunk by chunk, cost updates, and the structured HITL summary:
+
+```javascript title="frontend.html (excerpts)"
+// Start both streams in parallel
+connectLogStream();       // EventSource('/logs') — gpt-researcher streaming
+await fetch('/research/', ...);  // SSE fetch — AG-UI events
+
+// /logs handler: research progress, progressive report, cost, HITL summary
+function handleLogMessage(msg) {
+    if (msg.type === 'report') {
+        // Progressive report rendering as Writer streams output
+        reportAccumulator += msg.output;
+        reportEl.innerHTML = marked.parse(reportAccumulator);
+    }
+    if (msg.type === 'hitl_summary') {
+        // Render structured review panel: score, gaps, sources, findings preview
+        hitlPromptEl.innerHTML = renderHitlSummary(msg.data);
+    }
+    if (msg.type === 'cost') {
+        totalCost += parseFloat(msg.data.total_cost.replace('$', ''));
+        costEl.textContent = '$' + totalCost.toFixed(4);
+    }
+    if (msg.type === 'state') {
+        handleSnapshot(msg.data);  // advances the pipeline panel
+    }
+}
+
+// /research/ main SSE surfaces the HITL panel when INPUT_REQUEST arrives
+case 'INPUT_REQUEST':
+    showHitl(event.prompt);  // shows approve / feedback UI
+    break;
+
+// Approve: resume with a simple message
+async function sendHitlApprove() {
+    await fetch('/research/respond', {
+        method: 'POST',
+        body: JSON.stringify({ response: 'Looks good, proceed with writing the report.' }),
+    });
+}
+
+// Feedback: resume with the user's text — human_review_agent routes back to Researcher
+async function sendHitlFeedback() {
+    const text = hitlInputEl.value.trim();
+    await fetch('/research/respond', {
+        method: 'POST',
+        body: JSON.stringify({ response: text }),
+    });
+}
+```
 
 <details markdown="1">
 <summary>frontend.html — full source (click to expand)</summary>
@@ -185,50 +288,242 @@ The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress pa
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="/assets/faviconlight.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
+    <link rel="icon" href="/assets/favicondark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
     <title>GPT Researcher + AG2</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #f5f5f5; }
 
         /* Left: research input and report output */
-        .main { flex: 1; display: flex; flex-direction: column; padding: 24px; gap: 16px; }
-        .main h2 { font-size: 20px; }
+        .main { flex: 1; display: flex; flex-direction: column; padding: 24px; gap: 16px; overflow: hidden; }
+        .main > h2 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main > h2 img { height: 24px; width: auto; }
         .input-row { display: flex; gap: 8px; }
-        .input-row input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; }
-        .input-row button { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
-        .input-row button:disabled { opacity: 0.5; }
-        .report { flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 16px; background: #fff; white-space: pre-wrap; font-size: 14px; line-height: 1.7; }
+        .input-row input {
+            flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 15px; background: #fff;
+        }
+        .input-row button {
+            padding: 10px 24px; background: #1a73e8; color: #fff; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 15px; white-space: nowrap;
+        }
+        .input-row button:disabled { opacity: 0.5; cursor: default; }
+
+        /* Activity log */
+        .activity {
+            max-height: 220px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px;
+            padding: 12px 16px; background: #fafafa; font-size: 13px; line-height: 1.5;
+            display: none; flex-shrink: 0;
+        }
+        .activity.visible { display: block; }
+        .activity-agent {
+            font-weight: 600; font-size: 12px; color: #1a73e8; margin: 8px 0 4px;
+            text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .activity-agent:first-child { margin-top: 0; }
+        .activity-tool {
+            font-family: ui-monospace, monospace; font-size: 12px; color: #888;
+            padding: 2px 0;
+        }
+        .activity-tool.done { color: #34a853; }
+        .activity-log {
+            font-size: 12px; color: #666; padding: 1px 0;
+        }
+        .activity-log.source { color: #1a73e8; }
+        /* Report: renders markdown as HTML */
+        .report {
+            flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px;
+            padding: 28px 32px; background: #fff; color: #1a1a1a;
+            font-size: 15px; line-height: 1.7;
+        }
+        .report.placeholder { color: #aaa; font-style: italic; display: flex; align-items: center; justify-content: center; }
+
+        /* Markdown content styles */
+        .report h1 { font-size: 22px; font-weight: 700; margin: 0 0 16px; color: #111; }
+        .report h2 { font-size: 18px; font-weight: 600; margin: 28px 0 10px; color: #111; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+        .report h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: #222; }
+        .report p { margin: 0 0 12px; }
+        .report ul, .report ol { margin: 0 0 12px 24px; }
+        .report li { margin-bottom: 4px; }
+        .report a { color: #1a73e8; text-decoration: none; }
+        .report a:hover { text-decoration: underline; }
+        .report strong { font-weight: 600; }
+        .report em { font-style: italic; }
+        .report blockquote {
+            border-left: 3px solid #ddd; margin: 0 0 12px; padding: 8px 16px;
+            color: #555; background: #fafafa; border-radius: 0 4px 4px 0;
+        }
+        .report code {
+            background: #f4f4f4; border-radius: 3px; padding: 1px 5px;
+            font-family: ui-monospace, monospace; font-size: 13px;
+        }
+        .report pre {
+            background: #f4f4f4; border-radius: 6px; padding: 14px 16px;
+            overflow-x: auto; margin: 0 0 12px;
+        }
+        .report pre code { background: none; padding: 0; font-size: 13px; }
+
+        /* Tables */
+        .report table {
+            border-collapse: collapse; width: 100%; margin: 0 0 16px;
+            font-size: 14px;
+        }
+        .report th {
+            background: #f0f4ff; font-weight: 600; text-align: left;
+            padding: 9px 12px; border: 1px solid #dde4f0; color: #333;
+        }
+        .report td {
+            padding: 8px 12px; border: 1px solid #e8ecf4; vertical-align: top;
+        }
+        .report tr:nth-child(even) td { background: #fafbff; }
 
         /* Right: pipeline progress panel */
-        .pipeline { width: 280px; display: flex; flex-direction: column; border-left: 1px solid #ddd; padding: 24px; background: #fff; gap: 12px; }
-        .pipeline h2 { font-size: 16px; }
-        .stage-label { font-size: 13px; color: #666; }
-        .stage-value { font-size: 15px; font-weight: 600; color: #1a73e8; }
-        .agents { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-        .agent { padding: 8px 12px; border-radius: 6px; font-size: 13px; border: 1px solid #eee; transition: all 0.2s; }
-        .agent.active { background: #e8f0fe; border-color: #1a73e8; font-weight: 600; color: #1a73e8; }
+        .pipeline {
+            width: 260px; display: flex; flex-direction: column; border-left: 1px solid #ddd;
+            padding: 24px; background: #fff; gap: 16px; flex-shrink: 0;
+        }
+        .pipeline-logo { width: 48px; height: 48px; display: block; margin: 0 auto 8px; }
+        .pipeline h2 { font-size: 16px; font-weight: 600; }
+        .status-block { display: flex; flex-direction: column; gap: 4px; }
+        .status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #999; }
+        .status-value { font-size: 14px; font-weight: 600; color: #1a73e8; text-transform: capitalize; }
+        .agents { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .agent {
+            padding: 8px 12px; border-radius: 6px; font-size: 13px;
+            border: 1px solid #eee; background: #fafafa; color: #555;
+            transition: all 0.25s;
+        }
+        .agent.active {
+            background: #e8f0fe; border-color: #1a73e8;
+            font-weight: 600; color: #1a73e8;
+        }
+        .agent.done {
+            background: #f0faf0; border-color: #34a853; color: #34a853;
+        }
+
+        /* HITL review input */
+        .hitl {
+            display: none; flex-direction: column; gap: 10px; border: 2px solid #fbbc04;
+            border-radius: 8px; padding: 16px; background: #fffbea; flex-shrink: 0;
+        }
+        .hitl.visible { display: flex; }
+        .hitl-prompt {
+            font-size: 13px; line-height: 1.6; color: #333; white-space: pre-wrap;
+        }
+        .hitl-actions {
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .hitl-divider {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #b8a060;
+        }
+        .hitl-divider::before, .hitl-divider::after {
+            content: ''; flex: 1; border-top: 1px solid #e8d9a0;
+        }
+        .hitl-feedback-row { display: flex; gap: 8px; }
+        .hitl-feedback-row input {
+            flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; background: #fff;
+        }
+        .hitl-actions button {
+            padding: 8px 18px; border: none; border-radius: 6px; font-size: 14px;
+            cursor: pointer; white-space: nowrap;
+        }
+        .hitl-actions .btn-approve {
+            background: #34a853; color: #fff; width: 100%; padding: 10px;
+            font-weight: 600; font-size: 14px;
+        }
+        .hitl-actions .btn-approve:disabled { opacity: 0.5; cursor: default; }
+        .hitl-actions .btn-feedback { background: #1a73e8; color: #fff; }
+        .hitl-actions .btn-feedback:disabled { opacity: 0.5; cursor: default; }
+
+        /* Structured HITL summary */
+        .hitl-section { margin-bottom: 10px; }
+        .hitl-section-title {
+            font-size: 12px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.04em; color: #7a5c00; margin-bottom: 4px;
+        }
+        .hitl-query { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+        .hitl-meta { font-size: 13px; color: #555; }
+        .hitl-meta strong { color: #333; }
+        .hitl-sections-list {
+            list-style: decimal; margin: 4px 0 0 20px; font-size: 13px; color: #333;
+        }
+        .hitl-sections-list li { margin-bottom: 2px; }
+        .hitl-sources a {
+            display: block; font-size: 12px; color: #1a73e8;
+            text-decoration: none; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; line-height: 1.6;
+        }
+        .hitl-sources a:hover { text-decoration: underline; }
+        .hitl-sources .sources-count { font-size: 12px; color: #888; margin-top: 2px; }
+        .hitl-findings {
+            max-height: 150px; overflow-y: auto; font-size: 12px; color: #444;
+            line-height: 1.5; white-space: pre-wrap; background: #fff8e0;
+            border: 1px solid #f0e4b8; border-radius: 4px; padding: 8px 10px;
+        }
+        .hitl-prompt details { margin-top: 4px; }
+        .hitl-prompt details summary {
+            cursor: pointer; font-size: 12px; color: #7a5c00; font-weight: 500;
+            user-select: none;
+        }
+        .hitl-prompt details summary:hover { color: #5a4000; }
+        .hitl-prompt details[open] summary { margin-bottom: 6px; }
+        .hitl-score { font-weight: 700; }
+        .hitl-score.good { color: #34a853; }
+        .hitl-score.ok { color: #fbbc04; }
+        .hitl-score.poor { color: #ea4335; }
     </style>
 </head>
 <body>
     <div class="main">
-        <h2>GPT Researcher + AG2</h2>
+        <h2>
+            <img src="https://raw.githubusercontent.com/ag2ai/ag2/main/website/static/img/ag2.svg" alt="AG2">
+            GPT Researcher
+        </h2>
         <div class="input-row">
             <input type="text" id="query" placeholder="Enter your research question..." autofocus>
-            <button id="run" onclick="startResearch()">Research</button>
+            <button id="run-btn" onclick="startResearch()">Research</button>
         </div>
-        <div class="report" id="report">Your report will appear here.</div>
+        <div class="activity" id="activity"></div>
+        <div class="hitl" id="hitl">
+            <div class="hitl-prompt" id="hitl-prompt"></div>
+            <div class="hitl-actions">
+                <button class="btn-approve" id="hitl-approve-btn" onclick="sendHitlApprove()">Approve &amp; Write Report</button>
+                <div class="hitl-divider">or</div>
+                <div class="hitl-feedback-row">
+                    <input type="text" id="hitl-input" placeholder="Describe what needs more research...">
+                    <button class="btn-feedback" id="hitl-feedback-btn" onclick="sendHitlFeedback()">Send Feedback</button>
+                </div>
+            </div>
+        </div>
+        <div class="report placeholder" id="report">Your report will appear here when research is complete.</div>
     </div>
 
     <div class="pipeline">
+        <img src="/assets/ag2-logo.svg" alt="AG2" class="pipeline-logo">
         <h2>Pipeline</h2>
-        <div class="stage-label">Current stage</div>
-        <div class="stage-value" id="stage">Waiting</div>
+        <div class="status-block">
+            <div class="status-label">Stage</div>
+            <div class="status-value" id="stage">Idle</div>
+        </div>
+        <div class="status-block">
+            <div class="status-label">Active agent</div>
+            <div class="status-value" id="active-agent">&mdash;</div>
+        </div>
+        <div class="status-block">
+            <div class="status-label">Cost</div>
+            <div class="status-value" id="cost" style="font-family: ui-monospace, monospace; font-size: 13px;">&mdash;</div>
+        </div>
         <div class="agents" id="agents">
             <div class="agent" data-name="Chief Editor">Chief Editor</div>
             <div class="agent" data-name="Editor">Editor</div>
             <div class="agent" data-name="Researcher">Researcher</div>
             <div class="agent" data-name="Reviewer">Reviewer</div>
             <div class="agent" data-name="Revisor">Revisor</div>
+            <div class="agent" data-name="Human Review">Human Review</div>
             <div class="agent" data-name="Writer">Writer</div>
             <div class="agent" data-name="Publisher">Publisher</div>
         </div>
@@ -236,28 +531,323 @@ The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress pa
 
     <script>
     const queryEl = document.getElementById('query');
-    const runBtn = document.getElementById('run');
+    const runBtn = document.getElementById('run-btn');
     const reportEl = document.getElementById('report');
     const stageEl = document.getElementById('stage');
+    const activeAgentEl = document.getElementById('active-agent');
+    const activityEl = document.getElementById('activity');
+    const costEl = document.getElementById('cost');
+    const hitlEl = document.getElementById('hitl');
+    const hitlPromptEl = document.getElementById('hitl-prompt');
+    const hitlInputEl = document.getElementById('hitl-input');
+    const hitlFeedbackBtn = document.getElementById('hitl-feedback-btn');
+    const hitlApproveBtn = document.getElementById('hitl-approve-btn');
+
+    // Streaming state
+    let currentAgent = null;
+    let currentToolName = null;
+    let totalCost = 0;
+    let currentToolId = null;
+    let currentToolEl = null;
+
 
     function setActiveAgent(name) {
-        document.querySelectorAll('.agent').forEach(el => {
-            el.classList.toggle('active', el.dataset.name === name);
+        const agentEls = document.querySelectorAll('.agent');
+        // Check if the name matches any agent in the pipeline list
+        const isKnownAgent = Array.from(agentEls).some(el => el.dataset.name === name);
+        if (!isKnownAgent) return; // ignore unknown agents (e.g. "User") to preserve current state
+        let found = false;
+        agentEls.forEach(el => {
+            if (el.dataset.name === name) {
+                el.className = 'agent active';
+                found = true;
+            } else if (found) {
+                el.className = 'agent';
+            } else {
+                el.className = 'agent done';
+            }
         });
+        activeAgentEl.textContent = name || '\u2014';
     }
 
-    function updateFromSnapshot(state) {
-        if (state.stage) stageEl.textContent = state.stage.replace('_', ' ');
-        if (state.active_agent) setActiveAgent(state.active_agent);
+    function resetAgents() {
+        document.querySelectorAll('.agent').forEach(el => el.className = 'agent');
+        activeAgentEl.textContent = '\u2014';
     }
+
+    // --- Activity log helpers ---
+
+    function ensureAgentSection(agentName) {
+        if (agentName && agentName !== currentAgent) {
+            currentAgent = agentName;
+            const header = document.createElement('div');
+            header.className = 'activity-agent';
+            header.textContent = agentName;
+            activityEl.appendChild(header);
+        }
+    }
+
+    function addToolEntry(toolName) {
+        const el = document.createElement('div');
+        el.className = 'activity-tool';
+        el.textContent = '\u2699 ' + toolName + '\u2026';
+        activityEl.appendChild(el);
+        activityEl.scrollTop = activityEl.scrollHeight;
+        return el;
+    }
+
+    function addLogEntry(text, className) {
+        const el = document.createElement('div');
+        el.className = 'activity-log' + (className ? ' ' + className : '');
+        el.textContent = text;
+        activityEl.appendChild(el);
+        activityEl.scrollTop = activityEl.scrollHeight;
+    }
+
+    // --- Handle gpt-researcher log stream messages ---
+
+    let reportAccumulator = '';
+
+    function handleLogMessage(msg) {
+        const type = msg.type;
+        const output = msg.output || '';
+
+        if (type === 'done') return;
+
+        if (type === 'report') {
+            // Report text chunk — render progressively in the report area only
+            reportAccumulator += output;
+            reportEl.classList.remove('placeholder');
+            reportEl.innerHTML = marked.parse(reportAccumulator);
+            return;
+        }
+
+        if (type === 'cost') {
+            // Accumulate per-call costs from gpt-researcher
+            const costStr = (msg.data && msg.data.total_cost) || '';
+            const parsed = parseFloat(costStr.replace('$', ''));
+            if (!isNaN(parsed)) {
+                totalCost += parsed;
+                costEl.textContent = '$' + totalCost.toFixed(4);
+            }
+            return;
+        }
+
+        if (type === 'hitl_summary') {
+            // Render structured HITL summary with rich details
+            const d = msg.data || {};
+            if (d.query) {
+                hitlPromptEl.innerHTML = renderHitlSummary(d);
+            }
+            return;
+        }
+
+        if (type === 'state') {
+            // Pipeline state update from the orchestrator reply function
+            handleSnapshot(msg.data || {});
+            return;
+        }
+
+        if (type === 'logs') {
+            const text = output.replace(/^\s+/, '');
+            if (!text) return;
+
+            if (text.includes('Added source url') || text.includes('\u2705')) {
+                addLogEntry(text, 'source');
+            } else {
+                addLogEntry(text, '');
+            }
+            return;
+        }
+    }
+
+    // --- Render structured HITL summary ---
+
+    function renderHitlSummary(d) {
+        const scoreNum = parseInt(d.score) || 0;
+        const scoreClass = scoreNum >= 7 ? 'good' : scoreNum >= 4 ? 'ok' : 'poor';
+        const gaps = (d.gaps || 'none').trim();
+        const hasGaps = gaps.toLowerCase() !== 'none' && gaps !== '';
+
+        let html = '';
+
+        // Query
+        html += `<div class="hitl-section"><div class="hitl-section-title">Research Query</div>`;
+        html += `<div class="hitl-query">${escapeHtml(d.query)}</div></div>`;
+
+        // Quality + Gaps
+        html += `<div class="hitl-section"><div class="hitl-section-title">Quality Assessment</div>`;
+        html += `<div class="hitl-meta">Score: <span class="hitl-score ${scoreClass}">${scoreNum}/10</span>`;
+        if (hasGaps) {
+            html += ` &mdash; Gaps: <strong>${escapeHtml(gaps)}</strong>`;
+        } else {
+            html += ` &mdash; No gaps identified`;
+        }
+        html += `</div></div>`;
+
+        // Report outline / sections
+        if (d.sections) {
+            const items = d.sections.split(',').map(s => s.trim()).filter(Boolean);
+            if (items.length) {
+                html += `<div class="hitl-section"><div class="hitl-section-title">Report Outline</div>`;
+                html += `<ol class="hitl-sections-list">`;
+                items.forEach(s => { html += `<li>${escapeHtml(s)}</li>`; });
+                html += `</ol></div>`;
+            }
+        }
+
+        // Sources (collapsible)
+        const sources = d.sources || [];
+        const totalSources = d.sources_count || sources.length;
+        if (sources.length) {
+            html += `<div class="hitl-section"><details>`;
+            html += `<summary>Sources (${totalSources} collected, showing top ${sources.length})</summary>`;
+            html += `<div class="hitl-sources">`;
+            sources.forEach(url => {
+                html += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+            });
+            if (totalSources > sources.length) {
+                html += `<div class="sources-count">+ ${totalSources - sources.length} more sources</div>`;
+            }
+            html += `</div></details></div>`;
+        }
+
+        // Findings preview (collapsible)
+        if (d.findings_preview) {
+            html += `<div class="hitl-section"><details>`;
+            html += `<summary>Findings Preview</summary>`;
+            html += `<div class="hitl-findings">${escapeHtml(d.findings_preview)}</div>`;
+            html += `</details></div>`;
+        }
+
+        html += `<div class="hitl-meta" style="margin-top:8px;">Approve to proceed with writing, or provide feedback for additional research.</div>`;
+
+        return html;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // --- Snapshot handler ---
+
+    function handleSnapshot(snapshot) {
+        if (snapshot.stage) {
+            stageEl.textContent = snapshot.stage.replace(/_/g, ' ');
+        }
+        if (snapshot.active_agent !== undefined) {
+            setActiveAgent(snapshot.active_agent);
+            ensureAgentSection(snapshot.active_agent);
+        }
+        if (snapshot.report) {
+            reportEl.classList.remove('placeholder');
+            reportEl.innerHTML = marked.parse(snapshot.report);
+        }
+    }
+
+    // --- Log stream connection (uses EventSource for reliable SSE) ---
+
+    let logSource = null;
+
+    function connectLogStream() {
+        if (logSource) {
+            logSource.close();
+        }
+        logSource = new EventSource('/logs');
+        logSource.onmessage = function(event) {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'done') {
+                    logSource.close();
+                    logSource = null;
+                    return;
+                }
+                handleLogMessage(msg);
+            } catch (e) { /* skip parse errors */ }
+        };
+        logSource.onerror = function() {
+            // Connection closed or errored — clean up
+            if (logSource) {
+                logSource.close();
+                logSource = null;
+            }
+        };
+    }
+
+    // --- HITL (Human-in-the-Loop) helpers ---
+
+    function showHitl(prompt) {
+        // Only set prompt text if the structured summary hasn't been set yet via /logs
+        if (!hitlPromptEl.innerHTML) {
+            hitlPromptEl.textContent = prompt || 'Please review the research findings.';
+        }
+        hitlInputEl.value = '';
+        hitlEl.classList.add('visible');
+        hitlInputEl.focus();
+    }
+
+    function hideHitl() {
+        hitlEl.classList.remove('visible');
+        hitlPromptEl.innerHTML = '';
+        hitlFeedbackBtn.disabled = false;
+        hitlApproveBtn.disabled = false;
+    }
+
+    async function sendHitlResponse(text) {
+        hitlFeedbackBtn.disabled = true;
+        hitlApproveBtn.disabled = true;
+        try {
+            await fetch('/research/respond', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ response: text }),
+            });
+        } catch (e) {
+            console.error('HITL respond error:', e);
+        }
+        hideHitl();
+    }
+
+    function sendHitlApprove() {
+        sendHitlResponse('Looks good, proceed with writing the report.');
+    }
+
+    function sendHitlFeedback() {
+        const text = hitlInputEl.value.trim();
+        if (!text) return;
+        sendHitlResponse(text);
+    }
+
+    hitlInputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') sendHitlFeedback();
+    });
+
+    // --- Main research flow ---
 
     async function startResearch() {
         const query = queryEl.value.trim();
         if (!query) return;
 
         runBtn.disabled = true;
-        reportEl.textContent = '';
+        queryEl.disabled = true;
+        reportEl.innerHTML = 'Researching\u2026';
+        reportEl.classList.add('placeholder');
         stageEl.textContent = 'Starting...';
+        resetAgents();
+
+        // Reset activity log and cost
+        activityEl.innerHTML = '';
+        activityEl.classList.add('visible');
+        currentAgent = null;
+        currentToolName = null;
+        currentToolId = null;
+        currentToolEl = null;
+        reportAccumulator = '';
+        totalCost = 0;
+        costEl.textContent = '\u2014';
+        hideHitl();
 
         const payload = {
             threadId: 'research-thread',
@@ -266,12 +856,16 @@ The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress pa
             state: {}, context: [], tools: [], forwardedProps: {},
         };
 
-        let reportText = '';
+        // Connect to the gpt-researcher log stream (runs in parallel)
+        connectLogStream();
 
         try {
             const response = await fetch('/research/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                },
                 body: JSON.stringify(payload),
             });
 
@@ -282,35 +876,87 @@ The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress pa
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
                     if (!line.startsWith('data: ')) continue;
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
                     try {
-                        const event = JSON.parse(line.slice(6));
+                        const event = JSON.parse(data);
                         switch (event.type) {
-                            // STATE_SNAPSHOT: update the pipeline panel
-                            case 'STATE_SNAPSHOT':
-                                updateFromSnapshot(event.snapshot);
-                                break;
+                            case 'TEXT_MESSAGE_START':
                             case 'TEXT_MESSAGE_CONTENT':
-                                reportText += event.delta || '';
-                                reportEl.textContent = reportText;
+                            case 'TEXT_MESSAGE_CHUNK':
+                            case 'TEXT_MESSAGE_END':
+                                break;
+
+                            case 'TOOL_CALL_START':
+                                currentToolName = event.toolCallName;
+                                currentToolId = event.toolCallId;
+                                currentToolEl = addToolEntry(currentToolName);
+                                break;
+
+                            case 'TOOL_CALL_ARGS':
+                                break;
+
+                            case 'TOOL_CALL_RESULT':
+                                break;
+
+                            case 'TOOL_CALL_END':
+                                if (currentToolEl && currentToolName) {
+                                    currentToolEl.className = 'activity-tool done';
+                                    currentToolEl.textContent = '\u2713 ' + currentToolName;
+                                }
+                                currentToolName = null;
+                                currentToolId = null;
+                                currentToolEl = null;
+                                break;
+
+                            case 'INPUT_REQUEST':
+                                showHitl(event.prompt || 'Please review the research findings.');
+                                break;
+
+                            case 'STATE_SNAPSHOT':
+                                handleSnapshot(event.snapshot);
+                                break;
+
+                            case 'RUN_STARTED':
+                                break;
+
+                            case 'RUN_FINISHED':
+                                break;
+
+                            case 'RUN_ERROR':
+                                reportEl.classList.remove('placeholder');
+                                reportEl.textContent = 'Error: ' + (event.message || 'Unknown error');
                                 break;
                         }
                     } catch (e) { /* skip parse errors */ }
                 }
             }
+
+        } catch (err) {
+            reportEl.textContent = 'Connection error: ' + err.message;
         } finally {
             runBtn.disabled = false;
+            queryEl.disabled = false;
             stageEl.textContent = 'Complete';
             setActiveAgent('');
+            // Clean up log stream
+            if (logSource) {
+                logSource.close();
+                logSource = null;
+            }
         }
     }
 
-    queryEl.addEventListener('keydown', e => { if (e.key === 'Enter') startResearch(); });
+    queryEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') startResearch();
+    });
     </script>
 </body>
 </html>
@@ -318,47 +964,19 @@ The frontend consumes `STATE_SNAPSHOT` events to update the pipeline progress pa
 
 </details>
 
-The key part is the `STATE_SNAPSHOT` handler: whenever the pipeline transitions to a new agent or stage, the backend updates `context_variables` and AG-UI automatically pushes those changes to the browser. The frontend uses the `active_agent` value to highlight the current agent in the pipeline panel, and `stage` to update the status label -- no polling required.
+## Where to Take It Next
 
-### Human in the Loop
+`task.json` only needs a `query` and `report_type` to run. The `report_type` field is passed directly to `GPTResearcher` -- `"research_report"` produces a comprehensive multi-section report, while `"outline_report"` and `"resource_report"` give you lighter-weight alternatives. You can also pass additional parameters to the `GPTResearcher` constructor in `init_research`: `max_sections` controls depth, `model` sets the research LLM independently from the AG2 orchestration model, and `report_source` scopes the search to web or local sources.
 
-Set `"include_human_feedback": true` in `task.json` and the pipeline pauses for your input at key stages:
+The pipeline itself is straightforward to extend. Because each agent is a separate `ConversableAgent` with an explicit handoff, adding a stage means writing a new tool function and inserting an `AgentNameTarget` into the chain. A fact-checking agent between Reviewer and Revisor, for example, would cross-reference key claims before the revision step. A notification agent at the end could post the finished report to Slack or email with a few lines using AG2's [communication platform tools](/docs/user-guide/reference-tools/communication-platforms/slack).
 
-```json
-{
-  "query": "Competitive landscape of vector databases in 2026",
-  "include_human_feedback": true,
-  "max_sections": 5,
-  "max_revisions": 2,
-  "model": "gpt-4o",
-  "publish_formats": { "markdown": true }
-}
-```
+The human-in-the-loop step can also be extended. Right now there's one `RevertToUserTarget()` at the Human Review stage. Adding a second review checkpoint after the Writer produces a draft -- with its own approve/feedback cycle -- is a matter of another agent with the same pattern.
 
-In the web UI, the input field stays active while the pipeline is running. When the Human agent is invoked, the Chief Editor sends a message asking for your feedback, the UI displays it, and the pipeline waits. Your response goes directly to the next agent in the chain.
-
-## Customization and Next Steps
-
-**Tuning the output** via `task.json`:
-
-- **`max_sections`** — three sections gives a focused summary; increase to 6-8 for comprehensive analysis
-- **`max_revisions`** — more cycles mean more thorough review, at the cost of additional LLM calls
-- **`publish_formats`** — enable `pdf` and `docx` alongside `markdown` for distributable reports
-- **`follow_guidelines`** + **`guidelines`** — enforce formatting rules such as APA citations, specific languages, or required source linking
-- **`model`** — use a cheaper model for fast drafts, a more capable one for production
-
-**Extending the pipeline:**
-
-The AG2 orchestration layer makes it straightforward to add agents or tools. A few ideas:
-
-- A **fact-checking agent** that cross-references claims against trusted sources before the Reviewer sees them
-- A **citation formatter** tool registered to the Writer for automatic reference list generation
-- A **notification agent** that posts a summary to Slack or email when the report is complete -- AG2's [communication platform tools](/docs/user-guide/reference-tools/communication-platforms/slack) make this a few lines of code
+**Clone and run it from AG2's [Build with AG2 repository](https://github.com/ag2ai/build-with-ag2/tree/main/ag-ui/gpt-researcher) and make it your own!**
 
 ## Learn More
 
 - [GPT Researcher documentation](https://docs.gptr.dev/) — Assaf Elovic's full documentation for GPT Researcher
 - [AG2 integration guide](https://docs.gptr.dev/docs/gpt-researcher/multi_agents/ag2) — the original AG2 integration docs from the GPT Researcher team
-- [Sample code on GitHub](https://github.com/ag2ai/build-with-ag2/tree/main/gpt-researcher)
 - [Deep Research reference page](/docs/user-guide/reference-tools/deep-research) — DeepResearchTool vs. GPT Researcher comparison
 - [AG-UI protocol](/docs/user-guide/ag-ui/) — streaming agent state to a frontend

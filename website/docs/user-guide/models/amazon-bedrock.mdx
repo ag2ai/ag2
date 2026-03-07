@@ -1,6 +1,7 @@
 ---
-title: Amazon Bedrock
+title: Amazon Bedrock Guide | Multi-Agent Framework
 sidebarTitle: Amazon Bedrock
+description: "How to use Amazon Bedrock models with AG2. IAM setup, configuration, and code examples for building multi-agent systems on AWS."
 ---
 
 AG2 allows you to use Amazon's generative AI Bedrock service to run inference with a number of open-weight models and as well as their own models.
@@ -148,7 +149,7 @@ Typical use cases include (but are not limited to):
 
 For example, to enable Claude's 'thinking' mode:
 ```python
-llm_config_bedrock = autogen.LLMConfig(config_list={
+llm_config_bedrock = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
         "aws_region": "us-east-1",
@@ -179,7 +180,7 @@ If you are using your AG2 code within an AWS Lambda function, you can utilise th
 The following example shows a basic configuration with default retry settings (5 total attempts, standard mode):
 
 ```python
-llm_config_default = autogen.LLMConfig(config_list={
+llm_config_default = autogen.LLMConfig({
     "api_type": "bedrock",
     "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "aws_region": "us-east-1",
@@ -194,7 +195,7 @@ llm_config_default = autogen.LLMConfig(config_list={
 For critical applications that need maximum retry attempts:
 
 ```python
-llm_config_reliable = autogen.LLMConfig(config_list={
+llm_config_reliable = autogen.LLMConfig({
     "api_type": "bedrock",
     "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "aws_region": "us-east-1",
@@ -210,7 +211,7 @@ llm_config_reliable = autogen.LLMConfig(config_list={
 For handling rate limits and throttling:
 
 ```python
-llm_config_rate_limit = autogen.LLMConfig(config_list={
+llm_config_rate_limit = autogen.LLMConfig({
     "api_type": "bedrock",
     "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "aws_region": "us-east-1",
@@ -226,7 +227,7 @@ llm_config_rate_limit = autogen.LLMConfig(config_list={
 For applications that need quick failure detection:
 
 ```python
-llm_config_fast_fail = autogen.LLMConfig(config_list={
+llm_config_fast_fail = autogen.LLMConfig({
     "api_type": "bedrock",
     "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "aws_region": "us-east-1",
@@ -252,7 +253,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config_bedrock = autogen.LLMConfig(config_list={
+llm_config_bedrock = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "api_key": BEDROCK_API_KEY,
@@ -343,7 +344,7 @@ from typing import Literal
 
 import autogen
 
-llm_config_bedrock = autogen.LLMConfig(config_list={
+llm_config_bedrock = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "meta.llama3-1-70b-instruct-v1:0",
         "aws_region": "us-west-2",
@@ -512,7 +513,7 @@ from typing import Annotated, Literal
 import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
 
-llm_config_sonnet = autogen.LLMConfig(config_list={
+llm_config_sonnet = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "aws_region": "us-east-1",
@@ -524,7 +525,7 @@ llm_config_sonnet = autogen.LLMConfig(config_list={
     cache_seed=None,  # turn off caching
 )
 
-llm_config_mistral = autogen.LLMConfig(config_list={
+llm_config_mistral = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "mistral.mistral-large-2407-v1:0",
         "aws_region": "us-west-2",
@@ -536,7 +537,7 @@ llm_config_mistral = autogen.LLMConfig(config_list={
     cache_seed=None,  # turn off caching
 )
 
-llm_config_llama31_70b = autogen.LLMConfig(config_list={
+llm_config_llama31_70b = autogen.LLMConfig({
         "api_type": "bedrock",
         "model": "meta.llama3-1-70b-instruct-v1:0",
         "aws_region": "us-west-2",
