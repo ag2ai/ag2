@@ -126,15 +126,15 @@ class StdioConfig(BasicSessionConfig):
         Yields:
             ClientSession: The MCP client session
         """
-        client = stdio_client(
-            StdioServerParameters(
-                command=self.command,
-                args=self.args,
-                env=self.environment,
-                encoding=self.encoding,
-                encoding_error_handler=self.encoding_error_handler,
-            )
+        server_params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            env=self.environment,
+            cwd=str(self.working_dir) if self.working_dir else None,
+            encoding=self.encoding,
+            encoding_error_handler=self.encoding_error_handler,
         )
+        client = stdio_client(server_params)
         yield await self.initialize(client, exit_stack)
 
 
