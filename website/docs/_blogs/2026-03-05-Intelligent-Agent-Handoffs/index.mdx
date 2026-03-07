@@ -20,7 +20,7 @@ This is the handoff problem. And it's harder than it looks.
 
 ## Why Handoffs Are Hard
 
-In a multi-agent system, each agent is a specialist. One handles billing, another handles technical issues, a third manages account changes. The power of multi-agent architectures comes from this specialization -- but it creates a fundamental coordination challenge: **how does control move between agents at the right time, with the right context?**
+In a multi-agent system, each agent is a specialist. One handles billing, another handles technical issues, a third manages account changes. The power of multi-agent architectures comes from this specialization, but it creates a fundamental coordination challenge: **how does control move between agents at the right time, with the right context?**
 
 The naive approach is to stuff routing logic into prompts: "If the user asks about billing, say TRANSFER_TO_BILLING." This breaks down fast:
 
@@ -35,14 +35,14 @@ What you need is a structured handoff system that separates *when* to hand off f
 
 AG2 provides four distinct handoff mechanisms, each designed for different routing scenarios. They're evaluated in a specific priority order on every agent turn:
 
-1. **Context-based conditions** -- deterministic routing based on shared state (no LLM needed)
-2. **LLM-based conditions** -- the agent's LLM evaluates when a transition should occur
-3. **Tool-based handoffs** -- tools explicitly return the next agent as part of their result
-4. **After-work behavior** -- fallback when nothing else triggers
+1. **Context-based conditions**: deterministic routing based on shared state (no LLM needed)
+2. **LLM-based conditions**: the agent's LLM evaluates when a transition should occur
+3. **Tool-based handoffs**: tools explicitly return the next agent as part of their result
+4. **After-work behavior**: fallback when nothing else triggers
 
 This layered evaluation means you can combine fast, cheap, deterministic checks with nuanced LLM reasoning -- and always have a safety net.
 
-![Handoff evaluation priority flow -- context conditions, LLM conditions, tool handoffs, and after-work fallback evaluated top to bottom](img/handoff-evaluation-priority-flow.webp)
+![Handoff evaluation priority flow: context conditions, LLM conditions, tool handoffs, and after-work fallback evaluated top to bottom](img/handoff-evaluation-priority-flow.webp)
 
 ## Building a Customer Support Triage System
 
@@ -98,7 +98,7 @@ llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4.1-mini", "api_key"
 We'll define tool functions next (Step 2), then create the agents with their tools registered at construction time. For now, the agents that don't need tools:
 
 ```python
-# Tech agent -- assesses technical issues
+# Tech agent assesses technical issues
 tech_agent = ConversableAgent(
     name="tech_agent",
     system_message="""You are a technical support agent. Determine if the issue
@@ -173,7 +173,7 @@ triage_agent = ConversableAgent(
     name="triage_agent",
     system_message="""You are a support triage agent. Use the classify_query
     tool to route the customer to the right team. Do not attempt to solve
-    issues yourself -- your job is routing.""",
+    issues yourself, your job is routing.""",
     llm_config=llm_config,
     functions=[classify_query],
 )
@@ -249,7 +249,7 @@ smartphone_agent.handoffs.add_context_conditions([
 ])
 ```
 
-When `check_repeat_issue` sets `repeat_issue` to `True` in context, the next time the computer or smartphone agent is about to speak, the context condition fires *immediately* -- before the LLM generates any response -- and routes directly to advanced troubleshooting.
+When `check_repeat_issue` sets `repeat_issue` to `True` in context, the next time the computer or smartphone agent is about to speak, the context condition fires *immediately*, before the LLM generates any response, and routes directly to advanced troubleshooting.
 
 **Why context-based handoffs?** Use them for decisions based on state rather than conversation content: account tier, retry counts, feature flags, authentication status. They're the fastest and cheapest handoff type.
 
@@ -322,7 +322,7 @@ User: "I tried that, still happening."
 
 ## How the Evaluation Priority Works
 
-Understanding the priority order helps you design predictable handoffs and debug unexpected behavior. Refer back to the diagram above -- on every agent turn:
+Understanding the priority order helps you design predictable handoffs and debug unexpected behavior. Refer back to the diagram above, on every agent turn:
 
 1. **Context conditions** are checked first (no LLM call). Match? Hand off immediately.
 2. **LLM generates a response** with conditions available as tools. If the LLM calls a condition tool, hand off to that target. If it calls a regular tool and the tool returns a `ReplyResult` with a target, hand off there.
@@ -357,7 +357,7 @@ AG2's handoff system evolved from the earlier Swarm-based approach. If you're wo
 
 ## Try It Yourself
 
-The code in this post is self-contained -- copy the snippets into a single file, set your `OPENAI_API_KEY`, and run it. For a production-style example with the same handoff patterns, check out the [E-commerce Customer Service](https://github.com/ag2ai/build-with-ag2/tree/main/e-commerce-customer-service) project in [build-with-ag2](https://github.com/ag2ai/build-with-ag2): five agents handling order tracking and returns with LLM-driven handoffs and shared context variables.
+The code in this post is self-contained, copy the snippets into a single file, set your `OPENAI_API_KEY`, and run it. For a production-style example with the same handoff patterns, check out the [E-commerce Customer Service](https://github.com/ag2ai/build-with-ag2/tree/main/e-commerce-customer-service) project in [build-with-ag2](https://github.com/ag2ai/build-with-ag2): five agents handling order tracking and returns with LLM-driven handoffs and shared context variables.
 
 ## Learn More
 
