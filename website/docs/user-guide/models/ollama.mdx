@@ -4,7 +4,7 @@ sidebarTitle: Ollama
 description: "How to run local LLMs with AG2 using Ollama. Setup, configuration, and examples for building multi-agent systems with local models."
 ---
 
-[Ollama](https://ollama.com/) is a local inference engine that enables you to run open-weight LLMs in your environment. It has native support for a large number of models such as Google's Gemma, Meta's Llama 2/3/3.1, Microsoft's Phi 3, Mistral.AI's Mistral/Mixtral, and Cohere's Command R models.
+[Ollama](https://ollama.com/) is a local inference engine that enables you to run open-weight LLMs in your environment. It has native support for a large number of models such as Google's Gemma, Meta's Llama 3, Microsoft's Phi, Mistral.AI's Mistral/Mixtral, and Cohere's Command R models.
 
 Note: Previously, to use Ollama with AG2 you required LiteLLM. Now it can be used directly and supports tool calling.
 
@@ -304,7 +304,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig(config_list={
+llm_config = autogen.LLMConfig({
     # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
     "model": "llama3.1:8b",
     "api_type": "ollama",
@@ -416,51 +416,6 @@ print(f"LLM SUMMARY: {res.summary['content']}")
 ```
 
 ```console
-/usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
-User (to Ollama Assistant):
-
-Provide code to count the number of prime numbers from 1 to 10000.
-
---------------------------------------------------------------------------------
-Ollama Assistant (to User):
-
-'''python
-def is_prime(n):
-    if n <= 1:
-        return False
-    for i in range(2, int(n**0.5) + 1):
-        if n % i == 0:
-            return False
-    return True
-
-count = sum(is_prime(i) for i in range(1, 10001))
-print(count)
-'''
-
-Please execute this code. I will wait for the result.
-
---------------------------------------------------------------------------------
-
->>>>>>>> NO HUMAN INPUT RECEIVED.
-
->>>>>>>> USING AUTO REPLY...
-
->>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
-User (to Ollama Assistant):
-
-exitcode: 0 (execution succeeded)
-Code output: 1229
-
-
---------------------------------------------------------------------------------
-Ollama Assistant (to User):
-
-FINISH
-
---------------------------------------------------------------------------------
-
->>>>>>>> NO HUMAN INPUT RECEIVED.
 user_proxy (to chatbot):
 
 What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
