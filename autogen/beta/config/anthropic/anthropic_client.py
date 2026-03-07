@@ -53,6 +53,7 @@ class AnthropicClient(LLMClient):
         default_headers: dict[str, str] | None = None,
         http_client: httpx.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
+        prompt_caching: bool = True,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -65,6 +66,7 @@ class AnthropicClient(LLMClient):
 
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
+        self._prompt_caching = prompt_caching
 
     async def __call__(
         self,
@@ -73,14 +75,21 @@ class AnthropicClient(LLMClient):
         tools: Iterable[Tool],
     ) -> None:
         anthropic_messages = convert_messages(messages)
-        system_prompt = "\n\n".join(ctx.prompt) if ctx.prompt else NOT_GIVEN
+
+        if ctx.prompt:
+            system: Any = self._build_system(ctx.prompt)
+        else:
+            system = NOT_GIVEN
+
+        if self._prompt_caching and anthropic_messages:
+            self._inject_cache_control(anthropic_messages)
 
         tools_list = [tool_to_api(t) for t in tools]
 
         if self._streaming:
             async with self._client.messages.stream(
                 **self._create_options,
-                system=system_prompt,
+                system=system,
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             ) as stream:
@@ -88,11 +97,28 @@ class AnthropicClient(LLMClient):
         else:
             response = await self._client.messages.create(
                 **self._create_options,
-                system=system_prompt,
+                system=system,
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             )
             await self._process_response(response, ctx)
+
+    def _build_system(self, prompt: list[str]) -> Any:
+        text = "\n\n".join(prompt)
+        if self._prompt_caching:
+            return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+        return text
+
+    @staticmethod
+    def _inject_cache_control(messages: list[dict[str, Any]]) -> None:
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                content = msg.get("content")
+                if isinstance(content, str):
+                    msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+                elif isinstance(content, list) and content:
+                    content[-1]["cache_control"] = {"type": "ephemeral"}
+                break
 
     async def _process_response(
         self,

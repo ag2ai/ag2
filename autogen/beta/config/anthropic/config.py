@@ -28,6 +28,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     http_client: httpx.AsyncClient | None
     metadata: dict[str, str] | None
     service_tier: str | None
+    prompt_caching: bool
 
 
 @dataclass(slots=True)
@@ -47,6 +48,7 @@ class AnthropicConfig(ModelConfig):
     http_client: httpx.AsyncClient | None = None
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
+    prompt_caching: bool = True
 
     def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig":
         return replace(self, **overrides)
@@ -79,4 +81,5 @@ class AnthropicConfig(ModelConfig):
             default_headers=self.default_headers,
             http_client=self.http_client,
             create_options=options,
+            prompt_caching=self.prompt_caching,
         )
