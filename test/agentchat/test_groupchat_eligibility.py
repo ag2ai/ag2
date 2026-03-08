@@ -4,6 +4,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import patch
+
 import pytest
 
 from autogen import ConversableAgent, GroupChat, NoEligibleSpeakerError, SelectionContext
@@ -530,8 +533,6 @@ class TestAdversarialGroupChatEligibilityDeep:
         bob = _make_func_agent("bob", {"another_func": lambda: None})
         carol = _make_agent("carol")
 
-        block_all = _PolicyBlockByName("alice")
-
         class _BlockBoth:
             def is_eligible(self, agent, ctx):
                 return agent.name not in ("alice", "bob")
@@ -547,6 +548,33 @@ class TestAdversarialGroupChatEligibilityDeep:
         # Policy blocks both -> NoEligibleSpeakerError.
         with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._prepare_and_select_agents(carol)
+
+    def test_async_manual_fallback_uses_filtered_agents(self):
+        """a_select_speaker manual fallback must use policy-filtered agent list.
+
+        When manual_select_speaker returns None (user presses 'q' or empty),
+        a_select_speaker falls back to next_agent with the filtered list.
+        """
+        alice = _make_agent("alice")
+        bob = _make_agent("bob")
+        carol = _make_agent("carol")
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[{"role": "user", "content": "hello"}],
+            max_round=5,
+            speaker_selection_method="manual",
+            eligibility_policies=[_PolicyBlockByName("bob")],
+        )
+
+        # Mock manual_select_speaker to return None (simulates user pressing 'q')
+        # This makes _prepare_and_select_agents return (None, agents, None)
+        # and a_select_speaker falls through to the manual fallback at L678.
+        selector = _make_agent("selector")
+        with patch.object(gc, "manual_select_speaker", return_value=None):
+            selected = asyncio.run(gc.a_select_speaker(alice, selector))
+        # alice is last_speaker, bob is blocked by policy, so next should be carol
+        assert selected.name == "carol"
 
     def test_invalid_policy_rejected_at_construction(self):
         """GroupChat must reject objects that don't implement AgentEligibilityPolicy."""
