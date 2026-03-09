@@ -86,7 +86,7 @@ llm_config = LLMConfig(
         "api_type": "deepseek",
     },
     temperature=0.5,
-    max_tokens=10000,
+    max_tokens=8192,
 )
 ```
 
@@ -113,7 +113,6 @@ llm_config = LLMConfig({
         "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
     },
-    tags=["deepseek"],
 )
 
 # Setting up the agents
@@ -235,7 +234,6 @@ llm_config = autogen.LLMConfig(
         "api_key": os.environ.get("DEEPSEEK_API_KEY"),
         "api_type": "deepseek",
     },
-    tags=["deepseek"],
 )
 
 # Create the agent for tool calling
