@@ -157,6 +157,13 @@ crawl4ai = [
     "crawl4ai>=0.5.0,<0.9",
 ]
 
+quick-research = [
+    "ag2[tavily,crawl4ai,openai]",
+    "tiktoken",
+    "tldextract",
+    "beautifulsoup4",
+]
+
 browser-use = [
     # ToDo: Restrict browser-use to a specific version
     # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
