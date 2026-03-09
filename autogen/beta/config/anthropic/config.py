@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
 import httpx
+from anthropic.types import ModelParam
 
 from autogen.beta.config.config import ModelConfig
 
@@ -13,7 +14,7 @@ from .anthropic_client import AnthropicClient, CreateOptions
 
 
 class AnthropicConfigOverrides(TypedDict, total=False):
-    model: str
+    model: ModelParam | str
     api_key: str | None
     base_url: str | None
     max_tokens: int
@@ -33,7 +34,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class AnthropicConfig(ModelConfig):
-    model: str
+    model: ModelParam | str
     max_tokens: int = 4096
     api_key: str | None = None
     base_url: str | None = None

@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from itertools import dropwhile
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
@@ -27,6 +26,12 @@ class _HistoryLimiter(BaseMiddleware):
         super().__init__(event, ctx)
         self._max_events = max_events
 
+    @staticmethod
+    def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
+        while start < len(events) and isinstance(events[start], ToolResults):
+            start += 1
+        return start
+
     async def on_llm_call(
         self,
         call_next: LLMCall,
@@ -38,20 +43,14 @@ class _HistoryLimiter(BaseMiddleware):
 
         first = events[0]
         if isinstance(first, ModelRequest):
-            trimmed = [first]
-            if self._max_events > 1:
-                trimmed.extend(
-                    dropwhile(
-                        lambda x: isinstance(x, ToolResults),
-                        events[-(self._max_events - 1) :],
-                    )
-                )
+            if self._max_events == 1:
+                trimmed = [first]
+            else:
+                tail_start = len(events) - (self._max_events - 1)
+                tail_start = self._skip_leading_tool_results(events, tail_start)
+                trimmed = [first, *events[tail_start:]]
         else:
-            trimmed = list(
-                dropwhile(
-                    lambda x: isinstance(x, ToolResults),
-                    events[-self._max_events :],
-                )
-            )
+            start = self._skip_leading_tool_results(events, len(events) - self._max_events)
+            trimmed = list(events[start:])
 
         return await call_next(trimmed, ctx)

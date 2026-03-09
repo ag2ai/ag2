@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .base import AgentTurn, BaseMiddleware, LLMCall, Middleware, ToolExecution
-from .builtin import HistoryLimiter, LoggingMiddleware, RetryMiddleware
+from .builtin import HistoryLimiter, LoggingMiddleware, RetryMiddleware, TokenLimiter
 
 __all__ = (
     "AgentTurn",
@@ -13,5 +13,6 @@ __all__ = (
     "LoggingMiddleware",
     "Middleware",
     "RetryMiddleware",
+    "TokenLimiter",
     "ToolExecution",
 )

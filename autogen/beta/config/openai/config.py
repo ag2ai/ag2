@@ -8,6 +8,7 @@ from typing import Any, TypedDict, Unpack
 import httpx
 from openai import DEFAULT_MAX_RETRIES, not_given, omit
 from openai._types import Omit
+from openai.types import ChatModel
 
 from autogen.beta.config.config import ModelConfig
 
@@ -16,7 +17,7 @@ from .openai_responses_client import OpenAIResponsesClient
 
 
 class OpenAIConfigOverrides(TypedDict, total=False):
-    model: str
+    model: ChatModel | str
     api_key: str | None
     base_url: str | None
     temperature: float | None | Omit
@@ -59,7 +60,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class OpenAIConfig(ModelConfig):
-    model: str
+    model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
     temperature: float | None | Omit = omit
@@ -152,7 +153,7 @@ class OpenAIConfig(ModelConfig):
 
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
-    model: str
+    model: ChatModel | str
     api_key: str | None
     base_url: str | None
     temperature: float | None
@@ -179,7 +180,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class OpenAIResponsesConfig(ModelConfig):
-    model: str
+    model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
     temperature: float | None = None
