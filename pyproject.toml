@@ -158,7 +158,8 @@ crawl4ai = [
 ]
 
 quick-research = [
-    "ag2[tavily,crawl4ai,openai]",
+    "tavily-python>=0.7.4",
+    "crawl4ai>=0.5.0,<0.9",
     "tiktoken",
     "tldextract",
     "beautifulsoup4",

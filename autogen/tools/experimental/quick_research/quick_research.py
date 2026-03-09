@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....llm_config import LLMConfig
+from ....oai.client import OpenAIWrapper
 from ... import Tool
 from ...dependency_injection import Depends, on
 
@@ -28,7 +29,6 @@ with optional_import_block():
     import tldextract
     from bs4 import BeautifulSoup
     from crawl4ai import AsyncWebCrawler
-    from openai import AsyncOpenAI
     from tavily import TavilyClient
 
 __all__ = ["QuickResearchTool"]
@@ -37,8 +37,7 @@ __all__ = ["QuickResearchTool"]
 
 MAX_QUERIES = 5
 CRAWL_TIMEOUT = 10.0
-SUMMARIZE_TIMEOUT = 10.0
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
+SUMMARIZE_TIMEOUT = 30.0
 MAX_INPUT_TOKENS = 15_000
 MAX_CHUNK_TOKENS = 15_000
 OVERLAP_TOKENS = 200
@@ -96,27 +95,39 @@ def _split_tokens(text: str, enc: Any) -> list[str]:
 # ──────────────────────────── LLM summarization ──────────────────────────────
 
 
-async def _ask_llm_async(client: AsyncOpenAI, model: str, prompt: str, system_message: str) -> str:
-    """Call OpenAI-compatible API asynchronously."""
+def _ask_llm(config_list: list[dict[str, Any]], prompt: str, system_message: str) -> str:
+    """Call LLM synchronously via OpenAIWrapper (run in thread for async)."""
     try:
-        response = await client.chat.completions.create(
-            model=model,
+        wrapper = OpenAIWrapper(config_list=config_list)
+        response = wrapper.create(
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
+            cache_seed=None,
         )
-        content = response.choices[0].message.content
+        texts = wrapper.extract_text_or_completion_object(response)
+        if not texts:
+            return ""
+        result = texts[0]
+        # Handle both plain strings and ChatCompletionMessage objects
+        if isinstance(result, str):
+            return result.strip()
+        content = getattr(result, "content", None)
         return content.strip() if content else ""
     except Exception as e:
         print(f"[QuickResearch] LLM call failed: {e}")
         return ""
 
 
+async def _ask_llm_async(config_list: list[dict[str, Any]], prompt: str, system_message: str) -> str:
+    """Call LLM asynchronously by running OpenAIWrapper in a thread."""
+    return await asyncio.to_thread(_ask_llm, config_list, prompt, system_message)
+
+
 async def _summarise_text_async(
-    client: AsyncOpenAI,
-    model: str,
+    config_list: list[dict[str, Any]],
     enc: Any,
     text: str,
     chunk_prompt: str,
@@ -132,7 +143,7 @@ async def _summarise_text_async(
         was_truncated = True
 
     if len(tokens) <= MAX_CHUNK_TOKENS:
-        summary = await _ask_llm_async(client, model, text, full_prompt)
+        summary = await _ask_llm_async(config_list, text, full_prompt)
         if was_truncated:
             summary += (
                 "\n\n[Note: Summary based on first portion of content - original page was truncated due to length]"
@@ -140,11 +151,11 @@ async def _summarise_text_async(
         return summary
 
     chunks = _split_tokens(text, enc)
-    chunk_tasks = [_ask_llm_async(client, model, chunk, chunk_prompt) for chunk in chunks]
+    chunk_tasks = [_ask_llm_async(config_list, chunk, chunk_prompt) for chunk in chunks]
     partials = await asyncio.gather(*chunk_tasks)
 
     merge_text = "\n\n".join(partials)
-    summary = await _ask_llm_async(client, model, merge_text, merger_prompt)
+    summary = await _ask_llm_async(config_list, merge_text, merger_prompt)
 
     if was_truncated:
         summary += "\n\n[Note: Summary based on first portion of content - original page was truncated due to length]"
@@ -157,8 +168,7 @@ async def _summarise_text_async(
 
 async def _crawl_and_summarise(
     url: str,
-    client: AsyncOpenAI,
-    model: str,
+    config_list: list[dict[str, Any]],
     enc: Any,
     *,
     summarise: bool = True,
@@ -197,8 +207,7 @@ async def _crawl_and_summarise(
         try:
             summary = await asyncio.wait_for(
                 _summarise_text_async(
-                    client,
-                    model,
+                    config_list,
                     enc,
                     raw_text,
                     chunk_prompt=chunk_prompt,
@@ -257,8 +266,7 @@ def _tavily_search(query: str, tavily_api_key: str, num_results: int = 3) -> lis
 async def _research_single_query(
     query: str,
     tavily_api_key: str,
-    client: AsyncOpenAI,
-    model: str,
+    config_list: list[dict[str, Any]],
     enc: Any,
     num_results: int = 3,
     chunk_prompt: str = "Summarise the chunk, preserving all facts.",
@@ -271,8 +279,7 @@ async def _research_single_query(
     crawl_tasks = [
         _crawl_and_summarise(
             result["url"],
-            client,
-            model,
+            config_list,
             enc,
             summarise=True,
             chunk_prompt=chunk_prompt,
@@ -306,7 +313,7 @@ async def _research_single_query(
 # ──────────────────────────── Tool class ─────────────────────────────────────
 
 
-@require_optional_import(["tavily", "crawl4ai", "tiktoken", "tldextract", "bs4", "openai"], "quick-research")
+@require_optional_import(["tavily", "crawl4ai", "tiktoken", "tldextract", "bs4"], "quick-research")
 @export_module("autogen.tools.experimental")
 class QuickResearchTool(Tool):
     """Performs parallel web research across multiple queries.
@@ -314,53 +321,47 @@ class QuickResearchTool(Tool):
     For each query, the tool:
     1. Searches the web using Tavily to get top results
     2. Crawls each result URL using crawl4ai
-    3. Summarizes page content via an OpenAI-compatible LLM
+    3. Summarizes page content via LLM (any provider supported by AG2)
 
     This is a lightweight alternative to DeepResearchTool for quick fact-finding
     across multiple topics in parallel.
 
     Attributes:
         tavily_api_key: The Tavily API key for web search.
-        openai_api_key: The OpenAI API key for summarization.
-        llm_model: The model to use for summarization.
+        llm_config: LLM configuration for summarization.
     """
 
     def __init__(
         self,
         *,
+        llm_config: LLMConfig,
         tavily_api_key: str | None = None,
-        openai_api_key: str | None = None,
-        llm_config: LLMConfig | dict[str, Any] | None = None,
-        llm_model: str = DEFAULT_LLM_MODEL,
         num_results_per_query: int = 3,
     ) -> None:
         """Initialize the QuickResearchTool.
 
         Args:
+            llm_config: LLM configuration for summarization. Supports any AG2-compatible provider.
             tavily_api_key: Tavily API key. Falls back to TAVILY_API_KEY env var.
-            openai_api_key: OpenAI API key for summarization. Falls back to OPENAI_API_KEY env var.
-            llm_config: LLM configuration (currently unused, kept for consistency with other tools).
-            llm_model: The model to use for summarization. Defaults to "gpt-4o-mini".
             num_results_per_query: Number of search results to crawl per query. Defaults to 3.
 
         Raises:
-            ValueError: If tavily_api_key or openai_api_key are not provided or set in env vars.
+            ValueError: If tavily_api_key is not provided or set in env vars.
         """
         self.tavily_api_key = tavily_api_key or os.getenv("TAVILY_API_KEY")
-        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        self.llm_model = llm_model
+        self.llm_config = llm_config
         self.num_results_per_query = num_results_per_query
+
+        # Extract config_list as list of dicts for OpenAIWrapper
+        self._config_list = [c.model_dump() for c in llm_config.config_list]
 
         if self.tavily_api_key is None:
             raise ValueError("tavily_api_key must be provided either as an argument or via TAVILY_API_KEY env var")
-        if self.openai_api_key is None:
-            raise ValueError("openai_api_key must be provided either as an argument or via OPENAI_API_KEY env var")
 
         async def quick_research(
             queries: Annotated[list[str], "List of search queries to research (max 5)."],
             tavily_api_key: Annotated[str, Depends(on(self.tavily_api_key))],
-            openai_api_key: Annotated[str, Depends(on(self.openai_api_key))],
-            llm_model: Annotated[str, Depends(on(self.llm_model))],
+            config_list: Annotated[list[dict[str, Any]], Depends(on(self._config_list))],
             num_results_per_query: Annotated[int, Depends(on(self.num_results_per_query))],
             chunk_prompt: Annotated[
                 str, "Prompt for summarizing individual text chunks."
@@ -382,8 +383,7 @@ class QuickResearchTool(Tool):
             Args:
                 queries: List of search queries (max 5).
                 tavily_api_key: Tavily API key (injected dependency).
-                openai_api_key: OpenAI API key (injected dependency).
-                llm_model: Model name for summarization (injected dependency).
+                config_list: LLM config list (injected dependency).
                 num_results_per_query: Number of results per query (injected dependency).
                 chunk_prompt: Prompt for summarizing individual text chunks.
                 merger_prompt: Prompt for merging chunk summaries.
@@ -397,15 +397,13 @@ class QuickResearchTool(Tool):
 
             queries = queries[:MAX_QUERIES]
 
-            client = AsyncOpenAI(api_key=openai_api_key)
             enc = tiktoken.get_encoding("cl100k_base")
 
             research_tasks = [
                 _research_single_query(
                     query,
                     tavily_api_key=tavily_api_key,
-                    client=client,
-                    model=llm_model,
+                    config_list=config_list,
                     enc=enc,
                     num_results=num_results_per_query,
                     chunk_prompt=chunk_prompt,

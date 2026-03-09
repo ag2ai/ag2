@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.tools.experimental.quick_research import QuickResearchTool
 from autogen.tools.experimental.quick_research.quick_research import (
     _clean_html,
@@ -20,11 +21,15 @@ from autogen.tools.experimental.quick_research.quick_research import (
 )
 
 
-@run_for_optional_imports(["tavily", "crawl4ai", "tiktoken", "tldextract", "bs4", "openai"], "quick-research")
+@run_for_optional_imports(["tavily", "crawl4ai", "tiktoken", "tldextract", "bs4"], "quick-research")
 class TestQuickResearchTool:
     """Test suite for the QuickResearchTool class."""
 
     # ──────────────────────────── fixtures ────────────────────────────────────
+
+    @pytest.fixture
+    def llm_config(self) -> LLMConfig:
+        return LLMConfig({"model": "gpt-4o-mini", "api_key": "test_key"})
 
     @pytest.fixture
     def mock_tavily_response(self) -> dict[str, Any]:
@@ -61,48 +66,34 @@ class TestQuickResearchTool:
 
     # ──────────────────────────── initialization ─────────────────────────────
 
-    @pytest.mark.parametrize(
-        ("kwargs", "expected_error"),
-        [
-            ({"tavily_api_key": None, "openai_api_key": "key"}, "tavily_api_key must be provided"),
-            ({"tavily_api_key": "key", "openai_api_key": None}, "openai_api_key must be provided"),
-        ],
-    )
-    def test_initialization_missing_keys(
-        self, kwargs: dict[str, Any], expected_error: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test that missing API keys raise ValueError."""
+    def test_initialization_missing_tavily_key(self, llm_config: LLMConfig, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that missing Tavily API key raises ValueError."""
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        with pytest.raises(ValueError) as exc_info:
-            QuickResearchTool(**kwargs)
-        assert expected_error in str(exc_info.value)
+        with pytest.raises(ValueError, match="tavily_api_key must be provided"):
+            QuickResearchTool(llm_config=llm_config, tavily_api_key=None)
 
-    def test_initialization_success(self) -> None:
+    def test_initialization_success(self, llm_config: LLMConfig) -> None:
         """Test successful initialization with API keys."""
-        tool = QuickResearchTool(tavily_api_key="test_tavily_key", openai_api_key="test_openai_key")
+        tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_tavily_key")
         assert tool.name == "quick_research"
         assert "Research multiple queries" in tool.description
         assert tool.tavily_api_key == "test_tavily_key"
-        assert tool.openai_api_key == "test_openai_key"
         assert callable(tool.func)
 
-    def test_initialization_custom_params(self) -> None:
+    def test_initialization_custom_params(self, llm_config: LLMConfig) -> None:
         """Test initialization with custom parameters."""
         tool = QuickResearchTool(
+            llm_config=llm_config,
             tavily_api_key="key",
-            openai_api_key="key",
-            llm_model="gpt-4o",
             num_results_per_query=5,
         )
-        assert tool.llm_model == "gpt-4o"
         assert tool.num_results_per_query == 5
 
     # ──────────────────────────── tool schema ────────────────────────────────
 
-    def test_tool_schema(self) -> None:
+    def test_tool_schema(self, llm_config: LLMConfig) -> None:
         """Test the tool's JSON schema structure."""
-        tool = QuickResearchTool(tavily_api_key="test_key", openai_api_key="test_key")
+        tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_key")
         schema = tool.tool_schema
 
         assert schema["type"] == "function"
@@ -113,7 +104,7 @@ class TestQuickResearchTool:
         assert "queries" in params["required"]
 
         # Injected dependencies should NOT appear in the schema
-        for injected in ["tavily_api_key", "openai_api_key", "llm_model", "num_results_per_query"]:
+        for injected in ["tavily_api_key", "config_list", "num_results_per_query"]:
             assert injected not in params["properties"]
 
     # ──────────────────────────── HTML cleaning ──────────────────────────────
@@ -216,10 +207,10 @@ class TestQuickResearchTool:
         async def slow_crawler(*args: Any, **kwargs: Any) -> None:
             await asyncio.sleep(100)
 
-        mock_client = AsyncMock()
         import tiktoken
 
         enc = tiktoken.get_encoding("cl100k_base")
+        config_list = [{"model": "gpt-4o-mini", "api_key": "test_key"}]
 
         with patch("autogen.tools.experimental.quick_research.quick_research.AsyncWebCrawler") as mock_crawler_cls:
             mock_crawler = AsyncMock()
@@ -230,8 +221,7 @@ class TestQuickResearchTool:
 
             result = await _crawl_and_summarise(
                 "https://example.com",
-                mock_client,
-                "gpt-4o-mini",
+                config_list,
                 enc,
                 summarise=True,
             )
@@ -245,7 +235,7 @@ class TestQuickResearchTool:
         import tiktoken
 
         enc = tiktoken.get_encoding("cl100k_base")
-        mock_client = AsyncMock()
+        config_list = [{"model": "gpt-4o-mini", "api_key": "test_key"}]
 
         mock_result = MagicMock()
         mock_result.html = "<html><body><p>Raw page content here.</p></body></html>"
@@ -259,8 +249,7 @@ class TestQuickResearchTool:
 
             result = await _crawl_and_summarise(
                 "https://example.com",
-                mock_client,
-                "gpt-4o-mini",
+                config_list,
                 enc,
                 summarise=False,
             )
@@ -277,7 +266,7 @@ class TestQuickResearchTool:
         import tiktoken
 
         enc = tiktoken.get_encoding("cl100k_base")
-        mock_client = AsyncMock()
+        config_list = [{"model": "gpt-4o-mini", "api_key": "test_key"}]
 
         mock_search_results = [
             {"title": "Result 1", "url": "https://example.com/1"},
@@ -304,8 +293,7 @@ class TestQuickResearchTool:
             result = await _research_single_query(
                 "test query",
                 tavily_api_key="test_key",
-                client=mock_client,
-                model="gpt-4o-mini",
+                config_list=config_list,
                 enc=enc,
                 num_results=2,
             )
@@ -318,14 +306,14 @@ class TestQuickResearchTool:
     # ──────────────────────────── full tool invocation ────────────────────────
 
     @pytest.mark.asyncio
-    async def test_quick_research_empty_queries(self) -> None:
+    async def test_quick_research_empty_queries(self, llm_config: LLMConfig) -> None:
         """Test that empty queries return empty list."""
-        tool = QuickResearchTool(tavily_api_key="test_key", openai_api_key="test_key")
+        tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_key")
         result = await tool(queries=[])
         assert result == "[]"
 
     @pytest.mark.asyncio
-    async def test_quick_research_caps_queries(self) -> None:
+    async def test_quick_research_caps_queries(self, llm_config: LLMConfig) -> None:
         """Test that queries are capped at MAX_QUERIES."""
         mock_research_result = {"query": "q", "sources": []}
 
@@ -335,7 +323,7 @@ class TestQuickResearchTool:
             "autogen.tools.experimental.quick_research.quick_research._research_single_query",
             mock_research,
         ):
-            tool = QuickResearchTool(tavily_api_key="test_key", openai_api_key="test_key")
+            tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_key")
             queries = [f"query {i}" for i in range(10)]
             result_json = await tool(queries=queries)
             results = json.loads(result_json)
@@ -345,7 +333,7 @@ class TestQuickResearchTool:
             assert mock_research.call_count <= 5
 
     @pytest.mark.asyncio
-    async def test_quick_research_full_pipeline(self) -> None:
+    async def test_quick_research_full_pipeline(self, llm_config: LLMConfig) -> None:
         """Test full pipeline with mocked Tavily and crawl4ai."""
         mock_search_results = [{"title": "Test Page", "url": "https://example.com/test"}]
         mock_crawl_result = {
@@ -365,7 +353,7 @@ class TestQuickResearchTool:
                 return_value=mock_crawl_result,
             ),
         ):
-            tool = QuickResearchTool(tavily_api_key="test_key", openai_api_key="test_key")
+            tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_key")
             result_json = await tool(queries=["What is AG2?"])
 
         results = json.loads(result_json)
@@ -377,7 +365,7 @@ class TestQuickResearchTool:
         assert results[0]["sources"][0]["summary"] == "Summarized content about the topic."
 
     @pytest.mark.asyncio
-    async def test_quick_research_handles_crawl_failures(self) -> None:
+    async def test_quick_research_handles_crawl_failures(self, llm_config: LLMConfig) -> None:
         """Test that failed crawls are gracefully skipped."""
         mock_search_results = [
             {"title": "Good Page", "url": "https://example.com/good"},
@@ -404,7 +392,7 @@ class TestQuickResearchTool:
                 side_effect=mock_crawl_side_effect,
             ),
         ):
-            tool = QuickResearchTool(tavily_api_key="test_key", openai_api_key="test_key")
+            tool = QuickResearchTool(llm_config=llm_config, tavily_api_key="test_key")
             result_json = await tool(queries=["test query"])
 
         results = json.loads(result_json)
