@@ -32,8 +32,9 @@ class Middleware(MiddlewareFactory):
         return self._cls(event, ctx, **self._options)
 
 
+ToolResultType: TypeAlias = "ToolResult | ToolError | ClientToolCall"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
-ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable["ToolResult | ToolError | ClientToolCall"]]
+ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 
 
@@ -59,7 +60,7 @@ class BaseMiddleware:
         call_next: ToolExecution,
         event: "ToolCall",
         ctx: "Context",
-    ) -> "ToolResult":
+    ) -> ToolResultType:
         return await call_next(event, ctx)
 
     async def on_llm_call(

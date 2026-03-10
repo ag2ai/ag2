@@ -26,6 +26,9 @@ class Stream(Protocol):
 
     def where(self, condition: ClassInfo | Condition) -> "Stream": ...
 
+    @contextmanager
+    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]: ...
+
     @overload
     def subscribe(
         self,

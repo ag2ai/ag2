@@ -7,9 +7,15 @@ import time
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCall, ToolResult
-from autogen.beta.middlewares import AgentTurn, ToolExecution
-from autogen.beta.middlewares.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
+from autogen.beta.middlewares.base import (
+    AgentTurn,
+    BaseMiddleware,
+    LLMCall,
+    MiddlewareFactory,
+    ToolExecution,
+    ToolResultType,
+)
 
 
 class LoggingMiddleware(MiddlewareFactory):
@@ -45,7 +51,7 @@ class _LoggingMiddleware(BaseMiddleware):
         call_next: ToolExecution,
         event: ToolCall,
         ctx: Context,
-    ) -> ToolResult:
+    ) -> "ToolResultType":
         self._logger.info("Tool execute: %s(%s)", event.name, event.arguments)
         result = await call_next(event, ctx)
         self._logger.info("Tool result: %s", result)

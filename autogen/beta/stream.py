@@ -39,6 +39,28 @@ class ABCStream(Stream):
         finally:
             self.unsubscribe(sub_id)
 
+    @contextmanager
+    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]:
+        queue = asyncio.Queue[BaseEvent]()
+
+        async def write_events(event: BaseEvent) -> None:
+            await queue.put(event)
+
+        if max_events:
+
+            async def listen_events() -> AsyncIterator[BaseEvent]:
+                for _ in range(max_events):
+                    yield await queue.get()
+
+        else:
+
+            async def listen_events() -> AsyncIterator[BaseEvent]:
+                while True:
+                    yield await queue.get()
+
+        with self.sub_scope(write_events):
+            yield listen_events()
+
     def where(
         self,
         condition: ClassInfo | Condition,
@@ -129,7 +151,7 @@ class MemoryStream(ABCStream):
         ctx: "Context",
     ) -> None:
         # interrupters should follow registration order
-        for condition, interrupter in self._interrupters.values():
+        for condition, interrupter in tuple(self._interrupters.values()):
             if condition and not condition(event):
                 continue
 
@@ -147,7 +169,9 @@ class MemoryStream(ABCStream):
 
             event = e
 
-        for condition, s in self._subscribers.values():
+        # TODO: we need to publish under RWLock to prevent
+        # subscribers dictionary mutation. Now it is protected by copy
+        for condition, s in tuple(self._subscribers.values()):
             if condition and not condition(event):
                 continue
 

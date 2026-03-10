@@ -50,7 +50,6 @@ async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
 async def func(cmd: str, ctx: Context) -> str:
     """Just a test tool. Call it each time to let me testing tools."""
     print()
-    raise ValueError
     r = await ctx.input(cmd, timeout=0.0)
     print()
     return r

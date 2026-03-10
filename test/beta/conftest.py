@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,3 +11,8 @@ import pytest
 @pytest.fixture()
 def async_mock() -> AsyncMock:
     return AsyncMock()
+
+
+@pytest.fixture()
+def signal() -> asyncio.Event:
+    return asyncio.Event()

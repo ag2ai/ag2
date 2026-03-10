@@ -26,12 +26,6 @@ class _HistoryLimiter(BaseMiddleware):
         super().__init__(event, ctx)
         self._max_events = max_events
 
-    @staticmethod
-    def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
-        while start < len(events) and isinstance(events[start], ToolResults):
-            start += 1
-        return start
-
     async def on_llm_call(
         self,
         call_next: LLMCall,
@@ -44,13 +38,19 @@ class _HistoryLimiter(BaseMiddleware):
         first = events[0]
         if isinstance(first, ModelRequest):
             if self._max_events == 1:
-                trimmed = [first]
+                trimmed: Sequence[BaseEvent] = [first]
             else:
                 tail_start = len(events) - (self._max_events - 1)
-                tail_start = self._skip_leading_tool_results(events, tail_start)
+                tail_start = _skip_leading_tool_results(events, tail_start)
                 trimmed = [first, *events[tail_start:]]
         else:
-            start = self._skip_leading_tool_results(events, len(events) - self._max_events)
-            trimmed = list(events[start:])
+            start = _skip_leading_tool_results(events, len(events) - self._max_events)
+            trimmed = events[start:]
 
         return await call_next(trimmed, ctx)
+
+
+def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
+    while start < len(events) and isinstance(events[start], ToolResults):
+        start += 1
+    return start

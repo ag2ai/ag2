@@ -18,6 +18,8 @@ class Storage(Protocol):
 
     async def set_history(self, stream_id: "StreamId", events: Iterable[BaseEvent]) -> None: ...
 
+    async def drop_history(self, stream_id: "StreamId") -> None: ...
+
 
 class MemoryStorage(Storage):
     def __init__(self) -> None:
@@ -33,6 +35,9 @@ class MemoryStorage(Storage):
 
     async def set_history(self, stream_id: "StreamId", events: Iterable["BaseEvent"]) -> None:
         self.__data[stream_id] = list(events)
+
+    async def drop_history(self, stream_id: "StreamId") -> None:
+        self.__data.pop(stream_id, None)
 
 
 class History:

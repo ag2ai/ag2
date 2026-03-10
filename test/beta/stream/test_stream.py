@@ -12,7 +12,7 @@ from autogen.beta.events import ModelMessage, ToolCall
 
 class TestStreamSend:
     @pytest.mark.asyncio
-    async def test_send_event_to_single_subscriber(self, mock: MagicMock):
+    async def test_send_event_to_single_subscriber(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.subscribe(lambda ev: mock(ev))
@@ -22,7 +22,7 @@ class TestStreamSend:
         mock.assert_called_once_with(event)
 
     @pytest.mark.asyncio
-    async def test_send_event_to_multiple_subscribers(self, mock: MagicMock):
+    async def test_send_event_to_multiple_subscribers(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.subscribe(lambda ev: mock.listener1(ev))
@@ -34,7 +34,7 @@ class TestStreamSend:
         mock.listener2.assert_called_once_with(event)
 
     @pytest.mark.asyncio
-    async def test_send_multiple_events(self, mock: MagicMock):
+    async def test_send_multiple_events(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.subscribe(mock)
@@ -51,7 +51,7 @@ class TestStreamSend:
 
 class TestStreamWhereTypeFilter:
     @pytest.mark.asyncio
-    async def test_where_type_filter_by_type(self, mock: MagicMock):
+    async def test_where_type_filter_by_type(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
@@ -67,7 +67,7 @@ class TestStreamWhereTypeFilter:
         assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
     @pytest.mark.asyncio
-    async def test_where_type_filter_by_union_type(self, mock: MagicMock):
+    async def test_where_type_filter_by_union_type(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall | ModelMessage)
@@ -81,7 +81,7 @@ class TestStreamWhereTypeFilter:
         assert [c[0][0] for c in mock.call_args_list] == [event1, event2]
 
     @pytest.mark.asyncio
-    async def test_where_type_filter_no_match(self, mock: MagicMock):
+    async def test_where_type_filter_no_match(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
@@ -95,7 +95,7 @@ class TestStreamWhereTypeFilter:
 
 class TestStreamWhereConditionFilter:
     @pytest.mark.asyncio
-    async def test_where_condition_filter_by_condition(self, mock: MagicMock):
+    async def test_where_condition_filter_by_condition(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
@@ -112,7 +112,7 @@ class TestStreamWhereConditionFilter:
         assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
     @pytest.mark.asyncio
-    async def test_where_condition_filter_toolcall_name_no_match(self, mock: MagicMock):
+    async def test_where_condition_filter_toolcall_name_no_match(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         tool_stream = stream.where(ToolCall)
@@ -128,7 +128,7 @@ class TestStreamWhereConditionFilter:
 
 class TestStreamChainedFilters:
     @pytest.mark.asyncio
-    async def test_chained_type_and_condition_filters(self, mock: MagicMock):
+    async def test_chained_type_and_condition_filters(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.subscribe(mock.all)
@@ -145,7 +145,7 @@ class TestStreamChainedFilters:
         assert mock.func.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_unreachable_filter_scenario(self, mock: MagicMock):
+    async def test_unreachable_filter_scenario(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.where(ToolCall).where(ModelMessage).subscribe(mock)
@@ -159,7 +159,7 @@ class TestStreamChainedFilters:
 
 class TestStreamMultipleSubscribers:
     @pytest.mark.asyncio
-    async def test_multiple_subscribers_same_stream(self, mock: MagicMock):
+    async def test_multiple_subscribers_same_stream(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         stream.subscribe(mock.one)
@@ -174,7 +174,7 @@ class TestStreamMultipleSubscribers:
 
 class TestStreamPlayScenario:
     @pytest.mark.asyncio
-    async def test_play_py_scenario(self):
+    async def test_play_py_scenario(self) -> None:
         stream = MemoryStream()
         all_listener = MagicMock()
         tool_listener = MagicMock()
@@ -216,7 +216,7 @@ class TestStreamPlayScenario:
 
 class TestStreamUnsubscribe:
     @pytest.mark.asyncio
-    async def test_unsubscribe_stops_receiving_events(self, mock: MagicMock):
+    async def test_unsubscribe_stops_receiving_events(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         sub_id = stream.subscribe(lambda ev: mock(ev))
@@ -231,7 +231,7 @@ class TestStreamUnsubscribe:
 
 class TestStreamContextPropagation:
     @pytest.mark.asyncio
-    async def test_context_propagates_to_substream(self, mock: MagicMock):
+    async def test_context_propagates_to_substream(self, mock: MagicMock) -> None:
         stream = MemoryStream()
 
         def listener(ctx: Context):

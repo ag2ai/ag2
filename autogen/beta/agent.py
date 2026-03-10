@@ -218,10 +218,10 @@ class Agent(Askable):
         msg: str,
         *,
         stream: Stream | None = None,
-        config: ModelConfig | None = None,
-        prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
     ) -> "Conversation":
         config = config or self.config
