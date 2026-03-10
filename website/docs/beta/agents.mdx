@@ -41,7 +41,7 @@ print(next_turn.message.message.content)
 
 ## Empowering Agents with Tools
 
-Agents can use Python functions as tools seamlessly. When you provide a list of `@tool` decorated functions, the agent automatically manages the entire execution lifecycle—from model requests to execution and returning results—all behind the scenes.
+Agents can seamlessly use Python functions as tools. When you provide a list of `@tool`-decorated functions to an agent, it automatically manages the entire execution lifecycle (model requests to execution and returning results).
 
 ```python linenums="1" hl_lines="1 4-7 13"
 from autogen.beta import Agent, Context, tool
@@ -60,11 +60,12 @@ agent = Agent(
 )
 
 conversation = await agent.ask("Call the echo tool with 'hello'.")
+print(conversation.message.message.content)
 ```
 
 ## Adding Human-in-the-Loop (HITL)
 
-Sometimes an agent needs human guidance. You can configure an agent to handle `HumanInputRequest` events. This is especially powerful inside tools where you might need confirmation before taking a sensitive action.
+Sometimes an agent needs human guidance. You can configure an agent to handle `HumanInputRequest` events. This is especially effective inside tools where you can get confirmation before taking a sensitive action.
 
 ```python linenums="1" hl_lines="8 12-15 22"
 from autogen.beta import Agent, Context, tool
@@ -92,6 +93,7 @@ agent = Agent(
 )
 
 conversation = await agent.ask("Request confirmation through the tool.")
+print(conversation.message.message.content)
 ```
 
 ## Observing Agent Actions
