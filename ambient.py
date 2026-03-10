@@ -38,36 +38,40 @@ class CallModel(BaseEvent):
 
 
 @stream.where(CallModel).subscribe()
-async def call_agent(event: CallModel, ctx: Context, agent: Annotated[Agent, Inject("agent")]) -> None:
-    # await agent.ask(
-    #     event.prompt,
-    #     stream=ctx.stream,
-    #     dependencies=ctx.dependencies,
-    #     variables=ctx.variables,
-    # )
+async def call_agent(
+    event: CallModel,
+    ctx: Context,
+    agent: Annotated[Agent, Inject("agent")],
+) -> None:
+    await agent.ask(
+        event.prompt,
+        stream=ctx.stream,
+        dependencies=ctx.dependencies,
+        variables=ctx.variables,
+    )
 
-    # get original history events
-    history_events = await ctx.stream.history.get_events()
+    # # get original history events
+    # history_events = await ctx.stream.history.get_events()
 
-    # create new stream with subhistory
-    storage = ctx.stream.history.storage
-    stream = MemoryStream(storage=storage)
-    if len(history_events) > 3:
-        history_events = history_events[-3:]
-    # set subhistory to the new stream
-    await storage.set_history(stream.id, history_events)
+    # # create new stream with subhistory
+    # storage = ctx.stream.history.storage
+    # stream = MemoryStream(storage=storage)
+    # if len(history_events) > 3:
+    #     history_events = history_events[-3:]
+    # # set subhistory to the new stream
+    # await storage.set_history(stream.id, history_events)
 
-    # broadcast substream events to the original stream
-    with stream.sub_scope(ctx.send):
-        await agent.ask(
-            event.prompt,
-            stream=stream,
-            dependencies=ctx.dependencies,
-            variables=ctx.variables,
-        )
+    # # broadcast substream events to the original stream
+    # with stream.sub_scope(ctx.send):
+    #     await agent.ask(
+    #         event.prompt,
+    #         stream=stream,
+    #         dependencies=ctx.dependencies,
+    #         variables=ctx.variables,
+    #     )
 
-    # drop subhistory from the storage
-    await storage.drop_history(stream.id)
+    # # drop subhistory from the storage
+    # await storage.drop_history(stream.id)
 
 
 async def main() -> None:

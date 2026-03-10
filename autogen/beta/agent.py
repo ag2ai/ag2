@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from itertools import chain
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
@@ -58,11 +59,12 @@ class Conversation(Askable):
         self,
         msg: str,
         *,
-        config: ModelConfig | None = None,
-        prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        middlewares: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         initial_event = ModelRequest(content=msg)
 
@@ -81,6 +83,7 @@ class Conversation(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
+            additional_middlewares=middlewares,
         )
 
     @property
@@ -223,6 +226,7 @@ class Agent(Askable):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        middlewares: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         config = config or self.config
         if not config:
@@ -253,6 +257,7 @@ class Agent(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
+            additional_middlewares=middlewares,
         )
 
     async def _execute(
@@ -262,6 +267,7 @@ class Agent(Askable):
         ctx: Context,
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
+        additional_middlewares: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
 
@@ -269,7 +275,12 @@ class Agent(Askable):
         agent_turn: AgentTurn = _execute_turn
         llm_call: LLMCall = partial(client, tools=all_tools)
 
-        for m in reversed(self._middlewares):
+        for m in reversed(
+            chain(
+                self._middlewares,
+                additional_middlewares,
+            )
+        ):
             middleware = m(event, ctx)
             middlewares.append(middleware)
 
