@@ -111,10 +111,10 @@ else:
     anthropic_import_exception = ImportError("anthropic not found")
 
 with optional_import_block() as mistral_result:
-    from mistralai.models import (  # noqa
+    from mistralai.client.errors.httpvalidationerror import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
-        SDKError as mistral_SDKError,
     )
+    from mistralai.client.errors.sdkerror import SDKError as mistral_SDKError  # noqa
 
     from .mistral import MistralAIClient
 
