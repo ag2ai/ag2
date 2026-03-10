@@ -65,6 +65,15 @@ def convert_messages(
     return result
 
 
+def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
+    """OpenAI requires tool parameters to be type: object with properties."""
+    schema = dict(params)
+    schema["type"] = "object"
+    schema.setdefault("properties", {})
+    schema.setdefault("additionalProperties", False)
+    return schema
+
+
 def tool_to_api(t: Tool) -> dict[str, Any]:
     """Chat Completions API tool format."""
     return {
@@ -72,7 +81,7 @@ def tool_to_api(t: Tool) -> dict[str, Any]:
         "function": {
             "name": t.schema.function.name,
             "description": t.schema.function.description,
-            "parameters": {"additionalProperties": False} | t.schema.function.parameters,
+            "parameters": _ensure_object_schema(t.schema.function.parameters),
         },
     }
 
@@ -83,5 +92,5 @@ def tool_to_responses_api(t: Tool) -> dict[str, Any]:
         "type": "function",
         "name": t.schema.function.name,
         "description": t.schema.function.description,
-        "parameters": {"additionalProperties": False} | t.schema.function.parameters,
+        "parameters": _ensure_object_schema(t.schema.function.parameters),
     }

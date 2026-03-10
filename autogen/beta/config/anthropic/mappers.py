@@ -9,11 +9,19 @@ from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResu
 from autogen.beta.tools import Tool
 
 
+def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
+    """Anthropic requires input_schema to be type: object."""
+    schema = dict(params)
+    schema["type"] = "object"
+    schema.setdefault("properties", {})
+    return schema
+
+
 def tool_to_api(t: Tool) -> dict[str, Any]:
     return {
         "name": t.schema.function.name,
         "description": t.schema.function.description,
-        "input_schema": t.schema.function.parameters,
+        "input_schema": _ensure_object_schema(t.schema.function.parameters),
     }
 
 

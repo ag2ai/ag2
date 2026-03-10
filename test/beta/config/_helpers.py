@@ -13,6 +13,19 @@ class ToolStub:
     schema: FunctionToolSchema
 
 
+def make_parameterless_tool() -> ToolStub:
+    return ToolStub(
+        name="ask_human",
+        schema=FunctionToolSchema(
+            function=FunctionDefinition(
+                name="ask_human",
+                description="Ask the human for input.",
+                parameters={"type": "null"},
+            )
+        ),
+    )
+
+
 def make_tool() -> ToolStub:
     return ToolStub(
         name="search_docs",
