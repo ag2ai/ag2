@@ -15,7 +15,7 @@ Key highlights:
 - **Four simple API functions** to instrument agents, LLM calls, group chats, and A2A servers
 - **Hierarchical traces** that mirror how agents process conversations
 - **Distributed tracing** across services using W3C Trace Context propagation
-- **Works with any backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, and more
+- **Works with any backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and more
 - **Follows OpenTelemetry GenAI Semantic Conventions** for standard interoperability
 
 <!-- more -->
@@ -385,13 +385,35 @@ exporter = OTLPSpanExporter(
 
 Consult your vendor's documentation for the exact endpoint and authentication details.
 
+**[Langfuse](https://langfuse.com)** (open-source LLM observability):
+
+Langfuse is an open-source LLM engineering platform with native support for OpenTelemetry GenAI traces. It provides purpose-built visualization for multi-agent workflows including token usage, cost tracking, and message rendering. Langfuse uses OTLP over HTTP with Basic authentication:
+
+```python
+import base64
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."
+LANGFUSE_SECRET_KEY = "sk-lf-..."
+LANGFUSE_HOST = "https://cloud.langfuse.com"  # or your self-hosted URL
+
+auth = base64.b64encode(f"{LANGFUSE_PUBLIC_KEY}:{LANGFUSE_SECRET_KEY}".encode()).decode()
+
+exporter = OTLPSpanExporter(
+    endpoint=f"{LANGFUSE_HOST}/api/public/otel/v1/traces",
+    headers={"Authorization": f"Basic {auth}"},
+)
+```
+
+See the [Langfuse AG2 integration guide](https://langfuse.com/docs/integrations/frameworks/ag2) for a full walkthrough.
+
 ## Getting Started
 
 1. **Install**: `pip install "ag2[tracing]"`
 2. **Configure**: Create a `TracerProvider` with your chosen exporter
 3. **Instrument**: Call `instrument_llm_wrapper()` and `instrument_agent()` (or `instrument_pattern()` for group chats)
 4. **Run**: Execute your agent workflow as usual
-5. **Observe**: View traces in your backend (Grafana, Jaeger, Datadog, or the console)
+5. **Observe**: View traces in your backend (Grafana, Jaeger, Datadog, Langfuse, or the console)
 
 ## Additional Resources
 
@@ -400,6 +422,7 @@ Consult your vendor's documentation for the exact endpoint and authentication de
 - [Local OpenTelemetry Setup](/docs/user-guide/tracing/local-setup) -- Docker Compose stack configuration
 - [Tracing notebook](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_tracing_and_instrumentation) -- Interactive Jupyter notebook walkthrough
 - [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) -- The standard AG2 follows
+- [Langfuse AG2 integration guide](https://langfuse.com/docs/integrations/frameworks/ag2) -- Detailed setup for the Langfuse LLM observability platform
 
 ## Conclusion
 
