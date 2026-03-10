@@ -40,7 +40,7 @@ def delete_user(
 
 ## Depends with yield
 
-Just like in FastAPI, you can create dependencies that use `yield` instead of `return`. This allows you to execute "teardown" or "cleanup" code *after* the tool has finished executing.
+Just like in [FastAPI](https://fastapi.tiangolo.com/), you can create dependencies that use `yield` instead of `return`. This allows you to execute "teardown" or "cleanup" code *after* the tool has finished executing.
 
 This is the recommended approach for managing resource lifecycles, such as opening and closing database sessions or file handlers.
 
@@ -106,7 +106,7 @@ def get_timeout(
 
 @tool
 def process_data(
-    timeout: Annotated[int, Depends(get_timeout)]
+    timeout: Annotated[int, Depends(get_timeout)],
     # cached dependency
     config: Annotated[dict, Depends(get_expensive_config)],
 ) -> str:
@@ -125,7 +125,7 @@ def random_tool(
     pass
 ```
 
-## Dependencies overrides
+## Dependencies Overrides
 
 During testing, you often need to mock or override complex dependencies (like replacing a production database with a mock test database).
 

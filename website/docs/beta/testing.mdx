@@ -8,7 +8,7 @@ AG2 provides a built-in `TestConfig` utility in the `autogen.beta.testing` modul
 
 To mock LLM answers, you can use `TestConfig` in place of a standard model configuration. Pass the expected responses as arguments to `TestConfig`. Each argument represents the mocked response for a sequential turn in the conversation.
 
-```python linenums="1" linenums="4 14 18"
+```python linenums="1" hl_lines="4 14 18"
 import pytest
 
 from autogen.beta import Agent
