@@ -32,7 +32,7 @@ agent2 = Agent(
 
 ### On conversation startup
 
-System prompts can be generated dynamically when a conversation starts. This is useful when the prompt depends on external state or initial context. You can achieve this by using the `@agent.prompt` decorator or passing a synchronous or asynchronous function.
+System prompts can be generated dynamically when a conversation starts. This is useful when the prompt depends on external state or initial context. You can achieve this by using the `@my_agent.prompt` decorator or passing a synchronous or asynchronous function.
 
 Dynamic prompt functions support the same powerful execution context capabilities as Agent Tools. For more detailed information on specific context features, see [Dependency Injection](/docs/beta/context/inject), [Context Variables](/docs/beta/context/variables), and [Human-in-the-loop](/docs/beta/context/human_in_the_loop).
 
@@ -58,6 +58,7 @@ Alternatively, you can pass a callable directly to the `prompt` parameter, or mi
 from autogen.beta import Agent
 
 def get_sysprompt() -> str:
+    # Returns a string for the prompt, evaluated at the beginning of the conversation
     return "This is dynamically generated."
 
 agent = Agent(

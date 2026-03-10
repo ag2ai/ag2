@@ -4,13 +4,13 @@ title: Agent Tools
 
 # Agent Tools
 
-Tools allow agents to interact with the outside world. By providing tools, you enable your agents to perform actions such as executing code, fetching data from APIs, querying databases, or performing complex calculations. 
+Tools allow agents to interact with the outside world. By providing tools, you enable your agents to perform actions such as executing code, fetching data from APIs, querying databases, or performing complex calculations.
 
 Under the hood, a tool is a standard Python function accompanied by a schema that describes its purpose, inputs, and outputs to the underlying Large Language Model (LLM).
 
 ## Creating Agent Tools
 
-The most straightforward way to create a tool is by using the `@tool` decorator. This decorator automatically parses your function's signature, type hints, and docstring to generate a schema that the LLM can understand.
+The easiest way to create a tool is by using the `@tool` decorator. This decorator automatically parses your function's signature, type hints, and docstring to generate a schema that the LLM can understand.
 
 For the best results, **always provide clear type hints and a descriptive docstring**. The LLM relies heavily on these to know when and how to invoke your tool.
 
@@ -19,7 +19,7 @@ from autogen.beta import tool
 
 @tool
 def calculate_shipping_cost(destination: str, weight_kg: float) -> str:
-    """Calculates the shipping cost for a package based 
+    """Calculates the shipping cost for a package based
     on its destination and weight.
     """
     return "$15.00"
@@ -47,11 +47,11 @@ agent = Agent(name="ShippingAssistant", tools=[calculate_shipping_cost])
     agent = Agent(name="WeatherBot", tools=[get_weather])
     ```
 
-### Registering Tools via Decorator
+### Registering Tools via a Decorator
 
-Alternatively, you can register a tool directly to an existing agent instance using its `@agent.tool` decorator. 
+Alternatively, you can register a tool directly with an agent instance using its `@my_agent.tool` decorator.
 
-This approach is particularly useful when you need to dynamically add capabilities to an agent after it has been created, or when you are organizing your code by attaching specific tools to specific agent instances logically.
+This approach is particularly useful when you need to dynamically add capabilities to an agent after it has been created, or when you are logically organizing your code by attaching specific tools to specific agent instances.
 
 ```python linenums="1"
 from autogen.beta import Agent
@@ -107,7 +107,7 @@ def format_name(first_name: str, last_name: str) -> str:
 
 ## Customizing Tool Schemas
 
-LLMs perform best when they have precise constraints and detailed instructions. While the framework automatically generates a tool's schema based on its function signature and docstring, you might want to provide more granular control—such as defining minimum/maximum values, enforcing specific formats, or overriding the tool's name.
+LLMs perform best when they have precise constraints and detailed instructions. The framework automatically generates a tool's schema from its function signature and docstring. For more granular control, you can define minimum/maximum values, enforce specific formats, or override the tool's name.
 
 You can override the basic properties directly in the decorator:
 
@@ -136,7 +136,7 @@ def set_temperature(
     temp: Annotated[
         int,
         Field(
-            ..., 
+            ...,
             description="The target temperature.",
             ge=10,
             le=30,
@@ -145,7 +145,7 @@ def set_temperature(
     mode: Annotated[
         str,
         Field(
-            ..., 
+            ...,
             description="The thermostat mode.",
             pattern="^(heat|cool|auto)$",
         ),

@@ -27,7 +27,7 @@ agent = Agent(
 
 ### Conversation Variables
 
-If a variable is only relevant for a specific conversation, you can pass it directly when calling the `ask` method. 
+If a variable is only relevant for a specific conversation, you can pass it directly when calling the `ask` method.
 
 ```python linenums="1"
 await agent.ask(
@@ -46,10 +46,10 @@ agent = Agent(
     variables={"global_param": "A", "override_me": "AgentLevel"}
 )
 
-# Inside the tool, variables will be: 
+# Inside the tool, variables will be:
 # {"global_param": "A", "override_me": "CallLevel", "call_param": "B"}
 await agent.ask(
-    "Hello!", 
+    "Hello!",
     variables={"override_me": "CallLevel", "call_param": "B"}
 )
 ```
@@ -97,12 +97,12 @@ def fetch_user_data(
     # Looks for "api_key" in variables, but binds it to the "key" argument
     key: Annotated[str, Variable("api_key")],
 ) -> str:
-    return f"Fetching {user_id} using {db}"
+    return f"Fetching {user_id} using {key}"
 ```
 
 !!! note
-    Improtant remark: all such annotations has no effect on the tool schema for the LLM.
-    It's just a technical detail for the framework to inject the value into the function.
+    Important remark: these annotations have no effect on the tool schema for the LLM.
+    They are only used for the framework to inject the value into the function.
 
 ## Variables with Default Values
 
@@ -158,7 +158,7 @@ def authenticate(ctx: Context) -> str:
 def fetch_secure_data(
     auth_token: Annotated[str | None, Variable(default=None)],
 ) -> str:
-    if not token:
+    if not auth_token:
         return "Error: Not authenticated."
-    return f"Data fetched with token {token}"
+    return f"Data fetched with token {auth_token}"
 ```

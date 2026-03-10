@@ -5,7 +5,7 @@ sidebarTitle: Models & Providers
 
 # Model Configuration
 
-The AG2 framework provides an explicit, predictable, and type-safe way to configure Large Language Models (LLMs). The configuration API is designed to provide a consistent developer experience across different model providers while maintaining strong typing support.
+The AG2 framework provides an explicit, predictable, and type-safe way to configure Large Language Models (LLMs) for your agents. The configuration API is designed to provide a consistent developer experience across different model providers while maintaining strong typing support.
 
 ## Supported Providers
 
@@ -13,13 +13,14 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 
 | Provider | Configuration Class | Installation Command |
 | :--- | :--- | :--- |
-| **OpenAI** | `OpenAIConfig` | `pip install "ag2[openai]"` |
-| **Anthropic** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
-| **Gemini** | `GeminiConfig` | `pip install "ag2[gemini]"` |
-| **Ollama** | `OllamaConfig` | `pip install "ag2[ollama]"` |
-| **DashScope** | `DashScopeConfig` | `pip install "ag2[dashscope]"` |
+| **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
+| **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
+| **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
+| **[Ollama](https://docs.ollama.com/api/introduction)** | `OllamaConfig` | `pip install "ag2[ollama]"` |
+| **[DashScope](https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen)** | `DashScopeConfig` | `pip install "ag2[dashscope]"` |
 
-*(Note: `OpenAIResponsesConfig` is also available for OpenAI-compatible endpoints).*
+*(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
 
 ---
 
@@ -30,13 +31,26 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 To configure a model, import the specific provider's configuration class and initialize it with your desired parameters. The most common parameters are `model`, `api_key`, and `base_url`.
 
 <Tabs>
+  <Tab title="OpenAI Responses">
+```python linenums="1"
+from autogen.beta.config import OpenAIResponsesConfig
+
+# Configure an OpenAI Responses API model
+config = OpenAIResponsesConfig(
+    model="gpt-4.1-nano",
+    api_key="sk-...",
+    streaming=True
+)
+```
+  </Tab>
+
   <Tab title="OpenAI">
 ```python linenums="1"
 from autogen.beta.config import OpenAIConfig
 
 # Configure an OpenAI model
 config = OpenAIConfig(
-    model="gpt-4",
+    model="gpt-4o-mini",
     api_key="sk-...",
     temperature=0.2,
     streaming=True
@@ -50,8 +64,9 @@ from autogen.beta.config import AnthropicConfig
 
 # Configure an Anthropic model
 config = AnthropicConfig(
-    model="claude-3-5-sonnet-20240620",
-    api_key="sk-ant-..."
+    model="claude-haiku-4-5-20251001",
+    api_key="sk-ant-...",
+    streaming=True
 )
 ```
   </Tab>
@@ -62,8 +77,9 @@ from autogen.beta.config import GeminiConfig
 
 # Configure a Gemini model
 config = GeminiConfig(
-    model="gemini-1.5-pro",
-    api_key="..."
+    model="gemini-3-flash-preview",
+    api_key="...",
+    streaming=True
 )
 ```
   </Tab>
@@ -73,7 +89,8 @@ from autogen.beta.config import OllamaConfig
 
 # Configure an Ollama model
 config = OllamaConfig(
-    model="llama3.1"
+    model="qwen3.5:latest",
+    streaming=True
 )
 ```
   </Tab>
@@ -84,30 +101,35 @@ from autogen.beta.config import DashScopeConfig
 
 # Configure a DashScope model
 config = DashScopeConfig(
-    model="qwen-max",
-    api_key="..."
+    model="qwen-plus",
+    api_key="...",
+    streaming=True
 )
 ```
   </Tab>
 
 </Tabs>
 
+!!! tip
+
+    **AG2 Beta** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config.
+
 ### Using Environment Variables
 
 For security and convenience, you don't need to hardcode your API keys. If `api_key` is not explicitly provided, the configuration will automatically attempt to load it from your environment variables.
 
-The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
+The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
 
 ```python linenums="1"
 from autogen.beta.config import OpenAIConfig
 
 # Automatically falls back to OPENAI_API_KEY from the environment
-config = OpenAIConfig(model="gpt-4")
+config = OpenAIConfig(model="gpt-5")
 ```
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` or `OpenAIResponsesConfig` classes by specifying a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
 from autogen.beta.config import OpenAIConfig
@@ -117,7 +139,7 @@ config = OpenAIConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
     # Some endpoints don't require an API key, but the client expects a non-empty string
-    api_key="NotRequired", 
+    api_key="NotRequired",
 )
 ```
 
@@ -144,7 +166,7 @@ Model configurations are **immutable**. If you need to reuse a configuration for
 from autogen.agent import Agent
 from autogen.beta.config import OpenAIConfig
 
-base_config = OpenAIConfig(model="gpt-4")
+base_config = OpenAIConfig(model="gpt-5")
 
 agent1 = Agent(
     "Assistant",
@@ -155,11 +177,11 @@ agent1 = Agent(
 agent2 = Agent(
     "AnotherAssistant",
     # Create a new configuration with updated model and temperature
-    config=base_config.copy(model="gpt-4-mini", temperature=0.8),
+    config=base_config.copy(model="gpt-5-mini", temperature=0.8),
 )
 ```
 
-## Delay model configuration
+## Delaying Model Configuration
 
 In many use cases, you may want to separate the logic of defining your agent (tools, system messages, instructions) from configuring the specific model it uses. This allows you to construct an agent once and dynamically provide the model configuration later during execution.
 
@@ -169,7 +191,7 @@ You can accomplish this by passing the configuration to the `.ask()` method when
 from autogen.agent import Agent
 from autogen.beta.config import OpenAIConfig
 
-# Define an agent without an initial model config, 
+# Define an agent without an initial model config,
 # or with a default one you plan to override later
 agent = Agent(
     "Assistant",
@@ -181,7 +203,7 @@ agent = Agent(
 response = await agent.ask(
     "Hello!",
     config=OpenAIConfig(
-        model="gpt-4",
+        model="gpt-5",
         api_key="sk-user-specific-key"
     )
 )
@@ -196,12 +218,12 @@ response = await agent.ask(
 
     agent = Agent(
         "Assistant",
-        config=OpenAIConfig(model="gpt-4"),
+        config=OpenAIConfig(model="gpt-5"),
     )
 
     response = await agent.ask(
         "Hello!",
         # overrides the original model configuration
-        config=OpenAIConfig(model="gpt-4-mini")
+        config=OpenAIConfig(model="gpt-5-mini")
     )
     ```
