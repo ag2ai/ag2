@@ -4,7 +4,7 @@
 
 from autogen.beta.config.ollama.mappers import tool_to_api
 
-from .._helpers import make_tool
+from .._helpers import make_parameterless_tool, make_tool
 
 
 def test_tool_to_api() -> None:
@@ -24,4 +24,13 @@ def test_tool_to_api() -> None:
                 "required": ["query"],
             },
         },
+    }
+
+
+def test_tool_to_api_parameterless() -> None:
+    api_tool = tool_to_api(make_parameterless_tool())
+
+    assert api_tool["function"]["parameters"] == {
+        "type": "object",
+        "properties": {},
     }
