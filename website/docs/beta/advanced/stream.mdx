@@ -1,6 +1,5 @@
 ---
 title: Events Streaming
-title: Events Streaming
 ---
 
 ## What is the Stream?
@@ -11,9 +10,9 @@ The Stream manages the flow of messages, actions, and tool calls, allowing for d
 
 ## Passing a custom stream to an Agent
 
-By default, agent create `MemoryStream` instance internally for each conversation.
+By default, agents create a `MemoryStream` instance internally for each conversation.
 
-But, you can pass a custom stream to an agent when calling its `ask` method. This allows you to set up subscribers on the stream before the conversation starts, letting you observe or intercept the agent's internal events.
+However, you can pass a custom stream to an agent when calling its `ask` method. This allows you to set up subscribers on the stream before the conversation starts, letting you observe or intercept the agent's internal events.
 
 ```python linenums="1"
 from autogen.beta import Agent, MemoryStream
@@ -32,7 +31,7 @@ def log_model_activity(event):
 response = await agent.ask("Hello!", stream=my_stream)
 ```
 
-## How to subscribe on stream events
+## How to subscribe to stream events
 
 You can listen to events flowing through the stream using the `subscribe` method. To filter which events you receive, you can use the `where` method.
 
@@ -43,7 +42,7 @@ You can listen to events flowing through the stream using the `subscribe` method
 
     For more detailed information on specific context features, see [Dependency Injection](/docs/beta/context/inject), [Context Variables](/docs/beta/context/variables), [Depends](/docs/beta/depends), [Human-in-the-loop](/docs/beta/context/human_in_the_loop).
 
-### Subscribe on event with specific type
+### Subscribe to events of a specific type
 
 To subscribe to events of a specific type, pass the event class to `stream.where()`.
 
@@ -60,7 +59,7 @@ def handle_tool_call(event: ToolCall):
 stream.where(ToolCall).subscribe(handle_tool_call)
 ```
 
-### Subscribe on events with multiple types
+### Subscribe to multiple event types
 
 You can subscribe to multiple event types using the bitwise OR operator (`|`).
 
@@ -74,7 +73,7 @@ def handle_event(event):
 stream.where(ToolCall | ModelMessage).subscribe(handle_event)
 ```
 
-### Subscribe on events with specific value
+### Subscribe to events with a specific value
 
 You can filter events based on the value of their fields. The event classes define fields that support comparison operators.
 
@@ -148,7 +147,7 @@ async def publish_message(ctx: Context):
     await ctx.send(event)
 ```
 
-## Events interrupters
+## Events Interrupters
 
 Interrupters allow you to intercept an event before it reaches regular subscribers. You can use an interrupter to modify the event, raise a completely different event in its place, or suppress it entirely.
 
