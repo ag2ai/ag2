@@ -89,7 +89,7 @@ async def main() -> None:
     # pprint(final_events)
     # print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
 
-    result = await conversation.ask("And one more time")
+    _ = await conversation.ask("And one more time")
     # print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
 

@@ -73,7 +73,7 @@ class EventMeta(type):
 
             fields[field_name] = namespace[field_name] = field
 
-        def __init__(self, **kwargs: Any) -> None:
+        def __init__(self, **kwargs: Any) -> None:  # noqa: N807
             kwargs = {
                 name: default for name, f in fields.items() if (default := f.get_default()) is not Ellipsis
             } | kwargs
@@ -83,7 +83,7 @@ class EventMeta(type):
 
         namespace["__init__"] = __init__
 
-        def __repr__(self) -> str:
+        def __repr__(self) -> str:  # noqa: N807
             fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_"))
             return f"{self.__class__.__name__}({fields})"
 
