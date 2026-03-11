@@ -9,7 +9,7 @@ from typing import Annotated
 from autogen.beta import Agent, Context, Inject, MemoryStream
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.middlewares import LoggingMiddleware
+from autogen.beta.middleware import LoggingMiddleware
 
 agent = Agent(
     "test-agent",
@@ -19,7 +19,7 @@ agent = Agent(
         reasoning_effort="low",
         streaming=True,
     ),
-    middlewares=[LoggingMiddleware()],
+    middleware=[LoggingMiddleware()],
 )
 
 
