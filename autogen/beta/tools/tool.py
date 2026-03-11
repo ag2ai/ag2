@@ -7,7 +7,7 @@ from contextlib import ExitStack
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.annotations import Context
-from autogen.beta.middlewares import BaseMiddleware, ToolExecution
+from autogen.beta.middleware import BaseMiddleware, ToolExecution
 
 from .schemas import FunctionToolSchema
 
@@ -22,6 +22,6 @@ class Tool(Protocol, ToolExecution):
         stack: "ExitStack",
         ctx: "Context",
         *,
-        middlewares: Iterable["BaseMiddleware"] = (),
+        middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         pass

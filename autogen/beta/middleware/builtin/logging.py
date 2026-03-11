@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
-from autogen.beta.middlewares.base import (
+from autogen.beta.middleware.base import (
     AgentTurn,
     BaseMiddleware,
     LLMCall,

@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from itertools import chain
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial
+from itertools import chain
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
@@ -23,7 +23,7 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .middlewares.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
 from .utils import CONTEXT_OPTION_NAME, build_model
@@ -64,7 +64,7 @@ class Conversation(Askable):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
-        middlewares: Iterable["MiddlewareFactory"] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         initial_event = ModelRequest(content=msg)
 
@@ -83,7 +83,7 @@ class Conversation(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
-            additional_middlewares=middlewares,
+            additional_middleware=middleware,
         )
 
     @property
@@ -104,7 +104,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
-        middlewares: Iterable["MiddlewareFactory"] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
     ):
@@ -114,7 +114,7 @@ class Agent(Askable):
         self._agent_dependencies = dependencies or {}
         self._agent_variables = variables or {}
 
-        self._middlewares = middlewares
+        self._middleware = middleware
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
@@ -226,7 +226,7 @@ class Agent(Askable):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
-        middlewares: Iterable["MiddlewareFactory"] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         config = config or self.config
         if not config:
@@ -257,7 +257,7 @@ class Agent(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
-            additional_middlewares=middlewares,
+            additional_middleware=middleware,
         )
 
     async def _execute(
@@ -267,25 +267,27 @@ class Agent(Askable):
         ctx: Context,
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
-        additional_middlewares: Iterable["MiddlewareFactory"] = (),
+        additional_middleware: Iterable["MiddlewareFactory"] = (),
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
 
-        middlewares: list[BaseMiddleware] = []
+        middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
         llm_call: LLMCall = partial(client, tools=all_tools)
 
         for m in reversed(
-            chain(
-                self._middlewares,
-                additional_middlewares,
+            list(
+                chain(
+                    self._middleware,
+                    additional_middleware,
+                )
             )
         ):
-            middleware = m(event, ctx)
-            middlewares.append(middleware)
+            mw = m(event, ctx)
+            middleware_instances.append(mw)
 
-            agent_turn = partial(middleware.on_turn, agent_turn)
-            llm_call = partial(middleware.on_llm_call, llm_call)
+            agent_turn = partial(mw.on_turn, agent_turn)
+            llm_call = partial(mw.on_llm_call, llm_call)
 
         async def _call_client(ctx: Context) -> None:
             result = await llm_call(await ctx.stream.history.get_events(), ctx)
@@ -304,7 +306,7 @@ class Agent(Askable):
                 stack,
                 ctx,
                 tools=all_tools,
-                middlewares=middlewares,
+                middleware=middleware_instances,
             )
 
             message = await agent_turn(event, ctx)

@@ -17,7 +17,7 @@ from autogen.beta.events import (
     ToolResult,
     ToolResults,
 )
-from autogen.beta.middlewares import HistoryLimiter
+from autogen.beta.middleware import HistoryLimiter
 
 
 @pytest.mark.asyncio()

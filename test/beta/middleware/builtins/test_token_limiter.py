@@ -17,7 +17,7 @@ from autogen.beta.events import (
     ToolResult,
     ToolResults,
 )
-from autogen.beta.middlewares import TokenLimiter
+from autogen.beta.middleware import TokenLimiter
 
 
 @pytest.mark.asyncio()

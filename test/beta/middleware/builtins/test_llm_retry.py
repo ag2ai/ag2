@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
-from autogen.beta.middlewares import RetryMiddleware
+from autogen.beta.middleware import RetryMiddleware
 
 
 class TransientError(Exception):

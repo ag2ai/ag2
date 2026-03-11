@@ -5,7 +5,7 @@ from typing import Any
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ClientToolCall, ToolCall
-from autogen.beta.middlewares import BaseMiddleware, ToolExecution
+from autogen.beta.middleware import BaseMiddleware, ToolExecution
 
 from .schemas import FunctionToolSchema
 from .tool import Tool
@@ -26,11 +26,11 @@ class ClientTool(Tool):
         stack: "ExitStack",
         ctx: "Context",
         *,
-        middlewares: Iterable["BaseMiddleware"] = (),
+        middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         execution: ToolExecution = self
-        for middleware in middlewares:
-            execution = partial(middleware.on_tool_execution, execution)
+        for mw in middleware:
+            execution = partial(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCall", ctx: "Context") -> None:
             return await execution(event, ctx)

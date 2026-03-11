@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
-from autogen.beta.middlewares.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
 class TokenLimiter(MiddlewareFactory):

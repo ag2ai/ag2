@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
-from autogen.beta.middlewares import AgentTurn, BaseMiddleware, Middleware
+from autogen.beta.middleware import AgentTurn, BaseMiddleware, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 
 
@@ -43,7 +43,7 @@ async def test_middleware_creation(mock: MagicMock) -> None:
     agent = Agent(
         "",
         config=TestConfig("result"),
-        middlewares=[Middleware(MockMiddleware, mock=mock)],
+        middleware=[Middleware(MockMiddleware, mock=mock)],
     )
 
     await agent.ask("Hi!")
@@ -56,7 +56,7 @@ async def test_middleware_agent_turn_chaining(mock: MagicMock) -> None:
     agent = Agent(
         "",
         config=TestConfig("result"),
-        middlewares=[Middleware(MockMiddleware, mock=mock, position=i) for i in range(1, 4)],
+        middleware=[Middleware(MockMiddleware, mock=mock, position=i) for i in range(1, 4)],
     )
 
     await agent.ask("Hi!")
@@ -84,7 +84,7 @@ async def test_middleware_incoming_message_mutation() -> None:
     agent = Agent(
         "",
         config=tracking_config,
-        middlewares=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
+        middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
     )
 
     result = await agent.ask("1")

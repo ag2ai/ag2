@@ -18,7 +18,7 @@ from autogen.beta.events import (
     ToolResults,
 )
 from autogen.beta.exceptions import ToolNotFoundError
-from autogen.beta.middlewares import BaseMiddleware
+from autogen.beta.middleware import BaseMiddleware
 
 from .tool import Tool
 
@@ -30,14 +30,14 @@ class ToolExecutor:
         ctx: "Context",
         *,
         tools: Iterable["Tool"] = (),
-        middlewares: Iterable["BaseMiddleware"] = (),
+        middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         stack.enter_context(ctx.stream.where(ToolCalls).sub_scope(self.execute_tools))
 
         known_tools: set[str] = set()
         for tool in tools:
             known_tools.add(tool.name)
-            tool.register(stack, ctx, middlewares=middlewares)
+            tool.register(stack, ctx, middleware=middleware)
 
         # fallback subscriber to raise NotFound event
         stack.enter_context(

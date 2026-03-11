@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ToolCall, ToolResult
-from autogen.beta.middlewares import BaseMiddleware, Middleware, ToolExecution
+from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import tool
 
@@ -46,7 +46,7 @@ async def test_tool_execution_middleware(mock: MagicMock) -> None:
             "result",
         ),
         tools=[my_tool],
-        middlewares=[Middleware(MockMiddleware, mock=mock)],
+        middleware=[Middleware(MockMiddleware, mock=mock)],
     )
 
     await agent.ask("Hi!")
@@ -91,7 +91,7 @@ async def test_middleware_call_sequence(mock: MagicMock) -> None:
             "result",
         ),
         tools=[my_tool],
-        middlewares=[Middleware(OrderingMiddleware, mock=mock, position=i) for i in range(1, 4)],
+        middleware=[Middleware(OrderingMiddleware, mock=mock, position=i) for i in range(1, 4)],
     )
 
     await agent.ask("Hi!")
@@ -132,7 +132,7 @@ async def test_capture_tool_execution_error(mock: MagicMock) -> None:
         "",
         config=tracking_config,
         tools=[my_tool],
-        middlewares=[Middleware(MockMiddleware, mock=mock)],
+        middleware=[Middleware(MockMiddleware, mock=mock)],
     )
 
     await agent.ask("Hi!")
@@ -175,7 +175,7 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
         "",
         config=tracking_config,
         tools=[my_tool],
-        middlewares=[MutatingToolMiddleware, MutatingToolMiddleware, MutatingToolMiddleware],
+        middleware=[MutatingToolMiddleware, MutatingToolMiddleware, MutatingToolMiddleware],
     )
 
     await agent.ask("Hi!")

@@ -12,7 +12,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolResult,
 )
-from autogen.beta.middlewares import LoggingMiddleware
+from autogen.beta.middleware import LoggingMiddleware
 from autogen.beta.tools import tool
 
 
@@ -78,7 +78,7 @@ agent = Agent(
     hitl_hook=hitl_subscriber,
     # config=MockClient(),
     tools=[func],
-    middlewares=[LoggingMiddleware()],
+    middleware=[LoggingMiddleware()],
 )
 
 

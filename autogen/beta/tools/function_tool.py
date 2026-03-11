@@ -13,7 +13,7 @@ from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
-from autogen.beta.middlewares import BaseMiddleware, ToolExecution
+from autogen.beta.middleware import BaseMiddleware, ToolExecution
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
@@ -58,11 +58,11 @@ class FunctionTool(Tool):
         stack: "ExitStack",
         ctx: "Context",
         *,
-        middlewares: Iterable["BaseMiddleware"] = (),
+        middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         execution: ToolExecution = self
-        for middleware in middlewares:
-            execution = partial(middleware.on_tool_execution, execution)
+        for mw in middleware:
+            execution = partial(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCall", ctx: "Context") -> None:
             result = await execution(event, ctx)
