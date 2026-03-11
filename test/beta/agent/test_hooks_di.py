@@ -32,7 +32,7 @@ async def test_sync_hook_subscriber(
         dep: Annotated[str, Inject()],
     ) -> None:
         mock(c.dependencies["dep"] == dep == "1")
-        mock.response(event.message.content)
+        mock.response(event.content)
 
     agent = Agent("", config=test_config)
 

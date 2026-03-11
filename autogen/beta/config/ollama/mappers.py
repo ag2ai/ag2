@@ -41,7 +41,7 @@ def convert_messages(
         elif isinstance(message, ModelResponse):
             msg: dict[str, Any] = {
                 "role": "assistant",
-                "content": message.message.content if message.message else "",
+                "content": message.content or "",
             }
             tool_calls = [
                 {

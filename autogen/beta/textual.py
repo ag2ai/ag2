@@ -79,7 +79,7 @@ class TUIAgent(App):
                         await thinking_block.remove()
                         await chat_container.mount(assistant_message)
 
-                    final_content = c.message.message.content
+                    final_content = c.message.content
                     await assistant_message.update(f"**{self.agent.name}:** {final_content}")
                     assistant_message.scroll_visible(immediate=True)
 

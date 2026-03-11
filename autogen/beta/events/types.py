@@ -210,6 +210,10 @@ class ModelResponse(ModelEvent):
     usage: dict[str, float] = Field(default_factory=dict)
     response_force: bool = False
 
+    @property
+    def content(self) -> str | None:
+        return self.message.content if self.message else None
+
     def __repr__(self) -> str:
         text = f"content={getattr(self.message, 'content', None)}"
         if self.tool_calls:

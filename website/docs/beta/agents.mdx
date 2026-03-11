@@ -30,11 +30,11 @@ agent = Agent(
 
 # Start a new conversation
 conversation = await agent.ask("Give me one sentence about AG2 beta.")
-print(conversation.message.message.content)
+print(conversation.message.content)
 
 # Continue the exact same conversation context
 next_turn = await conversation.ask("Now make it shorter.")
-print(next_turn.message.message.content)
+print(next_turn.message.content)
 
 ...
 ```
@@ -60,7 +60,7 @@ agent = Agent(
 )
 
 conversation = await agent.ask("Call the echo tool with 'hello'.")
-print(conversation.message.message.content)
+print(conversation.message.content)
 ```
 
 ## Adding Human-in-the-Loop (HITL)
@@ -93,7 +93,7 @@ agent = Agent(
 )
 
 conversation = await agent.ask("Request confirmation through the tool.")
-print(conversation.message.message.content)
+print(conversation.message.content)
 ```
 
 ## Observing Agent Actions
