@@ -22,7 +22,7 @@ Install Mistral.AI python library using: pip install --upgrade mistralai
 Resources:
 - https://docs.mistral.ai/getting-started/quickstart/
 
-NOTE: Requires mistralai package version >= 1.0.1
+NOTE: Requires mistralai package version >= 2.0.0
 """
 
 import json
@@ -40,17 +40,15 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 
 with optional_import_block():
     # Mistral libraries
-    # pip install mistralai
-    from mistralai import (
-        AssistantMessage,
-        Function,
-        FunctionCall,
-        Mistral,
-        SystemMessage,
-        ToolCall,
-        ToolMessage,
-        UserMessage,
-    )
+    # pip install mistralai>=2.0.0
+    from mistralai.client.models.assistantmessage import AssistantMessage
+    from mistralai.client.models.function import Function
+    from mistralai.client.models.functioncall import FunctionCall
+    from mistralai.client.models.systemmessage import SystemMessage
+    from mistralai.client.models.toolcall import ToolCall
+    from mistralai.client.models.toolmessage import ToolMessage
+    from mistralai.client.models.usermessage import UserMessage
+    from mistralai.client.sdk import Mistral
 
 
 class MistralEntryDict(LLMConfigEntryDict, total=False):
@@ -128,7 +126,7 @@ class MistralAIClient:
         )
         mistral_params["random_seed"] = validate_parameter(params, "random_seed", int, True, None, False, None)
         mistral_params["tool_choice"] = validate_parameter(
-            params, "tool_choice", str, False, None, None, ["none", "auto", "any"]
+            params, "tool_choice", str, True, None, None, ["none", "auto", "any"]
         )
 
         # TODO
