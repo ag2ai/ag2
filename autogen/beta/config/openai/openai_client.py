@@ -95,11 +95,11 @@ class OpenAIClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse:
-        openai_messages = convert_messages(ctx.prompt, messages)
+        openai_messages = convert_messages(context.prompt, messages)
 
         response = await self._client.chat.completions.create(
             **self._create_options,
@@ -108,27 +108,27 @@ class OpenAIClient(LLMClient):
         )
 
         if self._streaming:
-            result = await self._process_stream(response, ctx)
+            result = await self._process_stream(response, context)
         else:
-            result = await self._process_completion(response, ctx)
+            result = await self._process_completion(response, context)
 
         return result
 
     async def _process_completion(
         self,
         completion: ChatCompletion,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         for choice in completion.choices or ():
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
-                await ctx.send(ModelReasoning(content=r))
+                await context.send(ModelReasoning(content=r))
 
             model_msg: ModelMessage | None = None
             if c := msg.content:
                 model_msg = ModelMessage(content=c)
-                await ctx.send(model_msg)
+                await context.send(model_msg)
 
             calls = [
                 ToolCall(
@@ -148,7 +148,7 @@ class OpenAIClient(LLMClient):
     async def _process_stream(
         self,
         response_stream: AsyncStream[ChatCompletionChunk],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
@@ -165,11 +165,11 @@ class OpenAIClient(LLMClient):
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
-                    await ctx.send(ModelReasoning(content=r))
+                    await context.send(ModelReasoning(content=r))
 
                 if c := delta.content:
                     full_content += c
-                    await ctx.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(content=c))
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
@@ -193,7 +193,7 @@ class OpenAIClient(LLMClient):
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
-            await ctx.send(message)
+            await context.send(message)
 
         calls = [
             ToolCall(

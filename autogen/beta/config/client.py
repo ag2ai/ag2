@@ -15,7 +15,7 @@ class LLMClient(Protocol):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse: ...

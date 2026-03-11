@@ -27,32 +27,32 @@ class ToolExecutor:
     def register(
         self,
         stack: "ExitStack",
-        ctx: "Context",
+        context: "Context",
         *,
         tools: Iterable["Tool"] = (),
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        stack.enter_context(ctx.stream.where(ToolCalls).sub_scope(self.execute_tools))
+        stack.enter_context(context.stream.where(ToolCalls).sub_scope(self.execute_tools))
 
         known_tools: set[str] = set()
         for tool in tools:
             known_tools.add(tool.name)
-            tool.register(stack, ctx, middleware=middleware)
+            tool.register(stack, context, middleware=middleware)
 
         # fallback subscriber to raise NotFound event
         stack.enter_context(
-            ctx.stream.where(ToolCall).sub_scope(_tool_not_found(known_tools)),
+            context.stream.where(ToolCall).sub_scope(_tool_not_found(known_tools)),
         )
 
-    async def execute_tools(self, event: ToolCalls, ctx: Context) -> None:
+    async def execute_tools(self, event: ToolCalls, context: Context) -> None:
         results = []
         client_calls = []
 
         for call in event.calls:
-            async with ctx.stream.get(
+            async with context.stream.get(
                 (ToolError.parent_id == call.id) | (ToolResult.parent_id == call.id) | ClientToolCall
             ) as result:
-                await ctx.send(call)
+                await context.send(call)
 
                 match await result:
                     case ClientToolCall() as ev:
@@ -61,7 +61,7 @@ class ToolExecutor:
                         results.append(ev)
 
         if client_calls:
-            await ctx.send(
+            await context.send(
                 ModelResponse(
                     tool_calls=ToolCalls(calls=client_calls),
                     response_force=True,
@@ -69,11 +69,11 @@ class ToolExecutor:
             )
 
         else:
-            await ctx.send(ToolResults(results=results))
+            await context.send(ToolResults(results=results))
 
 
 def _tool_not_found(known_tools: set[str]) -> Callable[..., Any]:
-    async def _tool_not_found(event: "ToolCall", ctx: "Context") -> None:
+    async def _tool_not_found(event: "ToolCall", context: "Context") -> None:
         if event.name not in known_tools:
             err = ToolNotFoundError(event.name)
             event = ToolNotFoundEvent(
@@ -82,6 +82,6 @@ def _tool_not_found(known_tools: set[str]) -> Callable[..., Any]:
                 content=repr(err),
                 error=err,
             )
-            await ctx.send(event)
+            await context.send(event)
 
     return _tool_not_found

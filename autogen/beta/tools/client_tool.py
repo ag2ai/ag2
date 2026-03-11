@@ -28,7 +28,7 @@ class ClientTool(Tool):
     def register(
         self,
         stack: "ExitStack",
-        ctx: "Context",
+        context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
@@ -36,12 +36,12 @@ class ClientTool(Tool):
         for mw in middleware:
             execution = partial(mw.on_tool_execution, execution)
 
-        async def execute(event: "ToolCall", ctx: "Context") -> None:
-            return await execution(event, ctx)
+        async def execute(event: "ToolCall", context: "Context") -> None:
+            return await execution(event, context)
 
         stack.enter_context(
-            ctx.stream.where((ToolCall.name == self.name) & ClientToolCall.not_()).sub_scope(execute),
+            context.stream.where((ToolCall.name == self.name) & ClientToolCall.not_()).sub_scope(execute),
         )
 
-    async def __call__(self, event: "ToolCall", ctx: "Context") -> "ClientToolCall":
+    async def __call__(self, event: "ToolCall", context: "Context") -> "ClientToolCall":
         return ClientToolCall.from_call(event)

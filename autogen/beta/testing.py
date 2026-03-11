@@ -20,7 +20,7 @@ class TestClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
         for m in messages:
@@ -45,11 +45,11 @@ class TrackingClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
         self.mock(messages[-1])
-        return await self.client(messages, ctx=ctx, **kwargs)
+        return await self.client(messages, context=context, **kwargs)
 
 
 class TrackingConfig(ModelConfig):

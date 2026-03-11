@@ -45,9 +45,9 @@ class BaseMiddleware:
         self,
         call_next: Callable[[BaseEvent, Context], Awaitable[ModelResponse]],
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
-        return await call_next(event, ctx)
+        return await call_next(event, context)
 ```
 
 `on_turn()` wraps the whole agent turn.
@@ -70,9 +70,9 @@ class BaseMiddleware:
         self,
         call_next: Callable[[Sequence[BaseEvent], Context], Awaitable[ModelResponse]],
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
-        return await call_next(events, ctx)
+        return await call_next(events, context)
 ```
 
 `on_llm_call()` wraps the call to the configured model client.
@@ -97,9 +97,9 @@ class BaseMiddleware:
         self,
         call_next: Callable[[ToolCall, Context], Awaitable[ToolResultType]],
         event: ToolCall,
-        ctx: Context,
+        context: Context,
     ) -> ToolResultType:
-        return await call_next(event, ctx)
+        return await call_next(event, context)
 ```
 
 `on_tool_execution()` wraps each tool invocation triggered during the turn.
@@ -143,7 +143,7 @@ Use agent-level registration for behavior that should always be present, such as
 You can also add middleware just for a specific turn.
 This is useful when you want temporary behavior without changing the agent's defaults.
 
-Both `Agent.ask(...)` and `Conversation.ask(...)` accept a `middleware` argument.
+Both `Agent.ask(...)` and `AgentReply.ask(...)` accept a `middleware` argument.
 
 ```python linenums="1" hl_lines="13 18"
 from autogen.beta import Agent
@@ -156,12 +156,12 @@ agent = Agent(
     config=OpenAIConfig("gpt-4o-mini"),
 )
 
-conversation = await agent.ask(
+reply = await agent.ask(
     "Summarize the latest messages.",
     middleware=[LoggingMiddleware()],
 )
 
-next_turn = await conversation.ask(
+next_turn = await reply.ask(
     "Now answer in one paragraph.",
     middleware=[TokenLimiter(max_tokens=4000)],
 )
@@ -188,10 +188,10 @@ class A(BaseMiddleware):
         self,
         call_next: AgentTurn,
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         print("enter A")
-        response = await call_next(event, ctx)
+        response = await call_next(event, context)
         print("exit A")
         return response
 
@@ -201,10 +201,10 @@ class B(BaseMiddleware):
         self,
         call_next: AgentTurn,
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         print("enter B")
-        response = await call_next(event, ctx)
+        response = await call_next(event, context)
         print("exit B")
         return response
 
@@ -214,10 +214,10 @@ class C(BaseMiddleware):
         self,
         call_next: AgentTurn,
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         print("enter C")
-        response = await call_next(event, ctx)
+        response = await call_next(event, context)
         print("exit C")
         return response
 
@@ -264,20 +264,20 @@ class AuditMiddleware(BaseMiddleware):
     def __init__(
         self,
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
         logger: logging.Logger,
     ) -> None:
-        super().__init__(event, ctx)
+        super().__init__(event, context)
         self.logger = logger
 
     async def on_llm_call(
         self,
         call_next: LLMCall,
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         self.logger.info("Calling model with %d events", len(events))
-        response = await call_next(events, ctx)
+        response = await call_next(events, context)
         self.logger.info("Model returned: %s", response)
         return response
 
@@ -285,10 +285,10 @@ class AuditMiddleware(BaseMiddleware):
         self,
         call_next: ToolExecution,
         event: ToolCall,
-        ctx: Context,
+        context: Context,
     ):
         self.logger.info("Executing tool: %s", event.name)
-        return await call_next(event, ctx)
+        return await call_next(event, context)
 
 
 agent = Agent(

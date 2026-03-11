@@ -71,14 +71,14 @@ class AnthropicClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 
-        if ctx.prompt:
-            system: Any = self._build_system(ctx.prompt)
+        if context.prompt:
+            system: Any = self._build_system(context.prompt)
         else:
             system = NOT_GIVEN
 
@@ -94,7 +94,7 @@ class AnthropicClient(LLMClient):
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             ) as stream:
-                return await self._process_stream(stream, ctx)
+                return await self._process_stream(stream, context)
         else:
             response = await self._client.messages.create(
                 **self._create_options,
@@ -102,7 +102,7 @@ class AnthropicClient(LLMClient):
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             )
-            return await self._process_response(response, ctx)
+            return await self._process_response(response, context)
 
     def _build_system(self, prompt: list[str]) -> Any:
         text = "\n\n".join(prompt)
@@ -124,7 +124,7 @@ class AnthropicClient(LLMClient):
     async def _process_response(
         self,
         response: Message,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
@@ -132,11 +132,11 @@ class AnthropicClient(LLMClient):
         for block in response.content:
             if isinstance(block, ThinkingBlock):
                 if block.thinking:
-                    await ctx.send(ModelReasoning(content=block.thinking))
+                    await context.send(ModelReasoning(content=block.thinking))
 
             elif isinstance(block, TextBlock):
                 model_msg = ModelMessage(content=block.text)
-                await ctx.send(model_msg)
+                await context.send(model_msg)
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -158,7 +158,7 @@ class AnthropicClient(LLMClient):
     async def _process_stream(
         self,
         stream: Any,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCall] = []
@@ -183,10 +183,10 @@ class AnthropicClient(LLMClient):
 
                 if delta_type == "text_delta":
                     full_content += delta.text
-                    await ctx.send(ModelMessageChunk(content=delta.text))
+                    await context.send(ModelMessageChunk(content=delta.text))
 
                 elif delta_type == "thinking_delta":
-                    await ctx.send(ModelReasoning(content=delta.thinking))
+                    await context.send(ModelReasoning(content=delta.thinking))
 
                 elif delta_type == "input_json_delta" and current_tool is not None:
                     current_tool["arguments"] += delta.partial_json
@@ -205,7 +205,7 @@ class AnthropicClient(LLMClient):
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
-            await ctx.send(message)
+            await context.send(message)
 
         final_message = await stream.get_final_message()
         usage = final_message.usage.model_dump() if final_message.usage else {}

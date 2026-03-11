@@ -15,25 +15,25 @@ class HistoryLimiter(MiddlewareFactory):
             raise ValueError("max_events must be greater than 0")
         self._max_events = max_events
 
-    def __call__(self, event: "BaseEvent", ctx: "Context") -> "BaseMiddleware":
-        return _HistoryLimiter(event, ctx, self._max_events)
+    def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
+        return _HistoryLimiter(event, context, self._max_events)
 
 
 class _HistoryLimiter(BaseMiddleware):
     """Truncate message history to a maximum number of events."""
 
-    def __init__(self, event: "BaseEvent", ctx: "Context", max_events: int) -> None:
-        super().__init__(event, ctx)
+    def __init__(self, event: "BaseEvent", context: "Context", max_events: int) -> None:
+        super().__init__(event, context)
         self._max_events = max_events
 
     async def on_llm_call(
         self,
         call_next: LLMCall,
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         if len(events) <= self._max_events:
-            return await call_next(events, ctx)
+            return await call_next(events, context)
 
         first = events[0]
         if isinstance(first, ModelRequest):
@@ -47,7 +47,7 @@ class _HistoryLimiter(BaseMiddleware):
             start = _skip_leading_tool_results(events, len(events) - self._max_events)
             trimmed = events[start:]
 
-        return await call_next(trimmed, ctx)
+        return await call_next(trimmed, context)
 
 
 def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:

@@ -85,12 +85,12 @@ class OpenAIResponsesClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
-        instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
+        instructions = "\n\n".join(context.prompt) if context.prompt else None
 
         response = await self._client.responses.create(
             **self._create_options,
@@ -100,13 +100,13 @@ class OpenAIResponsesClient(LLMClient):
         )
 
         if self._streaming:
-            return await self._process_stream(response, ctx)
-        return await self._process_response(response, ctx)
+            return await self._process_stream(response, context)
+        return await self._process_response(response, context)
 
     async def _process_response(
         self,
         response: Response,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
@@ -115,13 +115,13 @@ class OpenAIResponsesClient(LLMClient):
             if isinstance(item, ResponseReasoningItem):
                 for summary in item.summary or []:
                     if hasattr(summary, "text") and summary.text:
-                        await ctx.send(ModelReasoning(content=summary.text))
+                        await context.send(ModelReasoning(content=summary.text))
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
                     if hasattr(part, "text") and part.text:
                         model_msg = ModelMessage(content=part.text)
-                        await ctx.send(model_msg)
+                        await context.send(model_msg)
 
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
@@ -143,7 +143,7 @@ class OpenAIResponsesClient(LLMClient):
     async def _process_stream(
         self,
         response_stream: Any,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
@@ -154,7 +154,7 @@ class OpenAIResponsesClient(LLMClient):
 
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
-                await ctx.send(ModelMessageChunk(content=event.delta))
+                await context.send(ModelMessageChunk(content=event.delta))
 
             elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
                 calls.append(
@@ -172,7 +172,7 @@ class OpenAIResponsesClient(LLMClient):
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
-            await ctx.send(message)
+            await context.send(message)
 
         return ModelResponse(
             message=message,

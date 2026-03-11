@@ -20,7 +20,7 @@ class Tool(Protocol, ToolExecution):
     def register(
         self,
         stack: "ExitStack",
-        ctx: "Context",
+        context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:

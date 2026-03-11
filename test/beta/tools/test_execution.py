@@ -25,7 +25,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock),
+        context=Context(async_mock),
     )
 
     assert result.content == '"tool executed"'
@@ -44,7 +44,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock),
+        context=Context(async_mock),
     )
 
     assert result.content == '"tool executed"'
@@ -63,7 +63,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock),
+        context=Context(async_mock),
     )
 
     assert result.content == '"tool executed"'
@@ -84,7 +84,7 @@ async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock),
+        context=Context(async_mock),
     )
 
     assert result.content == '{"a":"1"}'
@@ -104,7 +104,7 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock),
+        context=Context(async_mock),
     )
 
     assert result.content == '"111"'
@@ -113,15 +113,15 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
 @pytest.mark.asyncio
 async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
     @tool
-    def my_func(a: str, ctx: Context) -> str:
-        return "".join(ctx.prompt)
+    def my_func(a: str, context: Context) -> str:
+        return "".join(context.prompt)
 
     result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock, prompt=["1"]),
+        context=Context(async_mock, prompt=["1"]),
     )
 
     assert result.content == '"1"'
@@ -138,7 +138,7 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: Magi
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),
-        ctx=Context(async_mock, prompt=["1"]),
+        context=Context(async_mock, prompt=["1"]),
     )
 
     assert result.content == '"1"'

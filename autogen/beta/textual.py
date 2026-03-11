@@ -7,7 +7,7 @@ from textual.app import App, ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Header, Input, Markdown
 
-from autogen.beta import Agent, Context, Conversation, MemoryStream
+from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
 
 
@@ -17,7 +17,7 @@ class TUIAgent(App):
 
         self.stream = MemoryStream()
         self.agent = agent
-        self.conversation: Conversation | None = None
+        self.conversation: AgentReply | None = None
 
     def on_mount(self) -> None:
         self.title = f"AG2 TUI of `{self.agent.name}` agent"
@@ -50,14 +50,14 @@ class TUIAgent(App):
             await chat_container.mount(thinking_block)
             thinking_block.scroll_visible(immediate=True)
 
-            async def put_reasoning_chunk(event: ModelReasoning, ctx: Context) -> None:
+            async def put_reasoning_chunk(event: ModelReasoning, context: Context) -> None:
                 await thinking_block.append(event.content)
 
             # Create agent message block
             assistant_message = Markdown(f"**{self.agent.name}:** ", classes="assistant-message")
             text_mounted = False
 
-            async def put_message_chunk(event: ModelMessageChunk, ctx: Context) -> None:
+            async def put_message_chunk(event: ModelMessageChunk, context: Context) -> None:
                 nonlocal text_mounted
                 if not text_mounted:
                     await thinking_block.remove()
@@ -79,7 +79,7 @@ class TUIAgent(App):
                         await thinking_block.remove()
                         await chat_container.mount(assistant_message)
 
-                    final_content = c.message.content
+                    final_content = c.content
                     await assistant_message.update(f"**{self.agent.name}:** {final_content}")
                     assistant_message.scroll_visible(immediate=True)
 

@@ -56,7 +56,7 @@ class FunctionTool(Tool):
     def register(
         self,
         stack: "ExitStack",
-        ctx: "Context",
+        context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
@@ -64,17 +64,17 @@ class FunctionTool(Tool):
         for mw in middleware:
             execution = partial(mw.on_tool_execution, execution)
 
-        async def execute(event: "ToolCall", ctx: "Context") -> None:
-            result = await execution(event, ctx)
-            await ctx.send(result)
+        async def execute(event: "ToolCall", context: "Context") -> None:
+            result = await execution(event, context)
+            await context.send(result)
 
-        stack.enter_context(ctx.stream.where(ToolCall.name == self.name).sub_scope(execute))
+        stack.enter_context(context.stream.where(ToolCall.name == self.name).sub_scope(execute))
 
-    async def __call__(self, event: "ToolCall", ctx: "Context") -> "ToolResult":
+    async def __call__(self, event: "ToolCall", context: "Context") -> "ToolResult":
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
-                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: ctx}),
+                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: context}),
                     stack=stack,
                     cache_dependencies={},
                     dependency_provider=self.provider,

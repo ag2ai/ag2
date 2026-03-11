@@ -46,7 +46,7 @@ async def test_sysprompt(mock: MagicMock):
     conversation = await agent.ask("Hi, agent!")
 
     mock.assert_called_once_with(["You are a helpful agent!"])
-    assert conversation.ctx.prompt == ["You are a helpful agent!"]
+    assert conversation.context.prompt == ["You are a helpful agent!"]
 
 
 @pytest.mark.asyncio()
@@ -60,7 +60,7 @@ async def test_multiple_sysprompts(mock: MagicMock):
     conversation = await agent.ask("Hi, agent!")
 
     mock.assert_called_once_with(["1", "2"])
-    assert conversation.ctx.prompt == ["1", "2"]
+    assert conversation.context.prompt == ["1", "2"]
 
 
 @pytest.mark.asyncio()
@@ -177,7 +177,7 @@ async def test_prompt_mutation(mock: MagicMock):
     mock.assert_called_once_with(["1"])
 
     # test second call
-    conversation.ctx.prompt = ["2"]
+    conversation.context.prompt = ["2"]
     await conversation.ask("Next turn")
 
     # validate latest call

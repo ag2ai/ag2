@@ -52,12 +52,12 @@ class GeminiClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse:
         contents = convert_messages(messages)
-        system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
+        system_instruction = "\n\n".join(context.prompt) if context.prompt else None
 
         tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in tools]
         gemini_tools = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else None
@@ -75,19 +75,19 @@ class GeminiClient(LLMClient):
                 contents=contents,
                 config=config,
             )
-            return await self._process_stream(stream, ctx)
+            return await self._process_stream(stream, context)
 
         response = await self._client.aio.models.generate_content(
             model=self._model_name,
             contents=contents,
             config=config,
         )
-        return await self._process_response(response, ctx)
+        return await self._process_response(response, context)
 
     async def _process_response(
         self,
         response: types.GenerateContentResponse,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
@@ -95,10 +95,10 @@ class GeminiClient(LLMClient):
         if response.candidates:
             for part in response.candidates[0].content.parts:
                 if part.thought and part.text:
-                    await ctx.send(ModelReasoning(content=part.text))
+                    await context.send(ModelReasoning(content=part.text))
                 elif part.text is not None:
                     model_msg = ModelMessage(content=part.text)
-                    await ctx.send(model_msg)
+                    await context.send(model_msg)
                 elif part.function_call:
                     fc = part.function_call
                     pdata: dict[str, Any] = {}
@@ -130,7 +130,7 @@ class GeminiClient(LLMClient):
     async def _process_stream(
         self,
         stream: Any,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCall] = []
@@ -140,10 +140,10 @@ class GeminiClient(LLMClient):
             if chunk.candidates:
                 for part in chunk.candidates[0].content.parts:
                     if part.thought and part.text:
-                        await ctx.send(ModelReasoning(content=part.text))
+                        await context.send(ModelReasoning(content=part.text))
                     elif part.text is not None:
                         full_content += part.text
-                        await ctx.send(ModelMessageChunk(content=part.text))
+                        await context.send(ModelMessageChunk(content=part.text))
                     elif part.function_call:
                         fc = part.function_call
                         pdata: dict[str, Any] = {}
@@ -168,7 +168,7 @@ class GeminiClient(LLMClient):
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
-            await ctx.send(message)
+            await context.send(message)
 
         return ModelResponse(
             message=message,

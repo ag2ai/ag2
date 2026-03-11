@@ -53,11 +53,11 @@ class OllamaClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         *,
         tools: Iterable[Tool],
     ) -> ModelResponse:
-        ollama_messages = convert_messages(ctx.prompt, messages)
+        ollama_messages = convert_messages(context.prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}
@@ -68,14 +68,14 @@ class OllamaClient(LLMClient):
             kwargs["tools"] = tools_list
 
         if self._streaming:
-            return await self._call_streaming(ollama_messages, kwargs, ctx)
-        return await self._call_non_streaming(ollama_messages, kwargs, ctx)
+            return await self._call_streaming(ollama_messages, kwargs, context)
+        return await self._call_non_streaming(ollama_messages, kwargs, context)
 
     async def _call_non_streaming(
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         response = await self._client.chat(
             model=self._model,
@@ -86,12 +86,12 @@ class OllamaClient(LLMClient):
         msg = response.message
 
         if msg.thinking:
-            await ctx.send(ModelReasoning(content=msg.thinking))
+            await context.send(ModelReasoning(content=msg.thinking))
 
         model_msg: ModelMessage | None = None
         if msg.content:
             model_msg = ModelMessage(content=msg.content)
-            await ctx.send(model_msg)
+            await context.send(model_msg)
 
         calls = [
             ToolCall(
@@ -118,7 +118,7 @@ class OllamaClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         response_stream = await self._client.chat(
             model=self._model,
@@ -135,11 +135,11 @@ class OllamaClient(LLMClient):
             msg = chunk.message
 
             if msg.thinking:
-                await ctx.send(ModelReasoning(content=msg.thinking))
+                await context.send(ModelReasoning(content=msg.thinking))
 
             if msg.content:
                 full_content += msg.content
-                await ctx.send(ModelMessageChunk(content=msg.content))
+                await context.send(ModelMessageChunk(content=msg.content))
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
@@ -160,7 +160,7 @@ class OllamaClient(LLMClient):
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
-            await ctx.send(message)
+            await context.send(message)
 
         return ModelResponse(
             message=message,

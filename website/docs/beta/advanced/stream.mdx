@@ -141,10 +141,10 @@ To raise or publish events to the stream, you should always use the `Context` ob
 from autogen.beta import Context
 from autogen.beta.events import ModelMessage
 
-async def publish_message(ctx: Context):
+async def publish_message(context: Context):
     event = ModelMessage(content="Hello from the agent!")
-    # Always use ctx.send() to raise events
-    await ctx.send(event)
+    # Always use context.send() to raise events
+    await context.send(event)
 ```
 
 ## Events Interrupters
@@ -157,7 +157,7 @@ To register an interrupter, pass `interrupt=True` to the `subscribe` method. If 
 @stream.where(ModelMessage).subscribe(interrupt=True)
 async def intercept_message(
     event: ModelMessage,
-    ctx: Context,
+    context: Context,
 ) -> BaseEvent | None:
     if "secret" in event.content:
         # Suppress the event by returning None
@@ -165,7 +165,7 @@ async def intercept_message(
 
     elif "alert" in event.content:
         # Replace it with a different event
-        await ctx.send(AlertEvent(message=event.content))
+        await context.send(AlertEvent(message=event.content))
         return None
 
     # Or modify and return the original event
@@ -190,6 +190,6 @@ def handle_success(event: PaymentProcessed):
     print(f"Payment processed: {event.amount}")
 
 # And raise them via Context
-async def process_payment(ctx: Context):
-    await ctx.send(PaymentProcessed(amount=100.50, status="success"))
+async def process_payment(context: Context):
+    await context.send(PaymentProcessed(amount=100.50, status="success"))
 ```

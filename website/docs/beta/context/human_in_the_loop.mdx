@@ -33,9 +33,9 @@ Here is an example of a tool that asks for human confirmation:
 from autogen.beta import Context, Agent, tool
 
 @tool
-async def execute_query(ctx: Context) -> str:
+async def execute_query(context: Context) -> str:
     # Pause and ask for human input
-    user_response = await ctx.input(
+    user_response = await context.input(
         "Are you sure you want to run this query? (yes/no)",
         timeout=60.0
     )
@@ -56,7 +56,7 @@ agent = Agent(
 
 ## HITL Registration
 
-To handle the input requests made by `ctx.input()`, you must register a **HITL hook** on your `Agent`.
+To handle the input requests made by `context.input()`, you must register a **HITL hook** on your `Agent`.
 
 A **HITL** hook is a callback function that consumes a `HumanInputRequest` event and returns a `HumanMessage`. Like tools, HITL hooks support all context features, including dependency injection and variables.
 
@@ -69,7 +69,7 @@ from autogen.beta import Agent
 from autogen.beta.events import HumanInputRequest, HumanMessage
 
 def my_hitl_hook(event: HumanInputRequest) -> HumanMessage:
-    # event.content contains the prompt passed to ctx.input()
+    # event.content contains the prompt passed to context.input()
     print(f"Agent asks: {event.content}")
 
     # Collect input from the user (e.g., via standard input)

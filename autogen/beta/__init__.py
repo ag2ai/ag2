@@ -4,15 +4,15 @@
 
 from fast_depends import Depends
 
-from .agent import Agent, Conversation
+from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
 from .stream import MemoryStream
 from .tools import tool
 
 __all__ = (
     "Agent",
+    "AgentReply",
     "Context",
-    "Conversation",
     "Depends",
     "Inject",
     "MemoryStream",

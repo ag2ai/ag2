@@ -17,16 +17,16 @@ HumanHook: TypeAlias = Callable[..., HumanMessage] | Callable[..., Awaitable[Hum
 def wrap_hitl(func: HumanHook) -> None:
     call_model = build_model(func)
 
-    async def wrapper(event: HumanInputRequest, ctx: Context) -> None:
+    async def wrapper(event: HumanInputRequest, context: Context) -> None:
         async with AsyncExitStack() as stack:
             event = await call_model.asolve(
                 event,
                 stack=stack,
                 cache_dependencies={},
-                dependency_provider=ctx.dependency_provider,
-                **{CONTEXT_OPTION_NAME: ctx},
+                dependency_provider=context.dependency_provider,
+                **{CONTEXT_OPTION_NAME: context},
             )
-        await ctx.send(event)
+        await context.send(event)
 
     return wrapper
 

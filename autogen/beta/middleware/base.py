@@ -10,7 +10,7 @@ from autogen.beta.events import BaseEvent, ClientToolCall, ModelResponse, ToolCa
 
 
 class MiddlewareFactory(Protocol):
-    def __call__(self, event: "BaseEvent", ctx: "Context") -> "BaseMiddleware": ...
+    def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware": ...
 
 
 class Middleware(MiddlewareFactory):
@@ -27,9 +27,9 @@ class Middleware(MiddlewareFactory):
     def __call__(
         self,
         event: "BaseEvent",
-        ctx: "Context",
+        context: "Context",
     ) -> "BaseMiddleware":
-        return self._cls(event, ctx, **self._options)
+        return self._cls(event, context, **self._options)
 
 
 ToolResultType: TypeAlias = "ToolResult | ToolError | ClientToolCall"
@@ -42,31 +42,31 @@ class BaseMiddleware:
     def __init__(
         self,
         event: "BaseEvent",
-        ctx: "Context",
+        context: "Context",
     ) -> None:
         self.initial_event = event
-        self.ctx = ctx
+        self.context = context
 
     async def on_turn(
         self,
         call_next: AgentTurn,
         event: "BaseEvent",
-        ctx: "Context",
+        context: "Context",
     ) -> "ModelResponse":
-        return await call_next(event, ctx)
+        return await call_next(event, context)
 
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
         event: "ToolCall",
-        ctx: "Context",
+        context: "Context",
     ) -> ToolResultType:
-        return await call_next(event, ctx)
+        return await call_next(event, context)
 
     async def on_llm_call(
         self,
         call_next: LLMCall,
         events: "Sequence[BaseEvent]",
-        ctx: "Context",
+        context: "Context",
     ) -> "ModelResponse":
-        return await call_next(events, ctx)
+        return await call_next(events, context)

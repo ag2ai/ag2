@@ -28,7 +28,7 @@ class TestStreamSend:
             asyncio.create_task(listen_stream(events))
 
             event = ToolCall(name="func1", arguments='"test"')
-            await stream.send(event, ctx=Context(stream))
+            await stream.send(event, context=Context(stream))
 
             await asyncio.wait_for(signal.wait(), timeout=1.0)
 
@@ -51,7 +51,7 @@ class TestStreamSend:
                 # publish more messages than expected
                 await stream.send(
                     ToolCall(name="func1", arguments='"test"'),
-                    ctx=Context(stream),
+                    context=Context(stream),
                 )
 
             await asyncio.wait_for(signal.wait(), timeout=1.0)
@@ -73,10 +73,10 @@ class TestStreamSend:
 
             await stream.send(
                 ModelMessage(content="test"),
-                ctx=Context(stream),
+                context=Context(stream),
             )
             event = ToolCall(name="func1", arguments='"test"')
-            await stream.send(event, ctx=Context(stream))
+            await stream.send(event, context=Context(stream))
 
             await asyncio.wait_for(signal.wait(), timeout=1.0)
 

@@ -36,24 +36,35 @@ class Askable(Protocol):
     async def ask(
         self,
         msg: str,
-    ) -> "Conversation":
+        *,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
+    ) -> "AgentReply":
         raise NotImplementedError
 
 
-class Conversation(Askable):
+class AgentReply(Askable):
     def __init__(
         self,
-        message: ModelResponse,
+        response: ModelResponse,
         *,
-        ctx: "Context",
+        context: "Context",
         client: "LLMClient",
         agent: "Agent",
     ) -> None:
-        self.message = message
-
-        self.ctx = ctx
+        self.response = response
+        self.context = context
         self.__client = client
         self.__agent = agent
+
+    @property
+    def content(self) -> str | None:
+        """Text content of the model's response for this turn."""
+        return self.response.content
 
     async def ask(
         self,
@@ -65,22 +76,22 @@ class Conversation(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "Conversation":
+    ) -> "AgentReply":
         initial_event = ModelRequest(content=msg)
 
-        ctx = self.ctx
+        context = self.context
         if dependencies:
-            ctx.dependencies.update(dependencies)
+            context.dependencies.update(dependencies)
         if variables:
-            ctx.variables.update(variables)
+            context.variables.update(variables)
         if prompt:
-            ctx.prompt = list(prompt)
+            context.prompt = list(prompt)
 
         client = config.create() if config else self.__client
 
         return await self.__agent._execute(
             initial_event,
-            ctx=ctx,
+            context=context,
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
@@ -88,7 +99,7 @@ class Conversation(Askable):
 
     @property
     def history(self) -> History:
-        return self.ctx.stream.history
+        return self.context.stream.history
 
 
 PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
@@ -227,7 +238,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "Conversation":
+    ) -> "AgentReply":
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
@@ -237,7 +248,7 @@ class Agent(Askable):
 
         initial_event = ModelRequest(content=msg)
 
-        ctx = Context(
+        context = Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
@@ -245,16 +256,16 @@ class Agent(Askable):
             dependency_provider=self.dependency_provider,
         )
 
-        if not ctx.prompt:
-            ctx.prompt.extend(self._system_prompt)
+        if not context.prompt:
+            context.prompt.extend(self._system_prompt)
 
             for dp in self._dynamic_prompt:
-                p = await dp(initial_event, ctx)
-                ctx.prompt.append(p)
+                p = await dp(initial_event, context)
+                context.prompt.append(p)
 
         return await self._execute(
             initial_event,
-            ctx=ctx,
+            context=context,
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
@@ -264,11 +275,11 @@ class Agent(Askable):
         self,
         event: BaseEvent,
         *,
-        ctx: Context,
+        context: Context,
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "Conversation":
+    ) -> "AgentReply":
         all_tools = self.tools + list(additional_tools)
 
         middleware_instances: list[BaseMiddleware] = []
@@ -283,37 +294,37 @@ class Agent(Askable):
                 )
             )
         ):
-            mw = m(event, ctx)
+            mw = m(event, context)
             middleware_instances.append(mw)
 
             agent_turn = partial(mw.on_turn, agent_turn)
             llm_call = partial(mw.on_llm_call, llm_call)
 
-        async def _call_client(ctx: Context) -> None:
-            result = await llm_call(await ctx.stream.history.get_events(), ctx)
-            await ctx.send(result)
+        async def _call_client(context: Context) -> None:
+            result = await llm_call(await context.stream.history.get_events(), context)
+            await context.send(result)
 
         with ExitStack() as stack:
             stack.enter_context(
-                ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
+                context.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
             )
 
             stack.enter_context(
-                ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
+                context.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
             )
 
             self.__tool_executor.register(
                 stack,
-                ctx,
+                context,
                 tools=all_tools,
                 middleware=middleware_instances,
             )
 
-            message = await agent_turn(event, ctx)
+            message = await agent_turn(event, context)
 
-            return Conversation(
+            return AgentReply(
                 message,
-                ctx=ctx,
+                context=context,
                 agent=self,
                 client=client,
             )
@@ -324,14 +335,14 @@ class Agent(Askable):
         return ConversableAdapter(self)
 
 
-async def _execute_turn(event: BaseEvent, ctx: Context) -> ModelResponse:
-    async with ctx.stream.get(ModelResponse) as result:
-        await ctx.send(event)
+async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
+    async with context.stream.get(ModelResponse) as result:
+        await context.send(event)
         message = await result
 
     while message.tool_calls and not message.response_force:
-        async with ctx.stream.get(ModelResponse) as result:
-            await ctx.send(message.tool_calls)
+        async with context.stream.get(ModelResponse) as result:
+            await context.send(message.tool_calls)
             message = await result
 
     return message
@@ -340,14 +351,14 @@ async def _execute_turn(event: BaseEvent, ctx: Context) -> ModelResponse:
 def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awaitable[str]]:
     call_model = build_model(func)
 
-    async def wrapper(event: ModelRequest, ctx: Context) -> str:
+    async def wrapper(event: ModelRequest, context: Context) -> str:
         async with AsyncExitStack() as stack:
             return await call_model.asolve(
                 event,
                 stack=stack,
                 cache_dependencies={},
-                dependency_provider=ctx.dependency_provider,
-                **{CONTEXT_OPTION_NAME: ctx},
+                dependency_provider=context.dependency_provider,
+                **{CONTEXT_OPTION_NAME: context},
             )
 
     return wrapper

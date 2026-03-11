@@ -8,7 +8,7 @@ from typing import Any
 from autogen import ConversableAgent
 from autogen.oai.client import OpenAIWrapper
 
-from .agent import Agent, Conversation
+from .agent import Agent, AgentReply
 from .tools import ClientTool
 
 
@@ -17,7 +17,7 @@ class ConversableAdapter(ConversableAgent):
         super().__init__(agent.name)
 
         self.__agent = agent
-        self.__conversation: Conversation | None = None
+        self.__conversation: AgentReply | None = None
         self.__client_tools: list[ClientTool] = []
         self.__llm_config: dict[str, Any] = {}
 
@@ -62,12 +62,12 @@ class ConversableAdapter(ConversableAgent):
                 tools=self.__client_tools,
             )
 
-        if vars := r.ctx.variables:
+        if vars := r.context.variables:
             self.context_variables.update(vars)
             if sender:
                 sender.context_variables.update(vars)
 
-        result = r.message.to_api() | {"name": self.name}
+        result = r.response.to_api() | {"name": self.name}
         pprint(result)
 
         return True, result

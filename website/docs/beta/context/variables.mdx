@@ -62,10 +62,10 @@ The most straightforward way to access variables inside a tool is by requesting 
 from autogen.beta import Context, tool
 
 @tool
-def process_data(ctx: Context) -> str:
+def process_data(context: Context) -> str:
     # Access variables directly from the context dictionary
-    api_key = ctx.variables.get("api_key")
-    session = ctx.variables.get("session_id")
+    api_key = context.variables.get("api_key")
+    session = context.variables.get("session_id")
 
     return f"Processed using key: {api_key}"
 ```
@@ -143,15 +143,15 @@ def update_status(
 
 ## Updating Variables in Tools
 
-Variables are mutable. If a tool updates a `ctx.variables` dictionary, that change is preserved in the context and will be available to subsequent tool calls within the same conversation.
+Variables are mutable. If a tool updates the `context.variables` dictionary, that change is preserved in the context and will be available to subsequent tool calls within the same conversation.
 
 This is highly useful for sharing state or caching results between different tools without requiring the LLM to pass the data back and forth.
 
 ```python linenums="1" hl_lines="4 9 11-12"
 @tool
-def authenticate(ctx: Context) -> str:
+def authenticate(context: Context) -> str:
     # Generate and store a token in the context variables
-    ctx.variables["auth_token"] = "abc-123"
+    context.variables["auth_token"] = "abc-123"
     return "Successfully authenticated."
 
 @tool

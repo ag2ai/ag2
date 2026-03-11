@@ -23,18 +23,18 @@ class TokenLimiter(MiddlewareFactory):
             raise ValueError("chars_per_token must be greater than 0")
         self._max_chars = max_tokens // chars_per_token
 
-    def __call__(self, event: "BaseEvent", ctx: "Context") -> "BaseMiddleware":
-        return _TokenLimiter(event, ctx, self._max_chars)
+    def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
+        return _TokenLimiter(event, context, self._max_chars)
 
 
 class _TokenLimiter(BaseMiddleware):
     def __init__(
         self,
         event: "BaseEvent",
-        ctx: "Context",
+        context: "Context",
         max_chars: int,
     ) -> None:
-        super().__init__(event, ctx)
+        super().__init__(event, context)
         self._max_chars = max_chars
 
     @staticmethod
@@ -47,11 +47,11 @@ class _TokenLimiter(BaseMiddleware):
         self,
         call_next: LLMCall,
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         event_lengths = [len(str(event)) for event in events]
         if sum(event_lengths) <= self._max_chars:
-            return await call_next(events, ctx)
+            return await call_next(events, context)
 
         prefix_length = 1 if isinstance(events[0], ModelRequest) else 0
         current_chars = event_lengths[0] if prefix_length else 0
@@ -71,4 +71,4 @@ class _TokenLimiter(BaseMiddleware):
         if prefix_length:
             trimmed = [events[0], *trimmed]
 
-        return await call_next(trimmed, ctx)
+        return await call_next(trimmed, context)

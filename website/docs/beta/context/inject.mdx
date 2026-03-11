@@ -65,9 +65,9 @@ The simplest way to access your dependencies inside a tool is through the `Conte
 from autogen.beta import Context, tool
 
 @tool
-def query_database(query: str, ctx: Context) -> str:
+def query_database(query: str, context: Context) -> str:
     # Access the complex dependency directly from the context
-    db = ctx.dependencies.get("db")
+    db = context.dependencies.get("db")
 
     result = db.execute(query)
     return f"Result: {result}"

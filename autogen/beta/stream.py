@@ -148,7 +148,7 @@ class MemoryStream(ABCStream):
     async def send(
         self,
         event: BaseEvent,
-        ctx: "Context",
+        context: "Context",
     ) -> None:
         # interrupters should follow registration order
         for condition, interrupter in tuple(self._interrupters.values()):
@@ -161,8 +161,8 @@ class MemoryStream(ABCStream):
                         event,
                         cache_dependencies={},
                         stack=stack,
-                        dependency_provider=ctx.dependency_provider,
-                        **{CONTEXT_OPTION_NAME: ctx},
+                        dependency_provider=context.dependency_provider,
+                        **{CONTEXT_OPTION_NAME: context},
                     )
                 ):
                     return
@@ -180,8 +180,8 @@ class MemoryStream(ABCStream):
                     event,
                     cache_dependencies={},
                     stack=stack,
-                    dependency_provider=ctx.dependency_provider,
-                    **{CONTEXT_OPTION_NAME: ctx},
+                    dependency_provider=context.dependency_provider,
+                    **{CONTEXT_OPTION_NAME: context},
                 )
 
 

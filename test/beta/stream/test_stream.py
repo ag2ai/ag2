@@ -17,7 +17,7 @@ class TestStreamSend:
 
         stream.subscribe(lambda ev: mock(ev))
         event = ToolCall(name="func1", arguments="test")
-        await stream.send(event, ctx=Context(stream))
+        await stream.send(event, context=Context(stream))
 
         mock.assert_called_once_with(event)
 
@@ -28,7 +28,7 @@ class TestStreamSend:
         stream.subscribe(lambda ev: mock.listener1(ev))
         stream.subscribe(lambda ev: mock.listener2(ev))
         event = ToolCall(name="func1", arguments="test")
-        await stream.send(event, ctx=Context(stream))
+        await stream.send(event, context=Context(stream))
 
         mock.listener1.assert_called_once_with(event)
         mock.listener2.assert_called_once_with(event)
@@ -42,9 +42,9 @@ class TestStreamSend:
         event2 = ToolCall(name="func2", arguments="test2")
         event3 = ModelMessage(content="response")
 
-        await stream.send(event1, ctx=Context(stream))
-        await stream.send(event2, ctx=Context(stream))
-        await stream.send(event3, ctx=Context(stream))
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+        await stream.send(event3, context=Context(stream))
 
         assert [c[0][0] for c in mock.call_args_list] == [event1, event2, event3]
 
@@ -60,9 +60,9 @@ class TestStreamWhereTypeFilter:
         event1 = ToolCall(name="func1", arguments="test1")
         event2 = ModelMessage(content="response")
         event3 = ToolCall(name="func2", arguments="test2")
-        await stream.send(event1, ctx=Context(stream))
-        await stream.send(event2, ctx=Context(stream))
-        await stream.send(event3, ctx=Context(stream))
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
+        await stream.send(event3, context=Context(stream))
 
         assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
@@ -75,8 +75,8 @@ class TestStreamWhereTypeFilter:
 
         event1 = ToolCall(name="func1", arguments="test1")
         event2 = ModelMessage(content="response")
-        await stream.send(event1, ctx=Context(stream))
-        await stream.send(event2, ctx=Context(stream))
+        await stream.send(event1, context=Context(stream))
+        await stream.send(event2, context=Context(stream))
 
         assert [c[0][0] for c in mock.call_args_list] == [event1, event2]
 
@@ -87,8 +87,8 @@ class TestStreamWhereTypeFilter:
         tool_stream = stream.where(ToolCall)
         tool_stream.subscribe(mock)
 
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="response2"), ctx=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
+        await stream.send(ModelMessage(content="response2"), context=Context(stream))
 
         mock.assert_not_called()
 
@@ -104,10 +104,10 @@ class TestStreamWhereConditionFilter:
 
         event1 = ToolCall(name="func1", arguments="test1")
         event3 = ToolCall(name="func1", arguments="test3")
-        await stream.send(event1, ctx=Context(stream))
-        await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
-        await stream.send(event3, ctx=Context(stream))
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
+        await stream.send(event1, context=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="test2"), context=Context(stream))
+        await stream.send(event3, context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
 
         assert [c[0][0] for c in mock.call_args_list] == [event1, event3]
 
@@ -119,9 +119,9 @@ class TestStreamWhereConditionFilter:
         func1_stream = tool_stream.where(ToolCall.name == "func1")
         func1_stream.subscribe(mock)
 
-        await stream.send(ToolCall(name="func2", arguments="test1"), ctx=Context(stream))
-        await stream.send(ToolCall(name="func3", arguments="test2"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="test1"), context=Context(stream))
+        await stream.send(ToolCall(name="func3", arguments="test2"), context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
 
         mock.assert_not_called()
 
@@ -136,9 +136,9 @@ class TestStreamChainedFilters:
         tool_stream.subscribe(mock.tool)
         tool_stream.where(ToolCall.name == "func1").subscribe(mock.func)
 
-        await stream.send(ToolCall(name="func1", arguments="test1"), ctx=Context(stream))
-        await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func1", arguments="test1"), context=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="test2"), context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
 
         assert mock.all.call_count == 3
         assert mock.tool.call_count == 2
@@ -150,9 +150,9 @@ class TestStreamChainedFilters:
 
         stream.where(ToolCall).where(ModelMessage).subscribe(mock)
 
-        await stream.send(ToolCall(name="func1", arguments="test1"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
-        await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func1", arguments="test1"), context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="test2"), context=Context(stream))
 
         mock.assert_not_called()
 
@@ -165,8 +165,8 @@ class TestStreamMultipleSubscribers:
         stream.subscribe(mock.one)
         stream.subscribe(mock.two)
 
-        await stream.send(ToolCall(name="func1", arguments="test"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="response"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func1", arguments="test"), context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
 
         assert mock.one.call_count == 2
         assert mock.two.call_count == 2
@@ -191,9 +191,9 @@ class TestStreamPlayScenario:
         stream.where(ModelMessage).subscribe(model_listener)
         tool_stream.where(ModelMessage).subscribe(unreachable_listener)
 
-        await stream.send(ToolCall(name="func1", arguments="Wtf1"), ctx=Context(stream))
-        await stream.send(ToolCall(name="func2", arguments="Wtf2"), ctx=Context(stream))
-        await stream.send(ModelMessage(content="Test"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func1", arguments="Wtf1"), context=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="Wtf2"), context=Context(stream))
+        await stream.send(ModelMessage(content="Test"), context=Context(stream))
 
         assert all_listener.call_count == 3
         assert tool_listener.call_count == 2
@@ -221,10 +221,10 @@ class TestStreamUnsubscribe:
 
         sub_id = stream.subscribe(lambda ev: mock(ev))
         event = ToolCall(name="func1", arguments="test1")
-        await stream.send(event, ctx=Context(stream))
+        await stream.send(event, context=Context(stream))
 
         stream.unsubscribe(sub_id)
-        await stream.send(ToolCall(name="func2", arguments="test2"), ctx=Context(stream))
+        await stream.send(ToolCall(name="func2", arguments="test2"), context=Context(stream))
 
         mock.assert_called_once_with(event)
 

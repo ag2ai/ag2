@@ -55,7 +55,7 @@ async def test_ask_with_explicit_config_option(test_config: TestConfig) -> None:
         config=TestConfig("result"),
     )
 
-    assert res.message.content == "result"
+    assert res.content == "result"
 
 
 @pytest.mark.asyncio()

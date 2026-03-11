@@ -22,26 +22,26 @@ class LoggingMiddleware(MiddlewareFactory):
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self._logger = logger or logging.getLogger("autogen")
 
-    def __call__(self, event: "BaseEvent", ctx: "Context") -> BaseMiddleware:
-        return _LoggingMiddleware(event, ctx, self._logger)
+    def __call__(self, event: "BaseEvent", context: "Context") -> BaseMiddleware:
+        return _LoggingMiddleware(event, context, self._logger)
 
 
 class _LoggingMiddleware(BaseMiddleware):
     """Log LLM calls, tool executions, and turns with timing."""
 
-    def __init__(self, event: "BaseEvent", ctx: Context, logger: logging.Logger) -> None:
-        super().__init__(event, ctx)
+    def __init__(self, event: "BaseEvent", context: Context, logger: logging.Logger) -> None:
+        super().__init__(event, context)
         self._logger = logger
 
     async def on_llm_call(
         self,
         call_next: LLMCall,
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         self._logger.info("LLM call: %s", events[-1])
         t0 = time.perf_counter()
-        response = await call_next(events, ctx)
+        response = await call_next(events, context)
         elapsed = time.perf_counter() - t0
         self._logger.info("LLM response: %s in %.2fs", response, elapsed)
         return response
@@ -50,10 +50,10 @@ class _LoggingMiddleware(BaseMiddleware):
         self,
         call_next: ToolExecution,
         event: ToolCall,
-        ctx: Context,
+        context: Context,
     ) -> "ToolResultType":
         self._logger.info("Tool execute: %s(%s)", event.name, event.arguments)
-        result = await call_next(event, ctx)
+        result = await call_next(event, context)
         self._logger.info("Tool result: %s", result)
         return result
 
@@ -61,9 +61,9 @@ class _LoggingMiddleware(BaseMiddleware):
         self,
         call_next: AgentTurn,
         event: BaseEvent,
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         self._logger.info("Agent turn started")
-        response = await call_next(event, ctx)
+        response = await call_next(event, context)
         self._logger.info("Agent turn finished")
         return response

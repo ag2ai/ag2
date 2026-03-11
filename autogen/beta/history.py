@@ -12,7 +12,7 @@ from .events import BaseEvent
 
 
 class Storage(Protocol):
-    async def save_event(self, event: "BaseEvent", ctx: "Context") -> None: ...
+    async def save_event(self, event: "BaseEvent", context: "Context") -> None: ...
 
     async def get_history(self, stream_id: "StreamId") -> Iterable["BaseEvent"]: ...
 
@@ -25,8 +25,8 @@ class MemoryStorage(Storage):
     def __init__(self) -> None:
         self.__data: defaultdict[StreamId, list[BaseEvent]] = defaultdict(list)
 
-    async def save_event(self, event: "BaseEvent", ctx: "Context") -> None:
-        stream_id = ctx.stream.id
+    async def save_event(self, event: "BaseEvent", context: "Context") -> None:
+        stream_id = context.stream.id
         if event not in self.__data[stream_id]:
             self.__data[stream_id].append(event)
 

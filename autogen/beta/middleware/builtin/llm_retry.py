@@ -18,10 +18,10 @@ class RetryMiddleware(MiddlewareFactory):
         self._max_retries = max_retries
         self._retry_on = retry_on
 
-    def __call__(self, event: "BaseEvent", ctx: "Context") -> "BaseMiddleware":
+    def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _RetryMiddleware(
             event,
-            ctx,
+            context,
             max_retries=self._max_retries,
             retry_on=self._retry_on,
         )
@@ -33,12 +33,12 @@ class _RetryMiddleware(BaseMiddleware):
     def __init__(
         self,
         event: "BaseEvent",
-        ctx: "Context",
+        context: "Context",
         *,
         max_retries: int = 3,
         retry_on: tuple[type[Exception], ...] = (Exception,),
     ) -> None:
-        super().__init__(event, ctx)
+        super().__init__(event, context)
         self._max_retries = max_retries
         self._retry_on = retry_on
 
@@ -46,12 +46,12 @@ class _RetryMiddleware(BaseMiddleware):
         self,
         call_next: LLMCall,
         events: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
     ) -> ModelResponse:
         last_error: Exception | None = None
         for _ in range(self._max_retries + 1):
             try:
-                return await call_next(events, ctx)
+                return await call_next(events, context)
             except self._retry_on as e:
                 last_error = e
         raise last_error
