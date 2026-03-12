@@ -31,7 +31,7 @@ class TUIAgent(App):  # type: ignore[misc]
         self.title = f"AG2 TUI of `{self.agent.name}` agent"
         self.query_one("#input", Input).focus()
 
-    def compose(self) -> ComposeResult:
+    def compose(self) -> "ComposeResult":
         yield Header(name=self.agent.name)
         yield ScrollableContainer(id="chat_history")
         yield Input(
