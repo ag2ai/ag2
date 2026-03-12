@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .config import OllamaConfig
-from .ollama_client import OllamaClient
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from .config import OllamaConfig
+    from .ollama_client import OllamaClient
 
 __all__ = (
     "OllamaClient",

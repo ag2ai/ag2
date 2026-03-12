@@ -8,12 +8,8 @@ from collections.abc import Iterable, Sequence
 from typing import Any, Literal, Required, TypedDict
 
 import httpx
-
-from autogen.import_utils import optional_import_block
-
-with optional_import_block():
-    from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
-    from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
