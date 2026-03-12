@@ -279,6 +279,10 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 tavily = ["tavily-python>=0.7.4"]
 
+nlip = [
+    "nlip-sdk", "nlip-server", "uvicorn"
+]
+
 ## dev dependencies
 
 # test dependencies

@@ -85,6 +85,7 @@ setuptools.setup(
         "commsagent-telegram": ["ag2[commsagent-telegram]==" + __version__],
         "duckduckgo": ["ag2[duckduckgo]==" + __version__],
         "tavily": ["ag2[tavily]==" + __version__],
+        "nlip": ["ag2[nlip]==" + __version__],
         "test": ["ag2[test]==" + __version__],
         "docs": ["ag2[docs]==" + __version__],
         "types": ["ag2[types]==" + __version__],
