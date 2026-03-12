@@ -2,18 +2,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 import httpx
-from anthropic import NOT_GIVEN, AsyncAnthropic
-from anthropic.types import (
-    Message,
-    TextBlock,
-    ThinkingBlock,
-    ToolUseBlock,
-)
+
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from anthropic import NOT_GIVEN, AsyncAnthropic
+    from anthropic.types import (
+        Message,
+        TextBlock,
+        ThinkingBlock,
+        ToolUseBlock,
+    )
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context

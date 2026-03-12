@@ -2,16 +2,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from textual import on
-from textual.app import App, ComposeResult
-from textual.containers import ScrollableContainer
-from textual.widgets import Header, Input, Markdown
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as _textual_import:
+    from textual import on
+    from textual.app import App, ComposeResult
+    from textual.containers import ScrollableContainer
+    from textual.widgets import Header, Input, Markdown
+
+if not _textual_import.is_successful:
+    App = object  # type: ignore[assignment,misc]
 
 from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
 
+__all__ = ["TUIAgent"]
 
-class TUIAgent(App):
+
+class TUIAgent(App):  # type: ignore[misc]
     def __init__(self, agent: Agent):
         super().__init__()
 

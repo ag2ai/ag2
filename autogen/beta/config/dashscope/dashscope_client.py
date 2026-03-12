@@ -2,12 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
-import dashscope
-from dashscope.aigc.generation import AioGeneration
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    import dashscope
+    from dashscope.aigc.generation import AioGeneration
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context

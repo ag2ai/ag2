@@ -2,12 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
-from google import genai
-from google.genai import types
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from google import genai
+    from google.genai import types
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
