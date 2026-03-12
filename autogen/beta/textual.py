@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as _textual_import:
@@ -12,8 +14,17 @@ with optional_import_block() as _textual_import:
 
 if not _textual_import.is_successful:
     App = object  # type: ignore[assignment,misc]
-    on = object  # type: ignore[assignment,misc]
-    Input = object  # type: ignore[assignment,misc]
+
+    def on(*args: Any, **kwargs: Any) -> Any:
+        def decorator(func):
+            return func
+
+        return decorator
+
+    class Input:
+        class Submitted:
+            pass
+
 
 from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
