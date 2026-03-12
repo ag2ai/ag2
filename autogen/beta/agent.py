@@ -66,6 +66,10 @@ class AgentReply(Askable):
         """Text content of the model's response for this turn."""
         return self.response.content
 
+    @property
+    def history(self) -> History:
+        return self.context.stream.history
+
     async def ask(
         self,
         msg: str,
@@ -96,10 +100,6 @@ class AgentReply(Askable):
             additional_tools=tools,
             additional_middleware=middleware,
         )
-
-    @property
-    def history(self) -> History:
-        return self.context.stream.history
 
 
 PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
