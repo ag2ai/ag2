@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .config import DashScopeConfig
-from .dashscope_client import DashScopeClient
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from .config import DashScopeConfig
+    from .dashscope_client import DashScopeClient
 
 __all__ = (
     "DashScopeClient",

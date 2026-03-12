@@ -8,11 +8,8 @@ import json
 from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
-from autogen.import_utils import optional_import_block
-
-with optional_import_block():
-    from google import genai
-    from google.genai import types
+from google import genai
+from google.genai import types
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context

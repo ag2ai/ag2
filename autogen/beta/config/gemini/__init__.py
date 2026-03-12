@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .config import GeminiConfig
-from .gemini_client import GeminiClient
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from .config import GeminiConfig
+    from .gemini_client import GeminiClient
 
 __all__ = (
     "GeminiClient",
