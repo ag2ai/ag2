@@ -12,6 +12,8 @@ with optional_import_block() as _textual_import:
 
 if not _textual_import.is_successful:
     App = object  # type: ignore[assignment,misc]
+    on = object  # type: ignore[assignment,misc]
+    Input = object  # type: ignore[assignment,misc]
 
 from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
