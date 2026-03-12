@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from textual import on
-from textual.app import App, ComposeResult
-from textual.containers import ScrollableContainer
-from textual.widgets import Header, Input, Markdown
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    from textual import on
+    from textual.app import App, ComposeResult
+    from textual.containers import ScrollableContainer
+    from textual.widgets import Header, Input, Markdown
 
 from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
