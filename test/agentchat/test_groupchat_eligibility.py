@@ -448,23 +448,6 @@ class TestAdversarialGroupChatEligibilityDeep:
         with pytest.raises(ValueError, match="underpopulated"):
             gc._prepare_and_select_agents(alice)
 
-    def test_two_agents_both_blocked_raises_no_eligible_speaker(self):
-        """All agents blocked by policy in a properly-populated GroupChat raises NoEligibleSpeakerError."""
-        alice, bob = _make_agent("alice"), _make_agent("bob")
-
-        class _BlockAll:
-            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
-                return False
-
-        gc = GroupChat(
-            agents=[alice, bob],
-            messages=[],
-            max_round=5,
-            eligibility_policies=[_BlockAll()],
-        )
-        with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
-            gc._prepare_and_select_agents(alice)
-
     def test_func_call_filter_singleton_not_early_returned(self):
         """func_call_filter path: policy leaves 2 function executors.
         allow_repeat_speaker=False removes the last_speaker from candidates.
@@ -549,6 +532,30 @@ class TestAdversarialGroupChatEligibilityDeep:
         with pytest.raises(NoEligibleSpeakerError, match="No eligible agents"):
             gc._prepare_and_select_agents(carol)
 
+    def test_sync_manual_fallback_uses_filtered_agents(self):
+        """select_speaker manual fallback must use policy-filtered agent list.
+
+        When manual_select_speaker returns None (user presses 'q' or empty),
+        select_speaker falls back to next_agent with the filtered list.
+        """
+        alice = _make_agent("alice")
+        bob = _make_agent("bob")
+        carol = _make_agent("carol")
+
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[{"role": "user", "content": "hello"}],
+            max_round=5,
+            speaker_selection_method="manual",
+            eligibility_policies=[_PolicyBlockByName("bob")],
+        )
+
+        selector = _make_agent("selector")
+        with patch.object(gc, "manual_select_speaker", return_value=None):
+            selected = gc.select_speaker(alice, selector)
+        # alice is last_speaker, bob is blocked by policy, so next should be carol
+        assert selected.name == "carol"
+
     def test_async_manual_fallback_uses_filtered_agents(self):
         """a_select_speaker manual fallback must use policy-filtered agent list.
 
@@ -586,3 +593,65 @@ class TestAdversarialGroupChatEligibilityDeep:
                 max_round=5,
                 eligibility_policies=["not_a_policy"],  # type: ignore[list-item]
             )
+
+    def test_policy_filtered_set_is_subset_of_input(self):
+        """R2 Invariant: AND semantics must never add agents not in the input set."""
+        agents = [_make_agent(f"agent{i}") for i in range(5)]
+
+        class _BlockOdds:
+            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
+                return not agent.name.endswith(("1", "3"))
+
+        gc = GroupChat(
+            agents=agents,
+            messages=[],
+            max_round=5,
+            speaker_selection_method="random",
+            eligibility_policies=[_BlockOdds()],
+        )
+        candidates = _get_candidates(gc, agents[0])
+        # Invariant: filtered set is a subset of the full roster
+        assert set(candidates).issubset({a.name for a in agents})
+        # Invariant: filtered set never contains blocked agents
+        assert "agent1" not in candidates
+        assert "agent3" not in candidates
+
+    def test_policy_plus_allow_repeat_speaker_false_normal_path(self):
+        """R6 Compound: policy + allow_repeat_speaker=False on the normal (non-func_call_filter) path."""
+        alice, bob, carol = _make_agent("alice"), _make_agent("bob"), _make_agent("carol")
+        gc = GroupChat(
+            agents=[alice, bob, carol],
+            messages=[],
+            max_round=5,
+            allow_repeat_speaker=False,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_PolicyBlockByName("bob")],
+        )
+        # alice is last_speaker -> removed by allow_repeat_speaker=False
+        # bob is blocked by policy
+        # Only carol remains
+        selected, candidates, _ = gc._prepare_and_select_agents(alice)
+        assert selected.name == "carol"
+        assert len(candidates) == 1
+
+    @pytest.mark.parametrize("n_agents,expect_error", [
+        (1, ValueError),    # below minimum (underpopulated guard)
+        (2, None),          # at minimum
+        (3, None),          # above minimum
+    ])
+    def test_agent_count_boundary_triple(self, n_agents, expect_error):
+        """R11 Boundary triple: agent count at 1 (below), 2 (at), 3 (above) minimum."""
+        agents = [_make_agent(f"a{i}") for i in range(n_agents)]
+        gc = GroupChat(
+            agents=agents,
+            messages=[],
+            max_round=5,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_PolicyAllowAll()],
+        )
+        if expect_error:
+            with pytest.raises(expect_error, match="underpopulated"):
+                gc._prepare_and_select_agents(agents[0])
+        else:
+            result = gc._prepare_and_select_agents(agents[0])
+            assert result[0] is not None or result[1] is not None

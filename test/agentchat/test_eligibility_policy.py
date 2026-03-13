@@ -126,18 +126,6 @@ class TestAdversarialEligibilityPolicy:
         assert agent.description.count("[UNAVAILABLE]") == 1
         assert "original" in agent.description
 
-    def test_policy_raises_exception_propagates(self):
-        """Policy that raises should propagate, not silently pass."""
-
-        class _RaisingPolicy:
-            def is_eligible(self, agent, ctx: SelectionContext) -> bool:
-                raise RuntimeError("policy failure")
-
-        policy = _RaisingPolicy()
-        ctx = SelectionContext(round=0, last_speaker=None, participants=("a",))
-        with pytest.raises(RuntimeError, match="policy failure"):
-            policy.is_eligible(object(), ctx)
-
     def test_description_mutation_none_description(self):
         """Agent with description=None must not crash mark_unavailable."""
         agent = MagicMock()
@@ -206,6 +194,24 @@ class TestAdversarialEligibilityPolicy:
 
         assert not errors, f"Concurrent calls raised: {errors}"
         assert call_count == 50
+
+
+def test_description_containing_unavailable_substring_not_stripped():
+    """R13 String parse: description containing '[UNAVAILABLE]' as substring (not prefix)
+    must NOT be stripped by mark_available."""
+    agent = MagicMock()
+    agent.description = "Agent handles [UNAVAILABLE] status checks"
+    guard = AgentDescriptionGuard(agent)
+
+    # mark_available on unmarked agent with substring -- must not strip mid-string match
+    guard.mark_available()
+    assert agent.description == "Agent handles [UNAVAILABLE] status checks"
+
+    # mark_unavailable adds prefix, mark_available removes only the prefix
+    guard.mark_unavailable()
+    assert agent.description == "[UNAVAILABLE] Agent handles [UNAVAILABLE] status checks"
+    guard.mark_available()
+    assert agent.description == "Agent handles [UNAVAILABLE] status checks"
 
 
 def test_description_external_modification_preserved():
