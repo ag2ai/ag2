@@ -435,21 +435,23 @@ class GeminiClient:
             if fn_call := part.function_call:
                 if fn_call not in prev_function_calls:
                     tool_call_id = str(random_id)
-                    autogen_tool_calls.append(
-                        ChatCompletionMessageToolCall(
-                            id=tool_call_id,
-                            function={
-                                "name": fn_call.name,
-                                "arguments": (
-                                    json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""
-                                ),
-                            },
-                            type="function",
-                        )
+                    tool_call_entry = ChatCompletionMessageToolCall(
+                        id=tool_call_id,
+                        function={
+                            "name": fn_call.name,
+                            "arguments": (json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""),
+                        },
+                        type="function",
                     )
 
+                    # Embed thought_signature in the tool call so it survives cross-agent routing
+                    # (required for Gemini 3 thinking models in group chat)
+                    # Base64-encode bytes so the dict stays JSON-serializable for other providers
                     if hasattr(part, "thought_signature") and part.thought_signature:
+                        tool_call_entry.thought_signature = base64.b64encode(part.thought_signature).decode("ascii")
                         self.tool_call_thought_signatures[tool_call_id] = part.thought_signature
+
+                    autogen_tool_calls.append(tool_call_entry)
 
                     prev_function_calls.append(fn_call)
                     random_id += 1
@@ -624,7 +626,14 @@ class GeminiClient:
                     )
                 else:
                     # Include thought_signature if available (required for Gemini 3 models)
-                    thought_sig = self.tool_call_thought_signatures.get(function_id)
+                    # Check message-level first (cross-agent), then instance dict (same-agent)
+                    thought_sig_raw = tool_call.get("thought_signature")
+                    if thought_sig_raw and isinstance(thought_sig_raw, str):
+                        thought_sig = base64.b64decode(thought_sig_raw)
+                    elif thought_sig_raw and isinstance(thought_sig_raw, bytes):
+                        thought_sig = thought_sig_raw
+                    else:
+                        thought_sig = self.tool_call_thought_signatures.get(function_id)
                     rst.append(
                         Part(
                             function_call=FunctionCall(
