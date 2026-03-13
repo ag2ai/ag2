@@ -8,9 +8,10 @@ import copy
 import json
 from typing import Any
 
-from ... import OpenAIWrapper, filter_config
+from ... import OpenAIWrapper
 from ...code_utils import execute_code
 from ...llm_config import LLMConfig
+from ...llm_config.utils import filter_config
 
 ADD_FUNC = {
     "type": "function",
@@ -205,9 +206,11 @@ class AgentOptimizer:
         self._best_performance = -1
 
         if llm_config is None:
-            llm_config = LLMConfig.current
+            raise ValueError("llm_config is required for AgentOptimizer")
         assert isinstance(llm_config, (dict, LLMConfig)), "llm_config must be a dict or LLMConfig"
         llm_config = copy.deepcopy(llm_config)
+        if isinstance(llm_config, LLMConfig):
+            llm_config = llm_config.model_dump()
         self.llm_config = llm_config
         if self.llm_config in [{}, {"config_list": []}, {"config_list": [{"model": ""}]}]:
             raise ValueError(

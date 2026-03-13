@@ -27,6 +27,7 @@ class ServiceResponse(BaseModel):
     message: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
     input_required: str | None = None
+    streaming_text: str | None = None
 
 
 def get_tool_names(tools: list[dict[str, Any]]) -> set[str]:

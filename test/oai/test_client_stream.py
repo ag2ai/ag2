@@ -185,6 +185,40 @@ def test__update_tool_calls_from_chunk() -> None:
     ChatCompletionMessage(role="assistant", tool_calls=full_tool_calls, content=None)
 
 
+@run_for_optional_imports("openai", "openai")
+def test__update_tool_calls_from_chunk_repeated_type() -> None:
+    """Regression test for gh-2058: some providers send type='function' in
+    every chunk, which caused it to be concatenated into
+    'functionfunction...' instead of staying 'function'."""
+    tool_calls_chunks = [
+        ChoiceDeltaToolCall(
+            index=0,
+            id="call_abc123",
+            function=ChoiceDeltaToolCallFunction(arguments="", name="my_tool"),
+            type="function",
+        ),
+        ChoiceDeltaToolCall(
+            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments='{"x"', name=None), type="function"
+        ),
+        ChoiceDeltaToolCall(
+            index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments=": 1}", name=None), type="function"
+        ),
+    ]
+
+    full_tool_call = None
+    completion_tokens = 0
+    for chunk in tool_calls_chunks:
+        full_tool_call, completion_tokens = OpenAIWrapper._update_tool_calls_from_chunk(
+            tool_calls_chunk=chunk,
+            full_tool_call=full_tool_call,
+            completion_tokens=completion_tokens,
+        )
+
+    assert full_tool_call["type"] == "function", f"type should stay 'function' but got '{full_tool_call['type']}'"
+    assert full_tool_call["function"]["name"] == "my_tool"
+    assert full_tool_call["function"]["arguments"] == '{"x": 1}'
+
+
 # todo: remove when OpenAI removes functions from the API
 
 

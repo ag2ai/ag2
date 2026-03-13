@@ -42,7 +42,7 @@ load_dotenv()
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -117,7 +117,7 @@ Specify a dedicated workspace directory for command execution:
 ``` python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -134,7 +134,7 @@ Control which paths can be accessed within the workspace:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -160,7 +160,7 @@ Only allow specific commands:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -175,7 +175,7 @@ Block specific commands:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -211,7 +211,7 @@ For production use, follow these security best practices:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],
@@ -255,7 +255,7 @@ Process data files:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["shell"],

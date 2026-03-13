@@ -1,6 +1,7 @@
 ---
-title: Groq
+title: Groq API Guide | Multi-Agent Framework
 sidebarTitle: Groq
+description: "How to use Groq's fast inference API with AG2. Configuration and code examples for building multi-agent systems with Groq."
 ---
 
 [Groq](https://groq.com/) is a cloud based platform serving a number of popular open weight models at high inference speeds. Models include Meta's Llama 3, Mistral AI's Mixtral, and Google's Gemma.
@@ -38,18 +39,6 @@ See the sample `OAI_CONFIG_LIST` below showing how the Groq client class is used
 ```python
 [
     {
-        "model": "gpt-35-turbo",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
-        "model": "gpt-4-vision-preview",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
-        "model": "dalle",
-        "api_key": "your OpenAI Key goes here",
-    },
-    {
         "model": "llama3-8b-8192",
         "api_key": "your Groq API Key goes here",
         "api_type": "groq"
@@ -60,7 +49,7 @@ See the sample `OAI_CONFIG_LIST` below showing how the Groq client class is used
         "api_type": "groq"
     },
     {
-        "model": "Mixtral 8x7b",
+        "model": "mixtral-8x7b-32768",
         "api_key": "your Groq API Key goes here",
         "api_type": "groq"
     },
@@ -249,7 +238,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig(config_list={
+llm_config = autogen.LLMConfig({
     "api_type": "groq",
     "model": "llama3-8b-8192",
     "api_key": os.getenv("GROQ_API_KEY"),

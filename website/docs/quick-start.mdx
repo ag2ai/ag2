@@ -3,18 +3,21 @@ title: Quick Start
 sidebarTitle: Quick Start
 ---
 
-Get up and running with AG2 in just **3 minutes**! This guide will help you set up your environment and build your very first multi-agent workflow. In just a few steps, you'll have your first agent up and running. Let's make it happen!
+Get up and running with AG2 in just **3 minutes**! This guide will help you set up your environment and build your very first agent workflow.
+
+!!! tip "Prerequisites"
+    Make sure you've [installed AG2](/docs/user-guide/basic-concepts/installing-ag2) before continuing. Need just 30 seconds: `pip install "ag2[openai]"`
 
 ### Set Up Your Environment
 
 
-**Install Python**
+**Python Version**
 
 AG2 requires **Python version >= 3.10, < 3.14**. We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
 
-**Set API Keys**
+**Set Your API Key**
 
-Make sure to set your LLM API key as an environment variable. For example:
+Make sure to set your LLM API key as an environment variable:
 
 === "macOS / Linux"
 
@@ -29,81 +32,50 @@ Make sure to set your LLM API key as an environment variable. For example:
     ```
 
 
-**Install AG2**
-
- Install AG2 with your preferred model provider(s), for example:
-
-```bash
-pip install ag2[openai]
-pip install ag2[gemini]
-pip install ag2[anthropic,cohere,mistral]
-```
-
-<Warning>
-On MacOS, if you get "no matches found:", add a quote to the package name, for example:
-- `pip install "ag2[openai]"`
-</Warning>
-
 ### Build Your First Agent Workflow
 
 
-Let’s build a poetic AI assistant that responds in rhymes using AG2 and OpenAI’s gpt-5-nano model.
-
-This example demonstrates how to:
-
-- Set up an LLM configuration
-- Create a conversational AI agent
-- Run an interactive multi-turn conversation
+Let's build a poetic AI assistant that responds in rhymes using AG2 and OpenAI's gpt-5-nano model.
 
 Create a Python script called `first_agent.py`, and paste the following code into it:
 
 ```python
-# 1. Import our agent class
-from autogen import ConversableAgent, LLMConfig
-from dotenv import load_dotenv
 import os
-load_dotenv()
 
-# 2. Define our LLM configuration for OpenAI's gpt-5 mini
+from autogen import ConversableAgent, LLMConfig
+
+# 1. Define our LLM configuration for OpenAI's gpt-5-nano
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(
+    {"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}
+)
 
-# 3. Create our LLM agent
+# 2. Create our LLM agent
 my_agent = ConversableAgent(
     name="helpful_agent",
     system_message="You are a poetic AI assistant, respond in rhyme.",
     llm_config=llm_config,
 )
 
-# 4. Run the agent with a prompt
+# 3. Run the agent with a prompt and process the response
 response = my_agent.run(
     message="In one sentence, what's the big deal about AI?",
     max_turns=3,
-    user_input=True
+    user_input=True,
 )
-
-# 5. Iterate through the chat automatically with console output
 response.process()
-
-# 6. Print the chat
-print(response.messages)
 ```
 
-<!--
-import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
-
-<RunMethodHelpMsg/>
--->
-
+!!! note "Why `run()` then `process()`?"
+    `run()` prepares the conversation, `process()` executes it. This two-step pattern gives you a chance to inspect or modify the workflow before it runs.
 
 ### Run Your Example
 
 
-Now you're ready to see your poetic AI agent in action! In your terminal, run:
-
+In your terminal, run:
 
 ```bash
-python3 first_agent.py
+python first_agent.py
 ```
 
 If everything is set up correctly, the agent will reply to your initial message in rhyme, then prompt you for a response.
@@ -127,11 +99,17 @@ In one sentence, what's the big deal about AI?
 >>>>>>>> USING AUTO REPLY...
 helpful_agent (to user):
 
-AI transforms our world, enhancing life’s parade,
+AI transforms our world, enhancing life's parade,
 With insights and solutions, it helps plans cascade.
 
 --------------------------------------------------------------------------------
 Replying as user. Provide feedback to helpful_agent. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
 ```
 
-That's it—you've built your first multi-agent system with AG2 🎉
+### What's Next?
+
+Now that you've built your first agent, here's where to go:
+
+- **[Overview](/docs/user-guide/basic-concepts/overview)** — Understand the core building blocks of AG2
+- **[LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration)** — Configure different model providers (Gemini, Anthropic, etc.)
+- **[Introducing Group Chat](/docs/user-guide/basic-concepts/introducing-group-chat)** — Make multiple agents collaborate together

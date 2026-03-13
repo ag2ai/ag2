@@ -1,0 +1,368 @@
+---
+title: "Intelligent Agent Handoffs: Routing Control in Multi-Agent Systems with AG2"
+authors: [marklysze]
+tags:
+    - Handoffs
+    - Multi-Agent
+    - Orchestration
+    - Group Chat
+date: 2026-03-05
+slug: intelligent-agent-handoffs
+---
+
+![Intelligent Agent Handoffs](img/intelligent-agent-handoffs-hero.webp)
+
+A customer messages your support system: "My laptop keeps shutting down randomly." The triage agent routes it to technical support. So far, so good. But the tech agent doesn't know whether this is a hardware or software issue, doesn't check the customer's account tier, and when it can't solve the problem, it hallucinates an answer instead of escalating. The customer leaves frustrated. The agent never knew it was supposed to hand off.
+
+This is the handoff problem. And it's harder than it looks.
+
+<!-- more -->
+
+## Why Handoffs Are Hard
+
+In a multi-agent system, each agent is a specialist. One handles billing, another handles technical issues, a third manages account changes. The power of multi-agent architectures comes from this specialization, but it creates a fundamental coordination challenge: **how does control move between agents at the right time, with the right context?**
+
+The naive approach is to stuff routing logic into prompts: "If the user asks about billing, say TRANSFER_TO_BILLING." This breaks down fast:
+
+- **Ambiguous intent**: "I was charged twice and now my app won't load" -- is that billing or technical? Prompt-based routing can't handle nuance reliably.
+- **State blindness**: The agent doesn't know this is the customer's third attempt at the same issue, or that they're a VIP. Without shared state, routing decisions are made in a vacuum.
+- **No fallback**: When no routing rule matches, the agent either guesses (often wrong) or goes silent. There's no structured escalation path.
+- **Fragile maintenance**: As you add more agents and routing rules, the prompt grows into an unmaintainable mess of conditional instructions.
+
+What you need is a structured handoff system that separates *when* to hand off from *where* to hand off, supports both deterministic and LLM-driven decisions, and always has a fallback.
+
+## AG2's Approach to Handoffs
+
+AG2 provides four distinct handoff mechanisms, each designed for different routing scenarios. They're evaluated in a specific priority order on every agent turn:
+
+1. **Context-based conditions**: deterministic routing based on shared state (no LLM needed)
+2. **LLM-based conditions**: the agent's LLM evaluates when a transition should occur
+3. **Tool-based handoffs**: tools explicitly return the next agent as part of their result
+4. **After-work behavior**: fallback when nothing else triggers
+
+This layered evaluation means you can combine fast, cheap, deterministic checks with nuanced LLM reasoning -- and always have a safety net.
+
+![Handoff evaluation priority flow: context conditions, LLM conditions, tool handoffs, and after-work fallback evaluated top to bottom](img/handoff-evaluation-priority-flow.webp)
+
+## Building a Customer Support Triage System
+
+We chose customer support triage as our example because it's a problem most developers understand intuitively, and it naturally requires all four handoff types. A real support system needs to:
+
+- Route based on what the customer said (LLM-based)
+- Fast-track VIP customers without LLM evaluation (context-based)
+- Update shared state and redirect after tool execution (tool-based)
+- Escalate gracefully when no routing rule matches (after-work)
+
+Here's our target architecture:
+
+```
+User → Triage Agent → Tech Agent → Computer Specialist
+                    ↘                ↘ Smartphone Specialist
+                     General Agent    ↘ Advanced Troubleshooting
+```
+
+Let's build it step by step. First, install AG2 with OpenAI support:
+
+```bash
+pip install "ag2[openai]"
+```
+
+### Step 1: Setting Up Agents and Context
+
+We define shared context variables and create our specialist agents:
+
+```python
+import os
+from typing import Annotated
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern, DefaultPattern
+from autogen.agentchat.group import (
+    ContextVariables, ReplyResult, AgentTarget,
+    OnCondition, StringLLMCondition,
+    OnContextCondition, ExpressionContextCondition, ContextExpression,
+    RevertToUserTarget, TerminateTarget
+)
+
+# Shared state across all agents
+context = ContextVariables(data={
+    "customer_tier": "standard",  # or "vip"
+    "query_count": 0,
+    "repeat_issue": False,
+    "issue_type": "",
+})
+
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4.1-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+```
+
+We'll define tool functions next (Step 2), then create the agents with their tools registered at construction time. For now, the agents that don't need tools:
+
+```python
+# Tech agent assesses technical issues
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="""You are a technical support agent. Determine if the issue
+    is related to computers or smartphones and route to the appropriate
+    specialist.""",
+    llm_config=llm_config,
+)
+
+advanced_agent = ConversableAgent(
+    name="advanced_troubleshooting_agent",
+    system_message="""You are an advanced troubleshooting specialist. Handle
+    complex issues that weren't resolved by initial support.""",
+    llm_config=llm_config,
+)
+
+general_agent = ConversableAgent(
+    name="general_agent",
+    system_message="""You are a general support agent. Handle non-technical
+    questions like billing, account info, and general inquiries.""",
+    llm_config=llm_config,
+)
+```
+
+### Step 2: Tool-Based Handoffs with ReplyResult
+
+Tool-based handoffs give you the most direct control. The tool function runs its logic, updates context, and explicitly returns which agent should speak next via `ReplyResult`:
+
+```python
+def classify_query(
+    query: Annotated[str, "The user query to classify"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Classify a user query and route to the appropriate agent."""
+    context_variables["query_count"] += 1
+
+    technical_keywords = [
+        "error", "bug", "broken", "crash", "not working",
+        "shutting down", "frozen", "blue screen", "slow",
+    ]
+
+    if any(kw in query.lower() for kw in technical_keywords):
+        context_variables["issue_type"] = "technical"
+        return ReplyResult(
+            message="Technical issue detected. Routing to tech support.",
+            target=AgentTarget(tech_agent),
+            context_variables=context_variables,
+        )
+    else:
+        context_variables["issue_type"] = "general"
+        return ReplyResult(
+            message="General inquiry. Routing to general support.",
+            target=AgentTarget(general_agent),
+            context_variables=context_variables,
+        )
+
+
+def check_repeat_issue(
+    description: Annotated[str, "Description of the continuing issue"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Escalate when a previous solution didn't work."""
+    context_variables["repeat_issue"] = True
+    return ReplyResult(
+        message="Escalating to advanced troubleshooting.",
+        target=AgentTarget(advanced_agent),
+        context_variables=context_variables,
+    )
+
+
+# Now create agents with their tools registered at construction time
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="""You are a support triage agent. Use the classify_query
+    tool to route the customer to the right team. Do not attempt to solve
+    issues yourself, your job is routing.""",
+    llm_config=llm_config,
+    functions=[classify_query],
+)
+
+computer_agent = ConversableAgent(
+    name="computer_agent",
+    system_message="""You are a computer specialist. Provide solutions for
+    laptop, desktop, and PC issues. If the customer says your solution didn't
+    work, use check_repeat_issue to escalate.""",
+    llm_config=llm_config,
+    functions=[check_repeat_issue],
+)
+
+smartphone_agent = ConversableAgent(
+    name="smartphone_agent",
+    system_message="""You are a smartphone specialist. Provide solutions for
+    mobile device issues. If the customer says your solution didn't work,
+    use check_repeat_issue to escalate.""",
+    llm_config=llm_config,
+    functions=[check_repeat_issue],
+)
+```
+
+**Why tool-based handoffs?** They're ideal when the routing decision depends on logic you want to control precisely -- keyword matching, database lookups, API calls. The LLM decides *when* to call the tool, but the tool decides *where* to go.
+
+### Step 3: LLM-Based Handoffs with OnCondition
+
+For routing decisions that require understanding natural language, use LLM-based conditions. The tech agent needs to figure out whether the customer is talking about a computer or a phone:
+
+```python
+tech_agent.handoffs.add_llm_conditions([
+    OnCondition(
+        target=AgentTarget(computer_agent),
+        condition=StringLLMCondition(
+            prompt="Route when the issue involves laptops, desktops, PCs, or Macs."
+        ),
+    ),
+    OnCondition(
+        target=AgentTarget(smartphone_agent),
+        condition=StringLLMCondition(
+            prompt="Route when the issue involves phones, mobile devices, or tablets."
+        ),
+    ),
+])
+```
+
+Under the hood, AG2 presents these conditions as tools to the agent's LLM. The LLM evaluates the conversation and decides which condition matches. This is more robust than prompt-based routing because the conditions are structured and the framework handles the mechanics.
+
+**Why LLM-based handoffs?** They shine when routing depends on semantic understanding: "My MacBook Pro screen flickers when I connect an external monitor" clearly needs the computer specialist, but no simple keyword match would catch that.
+
+### Step 4: Context-Based Handoffs with OnContextCondition
+
+Context-based conditions are evaluated *before* the LLM even runs. They're fast, deterministic, and free (no LLM call needed):
+
+```python
+# If this is a repeat issue, skip straight to advanced troubleshooting
+computer_agent.handoffs.add_context_conditions([
+    OnContextCondition(
+        target=AgentTarget(advanced_agent),
+        condition=ExpressionContextCondition(
+            expression=ContextExpression("${repeat_issue} == True")
+        ),
+    )
+])
+
+smartphone_agent.handoffs.add_context_conditions([
+    OnContextCondition(
+        target=AgentTarget(advanced_agent),
+        condition=ExpressionContextCondition(
+            expression=ContextExpression("${repeat_issue} == True")
+        ),
+    )
+])
+```
+
+When `check_repeat_issue` sets `repeat_issue` to `True` in context, the next time the computer or smartphone agent is about to speak, the context condition fires *immediately*, before the LLM generates any response, and routes directly to advanced troubleshooting.
+
+**Why context-based handoffs?** Use them for decisions based on state rather than conversation content: account tier, retry counts, feature flags, authentication status. They're the fastest and cheapest handoff type.
+
+### Step 5: After-Work Fallbacks
+
+After-work behavior is your safety net. It fires when an agent finishes speaking and no other handoff condition triggered:
+
+```python
+# After advanced troubleshooting, return to the user
+advanced_agent.handoffs.set_after_work(RevertToUserTarget())
+
+# After general support, return to the user
+general_agent.handoffs.set_after_work(RevertToUserTarget())
+
+# If tech agent can't determine device type, ask the user
+tech_agent.handoffs.set_after_work(RevertToUserTarget())
+```
+
+You can also set a pattern-level default that applies to all agents. This is done through the `group_after_work` parameter on `DefaultPattern`:
+
+```python
+pattern = DefaultPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, computer_agent,
+            smartphone_agent, advanced_agent, general_agent],
+    user_agent=user,
+    context_variables=context,
+    group_after_work=RevertToUserTarget(),  # Default for all agents
+)
+```
+
+Agent-level `set_after_work` overrides the pattern-level default, giving you fine-grained control where you need it and sensible defaults everywhere else.
+
+Note: `AutoPattern` always uses a group manager for agent selection (its defining characteristic), so it doesn't accept `group_after_work`. Use `DefaultPattern` when you need explicit control over the pattern-level fallback.
+
+**Why after-work fallbacks?** Every production system needs a "none of the above" path. Without it, conversations stall or agents hallucinate responses outside their expertise.
+
+### Step 6: Running the System
+
+```python
+user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, computer_agent,
+            smartphone_agent, advanced_agent, general_agent],
+    user_agent=user,
+    context_variables=context,
+    group_manager_args={"llm_config": llm_config},
+)
+
+result, final_context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages="My laptop keeps shutting down randomly. Can you help?",
+    max_rounds=20,
+)
+```
+
+A typical conversation flow looks like:
+
+```
+User: "My laptop keeps shutting down randomly."
+  → triage_agent calls classify_query → detects "shutting down" → routes to tech_agent
+  → tech_agent LLM evaluates → "laptop" matches computer condition → routes to computer_agent
+  → computer_agent provides solution → after-work returns to user
+User: "I tried that, still happening."
+  → computer_agent calls check_repeat_issue → sets repeat_issue=True → routes to advanced_agent
+  → advanced_agent provides deeper diagnostics → after-work returns to user
+```
+
+## How the Evaluation Priority Works
+
+Understanding the priority order helps you design predictable handoffs and debug unexpected behavior. Refer back to the diagram above, on every agent turn:
+
+1. **Context conditions** are checked first (no LLM call). Match? Hand off immediately.
+2. **LLM generates a response** with conditions available as tools. If the LLM calls a condition tool, hand off to that target. If it calls a regular tool and the tool returns a `ReplyResult` with a target, hand off there.
+3. **After-work behavior** fires only when nothing else triggered.
+
+Context conditions are checked first because they're deterministic and free. This means a VIP flag or a repeat-issue marker will always take priority over LLM-based routing, which is exactly what you want for business-critical decisions.
+
+## When to Use Each Handoff Type
+
+| Handoff Type | Best For | Requires LLM? | Deterministic? |
+|---|---|---|---|
+| **Context-based** (`OnContextCondition`) | State-driven routing: VIP tiers, retry counts, flags | No | Yes |
+| **LLM-based** (`OnCondition`) | Intent classification, semantic understanding | Yes | No |
+| **Tool-based** (`ReplyResult`) | Routing after computation, API calls, DB lookups | Tool call only | Yes (your logic) |
+| **After-work** (`set_after_work`) | Fallback when nothing else matches | No | Yes |
+
+## Best Practices
+
+1. **Design for the "no match" case first.** Set `after_work` on every agent or use `group_after_work` on `DefaultPattern`. Silent failures are the worst user experience.
+
+2. **Use context conditions for business logic.** Account tier, authentication status, retry counts -- these should never depend on LLM interpretation. Make them deterministic.
+
+3. **Keep context variables lean.** Every agent sees the full context. Store flags and counters, not full conversation transcripts.
+
+4. **Test handoff paths like code paths.** Each handoff is a branch in your system. A customer hitting the wrong specialist is a bug, same as a wrong function call.
+
+5. **Layer your handoffs.** Combine types for robust routing: context conditions for fast deterministic checks, LLM conditions for nuanced intent, tool handoffs for logic-dependent routing, and after-work for the safety net.
+
+<Note>
+AG2's handoff system evolved from the earlier Swarm-based approach. If you're working with older AG2 code that uses `initiate_swarm_chat` or `SwarmAgent`, see the [migration guide](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation) for upgrading to the current Group Chat API.
+</Note>
+
+## Try It Yourself
+
+The code in this post is self-contained, copy the snippets into a single file, set your `OPENAI_API_KEY`, and run it. For a production-style example with the same handoff patterns, check out the [E-commerce Customer Service](https://github.com/ag2ai/build-with-ag2/tree/main/e-commerce-customer-service) project in [build-with-ag2](https://github.com/ag2ai/build-with-ag2): five agents handling order tracking and returns with LLM-driven handoffs and shared context variables.
+
+## Learn More
+
+- [Handoffs](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs) -- complete reference for all handoff types, transition targets, and configuration options
+- [Patterns](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns) -- orchestration patterns (`AutoPattern`, `DefaultPattern`, `RoundRobinPattern`, and more)
+- [Context Variables](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables) -- shared state management across agents
+- [FunctionTarget Example Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_function_target_example.ipynb) -- using `FunctionTarget` for validation logic before handoffs
+- [Andrew Ng on Agentic Design Patterns](https://www.deeplearning.ai/the-batch/how-agents-can-improve-llm-performance/) -- foundational thinking on agent specialization and workflow design

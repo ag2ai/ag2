@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
 from ...llm_config import LLMConfig
-from ...oai.openai_utils import filter_config
+from ...llm_config.utils import filter_config
 from ...token_count_utils import count_token, get_max_token_limit
 
 logger = logging.getLogger(__name__)

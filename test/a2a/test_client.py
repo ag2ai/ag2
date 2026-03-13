@@ -162,7 +162,8 @@ async def test_streaming_raises_when_no_task_started() -> None:
     message = Message(message_id="msg_1", role=Role.user, parts=[])
 
     with pytest.raises(A2aClientError, match="Failed to connect to the agent"):
-        await agent._ask_streaming(NoEventClient(), message)
+        async for _ in agent._ask_streaming(NoEventClient(), message):
+            pass
 
 
 @pytest.mark.asyncio
@@ -182,7 +183,8 @@ async def test_polling_raises_when_no_task_started() -> None:
     message = Message(message_id="msg_2", role=Role.user, parts=[])
 
     with pytest.raises(A2aClientError, match="Failed to connect to the agent"):
-        await agent._ask_polling(NoEventClient(), message)
+        async for _ in agent._ask_polling(NoEventClient(), message):
+            pass
 
 
 @pytest.mark.asyncio
@@ -193,7 +195,8 @@ async def test_streaming_raises_when_no_task_and_no_agent_card() -> None:
     message = Message(message_id="msg_3", role=Role.user, parts=[])
 
     with pytest.raises(A2aClientError, match="agent card not found"):
-        await agent._ask_streaming(NoEventClient(), message)
+        async for _ in agent._ask_streaming(NoEventClient(), message):
+            pass
 
 
 @pytest.mark.asyncio
@@ -204,4 +207,5 @@ async def test_polling_raises_when_no_task_and_no_agent_card() -> None:
     message = Message(message_id="msg_4", role=Role.user, parts=[])
 
     with pytest.raises(A2aClientError, match="agent card not found"):
-        await agent._ask_polling(NoEventClient(), message)
+        async for _ in agent._ask_polling(NoEventClient(), message):
+            pass
