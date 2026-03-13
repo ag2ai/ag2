@@ -634,11 +634,14 @@ class TestAdversarialGroupChatEligibilityDeep:
         assert selected.name == "carol"
         assert len(candidates) == 1
 
-    @pytest.mark.parametrize("n_agents,expect_error", [
-        (1, ValueError),    # below minimum (underpopulated guard)
-        (2, None),          # at minimum
-        (3, None),          # above minimum
-    ])
+    @pytest.mark.parametrize(
+        "n_agents,expect_error",
+        [
+            (1, ValueError),  # below minimum (underpopulated guard)
+            (2, None),  # at minimum
+            (3, None),  # above minimum
+        ],
+    )
     def test_agent_count_boundary_triple(self, n_agents, expect_error):
         """R11 Boundary triple: agent count at 1 (below), 2 (at), 3 (above) minimum."""
         agents = [_make_agent(f"a{i}") for i in range(n_agents)]
