@@ -42,6 +42,7 @@ setuptools.setup(
         "graph-rag-falkor-db": ["ag2[graph-rag-falkor-db]==" + __version__],
         "rag": ["ag2[rag]==" + __version__],
         "crawl4ai": ["ag2[crawl4ai]==" + __version__],
+        "quick-research": ["ag2[quick-research]==" + __version__],
         "browser-use": ["ag2[browser-use]==" + __version__],
         "google-client": ["ag2[google-client]==" + __version__],
         "google-api": ["ag2[google-api]==" + __version__],
