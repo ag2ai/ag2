@@ -40,7 +40,7 @@ import os
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.contrib.nlip_agent import NlipAgentServer
 
-llm_config = LLMConfig(model="gpt-4o-mini")
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
 
 agent = ConversableAgent(
     name="python_expert",
