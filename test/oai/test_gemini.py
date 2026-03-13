@@ -1507,6 +1507,166 @@ class TestGeminiClient:
 
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_thought_signature_embedded_in_tool_call_for_cross_agent(
+        self, mock_calculate_cost, mock_generative_client, gemini_client
+    ):
+        """Test that thought_signature is base64-encoded and embedded in the tool call object.
+
+        This is required for cross-agent routing: when Agent B receives Agent A's
+        function call history, the signature must travel with the tool_call dict,
+        not just live in Agent A's instance dict.
+        """
+        import base64
+
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"city": "Tokyo"}
+
+        mock_part = MagicMock()
+        mock_part.function_call = mock_fn_call
+        mock_part.text = ""
+        mock_part.thought_signature = b"cross_agent_signature_bytes"
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [mock_part]
+        mock_response.candidates[0].finish_reason = None
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        response = gemini_client.create({
+            "model": "gemini-3-flash",
+            "messages": [{"role": "user", "content": "What's the weather?"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+                    },
+                },
+            ],
+        })
+
+        tool_call = response.choices[0].message.tool_calls[0]
+
+        # Verify thought_signature is embedded as base64 string on the tool call
+        assert hasattr(tool_call, "thought_signature")
+        assert isinstance(tool_call.thought_signature, str)
+        assert base64.b64decode(tool_call.thought_signature) == b"cross_agent_signature_bytes"
+
+        # Also verify it's still in the instance dict
+        assert tool_call.id in gemini_client.tool_call_thought_signatures
+        assert gemini_client.tool_call_thought_signatures[tool_call.id] == b"cross_agent_signature_bytes"
+
+    def test_thought_signature_reconstructed_from_tool_call_dict_cross_agent(self, gemini_client):
+        """Test that reconstruction reads thought_signature from the tool call dict.
+
+        Simulates the cross-agent scenario: Agent B's client has an empty
+        tool_call_thought_signatures dict, but the tool_call dict carries the
+        base64-encoded signature from Agent A.
+        """
+        import base64
+
+        from google.genai.types import Part
+
+        tool_call_id = "cross_agent_tool_456"
+        original_signature = b"original_signature_bytes"
+        encoded_signature = base64.b64encode(original_signature).decode("ascii")
+
+        # Set up function map but NOT the instance dict (simulates Agent B)
+        gemini_client.tool_call_function_map[tool_call_id] = "get_weather"
+        # Note: NOT adding to tool_call_thought_signatures — empty like Agent B's client
+
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "get_weather", "arguments": '{"city": "Tokyo"}'},
+                    "type": "function",
+                    "thought_signature": encoded_signature,  # Carried from Agent A
+                }
+            ],
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        assert len(parts) == 1
+        part = parts[0]
+        assert isinstance(part, Part)
+        assert part.function_call.name == "get_weather"
+        # Signature should be decoded from the tool call dict
+        assert part.thought_signature == original_signature
+
+    def test_thought_signature_instance_dict_fallback_when_not_in_tool_call(self, gemini_client):
+        """Test that reconstruction falls back to instance dict when tool call has no signature.
+
+        This is the same-agent scenario (original behavior) — the signature lives
+        in the instance dict, not in the tool call dict.
+        """
+        from google.genai.types import Part
+
+        tool_call_id = "same_agent_tool_789"
+        test_signature = b"instance_dict_signature"
+
+        gemini_client.tool_call_function_map[tool_call_id] = "get_weather"
+        gemini_client.tool_call_thought_signatures[tool_call_id] = test_signature
+
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "get_weather", "arguments": '{"city": "London"}'},
+                    "type": "function",
+                    # No thought_signature key — same-agent path
+                }
+            ],
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        part = parts[0]
+        assert isinstance(part, Part)
+        assert part.thought_signature == test_signature
+
+    def test_thought_signature_not_embedded_when_absent(self, gemini_client):
+        """Test that no thought_signature is added to tool call when model doesn't provide one."""
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"city": "NYC"}
+
+        mock_part = MagicMock()
+        mock_part.function_call = mock_fn_call
+        mock_part.text = ""
+        mock_part.thought_signature = None  # No signature (non-thinking model)
+
+        # Directly test _process_parts
+        autogen_tool_calls = []
+        gemini_client._process_parts([mock_part], autogen_tool_calls)
+
+        assert len(autogen_tool_calls) == 1
+        tool_call = autogen_tool_calls[0]
+        # Should NOT have thought_signature attribute
+        assert not hasattr(tool_call, "thought_signature") or tool_call.thought_signature is None
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
     def test_streaming_text_response(self, mock_calculate_cost, mock_generative_client, gemini_client):
         """Test that streaming accumulates text chunks and emits StreamEvents."""
         mock_calculate_cost.return_value = 0.001

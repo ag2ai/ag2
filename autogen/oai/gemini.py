@@ -439,9 +439,7 @@ class GeminiClient:
                         id=tool_call_id,
                         function={
                             "name": fn_call.name,
-                            "arguments": (
-                                json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""
-                            ),
+                            "arguments": (json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""),
                         },
                         type="function",
                     )
