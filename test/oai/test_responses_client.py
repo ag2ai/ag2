@@ -289,9 +289,9 @@ def test_create_converts_multimodal_blocks(mocked_openai_client):
     assert blocks[1]["type"] == "input_image"
     assert blocks[1]["image_url"] == "https://example.com/cat.png"
 
-    # The requested built-in tools should map to image_generation and web_search_preview
+    # The requested built-in tools should map to image_generation and web_search
     tool_types = {t["type"] for t in kwargs["tools"]}
-    assert {"image_generation", "web_search_preview"}.issubset(tool_types)
+    assert {"image_generation", "web_search"}.issubset(tool_types)
 
 
 # -----------------------------------------------------------------------------
@@ -963,7 +963,7 @@ def test_apply_patch_with_other_built_in_tools(mocked_openai_client):
 
     # All three built-in tools should be present
     tool_types = {t["type"] for t in kwargs["tools"]}
-    assert {"web_search_preview", "apply_patch", "image_generation"}.issubset(tool_types)
+    assert {"web_search", "apply_patch", "image_generation"}.issubset(tool_types)
 
 
 def test_message_retrieval_handles_apply_patch_call():

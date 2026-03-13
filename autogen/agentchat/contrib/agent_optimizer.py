@@ -209,6 +209,8 @@ class AgentOptimizer:
             raise ValueError("llm_config is required for AgentOptimizer")
         assert isinstance(llm_config, (dict, LLMConfig)), "llm_config must be a dict or LLMConfig"
         llm_config = copy.deepcopy(llm_config)
+        if isinstance(llm_config, LLMConfig):
+            llm_config = llm_config.model_dump()
         self.llm_config = llm_config
         if self.llm_config in [{}, {"config_list": []}, {"config_list": [{"model": ""}]}]:
             raise ValueError(

@@ -1,6 +1,7 @@
 ---
 sidebarTitle: Overview
 title: Overview
+description: "Ready-to-use tools for AG2 agents: web search (Google, Tavily, Perplexity, SearxNG), web scraping (Crawl4AI, Firecrawl, Browser Use), deep research, code execution, and messaging (Discord, Slack, Telegram)."
 ---
 
 Our reference tools offer powerful, ready-to-use functionalities that seamlessly integrate with your agents, enabling them to gather real-time information and enhance decision-making.
@@ -40,6 +41,11 @@ Stay up to date with the latest news, extract dynamic web content, and answer qu
 
 🔗 [Explore the Walk-through](/docs/user-guide/reference-tools/crawl4ai)
 
+### Tavily Search Tool
+[`TavilySearchTool`](/docs/api-reference/autogen/tools/experimental/TavilySearchTool) allows your agents to perform real-time, AI-powered web searches using the Tavily Search API — purpose-built for AI agents and RAG workflows.
+
+🔗 [Explore the Walk-through](/docs/user-guide/reference-tools/tavily-search)
+
 ### SearxNG Search Tool
 [`SearxngSearchTool`](/docs/api-reference/autogen/tools/experimental/SearxngSearchTool) allows your agents to perform real-time web searches using SearxNG, a privacy-friendly open-source metasearch engine.
 
@@ -50,10 +56,17 @@ Stay up to date with the latest news, extract dynamic web content, and answer qu
 
 🔗 [Explore the Walk-through](/docs/user-guide/reference-tools/firecrawl)
 
-## Deep Research Tool
+## Research Tools
+
+### Deep Research Tool
 Inspired by [OpenAI's Deep Research](https://openai.com/index/introducing-deep-research), [`DeepResearchTool`](/docs/api-reference/autogen/tools/experimental/DeepResearchTool) is designed for complex, multi-step research tasks, synthesizing insights from diverse online sources.
 
 🔗 [Explore the Walk-through](/docs/user-guide/reference-tools/deep-research)
+
+### Quick Research Tool
+[`QuickResearchTool`](/docs/api-reference/autogen/tools/experimental/QuickResearchTool) performs parallel web research across multiple queries, combining Tavily search, Crawl4AI web scraping, and LLM summarization for fast, multi-topic fact-finding. A lightweight alternative to DeepResearchTool.
+
+🔗 [Explore the Walk-through](/docs/user-guide/reference-tools/quick-research)
 
 ## Messaging Platform Tools
 Add social messaging capability to your agents with tools for sending and retrieving messages on Discord, Slack, and Telegram. Use the power of LLMs to craft platform-tailored messages and to interpret/classify new messages.

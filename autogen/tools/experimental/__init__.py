@@ -19,6 +19,7 @@ from .messageplatform import (
     TelegramSendTool,
 )
 from .perplexity import PerplexitySearchTool
+from .quick_research import QuickResearchTool
 from .reliable import ReliableTool, ReliableToolError, SuccessfulExecutionParameters, ToolExecutionDetails
 from .searxng import SearxngSearchTool
 from .tavily import TavilySearchTool
@@ -36,6 +37,7 @@ __all__ = [
     "GoogleSearchTool",
     "PerplexitySearchTool",
     "PythonCodeExecutionTool",
+    "QuickResearchTool",
     "ReliableTool",
     "ReliableToolError",
     "SearxngSearchTool",
