@@ -273,7 +273,7 @@ async def geocode_location(location: str) -> dict:
 
 
 async def run_weather_groupchat(task: str, weather_server_url: str = "http://localhost:8014", llm_config=None):
-    llm_config = llm_config or {"model": "gpt-4o-mini"}
+    llm_config = llm_config or LLMConfig({"model": "gpt-4o-mini"})
 
     coordinator = ConversableAgent(
         name="coordinator",
