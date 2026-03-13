@@ -187,7 +187,7 @@ async def get_weather_forecast(latitude: float, longitude: float) -> str:
         )
     return "\n---\n".join(parts)
 
-llm_config = LLMConfig(model="gpt-4o-mini")
+llm_config = LLMConfig({"model": "gpt-4o-mini"})
 
 agent = ConversableAgent(
     name="weather_assistant",
