@@ -1504,3 +1504,214 @@ class TestGeminiClient:
         assert isinstance(part, Part)
         # thought_signature should be None (not set, which is fine for non-Gemini-3 models)
         assert part.thought_signature is None
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_text_response(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that streaming accumulates text chunks and emits StreamEvents."""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # Create streaming chunks
+        def make_chunk(text, prompt_tokens=0, completion_tokens=0):
+            chunk = MagicMock(spec=GenerateContentResponse)
+            mock_part = MagicMock()
+            mock_part.text = text
+            mock_part.function_call = None
+            mock_part.thought_signature = None
+            mock_candidate = MagicMock()
+            mock_candidate.content.parts = [mock_part]
+            mock_candidate.finish_reason = None
+            chunk.candidates = [mock_candidate]
+            chunk.usage_metadata = MagicMock()
+            chunk.usage_metadata.prompt_token_count = prompt_tokens
+            chunk.usage_metadata.candidates_token_count = completion_tokens
+            return chunk
+
+        chunks = [
+            make_chunk("Hello", prompt_tokens=10, completion_tokens=1),
+            make_chunk(", ", completion_tokens=2),
+            make_chunk("world!", prompt_tokens=10, completion_tokens=3),
+        ]
+
+        mock_chat.send_message_stream.return_value = iter(chunks)
+
+        response = gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hi", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].message.content == "Hello, world!"
+        assert response.choices[0].finish_reason == "stop"
+        assert not response.choices[0].message.tool_calls
+        assert response.usage.prompt_tokens == 10
+        assert response.usage.completion_tokens == 3
+        mock_chat.send_message_stream.assert_called_once()
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_with_tool_calls(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that streaming handles function calls properly."""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # Create a chunk with a function call
+        chunk = MagicMock(spec=GenerateContentResponse)
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = MagicMock()
+        mock_fn_call.args.items.return_value = [("city", "London")]
+
+        mock_part = MagicMock()
+        mock_part.text = ""
+        mock_part.function_call = mock_fn_call
+        mock_part.thought_signature = None
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 20
+        chunk.usage_metadata.candidates_token_count = 5
+
+        mock_chat.send_message_stream.return_value = iter([chunk])
+
+        response = gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "What's the weather?", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].finish_reason == "tool_calls"
+        assert response.choices[0].message.tool_calls is not None
+        assert len(response.choices[0].message.tool_calls) == 1
+        assert response.choices[0].message.tool_calls[0].function.name == "get_weather"
+        assert response.choices[0].message.content == ""
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_emits_stream_events(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that StreamEvents are emitted during streaming."""
+
+        mock_calculate_cost.return_value = 0.0
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        chunk = MagicMock(spec=GenerateContentResponse)
+        mock_part = MagicMock()
+        mock_part.text = "streamed text"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 5
+        chunk.usage_metadata.candidates_token_count = 2
+
+        mock_chat.send_message_stream.return_value = iter([chunk])
+
+        mock_iostream = MagicMock()
+        with patch("autogen.oai.gemini.IOStream.get_default", return_value=mock_iostream):
+            gemini_client.create({
+                "model": "gemini-pro",
+                "messages": [{"content": "Hello", "role": "user"}],
+                "stream": True,
+            })
+
+        # Verify StreamEvent was emitted
+        mock_iostream.send.assert_called()
+        sent_event = mock_iostream.send.call_args[0][0]
+        # Navigate through wrapping to find the text content
+        event = sent_event
+        while hasattr(event, "content") and not isinstance(event.content, str):
+            event = event.content
+        assert event.content == "streamed text"
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_non_streaming_does_not_call_send_message_stream(
+        self, mock_calculate_cost, mock_generative_client, gemini_client
+    ):
+        """Test that non-streaming uses send_message, not send_message_stream."""
+        mock_calculate_cost.return_value = 0.0
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_part = MagicMock()
+        mock_part.text = "response"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [mock_part]
+        mock_response.candidates[0].finish_reason = None
+        mock_response.usage_metadata = MagicMock()
+        mock_response.usage_metadata.prompt_token_count = 5
+        mock_response.usage_metadata.candidates_token_count = 2
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hi", "role": "user"}],
+            "stream": False,
+        })
+
+        mock_chat.send_message.assert_called_once()
+        mock_chat.send_message_stream.assert_not_called()
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.vertexai.init")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_vertexai_streaming(
+        self, mock_calculate_cost, mock_init, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that VertexAI streaming uses send_message with stream=True."""
+        mock_calculate_cost.return_value = 0.001
+        mock_init.return_value = None
+
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        # VertexAI streaming returns an iterable of VertexAIGenerationResponse
+        chunk = MagicMock(spec=VertexAIGenerationResponse)
+        mock_part = MagicMock()
+        mock_part.text = "vertex streamed"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 10
+        chunk.usage_metadata.candidates_token_count = 5
+
+        mock_chat.send_message.return_value = iter([chunk])
+
+        response = gemini_client_with_credentials.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].message.content == "vertex streamed"
+        # VertexAI passes stream=True to send_message
+        mock_chat.send_message.assert_called_once()
+        call_kwargs = mock_chat.send_message.call_args
+        assert call_kwargs.kwargs.get("stream") is True or (
+            len(call_kwargs.args) > 1 and call_kwargs[1].get("stream") is True
+        )
