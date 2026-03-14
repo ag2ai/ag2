@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from fast_depends import Depends
+from mcphero import MCPServerConfig
 
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
@@ -15,6 +16,7 @@ __all__ = (
     "Context",
     "Depends",
     "Inject",
+    "MCPServerConfig",
     "MemoryStream",
     "Variable",
     "tool",

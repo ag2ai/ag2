@@ -1,0 +1,65 @@
+---
+title: MCP Servers
+---
+
+# MCP
+
+MCP(Model Context Protocol) is a protocol introduced by Anthropic, authors of Claude, that strives to be the standard of tool calling and prompting of LLMs.
+In a way, it's a superset of [Tools](../tools) that was created for multiple reasons:
+1. Each provider had their own tool structure and types, leading to incompatibility.
+2. There was no easy way to give AI scoped, context-optimized way to invoke APIs, RPCs and similar.
+
+## Registering MCP servers
+
+```python linenums="1"
+from autogen.beta import Agent
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    mcp_servers=["https://mcp.weather.com"],
+)
+```
+
+But most MCP servers have some sort of authentication inside, so a typed MCPServerConfig is available:
+
+```python linenums="1"
+from autogen.beta import Agent, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    mcp_servers=[MCPServerConfig(
+        url="https://mcp.weather.com",
+        headers={
+            "AUTH_TOKEN": "MY_AUTH_TOKEN",
+            "USER_ID": "MY_USER_ID",
+        },
+    )],
+)
+```
+
+MCPServer config supports headers, timeout and other http / MCP lifecycle - specific configuration.
+
+## Multiple servers and tool name collisions
+
+Multiple servers are supported out of the box, `mcp_servers` argument is a list.
+
+Agents might use multiple servers that have tools with equal names, and it might cause confusion or collision when LLM decides to call such a tool.
+To avoid that, prefix argument is available. By default, it'll use a generated string as a prefix.
+
+```python linenums="1"
+from autogen.beta import Agent, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    mcp_servers=[
+        MCPServerConfig(
+            url="https://mcp.weather.us",  # has a get_weather tool
+            prefix="usa_",  # now the tool will be usa_get_weather for the LLM
+        ),
+        MCPServerConfig(
+            url="https://mcp.weather.eu",  # has a get_weather tool also
+            prefix="eu_",  # now the tool will be eu_get_weather for the LLM
+        ),
+    ],
+)
+```
