@@ -5,6 +5,7 @@
 from .client_tool import ClientTool
 from .executor import ToolExecutor
 from .function_tool import FunctionTool, tool
+from .mcp_tool import MCPTool
 from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
 from .tool import Tool
 
@@ -14,6 +15,7 @@ __all__ = (
     "FunctionParameters",
     "FunctionTool",
     "FunctionToolSchema",
+    "MCPTool",
     "Tool",
     "ToolExecutor",
     "tool",

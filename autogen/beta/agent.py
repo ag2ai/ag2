@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
+from mcphero import MCPServerConfig, MCPToolAdapterOpenAI
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -25,7 +26,7 @@ from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
-from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+from .tools import FunctionParameters, FunctionTool, MCPTool, Tool, ToolExecutor, tool
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -115,6 +116,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        mcp_servers: Iterable[str | MCPServerConfig] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -143,6 +145,9 @@ class Agent(Askable):
                 self._system_prompt.append(p)
             else:
                 self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+        self._mcp_servers = [MCPServerConfig(url=s) if isinstance(s, str) else s for s in mcp_servers]
+        self._mcp_initialized = False
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
         if self.__hitl_hook is not default_hitl_hook:
@@ -227,6 +232,16 @@ class Agent(Askable):
 
         return make_tool
 
+    async def _ensure_mcp_servers_initialized(self):
+        if self._mcp_initialized:
+            return
+
+        adapter = MCPToolAdapterOpenAI(servers=self._mcp_servers)
+        openai_style_tools = await adapter.get_tool_definitions()
+
+        self._mcp_initialized = True
+        self.tools.extend(MCPTool(schema, adapter) for schema in openai_style_tools)
+
     async def ask(
         self,
         msg: str,
@@ -244,6 +259,7 @@ class Agent(Askable):
             raise ConfigNotProvidedError()
         client = config.create()
 
+        await self._ensure_mcp_servers_initialized()
         stream = stream or MemoryStream()
 
         initial_event = ModelRequest(content=msg)

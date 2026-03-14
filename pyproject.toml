@@ -60,6 +60,7 @@ dependencies = [
     "anyio>=4.0.0,<5.0.0",
     # for beta tools
     "fast-depends[pydantic]>=3.0.8,<4.0.0",
+    "mcphero==1.1.0",
 ]
 
 [project.optional-dependencies]
