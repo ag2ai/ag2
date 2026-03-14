@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
 from mcphero import MCPServerConfig, MCPToolAdapterOpenAI
+from mcphero.adapters.base_adapter import MCPToolDefinition
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -236,11 +237,32 @@ class Agent(Askable):
         if self._mcp_initialized:
             return
 
+        def _clean_mcp_schema(schema: Any) -> Any:
+            """Strip fields from MCP input schemas that some LLM APIs don't support (e.g. additionalProperties)."""
+            if isinstance(schema, dict):
+                return {k: _clean_mcp_schema(v) for k, v in schema.items() if k != "additionalProperties"}
+            if isinstance(schema, list):
+                return [_clean_mcp_schema(item) for item in schema]
+            return schema
+
         adapter = MCPToolAdapterOpenAI(servers=self._mcp_servers)
-        openai_style_tools = await adapter.get_tool_definitions()
+        mcp_tools: list[MCPToolDefinition] = await adapter.discover_tools()
 
         self._mcp_initialized = True
-        self.tools.extend(MCPTool(schema, adapter) for schema in openai_style_tools)
+        self.tools.extend(
+            MCPTool(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": _clean_mcp_schema(t.input_schema),
+                    },
+                },
+                adapter,
+            )
+            for t in mcp_tools
+        )
 
     async def ask(
         self,
