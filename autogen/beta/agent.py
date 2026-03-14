@@ -10,7 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
-from mcphero import MCPServerConfig, MCPToolAdapterOpenAI
+from mcphero import MCPServerConfig, MCPToolAdapter
 from mcphero.adapters.base_adapter import MCPToolDefinition
 
 from .annotations import Context
@@ -245,7 +245,7 @@ class Agent(Askable):
                 return [_clean_mcp_schema(item) for item in schema]
             return schema
 
-        adapter = MCPToolAdapterOpenAI(servers=self._mcp_servers)
+        adapter = MCPToolAdapter(servers=self._mcp_servers)
         mcp_tools: list[MCPToolDefinition] = await adapter.discover_tools()
 
         self._mcp_initialized = True

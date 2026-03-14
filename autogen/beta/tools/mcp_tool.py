@@ -7,7 +7,7 @@ from contextlib import ExitStack
 from functools import partial
 from typing import Any
 
-from mcphero import MCPToolAdapterOpenAI
+from mcphero import MCPToolAdapter
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
@@ -18,7 +18,7 @@ from .tool import Tool
 
 
 class MCPTool(Tool):
-    def __init__(self, schema: dict[str, Any], adapter: MCPToolAdapterOpenAI) -> None:
+    def __init__(self, schema: dict[str, Any], adapter: MCPToolAdapter) -> None:
         self.schema = FunctionToolSchema.model_validate(schema)
         self.name = self.schema.function.name
         self._adapter = adapter
