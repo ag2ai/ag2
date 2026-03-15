@@ -4,8 +4,10 @@
 
 from .builtin import WebSearchTool
 from .function_tool import tool
+from .toolkit import Toolkit
 
 __all__ = (
+    "Toolkit",
     "WebSearchTool",
     "tool",
 )
