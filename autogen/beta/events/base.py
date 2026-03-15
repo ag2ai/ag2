@@ -57,21 +57,8 @@ class Field:
 
 class EventMeta(type):
     def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]) -> type:
-        annotations = namespace.get("__annotations__", {})
-
+        # fields is populated after class creation (supports Python 3.14+ PEP 649 lazy annotations)
         fields: dict[str, Field] = {}
-        for field_name in annotations:
-            if not (default := namespace.get(field_name)):
-                field = Field()
-            elif isinstance(default, Field):
-                field = default
-            else:
-                field = Field(default)
-
-            if not field.name:
-                field.name = field_name
-
-            fields[field_name] = namespace[field_name] = field
 
         def __init__(self, **kwargs: Any) -> None:  # noqa: N807
             kwargs = {
@@ -90,7 +77,34 @@ class EventMeta(type):
         if "__repr__" not in namespace and "__str__" not in namespace:
             namespace["__repr__"] = __repr__
 
-        return super().__new__(mcs, name, bases, namespace)
+        cls = super().__new__(mcs, name, bases, namespace)
+
+        # Get annotations in a Python 3.14+ compatible way (PEP 649: lazy annotation evaluation
+        # means __annotations__ is no longer eagerly populated in the class namespace dict).
+        try:
+            # Python 3.14+
+            import annotationlib  # pyright: ignore[reportMissingImports]
+
+            annotations = annotationlib.get_annotations(cls, format=annotationlib.Format.FORWARDREF)
+        except ImportError:
+            annotations = vars(cls).get("__annotations__", {})
+
+        for field_name in annotations:
+            raw = namespace.get(field_name)
+            if not raw:
+                field = Field()
+            elif isinstance(raw, Field):
+                field = raw
+            else:
+                field = Field(raw)
+
+            if not field.name:
+                field.name = field_name
+
+            fields[field_name] = field
+            setattr(cls, field_name, field)
+
+        return cls
 
     def __or__(cls, other: Any) -> Any:
         return TypeCondition(cls).or_(other)
