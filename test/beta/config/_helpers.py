@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 
-from autogen.beta.tools.function_tool import FunctionDefinition, FunctionToolSchema
+from autogen.beta.tools.final import FunctionDefinition, FunctionToolSchema
 
 
 @dataclass

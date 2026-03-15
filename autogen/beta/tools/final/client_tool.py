@@ -10,9 +10,9 @@ from typing import Any
 from autogen.beta.annotations import Context
 from autogen.beta.events import ClientToolCall, ToolCall
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
+from autogen.beta.tools.tool import Tool
 
 from .function_tool import FunctionToolSchema
-from .tool import Tool
 
 
 class ClientTool(Tool):
@@ -21,7 +21,7 @@ class ClientTool(Tool):
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.model_validate(schema)
 
-    async def schemas(self, ctx: "Context") -> list[FunctionToolSchema]:
+    async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 
     def register(

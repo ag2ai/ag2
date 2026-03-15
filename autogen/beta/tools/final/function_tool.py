@@ -15,10 +15,9 @@ from pydantic import BaseModel, Field
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
+from autogen.beta.tools.schemas import ToolSchema
+from autogen.beta.tools.tool import Tool
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
-
-from .schemas import ToolSchema
-from .tool import Tool
 
 FunctionParameters: TypeAlias = dict[str, Any]
 
@@ -61,7 +60,7 @@ class FunctionTool(Tool):
 
         self.provider: Provider | None = None
 
-    async def schemas(self, ctx: "Context") -> list[FunctionToolSchema]:
+    async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 
     @staticmethod

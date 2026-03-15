@@ -8,7 +8,7 @@ from autogen import ConversableAgent
 from autogen.oai.client import OpenAIWrapper
 
 from .agent import Agent, AgentReply
-from .tools.client_tool import ClientTool
+from .tools.final import ClientTool
 
 
 class ConversableAdapter(ConversableAgent):

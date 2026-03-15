@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .builtin import WebSearchTool
-from .function_tool import tool
-from .toolkit import Toolkit
+from .final import Toolkit, tool
 
 __all__ = (
     "Toolkit",

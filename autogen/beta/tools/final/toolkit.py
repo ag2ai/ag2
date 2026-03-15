@@ -1,12 +1,17 @@
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from collections.abc import Callable, Iterable
 from contextlib import ExitStack
 from typing import Any, overload
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
-from autogen.beta.tools.function_tool import FunctionParameters, FunctionTool, tool
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
+
+from .function_tool import FunctionParameters, FunctionTool, tool
 
 
 class Toolkit(Tool):
@@ -56,10 +61,10 @@ class Toolkit(Tool):
 
         return make_tool
 
-    async def schemas(self, ctx: "Context") -> Iterable[ToolSchema]:
+    async def schemas(self, context: "Context") -> Iterable[ToolSchema]:
         schemas: list[ToolSchema] = []
         for t in self.tools:
-            schemas.extend(await t.schemas(ctx))
+            schemas.extend(await t.schemas(context))
         return schemas
 
     def register(

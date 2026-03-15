@@ -9,7 +9,7 @@ from google.genai import types
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
-from autogen.beta.tools.function_tool import FunctionToolSchema
+from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 

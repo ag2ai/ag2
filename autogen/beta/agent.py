@@ -26,7 +26,7 @@ from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
-from .tools.function_tool import FunctionParameters, FunctionTool, tool
+from .tools.final import FunctionParameters, FunctionTool, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
 from .utils import CONTEXT_OPTION_NAME, build_model
