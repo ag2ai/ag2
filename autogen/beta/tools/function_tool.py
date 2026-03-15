@@ -5,19 +5,39 @@
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial
-from typing import Any, overload
+from typing import Any, Literal, TypeAlias, overload
 
 from fast_depends import Provider
 from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
+from pydantic import BaseModel, Field
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
-from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
+from .schemas import ToolSchema
 from .tool import Tool
+
+FunctionParameters: TypeAlias = dict[str, Any]
+
+
+class FunctionDefinition(BaseModel):
+    name: str = Field(description="Name of the function to call.")
+    description: str = Field(default="", description="Description of what the function does.")
+    parameters: FunctionParameters = Field(
+        default_factory=dict,
+        description="JSON Schema for the function parameters.",
+    )
+
+    def model_post_init(self, context: Any) -> None:
+        self.parameters.pop("title", None)
+
+
+class FunctionToolSchema(ToolSchema):
+    type: Literal["function"] = "function"
+    function: FunctionDefinition = Field(description="The function definition.")
 
 
 class FunctionTool(Tool):
@@ -31,17 +51,18 @@ class FunctionTool(Tool):
     ) -> None:
         self.model = model
 
-        self.name = name
-        self.description = description
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
-                name=self.name,
-                description=self.description,
+                name=name,
+                description=description,
                 parameters=schema,
             )
         )
 
         self.provider: Provider | None = None
+
+    async def schemas(self) -> list[FunctionToolSchema]:
+        return [self.schema]
 
     @staticmethod
     def ensure_tool(
@@ -68,7 +89,7 @@ class FunctionTool(Tool):
             result = await execution(event, context)
             await context.send(result)
 
-        stack.enter_context(context.stream.where(ToolCall.name == self.name).sub_scope(execute))
+        stack.enter_context(context.stream.where(ToolCall.name == self.schema.function.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCall", context: "Context") -> "ToolResult":
         try:

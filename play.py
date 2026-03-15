@@ -2,7 +2,7 @@ import asyncio
 from pprint import pprint
 
 from autogen.beta import Agent, Context, MemoryStream
-from autogen.beta.config import LLMClient, OpenAIConfig
+from autogen.beta.config import LLMClient, OpenAIResponsesConfig
 from autogen.beta.events import (
     BaseEvent,
     HumanInputRequest,
@@ -13,7 +13,7 @@ from autogen.beta.events import (
     ToolResult,
 )
 from autogen.beta.middleware import LoggingMiddleware
-from autogen.beta.tools import tool
+from autogen.beta.tools import WebSearchTool, tool
 
 
 class MockClient(LLMClient):
@@ -70,14 +70,10 @@ logger.info("Starting agent")
 agent = Agent(
     "test",
     prompt=["You are a helpful agent!", get_prompt],
-    config=OpenAIConfig(
-        "gpt-5-nano",
-        reasoning_effort="low",
-        streaming=True,
-    ),
+    config=OpenAIResponsesConfig("gpt-5-nano"),
     hitl_hook=hitl_subscriber,
     # config=MockClient(),
-    tools=[func],
+    tools=[func, WebSearchTool()],
     middleware=[LoggingMiddleware()],
 )
 

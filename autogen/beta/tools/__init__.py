@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .builtin import WebSearchTool
 from .client_tool import ClientTool
 from .executor import ToolExecutor
-from .function_tool import FunctionTool, tool
-from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
+from .function_tool import FunctionDefinition, FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .schemas import ToolSchema
 from .tool import Tool
 
 __all__ = (
@@ -16,5 +17,7 @@ __all__ = (
     "FunctionToolSchema",
     "Tool",
     "ToolExecutor",
+    "ToolSchema",
+    "WebSearchTool",
     "tool",
 )

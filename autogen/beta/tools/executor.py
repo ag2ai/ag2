@@ -30,13 +30,12 @@ class ToolExecutor:
         context: "Context",
         *,
         tools: Iterable["Tool"] = (),
+        known_tools: Iterable[str] = (),
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         stack.enter_context(context.stream.where(ToolCalls).sub_scope(self.execute_tools))
 
-        known_tools: set[str] = set()
         for tool in tools:
-            known_tools.add(tool.name)
             tool.register(stack, context, middleware=middleware)
 
         # fallback subscriber to raise NotFound event
@@ -72,7 +71,7 @@ class ToolExecutor:
             await context.send(ToolResults(results=results))
 
 
-def _tool_not_found(known_tools: set[str]) -> Callable[..., Any]:
+def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:
     async def _tool_not_found(event: "ToolCall", context: "Context") -> None:
         if event.name not in known_tools:
             err = ToolNotFoundError(event.name)

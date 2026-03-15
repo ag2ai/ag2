@@ -22,7 +22,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import Tool
+from autogen.beta.tools import ToolSchema
 
 from .mappers import convert_messages, tool_to_api
 
@@ -99,14 +99,16 @@ class OpenAIClient(LLMClient):
         messages: Sequence[BaseEvent],
         context: Context,
         *,
-        tools: Iterable[Tool],
+        tools: Iterable[ToolSchema],
     ) -> ModelResponse:
         openai_messages = convert_messages(context.prompt, messages)
+
+        openai_tools = [tool_to_api(t) for t in tools]
 
         response = await self._client.chat.completions.create(
             **self._create_options,
             messages=openai_messages,
-            tools=[tool_to_api(t) for t in tools],
+            tools=openai_tools,
         )
 
         if self._streaming:

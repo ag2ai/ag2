@@ -8,7 +8,7 @@ from .._helpers import make_parameterless_tool, make_tool
 
 
 def test_tool_to_api() -> None:
-    api_tool = tool_to_api(make_tool())
+    api_tool = tool_to_api(make_tool().schema)
 
     assert api_tool == {
         "type": "function",
@@ -29,7 +29,7 @@ def test_tool_to_api() -> None:
 
 
 def test_tool_to_api_parameterless() -> None:
-    api_tool = tool_to_api(make_parameterless_tool())
+    api_tool = tool_to_api(make_parameterless_tool().schema)
 
     assert api_tool["function"]["parameters"] == {
         "type": "object",
@@ -39,7 +39,7 @@ def test_tool_to_api_parameterless() -> None:
 
 
 def test_tool_to_responses_api_parameterless() -> None:
-    api_tool = tool_to_responses_api(make_parameterless_tool())
+    api_tool = tool_to_responses_api(make_parameterless_tool().schema)
 
     assert api_tool["parameters"] == {
         "type": "object",

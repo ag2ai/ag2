@@ -4,17 +4,20 @@
 
 from collections.abc import Iterable
 from contextlib import ExitStack
-from typing import Protocol, runtime_checkable
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.tools.schemas import ToolSchema
+from autogen.beta.tools.tool import Tool
 
-from .schemas import ToolSchema
 
+class WebSearchTool(Tool):
+    __slots__ = ("schema",)
 
-@runtime_checkable
-class Tool(Protocol):
-    async def schemas(self) -> Iterable[ToolSchema]:
+    def __init__(self) -> None:
+        self.schema = ToolSchema(type="web_search")
+
+    async def schemas(self) -> list[ToolSchema]:
         return [self.schema]
 
     def register(

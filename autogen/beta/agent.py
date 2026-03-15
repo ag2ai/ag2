@@ -25,7 +25,7 @@ from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
-from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, ToolSchema, tool
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -280,11 +280,26 @@ class Agent(Askable):
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
     ) -> "AgentReply":
-        all_tools = self.tools + list(additional_tools)
+        all_tools: list[Tool] = list(
+            chain(
+                self.tools,
+                additional_tools,
+            )
+        )
+
+        all_schemas: list[ToolSchema] = []
+        known_tools: set[str] = set()
+        for t in all_tools:
+            schemas = await t.schemas()
+            all_schemas.extend(schemas)
+
+            for schema in schemas:
+                if schema.type == "function":
+                    known_tools.add(schema.function.name)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
-        llm_call: LLMCall = partial(client, tools=all_tools)
+        llm_call: LLMCall = partial(client, tools=all_schemas)
 
         for m in reversed(
             list(
@@ -317,6 +332,7 @@ class Agent(Askable):
                 stack,
                 context,
                 tools=all_tools,
+                known_tools=known_tools,
                 middleware=middleware_instances,
             )
 

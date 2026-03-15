@@ -31,7 +31,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import Tool
+from autogen.beta.tools import ToolSchema
 
 from .mappers import events_to_responses_input, tool_to_responses_api
 
@@ -89,16 +89,20 @@ class OpenAIResponsesClient(LLMClient):
         messages: Sequence[BaseEvent],
         context: Context,
         *,
-        tools: Iterable[Tool],
+        tools: Iterable[ToolSchema],
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
         instructions = "\n\n".join(context.prompt) if context.prompt else None
+
+        openai_tools = [tool_to_responses_api(t) for t in tools]
+        from pprint import pprint
+        pprint(openai_tools)
 
         response = await self._client.responses.create(
             **self._create_options,
             input=input_items,
             instructions=instructions,
-            tools=[tool_to_responses_api(t) for t in tools] or omit,
+            tools=openai_tools or omit,
         )
 
         if self._streaming:

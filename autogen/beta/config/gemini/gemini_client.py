@@ -22,7 +22,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import Tool
+from autogen.beta.tools import ToolSchema
 
 from .mappers import convert_messages, tool_to_api
 
@@ -56,7 +56,7 @@ class GeminiClient(LLMClient):
         messages: Sequence[BaseEvent],
         context: Context,
         *,
-        tools: Iterable[Tool],
+        tools: Iterable[ToolSchema],
     ) -> ModelResponse:
         contents = convert_messages(messages)
         system_instruction = "\n\n".join(context.prompt) if context.prompt else None

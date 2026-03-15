@@ -2,13 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from pydantic import BaseModel
+from .web_search import WebSearchTool
 
-
-class ToolSchema(BaseModel):
-    type: str
-
-
-__all__ = [
-    "ToolSchema",
-]
+__all__ = ("WebSearchTool",)

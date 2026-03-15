@@ -11,19 +11,18 @@ from autogen.beta.annotations import Context
 from autogen.beta.events import ClientToolCall, ToolCall
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
 
-from .schemas import FunctionToolSchema
+from .function_tool import FunctionToolSchema
 from .tool import Tool
 
 
 class ClientTool(Tool):
-    __slots__ = (
-        "schema",
-        "name",
-    )
+    __slots__ = ("schema",)
 
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.model_validate(schema)
-        self.name = self.schema.function.name
+
+    async def schemas(self) -> list[FunctionToolSchema]:
+        return [self.schema]
 
     def register(
         self,
@@ -40,7 +39,9 @@ class ClientTool(Tool):
             return await execution(event, context)
 
         stack.enter_context(
-            context.stream.where((ToolCall.name == self.name) & ClientToolCall.not_()).sub_scope(execute),
+            context.stream.where((ToolCall.name == self.schema.function.name) & ClientToolCall.not_()).sub_scope(
+                execute
+            ),
         )
 
     async def __call__(self, event: "ToolCall", context: "Context") -> "ClientToolCall":

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
-from autogen.beta.tools import Tool
+from autogen.beta.tools import ToolSchema
 
 
 def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
@@ -74,23 +74,34 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def tool_to_api(t: Tool) -> dict[str, Any]:
+def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
-    return {
-        "type": "function",
-        "function": {
-            "name": t.schema.function.name,
-            "description": t.schema.function.description,
-            "parameters": _ensure_object_schema(t.schema.function.parameters),
-        },
-    }
+    if t.type == "function":
+        return {
+            "type": "function",
+            "function": {
+                "name": t.function.name,
+                "description": t.function.description,
+                "parameters": _ensure_object_schema(t.function.parameters),
+            },
+        }
+
+    raise ValueError(f"Unsupported tool type: {t.type}")
 
 
-def tool_to_responses_api(t: Tool) -> dict[str, Any]:
+def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     """Responses API tool format — name/description at top level."""
-    return {
-        "type": "function",
-        "name": t.schema.function.name,
-        "description": t.schema.function.description,
-        "parameters": _ensure_object_schema(t.schema.function.parameters),
-    }
+    if t.type == "function":
+        return {
+            "type": "function",
+            "name": t.function.name,
+            "description": t.function.description,
+            "parameters": _ensure_object_schema(t.function.parameters),
+        }
+
+    if t.type == "web_search":
+        return {
+            "type": "web_search",
+        }
+
+    raise ValueError(f"Unsupported tool type: {t.type}")
