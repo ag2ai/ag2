@@ -7,7 +7,9 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.function_tool import FunctionToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
@@ -19,12 +21,18 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
-    if t.type == "function":
+    if isinstance(t, FunctionToolSchema):
         return {
             "name": t.function.name,
             "description": t.function.description,
             "input_schema": _ensure_object_schema(t.function.parameters),
         }
+
+    elif isinstance(t, WebSearchToolSchema):
+        result: dict[str, Any] = {"type": "web_search_20250305", "name": "web_search"}
+        if t.max_uses is not None:
+            result["max_uses"] = t.max_uses
+        return result
 
     raise UnsupportedToolError(t.type, "anthropic")
 

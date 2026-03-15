@@ -22,9 +22,9 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import build_tools, convert_messages
 
 
 class CreateConfig(TypedDict, total=False):
@@ -61,8 +61,7 @@ class GeminiClient(LLMClient):
         contents = convert_messages(messages)
         system_instruction = "\n\n".join(context.prompt) if context.prompt else None
 
-        tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in tools]
-        gemini_tools = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else None
+        gemini_tools = build_tools(list(tools))
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,

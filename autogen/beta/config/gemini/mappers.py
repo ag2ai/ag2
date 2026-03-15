@@ -9,18 +9,39 @@ from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.function_tool import FunctionToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 
-def tool_to_api(t: ToolSchema) -> dict[str, Any]:
-    if t.type == "function":
-        return {
-            "name": t.function.name,
-            "description": t.function.description,
-            "parameters": t.function.parameters,
-        }
+def function_tool_to_api(t: ToolSchema) -> dict[str, Any]:
+    """Convert a function ToolSchema to a Gemini FunctionDeclaration dict."""
+    return {
+        "name": t.function.name,
+        "description": t.function.description,
+        "parameters": t.function.parameters,
+    }
 
-    raise UnsupportedToolError(t.type, "gemini")
+
+def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
+    """Build Gemini tool objects from a list of ToolSchemas."""
+    function_declarations: list[types.FunctionDeclaration] = []
+    extra_tools: list[types.Tool] = []
+
+    for t in schemas:
+        if isinstance(t, FunctionToolSchema):
+            function_declarations.append(types.FunctionDeclaration(**function_tool_to_api(t)))
+        elif isinstance(t, WebSearchToolSchema):
+            extra_tools.append(types.Tool(google_search=types.GoogleSearch()))
+        else:
+            raise UnsupportedToolError(t.type, "gemini")
+
+    result: list[types.Tool] = []
+    if function_declarations:
+        result.append(types.Tool(function_declarations=function_declarations))
+    result.extend(extra_tools)
+
+    return result or None
 
 
 def convert_messages(

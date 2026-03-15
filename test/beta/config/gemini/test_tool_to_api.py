@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.config.gemini.mappers import tool_to_api
+from autogen.beta.config.gemini.mappers import function_tool_to_api
 
 from .._helpers import make_tool
 
 
 def test_tool_to_api() -> None:
-    api_tool = tool_to_api(make_tool().schema)
+    api_tool = function_tool_to_api(make_tool().schema)
 
     assert api_tool == {
         "name": "search_docs",

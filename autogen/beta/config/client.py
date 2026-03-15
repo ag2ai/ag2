@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 
 @runtime_checkable

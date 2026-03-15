@@ -9,6 +9,4 @@ class ToolSchema(BaseModel):
     type: str
 
 
-__all__ = [
-    "ToolSchema",
-]
+__all__ = ("ToolSchema",)

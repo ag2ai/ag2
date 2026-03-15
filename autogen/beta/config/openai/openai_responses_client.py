@@ -31,7 +31,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import events_to_responses_input, tool_to_responses_api
 

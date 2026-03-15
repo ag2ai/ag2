@@ -14,8 +14,7 @@ from .schemas import ToolSchema
 
 @runtime_checkable
 class Tool(Protocol):
-    async def schemas(self) -> Iterable[ToolSchema]:
-        return [self.schema]
+    async def schemas(self) -> Iterable[ToolSchema]: ...
 
     def register(
         self,
@@ -23,5 +22,4 @@ class Tool(Protocol):
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
-    ) -> None:
-        pass
+    ) -> None: ...

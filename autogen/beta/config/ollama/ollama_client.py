@@ -21,7 +21,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import convert_messages, tool_to_api
 

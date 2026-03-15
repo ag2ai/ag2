@@ -7,7 +7,7 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:

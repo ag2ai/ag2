@@ -9,7 +9,8 @@ from dirty_equals import IsPartialDict
 from pydantic import Field
 
 from autogen.beta import Depends, Inject
-from autogen.beta.tools import FunctionTool, tool
+from autogen.beta.tools import tool
+from autogen.beta.tools.function_tool import FunctionTool
 
 DEFAULT_SCHEMA = {
     "function": {

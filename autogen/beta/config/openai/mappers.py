@@ -7,7 +7,9 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools import ToolSchema
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.function_tool import FunctionToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 
 
 def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
@@ -92,7 +94,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
 def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     """Responses API tool format — name/description at top level."""
-    if t.type == "function":
+    if isinstance(t, FunctionToolSchema):
         return {
             "type": "function",
             "name": t.function.name,
@@ -100,9 +102,12 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             "parameters": _ensure_object_schema(t.function.parameters),
         }
 
-    if t.type == "web_search":
-        return {
-            "type": "web_search",
-        }
+    elif isinstance(t, WebSearchToolSchema):
+        result: dict[str, Any] = {"type": "web_search"}
+        if t.search_context_size is not None:
+            result["search_context_size"] = t.search_context_size
+        if t.max_uses is not None:
+            result["max_uses"] = t.max_uses
+        return result
 
     raise UnsupportedToolError(t.type, "openai-responses")
