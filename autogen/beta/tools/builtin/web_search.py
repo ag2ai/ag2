@@ -32,7 +32,7 @@ class WebSearchTool(Tool):
             max_uses=max_uses,
         )
 
-    async def schemas(self) -> list[WebSearchToolSchema]:
+    async def schemas(self, ctx: "Context") -> list[WebSearchToolSchema]:
         return [self.schema]
 
     def register(

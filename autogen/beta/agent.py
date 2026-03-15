@@ -293,7 +293,7 @@ class Agent(Askable):
         all_schemas: list[ToolSchema] = []
         known_tools: set[str] = set()
         for t in all_tools:
-            schemas = await t.schemas()
+            schemas = await t.schemas(context)
             all_schemas.extend(schemas)
 
             for schema in schemas:

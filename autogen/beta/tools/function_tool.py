@@ -61,7 +61,7 @@ class FunctionTool(Tool):
 
         self.provider: Provider | None = None
 
-    async def schemas(self) -> list[FunctionToolSchema]:
+    async def schemas(self, ctx: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 
     @staticmethod

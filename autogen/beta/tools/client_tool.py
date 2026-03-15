@@ -21,7 +21,7 @@ class ClientTool(Tool):
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.model_validate(schema)
 
-    async def schemas(self) -> list[FunctionToolSchema]:
+    async def schemas(self, ctx: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 
     def register(
