@@ -157,6 +157,10 @@ crawl4ai = [
     "crawl4ai>=0.5.0,<0.9",
 ]
 
+tinyfish = [
+    "tinyfish>=0.2.3",
+]
+
 quick-research = [
     "tavily-python>=0.7.4",
     "crawl4ai>=0.5.0,<0.9",

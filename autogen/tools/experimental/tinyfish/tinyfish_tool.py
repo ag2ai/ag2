@@ -122,9 +122,7 @@ class TinyFishTool(Tool):
         self.tinyfish_api_key = tinyfish_api_key or os.getenv("TINYFISH_API_KEY")
 
         if self.tinyfish_api_key is None:
-            raise ValueError(
-                "tinyfish_api_key must be provided either as an argument or via TINYFISH_API_KEY env var"
-            )
+            raise ValueError("tinyfish_api_key must be provided either as an argument or via TINYFISH_API_KEY env var")
 
         def tinyfish_scrape(
             url: Annotated[str, "The URL to scrape."],

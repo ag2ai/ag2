@@ -38,8 +38,9 @@ pip install -U "ag2[openai,tinyfish]"
 ### Imports
 
 ```python
+import asyncio
 import os
-from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen import ConversableAgent, LLMConfig
 from autogen.tools.experimental import TinyFishTool
 ```
 
@@ -48,14 +49,16 @@ from autogen.tools.experimental import TinyFishTool
 ```python
 llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o"})
 
-assistant = AssistantAgent(
+assistant = ConversableAgent(
     name="assistant",
+    system_message="You are a helpful assistant that can scrape web pages using the TinyFish tool. Use the tool to extract the requested information.",
     llm_config=llm_config,
 )
 
-user_proxy = UserProxyAgent(
+user_proxy = ConversableAgent(
     name="user_proxy",
     human_input_mode="NEVER",
+    llm_config=False,
 )
 ```
 
@@ -72,12 +75,19 @@ tinyfish_tool.register_for_execution(user_proxy)
 ### Usage Example
 
 ```python
-response = user_proxy.initiate_chat(
-    recipient=assistant,
-    message="Scrape https://example.com and extract the main product offerings and pricing information.",
-    max_turns=3,
-)
-print(f"Final Answer: {response.summary}")
+async def main():
+    response = await user_proxy.a_run(
+        assistant,
+        message="Scrape https://example.com and extract the main product offerings and pricing information.",
+        max_turns=2,
+        summary_method="last_msg",
+    )
+    await response.process()
+    print(f"Final Answer: {await response.summary}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Parameters
@@ -97,14 +107,6 @@ Each scrape returns a dictionary with:
 - `goal` — the extraction goal that was used
 - `data` — the structured data extracted by TinyFish
 
-## Use Cases
-
-- **Due Diligence**: Extract company information, team details, and financials from corporate websites
-- **Competitive Analysis**: Gather product and pricing data from competitor sites
-- **Lead Enrichment**: Scrape company profiles for sales intelligence
-- **Content Research**: Extract specific data points from articles and reports
-- **Market Research**: Collect structured data from industry publications
-
 ## Error Handling
 
 The tool handles errors gracefully and returns them in the response:
@@ -119,8 +121,16 @@ if "error" in result:
     print(f"Scraping failed: {result['error']}")
 ```
 
+## Use Cases
+
+- **Due Diligence**: Extract company information, team details, and financials from corporate websites - [Code on Build with AG2](https://github.com/ag2ai/build-with-ag2/tree/main/due-diligence-with-tinyfish)
+- **Competitive Analysis**: Gather product and pricing data from competitor sites
+- **Lead Enrichment**: Scrape company profiles for sales intelligence
+- **Content Research**: Extract specific data points from articles and reports
+- **Market Research**: Collect structured data from industry publications
+
 ## See Also
 
 - [Crawl4AI Tool](/docs/user-guide/reference-tools/crawl4ai)
 - [Firecrawl Tool](/docs/user-guide/reference-tools/firecrawl)
-- [Reference Tools Overview](/docs/user-guide/reference-tools)
+- [Build with AG2 - Due Diligence Example](https://github.com/ag2ai/build-with-ag2/tree/main/due-diligence-with-tinyfish)
