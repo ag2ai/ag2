@@ -8,15 +8,19 @@ from typing import Any
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
-from autogen.beta.tools import Tool
+from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools import ToolSchema
 
 
-def tool_to_api(t: Tool) -> dict[str, Any]:
-    return {
-        "name": t.schema.function.name,
-        "description": t.schema.function.description,
-        "parameters": t.schema.function.parameters,
-    }
+def tool_to_api(t: ToolSchema) -> dict[str, Any]:
+    if t.type == "function":
+        return {
+            "name": t.function.name,
+            "description": t.function.description,
+            "parameters": t.function.parameters,
+        }
+
+    raise UnsupportedToolError(t.type, "gemini")
 
 
 def convert_messages(

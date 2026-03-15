@@ -7,7 +7,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
-from autogen.beta.tools import Tool
+from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools import ToolSchema
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
@@ -18,15 +19,18 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def tool_to_api(t: Tool) -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": t.schema.function.name,
-            "description": t.schema.function.description,
-            "parameters": _ensure_object_schema(t.schema.function.parameters),
-        },
-    }
+def tool_to_api(t: ToolSchema) -> dict[str, Any]:
+    if t.type == "function":
+        return {
+            "type": "function",
+            "function": {
+                "name": t.function.name,
+                "description": t.function.description,
+                "parameters": _ensure_object_schema(t.function.parameters),
+            },
+        }
+
+    raise UnsupportedToolError(t.type, "ollama")
 
 
 def convert_messages(

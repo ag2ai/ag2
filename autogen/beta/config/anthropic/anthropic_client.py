@@ -28,7 +28,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolCalls,
 )
-from autogen.beta.tools import Tool
+from autogen.beta.tools import ToolSchema
 
 from .mappers import convert_messages, tool_to_api
 
@@ -75,7 +75,7 @@ class AnthropicClient(LLMClient):
         messages: Sequence[BaseEvent],
         context: Context,
         *,
-        tools: Iterable[Tool],
+        tools: Iterable[ToolSchema],
     ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 

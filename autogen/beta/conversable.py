@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from pprint import pprint
 from typing import Any
 
 from autogen import ConversableAgent
@@ -68,7 +67,6 @@ class ConversableAdapter(ConversableAgent):
                 sender.context_variables.update(vars)
 
         result = r.response.to_api() | {"name": self.name}
-        pprint(result)
 
         return True, result
 

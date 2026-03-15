@@ -95,8 +95,6 @@ class OpenAIResponsesClient(LLMClient):
         instructions = "\n\n".join(context.prompt) if context.prompt else None
 
         openai_tools = [tool_to_responses_api(t) for t in tools]
-        from pprint import pprint
-        pprint(openai_tools)
 
         response = await self._client.responses.create(
             **self._create_options,

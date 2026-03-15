@@ -8,7 +8,7 @@ from .._helpers import make_parameterless_tool, make_tool
 
 
 def test_tool_to_api() -> None:
-    api_tool = tool_to_api(make_tool())
+    api_tool = tool_to_api(make_tool().schema)
 
     assert api_tool == {
         "name": "search_docs",
@@ -25,7 +25,7 @@ def test_tool_to_api() -> None:
 
 
 def test_tool_to_api_parameterless() -> None:
-    api_tool = tool_to_api(make_parameterless_tool())
+    api_tool = tool_to_api(make_parameterless_tool().schema)
 
     assert api_tool["input_schema"] == {
         "type": "object",

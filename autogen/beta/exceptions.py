@@ -18,6 +18,13 @@ class ToolNotFoundError(ToolExecutionError):
         super().__init__(f"Tool `{name}` not found")
 
 
+class UnsupportedToolError(ToolExecutionError):
+    """Raised when a tool type is not supported by a provider."""
+
+    def __init__(self, tool_type: str, provider: str):
+        super().__init__(f"Unsupported tool type `{tool_type}` for provider `{provider}`")
+
+
 class HumanInputNotProvidedError(AG2Error):
     """Raised when human-in-the-loop input was requested but not provided."""
 
