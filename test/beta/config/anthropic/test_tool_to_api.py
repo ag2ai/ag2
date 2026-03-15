@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config.anthropic.mappers import tool_to_api
-from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 
 from .._helpers import make_parameterless_tool, make_tool
 
@@ -54,4 +54,23 @@ def test_tool_to_api_web_search_with_max_uses() -> None:
         "type": "web_search_20250305",
         "name": "web_search",
         "max_uses": 10,
+    }
+
+
+def test_tool_to_api_web_search_with_user_location() -> None:
+    schema = WebSearchToolSchema(
+        user_location=UserLocation(city="London", country="GB", timezone="Europe/London"),
+    )
+
+    api_tool = tool_to_api(schema)
+
+    assert api_tool == {
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "user_location": {
+            "type": "approximate",
+            "city": "London",
+            "country": "GB",
+            "timezone": "Europe/London",
+        },
     }

@@ -6,7 +6,7 @@ import pytest
 
 from autogen.beta.config.openai.mappers import tool_to_api, tool_to_responses_api
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 
 from .._helpers import make_parameterless_tool, make_tool
 
@@ -88,4 +88,37 @@ def test_tool_to_responses_api_web_search_all_options() -> None:
         "type": "web_search",
         "search_context_size": "low",
         "max_uses": 3,
+    }
+
+
+def test_tool_to_responses_api_web_search_with_user_location() -> None:
+    schema = WebSearchToolSchema(
+        user_location=UserLocation(city="San Francisco", region="California", country="US"),
+    )
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "user_location": {
+            "type": "approximate",
+            "city": "San Francisco",
+            "region": "California",
+            "country": "US",
+        },
+    }
+
+
+def test_tool_to_responses_api_web_search_with_user_location_partial() -> None:
+    schema = WebSearchToolSchema(
+        user_location=UserLocation(country="DE", timezone="Europe/Berlin"),
+    )
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "user_location": {
+            "type": "approximate",
+            "country": "DE",
+            "timezone": "Europe/Berlin",
+        },
     }

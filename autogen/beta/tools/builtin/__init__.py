@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .web_search import WebSearchTool
+from .web_search import UserLocation, WebSearchTool
 
-__all__ = ("WebSearchTool",)
+__all__ = ("UserLocation", "WebSearchTool")

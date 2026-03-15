@@ -108,6 +108,17 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             result["search_context_size"] = t.search_context_size
         if t.max_uses is not None:
             result["max_uses"] = t.max_uses
+        if t.user_location is not None:
+            loc: dict[str, str] = {"type": "approximate"}
+            if t.user_location.city is not None:
+                loc["city"] = t.user_location.city
+            if t.user_location.region is not None:
+                loc["region"] = t.user_location.region
+            if t.user_location.country is not None:
+                loc["country"] = t.user_location.country
+            if t.user_location.timezone is not None:
+                loc["timezone"] = t.user_location.timezone
+            result["user_location"] = loc
         return result
 
     raise UnsupportedToolError(t.type, "openai-responses")
