@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Any, TypedDict, Unpack
+from typing import Any, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, not_given, omit
 from openai._types import Omit
 from openai.types import ChatModel
+from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 

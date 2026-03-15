@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import TypedDict, Unpack
+from typing import TypedDict
 
 import httpx
 from anthropic.types import ModelParam
+from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 

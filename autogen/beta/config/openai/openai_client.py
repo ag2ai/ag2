@@ -5,11 +5,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal, Required, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context

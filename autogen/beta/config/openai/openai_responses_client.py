@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Required, TypedDict
+from typing import Any, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given, omit
@@ -19,6 +19,7 @@ from openai.types.responses import (
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
