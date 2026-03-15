@@ -25,7 +25,7 @@ async def test_toolkit_schemas(async_mock: AsyncMock) -> None:
         """Multiply two numbers."""
         return a * b
 
-    toolkit = Toolkit(tools=[add, multiply])
+    toolkit = Toolkit(add, multiply)
     schemas = list(await toolkit.schemas(Context(async_mock)))
 
     assert len(schemas) == 2
@@ -41,7 +41,7 @@ async def test_toolkit_executes_tool(mock: MagicMock) -> None:
         mock(a=a, b=b)
         return a + b
 
-    toolkit = Toolkit(tools=[add])
+    toolkit = Toolkit(add)
 
     config = TestConfig(
         ToolCall(name="add", arguments=json.dumps({"a": 2, "b": 3})),
@@ -68,7 +68,7 @@ async def test_toolkit_multiple_tools(mock: MagicMock) -> None:
         mock.multiply(a=a, b=b)
         return a * b
 
-    toolkit = Toolkit(tools=[add, multiply])
+    toolkit = Toolkit(add, multiply)
 
     config = TestConfig(
         ToolCall(name="multiply", arguments=json.dumps({"a": 4, "b": 5})),
@@ -95,7 +95,7 @@ async def test_toolkit_mixed_with_standalone_tool(mock: MagicMock) -> None:
         mock.standalone(b)
         return b
 
-    toolkit = Toolkit(tools=[bundled])
+    toolkit = Toolkit(bundled)
 
     config = TestConfig(
         ToolCall(name="standalone", arguments=json.dumps({"b": "hello"})),
@@ -118,7 +118,7 @@ async def test_toolkit_with_context(mock: MagicMock) -> None:
         mock(ctx.dependencies["lang"])
         return f"hello {name}"
 
-    toolkit = Toolkit(tools=[greet])
+    toolkit = Toolkit(greet)
 
     config = TestConfig(
         ToolCall(name="greet", arguments=json.dumps({"name": "world"})),
@@ -137,7 +137,7 @@ async def test_toolkit_with_plain_functions(mock: MagicMock) -> None:
         mock(a=a, b=b)
         return a + b
 
-    toolkit = Toolkit(tools=[add])
+    toolkit = Toolkit(add)
 
     config = TestConfig(
         ToolCall(name="add", arguments=json.dumps({"a": 1, "b": 2})),
@@ -162,7 +162,7 @@ async def test_toolkit_mixed_functions_and_tools(mock: MagicMock) -> None:
         mock.plain(b)
         return b
 
-    toolkit = Toolkit(tools=[decorated, plain])
+    toolkit = Toolkit(decorated, plain)
 
     config = TestConfig(
         ToolCall(name="plain", arguments=json.dumps({"b": "hi"})),
@@ -217,7 +217,7 @@ async def test_toolkit_tool_decorator_with_options(mock: MagicMock) -> None:
 
 @pytest.mark.asyncio()
 async def test_toolkit_empty() -> None:
-    toolkit = Toolkit(tools=[])
+    toolkit = Toolkit()
 
     config = TestConfig("done")
     agent = Agent("", config=config, tools=[toolkit])

@@ -10,7 +10,7 @@ from autogen.beta.tools.tool import Tool
 
 
 class Toolkit(Tool):
-    def __init__(self, tools: Iterable[Tool | Callable[..., Any]] = ()) -> None:
+    def __init__(self, *tools: Tool | Callable[..., Any]) -> None:
         self.tools: list[Tool] = [FunctionTool.ensure_tool(t) for t in tools]
 
     @overload

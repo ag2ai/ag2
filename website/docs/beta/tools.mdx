@@ -237,7 +237,7 @@ def cancel_order(order_id: str) -> str:
     """Cancels an order by its ID."""
     return f"Order {order_id} cancelled."
 
-support_tools = Toolkit(tools=[search_orders, cancel_order])
+support_tools = Toolkit(search_orders, cancel_order)
 
 agent = Agent(name="SupportBot", tools=[support_tools])
 ```
