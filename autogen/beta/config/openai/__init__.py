@@ -2,12 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.import_utils import optional_import_block
-
-with optional_import_block():
-    from .config import OpenAIConfig, OpenAIResponsesConfig
-    from .openai_client import OpenAIClient
-    from .openai_responses_client import OpenAIResponsesClient
+from .config import OpenAIConfig, OpenAIResponsesConfig
+from .openai_client import OpenAIClient
+from .openai_responses_client import OpenAIResponsesClient
 
 __all__ = (
     "OpenAIClient",

@@ -29,7 +29,7 @@ if not _textual_import.is_successful:
 from autogen.beta import Agent, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
 
-__all__ = ["TUIAgent"]
+__all__ = ("TUIAgent",)
 
 
 class TUIAgent(App):  # type: ignore[misc]

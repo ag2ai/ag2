@@ -21,7 +21,7 @@ from .types import (
     ToolResults,
 )
 
-__all__ = [
+__all__ = (
     "BaseEvent",
     "ClientToolCall",
     "Condition",
@@ -39,4 +39,4 @@ __all__ = [
     "ToolNotFoundEvent",
     "ToolResult",
     "ToolResults",
-]
+)
