@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import asdict
 from unittest.mock import MagicMock
 
 from dirty_equals import IsPartialDict
@@ -41,7 +42,7 @@ def test_agent_with_function(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert list(agent.tools)[0].schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool(mock: MagicMock) -> None:
@@ -52,7 +53,7 @@ def test_agent_with_tool(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert list(agent.tools)[0].schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator(mock: MagicMock) -> None:
@@ -63,7 +64,7 @@ def test_agent_with_tool_decorator(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    assert list(agent.tools)[0].schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
@@ -74,7 +75,7 @@ def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    assert list(agent.tools)[0].schema.model_dump() == {
+    assert asdict(list(agent.tools)[0].schema) == {
         "function": IsPartialDict({
             "description": "another_description",
             "name": "another_name",

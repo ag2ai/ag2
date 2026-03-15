@@ -4,13 +4,13 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, Literal, TypeAlias, overload
+from typing import Any, TypeAlias, overload
 
 from fast_depends import Provider
 from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
-from pydantic import BaseModel, Field
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
@@ -22,21 +22,27 @@ from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 FunctionParameters: TypeAlias = dict[str, Any]
 
 
-class FunctionDefinition(BaseModel):
-    name: str = Field(description="Name of the function to call.")
-    description: str = Field(default="", description="Description of what the function does.")
-    parameters: FunctionParameters = Field(
-        default_factory=dict,
-        description="JSON Schema for the function parameters.",
-    )
+@dataclass(slots=True)
+class FunctionDefinition:
+    name: str
+    description: str = ""
+    parameters: FunctionParameters = field(default_factory=dict)
 
-    def model_post_init(self, context: Any) -> None:
+    def __post_init__(self) -> None:
         self.parameters.pop("title", None)
 
 
+@dataclass(slots=True)
 class FunctionToolSchema(ToolSchema):
-    type: Literal["function"] = "function"
-    function: FunctionDefinition = Field(description="The function definition.")
+    type: str = field(default="function", init=False)
+    function: FunctionDefinition = field(default_factory=lambda: FunctionDefinition(name=""))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
+        func_data = data.get("function", {})
+        return cls(
+            function=FunctionDefinition(**func_data),
+        )
 
 
 class FunctionTool(Tool):

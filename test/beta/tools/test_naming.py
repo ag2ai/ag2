@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import asdict
 from typing import Annotated, Any
 
 import pytest
@@ -44,7 +45,7 @@ def test_simple_tool() -> None:
         """Tool description."""
         return ""
 
-    assert my_tool.schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(my_tool.schema) == DEFAULT_SCHEMA
 
 
 def test_tool_schema_ignores_di() -> None:
@@ -60,7 +61,7 @@ def test_tool_schema_ignores_di() -> None:
         """Tool description."""
         return ""
 
-    assert my_tool.schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(my_tool.schema) == DEFAULT_SCHEMA
 
 
 def test_override_options() -> None:
@@ -69,7 +70,7 @@ def test_override_options() -> None:
         """Tool description."""
         return ""
 
-    assert my_tool.schema.model_dump() == {
+    assert asdict(my_tool.schema) == {
         "function": IsPartialDict({
             "description": "another_description",
             "name": "another_name",
@@ -83,7 +84,7 @@ def test_ensure_tools() -> None:
         """Tool description."""
         return ""
 
-    assert FunctionTool.ensure_tool(my_tool).schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == DEFAULT_SCHEMA
 
 
 def test_ensure_tool_from_tool() -> None:
@@ -92,7 +93,7 @@ def test_ensure_tool_from_tool() -> None:
         """Tool description."""
         return ""
 
-    assert FunctionTool.ensure_tool(my_tool).schema.model_dump() == DEFAULT_SCHEMA
+    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == DEFAULT_SCHEMA
 
 
 def test_option_description() -> None:
@@ -104,7 +105,7 @@ def test_option_description() -> None:
         """Tool description."""
         return ""
 
-    assert FunctionTool.ensure_tool(my_tool).schema.model_dump() == {
+    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
         "function": IsPartialDict({
             "parameters": IsPartialDict({
                 "properties": {
@@ -132,7 +133,7 @@ def test_empty_args() -> None:
         """Tool description."""
         return ""
 
-    assert FunctionTool.ensure_tool(my_tool).schema.model_dump() == {
+    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",
@@ -151,7 +152,7 @@ def test_create_dynamic_options() -> None:
         """Tool description."""
         return ""
 
-    assert FunctionTool.ensure_tool(my_tool).schema.model_dump() == {
+    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",

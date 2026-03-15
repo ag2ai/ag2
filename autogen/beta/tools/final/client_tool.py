@@ -19,7 +19,7 @@ class ClientTool(Tool):
     __slots__ = ("schema",)
 
     def __init__(self, schema: dict[str, Any]) -> None:
-        self.schema = FunctionToolSchema.model_validate(schema)
+        self.schema = FunctionToolSchema.from_dict(schema)
 
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]

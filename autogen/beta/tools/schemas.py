@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from pydantic import BaseModel
+from dataclasses import dataclass
 
 
-class ToolSchema(BaseModel):
+@dataclass(slots=True)
+class ToolSchema:
     type: str
 
 
