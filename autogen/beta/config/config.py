@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Protocol, Self
+from typing import Protocol
+
+from typing_extensions import Self
 
 from .client import LLMClient
 
