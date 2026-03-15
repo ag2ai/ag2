@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import Any
 
 from google.genai import types
 
@@ -14,15 +13,6 @@ from autogen.beta.tools.function_tool import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 
-def function_tool_to_api(t: ToolSchema) -> dict[str, Any]:
-    """Convert a function ToolSchema to a Gemini FunctionDeclaration dict."""
-    return {
-        "name": t.function.name,
-        "description": t.function.description,
-        "parameters": t.function.parameters,
-    }
-
-
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     """Build Gemini tool objects from a list of ToolSchemas."""
     function_declarations: list[types.FunctionDeclaration] = []
@@ -30,9 +20,17 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
 
     for t in schemas:
         if isinstance(t, FunctionToolSchema):
-            function_declarations.append(types.FunctionDeclaration(**function_tool_to_api(t)))
+            function_declarations.append(
+                types.FunctionDeclaration(
+                    name=t.function.name,
+                    description=t.function.description,
+                    parameters=t.function.parameters,
+                )
+            )
+
         elif isinstance(t, WebSearchToolSchema):
             extra_tools.append(types.Tool(google_search=types.GoogleSearch()))
+
         else:
             raise UnsupportedToolError(t.type, "gemini")
 

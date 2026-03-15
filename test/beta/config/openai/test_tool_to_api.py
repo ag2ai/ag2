@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.config.openai.mappers import tool_to_api, tool_to_responses_api
+from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 
 from .._helpers import make_parameterless_tool, make_tool
 
@@ -45,4 +49,43 @@ def test_tool_to_responses_api_parameterless() -> None:
         "type": "object",
         "properties": {},
         "additionalProperties": False,
+    }
+
+
+def test_tool_to_api_web_search_raises() -> None:
+    schema = WebSearchToolSchema()
+
+    with pytest.raises(UnsupportedToolError):
+        tool_to_api(schema)
+
+
+def test_tool_to_responses_api_web_search_defaults() -> None:
+    schema = WebSearchToolSchema()
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {"type": "web_search"}
+
+
+def test_tool_to_responses_api_web_search_with_context_size() -> None:
+    schema = WebSearchToolSchema(search_context_size="high")
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {"type": "web_search", "search_context_size": "high"}
+
+
+def test_tool_to_responses_api_web_search_with_max_uses() -> None:
+    schema = WebSearchToolSchema(max_uses=5)
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {"type": "web_search", "max_uses": 5}
+
+
+def test_tool_to_responses_api_web_search_all_options() -> None:
+    schema = WebSearchToolSchema(search_context_size="low", max_uses=3)
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "search_context_size": "low",
+        "max_uses": 3,
     }

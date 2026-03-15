@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.config.dashscope.mappers import tool_to_api
+from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 
 from .._helpers import make_tool
 
@@ -25,3 +29,10 @@ def test_tool_to_api() -> None:
             },
         },
     }
+
+
+def test_tool_to_api_web_search_raises() -> None:
+    schema = WebSearchToolSchema()
+
+    with pytest.raises(UnsupportedToolError):
+        tool_to_api(schema)
