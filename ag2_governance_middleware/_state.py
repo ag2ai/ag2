@@ -58,6 +58,10 @@ class BudgetState:
             ("max_tool_calls", self.max_tool_calls),
             ("max_llm_calls", self.max_llm_calls),
         ):
+            if isinstance(value, bool):
+                raise TypeError(
+                    f"BudgetState.{name} must be numeric, not bool"
+                )
             if not math.isfinite(value):
                 raise ValueError(
                     f"BudgetState.{name} must be finite, got {value!r}"
@@ -154,6 +158,8 @@ class BudgetState:
         ValueError:
             If amount is NaN, Inf, or negative.
         """
+        if isinstance(amount, bool):
+            raise TypeError("record_tokens() amount must be numeric, not bool")
         if not math.isfinite(amount):
             raise ValueError(
                 f"record_tokens() amount must be finite, got {amount!r}"

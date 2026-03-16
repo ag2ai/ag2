@@ -24,10 +24,13 @@ async def send_tool_error(ctx: Any, event: Any, error: Exception) -> None:
         error,
     )
 
+    # Use generic name to avoid leaking internal tool names to downstream
+    # consumers (attacker could enumerate protected tool interfaces).
+    # The real tool name is available in the WARNING log above.
     await ctx.send(
         ToolError(
             parent_id=getattr(event, "id", None),
-            name=str(getattr(event, "name", "<unknown>")),
+            name="<denied>",
             content="Tool call denied by governance policy",
             error=error,
         )

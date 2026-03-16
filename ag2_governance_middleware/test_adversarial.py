@@ -495,7 +495,7 @@ async def test_full_stack_redaction_then_policy_then_budget() -> None:
     )
 
     policy_blocked = any(
-        isinstance(e, ToolError) and e.name == "dangerous_tool"
+        isinstance(e, ToolError) and e.name == "<denied>"
         for e in ctx.sent_events
     )
     assert policy_blocked, "dangerous_tool must be blocked by policy"

@@ -64,7 +64,7 @@ class PolicyDenyMiddleware(BaseMiddleware):
         invoking call_next.
         """
         tool_name = getattr(event, "name", None)
-        if not isinstance(tool_name, str):
+        if not isinstance(tool_name, str) or not tool_name:
             logger.warning(
                 "[Policy] Tool event has non-str name %r -- treating as DENY",
                 tool_name,

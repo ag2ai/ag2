@@ -175,15 +175,24 @@ class SecretRedactionMiddleware(BaseMiddleware):
                     event = new_event
                 except (TypeError, AttributeError):
                     # Fail-closed: do not forward unredacted tool arguments.
+                    # Emit ToolError instead of raising RuntimeError to avoid
+                    # crashing the middleware chain.
                     logger.error(
                         "[Redaction] Could not copy tool event %s to redact arguments"
-                        " -- blocking event (fail-closed)",
+                        " -- emitting ToolError (fail-closed)",
                         type(event).__name__,
                     )
-                    raise RuntimeError(
-                        "[Redaction] Cannot safely redact tool arguments -- "
-                        "blocking to prevent secret leak"
+                    from autogen.beta.events import ToolError
+
+                    await ctx.send(
+                        ToolError(
+                            parent_id=getattr(event, "id", None),
+                            name="<redaction-blocked>",
+                            content="Tool call blocked: cannot safely redact arguments",
+                            error=None,
+                        )
                     )
+                    return  # do not call call_next
                 logger.info(
                     "[Redaction] Redacted %d secret(s) in tool arguments",
                     count,
