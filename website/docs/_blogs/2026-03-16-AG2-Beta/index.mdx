@@ -6,6 +6,8 @@ date: 2026-03-12
 slug: ag2-beta-real-world-agents
 ---
 
+![AG2 Beta](img/ag2-beta-banner.webp)
+
 The original **AutoGen** and later **AG2** architecture helped define the early agent ecosystem. It enabled real systems, shaped how many developers thought about agent orchestration, and gave us firsthand experience building and operating agent applications in practice.
 
 That experience also made the limits of the original design clearer over time. As the agent ecosystem matured, expectations changed. Agents increasingly needed to fit into real application environments with concurrent users, explicit session boundaries, platform identities, persistence layers, and integration points that could not be treated as incidental details.
@@ -446,12 +448,14 @@ You can introduce new agents from the Beta API right into your current AG2 chat 
 
 ## Try AG2 Beta
 
-To try out **AG2 Beta**, start with the single-agent mental model:
+**AG2 Beta** is available today inside the `ag2` package. Just `pip install ag2` like you already do and check out the [docs](/docs/beta/motivation/).
 
-1. define one reusable agent
-2. create a new `MemoryStream` for each conversation
-3. pass the same stream back into each new turn
-4. add persistence only where your application actually needs it
+Here's a suggested mental model to get started:
+
+1. Define one reusable agent
+2. Create a new `MemoryStream` for each conversation
+3. Pass the same stream back into each new turn
+4. Add persistence only where your application actually needs it
 
 It's a small API shift, but it unlocks a strong foundation for real-world systems.
 
