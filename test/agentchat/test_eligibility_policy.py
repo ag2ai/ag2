@@ -152,6 +152,14 @@ class TestAdversarialEligibilityPolicy:
         mixin.mark_available()
         assert agent.description == ""
 
+    def test_mark_available_noop_on_none_description(self):
+        """mark_available on agent with description=None that was never marked unavailable."""
+        agent = MagicMock()
+        agent.description = None
+        guard = AgentDescriptionGuard(agent)
+        guard.mark_available()  # no-op, must not crash
+        assert agent.description is None or agent.description == ""
+
     def test_selection_context_participants_empty_tuple(self):
         """SelectionContext with empty participants tuple is valid."""
         ctx = SelectionContext(round=0, last_speaker=None, participants=())
@@ -257,3 +265,5 @@ def test_description_mutation_thread_safety():
     assert not errors
     # Final state: either original or unavailable -- not corrupted
     assert agent.description in ("original", "[UNAVAILABLE] original")
+    # No double-prefix from concurrent toggle
+    assert agent.description.count("[UNAVAILABLE]") <= 1
