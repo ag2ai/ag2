@@ -66,6 +66,14 @@ class BudgetState:
                 raise ValueError(
                     f"BudgetState.{name} must be non-negative, got {value!r}"
                 )
+        # max_llm_calls and max_tool_calls must be int (not float).
+        # float(1.5) would cause boundary errors: >=1.5 allows 2 calls.
+        for name in ("max_llm_calls", "max_tool_calls"):
+            val = getattr(self, name)
+            if not isinstance(val, int) or isinstance(val, bool):
+                raise TypeError(
+                    f"BudgetState.{name} must be int, got {type(val).__name__}"
+                )
         # Activate the counter mutation guard. Done at end of __post_init__
         # so that the dataclass-generated __init__ can still assign initial
         # counter values (consumed_tokens=0.0 etc.) before the guard fires.
@@ -77,6 +85,11 @@ class BudgetState:
         "tool_calls",
         "blocked_llm_calls",
         "blocked_tool_calls",
+    })
+    _LIMIT_FIELDS: frozenset[str] = frozenset({
+        "max_tokens",
+        "max_llm_calls",
+        "max_tool_calls",
     })
 
     def __setattr__(self, name: str, value: object) -> None:
@@ -90,7 +103,7 @@ class BudgetState:
         The _init_done flag is set at the end of __init__ by Python's
         dataclass machinery.
         """
-        if name in self._COUNTER_FIELDS and hasattr(self, "_init_done"):
+        if (name in self._COUNTER_FIELDS or name in self._LIMIT_FIELDS) and hasattr(self, "_init_done"):
             raise AttributeError(
                 f"BudgetState.{name} is read-only after init -- "
                 "use record_tokens(), try_consume_llm_call(), or "

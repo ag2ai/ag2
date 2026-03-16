@@ -84,7 +84,17 @@ class PolicyDenyMiddleware(BaseMiddleware):
             # 64 KB for args (JSON parse cost); redaction uses 100 KB for
             # content (regex cost). Different thresholds are intentional.
             _MAX_ARGS_BYTES = 65_536  # 64 KB
-            if isinstance(raw_args, str) and len(raw_args) > _MAX_ARGS_BYTES:
+            if raw_args is not None and not isinstance(raw_args, str):
+                # Non-string arguments (bytes, bytearray, etc.) cannot be
+                # safely parsed as JSON -- fail-closed.
+                logger.warning(
+                    "[Policy] Tool '%s' arguments are %s, not str"
+                    " -- treating as DENY (fail-closed)",
+                    tool_name,
+                    type(raw_args).__name__,
+                )
+                denied = True
+            elif isinstance(raw_args, str) and len(raw_args) > _MAX_ARGS_BYTES:
                 logger.warning(
                     "[Policy] Tool '%s' arguments exceed size limit (%d bytes)"
                     " -- treating as DENY (fail-closed)",

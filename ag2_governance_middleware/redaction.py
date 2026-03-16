@@ -51,6 +51,10 @@ class SecretRedactionMiddleware(BaseMiddleware):
     ) -> None:
         self._patterns = list(patterns)
         self._replacement = replacement
+        if max_content_bytes < 0:
+            raise ValueError(
+                f"max_content_bytes must be non-negative, got {max_content_bytes}"
+            )
         self._max_content_bytes = max_content_bytes
 
     def _redact_text(self, text: str) -> tuple[str, int]:
