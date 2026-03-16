@@ -63,7 +63,7 @@ class PolicyDenyMiddleware(BaseMiddleware):
         Evaluate deny list and predicates. Emit ToolError on denial without
         invoking call_next.
         """
-        tool_name = event.name
+        tool_name = getattr(event, "name", None)
         if not isinstance(tool_name, str):
             logger.warning(
                 "[Policy] Tool event has non-str name %r -- treating as DENY",

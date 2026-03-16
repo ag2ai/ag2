@@ -51,6 +51,10 @@ class SecretRedactionMiddleware(BaseMiddleware):
     ) -> None:
         self._patterns = list(patterns)
         self._replacement = replacement
+        if not isinstance(max_content_bytes, int) or isinstance(max_content_bytes, bool):
+            raise TypeError(
+                f"max_content_bytes must be int, got {type(max_content_bytes).__name__}"
+            )
         if max_content_bytes < 0:
             raise ValueError(
                 f"max_content_bytes must be non-negative, got {max_content_bytes}"

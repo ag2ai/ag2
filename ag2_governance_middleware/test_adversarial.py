@@ -557,6 +557,48 @@ async def test_redaction_oversized_content_passes_through() -> None:
     assert received[0].content == oversized, "Oversized content must pass through unchanged"
 
 
+def test_redaction_max_content_bytes_rejects_float() -> None:
+    """max_content_bytes=float must raise TypeError (float NaN would bypass < 0 guard)."""
+    with pytest.raises(TypeError, match="int"):
+        SecretRedactionMiddleware(
+            patterns=[re.compile(r"SECRET")],
+            max_content_bytes=float("nan"),  # type: ignore[arg-type]
+        )
+
+
+def test_redaction_max_content_bytes_rejects_bool() -> None:
+    """max_content_bytes=True must raise TypeError (bool is int subclass, must be excluded)."""
+    with pytest.raises(TypeError, match="int"):
+        SecretRedactionMiddleware(
+            patterns=[re.compile(r"SECRET")],
+            max_content_bytes=True,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.asyncio
+async def test_policy_event_missing_name_attribute_is_denied() -> None:
+    """event with no 'name' attribute at all must be denied (fail-closed)."""
+
+    class NoNameEvent:
+        id: str = "tc-noname"
+        arguments: str = "{}"
+
+    mw = PolicyDenyMiddleware(denied_tools={"shell_exec"})
+    ctx = MockContext()
+    event = NoNameEvent()
+
+    call_next_invoked = False
+
+    async def next_handler(ev: Any, context: Any) -> None:
+        nonlocal call_next_invoked
+        call_next_invoked = True
+
+    await mw.on_tool_call(next_handler, event, ctx)
+
+    assert not call_next_invoked, "event with no name must be denied"
+    assert any(isinstance(e, ToolError) for e in ctx.sent_events)
+
+
 @pytest.mark.asyncio
 async def test_policy_non_dict_json_args_denied() -> None:
     """Non-dict JSON arguments (array) must be treated as DENY (fail-closed)."""
