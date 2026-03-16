@@ -182,6 +182,30 @@
     z-index: 3;
   }
 
+  .hero-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    z-index: 3;
+  }
+
+  .playground-btn {
+    background: linear-gradient(90deg, #e85d9a, #d4af37, #a78bfa, #e85d9a);
+    background-size: 300% auto;
+    animation: playground-shimmer 10s ease-in-out infinite;
+    border: 2px solid #ffffff;
+  }
+
+  .playground-btn p {
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes playground-shimmer {
+    0%, 100% { background-position: 0% center; }
+    50% { background-position: 300% center; }
+  }
+
   .shine {
     position:absolute;
     left: -40px;
@@ -487,10 +511,16 @@
       <h1 class="title">The Open-Source AgentOS</h1>
       <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
     </div>
-    <a href="./docs/quick-start"><div class="button">
-      <p>Quick Start</p>
-      <img src="images/button-shine.png" alt="Shine" class="shine"/>
-    </div></a>
+    <div class="hero-buttons">
+      <a href="./docs/quick-start"><div class="button">
+        <p>Quick Start</p>
+        <img src="images/button-shine.png" alt="Shine" class="shine"/>
+      </div></a>
+      <a href="https://playground.ag2.ai" target="_blank"><div class="button playground-btn">
+        <p>Playground</p>
+        <img src="images/button-shine.png" alt="Shine" class="shine"/>
+      </div></a>
+    </div>
     <img src="images/city-horizon.png" alt="City Horizon" class="skyline">
     <img src="images/sun.png" alt="Sun" class="sun"/>
     <img src="images/cloud.png" alt="Cloud" class="cloud left large"/>
