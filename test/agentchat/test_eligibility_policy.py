@@ -267,3 +267,20 @@ def test_description_mutation_thread_safety():
     assert agent.description in ("original", "[UNAVAILABLE] original")
     # No double-prefix from concurrent toggle
     assert agent.description.count("[UNAVAILABLE]") <= 1
+
+
+def test_selection_context_rejects_str_participants():
+    """participants='alice' (bare str) must raise TypeError, not iterate chars."""
+    with pytest.raises(TypeError, match="not a str"):
+        SelectionContext(round=1, last_speaker=None, participants="alice")
+
+
+def test_mark_available_strips_external_prefix():
+    """When an external source adds the [UNAVAILABLE] prefix (not this guard),
+    mark_available still strips it -- structural check, not state-based."""
+    agent = MagicMock()
+    agent.description = "[UNAVAILABLE] injected by external code"
+    guard = AgentDescriptionGuard(agent)
+    # guard._original_description is _UNSET -- guard never called mark_unavailable
+    guard.mark_available()
+    assert agent.description == "injected by external code"
