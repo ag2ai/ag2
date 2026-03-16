@@ -13,12 +13,14 @@ from autogen.beta.events import ClientToolCall, ToolCall
 from autogen.beta.tools.final.client_tool import ClientTool
 
 
-@pytest.mark.asyncio
-async def test_client_tool_call_returns_client_tool_call(mock: MagicMock) -> None:
-    """ClientTool.__call__ must return a ClientToolCall wrapping the original call."""
-    schema = {"function": {"name": "my_client_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
+@pytest.fixture()
+def client_tool() -> ClientTool:
+    return ClientTool(schema={"function": {"name": "my_client_tool", "description": "desc", "parameters": {}}})
 
+
+@pytest.mark.asyncio
+async def test_client_tool_call_returns_client_tool_call(client_tool: ClientTool, mock: MagicMock) -> None:
+    """ClientTool.__call__ must return a ClientToolCall wrapping the original call."""
     call = ToolCall(name="my_client_tool", arguments="{}")
     result = await client_tool(call, mock())
 
@@ -28,22 +30,19 @@ async def test_client_tool_call_returns_client_tool_call(mock: MagicMock) -> Non
 
 
 @pytest.mark.asyncio
-async def test_client_tool_register_execute_sends_to_stream() -> None:
+async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientTool) -> None:
     """The execute closure inside register() must send ClientToolCall to the stream.
 
     Regression: the original code did `return await execution(...)` without
     `await context.send(result)`, so ToolExecutor.execute_tools() would block
     forever waiting for a ClientToolCall that was never sent to the stream.
     """
-    schema = {"function": {"name": "my_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
-
     stream = MemoryStream()
     context = Context(stream=stream)
 
     with ExitStack() as stack:
         client_tool.register(stack, context)
-        call = ToolCall(name="my_tool", arguments="{}")
+        call = ToolCall(name="my_client_tool", arguments="{}")
         await stream.send(call, context)
 
     events = await stream.history.get_events()
@@ -55,11 +54,8 @@ async def test_client_tool_register_execute_sends_to_stream() -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_tool_register_with_middleware() -> None:
+async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> None:
     """execute closure must propagate through middleware before sending."""
-    schema = {"function": {"name": "mw_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
-
     stream = MemoryStream()
     context = Context(stream=stream)
 
@@ -72,7 +68,7 @@ async def test_client_tool_register_with_middleware() -> None:
     with ExitStack() as stack:
         client_tool.register(stack, context, middleware=[TagMiddleware()])
 
-        call = ToolCall(name="mw_tool", arguments="{}")
+        call = ToolCall(name="my_client_tool", arguments="{}")
         await stream.send(call, context)
 
     events = await stream.history.get_events()
