@@ -3,48 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import ExitStack
+from unittest.mock import MagicMock
 
 import pytest
 
+from autogen.beta import MemoryStream
 from autogen.beta.context import Context
 from autogen.beta.events import ClientToolCall, ToolCall
 from autogen.beta.tools.final.client_tool import ClientTool
 
 
-class _CapturingStream:
-    """Minimal stream implementation that records sent events."""
-
-    def __init__(self) -> None:
-        self.sent_events: list = []
-
-    async def send(self, event: object, context: object) -> None:
-        self.sent_events.append(event)
-
-    def where(self, condition: object) -> "_CapturingStream":
-        return self
-
-    def sub_scope(self, func: object, **kwargs: object) -> "_CapturingStream":
-        self._captured_func = func
-        return self
-
-    def __enter__(self) -> "_CapturingStream":
-        return self
-
-    def __exit__(self, *args: object) -> bool:
-        return False
+@pytest.fixture()
+def client_tool() -> ClientTool:
+    return ClientTool(schema={"function": {"name": "my_client_tool", "description": "desc", "parameters": {}}})
 
 
 @pytest.mark.asyncio
-async def test_client_tool_call_returns_client_tool_call() -> None:
+async def test_client_tool_call_returns_client_tool_call(client_tool: ClientTool, mock: MagicMock) -> None:
     """ClientTool.__call__ must return a ClientToolCall wrapping the original call."""
-    schema = {"function": {"name": "my_client_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
-
-    stream = _CapturingStream()
-    context = Context(stream=stream)  # type: ignore[arg-type]
-
     call = ToolCall(name="my_client_tool", arguments="{}")
-    result = await client_tool(call, context)
+    result = await client_tool(call, mock())
 
     assert isinstance(result, ClientToolCall)
     assert result.name == "my_client_tool"
@@ -52,45 +30,34 @@ async def test_client_tool_call_returns_client_tool_call() -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_tool_register_execute_sends_to_stream() -> None:
+async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientTool) -> None:
     """The execute closure inside register() must send ClientToolCall to the stream.
 
     Regression: the original code did `return await execution(...)` without
     `await context.send(result)`, so ToolExecutor.execute_tools() would block
     forever waiting for a ClientToolCall that was never sent to the stream.
     """
-    schema = {"function": {"name": "my_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
-
-    stream = _CapturingStream()
-    context = Context(stream=stream)  # type: ignore[arg-type]
+    stream = MemoryStream()
+    context = Context(stream=stream)
 
     with ExitStack() as stack:
         client_tool.register(stack, context)
+        call = ToolCall(name="my_client_tool", arguments="{}")
+        await stream.send(call, context)
 
-    assert hasattr(stream, "_captured_func"), "sub_scope was never called -- register() is broken"
+    events = await stream.history.get_events()
 
-    call = ToolCall(name="my_tool", arguments="{}")
-    await stream._captured_func(call, context)
-
-    assert len(stream.sent_events) == 1, (
-        f"Expected 1 event sent to stream, got {len(stream.sent_events)}. "
-        "ClientTool.register() execute callback must call context.send(result)."
-    )
-    sent = stream.sent_events[0]
-    assert isinstance(sent, ClientToolCall), f"Expected ClientToolCall, got {type(sent)}"
-    assert sent.parent_id == call.id
-    assert sent.name == call.name
+    assert len(events) == 2
+    assert isinstance(events[-1], ClientToolCall)
+    assert events[1].parent_id == call.id
+    assert events[1].name == call.name
 
 
 @pytest.mark.asyncio
-async def test_client_tool_register_with_middleware() -> None:
+async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> None:
     """execute closure must propagate through middleware before sending."""
-    schema = {"function": {"name": "mw_tool", "description": "desc", "parameters": {}}}
-    client_tool = ClientTool(schema)
-
-    stream = _CapturingStream()
-    context = Context(stream=stream)  # type: ignore[arg-type]
+    stream = MemoryStream()
+    context = Context(stream=stream)
 
     class TagMiddleware:
         async def on_tool_execution(self, call_next: object, event: object, context: object) -> object:
@@ -101,10 +68,11 @@ async def test_client_tool_register_with_middleware() -> None:
     with ExitStack() as stack:
         client_tool.register(stack, context, middleware=[TagMiddleware()])
 
-    call = ToolCall(name="mw_tool", arguments="{}")
-    await stream._captured_func(call, context)
+        call = ToolCall(name="my_client_tool", arguments="{}")
+        await stream.send(call, context)
 
-    assert len(stream.sent_events) == 1
-    sent = stream.sent_events[0]
-    assert isinstance(sent, ClientToolCall)
-    assert getattr(sent, "_tag", None) == "middleware_ran"
+    events = await stream.history.get_events()
+
+    assert len(events) == 2
+    assert isinstance(events[-1], ClientToolCall)
+    assert getattr(events[-1], "_tag", None) == "middleware_ran"
