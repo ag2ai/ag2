@@ -81,6 +81,8 @@ class PolicyDenyMiddleware(BaseMiddleware):
             args: dict[str, Any] = {}  # Default: empty args (safe fallback)
             raw_args = getattr(event, "arguments", None)
             # Guard against DoS via oversized or deeply nested JSON.
+            # 64 KB for args (JSON parse cost); redaction uses 100 KB for
+            # content (regex cost). Different thresholds are intentional.
             _MAX_ARGS_BYTES = 65_536  # 64 KB
             if isinstance(raw_args, str) and len(raw_args) > _MAX_ARGS_BYTES:
                 logger.warning(
@@ -106,11 +108,15 @@ class PolicyDenyMiddleware(BaseMiddleware):
                     else:
                         args = parsed
                 except (json.JSONDecodeError, TypeError, ValueError):
+                    # Fail-closed: unparseable arguments -> DENY.
+                    # Using empty args would let predicates see {} and return
+                    # ALLOW, silently bypassing argument-based policies.
                     logger.warning(
-                        "[Policy] Failed to parse arguments for tool '%s' -- using empty args",
+                        "[Policy] Failed to parse arguments for tool '%s'"
+                        " -- treating as DENY (fail-closed)",
                         tool_name,
                     )
-                    args = {}
+                    denied = True
 
             if not denied:
                 for predicate in self._denied_predicates:

@@ -71,6 +71,14 @@ class BudgetState:
         # counter values (consumed_tokens=0.0 etc.) before the guard fires.
         self._mark_init_done()
 
+    _COUNTER_FIELDS: frozenset[str] = frozenset({
+        "consumed_tokens",
+        "llm_calls",
+        "tool_calls",
+        "blocked_llm_calls",
+        "blocked_tool_calls",
+    })
+
     def __setattr__(self, name: str, value: object) -> None:
         """Prevent direct writes to counter fields after initialization.
 
@@ -82,14 +90,7 @@ class BudgetState:
         The _init_done flag is set at the end of __init__ by Python's
         dataclass machinery.
         """
-        _counter_fields = {
-            "consumed_tokens",
-            "llm_calls",
-            "tool_calls",
-            "blocked_llm_calls",
-            "blocked_tool_calls",
-        }
-        if name in _counter_fields and hasattr(self, "_init_done"):
+        if name in self._COUNTER_FIELDS and hasattr(self, "_init_done"):
             raise AttributeError(
                 f"BudgetState.{name} is read-only after init -- "
                 "use record_tokens(), try_consume_llm_call(), or "
@@ -172,17 +173,18 @@ class BudgetState:
             self._unsafe_set("llm_calls", self.llm_calls + 1)
             return True, ""
 
-    async def try_consume_tool_call(self) -> bool:
+    async def try_consume_tool_call(self) -> tuple[bool, str]:
         """Atomically check and consume one tool call slot.
 
-        Returns True if consumed, False if exhausted.
+        Returns (True, "") if consumed, (False, "tool_calls") if exhausted.
+        Consistent with try_consume_llm_call() return type.
         """
         async with self._lock:
             if self.tool_exhausted:
                 self._unsafe_set("blocked_tool_calls", self.blocked_tool_calls + 1)
-                return False
+                return False, "tool_calls"
             self._unsafe_set("tool_calls", self.tool_calls + 1)
-            return True
+            return True, ""
 
 
 def _make_budget_state(

@@ -109,7 +109,7 @@ async def test_policy_event_arguments_none() -> None:
 
 @pytest.mark.asyncio
 async def test_policy_event_arguments_binary() -> None:
-    """Binary (non-JSON) arguments must not crash -- uses empty args."""
+    """Binary (non-JSON) arguments must be DENIED (fail-closed)."""
     mw = PolicyDenyMiddleware(
         denied_predicates=[lambda name, args: False]
     )
@@ -123,7 +123,9 @@ async def test_policy_event_arguments_binary() -> None:
         call_next_invoked = True
 
     await mw.on_tool_call(next_handler, event, ctx)
-    assert call_next_invoked, "call_next must be invoked for binary args with permissive predicate"
+    # Fail-closed: unparseable arguments -> DENY, call_next NOT invoked
+    assert not call_next_invoked, "call_next must NOT be invoked for unparseable binary args"
+    assert len(ctx.sent_events) > 0, "ToolError must be sent for denied binary args"
 
 
 @pytest.mark.asyncio
@@ -252,7 +254,8 @@ async def test_budget_tool_boundary_n_minus_1() -> None:
 
     results = []
     for _ in range(5):
-        results.append(await state.try_consume_tool_call())
+        allowed, _reason = await state.try_consume_tool_call()
+        results.append(allowed)
 
     expected = [True, True, True, False, False]
     assert results == expected, f"Expected {expected}, got {results}"
@@ -351,12 +354,12 @@ async def test_concurrent_tool_budget_consumption() -> None:
     """Multiple concurrent try_consume_tool_call must not exceed max."""
     state = BudgetState(max_tokens=10_000, max_tool_calls=3, max_llm_calls=10)
 
-    async def consume() -> bool:
+    async def consume() -> tuple[bool, str]:
         return await state.try_consume_tool_call()
 
     results = await asyncio.gather(*[consume() for _ in range(15)])
 
-    successes = sum(1 for r in results if r)
+    successes = sum(1 for allowed, _reason in results if allowed)
     assert successes == 3, f"Expected exactly 3 successes, got {successes}"
     assert state.tool_calls == 3, f"Expected tool_calls=3, got {state.tool_calls}"
 

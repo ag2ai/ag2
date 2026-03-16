@@ -116,9 +116,11 @@ class SharedBudgetMiddleware(BaseMiddleware):
         """
         budget = self._get_budget(ctx)
 
-        if not await budget.try_consume_tool_call():
+        allowed, reason = await budget.try_consume_tool_call()
+        if not allowed:
             logger.warning(
-                "[Budget] Tool call BLOCKED -- tool_calls exhausted (%d/%d) tool=%s",
+                "[Budget] Tool call BLOCKED -- %s exhausted (%d/%d) tool=%s",
+                reason,
                 budget.tool_calls,
                 budget.max_tool_calls,
                 getattr(event, "name", "<unknown>"),

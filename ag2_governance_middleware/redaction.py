@@ -100,11 +100,17 @@ class SecretRedactionMiddleware(BaseMiddleware):
             return type(event)(content=new_content)
         except Exception as exc:
             logger.error(
-                "[Redaction] Could not reconstruct %s: %r -- passing original",
+                "[Redaction] Could not reconstruct %s: %r -- blocking event "
+                "(fail-closed: will not forward unredacted content)",
                 type(event).__name__,
                 exc,
             )
-            return event
+            # Fail-closed: return a sanitized event with only the redacted
+            # content rather than forwarding the unredacted original.
+            # Use a minimal object that downstream can handle.
+            raise RuntimeError(
+                "[Redaction] Cannot safely redact event -- blocking to prevent secret leak"
+            ) from exc
 
     async def on_llm_call(
         self,
@@ -160,10 +166,15 @@ class SecretRedactionMiddleware(BaseMiddleware):
                     object.__setattr__(new_event, "arguments", new_args)
                     event = new_event
                 except (TypeError, AttributeError):
+                    # Fail-closed: do not forward unredacted tool arguments.
                     logger.error(
                         "[Redaction] Could not copy tool event %s to redact arguments"
-                        " -- passing UNREDACTED original. Secrets may be exposed.",
+                        " -- blocking event (fail-closed)",
                         type(event).__name__,
+                    )
+                    raise RuntimeError(
+                        "[Redaction] Cannot safely redact tool arguments -- "
+                        "blocking to prevent secret leak"
                     )
                 logger.info(
                     "[Redaction] Redacted %d secret(s) in tool arguments",
