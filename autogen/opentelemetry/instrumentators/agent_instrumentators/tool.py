@@ -9,6 +9,7 @@ from opentelemetry.trace import Tracer
 
 from autogen import Agent
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.instrumentators.agent_instrumentators._config import RECORD_CONTENT
 
 
 def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
@@ -30,19 +31,20 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
                 if call_id:
                     span.set_attribute("gen_ai.tool.call.id", call_id)
 
-                # Opt-in: Add tool call arguments
-                arguments = func_call.get("arguments", "{}")
-                if isinstance(arguments, str):
-                    span.set_attribute("gen_ai.tool.call.arguments", arguments)
-                else:
-                    span.set_attribute("gen_ai.tool.call.arguments", json.dumps(arguments))
+                # Opt-in: Add tool call arguments (requires AG2_OTEL_RECORD_CONTENT=1)
+                if RECORD_CONTENT:
+                    arguments = func_call.get("arguments", "{}")
+                    if isinstance(arguments, str):
+                        span.set_attribute("gen_ai.tool.call.arguments", arguments)
+                    else:
+                        span.set_attribute("gen_ai.tool.call.arguments", json.dumps(arguments))
 
                 is_success, result = old_execute_function(func_call, call_id, verbose)
 
                 if not is_success:
                     span.set_attribute("error.type", "ExecutionError")
-                else:
-                    # Opt-in: Add tool call result (only on success)
+                elif RECORD_CONTENT:
+                    # Opt-in: Add tool call result (requires AG2_OTEL_RECORD_CONTENT=1)
                     content = result.get("content", "")
                     span.set_attribute("gen_ai.tool.call.result", str(content))
 
@@ -69,19 +71,20 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
                 if call_id:
                     span.set_attribute("gen_ai.tool.call.id", call_id)
 
-                # Opt-in: Add tool call arguments
-                arguments = func_call.get("arguments", "{}")
-                if isinstance(arguments, str):
-                    span.set_attribute("gen_ai.tool.call.arguments", arguments)
-                else:
-                    span.set_attribute("gen_ai.tool.call.arguments", json.dumps(arguments))
+                # Opt-in: Add tool call arguments (requires AG2_OTEL_RECORD_CONTENT=1)
+                if RECORD_CONTENT:
+                    arguments = func_call.get("arguments", "{}")
+                    if isinstance(arguments, str):
+                        span.set_attribute("gen_ai.tool.call.arguments", arguments)
+                    else:
+                        span.set_attribute("gen_ai.tool.call.arguments", json.dumps(arguments))
 
                 is_success, result = await old_a_execute_function(func_call, call_id, verbose)
 
                 if not is_success:
                     span.set_attribute("error.type", "ExecutionError")
-                else:
-                    # Opt-in: Add tool call result (only on success)
+                elif RECORD_CONTENT:
+                    # Opt-in: Add tool call result (requires AG2_OTEL_RECORD_CONTENT=1)
                     content = result.get("content", "")
                     span.set_attribute("gen_ai.tool.call.result", str(content))
 

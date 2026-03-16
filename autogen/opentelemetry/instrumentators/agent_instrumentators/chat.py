@@ -9,6 +9,7 @@ from opentelemetry.trace import Tracer
 
 from autogen import Agent
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.instrumentators.agent_instrumentators._config import RECORD_CONTENT
 from autogen.opentelemetry.utils import (
     aggregate_usage,
     get_model_name,
@@ -48,7 +49,7 @@ def instrument_initiate_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                     span.set_attribute("gen_ai.conversation.max_turns", max_turns)
 
                 # Capture input message
-                if message is not None:
+                if RECORD_CONTENT and message is not None:
                     if isinstance(message, str):
                         input_msg = {"role": "user", "content": message}
                     elif isinstance(message, dict):
@@ -66,7 +67,7 @@ def instrument_initiate_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("gen_ai.conversation.turns", len(result.chat_history))
 
                 # Capture output messages (full chat history)
-                if result.chat_history:
+                if RECORD_CONTENT and result.chat_history:
                     otel_output = messages_to_otel(result.chat_history)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
@@ -114,7 +115,7 @@ def instrument_initiate_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                 if max_turns:
                     span.set_attribute("gen_ai.conversation.max_turns", max_turns)
 
-                if message is not None:
+                if RECORD_CONTENT and message is not None:
                     if isinstance(message, str):
                         input_msg = {"role": "user", "content": message}
                     elif isinstance(message, dict):
@@ -131,7 +132,7 @@ def instrument_initiate_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("gen_ai.conversation.id", str(result.chat_id))
                 span.set_attribute("gen_ai.conversation.turns", len(result.chat_history))
 
-                if result.chat_history:
+                if RECORD_CONTENT and result.chat_history:
                     otel_output = messages_to_otel(result.chat_history)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
@@ -193,14 +194,14 @@ def instrument_run_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("gen_ai.agent.name", agent.name)
 
                 # Capture input messages
-                if messages:
+                if RECORD_CONTENT and messages:
                     otel_input = messages_to_otel(messages)
                     span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
 
                 result = old_run_chat(messages=messages, sender=sender, config=config, **kwargs)
 
                 # Capture output messages from groupchat
-                if config and hasattr(config, "messages") and config.messages:
+                if RECORD_CONTENT and config and hasattr(config, "messages") and config.messages:
                     otel_output = messages_to_otel(config.messages)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
@@ -225,14 +226,14 @@ def instrument_run_chat(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("gen_ai.agent.name", agent.name)
 
                 # Capture input messages
-                if messages:
+                if RECORD_CONTENT and messages:
                     otel_input = messages_to_otel(messages)
                     span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
 
                 result = await old_a_run_chat(messages=messages, sender=sender, config=config, **kwargs)
 
                 # Capture output messages from groupchat
-                if config and hasattr(config, "messages") and config.messages:
+                if RECORD_CONTENT and config and hasattr(config, "messages") and config.messages:
                     otel_output = messages_to_otel(config.messages)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
@@ -271,8 +272,9 @@ def instrument_initiate_chats(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
 
                 # Capture summaries
-                summaries = [r.summary for r in results if hasattr(r, "summary")]
-                span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
+                if RECORD_CONTENT:
+                    summaries = [r.summary for r in results if hasattr(r, "summary")]
+                    span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
 
                 return results
 
@@ -314,8 +316,9 @@ def instrument_initiate_chats(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.chats.ids", json.dumps(chat_ids))
 
                 # Capture summaries (results is a dict for async version)
-                summaries = [r.summary for r in results.values() if hasattr(r, "summary")]
-                span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
+                if RECORD_CONTENT:
+                    summaries = [r.summary for r in results.values() if hasattr(r, "summary")]
+                    span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
 
                 return results
 
