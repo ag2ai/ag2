@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import pickle
+import json
 from types import TracebackType
 from typing import Any
 
@@ -74,7 +74,10 @@ class RedisCache(AbstractCache):
         result = self.cache.get(self._prefixed_key(key))
         if result is None:
             return default
-        return pickle.loads(result)
+        try:
+            return json.loads(result)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return default
 
     def set(self, key: str, value: Any) -> None:
         """Set an item in the Redis cache.
@@ -84,9 +87,9 @@ class RedisCache(AbstractCache):
             value: The value to be stored in the cache.
 
         Notes:
-            The value is serialized using pickle before being stored in Redis.
+            The value is serialized using JSON before being stored in Redis.
         """
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value, default=str)
         self.cache.set(self._prefixed_key(key), serialized_value)
 
     def close(self) -> None:

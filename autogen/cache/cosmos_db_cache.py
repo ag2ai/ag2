@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 # Install Azure Cosmos DB SDK if not already
 
-import pickle
+import json
 from typing import Any, Optional, TypedDict
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -93,7 +93,10 @@ class CosmosDBCache(AbstractCache):
         """
         try:
             response = self.container.read_item(item=key, partition_key=str(self.seed))
-            return pickle.loads(response["data"])
+            try:
+                return json.loads(response["data"])
+            except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                return default
         except CosmosResourceNotFoundError:
             return default
         except Exception as e:
@@ -109,10 +112,10 @@ class CosmosDBCache(AbstractCache):
             value: The value to be stored in the cache.
 
         Notes:
-            The value is serialized using pickle before being stored.
+            The value is serialized using JSON before being stored.
         """
         try:
-            serialized_value = pickle.dumps(value)
+            serialized_value = json.dumps(value, default=str)
             item = {"id": key, "partitionKey": str(self.seed), "data": serialized_value}
             self.container.upsert_item(item)
         except Exception as e:

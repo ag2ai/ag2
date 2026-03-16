@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-import pickle
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -39,7 +39,7 @@ class TestRedisCache:
     def test_get(self, mock_redis_from_url):
         key = "key"
         value = "value"
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value)
         cache = RedisCache(self.seed, self.redis_url)
         cache.cache.get.return_value = serialized_value
         assert cache.get(key) == value
@@ -52,7 +52,7 @@ class TestRedisCache:
     def test_set(self, mock_redis_from_url):
         key = "key"
         value = "value"
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value, default=str)
         cache = RedisCache(self.seed, self.redis_url)
         cache.set(key, value)
         cache.cache.set.assert_called_with(f"autogen:{self.seed}:{key}", serialized_value)

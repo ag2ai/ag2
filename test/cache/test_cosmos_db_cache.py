@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-import pickle
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -40,7 +40,7 @@ class TestCosmosDBCache:
     def test_get(self):
         key = "key"
         value = "value"
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value)
         cache = CosmosDBCache(
             self.seed,
             {
@@ -60,7 +60,7 @@ class TestCosmosDBCache:
     def test_set(self):
         key = "key"
         value = "value"
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value, default=str)
         cache = CosmosDBCache(
             self.seed,
             {
