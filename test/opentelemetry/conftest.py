@@ -7,8 +7,21 @@
 import threading
 from collections.abc import Sequence
 
+import pytest
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExportResult, SpanExporter
+
+
+@pytest.fixture(autouse=True)
+def _enable_otel_content_recording(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enable content recording for all OTel tests.
+
+    Production default is OFF (to prevent secret leakage). Tests need it ON
+    to verify that content is correctly attached to spans.
+    """
+    import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _cfg
+
+    monkeypatch.setattr(_cfg, "RECORD_CONTENT", True)
 
 
 class InMemorySpanExporter(SpanExporter):

@@ -6,9 +6,9 @@ from typing import Any
 
 from opentelemetry.trace import Tracer
 
+import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _otel_cfg
 from autogen import Agent
 from autogen.opentelemetry.consts import SpanType
-from autogen.opentelemetry.instrumentators.agent_instrumentators._config import RECORD_CONTENT
 
 
 def instrument_human_input(agent: Agent, *, tracer: Tracer) -> Agent:
@@ -25,12 +25,12 @@ def instrument_human_input(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.span.type", SpanType.HUMAN_INPUT.value)
                 span.set_attribute("gen_ai.operation.name", "await_human_input")
                 span.set_attribute("gen_ai.agent.name", agent.name)
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     span.set_attribute("ag2.human_input.prompt", prompt)
 
                 response = old_get_human_input(prompt, *args, **kwargs)
 
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     span.set_attribute("ag2.human_input.response", response)
                 return response
 
@@ -50,12 +50,12 @@ def instrument_human_input(agent: Agent, *, tracer: Tracer) -> Agent:
                 span.set_attribute("ag2.span.type", SpanType.HUMAN_INPUT.value)
                 span.set_attribute("gen_ai.operation.name", "await_human_input")
                 span.set_attribute("gen_ai.agent.name", agent.name)
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     span.set_attribute("ag2.human_input.prompt", prompt)
 
                 response = await old_a_get_human_input(prompt, *args, **kwargs)
 
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     span.set_attribute("ag2.human_input.response", response)
                 return response
 

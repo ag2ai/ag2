@@ -7,9 +7,9 @@ from typing import Any
 
 from opentelemetry.trace import Tracer
 
+import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _otel_cfg
 from autogen import Agent
 from autogen.opentelemetry.consts import SpanType
-from autogen.opentelemetry.instrumentators.agent_instrumentators._config import RECORD_CONTENT
 
 
 def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
@@ -32,7 +32,7 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
                     span.set_attribute("gen_ai.tool.call.id", call_id)
 
                 # Opt-in: Add tool call arguments (requires AG2_OTEL_RECORD_CONTENT=1)
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     arguments = func_call.get("arguments", "{}")
                     if isinstance(arguments, str):
                         span.set_attribute("gen_ai.tool.call.arguments", arguments)
@@ -43,7 +43,7 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
 
                 if not is_success:
                     span.set_attribute("error.type", "ExecutionError")
-                elif RECORD_CONTENT:
+                elif _otel_cfg.RECORD_CONTENT:
                     # Opt-in: Add tool call result (requires AG2_OTEL_RECORD_CONTENT=1)
                     content = result.get("content", "")
                     span.set_attribute("gen_ai.tool.call.result", str(content))
@@ -72,7 +72,7 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
                     span.set_attribute("gen_ai.tool.call.id", call_id)
 
                 # Opt-in: Add tool call arguments (requires AG2_OTEL_RECORD_CONTENT=1)
-                if RECORD_CONTENT:
+                if _otel_cfg.RECORD_CONTENT:
                     arguments = func_call.get("arguments", "{}")
                     if isinstance(arguments, str):
                         span.set_attribute("gen_ai.tool.call.arguments", arguments)
@@ -83,7 +83,7 @@ def instrument_execute_function(agent: Agent, *, tracer: Tracer) -> Agent:
 
                 if not is_success:
                     span.set_attribute("error.type", "ExecutionError")
-                elif RECORD_CONTENT:
+                elif _otel_cfg.RECORD_CONTENT:
                     # Opt-in: Add tool call result (requires AG2_OTEL_RECORD_CONTENT=1)
                     content = result.get("content", "")
                     span.set_attribute("gen_ai.tool.call.result", str(content))

@@ -11,10 +11,10 @@ from opentelemetry import context as otel_context
 from opentelemetry.context import Context
 from opentelemetry.trace import Tracer
 
+import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _otel_cfg
 from autogen import Agent
 from autogen.io import IOStream
 from autogen.opentelemetry.consts import SpanType
-from autogen.opentelemetry.instrumentators.agent_instrumentators._config import RECORD_CONTENT
 from autogen.opentelemetry.utils import (
     get_model_name,
     get_provider_name,
@@ -47,14 +47,14 @@ def instrument_generate_reply(agent: Agent, *, tracer: Tracer) -> Agent:
                     span.set_attribute("gen_ai.request.model", model)
 
                 # Capture input messages
-                if RECORD_CONTENT and messages:
+                if _otel_cfg.RECORD_CONTENT and messages:
                     otel_input = messages_to_otel(messages)
                     span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
 
                 reply = await old_a_generate_reply(messages, *args, **kwargs)
 
                 # Capture output message
-                if RECORD_CONTENT and reply is not None:
+                if _otel_cfg.RECORD_CONTENT and reply is not None:
                     otel_output = reply_to_otel_message(reply)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
@@ -85,13 +85,13 @@ def instrument_generate_reply(agent: Agent, *, tracer: Tracer) -> Agent:
                 if model:
                     span.set_attribute("gen_ai.request.model", model)
 
-                if RECORD_CONTENT and messages:
+                if _otel_cfg.RECORD_CONTENT and messages:
                     otel_input = messages_to_otel(messages)
                     span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
 
                 reply = old_generate_reply(messages, *args, **kwargs)
 
-                if RECORD_CONTENT and reply is not None:
+                if _otel_cfg.RECORD_CONTENT and reply is not None:
                     otel_output = reply_to_otel_message(reply)
                     span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
 
