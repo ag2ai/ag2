@@ -629,8 +629,7 @@ class GroupChat:
         # the candidate set" (should raise).  The sentinel case is when
         # last_speaker is outside the group AND has no entry in the transition dict.
         _no_transition_constraints = (
-            not is_last_speaker_in_group
-            and last_speaker not in self.allowed_speaker_transitions_dict
+            not is_last_speaker_in_group and last_speaker not in self.allowed_speaker_transitions_dict
         )
         if len(graph_eligible_agents) == 0 and _policies_applied and not _no_transition_constraints:
             raise NoEligibleSpeakerError(
