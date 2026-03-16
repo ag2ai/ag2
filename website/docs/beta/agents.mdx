@@ -1,0 +1,131 @@
+---
+title: Agent Communication
+sidebarTitle: Agents
+---
+
+Agents are the central primitive in **AG2 Beta**. They maintain state, interact with models, execute tools, and handle user interactions through a clean, conversation-focused API.
+
+## Core Communication Primitives
+
+The API is built around two simple methods:
+
+* `Agent.ask(...)` initiates a new turn and returns an `AgentReply` object.
+* `AgentReply.ask(...)` continues an existing conversation, preserving its context and history.
+
+The final result of any turn is safely stored in `reply.response`; use `reply.content` for the text.
+
+## Basic Communication Example
+
+Here's how easily you can start and continue a conversation:
+
+```python linenums="1" hl_lines="11 15"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig("gpt-4o-mini"),
+)
+
+# Start a new conversation
+reply = await agent.ask("Give me one sentence about AG2 beta.")
+print(reply.content)
+
+# Continue the exact same conversation context
+next_turn = await reply.ask("Now make it shorter.")
+print(next_turn.content)
+
+...
+```
+
+## Empowering Agents with Tools
+
+Agents can seamlessly use Python functions as tools. When you provide a list of `@tool`-decorated functions to an agent, it automatically manages the entire execution lifecycle (model requests to execution and returning results).
+
+```python linenums="1" hl_lines="1 4-7 13"
+from autogen.beta import Agent, Context, tool
+from autogen.beta.config import OpenAIConfig
+
+@tool
+async def echo(text: str) -> str:
+    """Useful for repeating exactly what was given."""
+    return f"echo: {text}"
+
+agent = Agent(
+    "assistant",
+    prompt="Use tools when helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[echo],
+)
+
+reply = await agent.ask("Call the echo tool with 'hello'.")
+print(reply.content)
+```
+
+## Adding Human-in-the-Loop (HITL)
+
+Sometimes an agent needs human guidance. You can configure an agent to handle `HumanInputRequest` events. This is especially effective inside tools where you can get confirmation before taking a sensitive action.
+
+```python linenums="1" hl_lines="8 12-15 22"
+from autogen.beta import Agent, Context, tool
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import HumanInputRequest, HumanMessage
+
+@tool
+async def ask_human(context: Context) -> str:
+    # Pauses agent execution to await human input
+    answer = await context.input("Please provide confirmation:")
+    return f"Human said: {answer}"
+
+# Define how your application handles the input request
+def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    # Here you could block and wait for UI/CLI input.
+    # We return a static response for demonstration.
+    return HumanMessage(content="confirmed")
+
+agent = Agent(
+    "assistant",
+    prompt="Use ask_human when needed.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[ask_human],
+    hitl_hook=hitl_hook,
+)
+
+reply = await agent.ask("Request confirmation through the tool.")
+print(reply.content)
+```
+
+## Observing Agent Actions
+
+Need to know exactly what the agent is doing? Pass a `MemoryStream` when calling `ask()`. You can attach event subscribers to log actions, save history to a database, or update a user interface in real time.
+
+```python linenums="1" hl_lines="5 8-10 13-15 26"
+from autogen.beta import Agent, Context, MemoryStream
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
+from autogen.beta.config import OpenAIConfig
+
+stream = MemoryStream()
+
+# Listen to everything
+@stream.subscribe()
+async def on_any_event(event: BaseEvent) -> None:
+    print(f"Event occurred: {event}")
+
+# Only listen to specific events
+@stream.where(ToolCall).subscribe()
+async def on_tool_call(event: ToolCall) -> None:
+    print("Agent requested tool:", event.name)
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig("gpt-4o-mini"),
+)
+
+# Stream captures all events during the ask
+reply = await agent.ask(
+    "Give me one sentence about AG2 beta.",
+    stream=stream
+)
+```

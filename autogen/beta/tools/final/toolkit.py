@@ -1,0 +1,78 @@
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from collections.abc import Callable, Iterable
+from contextlib import ExitStack
+from typing import Any, overload
+
+from autogen.beta.annotations import Context
+from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.tools.schemas import ToolSchema
+from autogen.beta.tools.tool import Tool
+
+from .function_tool import FunctionParameters, FunctionTool, tool
+
+
+class Toolkit(Tool):
+    def __init__(self, *tools: Tool | Callable[..., Any]) -> None:
+        self.tools: list[Tool] = [FunctionTool.ensure_tool(t) for t in tools]
+
+    @overload
+    def tool(
+        self,
+        function: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+    ) -> Tool: ...
+
+    @overload
+    def tool(
+        self,
+        function: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+    ) -> Callable[[Callable[..., Any]], Tool]: ...
+
+    def tool(
+        self,
+        function: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
+        def make_tool(f: Callable[..., Any]) -> Tool:
+            t = FunctionTool.ensure_tool(
+                tool(f, name=name, description=description, schema=schema, sync_to_thread=sync_to_thread)
+            )
+            self.tools.append(t)
+            return t
+
+        if function:
+            return make_tool(function)
+
+        return make_tool
+
+    async def schemas(self, context: "Context") -> Iterable[ToolSchema]:
+        schemas: list[ToolSchema] = []
+        for t in self.tools:
+            schemas.extend(await t.schemas(context))
+        return schemas
+
+    def register(
+        self,
+        stack: "ExitStack",
+        context: "Context",
+        *,
+        middleware: Iterable["BaseMiddleware"] = (),
+    ) -> None:
+        for t in self.tools:
+            t.register(stack, context, middleware=middleware)

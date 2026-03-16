@@ -1,0 +1,209 @@
+---
+title: AG2 Compatibility
+sidebarTitle: AG2 Compatibility
+description: Guide on using Beta Agents within AG2 GroupChats, sequential chats, handoffs, and context variable workflows.
+---
+
+The `autogen.beta.Agent` is designed to be fully compatible with existing AG2 architectures, including [Group Chats](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction) and [sequential workflows](/docs/user-guide/advanced-concepts/orchestration/sequential-chat). By calling the `as_conversable()` method, you can seamlessly integrate beta agents with traditional `ConversableAgent` instances.
+
+This guide explains how to use the new Beta Agents across various chat topologies.
+
+## One-to-one chats
+
+You can initiate a standard chat between a `ConversableAgent` and a Beta `Agent` by converting the beta agent into a conversable format. This enables direct, two-way communication.
+
+```python linenums="1" hl_lines="2 5-8 18"
+from autogen import ConversableAgent, LLMConfig
+from autogen.beta import Agent, config
+
+# Define the beta agent
+beta_agent = Agent(
+    "beta_agent",
+    config=config.OpenAIConfig(model="gpt-4o"),
+)
+
+# Define a traditional local agent
+local_agent = ConversableAgent(
+    "local_agent",
+    llm_config=LLMConfig({"model": "gpt-4o"}),
+)
+
+# Initiate one-to-one chat
+result = await local_agent.a_run(
+    recipient=beta_agent.as_conversable(),
+    message="Hello beta agent!",
+    max_turns=2,
+)
+
+await result.process()
+```
+
+## Sequential chats
+
+You can chain multiple chats together sequentially using `a_initiate_chats` (see the [Sequential Chat](/docs/user-guide/advanced-concepts/orchestration/sequential-chat) guide). The beta agents handle their respective tasks in order, acting as recipients in the chat sequence.
+
+```python linenums="1" hl_lines="15 21"
+from autogen import ConversableAgent, LLMConfig
+from autogen.beta import Agent, config
+
+model_config = config.OpenAIConfig(model="gpt-4o")
+agent1 = Agent("agent1", config=model_config)
+agent2 = Agent("agent2", config=model_config)
+
+local_agent = ConversableAgent(
+    "local_manager",
+    llm_config=LLMConfig({"model": "gpt-4o"}),
+)
+
+chat_results = await local_agent.a_initiate_chats([
+    {
+        "recipient": agent1.as_conversable(),
+        "message": "Analyze this data.",
+        "max_turns": 1,
+        "chat_id": "analysis-chat",
+    },
+    {
+        "recipient": agent2.as_conversable(),
+        "message": "Summarize the analysis.",
+        "max_turns": 1,
+        "chat_id": "summary-chat",
+    },
+])
+```
+
+## Handoffs
+
+Beta agents fully support AG2's pattern-based [handoff mechanisms](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs). You can use `AgentTarget` to explicitly dictate which agent should take over when the current agent completes its work.
+
+```python linenums="1" hl_lines="13-15 17-19"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat.group.multi_agent_chat import a_run_group_chat
+from autogen.agentchat.group import AgentTarget
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.beta import Agent, config
+
+original_agent = ConversableAgent(
+    "manager", llm_config=LLMConfig({"model": "gpt-4o"})
+)
+
+model_config = config.OpenAIConfig(model="gpt-4o")
+
+agent1 = Agent(
+    "researcher", config=model_config
+).as_conversable()
+
+agent2 = Agent(
+    "reviewer", config=model_config
+).as_conversable()
+
+# Define handoffs
+original_agent.handoffs.set_after_work(AgentTarget(agent1))
+agent1.handoffs.set_after_work(AgentTarget(agent2))
+agent2.handoffs.set_after_work(AgentTarget(original_agent))
+
+pattern = DefaultPattern(
+    initial_agent=original_agent,
+    agents=[original_agent, agent1, agent2],
+)
+
+result = await a_run_group_chat(
+    pattern=pattern,
+    messages="Start the research process.",
+    max_rounds=5,
+)
+
+await result.process()
+```
+
+## Group chats (autopattern)
+
+You can build dynamic [group chats](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction) using `AutoPattern`, where multiple beta agents and standard agents participate in a shared environment.
+
+```python linenums="1" hl_lines="9-11 13-15"
+from autogen.agentchat.group.multi_agent_chat import a_run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.llm_config.config import LLMConfig
+from autogen.beta import Agent, config
+
+# Create beta agents
+model_config = config.OpenAIConfig(model="gpt-4o")
+
+researcher = Agent(
+    "researcher", config=model_config
+).as_conversable()
+
+writer = Agent(
+    "writer", config=model_config
+).as_conversable()
+
+pattern = AutoPattern(
+    initial_agent=researcher,
+    agents=[researcher, writer],
+    group_manager_args={"llm_config": LLMConfig({"model": "gpt-4o"})},
+)
+
+result = await a_run_group_chat(
+    pattern=pattern,
+    messages="Research quantum computing and write a summary.",
+    max_rounds=10,
+)
+
+await result.process()
+```
+
+## Context Variables support
+
+Beta agents deeply integrate with AG2's [`ContextVariables`](/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables), allowing state to be shared effortlessly across group chats and seamlessly accessed inside beta agent tools.
+
+You can inject global variables into the group chat pattern, and read/modify them within any tool via the `Context` object or `Variable()` annotations.
+
+```python linenums="1" hl_lines="14-22 32-33 46-47"
+from typing import Annotated
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat.group import ContextVariables
+from autogen.agentchat.group.multi_agent_chat import a_run_group_chat
+from autogen.agentchat.group.patterns import RoundRobinPattern
+from autogen.beta import Agent, Context, Variable, config
+
+beta_agent = Agent(
+    "tracker_agent",
+    config=config.OpenAIConfig(model="gpt-4o"),
+)
+
+# Define a tool that accesses and modifies ContextVariables
+@beta_agent.tool
+def issue_tracker(
+    context: Context,
+    issue_count: Annotated[int, Variable(default=0)]
+) -> str:
+    # Update the shared context variable
+    issue_count += 1
+    context.variables["issue_count"] = issue_count
+    return f"Issue tracked. Total issues: {issue_count}"
+
+
+local_agent = ConversableAgent(
+    "local_agent",
+    llm_config=LLMConfig({"model": "gpt-4o"}),
+)
+
+# Initialize the pattern with ContextVariables
+pattern = RoundRobinPattern(
+    initial_agent=local_agent,
+    agents=[local_agent, beta_agent.as_conversable()],
+    context_variables=ContextVariables({"issue_count": 0}),
+)
+
+async def main():
+    result = await a_run_group_chat(
+        pattern=pattern,
+        messages="Please track this new issue.",
+        max_rounds=3,
+    )
+
+    await result.process()
+
+    # context_variables["issue_count"] will now be updated globally!
+    context_variables = await result.context_variables
+    print("Final issue count:", context_variables.data["issue_count"])
+```
