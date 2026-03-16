@@ -6,7 +6,16 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Protocol, TypeAlias
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ClientToolCall, ModelResponse, ToolCall, ToolError, ToolResult
+from autogen.beta.events import (
+    BaseEvent,
+    ClientToolCall,
+    HumanInputRequest,
+    HumanMessage,
+    ModelResponse,
+    ToolCall,
+    ToolError,
+    ToolResult,
+)
 
 
 class MiddlewareFactory(Protocol):
@@ -36,6 +45,7 @@ ToolResultType: TypeAlias = "ToolResult | ToolError | ClientToolCall"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
 ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
+HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable["HumanMessage"]]
 
 
 class BaseMiddleware:
@@ -70,3 +80,11 @@ class BaseMiddleware:
         context: "Context",
     ) -> "ModelResponse":
         return await call_next(events, context)
+
+    async def on_human_input(
+        self,
+        call_next: HumanInputHook,
+        event: "HumanInputRequest",
+        context: "Context",
+    ) -> "HumanMessage":
+        return await call_next(event, context)

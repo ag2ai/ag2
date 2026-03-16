@@ -328,7 +328,7 @@ class Agent(Askable):
             )
 
             stack.enter_context(
-                context.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
+                context.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook(middleware_instances)),
             )
 
             self.__tool_executor.register(

@@ -258,7 +258,10 @@ def check_stock(item_id: str) -> int:
     """Returns the current stock count for an item."""
     return 42
 
-@inventory.tool(name="reorder_item", description="Places a reorder for a low-stock item.")
+@inventory.tool(
+    name="reorder_item",
+    description="Places a reorder for a low-stock item.",
+)
 def reorder(item_id: str, quantity: int) -> str:
     return f"Reordered {quantity} of {item_id}."
 ```

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
@@ -37,6 +38,21 @@ DEFAULT_HTTP_REQUEST_TIMEOUT = 5
 DEFAULT_SSE_EVENT_READ_TIMEOUT = 60 * 5
 DEFAULT_STREAMABLE_HTTP_REQUEST_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_EVENT_READ_TIMEOUT = timedelta(seconds=60 * 5)
+
+
+def _sanitize_resource_filename(uri: str, download_folder: Path, timestamp: str) -> Path:
+    """Sanitize a resource URI into a safe local filename inside download_folder.
+
+    Strips directory components (including traversal sequences) from the URI
+    and verifies the resulting path stays inside download_folder.
+    """
+    raw_name = uri.split("://")[-1]
+    safe_name = os.path.basename(raw_name.replace("\\", "/")) or "resource"
+    filename = f"{safe_name}_{timestamp}"
+    file_path = (download_folder / filename).resolve()
+    if not file_path.is_relative_to(download_folder.resolve()):
+        raise ValueError(f"Path traversal detected in resource URI: {uri}")
+    return file_path
 
 
 class SessionConfigProtocol(Protocol):
@@ -219,8 +235,7 @@ Here is the correct format for the URI template:
                 return result
 
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            filename = uri.split("://")[-1] + f"_{timestamp}"
-            file_path = resource_download_folder / filename
+            file_path = _sanitize_resource_filename(uri, resource_download_folder, timestamp)
 
             async with await anyio.open_file(file_path, "w") as f:
                 await f.write(result.model_dump_json(indent=4))
