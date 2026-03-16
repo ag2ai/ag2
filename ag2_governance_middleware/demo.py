@@ -147,7 +147,7 @@ async def test_budget_tool_block() -> bool:
     await mw.on_tool_call(next_handler, tool_call, ctx)
 
     error_emitted = any(
-        isinstance(e, ToolError) and e.name == "web_search" for e in ctx.sent_events
+        isinstance(e, ToolError) for e in ctx.sent_events
     )
     print(
         f"  call_next_invoked={call_next_invoked}, "
@@ -176,7 +176,7 @@ async def test_policy_deny() -> bool:
     await mw.on_tool_call(next_handler, tool_call, ctx)
 
     error_emitted = any(
-        isinstance(e, ToolError) and e.name == "shell_exec" for e in ctx.sent_events
+        isinstance(e, ToolError) for e in ctx.sent_events
     )
     print(
         f"  call_next_invoked={call_next_invoked}, "

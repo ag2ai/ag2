@@ -141,7 +141,27 @@ class SecretRedactionMiddleware(BaseMiddleware):
             if isinstance(event, ModelRequest) and isinstance(event.content, str):
                 new_content, count = self._redact_text(event.content)
                 if count:
-                    event = self._copy_event_with_content(event, new_content)
+                    try:
+                        event = self._copy_event_with_content(event, new_content)
+                    except RuntimeError:
+                        # Fail-closed: cannot safely redact -> block the entire
+                        # LLM call by emitting a denial response instead of
+                        # crashing the middleware chain.
+                        from autogen.beta.events import ModelMessage, ModelResponse, ToolCalls
+
+                        logger.error(
+                            "[Redaction] LLM call blocked: cannot safely redact event"
+                        )
+                        await ctx.send(
+                            ModelResponse(
+                                message=ModelMessage(
+                                    content="[Redaction failure -- LLM call blocked]"
+                                ),
+                                tool_calls=ToolCalls(),
+                                usage={},
+                            )
+                        )
+                        return
                     total_redacted += count
             redacted_messages.append(event)
 

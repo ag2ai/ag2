@@ -117,7 +117,7 @@ class PolicyDenyMiddleware(BaseMiddleware):
                         denied = True
                     else:
                         args = parsed
-                except (json.JSONDecodeError, TypeError, ValueError):
+                except (json.JSONDecodeError, TypeError, ValueError, RecursionError, MemoryError):
                     # Fail-closed: unparseable arguments -> DENY.
                     # Using empty args would let predicates see {} and return
                     # ALLOW, silently bypassing argument-based policies.
