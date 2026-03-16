@@ -4,29 +4,15 @@
 
 """Unit tests for MCP resource URI path sanitization.
 
-These tests verify the path sanitization logic added in autogen/mcp/mcp_client.py
+These tests verify the path sanitization logic in autogen/mcp/mcp_client.py
 (fix: sanitize MCP resource URI to prevent path traversal). No MCP server is
-required -- the sanitization algorithm is extracted into a local helper and
-exercised with pathlib only.
+required -- tests exercise the extracted _sanitize_resource_filename function
+directly.
 """
 
-import os
 from pathlib import Path
 
-
-def _sanitize_resource_filename(uri: str, download_folder: Path, timestamp: str) -> Path:
-    """Path sanitization logic extracted from mcp_client.py call_resource.
-
-    Mirrors the exact logic added by the security fix so that unit tests
-    remain coupled to the algorithm, not to the async machinery around it.
-    """
-    raw_name = uri.split("://")[-1]
-    safe_name = os.path.basename(raw_name.replace("\\", "/")) or "resource"
-    filename = f"{safe_name}_{timestamp}"
-    file_path = (download_folder / filename).resolve()
-    if not file_path.is_relative_to(download_folder.resolve()):
-        raise ValueError(f"Path traversal detected in resource URI: {uri}")
-    return file_path
+from autogen.mcp.mcp_client import _sanitize_resource_filename
 
 
 class TestMCPResourcePathSanitization:
