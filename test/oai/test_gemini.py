@@ -240,6 +240,84 @@ class TestGeminiClient:
         assert converted_messages[2].role == "user", "Message without role should default to 'user'"
         assert converted_messages[2].parts[0].text == "Another message without role"
 
+    def test_parallel_function_responses_merged(self, gemini_client):
+        """Test that consecutive tool response messages are merged into a single Content object.
+
+        Gemini requires that the number of FunctionResponse parts equals the number of
+        FunctionCall parts in the preceding model turn. When parallel function calls are
+        made, AG2 unrolls the tool_responses into separate messages, but they must be
+        recombined into a single Content for Gemini.
+        """
+
+        # Set up tool_call_function_map as would happen during a real conversation
+        gemini_client.tool_call_function_map["1777"] = "timer"
+        gemini_client.tool_call_function_map["1778"] = "stopwatch"
+
+        messages = [
+            {"role": "user", "content": "Create a timer for 1 second and then a stopwatch for 2 seconds."},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "1777",
+                        "type": "function",
+                        "function": {"name": "timer", "arguments": '{"num_seconds": "1"}'},
+                    },
+                    {
+                        "id": "1778",
+                        "type": "function",
+                        "function": {"name": "stopwatch", "arguments": '{"num_seconds": "2"}'},
+                    },
+                ],
+            },
+            # These are the unrolled tool_responses — two separate messages
+            {"role": "tool", "tool_call_id": "1777", "content": "Timer is done!"},
+            {"role": "tool", "tool_call_id": "1778", "content": "Stopwatch is done!"},
+        ]
+
+        converted = gemini_client._oai_messages_to_gemini_messages(messages)
+
+        # Should be: user message, model tool_call, single user with 2 FunctionResponse parts
+        assert len(converted) == 3, f"Expected 3 Content objects, got {len(converted)}"
+
+        # The third Content should have 2 FunctionResponse parts merged together
+        tool_response_content = converted[2]
+        assert tool_response_content.role == "user"
+        assert len(tool_response_content.parts) == 2, (
+            f"Expected 2 FunctionResponse parts in one Content, got {len(tool_response_content.parts)}"
+        )
+        assert tool_response_content.parts[0].function_response.name == "timer"
+        assert tool_response_content.parts[1].function_response.name == "stopwatch"
+
+    def test_single_function_response_not_affected(self, gemini_client):
+        """Test that a single tool response still works correctly."""
+        gemini_client.tool_call_function_map["123"] = "my_func"
+
+        messages = [
+            {"role": "user", "content": "Call my_func"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "123",
+                        "type": "function",
+                        "function": {"name": "my_func", "arguments": "{}"},
+                    },
+                ],
+            },
+            {"role": "tool", "tool_call_id": "123", "content": "done"},
+        ]
+
+        converted = gemini_client._oai_messages_to_gemini_messages(messages)
+
+        assert len(converted) == 3
+        tool_response_content = converted[2]
+        assert tool_response_content.role == "user"
+        assert len(tool_response_content.parts) == 1
+        assert tool_response_content.parts[0].function_response.name == "my_func"
+
     def test_vertexai_safety_setting_conversion(self):
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -1102,6 +1180,101 @@ class TestGeminiClient:
         else:
             assert result != tools_list
 
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_response_format_uses_response_json_schema_for_non_vertexai(
+        self, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that non-VertexAI path uses response_json_schema instead of response_schema.
+
+        This is the fix for issue #2348: Pydantic models with dict[str, SomeModel]
+        generate additionalProperties in the JSON schema, which the Google GenAI SDK
+        rejects via response_schema but accepts via response_json_schema.
+        """
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert "response_json_schema" in config_kwargs, "Non-VertexAI path should use response_json_schema"
+        assert "response_schema" not in config_kwargs, "Non-VertexAI path should NOT use response_schema"
+        assert config_kwargs["response_mime_type"] == "application/json"
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.GenerationConfig")
+    def test_response_format_uses_response_schema_for_vertexai(
+        self, mock_generation_config, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that VertexAI path still uses response_schema (not response_json_schema)."""
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = '{"title": "Test", "extras": {"a": {"value": "hello", "score": 0.5}}}'
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=VertexAIGenerationResponse)
+        mock_response.candidates = [mock_candidate]
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        class Extra(BaseModel):
+            value: str
+            score: float
+
+        class Report(BaseModel):
+            title: str
+            extras: dict[str, Extra]
+
+        gemini_client_with_credentials.create({
+            "model": "gemini-2.0-flash",
+            "messages": [{"content": "Give me a report", "role": "user"}],
+            "response_format": Report,
+        })
+
+        config_kwargs = mock_generation_config.call_args.kwargs
+        assert "response_schema" in config_kwargs, "VertexAI path should use response_schema"
+        assert "response_json_schema" not in config_kwargs, "VertexAI path should NOT use response_json_schema"
+
     def test_thought_signature_initialized_in_init(self, gemini_client):
         """Test that thought signature mapping is initialized in __init__"""
         assert hasattr(gemini_client, "tool_call_thought_signatures")
@@ -1331,3 +1504,374 @@ class TestGeminiClient:
         assert isinstance(part, Part)
         # thought_signature should be None (not set, which is fine for non-Gemini-3 models)
         assert part.thought_signature is None
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_thought_signature_embedded_in_tool_call_for_cross_agent(
+        self, mock_calculate_cost, mock_generative_client, gemini_client
+    ):
+        """Test that thought_signature is base64-encoded and embedded in the tool call object.
+
+        This is required for cross-agent routing: when Agent B receives Agent A's
+        function call history, the signature must travel with the tool_call dict,
+        not just live in Agent A's instance dict.
+        """
+        import base64
+
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"city": "Tokyo"}
+
+        mock_part = MagicMock()
+        mock_part.function_call = mock_fn_call
+        mock_part.text = ""
+        mock_part.thought_signature = b"cross_agent_signature_bytes"
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [mock_part]
+        mock_response.candidates[0].finish_reason = None
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        response = gemini_client.create({
+            "model": "gemini-3-flash",
+            "messages": [{"role": "user", "content": "What's the weather?"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+                    },
+                },
+            ],
+        })
+
+        tool_call = response.choices[0].message.tool_calls[0]
+
+        # Verify thought_signature is embedded as base64 string on the tool call
+        assert hasattr(tool_call, "thought_signature")
+        assert isinstance(tool_call.thought_signature, str)
+        assert base64.b64decode(tool_call.thought_signature) == b"cross_agent_signature_bytes"
+
+        # Also verify it's still in the instance dict
+        assert tool_call.id in gemini_client.tool_call_thought_signatures
+        assert gemini_client.tool_call_thought_signatures[tool_call.id] == b"cross_agent_signature_bytes"
+
+    def test_thought_signature_reconstructed_from_tool_call_dict_cross_agent(self, gemini_client):
+        """Test that reconstruction reads thought_signature from the tool call dict.
+
+        Simulates the cross-agent scenario: Agent B's client has an empty
+        tool_call_thought_signatures dict, but the tool_call dict carries the
+        base64-encoded signature from Agent A.
+        """
+        import base64
+
+        from google.genai.types import Part
+
+        tool_call_id = "cross_agent_tool_456"
+        original_signature = b"original_signature_bytes"
+        encoded_signature = base64.b64encode(original_signature).decode("ascii")
+
+        # Set up function map but NOT the instance dict (simulates Agent B)
+        gemini_client.tool_call_function_map[tool_call_id] = "get_weather"
+        # Note: NOT adding to tool_call_thought_signatures — empty like Agent B's client
+
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "get_weather", "arguments": '{"city": "Tokyo"}'},
+                    "type": "function",
+                    "thought_signature": encoded_signature,  # Carried from Agent A
+                }
+            ],
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        assert len(parts) == 1
+        part = parts[0]
+        assert isinstance(part, Part)
+        assert part.function_call.name == "get_weather"
+        # Signature should be decoded from the tool call dict
+        assert part.thought_signature == original_signature
+
+    def test_thought_signature_instance_dict_fallback_when_not_in_tool_call(self, gemini_client):
+        """Test that reconstruction falls back to instance dict when tool call has no signature.
+
+        This is the same-agent scenario (original behavior) — the signature lives
+        in the instance dict, not in the tool call dict.
+        """
+        from google.genai.types import Part
+
+        tool_call_id = "same_agent_tool_789"
+        test_signature = b"instance_dict_signature"
+
+        gemini_client.tool_call_function_map[tool_call_id] = "get_weather"
+        gemini_client.tool_call_thought_signatures[tool_call_id] = test_signature
+
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "get_weather", "arguments": '{"city": "London"}'},
+                    "type": "function",
+                    # No thought_signature key — same-agent path
+                }
+            ],
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        part = parts[0]
+        assert isinstance(part, Part)
+        assert part.thought_signature == test_signature
+
+    def test_thought_signature_not_embedded_when_absent(self, gemini_client):
+        """Test that no thought_signature is added to tool call when model doesn't provide one."""
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"city": "NYC"}
+
+        mock_part = MagicMock()
+        mock_part.function_call = mock_fn_call
+        mock_part.text = ""
+        mock_part.thought_signature = None  # No signature (non-thinking model)
+
+        # Directly test _process_parts
+        autogen_tool_calls = []
+        gemini_client._process_parts([mock_part], autogen_tool_calls)
+
+        assert len(autogen_tool_calls) == 1
+        tool_call = autogen_tool_calls[0]
+        # Should NOT have thought_signature attribute
+        assert not hasattr(tool_call, "thought_signature") or tool_call.thought_signature is None
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_text_response(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that streaming accumulates text chunks and emits StreamEvents."""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # Create streaming chunks
+        def make_chunk(text, prompt_tokens=0, completion_tokens=0):
+            chunk = MagicMock(spec=GenerateContentResponse)
+            mock_part = MagicMock()
+            mock_part.text = text
+            mock_part.function_call = None
+            mock_part.thought_signature = None
+            mock_candidate = MagicMock()
+            mock_candidate.content.parts = [mock_part]
+            mock_candidate.finish_reason = None
+            chunk.candidates = [mock_candidate]
+            chunk.usage_metadata = MagicMock()
+            chunk.usage_metadata.prompt_token_count = prompt_tokens
+            chunk.usage_metadata.candidates_token_count = completion_tokens
+            return chunk
+
+        chunks = [
+            make_chunk("Hello", prompt_tokens=10, completion_tokens=1),
+            make_chunk(", ", completion_tokens=2),
+            make_chunk("world!", prompt_tokens=10, completion_tokens=3),
+        ]
+
+        mock_chat.send_message_stream.return_value = iter(chunks)
+
+        response = gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hi", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].message.content == "Hello, world!"
+        assert response.choices[0].finish_reason == "stop"
+        assert not response.choices[0].message.tool_calls
+        assert response.usage.prompt_tokens == 10
+        assert response.usage.completion_tokens == 3
+        mock_chat.send_message_stream.assert_called_once()
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_with_tool_calls(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that streaming handles function calls properly."""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # Create a chunk with a function call
+        chunk = MagicMock(spec=GenerateContentResponse)
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = MagicMock()
+        mock_fn_call.args.items.return_value = [("city", "London")]
+
+        mock_part = MagicMock()
+        mock_part.text = ""
+        mock_part.function_call = mock_fn_call
+        mock_part.thought_signature = None
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 20
+        chunk.usage_metadata.candidates_token_count = 5
+
+        mock_chat.send_message_stream.return_value = iter([chunk])
+
+        response = gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "What's the weather?", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].finish_reason == "tool_calls"
+        assert response.choices[0].message.tool_calls is not None
+        assert len(response.choices[0].message.tool_calls) == 1
+        assert response.choices[0].message.tool_calls[0].function.name == "get_weather"
+        assert response.choices[0].message.content == ""
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_streaming_emits_stream_events(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that StreamEvents are emitted during streaming."""
+
+        mock_calculate_cost.return_value = 0.0
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        chunk = MagicMock(spec=GenerateContentResponse)
+        mock_part = MagicMock()
+        mock_part.text = "streamed text"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 5
+        chunk.usage_metadata.candidates_token_count = 2
+
+        mock_chat.send_message_stream.return_value = iter([chunk])
+
+        mock_iostream = MagicMock()
+        with patch("autogen.oai.gemini.IOStream.get_default", return_value=mock_iostream):
+            gemini_client.create({
+                "model": "gemini-pro",
+                "messages": [{"content": "Hello", "role": "user"}],
+                "stream": True,
+            })
+
+        # Verify StreamEvent was emitted
+        mock_iostream.send.assert_called()
+        sent_event = mock_iostream.send.call_args[0][0]
+        # Navigate through wrapping to find the text content
+        event = sent_event
+        while hasattr(event, "content") and not isinstance(event.content, str):
+            event = event.content
+        assert event.content == "streamed text"
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_non_streaming_does_not_call_send_message_stream(
+        self, mock_calculate_cost, mock_generative_client, gemini_client
+    ):
+        """Test that non-streaming uses send_message, not send_message_stream."""
+        mock_calculate_cost.return_value = 0.0
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_part = MagicMock()
+        mock_part.text = "response"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [mock_part]
+        mock_response.candidates[0].finish_reason = None
+        mock_response.usage_metadata = MagicMock()
+        mock_response.usage_metadata.prompt_token_count = 5
+        mock_response.usage_metadata.candidates_token_count = 2
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hi", "role": "user"}],
+            "stream": False,
+        })
+
+        mock_chat.send_message.assert_called_once()
+        mock_chat.send_message_stream.assert_not_called()
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.vertexai.init")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_vertexai_streaming(
+        self, mock_calculate_cost, mock_init, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that VertexAI streaming uses send_message with stream=True."""
+        mock_calculate_cost.return_value = 0.001
+        mock_init.return_value = None
+
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        # VertexAI streaming returns an iterable of VertexAIGenerationResponse
+        chunk = MagicMock(spec=VertexAIGenerationResponse)
+        mock_part = MagicMock()
+        mock_part.text = "vertex streamed"
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.finish_reason = None
+        chunk.candidates = [mock_candidate]
+        chunk.usage_metadata = MagicMock()
+        chunk.usage_metadata.prompt_token_count = 10
+        chunk.usage_metadata.candidates_token_count = 5
+
+        mock_chat.send_message.return_value = iter([chunk])
+
+        response = gemini_client_with_credentials.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "stream": True,
+        })
+
+        assert response.choices[0].message.content == "vertex streamed"
+        # VertexAI passes stream=True to send_message
+        mock_chat.send_message.assert_called_once()
+        call_kwargs = mock_chat.send_message.call_args
+        assert call_kwargs.kwargs.get("stream") is True or (
+            len(call_kwargs.args) > 1 and call_kwargs[1].get("stream") is True
+        )

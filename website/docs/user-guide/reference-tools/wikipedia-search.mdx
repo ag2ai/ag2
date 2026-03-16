@@ -1,8 +1,9 @@
 ---
 title: Wikipedia Search Tools
+description: "Search Wikipedia from AG2 agents using WikipediaQueryRunTool and WikipediaPageLoadTool. Get page summaries or full content for knowledge retrieval."
 ---
 
-The Wikipedia search integration allows users to perform search in wikipedia pages within the AG2 framework.
+The Wikipedia search integration allows AG2 agents to search Wikipedia pages for knowledge retrieval.
 Follow these steps to integrate Wikipedia Tools with AG2 Agents.
 
 
@@ -34,11 +35,9 @@ You're all set! Now you can start using Wikipedia Search with AG2.
 
 ```python
 import os
-import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.tools.experimental import WikipediaQueryRunTool, WikipediaPageLoadTool
 from dotenv import load_dotenv
-import os
 load_dotenv()
 ```
 

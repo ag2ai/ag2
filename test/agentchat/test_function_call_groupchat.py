@@ -142,6 +142,46 @@ async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credential
     assert mock_func.called, "Expected dummy_func to be called"
 
 
+@pytest.mark.integration()
+def test_group_chat_tool_returns_list(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: tool that returns list[int] in group chat with AutoPattern completes without TypeError."""
+    from autogen import ConversableAgent
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    def get_numbers_list() -> list[int]:
+        return [5, 3, 10]
+
+    def get_numbers_tuple() -> tuple[int, ...]:
+        return (5, 3, 10)
+
+    tool_bot = ConversableAgent(
+        name="tool_bot",
+        llm_config=llm_config,
+        system_message="You are a tool bot. Use the available tool to get a sequence of numbers. Concatenate them into a string and return.",
+        functions=[get_numbers_list, get_numbers_tuple],
+    )
+    human = ConversableAgent(name="human", human_input_mode="NEVER")
+    pattern = AutoPattern(
+        initial_agent=tool_bot,
+        agents=[tool_bot],
+        user_agent=human,
+        group_manager_args={"llm_config": llm_config},
+    )
+    result, _, _ = initiate_group_chat(
+        pattern=pattern,
+        messages="Get the list of numbers, then concatenate them into a string.",
+        max_rounds=5,
+    )
+    assert result is not None
+    assert result.chat_history, "Chat should produce history"
+    # Tool response should contain the serialized list (validates list return type is handled without TypeError)
+    content_strs = [str(msg.get("content", "")) for msg in result.chat_history]
+    assert any("[5, 3, 10]" in c for c in content_strs), "Tool response should contain serialized list [5, 3, 10]"
+
+
 def test_no_function_map():
     dummy1 = autogen.UserProxyAgent(
         name="User_proxy_1",

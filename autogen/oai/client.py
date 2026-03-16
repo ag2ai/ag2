@@ -111,10 +111,10 @@ else:
     anthropic_import_exception = ImportError("anthropic not found")
 
 with optional_import_block() as mistral_result:
-    from mistralai.models import (  # noqa
+    from mistralai.client.errors.httpvalidationerror import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
-        SDKError as mistral_SDKError,
     )
+    from mistralai.client.errors.sdkerror import SDKError as mistral_SDKError  # noqa
 
     from .mistral import MistralAIClient
 
@@ -254,6 +254,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     verbosity: Literal["low", "medium", "high"] | None
     extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
 
@@ -274,6 +275,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     extra_body: dict[str, Any] | None = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
+    extra_headers: dict[str, str] | None = (
+        None  # For VLLM and other OpenAI-compatible servers - See: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers
+    )
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None = None
     max_completion_tokens: int | None = None
@@ -289,6 +293,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
@@ -300,6 +305,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     tool_choice: Literal["none", "auto", "required"] | None = None
     user: str | None = None
+    extra_headers: dict[str, str] | None = None
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
@@ -401,7 +407,7 @@ class OpenAIClient:
     @staticmethod
     def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
         for msg in messages:
-            if msg["role"] == "system":
+            if msg.get("role") == "system":
                 messages.insert(0, messages.pop(messages.index(msg)))
                 break
 
@@ -438,7 +444,7 @@ class OpenAIClient:
 
         # The last message of deepseek-reasoner must be a user message
         # , or an assistant message with prefix mode on (but this is supported only for beta api)
-        if new_messages[-1]["role"] != "user":
+        if new_messages[-1].get("role") != "user":
             new_messages.append({"role": "user", "content": "continue"})
 
         kwargs["messages"] = new_messages
@@ -536,6 +542,12 @@ class OpenAIClient:
         is_mistral = "model" in params and "mistral" in params["model"]
         if is_mistral:
             OpenAIClient._convert_system_role_to_user(params["messages"])
+
+        # Default missing role to "user" (e.g., A2A messages may not have role set)
+        if "messages" in params:
+            for msg in params["messages"]:
+                if "role" not in msg:
+                    msg["role"] = "user"
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response and is not using structured outputs.
         if params.get("stream", False) and "messages" in params and not is_o1 and not is_structured_output:
@@ -683,7 +695,7 @@ class OpenAIClient:
             # remove the system_message from the response and add it in the prompt at the start.
             if is_o1:
                 for msg in params["messages"]:
-                    if msg["role"] == "user" and msg["content"].startswith("System message: "):
+                    if msg.get("role") == "user" and msg.get("content", "").startswith("System message: "):
                         msg["role"] = "system"
                         msg["content"] = msg["content"][len("System message: ") :]
 
@@ -720,7 +732,7 @@ class OpenAIClient:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
             # replace the system messages with user messages preappended with "System message: "
             for msg in params["messages"]:
-                if msg["role"] == "system":
+                if msg.get("role") == "system":
                     msg["role"] = "user"
                     msg["content"] = f"System message: {msg['content']}"
 
@@ -847,7 +859,9 @@ class OpenAIWrapper:
         extra_kwargs.pop("routing_method", None)
 
         if config_list:
-            config_list = [config.copy() for config in config_list]  # make a copy before modifying
+            config_list = [
+                config.model_dump() if hasattr(config, "model_dump") else config.copy() for config in config_list
+            ]  # make a copy before modifying
             for config_item in config_list:
                 self._register_default_client(config_item, openai_config)
                 # Construct current_config_extra_kwargs using the cleaned extra_kwargs
@@ -936,6 +950,12 @@ class OpenAIWrapper:
             if key in config:
                 openai_config[key] = config[key]
 
+    def _create_v2_client(self, client_cls: type, openai_config: dict[str, Any], response_format: Any) -> Any:
+        """Create a V2 model client and register it."""
+        v2_client = client_cls(response_format=response_format, **openai_config)
+        self._clients.append(v2_client)  # type: ignore[arg-type]
+        return v2_client
+
     def _register_default_client(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         """Create a client with the given config to override openai_config,
         after removing extra kwargs.
@@ -1021,17 +1041,13 @@ class OpenAIWrapper:
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("openai_v2"):
-                # OpenAI V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
                 from autogen.llm_clients import OpenAICompletionsClient as V2Client
 
-                v2_client = V2Client(
-                    api_key=openai_config.get("api_key"),
-                    base_url=openai_config.get("base_url"),
-                    timeout=openai_config.get("timeout", 60.0),
-                    response_format=response_format,
-                )
-                self._clients.append(v2_client)  # type: ignore[arg-type]
-                client = v2_client
+                client = self._create_v2_client(V2Client, openai_config, response_format)
+            elif api_type is not None and api_type.startswith("responses_v2"):
+                from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2Client as V2Client
+
+                client = self._create_v2_client(V2Client, openai_config, response_format)
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
                 @require_optional_import("openai>=1.66.2", "openai")
@@ -1471,8 +1487,13 @@ class OpenAIWrapper:
         if tool_calls_chunk:
             if full_tool_call is None:
                 full_tool_call = {}
-            for field in ["index", "id", "type"]:
+            for field in ["index", "id"]:
                 completion_tokens += OpenAIWrapper._update_dict_from_chunk(tool_calls_chunk, full_tool_call, field)
+            # "type" is a fixed identifier (e.g. "function"), not a streamed
+            # delta — set it directly so repeated chunks don't concatenate it
+            # into "functionfunction..." (gh-2058)
+            if tool_calls_chunk.type:
+                full_tool_call["type"] = tool_calls_chunk.type
 
             if hasattr(tool_calls_chunk, "function") and tool_calls_chunk.function:
                 if "function" not in full_tool_call:
@@ -1608,7 +1629,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     ```python
     {
-        "api_type": "responses",  # <-- key differentiator
+        "api_type": "responses_v2",  # <-- key differentiator
         "model": "o3",  # reasoning model
         "reasoning_effort": "medium",  # low / medium / high
         "stream": True,

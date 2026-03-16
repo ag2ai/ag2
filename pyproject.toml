@@ -56,9 +56,10 @@ dependencies = [
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
-#    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
-    "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends
+    "anyio>=4.0.0,<5.0.0",
+    # for beta tools
+    "fast-depends[pydantic]>=3.0.8,<4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -83,6 +84,7 @@ openai = [
     "openai>=1.99.3",
 ]
 
+
 openai-realtime = [
     "ag2[openai]",
     "openai[realtime]",
@@ -98,8 +100,8 @@ jupyter-executor = [
 
 retrievechat = [
     "protobuf==6.33.5",
-    "chromadb>=1.3.0,<1.5",
-    "sentence_transformers>=3.0.0,<=5.2.2",
+    "chromadb>=1.4.1,<1.5",
+    "sentence_transformers>=5.2.2,<=6",
     "pypdf",
     "ipython",
     "beautifulsoup4",
@@ -141,8 +143,8 @@ rag = [
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<2",
-    "llama-index>=0.12,<0.15",
-    "llama-index-core>=0.12,<0.15",
+    "llama-index>=0.14.13,<0.15",
+    "llama-index-core>=0.14.13,<0.15",
     "llama-index-vector-stores-chroma>=0.4,<0.6",
     "llama-index-vector-stores-mongodb>=0.6,<0.10",
     "llama-index-embeddings-huggingface>=0.5,<0.7",
@@ -154,7 +156,19 @@ rag = [
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.9",
+    "crawl4ai>=0.5.0,<0.9",
+]
+
+tinyfish = [
+    "tinyfish>=0.2.3",
+]
+
+quick-research = [
+    "tavily-python>=0.7.4",
+    "crawl4ai>=0.5.0,<0.9",
+    "tiktoken",
+    "tldextract",
+    "beautifulsoup4",
 ]
 
 browser-use = [
@@ -224,8 +238,8 @@ interop =[
 ]
 
 autobuild = [
-    "chromadb>=1.3.0,<1.5",
-    "sentence_transformers>=3.0.0,<=5.2.2",
+    "chromadb>=1.3.0,<1.4",
+    "sentence_transformers>=5.2.2,<=6",
     "huggingface-hub"
 ]
 
@@ -258,19 +272,26 @@ redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 websockets = ["websockets>=14.0,<17"]
 long-context = ["llmlingua<0.3"]
-anthropic = ["anthropic[vertex]>=0.23.1"]
+anthropic = ["anthropic[vertex]>=0.79.0"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = [
     "yepcode-run>=1.6.1",
     "python-dotenv",
 ]
 remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
-mistral = ["mistralai>=1.0.1"]
+mistral = ["mistralai>=2.0.0"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
+dashscope = ["dashscope>=1.25.13"]
 deepseek = ["ag2[openai]"]
+
+tracing = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
@@ -300,7 +321,14 @@ test = [
 
 docs = [
     "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "ag2[tracing]",  # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
     "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    # Beta optional dependencies
+    "ag2[openai]",  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[anthropic]",  # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[gemini]",  # Gemini is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[ollama]",  # Ollama is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[dashscope]",  # DashScope is exposed in the public API by the optional `autogen.beta.config` module
     "mkdocs-material==9.7.1",
     "mkdocstrings[python]==1.0.2",
     "mkdocs-literate-nav==0.6.2",
@@ -422,6 +450,7 @@ markers = [
     "commsagent_slack",
     "commsagent-telegram",
     "lmm",
+    "tracing",
 ]
 
 [tool.black]

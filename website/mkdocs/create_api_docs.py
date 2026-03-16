@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -46,6 +46,43 @@ def _add_all_submodules(members: list[str]) -> list[str]:
     return sorted(members, key=_get_sorting_key)
 
 
+def _resolve_case_collisions(members: list[str]) -> dict[str, str]:
+    """Build a mapping from member name to file path, resolving case collisions.
+
+    On case-insensitive filesystems (macOS), Tool.md and tool.md collide.
+    When a collision is detected, the lowercase member gets a _func suffix.
+    """
+    path_map: dict[str, str] = {}  # member -> file path (without .md)
+    seen_lower: dict[str, str] = {}  # lowercased path -> first member
+
+    for x in members:
+        if x.endswith("."):
+            continue
+        xs = x.split(".")
+        file_path = "/".join(xs)
+        lower_path = file_path.lower()
+
+        if lower_path in seen_lower:
+            # Case collision - disambiguate the lowercase one
+            existing = seen_lower[lower_path]
+            existing_last = existing.split(".")[-1]
+            current_last = xs[-1]
+            if current_last[0].islower():
+                # Current is lowercase, add suffix
+                file_path = "/".join(xs[:-1]) + f"/{xs[-1]}_func"
+            elif existing_last[0].islower():
+                # Existing was lowercase, update it
+                path_map[existing] = "/".join(existing.split(".")[:-1]) + f"/{existing_last}_func"
+        seen_lower[lower_path] = x
+        path_map[x] = file_path
+
+    return path_map
+
+
+# Module-level cache populated during summary generation
+_MEMBER_PATH_MAP: dict[str, str] = {}
+
+
 def _get_api_summary_item(x: str) -> str:
     xs = x.split(".")
     if x.endswith("."):
@@ -53,10 +90,13 @@ def _get_api_summary_item(x: str) -> str:
         return f"{indent}- {xs[-2]}"
     else:
         indent = " " * (4 * (len(xs)))
-        return f"{indent}- [{xs[-1]}](docs/api-reference/{'/'.join(xs)}.md)"
+        file_path = _MEMBER_PATH_MAP.get(x, "/".join(xs))
+        return f"{indent}- [{xs[-1]}](docs/api-reference/{file_path}.md)"
 
 
 def _get_api_summary(members: list[str]) -> str:
+    global _MEMBER_PATH_MAP
+    _MEMBER_PATH_MAP = _resolve_case_collisions(members)
     return "\n".join([_get_api_summary_item(x) for x in members])
 
 
@@ -64,7 +104,8 @@ def _generate_api_doc(name: str, docs_path: Path) -> Path:
     xs = name.split(".")
     module_name = ".".join(xs[:-1])
     member_name = xs[-1]
-    path = docs_path / f"{('/').join(xs)}.md"
+    file_path = _MEMBER_PATH_MAP.get(name, "/".join(xs))
+    path = docs_path / f"{file_path}.md"
     content = f"::: {module_name}.{member_name}\n"
 
     path.parent.mkdir(exist_ok=True, parents=True)

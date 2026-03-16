@@ -905,3 +905,42 @@ def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Creden
 
     # Verify last speaker
     assert last_speaker is not None, "Should return last speaker"
+
+
+@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
+def test_responses_api_phase_field_handling(credentials_responses_gpt_4o: Credentials) -> None:
+    """Verify message_retrieval does not leak extra fields (e.g. phase) from OpenAI SDK.
+
+    OpenAI SDK v2.24.0+ introduced a ``phase`` field to response message objects.
+    This test exercises the full path through ``message_retrieval()`` and
+    ``TextEvent`` creation, confirming no Pydantic validation errors occur.
+    """
+
+    assistant = ConversableAgent(
+        name="phase_test_assistant",
+        llm_config=credentials_responses_gpt_4o.llm_config,
+        human_input_mode="NEVER",
+        system_message="Reply with a single short sentence.",
+    )
+
+    user_proxy = UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+        max_consecutive_auto_reply=0,
+    )
+
+    chat_result = user_proxy.initiate_chat(assistant, message="Say hello.", max_turns=1)
+
+    assert chat_result is not None, "Chat result should not be None"
+    assert len(chat_result.chat_history) >= 2, "Should have at least user message and assistant reply"
+
+    # Verify assistant's response is well-formed
+    assistant_msg = next(
+        (msg for msg in chat_result.chat_history if msg.get("name") == "phase_test_assistant"),
+        None,
+    )
+    assert assistant_msg is not None, "Assistant should have responded"
+    content = assistant_msg.get("content")
+    assert content is not None and content != "", "Response content should not be empty"

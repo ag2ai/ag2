@@ -1,0 +1,382 @@
+---
+title: Middleware
+sidebarTitle: Middleware
+---
+
+# Beta Middleware
+
+Middleware lets you intercept and customize how an **AG2 Beta** agent runs a turn.
+It's the right tool when you want to add cross-cutting behavior such as logging, retries, history trimming, request mutation, tool auditing, or guardrails without changing the agent, model client, or tools themselves.
+
+At a high level, middleware can wrap three parts of the runtime:
+
+- the full agent turn
+- each LLM call
+- each tool execution
+
+This makes it a good fit for behavior that should apply consistently across many runs.
+
+## What is Middleware
+
+Middleware is an object that receives the current turn's initial event and `Context`, then participates in one or more lifecycle hooks.
+
+Each middleware instance is created at the beginning of a turn and can keep per-turn state on `self`.
+That same instance can then observe or modify the turn, the LLM call, and tool execution as the run progresses.
+
+In practice, you use middleware to:
+
+- add observability such as logging, tracing, and timing
+- enforce policies before a tool runs
+- retry transient model failures
+- trim conversation history before sending it to the model
+- normalize tool inputs or outputs
+- short-circuit or reshape a response
+
+## Middleware Hooks
+
+`BaseMiddleware` exposes three async hooks.
+You can implement just one of them or mix several in the same class.
+
+### `on_turn()`
+
+```python linenums="1"
+class BaseMiddleware:
+    async def on_turn(
+        self,
+        call_next: Callable[[BaseEvent, Context], Awaitable[ModelResponse]],
+        event: BaseEvent,
+        context: Context,
+    ) -> ModelResponse:
+        return await call_next(event, context)
+```
+
+`on_turn()` wraps the whole agent turn.
+It receives the incoming event and the final `ModelResponse`.
+
+Use `on_turn()` when you want to:
+
+- measure total turn latency
+- inspect or rewrite the initial request before anything else happens
+- inspect or rewrite the final response before it is returned
+- implement turn-level policies, approvals, or short-circuit behavior
+
+Conceptually, this is the outermost hook around a single `ask(...)` call.
+
+### `on_llm_call()`
+
+```python linenums="1"
+class BaseMiddleware:
+    async def on_llm_call(
+        self,
+        call_next: Callable[[Sequence[BaseEvent], Context], Awaitable[ModelResponse]],
+        events: Sequence[BaseEvent],
+        context: Context,
+    ) -> ModelResponse:
+        return await call_next(events, context)
+```
+
+`on_llm_call()` wraps the call to the configured model client.
+It receives the event history that will be sent to the LLM.
+
+Use `on_llm_call()` when you want to:
+
+- retry transient client failures
+- log prompts and responses
+- trim history before it reaches the model
+- sanitize context / model response
+- inject additional request-time instructions through event mutation
+- implement caching or request deduplication around model calls
+
+This is the hook used by built-in history and token limiting middleware.
+
+### `on_tool_execution()`
+
+```python linenums="1"
+class BaseMiddleware:
+    async def on_tool_execution(
+        self,
+        call_next: Callable[[ToolCall, Context], Awaitable[ToolResultType]],
+        event: ToolCall,
+        context: Context,
+    ) -> ToolResultType:
+        return await call_next(event, context)
+```
+
+`on_tool_execution()` wraps each tool invocation triggered during the turn.
+It receives the current `ToolCall` and can return a modified `ToolResult`.
+
+Use `on_tool_execution()` when you want to:
+
+- validate or rewrite tool arguments before execution
+- log tool usage
+- transform tool results before they go back into the event stream
+- capture tool failures and replace them with safer fallback results
+- enforce access control around specific tools
+
+
+## Registering Middleware
+
+### On an Agent
+
+To make middleware apply to every turn for an agent, pass it through the `middleware` argument when constructing the agent.
+
+```python linenums="1" hl_lines="3 10-11"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware import LoggingMiddleware, RetryMiddleware
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    middleware=[
+        LoggingMiddleware(),
+        RetryMiddleware(max_retries=2),
+    ],
+)
+```
+
+Use agent-level registration for behavior that should always be present, such as logging, tracing, or default retry policy.
+
+### On a Single Call
+
+You can also add middleware just for a specific turn.
+This is useful when you want temporary behavior without changing the agent's defaults.
+
+Both `Agent.ask(...)` and `AgentReply.ask(...)` accept a `middleware` argument.
+
+```python linenums="1" hl_lines="13 18"
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware import LoggingMiddleware, TokenLimiter
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+)
+
+reply = await agent.ask(
+    "Summarize the latest messages.",
+    middleware=[LoggingMiddleware()],
+)
+
+next_turn = await reply.ask(
+    "Now answer in one paragraph.",
+    middleware=[TokenLimiter(max_tokens=4000)],
+)
+```
+
+Call-level middleware is appended after the middleware list defined on the agent.
+
+## Middleware Ordering
+
+Middleware runs in the order you register them.
+If you register `[A, B, C]`, they enter in the order `A -> B -> C` and unwind in reverse order `C -> B -> A`.
+
+This matters when you combine behaviors such as logging, mutation, and retries.
+
+```python linenums="1"
+from autogen.beta import Agent, Context
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import BaseEvent, ModelResponse
+from autogen.beta.middleware import AgentTurn, BaseMiddleware
+
+
+class A(BaseMiddleware):
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: BaseEvent,
+        context: Context,
+    ) -> ModelResponse:
+        print("enter A")
+        response = await call_next(event, context)
+        print("exit A")
+        return response
+
+
+class B(BaseMiddleware):
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: BaseEvent,
+        context: Context,
+    ) -> ModelResponse:
+        print("enter B")
+        response = await call_next(event, context)
+        print("exit B")
+        return response
+
+
+class C(BaseMiddleware):
+    async def on_turn(
+        self,
+        call_next: AgentTurn,
+        event: BaseEvent,
+        context: Context,
+    ) -> ModelResponse:
+        print("enter C")
+        response = await call_next(event, context)
+        print("exit C")
+        return response
+
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    middleware=[A, B],
+)
+
+await agent.ask(
+    "Hello",
+    middleware=[C],
+)
+
+# Output:
+# enter A
+# enter B
+# enter C
+# exit C
+# exit B
+# exit A
+```
+
+## Writing Your Own Middleware
+
+To create custom middleware, subclass `BaseMiddleware` and implement the hooks you need.
+
+If your middleware does not need extra constructor arguments, you can register the class directly.
+If it does need configuration, wrap it with `Middleware(...)` when registering it.
+
+```python linenums="1"
+import logging
+from collections.abc import Sequence
+
+from autogen.beta import Agent, Context
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
+from autogen.beta.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
+
+
+class AuditMiddleware(BaseMiddleware):
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        logger: logging.Logger,
+    ) -> None:
+        super().__init__(event, context)
+        self.logger = logger
+
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: Sequence[BaseEvent],
+        context: Context,
+    ) -> ModelResponse:
+        self.logger.info("Calling model with %d events", len(events))
+        response = await call_next(events, context)
+        self.logger.info("Model returned: %s", response)
+        return response
+
+    async def on_tool_execution(
+        self,
+        call_next: ToolExecution,
+        event: ToolCall,
+        context: Context,
+    ):
+        self.logger.info("Executing tool: %s", event.name)
+        return await call_next(event, context)
+
+
+agent = Agent(
+    "assistant",
+    prompt="Be helpful.",
+    config=OpenAIConfig("gpt-4o-mini"),
+    middleware=[
+        Middleware(AuditMiddleware, logger=logging.getLogger("ag2.audit")),
+    ],
+)
+```
+
+### Guidelines for Custom Middleware
+
+- Keep hook behavior focused. Middleware that does one job well is easier to reason about than one that handles, for example, logging, retries, mutation, and policy checks together.
+- Prefer `on_turn()` for whole-run behavior, `on_llm_call()` for model-facing behavior, and `on_tool_execution()` for tool-facing behavior.
+- Be deliberate when mutating `event`, `events`, or tool results. Later executing middleware and the rest of the runtime will observe those changes.
+- Register zero-config middleware classes directly, and use `Middleware(YourMiddleware, ...)` when the constructor needs additional options.
+
+## Built-In Middleware
+
+AG2 Beta currently includes four built-in middleware in `autogen.beta.middleware`:
+
+### `LoggingMiddleware`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.middleware import LoggingMiddleware
+
+agent = Agent(..., middleware=[LoggingMiddleware()])
+```
+
+Logs the lifecycle of a turn, including:
+
+- when a turn starts and finishes
+- each LLM call and its response time
+- each tool execution and its result
+
+Use it for quick debugging or application-level observability.
+
+### `RetryMiddleware`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.middleware import RetryMiddleware
+
+agent = Agent(..., middleware=[RetryMiddleware(max_retries=2)])
+```
+
+Retries failed LLM calls up to `max_retries` times.
+By default it retries any `Exception`, but you can narrow that with `retry_on=...`.
+
+Use it for transient failures such as provider timeouts or flaky network issues.
+
+### `HistoryLimiter`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.middleware import HistoryLimiter
+
+agent = Agent(..., middleware=[HistoryLimiter(max_events=100)])
+```
+
+Trims the event history to a maximum number of events before the model call.
+It preserves the first `ModelRequest` when possible and avoids leaving leading orphaned tool results in the trimmed history.
+
+Use it when you want a simple, deterministic cap on context length by event count.
+
+### `TokenLimiter`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.middleware import TokenLimiter
+
+agent = Agent(..., middleware=[TokenLimiter(max_tokens=1000)])
+```
+
+Trims the event history to fit within an approximate token budget before the model call.
+It uses a character-based estimate controlled by `chars_per_token`.
+
+Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
+
+## Choosing the Right Hook
+
+If you are unsure where a behavior belongs, use this rule of thumb:
+
+- Use `on_turn()` when the behavior is about the entire request/response lifecycle.
+- Use `on_llm_call()` when the behavior is about what goes into or comes out of the model.
+- Use `on_tool_execution()` when the behavior is about tool safety, auditing, or result shaping.
+
+For related runtime customization patterns, see [Tools](../tools), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).
