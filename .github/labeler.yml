@@ -1,0 +1,43 @@
+A2A:
+  - changed-files:
+    - any-glob-to-any-file:
+      - autogen/a2a/**
+      - test/a2a/**
+      - website/docs/a2a/**
+
+beta:
+  - changed-files:
+    - any-glob-to-any-file:
+      - autogen/beta/**
+      - test/beta/**
+      - website/docs/beta/**
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - pyproject.toml
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - website/**
+      - docs/**
+      - notebook/**
+
+github_actions:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/workflows/**
+
+telemetry:
+  - changed-files:
+    - any-glob-to-any-file:
+      - autogen/opentelemetry/**
+      - test/opentelemetry/**
+
+ui:
+  - changed-files:
+    - any-glob-to-any-file:
+      - autogen/ag_ui/**
+      - test/ag_ui/**
+      - website/docs/ag-ui/**
