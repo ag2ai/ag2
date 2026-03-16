@@ -95,11 +95,15 @@ def download_file(
     destination_dir = download_folder
     if subfolder_path:
         destination_dir = download_folder / subfolder_path
+        if not destination_dir.resolve().is_relative_to(download_folder.resolve()):
+            raise ValueError(f"subfolder_path escapes download_folder: {subfolder_path}")
         # Ensure the subfolder exists, create it if necessary
         destination_dir.mkdir(parents=True, exist_ok=True)
 
     # Construct the full path for the file
     file_path = destination_dir / file_name
+    if not file_path.resolve().is_relative_to(download_folder.resolve()):
+        raise ValueError(f"file_name escapes download_folder: {file_name}")
 
     # Save file
     try:
