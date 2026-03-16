@@ -658,3 +658,60 @@ class TestAdversarialGroupChatEligibilityDeep:
         else:
             result = gc._prepare_and_select_agents(agents[0])
             assert result[0] is not None or result[1] is not None
+
+    def test_h10_func_call_filter_policies_applied_then_allow_repeat_speaker_empties_candidates(self):
+        """H10 regression: func_call_filter path sets _policies_applied=True, then
+        allow_repeat_speaker=False removes the only remaining candidate.
+
+        Before the fix: the empty-candidates guard at line 628 was gated on
+        `not _policies_applied`, so it was skipped.  The empty list fell through
+        to selection methods and produced IndexError or wrong behavior.
+
+        After the fix: an explicit guard after allow_repeat_speaker filtering
+        raises NoEligibleSpeakerError when _policies_applied=True and candidates
+        is empty.
+        """
+        # alice is the only agent that can execute do_stuff, and she is the last_speaker.
+        # allow_repeat_speaker=False will remove alice from candidates after policies apply.
+        # Result: zero candidates -> NoEligibleSpeakerError (not IndexError).
+        alice = _make_func_agent("alice", {"do_stuff": lambda: None})
+        bob = _make_agent("bob")  # cannot execute do_stuff, no function_map
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[{"role": "assistant", "content": "", "function_call": {"name": "do_stuff"}}],
+            max_round=5,
+            allow_repeat_speaker=False,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_PolicyAllowAll()],
+        )
+        # alice is last_speaker, is the only do_stuff executor, but allow_repeat_speaker=False
+        # removes her.  No candidates remain after the combined filters.
+        with pytest.raises(NoEligibleSpeakerError):
+            gc._prepare_and_select_agents(alice)
+
+    def test_h10_guard_does_not_fire_when_last_speaker_outside_group(self):
+        """H10 guard must NOT raise NoEligibleSpeakerError when last_speaker is outside the
+        group.  In that case graph_eligible_agents=[] is the legacy sentinel meaning
+        'no transition constraints -- all agents eligible', not 'zero candidates'.
+
+        Regression for the original H10 fix which used to incorrectly fire in this scenario.
+        """
+        alice = _make_func_agent("alice", {"do_stuff": lambda: None})
+        bob = _make_func_agent("bob", {"do_stuff": lambda: None})
+        # external_agent is NOT in the GroupChat agents list
+        external_agent = _make_agent("external")
+
+        gc = GroupChat(
+            agents=[alice, bob],
+            messages=[{"role": "assistant", "content": "", "function_call": {"name": "do_stuff"}}],
+            max_round=5,
+            allow_repeat_speaker=False,
+            speaker_selection_method="round_robin",
+            eligibility_policies=[_PolicyAllowAll()],
+        )
+        # external_agent is last_speaker but not in the group -> all agents eligible
+        # Both alice and bob can execute do_stuff and neither is the last_speaker
+        # -> must not raise
+        selected, candidates, _ = gc._prepare_and_select_agents(external_agent)
+        assert len(candidates) >= 1

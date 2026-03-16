@@ -515,6 +515,11 @@ class GroupChat:
                     "Custom speaker selection function returned None. Terminating conversation."
                 )
             elif isinstance(selected_agent, Agent):
+                # When the Callable returns an Agent directly, the caller has explicit
+                # control over the selection -- eligibility_policies are NOT applied.
+                # This is by design: the Callable is treated as an override that bypasses
+                # the policy layer.  If the Callable returns a str instead (a method name),
+                # normal speaker selection runs and eligibility_policies DO apply.
                 if selected_agent in self.agents:
                     return selected_agent, self.agents, None
                 else:
@@ -522,7 +527,8 @@ class GroupChat:
                         f"Custom speaker selection function returned an agent {selected_agent.name} not in the group chat."
                     )
             elif isinstance(selected_agent, str):
-                # If returned a string, assume it is a speaker selection method
+                # If returned a string, assume it is a speaker selection method.
+                # Eligibility policies will apply normally in this path.
                 speaker_selection_method = selected_agent
             else:
                 raise ValueError(
@@ -618,7 +624,22 @@ class GroupChat:
                 agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
             ]
 
-        # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
+        # Distinguish "no transition constraints" (legacy sentinel -- fallback to
+        # all agents is intentional) from "transition filtering genuinely emptied
+        # the candidate set" (should raise).  The sentinel case is when
+        # last_speaker is outside the group AND has no entry in the transition dict.
+        _no_transition_constraints = (
+            not is_last_speaker_in_group
+            and last_speaker not in self.allowed_speaker_transitions_dict
+        )
+        if len(graph_eligible_agents) == 0 and _policies_applied and not _no_transition_constraints:
+            raise NoEligibleSpeakerError(
+                "All candidates were eliminated after eligibility policies and speaker filters "
+                "(allow_repeat_speaker or transition rules)."
+            )
+
+        # Legacy behavior: empty graph_eligible_agents (no transition dict, or
+        # last_speaker not in group) falls back to full agent list.
         if len(graph_eligible_agents) == 0:
             graph_eligible_agents = None
 

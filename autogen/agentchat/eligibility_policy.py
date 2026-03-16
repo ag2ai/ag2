@@ -44,7 +44,25 @@ class SelectionContext:
 
     participants: tuple[str, ...]
     """Names of all registered participants in the GroupChat (the full roster,
-    not the filtered candidate set at the point of this call)."""
+    not the filtered candidate set at the point of this call).
+
+    Note:
+        Agents that have been marked unavailable via :class:`AgentDescriptionGuard`
+        (description prefixed with ``[UNAVAILABLE]``) are still included here --
+        they are present in the GroupChat roster.  Eligibility filtering happens
+        separately; this field reflects the raw participant list.
+    """
+
+    def __post_init__(self) -> None:
+        # Normalize participants to tuple regardless of what the caller passed
+        # (list, generator, etc.).  A plain str would silently iterate characters,
+        # so reject it explicitly.  frozen=True requires object.__setattr__.
+        if isinstance(self.participants, str):
+            raise TypeError(
+                f"SelectionContext.participants must be a sequence of str, not a str "
+                f"(got {self.participants!r}).  Wrap in a tuple: ({self.participants!r},)"
+            )
+        object.__setattr__(self, "participants", tuple(self.participants))
 
 
 @export_module("autogen")
@@ -111,29 +129,61 @@ class AgentDescriptionGuard:
         the guard's state becomes inconsistent.
     """
 
+    _UNSET = object()  # sentinel: "mark_unavailable was never called by this guard"
+
     def __init__(self, agent: Agent) -> None:
         self._agent = agent
         self._lock = threading.Lock()
+        self._original_description: str | None | object = self._UNSET
 
     def mark_unavailable(self) -> None:
         """Prepend [UNAVAILABLE] to agent.description (idempotent, thread-safe).
 
         Note:
-            If ``agent.description`` is ``None``, it is treated as ``""`` internally.
+            If ``agent.description`` is ``None``, it is treated as ``""`` for the
+            prefix but the original ``None`` value is remembered and restored by
+            :meth:`mark_available`.
         """
         with self._lock:
             current = self._agent.description or ""
             if current.startswith(_UNAVAILABLE_PREFIX):
                 return
+            self._original_description = self._agent.description
             self._agent.description = _UNAVAILABLE_PREFIX + current
 
     def mark_available(self) -> None:
-        """Strip [UNAVAILABLE] prefix from description (no-op if not marked, thread-safe).
+        """Strip [UNAVAILABLE] prefix from description (thread-safe).
 
-        Any modifications made to the description after the prefix (e.g. by
-        external code appending text) are preserved.
+        If the current ``agent.description`` does not start with the
+        ``[UNAVAILABLE]`` prefix this is a no-op.  Otherwise, the prefix is
+        stripped and the description is restored to the value it held at the
+        time :meth:`mark_unavailable` was called.  Any modifications made to
+        the suffix after the prefix (e.g. by external code appending text) are
+        preserved: the prefix is stripped from the live value, not replaced
+        wholesale.
+
+        Note:
+            The check is structural (prefix present or absent) rather than
+            based on internal guard state.  If another source added the
+            ``[UNAVAILABLE]`` prefix without going through this guard instance,
+            calling this method will strip it -- see the class-level Warning
+            for details on multi-guard scenarios.
         """
         with self._lock:
             current = self._agent.description or ""
-            if current.startswith(_UNAVAILABLE_PREFIX):
+            if not current.startswith(_UNAVAILABLE_PREFIX):
+                # Clear stale state -- external code may have removed the prefix.
+                self._original_description = self._UNSET
+                return
+            # Only restore original if THIS guard placed the prefix.
+            if self._original_description is self._UNSET:
+                # Another source added the prefix; strip it but don't guess
+                # what the original value was -- just remove the prefix text.
                 self._agent.description = current[len(_UNAVAILABLE_PREFIX) :]
+            elif self._original_description is None:
+                # Original was None and no suffix was appended -> restore None.
+                suffix = current[len(_UNAVAILABLE_PREFIX) :]
+                self._agent.description = None if suffix == "" else suffix
+            else:
+                self._agent.description = current[len(_UNAVAILABLE_PREFIX) :]
+            self._original_description = self._UNSET

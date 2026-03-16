@@ -143,14 +143,14 @@ class TestAdversarialEligibilityPolicy:
         assert agent.description.startswith("[UNAVAILABLE]")
 
     def test_mark_available_after_none_description(self):
-        """Restoring after None description: original was treated as '' so restores to ''."""
+        """Restoring after None description: original None is preserved on restore."""
         agent = MagicMock()
         agent.description = None
         mixin = AgentDescriptionGuard(agent)
         mixin.mark_unavailable()
-        # None was treated as "" by mark_unavailable, so stripping the prefix restores ""
+        # mark_unavailable stores the original None; mark_available restores it.
         mixin.mark_available()
-        assert agent.description == ""
+        assert agent.description is None
 
     def test_mark_available_noop_on_none_description(self):
         """mark_available on agent with description=None that was never marked unavailable."""
