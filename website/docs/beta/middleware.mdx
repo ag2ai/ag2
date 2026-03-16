@@ -8,11 +8,12 @@ sidebarTitle: Middleware
 Middleware lets you intercept and customize how an **AG2 Beta** agent runs a turn.
 It's the right tool when you want to add cross-cutting behavior such as logging, retries, history trimming, request mutation, tool auditing, or guardrails without changing the agent, model client, or tools themselves.
 
-At a high level, middleware can wrap three parts of the runtime:
+At a high level, middleware can wrap four parts of the runtime:
 
 - the full agent turn
 - each LLM call
 - each tool execution
+- each human input request
 
 This makes it a good fit for behavior that should apply consistently across many runs.
 
@@ -21,7 +22,7 @@ This makes it a good fit for behavior that should apply consistently across many
 Middleware is an object that receives the current turn's initial event and `Context`, then participates in one or more lifecycle hooks.
 
 Each middleware instance is created at the beginning of a turn and can keep per-turn state on `self`.
-That same instance can then observe or modify the turn, the LLM call, and tool execution as the run progresses.
+That same instance can then observe or modify the turn, the LLM call, tool execution, and human input as the run progresses.
 
 In practice, you use middleware to:
 
@@ -34,7 +35,7 @@ In practice, you use middleware to:
 
 ## Middleware Hooks
 
-`BaseMiddleware` exposes three async hooks.
+`BaseMiddleware` exposes four async hooks.
 You can implement just one of them or mix several in the same class.
 
 ### `on_turn()`
@@ -112,6 +113,30 @@ Use `on_tool_execution()` when you want to:
 - transform tool results before they go back into the event stream
 - capture tool failures and replace them with safer fallback results
 - enforce access control around specific tools
+
+### `on_human_input()`
+
+```python linenums="1"
+class BaseMiddleware:
+    async def on_human_input(
+        self,
+        call_next: Callable[[HumanInputRequest, Context], Awaitable[HumanMessage]],
+        event: HumanInputRequest,
+        context: Context,
+    ) -> HumanMessage:
+        return await call_next(event, context)
+```
+
+`on_human_input()` wraps each human-in-the-loop (HITL) request triggered during a turn.
+It receives the `HumanInputRequest` emitted by a tool via `ctx.input(...)` and can intercept or modify both the request and the `HumanMessage` response.
+
+Use `on_human_input()` when you want to:
+
+- log or audit human input requests and responses
+- rewrite or enrich the prompt shown to the human
+- transform the human's reply before it reaches the tool
+- short-circuit the request with an automated response instead of asking a human
+- enforce policies or rate limits on human input requests
 
 
 ## Registering Middleware
@@ -304,7 +329,7 @@ agent = Agent(
 ### Guidelines for Custom Middleware
 
 - Keep hook behavior focused. Middleware that does one job well is easier to reason about than one that handles, for example, logging, retries, mutation, and policy checks together.
-- Prefer `on_turn()` for whole-run behavior, `on_llm_call()` for model-facing behavior, and `on_tool_execution()` for tool-facing behavior.
+- Prefer `on_turn()` for whole-run behavior, `on_llm_call()` for model-facing behavior, `on_tool_execution()` for tool-facing behavior, and `on_human_input()` for human-in-the-loop behavior.
 - Be deliberate when mutating `event`, `events`, or tool results. Later executing middleware and the rest of the runtime will observe those changes.
 - Register zero-config middleware classes directly, and use `Middleware(YourMiddleware, ...)` when the constructor needs additional options.
 
@@ -378,5 +403,6 @@ If you are unsure where a behavior belongs, use this rule of thumb:
 - Use `on_turn()` when the behavior is about the entire request/response lifecycle.
 - Use `on_llm_call()` when the behavior is about what goes into or comes out of the model.
 - Use `on_tool_execution()` when the behavior is about tool safety, auditing, or result shaping.
+- Use `on_human_input()` when the behavior is about intercepting, logging, or transforming human-in-the-loop requests and responses.
 
 For related runtime customization patterns, see [Tools](../tools), [Prompt Management](../system_prompts), and [Events Streaming](../advanced/stream).

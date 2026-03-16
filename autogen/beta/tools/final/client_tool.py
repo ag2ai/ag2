@@ -36,7 +36,8 @@ class ClientTool(Tool):
             execution = partial(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCall", context: "Context") -> None:
-            return await execution(event, context)
+            result = await execution(event, context)
+            await context.send(result)
 
         stack.enter_context(
             context.stream.where((ToolCall.name == self.schema.function.name) & ClientToolCall.not_()).sub_scope(
