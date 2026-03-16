@@ -47,7 +47,8 @@ class TestMCPResourcePathSanitization:
         """res://../../tmp/pwn must not escape download_folder."""
         result = _sanitize_resource_filename("res://../../tmp/pwn", tmp_path, "20260316")
         assert result.parent == tmp_path
-        assert "tmp" not in str(result.parent)
+        # basename extraction strips all directory components including ../
+        assert result.name.startswith("pwn_")
 
     def test_windows_backslash_traversal_sanitized(self, tmp_path: Path) -> None:
         """Backslash traversal (Windows-style) must be sanitized."""
