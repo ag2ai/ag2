@@ -2,13 +2,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import AgentTurn, BaseMiddleware, LLMCall, Middleware, ToolExecution, ToolResultType
-from .builtin import HistoryLimiter, LoggingMiddleware, RetryMiddleware, TokenLimiter
+from .base import (
+    AgentTurn,
+    BaseMiddleware,
+    HumanInputHook,
+    LLMCall,
+    Middleware,
+    ToolExecution,
+    ToolResultType,
+)
+from .builtin import (
+    HistoryLimiter,
+    LoggingMiddleware,
+    RetryMiddleware,
+    TokenLimiter,
+)
 
 __all__ = (
     "AgentTurn",
     "BaseMiddleware",
     "HistoryLimiter",
+    "HumanInputHook",
     "LLMCall",
     "LoggingMiddleware",
     "Middleware",
