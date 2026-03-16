@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+import logging
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -13,6 +14,8 @@ from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["DeepResearchTool"]
 
@@ -75,6 +78,24 @@ class DeepResearchTool(Tool):
     """A tool that delegates a web research task to the subteams of agents."""
 
     ANSWER_CONFIRMED_PREFIX = "Answer confirmed:"
+
+    @staticmethod
+    def _extract_last_result_with_prefix(chat_result: Any, prefix: str) -> str:
+        """Extract the last message starting with the given prefix from a ChatResult's history.
+
+        When a chat terminates via a tool call (e.g. confirm_summary), the default
+        ``last_msg`` summary method returns empty because the last sender→recipient
+        message is a tool_call with ``content=None``. This helper walks the chat
+        history in reverse and returns the first message whose content starts with
+        *prefix*, falling back to ``chat_result.summary``.
+        """
+        for msg in reversed(chat_result.chat_history):
+            content = msg.get("content") or ""
+            if isinstance(content, str) and content.startswith(prefix):
+                return content
+            elif isinstance(content, list):
+                logger.debug("Skipping list-type content when searching for prefix %r", prefix)
+        return chat_result.summary or ""
 
     def __init__(
         self,
@@ -154,7 +175,7 @@ class DeepResearchTool(Tool):
                 clear_history=False,
             )
 
-            return result.summary
+            return DeepResearchTool._extract_last_result_with_prefix(result, self.ANSWER_CONFIRMED_PREFIX)
 
         super().__init__(
             name=delegate_research_task.__name__,
@@ -228,7 +249,7 @@ class DeepResearchTool(Tool):
                 message="Analyse and gather subqestions for the following question: " + question,
             )
 
-            return result.summary
+            return DeepResearchTool._extract_last_result_with_prefix(result, DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX)
 
         return split_question_and_answer_subquestions
 
@@ -326,4 +347,4 @@ class DeepResearchTool(Tool):
             message="Please find the answer to this question: " + question,
         )
 
-        return result.summary
+        return DeepResearchTool._extract_last_result_with_prefix(result, DeepResearchTool.ANSWER_CONFIRMED_PREFIX)

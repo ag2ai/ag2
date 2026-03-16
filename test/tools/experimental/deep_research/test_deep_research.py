@@ -8,10 +8,79 @@ from unittest.mock import patch
 
 from autogen import LLMConfig
 from autogen.agentchat import AssistantAgent
+from autogen.agentchat.chat import ChatResult
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.dependency_injection import Depends, on
 from autogen.tools.experimental import DeepResearchTool
 from test.credentials import Credentials
+
+
+class TestExtractLastResultWithPrefix:
+    """Unit tests for _extract_last_result_with_prefix (issue #1770)."""
+
+    def test_extracts_answer_from_tool_result_message(self) -> None:
+        """When chat terminates via tool call, the confirmed answer is in the history."""
+        chat_result = ChatResult(
+            chat_history=[
+                {"role": "assistant", "content": "Let me research that."},
+                {"role": "assistant", "content": None, "tool_calls": [{"function": {"name": "confirm_summary"}}]},
+                {"role": "tool", "content": "Answer confirmed: Brussels is the capital of Belgium"},
+            ],
+            summary="",
+        )
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == "Answer confirmed: Brussels is the capital of Belgium"
+
+    def test_returns_last_match_when_multiple_prefixed_messages(self) -> None:
+        """When multiple messages match the prefix, returns the last one."""
+        chat_result = ChatResult(
+            chat_history=[
+                {"role": "tool", "content": "Answer confirmed: First attempt"},
+                {"role": "assistant", "content": "That needs improvement."},
+                {"role": "tool", "content": "Answer confirmed: Refined answer"},
+            ],
+            summary="",
+        )
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == "Answer confirmed: Refined answer"
+
+    def test_falls_back_to_summary_when_no_prefix_found(self) -> None:
+        """When no message matches, falls back to chat_result.summary."""
+        chat_result = ChatResult(
+            chat_history=[
+                {"role": "assistant", "content": "Some other message"},
+            ],
+            summary="fallback summary",
+        )
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == "fallback summary"
+
+    def test_handles_none_content_gracefully(self) -> None:
+        """Messages with content=None (tool calls) should not crash."""
+        chat_result = ChatResult(
+            chat_history=[
+                {"role": "assistant", "content": None},
+                {"role": "assistant"},
+            ],
+            summary="",
+        )
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == ""
+
+    def test_handles_empty_chat_history(self) -> None:
+        """Empty chat history falls back to summary."""
+        chat_result = ChatResult(chat_history=[], summary="")
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == ""
+
+    def test_handles_none_summary_fallback(self) -> None:
+        """When summary is None and no prefix match, returns empty string."""
+        chat_result = ChatResult(
+            chat_history=[{"role": "assistant", "content": "unrelated"}],
+        )
+        chat_result.summary = None  # type: ignore[assignment]
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == ""
 
 
 @run_for_optional_imports(
