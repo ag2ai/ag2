@@ -425,13 +425,15 @@ class TestShellExecutorRun:
 
     def test_run_command_with_stderr(self) -> None:
         """Test run captures stderr output."""
+        import sys
+
         executor = ShellExecutor()
 
-        # Use a command that produces stderr (command not found on most systems)
-        result = executor.run("echo hello 1>&2")
+        # Write to stderr via python -c (works with shell=False on all platforms)
+        python = sys.executable.replace("\\", "/")
+        result = executor.run(f'"{python}" -c "import sys; sys.stderr.write(\'hello\')"')
 
-        # On Unix, redirecting stdout to stderr should work
-        assert result.stderr.strip() == "hello" or result.stdout.strip() == "hello"
+        assert result.stderr.strip() == "hello"
         assert result.exit_code == 0
 
     def test_run_command_with_nonzero_exit(self) -> None:
