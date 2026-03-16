@@ -701,7 +701,7 @@ class TestShellExecutorIntegration:
 
 
 # -----------------------------------------------------------------------------
-# Shell Injection Prevention Tests (PR #2481 verification)
+# Shell Injection Prevention Tests
 # -----------------------------------------------------------------------------
 
 
