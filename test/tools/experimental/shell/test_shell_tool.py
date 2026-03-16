@@ -732,7 +732,7 @@ class TestShellInjectionPrevention:
                 allowed_commands=["echo"],
             )
             marker = Path(tmpdir) / "pwned.txt"
-            result = executor.run(f"echo hello | touch {marker}")
+            executor.run(f"echo hello | touch {marker}")
             assert not marker.exists(), "Pipe was interpreted as shell operator!"
 
     def test_and_operator_does_not_chain_commands(self) -> None:
@@ -743,7 +743,7 @@ class TestShellInjectionPrevention:
                 allowed_commands=["echo"],
             )
             marker = Path(tmpdir) / "pwned.txt"
-            result = executor.run(f"echo hello && touch {marker}")
+            executor.run(f"echo hello && touch {marker}")
             assert not marker.exists(), "&& was interpreted as shell AND operator!"
 
     def test_subshell_substitution_does_not_execute(self) -> None:
@@ -766,5 +766,5 @@ class TestShellInjectionPrevention:
                 allowed_commands=["echo"],
             )
             target = Path(tmpdir) / "redirected.txt"
-            result = executor.run(f"echo hello > {target}")
+            executor.run(f"echo hello > {target}")
             assert not target.exists(), "> was interpreted as shell redirect!"
