@@ -7,6 +7,7 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -122,5 +123,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
         return result
+
+    elif isinstance(t, CodeExecutionToolSchema):
+        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        return {"type": "code_interpreter", "container": {"type": "auto"}}
 
     raise UnsupportedToolError(t.type, "openai-responses")
