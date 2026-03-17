@@ -13,7 +13,7 @@ The _redact function is a pure in-process utility.
 
 from typing import Any
 
-from autogen.logger.file_logger import _redact
+from autogen.logger.logger_utils import redact as _redact
 
 
 class TestRedactSensitiveKeys:
@@ -29,10 +29,12 @@ class TestRedactSensitiveKeys:
         assert result["api_key"] == "***REDACTED***"
         assert result["model"] == "gpt-4"
 
-    def test_openai_api_key_variant_redacted(self) -> None:
-        data: dict[str, Any] = {"openai_api_key": "sk-xyz"}
+    def test_unknown_key_not_redacted(self) -> None:
+        """Keys not in the exact sensitive list must pass through."""
+        data: dict[str, Any] = {"openai_api_key": "sk-xyz", "custom_secret_key": "shh"}
         result = _redact(data)
-        assert result["openai_api_key"] == "***REDACTED***"
+        assert result["openai_api_key"] == "sk-xyz"
+        assert result["custom_secret_key"] == "shh"
 
     def test_azure_ad_token_redacted(self) -> None:
         data: dict[str, Any] = {"azure_ad_token": "eyJ..."}
@@ -50,23 +52,75 @@ class TestRedactSensitiveKeys:
         result = _redact(data)
         assert result["password"] == "***REDACTED***"
 
-    def test_token_substring_match_redacted(self) -> None:
-        """Keys containing 'token' anywhere must be redacted."""
-        data: dict[str, Any] = {"access_token": "abc", "refresh_token": "xyz"}
+    def test_specific_token_keys_redacted(self) -> None:
+        """Specific token keys (access_token, refresh_token) must be redacted."""
+        data: dict[str, Any] = {"access_token": "abc", "refresh_token": "xyz", "auth_token": "tok"}
         result = _redact(data)
         assert result["access_token"] == "***REDACTED***"
         assert result["refresh_token"] == "***REDACTED***"
+        assert result["auth_token"] == "***REDACTED***"
+
+    def test_azure_ad_token_variants_redacted(self) -> None:
+        """azure_ad_token and azure_ad_token_provider must be redacted."""
+        data: dict[str, Any] = {"azure_ad_token": "eyJ...", "azure_ad_token_provider": "func"}
+        result = _redact(data)
+        assert result["azure_ad_token"] == "***REDACTED***"
+        assert result["azure_ad_token_provider"] == "***REDACTED***"
 
     def test_base_url_redacted(self) -> None:
-        """base_url is a sensitive substring -- must be redacted."""
+        """base_url is sensitive (exact match) -- must be redacted."""
         data: dict[str, Any] = {"base_url": "https://custom.openai.azure.com"}
         result = _redact(data)
         assert result["base_url"] == "***REDACTED***"
+
+    def test_llm_token_params_not_redacted(self) -> None:
+        """Common LLM parameters containing 'token' must NOT be redacted."""
+        data: dict[str, Any] = {
+            "max_tokens": 4096,
+            "prompt_tokens": 150,
+            "completion_tokens": 200,
+            "total_tokens": 350,
+            "token_count": 500,
+            "num_tokens": 1024,
+        }
+        result = _redact(data)
+        assert result == data
 
     def test_non_sensitive_keys_unchanged(self) -> None:
         data: dict[str, Any] = {"model": "gpt-4", "temperature": 0.7, "messages": []}
         result = _redact(data)
         assert result == data
+
+    def test_exact_key_variants_redacted(self) -> None:
+        """All exact key variants (api_key, api-key, apikey) must be redacted."""
+        data: dict[str, Any] = {"api_key": "sk-1", "api-key": "sk-2", "apikey": "sk-3"}
+        result = _redact(data)
+        assert result["api_key"] == "***REDACTED***"
+        assert result["api-key"] == "***REDACTED***"
+        assert result["apikey"] == "***REDACTED***"
+
+    def test_remaining_sensitive_keys_redacted(self) -> None:
+        """All other keys in SENSITIVE_KEYS must be redacted."""
+        data: dict[str, Any] = {
+            "secret": "shh",
+            "credential": "cred",
+            "authorization": "Bearer sk-123",
+            "bearer": "tok",
+            "api_token": "tok",
+            "organization": "org-123",
+            "azure_endpoint": "https://my.azure.com",
+        }
+        result = _redact(data)
+        for key in data:
+            assert result[key] == "***REDACTED***", f"{key} was not redacted"
+
+    def test_case_insensitive_matching(self) -> None:
+        """Key matching must be case-insensitive."""
+        data: dict[str, Any] = {"API_KEY": "sk-1", "Password": "hunter2", "BASE_URL": "https://x"}
+        result = _redact(data)
+        assert result["API_KEY"] == "***REDACTED***"
+        assert result["Password"] == "***REDACTED***"
+        assert result["BASE_URL"] == "***REDACTED***"
 
     # ------------------------------------------------------------------
     # Nested dict cases

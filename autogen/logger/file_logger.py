@@ -39,37 +39,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 __all__ = ("FileLogger",)
 
-_SENSITIVE_SUBSTRINGS = (
-    "api_key",
-    "api-key",
-    "apikey",
-    "secret",
-    "password",
-    "token",
-    "authorization",
-    "bearer",
-    "credential",
-    "azure_ad",
-    "base_url",
-)
-
-
-def _redact(data: Any, depth: int = 10) -> Any:
-    """Recursively mask sensitive keys. Depth-limited to avoid cycles."""
-    if depth <= 0:
-        return data
-    if isinstance(data, dict):
-        out = {}
-        for k, v in data.items():
-            if isinstance(k, str) and any(s in k.lower() for s in _SENSITIVE_SUBSTRINGS):
-                out[k] = "***REDACTED***"
-            else:
-                out[k] = _redact(v, depth - 1)
-        return out
-    if isinstance(data, (list, tuple, set)):
-        result = [_redact(item, depth - 1) for item in data]
-        return type(data)(result)
-    return data
+from .logger_utils import redact as _redact
 
 
 def safe_serialize(obj: Any) -> str:
