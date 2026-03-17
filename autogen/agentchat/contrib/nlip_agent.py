@@ -1,6 +1,7 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+
 import asyncio
 import logging
 from typing import Any
@@ -414,7 +415,11 @@ class NlipRemoteAgent(ConversableAgent):
             messages = self._oai_messages[sender]
 
         # Build request (NLIP standard: only messages)
-        request = RequestMessage(messages=messages)
+        request = RequestMessage(
+            messages=messages,
+            context=self.context_variables.data,
+            client_tools=self.__llm_config.get("tools", []),
+        )
 
         # Convert to NLIP
         nlip_request = request_message_to_nlip(request)
@@ -451,6 +456,11 @@ class NlipRemoteAgent(ConversableAgent):
                     # Append user input and retry
                     messages.append({"content": user_input, "role": "user"})
                     return await self.a_generate_remote_reply(messages, sender, config)
+
+                if response_msg.context:
+                    self.context_variables.update(response_msg.context)
+                    if sender:
+                        sender.context_variables.update(response_msg.context)
 
                 # Return final message
                 if response_msg.messages:
@@ -509,3 +519,17 @@ class NlipRemoteAgent(ConversableAgent):
                     break
 
         return ResponseMessage(messages=messages, input_required=input_required)
+
+    def update_tool_signature(
+        self,
+        tool_sig: str | dict[str, Any],
+        is_remove: bool,
+        silent_override: bool = False,
+    ) -> None:
+        """This method required to support Handoffs."""
+        self.__llm_config = self._update_tool_config(
+            self.__llm_config,
+            tool_sig=tool_sig,
+            is_remove=is_remove,
+            silent_override=silent_override,
+        )
