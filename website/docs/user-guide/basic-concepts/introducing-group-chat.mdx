@@ -3,6 +3,9 @@ title: "Agent Orchestration: Coordinating Multiple Agents"
 sidebarTitle: "Agent Orchestration: Coordinating Multiple Agents"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 In our financial compliance example, we've successfully implemented a human-in-the-loop agent that processes transactions and flags suspicious ones for human approval. This works well for basic compliance checking, but what if we need to provide detailed summary reports after all transactions are processed?
 
 We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The `finance_bot` would have multiple responsibilities, making it harder to maintain and extend.

@@ -425,13 +425,15 @@ class TestShellExecutorRun:
 
     def test_run_command_with_stderr(self) -> None:
         """Test run captures stderr output."""
+        import sys
+
         executor = ShellExecutor()
 
-        # Use a command that produces stderr (command not found on most systems)
-        result = executor.run("echo hello 1>&2")
+        # Write to stderr via python -c (works with shell=False on all platforms)
+        python = sys.executable.replace("\\", "/")
+        result = executor.run(f'"{python}" -c "import sys; sys.stderr.write(\'hello\')"')
 
-        # On Unix, redirecting stdout to stderr should work
-        assert result.stderr.strip() == "hello" or result.stdout.strip() == "hello"
+        assert result.stderr.strip() == "hello"
         assert result.exit_code == 0
 
     def test_run_command_with_nonzero_exit(self) -> None:
@@ -696,3 +698,73 @@ class TestShellExecutorIntegration:
 
         assert rm_pattern_found, "No pattern found that matches 'rm -rf /'"
         assert dd_pattern_found, "No pattern found that matches 'dd of=/dev/sda'"
+
+
+# -----------------------------------------------------------------------------
+# Shell Injection Prevention Tests
+# -----------------------------------------------------------------------------
+
+
+class TestShellInjectionPrevention:
+    """Verify that shell metacharacters are NOT interpreted as shell operators.
+
+    With shell=False, metacharacters like ;, |, &&, $() become literal
+    arguments to the command, not shell operators.
+    """
+
+    def test_semicolon_does_not_chain_commands(self) -> None:
+        """Semicolons should be literal args, not command separators."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            executor = ShellExecutor(
+                workspace_dir=tmpdir,
+                allowed_commands=["echo"],
+            )
+            marker = Path(tmpdir) / "pwned.txt"
+            result = executor.run(f"echo hello ; touch {marker}")
+            assert not marker.exists(), "Semicolon was interpreted as shell separator!"
+            assert "hello" in result.stdout
+
+    def test_pipe_does_not_chain_commands(self) -> None:
+        """Pipes should be literal args, not shell pipes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            executor = ShellExecutor(
+                workspace_dir=tmpdir,
+                allowed_commands=["echo"],
+            )
+            marker = Path(tmpdir) / "pwned.txt"
+            executor.run(f"echo hello | touch {marker}")
+            assert not marker.exists(), "Pipe was interpreted as shell operator!"
+
+    def test_and_operator_does_not_chain_commands(self) -> None:
+        """&& should be literal args, not shell AND operator."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            executor = ShellExecutor(
+                workspace_dir=tmpdir,
+                allowed_commands=["echo"],
+            )
+            marker = Path(tmpdir) / "pwned.txt"
+            executor.run(f"echo hello && touch {marker}")
+            assert not marker.exists(), "&& was interpreted as shell AND operator!"
+
+    def test_subshell_substitution_does_not_execute(self) -> None:
+        """$() should be literal, not subshell substitution."""
+        executor = ShellExecutor(allowed_commands=["echo"])
+        result = executor.run("echo $(whoami)")
+        assert "$(whoami)" in result.stdout
+
+    def test_backtick_substitution_does_not_execute(self) -> None:
+        """Backticks should be literal, not command substitution."""
+        executor = ShellExecutor(allowed_commands=["echo"])
+        result = executor.run("echo `whoami`")
+        assert "`whoami`" in result.stdout
+
+    def test_redirect_does_not_write_file(self) -> None:
+        """Output redirect > should be literal, not file redirect."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            executor = ShellExecutor(
+                workspace_dir=tmpdir,
+                allowed_commands=["echo"],
+            )
+            target = Path(tmpdir) / "redirected.txt"
+            executor.run(f"echo hello > {target}")
+            assert not target.exists(), "> was interpreted as shell redirect!"
