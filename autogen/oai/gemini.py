@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -645,6 +645,17 @@ class GeminiClient:
                     )
 
             return rst, "tool_call"
+
+        elif "content" not in message:
+            # Message has no 'content' key (e.g. a DataPart converted to a
+            # chat message).  Serialize whatever data is present as text so
+            # the conversation history stays intact.
+            fallback = json.dumps({k: v for k, v in message.items() if k != "role"}) or "empty"
+            if self.use_vertexai:
+                rst.append(VertexAIPart.from_text(fallback))
+            else:
+                rst.append(Part(text=fallback))
+            return rst, "text"
 
         elif isinstance(message["content"], str):
             content = message["content"]
