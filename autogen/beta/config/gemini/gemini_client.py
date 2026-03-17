@@ -122,10 +122,19 @@ class GeminiClient(LLMClient):
                 "total_token_count": response.usage_metadata.total_token_count,
             }
 
+        finish_reason = None
+        if response.candidates:
+            fr = response.candidates[0].finish_reason
+            if fr is not None:
+                finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )
 
     async def _process_stream(
@@ -136,6 +145,7 @@ class GeminiClient(LLMClient):
         full_content: str = ""
         calls: list[ToolCall] = []
         usage: dict[str, Any] = {}
+        finish_reason: str | None = None
 
         async for chunk in stream:
             if chunk.candidates:
@@ -166,6 +176,11 @@ class GeminiClient(LLMClient):
                     "total_token_count": chunk.usage_metadata.total_token_count,
                 }
 
+            if chunk.candidates:
+                fr = chunk.candidates[0].finish_reason
+                if fr is not None:
+                    finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
@@ -175,4 +190,7 @@ class GeminiClient(LLMClient):
             message=message,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )

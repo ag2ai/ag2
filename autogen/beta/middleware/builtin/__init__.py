@@ -7,9 +7,16 @@ from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
 from .token_limiter import TokenLimiter
 
-__all__ = (
+__all__: tuple[str, ...] = (
     "HistoryLimiter",
     "LoggingMiddleware",
     "RetryMiddleware",
     "TokenLimiter",
 )
+
+try:
+    from .telemetry import TelemetryMiddleware
+
+    __all__ = (*__all__, "TelemetryMiddleware")
+except ImportError:
+    pass

@@ -143,6 +143,9 @@ class OpenAIResponsesClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=response.model,
+            provider="openai",
+            finish_reason=response.status,
         )
 
     async def _process_stream(
@@ -153,6 +156,8 @@ class OpenAIResponsesClient(LLMClient):
         full_content: str = ""
         usage: dict[str, Any] = {}
         calls: list[ToolCall] = []
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         async for event in response_stream:
             event: ResponseStreamEvent
@@ -173,6 +178,8 @@ class OpenAIResponsesClient(LLMClient):
             elif isinstance(event, ResponseCompletedEvent):
                 if event.response.usage:
                     usage = event.response.usage.model_dump()
+                finish_reason = event.response.status
+                resolved_model = event.response.model
 
         message: ModelMessage | None = None
         if full_content:
@@ -183,4 +190,7 @@ class OpenAIResponsesClient(LLMClient):
             message=message,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=resolved_model,
+            provider="openai",
+            finish_reason=finish_reason,
         )

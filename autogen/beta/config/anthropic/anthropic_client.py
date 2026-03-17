@@ -155,6 +155,9 @@ class AnthropicClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=response.model,
+            provider="anthropic",
+            finish_reason=response.stop_reason,
         )
 
     async def _process_stream(
@@ -216,4 +219,7 @@ class AnthropicClient(LLMClient):
             message=message,
             tool_calls=ToolCalls(calls=calls),
             usage=usage,
+            model=final_message.model,
+            provider="anthropic",
+            finish_reason=final_message.stop_reason,
         )

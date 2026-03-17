@@ -114,6 +114,9 @@ class OllamaClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCalls(calls=calls),
             usage=usage_dict,
+            model=response.model,
+            provider="ollama",
+            finish_reason=getattr(response, "done_reason", None),
         )
 
     async def _call_streaming(
@@ -132,6 +135,8 @@ class OllamaClient(LLMClient):
         full_content: str = ""
         usage_dict: dict[str, Any] = {}
         calls: list[ToolCall] = []
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         async for chunk in response_stream:
             msg = chunk.message
@@ -158,6 +163,8 @@ class OllamaClient(LLMClient):
                     "completion_tokens": chunk.eval_count or 0,
                     "total_tokens": (chunk.prompt_eval_count or 0) + (chunk.eval_count or 0),
                 }
+                finish_reason = getattr(chunk, "done_reason", None)
+                resolved_model = chunk.model
 
         message: ModelMessage | None = None
         if full_content:
@@ -168,4 +175,7 @@ class OllamaClient(LLMClient):
             message=message,
             tool_calls=ToolCalls(calls=calls),
             usage=usage_dict,
+            model=resolved_model,
+            provider="ollama",
+            finish_reason=finish_reason,
         )

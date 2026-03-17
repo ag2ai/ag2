@@ -130,6 +130,11 @@ class DashScopeClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCalls(calls=calls),
             usage=usage_dict,
+            model=self._model,
+            provider="dashscope",
+            finish_reason=choice.get("finish_reason")
+            if hasattr(choice, "get")
+            else getattr(choice, "finish_reason", None),
         )
 
     async def _call_streaming(
@@ -150,6 +155,7 @@ class DashScopeClient(LLMClient):
         full_content: str = ""
         usage_dict: dict[str, Any] = {}
         calls: list[ToolCall] = []
+        finish_reason: str | None = None
 
         async for chunk in responses:
             if chunk.status_code != 200:
@@ -164,6 +170,10 @@ class DashScopeClient(LLMClient):
                 }
 
             for choice in chunk.output.choices:
+                fr = choice.get("finish_reason") if hasattr(choice, "get") else getattr(choice, "finish_reason", None)
+                if fr:
+                    finish_reason = fr
+
                 msg = choice.message
 
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
@@ -194,4 +204,7 @@ class DashScopeClient(LLMClient):
             message=message,
             tool_calls=ToolCalls(calls=calls),
             usage=usage_dict,
+            model=self._model,
+            provider="dashscope",
+            finish_reason=finish_reason,
         )

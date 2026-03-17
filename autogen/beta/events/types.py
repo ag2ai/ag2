@@ -209,6 +209,9 @@ class ModelResponse(ModelEvent):
     tool_calls: ToolCalls = Field(default_factory=ToolCalls)
     usage: dict[str, float] = Field(default_factory=dict)
     response_force: bool = False
+    model: str | None = None
+    provider: str | None = None
+    finish_reason: str | None = None
 
     @property
     def content(self) -> str | None:
