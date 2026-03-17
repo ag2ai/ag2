@@ -31,17 +31,17 @@ async def test_mock_llm_answer():
 
 ## How to test tool execution
 
-You can also use `TestConfig` to yield tool calls. This allows you to test both successful tool execution and error handling. By providing a `ToolCall` as the first response and a string as the final response, you can simulate a complete agent-tool interaction loop.
+You can also use `TestConfig` to yield tool calls. This allows you to test both successful tool execution and error handling. By providing a `ToolCallEvent` as the first response and a string as the final response, you can simulate a complete agent-tool interaction loop.
 
 ### Success case
 
-To test a successful tool execution, pass a `ToolCall` followed by the final answer you expect the LLM to provide after the tool executes.
+To test a successful tool execution, pass a `ToolCallEvent` followed by the final answer you expect the LLM to provide after the tool executes.
 
 ```python linenums="1" hl_lines="16-19 21"
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 @pytest.mark.asyncio
@@ -52,9 +52,9 @@ async def test_tool_success():
 
     agent = Agent("test_agent", tools=[my_tool])
 
-    # Configure TestConfig to first return a ToolCall, then a final string answer
+    # Configure TestConfig to first return a ToolCallEvent, then a final string answer
     test_config = TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "final result",
     )
 
@@ -74,7 +74,7 @@ If a tool raises an exception during execution, it will propagate up to the `ask
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_tool_raise_exc():
         raise ValueError("Something went wrong")
 
     test_config = TestConfig(
-        ToolCall(name="failing_tool"),
+        ToolCallEvent(name="failing_tool"),
         "result",
     )
 
@@ -106,14 +106,14 @@ If the LLM attempts to call a tool that hasn't been registered with the agent, a
 import pytest
 
 from autogen.beta import Agent
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.exceptions import ToolNotFoundError
 from autogen.beta.testing import TestConfig
 
 @pytest.mark.asyncio
 async def test_tool_not_found():
     # Mock the LLM returning a tool call for "unregistered_tool"
-    test_config = TestConfig(ToolCall(name="unregistered_tool"))
+    test_config = TestConfig(ToolCallEvent(name="unregistered_tool"))
 
     # Agent is created WITHOUT any tools
     agent = Agent("test_agent", config=test_config)

@@ -6,9 +6,11 @@ from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock
 
+from typing_extensions import Self
+
 from autogen.beta import Context
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCall, ToolCalls, ToolError
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
 
 
 class TestClient(LLMClient):
@@ -24,15 +26,15 @@ class TestClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         for m in messages:
-            if isinstance(m, ToolError):
+            if isinstance(m, ToolErrorEvent):
                 raise m.error
 
         next_msg = next(self.events)
 
         if isinstance(next_msg, str):
             next_msg = ModelResponse(message=ModelMessage(content=next_msg))
-        elif isinstance(next_msg, ToolCall):
-            next_msg = ModelResponse(tool_calls=ToolCalls(calls=[next_msg]))
+        elif isinstance(next_msg, ToolCallEvent):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent(calls=[next_msg]))
 
         return next_msg
 
@@ -57,7 +59,7 @@ class TrackingConfig(ModelConfig):
         self.config = config
         self.mock = MagicMock()
 
-    def copy(self) -> "TrackingConfig":
+    def copy(self) -> Self:
         return self
 
     def create(self) -> TrackingClient:
@@ -67,11 +69,11 @@ class TrackingConfig(ModelConfig):
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCall | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | str) -> None:
         self.events = events
 
-    def copy(self) -> "TestConfig":
+    def copy(self) -> Self:
         return self
 
-    def create(self) -> "TestConfig":
+    def create(self) -> TestClient:
         return TestClient(*self.events)

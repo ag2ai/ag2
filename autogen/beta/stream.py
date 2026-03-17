@@ -16,6 +16,8 @@ from .events.conditions import ClassInfo, Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, build_model
 
+__all__ = ("MemoryStream", "Stream")
+
 
 class ABCStream(Stream):
     @contextmanager
@@ -84,6 +86,13 @@ class ABCStream(Stream):
 
 
 class MemoryStream(ABCStream):
+    __slots__ = (
+        "id",
+        "_subscribers",
+        "_interrupters",
+        "history",
+    )
+
     def __init__(
         self,
         storage: Storage | None = None,
@@ -145,11 +154,7 @@ class MemoryStream(ABCStream):
         self._subscribers.pop(sub_id, None)
         self._interrupters.pop(sub_id, None)
 
-    async def send(
-        self,
-        event: BaseEvent,
-        context: "Context",
-    ) -> None:
+    async def send(self, event: BaseEvent, context: "Context") -> None:
         # interrupters should follow registration order
         for condition, interrupter in tuple(self._interrupters.values()):
             if condition and not condition(event):
@@ -186,11 +191,19 @@ class MemoryStream(ABCStream):
 
 
 class SubStream(ABCStream):
+    __slots__ = (
+        "id",
+        "_filter_condition",
+        "_parent",
+    )
+
     def __init__(
         self,
         parent: Stream,
         condition: Condition,
     ) -> None:
+        self.id: StreamId = uuid4()
+
         self._filter_condition = condition
         self._parent = parent
 
@@ -240,3 +253,6 @@ class SubStream(ABCStream):
 
     def unsubscribe(self, sub_id: SubId) -> None:
         return self._parent.unsubscribe(sub_id)
+
+    async def send(self, event: BaseEvent, context: "Context") -> None:
+        await self._parent.send(event, context)

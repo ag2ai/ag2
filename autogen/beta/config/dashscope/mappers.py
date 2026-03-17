@@ -5,13 +5,14 @@
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
-    if t.type == "function":
+    if isinstance(t, FunctionToolSchema):
         return {
             "type": "function",
             "function": {
@@ -26,7 +27,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
 def convert_messages(
     system_prompt: Iterable[str],
-    messages: tuple[BaseEvent, ...],
+    messages: Iterable[BaseEvent],
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
 
@@ -49,7 +50,7 @@ def convert_messages(
             if tool_calls:
                 msg["tool_calls"] = tool_calls
             result.append(msg)
-        elif isinstance(message, ToolResults):
+        elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append({
                     "role": "tool",

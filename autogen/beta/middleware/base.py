@@ -8,13 +8,13 @@ from typing import Any, Protocol, TypeAlias
 from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
-    ClientToolCall,
+    ClientToolCallEvent,
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
-    ToolCall,
-    ToolError,
-    ToolResult,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
 )
 
 
@@ -41,9 +41,9 @@ class Middleware(MiddlewareFactory):
         return self._cls(event, context, **self._options)
 
 
-ToolResultType: TypeAlias = "ToolResult | ToolError | ClientToolCall"
+ToolResultType: TypeAlias = "ToolResultEvent | ToolErrorEvent | ClientToolCallEvent"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
-ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable[ToolResultType]]
+ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable["HumanMessage"]]
 
@@ -68,7 +68,7 @@ class BaseMiddleware:
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: "ToolCall",
+        event: "ToolCallEvent",
         context: "Context",
     ) -> ToolResultType:
         return await call_next(event, context)

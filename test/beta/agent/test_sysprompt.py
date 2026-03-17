@@ -140,7 +140,7 @@ async def test_callable_sysprompt_decorator(mock: MagicMock):
     agent = Agent("test", config=MockClient(mock))
 
     @agent.prompt()
-    async def sysprompt(event: BaseEvent, ctx: Context) -> str:
+    def sysprompt(ctx: Context) -> str:
         return "1"
 
     await agent.ask("Hi, agent!")

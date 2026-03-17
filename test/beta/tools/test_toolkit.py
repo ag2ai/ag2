@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autogen.beta import Agent, Context, tool
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import Toolkit
 
@@ -44,7 +44,7 @@ async def test_toolkit_executes_tool(mock: MagicMock) -> None:
     toolkit = Toolkit(add)
 
     config = TestConfig(
-        ToolCall(name="add", arguments=json.dumps({"a": 2, "b": 3})),
+        ToolCallEvent(name="add", arguments=json.dumps({"a": 2, "b": 3})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -71,7 +71,7 @@ async def test_toolkit_multiple_tools(mock: MagicMock) -> None:
     toolkit = Toolkit(add, multiply)
 
     config = TestConfig(
-        ToolCall(name="multiply", arguments=json.dumps({"a": 4, "b": 5})),
+        ToolCallEvent(name="multiply", arguments=json.dumps({"a": 4, "b": 5})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -98,7 +98,7 @@ async def test_toolkit_mixed_with_standalone_tool(mock: MagicMock) -> None:
     toolkit = Toolkit(bundled)
 
     config = TestConfig(
-        ToolCall(name="standalone", arguments=json.dumps({"b": "hello"})),
+        ToolCallEvent(name="standalone", arguments=json.dumps({"b": "hello"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit, standalone])
@@ -121,7 +121,7 @@ async def test_toolkit_with_context(mock: MagicMock) -> None:
     toolkit = Toolkit(greet)
 
     config = TestConfig(
-        ToolCall(name="greet", arguments=json.dumps({"name": "world"})),
+        ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit], dependencies={"lang": "en"})
@@ -140,7 +140,7 @@ async def test_toolkit_with_plain_functions(mock: MagicMock) -> None:
     toolkit = Toolkit(add)
 
     config = TestConfig(
-        ToolCall(name="add", arguments=json.dumps({"a": 1, "b": 2})),
+        ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -165,7 +165,7 @@ async def test_toolkit_mixed_functions_and_tools(mock: MagicMock) -> None:
     toolkit = Toolkit(decorated, plain)
 
     config = TestConfig(
-        ToolCall(name="plain", arguments=json.dumps({"b": "hi"})),
+        ToolCallEvent(name="plain", arguments=json.dumps({"b": "hi"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -186,7 +186,7 @@ async def test_toolkit_tool_decorator(mock: MagicMock) -> None:
         return f"hello {name}"
 
     config = TestConfig(
-        ToolCall(name="greet", arguments=json.dumps({"name": "world"})),
+        ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -206,7 +206,7 @@ async def test_toolkit_tool_decorator_with_options(mock: MagicMock) -> None:
         return f"hello {name}"
 
     config = TestConfig(
-        ToolCall(name="say_hi", arguments=json.dumps({"name": "world"})),
+        ToolCallEvent(name="say_hi", arguments=json.dumps({"name": "world"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
