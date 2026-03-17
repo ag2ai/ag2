@@ -44,7 +44,7 @@ def get_sensitive_exclude_keys() -> tuple[str, ...]:
 
     Includes 'self' and '__class__' which SqliteLogger always excludes.
     """
-    return ("self", "__class__", "base_url", "organization", *SENSITIVE_KEYS)
+    return ("self", "__class__", *SENSITIVE_KEYS)
 
 
 def redact(data: Any, depth: int = 10) -> Any:
