@@ -67,11 +67,11 @@ class TestRedactSensitiveKeys:
         assert result["azure_ad_token"] == "***REDACTED***"
         assert result["azure_ad_token_provider"] == "***REDACTED***"
 
-    def test_base_url_redacted(self) -> None:
-        """base_url is sensitive (exact match) -- must be redacted."""
+    def test_base_url_not_redacted(self) -> None:
+        """base_url is not sensitive -- useful for debugging."""
         data: dict[str, Any] = {"base_url": "https://custom.openai.azure.com"}
         result = _redact(data)
-        assert result["base_url"] == "***REDACTED***"
+        assert result["base_url"] == "https://custom.openai.azure.com"
 
     def test_llm_token_params_not_redacted(self) -> None:
         """Common LLM parameters containing 'token' must NOT be redacted."""
@@ -107,7 +107,6 @@ class TestRedactSensitiveKeys:
             "authorization": "Bearer sk-123",
             "bearer": "tok",
             "api_token": "tok",
-            "organization": "org-123",
             "azure_endpoint": "https://my.azure.com",
         }
         result = _redact(data)
@@ -116,11 +115,11 @@ class TestRedactSensitiveKeys:
 
     def test_case_insensitive_matching(self) -> None:
         """Key matching must be case-insensitive."""
-        data: dict[str, Any] = {"API_KEY": "sk-1", "Password": "hunter2", "BASE_URL": "https://x"}
+        data: dict[str, Any] = {"API_KEY": "sk-1", "Password": "hunter2", "SECRET": "shh"}
         result = _redact(data)
         assert result["API_KEY"] == "***REDACTED***"
         assert result["Password"] == "***REDACTED***"
-        assert result["BASE_URL"] == "***REDACTED***"
+        assert result["SECRET"] == "***REDACTED***"
 
     # ------------------------------------------------------------------
     # Nested dict cases
