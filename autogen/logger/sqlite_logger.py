@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
-from .logger_utils import get_current_ts, to_dict
+from .logger_utils import get_current_ts, get_sensitive_exclude_keys, to_dict
 
 if TYPE_CHECKING:
     from openai import AzureOpenAI, OpenAI
@@ -319,16 +319,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
             no_recursive=(Agent,),
         )
 
@@ -407,16 +398,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
         )
 
         query = """
@@ -486,16 +468,7 @@ class SqliteLogger(BaseLogger):
 
         args = to_dict(
             init_args,
-            exclude=(
-                "self",
-                "__class__",
-                "api_key",
-                "organization",
-                "base_url",
-                "azure_endpoint",
-                "azure_ad_token",
-                "azure_ad_token_provider",
-            ),
+            exclude=get_sensitive_exclude_keys(),
         )
 
         query = """

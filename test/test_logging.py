@@ -212,7 +212,7 @@ def test_log_oai_wrapper(db_connection):
         saved_init_args = json.loads(row["init_args"])
         assert "config_list" in saved_init_args
         assert "api_key" not in saved_init_args["config_list"][0]
-        assert "base_url" not in saved_init_args["config_list"][0]
+        assert "base_url" in saved_init_args["config_list"][0]
         assert "base_config" in saved_init_args
 
 
