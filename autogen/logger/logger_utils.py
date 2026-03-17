@@ -35,8 +35,6 @@ SENSITIVE_KEYS = frozenset({
     "api_token",
     "azure_ad_token",
     "azure_ad_token_provider",
-    "base_url",
-    "organization",
     "azure_endpoint",
 })
 
