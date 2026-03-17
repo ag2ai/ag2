@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from collections.abc import Iterator
 from typing import Any, cast
 from uuid import uuid4
@@ -23,6 +24,7 @@ RESULT_ARTIFACT_NAME = "result"
 def request_message_to_a2a(
     request_message: RequestMessage,
     context_id: str,
+    extra_parts: list[Part] | None = None,
 ) -> Message:
     metadata: dict[str, Any] = {}
     if request_message.client_tools:
@@ -30,9 +32,13 @@ def request_message_to_a2a(
     if request_message.context:
         metadata[CONTEXT_KEY] = request_message.context
 
+    parts = [message_to_part(message) for message in request_message.messages]
+    if extra_parts:
+        parts.extend(extra_parts)
+
     return Message(
         role=Role.user,
-        parts=[message_to_part(message) for message in request_message.messages],
+        parts=parts,
         message_id=uuid4().hex,
         context_id=context_id,
         metadata=metadata,
@@ -89,8 +95,32 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     if not artifact.parts:
         return None
 
+    # Check if there are any data parts mixed with text parts
+    has_data = any(isinstance(p.root, DataPart) for p in artifact.parts)
+
+    if not has_data:
+        # Text-only: preserve original behavior (keeps metadata like name, role)
+        return ResponseMessage(
+            messages=[message_from_part(p) for p in artifact.parts],
+            context=(artifact.metadata or {}).get(CONTEXT_KEY),
+        )
+
+    # Mixed text + data parts: combine text into content, append data parts
+    text_content: list[str] = []
+    data_messages: list[dict[str, Any]] = []
+    for p in artifact.parts:
+        if isinstance(p.root, TextPart):
+            text_content.append(p.root.text)
+        else:
+            data_messages.append(message_from_part(p))
+
+    messages: list[dict[str, Any]] = []
+    if text_content:
+        messages.append({"content": "\n".join(text_content)})
+    messages.extend(data_messages)
+
     return ResponseMessage(
-        messages=[message_from_part(p) for p in artifact.parts],
+        messages=messages,
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
     )
 
@@ -118,18 +148,19 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
             raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
 
     tpn = len(text_parts)
-    if dpn := len(data_parts):
-        if dpn > 1:
-            raise NotImplementedError("Multiple data parts are not supported")
+    dpn = len(data_parts)
 
-        if tpn:
-            raise NotImplementedError("Data parts and text parts are not supported together")
+    messages: list[dict[str, Any]] = []
 
-        messages = [message_from_part(data_parts[0])]
-    elif tpn == 1:
-        messages = [message_from_part(text_parts[0])]
-    else:
-        messages = [{"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)}]
+    # Combine text parts into a single message
+    if tpn == 1:
+        messages.append(message_from_part(text_parts[0]))
+    elif tpn > 1:
+        messages.append({"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)})
+
+    # Append data parts as separate messages
+    for dp in data_parts:
+        messages.append(message_from_part(dp))
 
     return ResponseMessage(
         messages=messages,
@@ -222,7 +253,8 @@ def message_from_part(part: Part) -> dict[str, Any]:
         ):
             return data
 
-        return root.data
+        # Serialize DataPart payload as text so LLM clients can consume it.
+        return {"content": json.dumps(root.data), "role": "user"}
 
     else:
         raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
