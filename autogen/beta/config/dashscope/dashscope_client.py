@@ -19,8 +19,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -112,7 +112,7 @@ class DashScopeClient(LLMClient):
         for tc in msg.get("tool_calls") or []:
             args = tc["function"]["arguments"]
             calls.append(
-                ToolCall(
+                ToolCallEvent(
                     id=tc["id"],
                     name=tc["function"]["name"],
                     arguments=args if isinstance(args, str) else json.dumps(args),
@@ -128,7 +128,7 @@ class DashScopeClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage_dict,
         )
 
@@ -149,7 +149,7 @@ class DashScopeClient(LLMClient):
 
         full_content: str = ""
         usage_dict: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         async for chunk in responses:
             if chunk.status_code != 200:
@@ -178,7 +178,7 @@ class DashScopeClient(LLMClient):
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
                     calls.append(
-                        ToolCall(
+                        ToolCallEvent(
                             id=tc["id"],
                             name=tc["function"]["name"],
                             arguments=args if isinstance(args, str) else json.dumps(args),
@@ -192,6 +192,6 @@ class DashScopeClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage_dict,
         )

@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from autogen.beta.events.tool_events import ToolResult
+
 from .builtin import UserLocation, WebSearchTool
 from .final import Toolkit, tool
 
 __all__ = (
+    "ToolResult",
     "Toolkit",
     "UserLocation",
     "WebSearchTool",

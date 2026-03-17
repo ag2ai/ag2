@@ -9,6 +9,8 @@ from typing import Any, Literal, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
+from openai._types import Omit
+from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from typing_extensions import Required
 
@@ -20,8 +22,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -31,37 +33,37 @@ ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
 class CreateOptions(TypedDict, total=False):
-    model: Required[str]
+    model: Required[ChatModel | str]
 
-    temperature: float | None
-    top_p: float | None
-    max_tokens: int | None
-    max_completion_tokens: int | None
-    response_format: dict[str, Any] | None
-    frequency_penalty: float | None
-    presence_penalty: float | None
-    seed: int | None
-    stop: str | list[str] | None
-    n: int | None
-    user: str
-    logprobs: bool | None
-    top_logprobs: int | None
-    tool_choice: str | dict[str, Any]
-    parallel_tool_calls: bool
-    logit_bias: dict[str, int] | None
-    metadata: dict[str, str] | None
-    modalities: list[str] | None
-    prediction: dict[str, Any] | None
-    prompt_cache_key: str
-    prompt_cache_retention: str | None
-    safety_identifier: str
-    service_tier: str | None
-    store: bool | None
-    verbosity: str | None
-    web_search_options: dict[str, Any]
+    temperature: float | None | Omit
+    top_p: float | None | Omit
+    max_tokens: int | None | Omit
+    max_completion_tokens: int | None | Omit
+    response_format: dict[str, Any] | None | Omit
+    frequency_penalty: float | None | Omit
+    presence_penalty: float | None | Omit
+    seed: int | None | Omit
+    stop: str | list[str] | None | Omit
+    n: int | None | Omit
+    user: str | Omit
+    logprobs: bool | None | Omit
+    top_logprobs: int | None | Omit
+    tool_choice: str | dict[str, Any] | Omit
+    parallel_tool_calls: bool | Omit
+    logit_bias: dict[str, int] | None | Omit
+    metadata: dict[str, str] | None | Omit
+    modalities: list[str] | None | Omit
+    prediction: dict[str, Any] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_retention: str | None | Omit
+    safety_identifier: str | Omit
+    service_tier: str | None | Omit
+    store: bool | None | Omit
+    verbosity: str | None | Omit
+    web_search_options: dict[str, Any] | Omit
     stream: bool
-    stream_options: dict[str, Any]
-    reasoning_effort: ReasoningEffort
+    stream_options: dict[str, Any] | Omit
+    reasoning_effort: ReasoningEffort | None | Omit
 
 
 class OpenAIClient(LLMClient):
@@ -136,7 +138,7 @@ class OpenAIClient(LLMClient):
                 await context.send(model_msg)
 
             calls = [
-                ToolCall(
+                ToolCallEvent(
                     id=c.id,
                     name=c.function.name,
                     arguments=c.function.arguments,
@@ -146,7 +148,7 @@ class OpenAIClient(LLMClient):
 
             return ModelResponse(
                 message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
+                tool_calls=ToolCallsEvent(calls=calls),
                 usage=completion.usage.model_dump() if completion.usage else {},
             )
 
@@ -201,7 +203,7 @@ class OpenAIClient(LLMClient):
             await context.send(message)
 
         calls = [
-            ToolCall(
+            ToolCallEvent(
                 id=acc["id"],
                 name=acc["name"],
                 arguments=acc["arguments"],
@@ -211,6 +213,6 @@ class OpenAIClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )

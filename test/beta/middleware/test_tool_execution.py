@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ToolCall, ToolResult
+from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools import tool
+from autogen.beta.tools import ToolResult, tool
 
 
 @pytest.mark.asyncio()
@@ -28,9 +28,9 @@ async def test_tool_execution_middleware(mock: MagicMock) -> None:
         async def on_tool_execution(
             self,
             call_next: ToolExecution,
-            event: ToolCall,
+            event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResult:
+        ) -> ToolResultEvent:
             self.mock.enter(event.name)
             r = await call_next(event, ctx)
             self.mock.exit(r.content)
@@ -42,7 +42,7 @@ async def test_tool_execution_middleware(mock: MagicMock) -> None:
     agent = Agent(
         "",
         config=TestConfig(
-            ToolCall(name="my_tool"),
+            ToolCallEvent(name="my_tool"),
             "result",
         ),
         tools=[my_tool],
@@ -70,9 +70,9 @@ class OrderingMiddleware(BaseMiddleware):
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: ToolCall,
+        event: ToolCallEvent,
         ctx: Context,
-    ) -> ToolResult:
+    ) -> ToolResultEvent:
         self.mock.enter(self.position)
         result = await call_next(event, ctx)
         self.mock.exit(self.position)
@@ -87,7 +87,7 @@ async def test_middleware_call_sequence(mock: MagicMock) -> None:
     agent = Agent(
         "",
         config=TestConfig(
-            ToolCall(name="my_tool"),
+            ToolCallEvent(name="my_tool"),
             "result",
         ),
         tools=[my_tool],
@@ -115,18 +115,18 @@ async def test_capture_tool_execution_error(mock: MagicMock) -> None:
         async def on_tool_execution(
             self,
             call_next: ToolExecution,
-            event: ToolCall,
+            event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResult:
+        ) -> ToolResultEvent:
             r = await call_next(event, ctx)
             self.mock.exit(repr(r.error))
             # suppress the error
-            return ToolResult(parent_id=event.id, name=event.name, raw_content="tool executed")
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("tool executed"))
 
     def my_tool() -> str:
         raise ValueError("tool execution error")
 
-    tracking_config = TrackingConfig(TestConfig(ToolCall(name="my_tool"), "result"))
+    tracking_config = TrackingConfig(TestConfig(ToolCallEvent(name="my_tool"), "result"))
 
     agent = Agent(
         "",
@@ -149,12 +149,12 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
         async def on_tool_execution(
             self,
             call_next: ToolExecution,
-            event: ToolCall,
+            event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResult:
+        ) -> ToolResultEvent:
             event.serialized_arguments["x"] += 1
             result = await call_next(event, ctx)
-            result.raw_content += "!"
+            result.result.content += "!"
             return result
 
     recorded_args = MagicMock()
@@ -166,7 +166,7 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
 
     tracking_config = TrackingConfig(
         TestConfig(
-            ToolCall(name="my_tool", arguments='{"x": 1}'),
+            ToolCallEvent(name="my_tool", arguments='{"x": 1}'),
             "done",
         ),
     )
@@ -183,7 +183,7 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
     # Argument mutation: x starts as 1 and is incremented by each middleware.
     recorded_args.assert_called_once_with(4)
 
-    # Result mutation: ToolResults passed back to the client should reflect
-    # the mutated ToolResult content.
+    # Result mutation: ToolResultsEvent passed back to the client should reflect
+    # the mutated ToolResultEvent content.
     tool_results_event = tracking_config.mock.call_args_list[1].args[0]
     assert tool_results_event.results[0].content == '"4!!!"'

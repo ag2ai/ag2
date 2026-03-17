@@ -16,7 +16,7 @@ if not _textual_import.is_successful:
     App = object  # type: ignore[assignment,misc]
 
     def on(*args: Any, **kwargs: Any) -> Any:
-        def decorator(func):
+        def decorator(func: Any) -> Any:
             return func
 
         return decorator
