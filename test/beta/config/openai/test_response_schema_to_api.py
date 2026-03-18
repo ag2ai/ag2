@@ -29,7 +29,10 @@ class TestPrimitiveSchemas:
         ],
     )
     def test_primitive_type(
-        self, type_: type, name: str, expected_inner_schema: dict  # type: ignore[type-arg]
+        self,
+        type_: type,
+        name: str,
+        expected_inner_schema: dict,  # type: ignore[type-arg]
     ) -> None:
         schema = ResponseSchema(type_, name=name)
 
