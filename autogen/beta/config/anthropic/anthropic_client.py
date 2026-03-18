@@ -25,8 +25,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -129,7 +129,7 @@ class AnthropicClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         for block in response.content:
             if isinstance(block, ThinkingBlock):
@@ -142,7 +142,7 @@ class AnthropicClient(LLMClient):
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=block.id,
                         name=block.name,
                         arguments=json.dumps(block.input),
@@ -153,7 +153,7 @@ class AnthropicClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )
 
@@ -163,7 +163,7 @@ class AnthropicClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         current_tool: dict[str, Any] | None = None
 
@@ -196,7 +196,7 @@ class AnthropicClient(LLMClient):
             elif event_type == "content_block_stop":
                 if current_tool is not None:
                     calls.append(
-                        ToolCall(
+                        ToolCallEvent(
                             id=current_tool["id"],
                             name=current_tool["name"],
                             arguments=current_tool["arguments"],
@@ -214,6 +214,6 @@ class AnthropicClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )

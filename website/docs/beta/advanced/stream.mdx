@@ -48,15 +48,15 @@ To subscribe to events of a specific type, pass the event class to `stream.where
 
 ```python linenums="1"
 from autogen.beta import MemoryStream
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 
 stream = MemoryStream()
 
-def handle_tool_call(event: ToolCall):
+def handle_tool_call(event: ToolCallEvent):
     print(f"Tool called: {event.name}")
 
-# Subscribe only to ToolCall events
-stream.where(ToolCall).subscribe(handle_tool_call)
+# Subscribe only to ToolCallEvent events
+stream.where(ToolCallEvent).subscribe(handle_tool_call)
 ```
 
 ### Subscribe to multiple event types
@@ -64,13 +64,13 @@ stream.where(ToolCall).subscribe(handle_tool_call)
 You can subscribe to multiple event types using the bitwise OR operator (`|`).
 
 ```python linenums="1"
-from autogen.beta.events import ToolCall, ModelMessage
+from autogen.beta.events import ToolCallEvent, ModelMessage
 
 def handle_event(event):
     print(f"Received event: {event}")
 
-# Subscribe to either ToolCall or ModelMessage events
-stream.where(ToolCall | ModelMessage).subscribe(handle_event)
+# Subscribe to either ToolCallEvent or ModelMessage events
+stream.where(ToolCallEvent | ModelMessage).subscribe(handle_event)
 ```
 
 ### Subscribe to events with a specific value
@@ -78,8 +78,8 @@ stream.where(ToolCall | ModelMessage).subscribe(handle_event)
 You can filter events based on the value of their fields. The event classes define fields that support comparison operators.
 
 ```python
-# Subscribe only to ToolCall events where the name is "fetch_data"
-stream.where(ToolCall.name == "fetch_data").subscribe(handle_event)
+# Subscribe only to ToolCallEvent events where the name is "fetch_data"
+stream.where(ToolCallEvent.name == "fetch_data").subscribe(handle_event)
 ```
 
 ## Static subscribers with decorators
@@ -89,8 +89,8 @@ You can use `subscribe` as a decorator to register static handlers cleanly. This
 ```python linenums="1"
 stream = MemoryStream()
 
-@stream.where(ToolCall).subscribe()
-def on_tool_call(event: ToolCall):
+@stream.where(ToolCallEvent).subscribe()
+def on_tool_call(event: ToolCallEvent):
     print(f"Handling tool call: {event.name}")
 
 @stream.subscribe()

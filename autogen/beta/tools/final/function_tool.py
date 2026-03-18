@@ -13,7 +13,7 @@ from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import ToolCall, ToolError, ToolResult
+from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResult, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -90,13 +90,13 @@ class FunctionTool(Tool):
         for mw in middleware:
             execution = partial(mw.on_tool_execution, execution)
 
-        async def execute(event: "ToolCall", context: "Context") -> None:
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
             result = await execution(event, context)
             await context.send(result)
 
-        stack.enter_context(context.stream.where(ToolCall.name == self.schema.function.name).sub_scope(execute))
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
 
-    async def __call__(self, event: "ToolCall", context: "Context") -> "ToolResult":
+    async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
@@ -106,14 +106,14 @@ class FunctionTool(Tool):
                     dependency_provider=self.provider,
                 )
 
-            return ToolResult(
+            return ToolResultEvent(
                 parent_id=event.id,
                 name=event.name,
-                raw_content=result,
+                result=ToolResult.ensure_result(result),
             )
 
         except Exception as e:
-            return ToolError(
+            return ToolErrorEvent(
                 parent_id=event.id,
                 name=event.name,
                 error=e,

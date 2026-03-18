@@ -12,12 +12,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
-    ToolResult,
-    ToolResults,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
 from autogen.beta.middleware import TokenLimiter
+from autogen.beta.tools import ToolResult
 
 
 @pytest.mark.asyncio()
@@ -79,11 +80,13 @@ async def test_token_limiter_trims_from_front_without_initial_request(mock: Magi
 
 @pytest.mark.asyncio()
 async def test_token_limiter_drops_tool_results_without_parent_message(mock: MagicMock) -> None:
-    tool_call = ToolCall(id="tool-call-1", name="lookup", arguments="{}")
+    tool_call = ToolCallEvent(id="tool-call-1", name="lookup", arguments="{}")
     events = [
         ModelRequest(content="turn 1"),
-        ModelResponse(tool_calls=ToolCalls(calls=[tool_call])),
-        ToolResults(results=[ToolResult(parent_id=tool_call.id, name=tool_call.name, raw_content="ok")]),
+        ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
+        ToolResultsEvent(
+            results=[ToolResultEvent(parent_id=tool_call.id, name=tool_call.name, result=ToolResult("ok"))]
+        ),
         ModelResponse(message=ModelMessage(content="answer 1")),
         ModelRequest(content="turn 2"),
     ]
@@ -107,10 +110,12 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
 async def test_token_limiter_drops_tool_results_without_parent_message_and_no_initial_request(
     mock: MagicMock,
 ) -> None:
-    tool_call = ToolCall(id="tool-call-1", name="lookup", arguments="{}")
+    tool_call = ToolCallEvent(id="tool-call-1", name="lookup", arguments="{}")
     events = [
-        ModelResponse(tool_calls=ToolCalls(calls=[tool_call])),
-        ToolResults(results=[ToolResult(parent_id=tool_call.id, name=tool_call.name, raw_content="ok")]),
+        ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
+        ToolResultsEvent(
+            results=[ToolResultEvent(parent_id=tool_call.id, name=tool_call.name, result=ToolResult("ok"))]
+        ),
         ModelResponse(message=ModelMessage(content="answer 1")),
     ]
     budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[1], events[2]])

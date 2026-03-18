@@ -96,15 +96,15 @@ This is the hook used by built-in history and token limiting middleware.
 class BaseMiddleware:
     async def on_tool_execution(
         self,
-        call_next: Callable[[ToolCall, Context], Awaitable[ToolResultType]],
-        event: ToolCall,
+        call_next: Callable[[ToolCallEvent, Context], Awaitable[ToolResultType]],
+        event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
         return await call_next(event, context)
 ```
 
 `on_tool_execution()` wraps each tool invocation triggered during the turn.
-It receives the current `ToolCall` and can return a modified `ToolResult`.
+It receives the current `ToolCallEvent` and returns a `ToolResultType`.
 
 Use `on_tool_execution()` when you want to:
 
@@ -281,7 +281,7 @@ from collections.abc import Sequence
 
 from autogen.beta import Agent, Context
 from autogen.beta.config import OpenAIConfig
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCall
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
 
 
@@ -309,7 +309,7 @@ class AuditMiddleware(BaseMiddleware):
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: ToolCall,
+        event: ToolCallEvent,
         context: Context,
     ):
         self.logger.info("Executing tool: %s", event.name)

@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from collections.abc import Iterable
 
 from google.genai import types
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -31,6 +33,9 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
         elif isinstance(t, WebSearchToolSchema):
             extra_tools.append(types.Tool(google_search=types.GoogleSearch()))
 
+        elif isinstance(t, CodeExecutionToolSchema):
+            extra_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
+
         else:
             raise UnsupportedToolError(t.type, "gemini")
 
@@ -43,7 +48,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
 
 
 def convert_messages(
-    messages: tuple[BaseEvent, ...],
+    messages: Iterable[BaseEvent],
 ) -> list[types.Content]:
     result: list[types.Content] = []
 
@@ -55,6 +60,7 @@ def convert_messages(
                     parts=[types.Part.from_text(text=message.content)],
                 )
             )
+
         elif isinstance(message, ModelResponse):
             parts: list[types.Part] = []
             if message.message:
@@ -69,7 +75,8 @@ def convert_messages(
                 parts.append(fc_part)
             if parts:
                 result.append(types.Content(role="model", parts=parts))
-        elif isinstance(message, ToolResults):
+
+        elif isinstance(message, ToolResultsEvent):
             parts_list: list[types.Part] = []
             for r in message.results:
                 parts_list.append(

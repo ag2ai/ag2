@@ -18,8 +18,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -96,7 +96,7 @@ class OllamaClient(LLMClient):
             await context.send(model_msg)
 
         calls = [
-            ToolCall(
+            ToolCallEvent(
                 id=f"call_{i}",
                 name=tc.function.name,
                 arguments=json.dumps(tc.function.arguments),
@@ -112,7 +112,7 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage_dict,
         )
 
@@ -131,7 +131,7 @@ class OllamaClient(LLMClient):
 
         full_content: str = ""
         usage_dict: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         async for chunk in response_stream:
             msg = chunk.message
@@ -145,7 +145,7 @@ class OllamaClient(LLMClient):
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=f"call_{len(calls) + i}",
                         name=tc.function.name,
                         arguments=json.dumps(tc.function.arguments),
@@ -166,6 +166,6 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage_dict,
         )

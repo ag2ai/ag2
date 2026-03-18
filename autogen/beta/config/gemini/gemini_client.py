@@ -19,8 +19,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -91,28 +91,29 @@ class GeminiClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
-        if response.candidates:
-            for part in response.candidates[0].content.parts:
-                if part.thought and part.text:
-                    await context.send(ModelReasoning(content=part.text))
-                elif part.text is not None:
-                    model_msg = ModelMessage(content=part.text)
-                    await context.send(model_msg)
-                elif part.function_call:
-                    fc = part.function_call
-                    pdata: dict[str, Any] = {}
-                    if part.thought_signature is not None:
-                        pdata["thought_signature"] = part.thought_signature
-                    calls.append(
-                        ToolCall(
-                            id=fc.id or fc.name or "",
-                            name=fc.name or "",
-                            arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                            provider_data=pdata,
+        for candidate in response.candidates or ():
+            if candidate.content:
+                for part in candidate.content.parts or ():
+                    if part.thought and part.text:
+                        await context.send(ModelReasoning(content=part.text))
+                    elif part.text is not None:
+                        model_msg = ModelMessage(content=part.text)
+                        await context.send(model_msg)
+                    elif part.function_call:
+                        fc = part.function_call
+                        pdata: dict[str, Any] = {}
+                        if part.thought_signature is not None:
+                            pdata["thought_signature"] = part.thought_signature
+                        calls.append(
+                            ToolCallEvent(
+                                id=fc.id or fc.name or "",
+                                name=fc.name or "",
+                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                                provider_data=pdata,
+                            )
                         )
-                    )
 
         usage = {}
         if response.usage_metadata:
@@ -124,7 +125,7 @@ class GeminiClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )
 
@@ -134,30 +135,31 @@ class GeminiClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
         usage: dict[str, Any] = {}
 
         async for chunk in stream:
-            if chunk.candidates:
-                for part in chunk.candidates[0].content.parts:
-                    if part.thought and part.text:
-                        await context.send(ModelReasoning(content=part.text))
-                    elif part.text is not None:
-                        full_content += part.text
-                        await context.send(ModelMessageChunk(content=part.text))
-                    elif part.function_call:
-                        fc = part.function_call
-                        pdata: dict[str, Any] = {}
-                        if part.thought_signature is not None:
-                            pdata["thought_signature"] = part.thought_signature
-                        calls.append(
-                            ToolCall(
-                                id=fc.id or fc.name or "",
-                                name=fc.name or "",
-                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                                provider_data=pdata,
+            for candidate in chunk.candidates or ():
+                if candidate.content:
+                    for part in candidate.content.parts or ():
+                        if part.thought and part.text:
+                            await context.send(ModelReasoning(content=part.text))
+                        elif part.text is not None:
+                            full_content += part.text
+                            await context.send(ModelMessageChunk(content=part.text))
+                        elif part.function_call:
+                            fc = part.function_call
+                            pdata: dict[str, Any] = {}
+                            if part.thought_signature is not None:
+                                pdata["thought_signature"] = part.thought_signature
+                            calls.append(
+                                ToolCallEvent(
+                                    id=fc.id or fc.name or "",
+                                    name=fc.name or "",
+                                    arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                                    provider_data=pdata,
+                                )
                             )
-                        )
 
             if chunk.usage_metadata:
                 usage = {
@@ -173,6 +175,6 @@ class GeminiClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )

@@ -12,7 +12,10 @@ from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeC
 
 class Field:
     def __init__(
-        self, default: Any = Ellipsis, *, default_factory: Callable[[], Any] | EllipsisType = Ellipsis
+        self,
+        default: Any = Ellipsis,
+        *,
+        default_factory: Callable[[], Any] | EllipsisType = Ellipsis,
     ) -> None:
         self.name = ""
 
@@ -60,7 +63,7 @@ class EventMeta(type):
         # fields is populated after class creation (supports Python 3.14+ PEP 649 lazy annotations)
         fields: dict[str, Field] = {}
 
-        def __init__(self, **kwargs: Any) -> None:  # noqa: N807
+        def __init__(self: object, **kwargs: Any) -> None:  # noqa: N807
             kwargs = {
                 name: default for name, f in fields.items() if (default := f.get_default()) is not Ellipsis
             } | kwargs
@@ -70,7 +73,7 @@ class EventMeta(type):
 
         namespace["__init__"] = __init__
 
-        def __repr__(self) -> str:  # noqa: N807
+        def __repr__(self: object) -> str:  # noqa: N807
             fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_"))
             return f"{self.__class__.__name__}({fields})"
 

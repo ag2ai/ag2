@@ -5,8 +5,9 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -22,6 +23,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "role": "user",
                 "content": [{"type": "input_text", "text": message.content}],
             })
+
         elif isinstance(message, ModelResponse):
             # Reconstruct assistant message
             content: list[dict[str, Any]] = []
@@ -40,7 +42,8 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                     "name": call.name,
                     "arguments": call.arguments,
                 })
-        elif isinstance(message, ToolResults):
+
+        elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append({
                     "type": "function_call_output",
@@ -53,7 +56,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
 
 def convert_messages(
     system_prompt: Iterable[str],
-    messages: tuple[BaseEvent, ...],
+    messages: Iterable[BaseEvent],
 ) -> list[dict[str, str]]:
     # legacy prompt message format
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
@@ -61,7 +64,7 @@ def convert_messages(
     for message in messages:
         if isinstance(message, (ModelRequest, ModelResponse)):
             result.append(message.to_api())
-        elif isinstance(message, ToolResults):
+        elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append(r.to_api())
 
@@ -79,7 +82,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
-    if t.type == "function":
+    if isinstance(t, FunctionToolSchema):
         return {
             "type": "function",
             "function": {
@@ -120,5 +123,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
         return result
+
+    elif isinstance(t, CodeExecutionToolSchema):
+        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        return {"type": "code_interpreter", "container": {"type": "auto"}}
 
     raise UnsupportedToolError(t.type, "openai-responses")

@@ -14,6 +14,7 @@ from typing_extensions import Unpack
 from autogen.beta.config.config import ModelConfig
 
 from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
+from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient
 
 
@@ -209,7 +210,7 @@ class OpenAIResponsesConfig(ModelConfig):
         return replace(self, **overrides)
 
     def create(self) -> OpenAIResponsesClient:
-        options = CreateOptions(
+        options = ResponseCreateOptions(
             model=self.model,
             stream=self.streaming,
             temperature=self.temperature,

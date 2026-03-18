@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given, omit
+from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
@@ -29,8 +30,8 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -38,7 +39,7 @@ from .mappers import events_to_responses_input, tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
-    model: Required[str]
+    model: Required[ChatModel | str]
 
     temperature: float | None
     top_p: float | None
@@ -114,7 +115,7 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -130,7 +131,7 @@ class OpenAIResponsesClient(LLMClient):
 
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=item.call_id,
                         name=item.name,
                         arguments=item.arguments,
@@ -141,7 +142,7 @@ class OpenAIResponsesClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )
 
@@ -152,7 +153,7 @@ class OpenAIResponsesClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
         async for event in response_stream:
             event: ResponseStreamEvent
@@ -163,7 +164,7 @@ class OpenAIResponsesClient(LLMClient):
 
             elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=event.item_id,
                         name=event.name,
                         arguments=event.arguments,
@@ -181,6 +182,6 @@ class OpenAIResponsesClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
         )

@@ -18,7 +18,7 @@ from .events import (
     HumanInputRequest,
     ModelRequest,
     ModelResponse,
-    ToolResults,
+    ToolResultsEvent,
 )
 from .exceptions import ConfigNotProvidedError
 from .history import History
@@ -26,7 +26,7 @@ from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
-from .tools.final import FunctionParameters, FunctionTool, tool
+from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
 from .utils import CONTEXT_OPTION_NAME, build_model
@@ -175,7 +175,7 @@ class Agent(Askable):
         func: PromptHook | None = None,
     ) -> PromptHook | Callable[[PromptHook], PromptHook]:
         def wrapper(f: PromptHook) -> PromptHook:
-            self._dynamic_prompt.append(f)
+            self._dynamic_prompt.append(_wrap_prompt_hook(f))
             return f
 
         if func:
@@ -297,7 +297,7 @@ class Agent(Askable):
             all_schemas.extend(schemas)
 
             for schema in schemas:
-                if schema.type == "function":
+                if isinstance(schema, FunctionToolSchema):
                     known_tools.add(schema.function.name)
 
         middleware_instances: list[BaseMiddleware] = []
@@ -324,7 +324,7 @@ class Agent(Askable):
 
         with ExitStack() as stack:
             stack.enter_context(
-                context.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
+                context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
             )
 
             stack.enter_context(
@@ -357,7 +357,7 @@ class Agent(Askable):
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     async with context.stream.get(ModelResponse) as result:
         await context.send(event)
-        message = await result
+        message: ModelResponse = await result
 
     while message.tool_calls and not message.response_force:
         async with context.stream.get(ModelResponse) as result:
