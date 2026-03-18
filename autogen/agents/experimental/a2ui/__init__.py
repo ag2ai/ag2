@@ -4,6 +4,9 @@
 
 from .a2a_executor import A2UIAgentExecutor
 from .a2a_helpers import (
+    A2UI_DEFAULT_ACTIVITY_TYPE,
+    A2UI_DEFAULT_DELIMITER,
+    A2UI_DEFAULT_VERSION,
     A2UI_EXTENSION_URI,
     A2UI_MIME_TYPE,
     create_a2ui_part,
@@ -19,6 +22,9 @@ from .response_parser import A2UIParseResult, A2UIResponseParser, A2UIValidation
 from .schema_manager import A2UISchemaManager
 
 __all__ = [
+    "A2UI_DEFAULT_ACTIVITY_TYPE",
+    "A2UI_DEFAULT_DELIMITER",
+    "A2UI_DEFAULT_VERSION",
     "A2UI_EXTENSION_URI",
     "A2UI_MIME_TYPE",
     "A2UIAction",

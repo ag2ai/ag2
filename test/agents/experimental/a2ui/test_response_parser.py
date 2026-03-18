@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser
+from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser, strip_markdown_fences
 
 
 class TestA2UIResponseParser:
@@ -275,3 +275,53 @@ class TestFormatValidationError:
         validation_result = A2UIValidationResult(is_valid=False, errors=["missing version"])
         feedback = parser.format_validation_error(parse_result, validation_result)
         assert "v0.9" in feedback
+
+
+class TestStripMarkdownFences:
+    def test_no_fences(self) -> None:
+        assert strip_markdown_fences('[{"key": "value"}]') == '[{"key": "value"}]'
+
+    def test_json_fence(self) -> None:
+        assert strip_markdown_fences('```json\n[{"key": "value"}]\n```') == '[{"key": "value"}]'
+
+    def test_plain_fence(self) -> None:
+        assert strip_markdown_fences('```\n{"key": "value"}\n```') == '{"key": "value"}'
+
+    def test_fence_no_newline(self) -> None:
+        """Edge case: opening fence with no newline."""
+        assert strip_markdown_fences('```{"key": "value"}```') == '{"key": "value"}'
+
+    def test_whitespace_around_fences(self) -> None:
+        assert strip_markdown_fences('  ```json\n[1, 2]\n```  ') == "[1, 2]"
+
+    def test_empty_string(self) -> None:
+        assert strip_markdown_fences("") == ""
+
+    def test_only_fences(self) -> None:
+        assert strip_markdown_fences("```json\n```") == ""
+
+
+class TestParseWithMarkdownFences:
+    """Test that parse() strips markdown fences from JSON after the delimiter."""
+
+    def test_parse_json_wrapped_in_fences(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            "Here is your UI.\n---a2ui_JSON---\n```json\n"
+            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```'
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None
+
+    def test_parse_plain_fence(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            "Text\n---a2ui_JSON---\n```\n"
+            '{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```'
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None

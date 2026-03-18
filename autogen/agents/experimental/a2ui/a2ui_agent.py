@@ -11,8 +11,9 @@ from typing import Any
 from .... import ConversableAgent
 from ....agentchat.agent import Agent
 from ....doc_utils import export_module
+from .a2a_helpers import A2UI_DEFAULT_DELIMITER
 from .actions import A2UIAction
-from .response_parser import A2UIResponseParser, A2UIValidationResult
+from .response_parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
 from .schema_manager import A2UISchemaManager
 
 __all__ = ["A2UIAgent"]
@@ -60,7 +61,7 @@ class A2UIAgent(ConversableAgent):
         custom_catalog_rules: str | None = None,
         include_schema_in_prompt: bool = True,
         include_rules_in_prompt: bool = True,
-        response_delimiter: str = "---a2ui_JSON---",
+        response_delimiter: str = A2UI_DEFAULT_DELIMITER,
         validate_responses: bool = False,
         validation_retries: int = 1,
         actions: list[A2UIAction] | None = None,
@@ -140,6 +141,45 @@ class A2UIAgent(ConversableAgent):
                 A2UIAgent._a2ui_validating_reply,
             )
 
+    def _validate_a2ui_response(
+        self, response_text: str
+    ) -> tuple[A2UIParseResult, list[str] | None]:
+        """Parse and validate an A2UI response.
+
+        Returns:
+            A tuple of (parse_result, validation_errors). If validation_errors
+            is None, the response is valid (or has no A2UI content).
+        """
+        parse_result = self._response_parser.parse(response_text)
+
+        if not parse_result.has_a2ui:
+            return parse_result, None
+
+        if parse_result.parse_error:
+            return parse_result, [parse_result.parse_error]
+
+        validation_result = self._response_parser.validate(parse_result.operations)
+        if validation_result.is_valid:
+            return parse_result, None
+
+        return parse_result, validation_result.errors
+
+    def _build_retry_messages(
+        self,
+        working_messages: list[dict[str, Any]],
+        response_text: str,
+        parse_result: A2UIParseResult,
+        validation_errors: list[str],
+    ) -> list[dict[str, Any]]:
+        """Append the invalid response and error feedback to the message list for retry."""
+        error_result = A2UIValidationResult(is_valid=False, errors=validation_errors)
+        feedback = self._response_parser.format_validation_error(parse_result, error_result)
+
+        retry_messages = list(working_messages)
+        retry_messages.append({"role": "assistant", "content": response_text})
+        retry_messages.append({"role": "user", "content": feedback})
+        return retry_messages
+
     def _a2ui_validating_reply(
         self,
         messages: list[dict[str, Any]] | None = None,
@@ -158,32 +198,18 @@ class A2UIAgent(ConversableAgent):
         working_messages = list(messages) if messages else []
 
         for attempt in range(1 + self._validation_retries):
-            # Generate LLM response
             final, response = self.generate_oai_reply(working_messages, sender)
             if not final or response is None:
                 return False, None
 
-            # Extract response text
             response_text = response if isinstance(response, str) else response.get("content", "")
             if not isinstance(response_text, str):
                 return True, response
 
-            # Parse for A2UI content
-            parse_result = self._response_parser.parse(response_text)
+            parse_result, validation_errors = self._validate_a2ui_response(response_text)
 
-            # No A2UI content — plain text is fine, return as-is
-            if not parse_result.has_a2ui:
+            if validation_errors is None:
                 return True, response
-
-            # JSON parse error counts as invalid
-            if parse_result.parse_error:
-                validation_errors = [parse_result.parse_error]
-            else:
-                # Validate against schema
-                validation_result = self._response_parser.validate(parse_result.operations)
-                if validation_result.is_valid:
-                    return True, response
-                validation_errors = validation_result.errors
 
             # Last attempt — return text-only (graceful degradation)
             if attempt >= self._validation_retries:
@@ -193,18 +219,12 @@ class A2UIAgent(ConversableAgent):
                 )
                 return True, parse_result.text
 
-            # Build retry feedback and try again
-            error_result = A2UIValidationResult(is_valid=False, errors=validation_errors)
-            feedback = self._response_parser.format_validation_error(parse_result, error_result)
-
             logger.info("A2UI validation failed (attempt %d/%d). Retrying.", attempt + 1, self._validation_retries)
             logger.debug("Validation errors: %s", validation_errors)
-            logger.debug("Feedback to LLM:\n%s", feedback)
 
-            # Append the invalid response and feedback as messages for the retry
-            working_messages = list(working_messages)
-            working_messages.append({"role": "assistant", "content": response_text})
-            working_messages.append({"role": "user", "content": feedback})
+            working_messages = self._build_retry_messages(
+                working_messages, response_text, parse_result, validation_errors
+            )
 
         return True, response if response else "Sorry, I was not able to generate a valid UI."
 

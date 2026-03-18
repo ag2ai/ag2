@@ -25,13 +25,19 @@ with optional_import_block():
     from a2a.server.agent_execution import AgentExecutor, RequestContext
     from a2a.server.events import EventQueue
     from a2a.server.tasks import TaskUpdater
-    from a2a.types import Artifact, Part, Task, TaskState, TaskStatus, TextPart
+    from a2a.types import Artifact, DataPart, InternalError, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.utils.errors import ServerError
 
     from ....a2a.utils import make_input_required_message, new_artifact, request_message_from_a2a
     from ....agentchat.remote import AgentService
 
-from .a2a_helpers import A2UI_MIME_TYPE, MIME_TYPE_KEY, create_a2ui_part, try_activate_a2ui_extension
+from .a2a_helpers import (
+    A2UI_DEFAULT_DELIMITER,
+    A2UI_MIME_TYPE,
+    MIME_TYPE_KEY,
+    create_a2ui_part,
+    try_activate_a2ui_extension,
+)
 from .response_parser import A2UIResponseParser
 
 if TYPE_CHECKING:
@@ -57,7 +63,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
     def __init__(
         self,
         agent: ConversableAgent,
-        delimiter: str = "---a2ui_JSON---",
+        delimiter: str = A2UI_DEFAULT_DELIMITER,
         version_string: str = "v0.9",
     ) -> None:
         self._agent = agent
@@ -66,8 +72,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
 
     def _extract_incoming_action(self, context: RequestContext) -> dict[str, Any] | None:
         """Check incoming message parts for A2UI action DataParts."""
-        from a2a.types import DataPart
-
+        assert context.message
         for part in context.message.parts:
             if isinstance(part.root, DataPart) and part.root.metadata:
                 if part.root.metadata.get(MIME_TYPE_KEY) == A2UI_MIME_TYPE:
@@ -124,7 +129,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                     result_text = str(tool_func(**action_context))
                     logger.info("Action '%s' called tool '%s': %s", action_name, action_def.tool_name, result_text)
                 except Exception as e:
-                    logger.error("Tool '%s' failed: %s", action_def.tool_name, e)
+                    logger.error("Tool '%s' failed: %s", action_def.tool_name, e, exc_info=True)
                     result_text = f"Error calling {action_def.tool_name}: {e}"
 
             # Publish text-only result
@@ -150,8 +155,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             logger.info("Action '%s' routed to LLM with prompt: %s", action_name, prompt)
 
             # Replace only the action DataPart with the prompt, keeping conversation history parts
-            from a2a.types import DataPart
-
+            assert context.message
             new_parts = []
             for part in context.message.parts:
                 if (
@@ -166,19 +170,9 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             context.message.parts = new_parts
             return False  # Let normal execute() flow continue
 
-    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+    async def _setup_task(self, context: RequestContext, event_queue: EventQueue) -> tuple[Task, TaskUpdater]:
+        """Create or retrieve the task and return it with a TaskUpdater."""
         assert context.message
-
-        # Negotiate A2UI extension
-        use_a2ui = try_activate_a2ui_extension(context)
-        if use_a2ui:
-            logger.info("A2UI extension activated for this request.")
-
-        # Check for incoming A2UI actions
-        incoming_action = self._extract_incoming_action(context)
-        if incoming_action:
-            logger.info("Received A2UI action: %s", incoming_action.get("name", "?"))
-
         task = context.current_task
         if not task:
             request = context.message
@@ -195,100 +189,111 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
         await updater.update_status(state=TaskState.working)
+        return task, updater
+
+    async def _stream_agent_response(
+        self, context: RequestContext, task: Task, updater: TaskUpdater, artifact: Artifact
+    ) -> tuple[str, bool]:
+        """Stream the agent response, forwarding chunks to the updater.
+
+        Returns:
+            A tuple of (full_response_text, streaming_started).
+        """
+        full_response_text = ""
+        streaming_started = False
+        assert context.message
+
+        async for response in self._agent_service(request_message_from_a2a(context.message)):
+            if response.input_required:
+                await updater.requires_input(
+                    message=make_input_required_message(
+                        context_id=task.context_id,
+                        task_id=task.id,
+                        text=response.input_required,
+                        context=response.context,
+                    ),
+                    final=True,
+                )
+                return "", False  # Caller should return early
+
+            if response.streaming_text:
+                full_response_text += response.streaming_text
+                text_part = Part(root=TextPart(text=response.streaming_text))
+                await updater.add_artifact(
+                    parts=[text_part],
+                    artifact_id=artifact.artifact_id,
+                    name=artifact.name,
+                    append=streaming_started,
+                    last_chunk=False,
+                )
+                streaming_started = True
+
+            elif response.message:
+                content = response.message.get("content", "")
+                if isinstance(content, str):
+                    full_response_text = content
+
+        return full_response_text, streaming_started
+
+    def _build_final_parts(self, full_response_text: str, use_a2ui: bool) -> list[Part]:
+        """Parse the response and build final artifact parts.
+
+        If A2UI content is found, returns TextPart + DataPart.
+        Otherwise returns a single TextPart.
+        """
+        if use_a2ui and full_response_text:
+            parse_result = self._parser.parse(full_response_text)
+
+            if parse_result.has_a2ui and parse_result.operations and not parse_result.parse_error:
+                parts: list[Part] = []
+                if parse_result.text:
+                    parts.append(Part(root=TextPart(text=parse_result.text)))
+                parts.append(create_a2ui_part(parse_result.operations))
+                return parts
+
+        if full_response_text:
+            return [Part(root=TextPart(text=full_response_text))]
+        return []
+
+    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+        assert context.message
+
+        # Negotiate A2UI extension
+        use_a2ui = try_activate_a2ui_extension(context)
+        if use_a2ui:
+            logger.info("A2UI extension activated for this request.")
+
+        # Check for incoming A2UI actions
+        incoming_action = self._extract_incoming_action(context)
+        if incoming_action:
+            logger.info("Received A2UI action: %s", incoming_action.get("name", "?"))
+
+        task, updater = await self._setup_task(context, event_queue)
 
         # Handle incoming A2UI action if present
         if incoming_action:
             handled = await self._handle_action(incoming_action, task, updater, context)
             if handled:
                 return
-            # If not handled (LLM routing), continue with normal flow
-            # _handle_action already modified context.message to contain the prompt
 
         artifact = new_artifact(name=RESULT_ARTIFACT_NAME, parts=[], description=None)
-        full_response_text = ""
-        streaming_started = False
 
         try:
-            async for response in self._agent_service(request_message_from_a2a(context.message)):
-                if response.input_required:
-                    await updater.requires_input(
-                        message=make_input_required_message(
-                            context_id=task.context_id,
-                            task_id=task.id,
-                            text=response.input_required,
-                            context=response.context,
-                        ),
-                        final=True,
-                    )
-                    return
-
-                if response.streaming_text:
-                    full_response_text += response.streaming_text
-                    # Stream text chunks as TextPart (standard behavior)
-                    text_part = Part(root=TextPart(text=response.streaming_text))
-                    artifact = Artifact(
-                        artifact_id=artifact.artifact_id,
-                        name=artifact.name,
-                        parts=[text_part],
-                    )
-                    await updater.add_artifact(
-                        parts=artifact.parts,
-                        artifact_id=artifact.artifact_id,
-                        name=artifact.name,
-                        append=streaming_started,
-                        last_chunk=False,
-                    )
-                    streaming_started = True
-
-                elif response.message:
-                    content = response.message.get("content", "")
-                    if isinstance(content, str):
-                        full_response_text = content
-                    response_context = response.context
-
+            full_response_text, streaming_started = await self._stream_agent_response(context, task, updater, artifact)
         except Exception as e:
-            from a2a.types import InternalError
-
             raise ServerError(error=InternalError()) from e
 
-        # Parse the full response for A2UI content
-        if use_a2ui and full_response_text:
-            parse_result = self._parser.parse(full_response_text)
-
-            if parse_result.has_a2ui and parse_result.operations and not parse_result.parse_error:
-                # Split into TextPart + single DataPart containing all operations.
-                # Per spec: "The data field of the DataPart contains a list of A2UI
-                # JSON messages. It MUST be an array of messages."
-                final_parts: list[Part] = []
-
-                if parse_result.text:
-                    final_parts.append(Part(root=TextPart(text=parse_result.text)))
-
-                final_parts.append(create_a2ui_part(parse_result.operations))
-
-                artifact = Artifact(
-                    artifact_id=artifact.artifact_id,
-                    name=artifact.name,
-                    parts=final_parts,
-                )
-
-                await updater.add_artifact(
-                    artifact_id=artifact.artifact_id,
-                    name=artifact.name,
-                    parts=artifact.parts,
-                    append=streaming_started,
-                    last_chunk=True,
-                )
-                await updater.complete()
+        if not full_response_text:
+            # input_required was handled inside _stream_agent_response
+            if not streaming_started:
                 return
 
-        # No A2UI content or extension not active — standard text response
-        if full_response_text:
-            text_part = Part(root=TextPart(text=full_response_text))
+        final_parts = self._build_final_parts(full_response_text, use_a2ui)
+        if final_parts:
             artifact = Artifact(
                 artifact_id=artifact.artifact_id,
                 name=artifact.name,
-                parts=[text_part],
+                parts=final_parts,
             )
 
         await updater.add_artifact(

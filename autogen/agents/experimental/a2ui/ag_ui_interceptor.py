@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Callable
 from uuid import uuid4
 
 from ....import_utils import optional_import_block
+from .a2a_helpers import A2UI_DEFAULT_ACTIVITY_TYPE, A2UI_DEFAULT_DELIMITER, A2UI_DEFAULT_VERSION
 from .response_parser import A2UIResponseParser
 
 with optional_import_block():
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 def create_a2ui_event_interceptor(
-    delimiter: str = "---a2ui_JSON---",
-    version_string: str = "v0.9",
-    activity_type: str = "a2ui-surface",
+    delimiter: str = A2UI_DEFAULT_DELIMITER,
+    version_string: str = A2UI_DEFAULT_VERSION,
+    activity_type: str = A2UI_DEFAULT_ACTIVITY_TYPE,
 ) -> Callable[[ServiceResponse], AsyncIterator[BaseEvent]]:
     """Create an AG-UI event interceptor that extracts A2UI JSON from agent responses.
 

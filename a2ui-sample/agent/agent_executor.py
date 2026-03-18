@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import logging
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import (
@@ -47,6 +47,7 @@ class RestaurantAgentExecutor(AgentExecutor):
         # The appropriate one will be chosen at execution time.
         self.ui_agent = RestaurantAgent(base_url=base_url, use_ui=True)
         self.text_agent = RestaurantAgent(base_url=base_url, use_ui=False)
+        self._parser = A2UIResponseParser(version_string="v0.9")
 
     async def execute(
         self,
@@ -129,32 +130,19 @@ class RestaurantAgentExecutor(AgentExecutor):
 
             content = item["content"]
             final_parts = []
-            if "---a2ui_JSON---" in content:
+            parse_result = self._parser.parse(content)
+
+            if parse_result.has_a2ui and not parse_result.parse_error:
                 logger.info("Splitting final response into text and UI parts.")
-                text_content, json_string = content.split("---a2ui_JSON---", 1)
+                if parse_result.text:
+                    final_parts.append(Part(root=TextPart(text=parse_result.text)))
 
-                if text_content.strip():
-                    final_parts.append(Part(root=TextPart(text=text_content.strip())))
-
-                if json_string.strip():
-                    try:
-                        json_string_cleaned = json_string.strip().lstrip("```json").rstrip("```").strip()
-                        # The new protocol sends a stream of JSON objects.
-                        # For this example, we'll assume they are sent as a list in the final response.
-                        json_data = json.loads(json_string_cleaned)
-
-                        if isinstance(json_data, list):
-                            logger.info(f"Found {len(json_data)} messages. Creating individual DataParts.")
-                            for message in json_data:
-                                final_parts.append(create_a2ui_part(message))
-                        else:
-                            # Handle the case where a single JSON object is returned
-                            logger.info("Received a single JSON object. Creating a DataPart.")
-                            final_parts.append(create_a2ui_part(json_data))
-
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse UI JSON: {e}")
-                        final_parts.append(Part(root=TextPart(text=json_string)))
+                logger.info(f"Found {len(parse_result.operations)} messages. Creating DataParts.")
+                for message in parse_result.operations:
+                    final_parts.append(create_a2ui_part(message))
+            elif parse_result.parse_error:
+                logger.error(f"Failed to parse UI JSON: {parse_result.parse_error}")
+                final_parts.append(Part(root=TextPart(text=content.strip())))
             else:
                 final_parts.append(Part(root=TextPart(text=content.strip())))
 

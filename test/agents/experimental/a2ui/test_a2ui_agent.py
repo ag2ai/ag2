@@ -272,3 +272,86 @@ class TestA2UIAgentValidationRetry:
         assert final is True
         assert reply == valid_response
         assert call_count == 2
+
+
+class TestValidateA2UIResponse:
+    """Tests for the extracted _validate_a2ui_response helper."""
+
+    def _make_agent(self) -> A2UIAgent:
+        return A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            validate_responses=True,
+        )
+
+    def test_plain_text_returns_no_errors(self) -> None:
+        agent = self._make_agent()
+        parse_result, errors = agent._validate_a2ui_response("Just plain text.")
+        assert errors is None
+        assert parse_result.has_a2ui is False
+
+    def test_valid_a2ui_returns_no_errors(self) -> None:
+        agent = self._make_agent()
+        response = (
+            "UI.\n---a2ui_JSON---\n"
+            '[{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
+            '"catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"}}]'
+        )
+        parse_result, errors = agent._validate_a2ui_response(response)
+        assert errors is None
+        assert parse_result.has_a2ui is True
+
+    def test_invalid_a2ui_returns_errors(self) -> None:
+        agent = self._make_agent()
+        response = (
+            "UI.\n---a2ui_JSON---\n"
+            '[{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]'  # missing catalogId
+        )
+        parse_result, errors = agent._validate_a2ui_response(response)
+        assert errors is not None
+        assert len(errors) > 0
+
+    def test_invalid_json_returns_parse_error(self) -> None:
+        agent = self._make_agent()
+        response = "Text.\n---a2ui_JSON---\n{bad json}"
+        parse_result, errors = agent._validate_a2ui_response(response)
+        assert errors is not None
+        assert any("Invalid JSON" in e for e in errors)
+
+
+class TestBuildRetryMessages:
+    """Tests for the extracted _build_retry_messages helper."""
+
+    def _make_agent(self) -> A2UIAgent:
+        return A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            validate_responses=True,
+        )
+
+    def test_appends_response_and_feedback(self) -> None:
+        agent = self._make_agent()
+        from autogen.agents.experimental.a2ui.response_parser import A2UIParseResult
+
+        original = [{"role": "user", "content": "show UI"}]
+        parse_result = A2UIParseResult(text="Text", operations=[], has_a2ui=True)
+        errors = ["missing catalogId"]
+
+        result = agent._build_retry_messages(original, "response text", parse_result, errors)
+
+        assert len(result) == 3
+        assert result[0] == original[0]
+        assert result[1] == {"role": "assistant", "content": "response text"}
+        assert result[2]["role"] == "user"
+        assert "validation errors" in result[2]["content"]
+        assert "missing catalogId" in result[2]["content"]
+
+    def test_does_not_mutate_original(self) -> None:
+        agent = self._make_agent()
+        from autogen.agents.experimental.a2ui.response_parser import A2UIParseResult
+
+        original = [{"role": "user", "content": "show UI"}]
+        parse_result = A2UIParseResult(text="Text", operations=[], has_a2ui=True)
+
+        agent._build_retry_messages(original, "resp", parse_result, ["err"])
+        assert len(original) == 1  # Original not mutated

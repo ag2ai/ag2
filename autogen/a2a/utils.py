@@ -105,7 +105,12 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
             context=(artifact.metadata or {}).get(CONTEXT_KEY),
         )
 
-    # Mixed text + data parts: combine text into content, append data parts
+    # Check if any data parts are A2UI — if so, merge text + data into single dict
+    has_a2ui = any(
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == "application/json+a2ui"
+        for p in artifact.parts
+    )
+
     text_content: list[str] = []
     data_messages: list[dict[str, Any]] = []
     for p in artifact.parts:
@@ -114,6 +119,19 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
         else:
             data_messages.append(message_from_part(p))
 
+    if has_a2ui:
+        # Merge text + A2UI data into a single dict so client gets both
+        combined: dict[str, Any] = {}
+        if text_content:
+            combined["content"] = "\n".join(text_content)
+        for dm in data_messages:
+            combined.update(dm)
+        return ResponseMessage(
+            messages=[combined],
+            context=(artifact.metadata or {}).get(CONTEXT_KEY),
+        )
+
+    # Non-A2UI: keep text and data as separate messages (original behavior)
     messages: list[dict[str, Any]] = []
     if text_content:
         messages.append({"content": "\n".join(text_content)})
@@ -147,20 +165,29 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
         else:
             raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
 
-    tpn = len(text_parts)
-    dpn = len(data_parts)
+    has_a2ui = any(
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == "application/json+a2ui"
+        for p in data_parts
+    )
 
     messages: list[dict[str, Any]] = []
 
-    # Combine text parts into a single message
-    if tpn == 1:
-        messages.append(message_from_part(text_parts[0]))
-    elif tpn > 1:
-        messages.append({"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)})
-
-    # Append data parts as separate messages
-    for dp in data_parts:
-        messages.append(message_from_part(dp))
+    if has_a2ui:
+        # Merge text + A2UI data into a single dict
+        combined: dict[str, Any] = {}
+        if text_parts:
+            combined["content"] = "\n".join(cast(TextPart, t.root).text for t in text_parts)
+        for dp in data_parts:
+            combined.update(message_from_part(dp))
+        messages.append(combined)
+    else:
+        # Non-A2UI: keep text and data as separate messages (original behavior)
+        if len(text_parts) == 1:
+            messages.append(message_from_part(text_parts[0]))
+        elif len(text_parts) > 1:
+            messages.append({"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)})
+        for dp in data_parts:
+            messages.append(message_from_part(dp))
 
     return ResponseMessage(
         messages=messages,
@@ -253,8 +280,8 @@ def message_from_part(part: Part) -> dict[str, Any]:
         ):
             return data
 
-        # Serialize DataPart payload as text so LLM clients can consume it.
-        return {"content": json.dumps(root.data), "role": "user"}
+        # Preserve DataPart data as-is (structured dict)
+        return dict(root.data)
 
     else:
         raise NotImplementedError(f"Unsupported part type: {type(part.root)}")

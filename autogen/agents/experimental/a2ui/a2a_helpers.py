@@ -24,6 +24,9 @@ A2UI_EXTENSION_URI = "https://a2ui.org/a2a-extension/a2ui/v0.9"
 
 MIME_TYPE_KEY = "mimeType"
 A2UI_MIME_TYPE = "application/json+a2ui"
+A2UI_DEFAULT_DELIMITER = "---a2ui_JSON---"
+A2UI_DEFAULT_VERSION = "v0.9"
+A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"
 
 
 @require_optional_import(["a2a"], "a2a")

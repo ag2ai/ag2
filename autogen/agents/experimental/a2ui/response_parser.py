@@ -5,10 +5,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from ....import_utils import optional_import_block, require_optional_import
+from .a2a_helpers import A2UI_DEFAULT_DELIMITER
+
+logger = logging.getLogger(__name__)
 
 with optional_import_block():
     import jsonschema
@@ -42,6 +46,17 @@ class A2UIParseResult:
     """Error message if JSON parsing failed."""
 
 
+def strip_markdown_fences(text: str) -> str:
+    """Remove markdown code fences (```json ... ```) wrapping JSON content."""
+    text = text.strip()
+    if text.startswith("```"):
+        # Remove opening fence line (e.g. ```json or just ```)
+        text = text.split("\n", 1)[-1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
 class A2UIResponseParser:
     """Parses and validates A2UI JSON from agent responses.
 
@@ -52,7 +67,7 @@ class A2UIResponseParser:
     def __init__(
         self,
         version_string: str,
-        delimiter: str = "---a2ui_JSON---",
+        delimiter: str = A2UI_DEFAULT_DELIMITER,
         server_to_client_schema: dict[str, Any] | None = None,
         schema_registry: Any | None = None,
         component_schemas: dict[str, dict[str, Any]] | None = None,
@@ -82,7 +97,7 @@ class A2UIResponseParser:
             )
 
         text_part, json_part = response.split(self._delimiter, 1)
-        json_part = json_part.strip()
+        json_part = strip_markdown_fences(json_part)
 
         if not json_part:
             return A2UIParseResult(
@@ -201,7 +216,10 @@ class A2UIResponseParser:
         Returns a list of per-component error strings, or an empty list if
         this operation is not an updateComponents or has no component schemas.
         """
-        if "updateComponents" not in op or not self._component_schemas or not self._catalog_id:
+        if "updateComponents" not in op or not self._component_schemas:
+            return []
+        if not self._catalog_id:
+            logger.debug("Skipping per-component validation: no catalog_id configured")
             return []
 
         components = op.get("updateComponents", {}).get("components", [])
@@ -226,7 +244,8 @@ class A2UIResponseParser:
                     jsonschema.validate(instance=comp, schema=ref_schema)
             except jsonschema.ValidationError as ce:
                 comp_errors.append(f"Component '{comp_id}' ({comp_type}): {ce.message}")
-            except Exception:
-                # If ref resolution fails, skip per-component drill-down
-                pass
+            except jsonschema.RefResolutionError as re:
+                logger.warning("Schema ref resolution failed for component '%s' (%s): %s", comp_id, comp_type, re)
+            except Exception as exc:
+                logger.warning("Unexpected error validating component '%s' (%s): %s", comp_id, comp_type, exc)
         return comp_errors

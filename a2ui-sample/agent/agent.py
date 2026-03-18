@@ -19,6 +19,7 @@ from collections.abc import AsyncIterable
 from typing import Any
 
 import jsonschema
+from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -71,20 +72,16 @@ class RestaurantAgent:
             memory_service=InMemoryMemoryService(),
         )
 
-        # --- MODIFICATION: Wrap the schema ---
-        # Load the A2UI_SCHEMA string into a Python object for validation
-        try:
-            # First, load the schema for a *single message*
-            single_message_schema = json.loads(A2UI_SCHEMA)
+        self._parser = A2UIResponseParser(version_string="v0.9")
 
-            # The prompt instructs the LLM to return a *list* of messages.
-            # Therefore, our validation schema must be an *array* of the single message schema.
+        # Load the A2UI_SCHEMA for additional jsonschema validation
+        try:
+            single_message_schema = json.loads(A2UI_SCHEMA)
             self.a2ui_schema_object = {"type": "array", "items": single_message_schema}
             logger.info("A2UI_SCHEMA successfully loaded and wrapped in an array validator.")
         except json.JSONDecodeError as e:
             logger.error(f"CRITICAL: Failed to parse A2UI_SCHEMA: {e}")
             self.a2ui_schema_object = None
-        # --- END MODIFICATION ---
 
     def get_processing_message(self) -> str:
         return "Finding restaurants that match your criteria..."
@@ -188,28 +185,20 @@ class RestaurantAgent:
             if self.use_ui:
                 logger.info(f"--- RestaurantAgent.stream: Validating UI response (Attempt {attempt})... ---")
                 try:
-                    if "---a2ui_JSON---" not in final_response_content:
-                        raise ValueError("Delimiter '---a2ui_JSON---' not found.")
+                    parse_result = self._parser.parse(final_response_content)
 
-                    text_part, json_string = final_response_content.split("---a2ui_JSON---", 1)
+                    if not parse_result.has_a2ui:
+                        raise ValueError("Delimiter not found in response.")
 
-                    if not json_string.strip():
+                    if parse_result.parse_error:
+                        raise ValueError(parse_result.parse_error)
+
+                    if not parse_result.operations:
                         raise ValueError("JSON part is empty.")
 
-                    json_string_cleaned = json_string.strip().lstrip("```json").rstrip("```").strip()
-
-                    if not json_string_cleaned:
-                        raise ValueError("Cleaned JSON string is empty.")
-
-                    # --- New Validation Steps ---
-                    # 1. Check if it's parsable JSON
-                    parsed_json_data = json.loads(json_string_cleaned)
-
-                    # 2. Check if it validates against the A2UI_SCHEMA
-                    # This will raise jsonschema.exceptions.ValidationError if it fails
+                    # Additional jsonschema validation
                     logger.info("--- RestaurantAgent.stream: Validating against A2UI_SCHEMA... ---")
-                    jsonschema.validate(instance=parsed_json_data, schema=self.a2ui_schema_object)
-                    # --- End New Validation Steps ---
+                    jsonschema.validate(instance=parse_result.operations, schema=self.a2ui_schema_object)
 
                     logger.info(
                         f"--- RestaurantAgent.stream: UI JSON successfully parsed AND validated against schema. "
@@ -219,7 +208,6 @@ class RestaurantAgent:
 
                 except (
                     ValueError,
-                    json.JSONDecodeError,
                     jsonschema.exceptions.ValidationError,
                 ) as e:
                     logger.warning(f"--- RestaurantAgent.stream: A2UI validation failed: {e} (Attempt {attempt}) ---")

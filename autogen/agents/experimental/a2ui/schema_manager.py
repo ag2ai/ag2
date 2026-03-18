@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ....import_utils import optional_import_block
+from .a2a_helpers import A2UI_DEFAULT_DELIMITER
 
 with optional_import_block():
     from referencing import Registry, Resource
@@ -262,7 +263,7 @@ class A2UISchemaManager:
         self,
         include_schema: bool = True,
         include_rules: bool = True,
-        response_delimiter: str = "---a2ui_JSON---",
+        response_delimiter: str = A2UI_DEFAULT_DELIMITER,
         actions: list[Any] | None = None,
     ) -> str:
         """Generate the A2UI portion of the system prompt.

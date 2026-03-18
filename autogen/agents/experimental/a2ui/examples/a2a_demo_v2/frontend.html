@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AG2 + A2UI Marketing Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="chat-panel">
+        <div class="header">
+            <div>
+                <h1>AG2 + A2UI Marketing Preview</h1>
+                <p>AG-UI Protocol with A2UI Surfaces</p>
+            </div>
+            <div class="status-dot" title="Connected"></div>
+        </div>
+
+        <div class="messages" id="messages">
+            <div class="welcome" id="welcome">
+                <h2>Marketing Preview Pipeline</h2>
+                <p>Give a product brief and the agents will create email + social media previews using A2UI.</p>
+                <div class="quick-actions">
+                    <button class="quick-action" onclick="askH2Oh()">H2Oh Water Bottle</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="input" placeholder="Describe a product to create marketing previews..." autofocus>
+            <button class="send-btn" id="send-btn" onclick="sendMessage()">SEND</button>
+        </div>
+        <div class="footer">
+            AG2 + A2UI &mdash; <a href="https://docs.ag2.ai" target="_blank">docs.ag2.ai</a> &bull;
+            <a href="https://a2ui.org" target="_blank">a2ui.org</a>
+        </div>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const inputEl = document.getElementById('input');
+        const sendBtn = document.getElementById('send-btn');
+        const welcomeEl = document.getElementById('welcome');
+        const statusDot = document.querySelector('.status-dot');
+
+        const messages = [];
+        const threadId = 'demo-thread';
+        let msgSeq = 0;
+        let isStreaming = false;
+        let currentSurfaceId = null;
+        let pendingAction = null;  // A2UI action to send with next request
+        const dataModels = {};     // surfaceId → data model object
+        const surfaceElements = {}; // surfaceId → DOM wrapper element
+
+        function resolveDataPath(surfaceId, path) {
+            const model = dataModels[surfaceId] || {};
+            // path like "/customTime" → model["customTime"]
+            const key = path.replace(/^\//, '');
+            return key.split('/').reduce((obj, k) => (obj && obj[k] !== undefined) ? obj[k] : '', model);
+        }
+
+        function setDataPath(surfaceId, path, value) {
+            if (!dataModels[surfaceId]) dataModels[surfaceId] = {};
+            const key = path.replace(/^\//, '');
+            dataModels[surfaceId][key] = value;
+        }
+
+        function resolveActionContext(surfaceId, context) {
+            // Resolve path references in action context
+            const resolved = {};
+            for (const [k, v] of Object.entries(context || {})) {
+                if (v && typeof v === 'object' && v.path) {
+                    resolved[k] = resolveDataPath(surfaceId, v.path);
+                } else {
+                    resolved[k] = v;
+                }
+            }
+            return resolved;
+        }
+
+        marked.setOptions({ breaks: true, gfm: true });
+        let pendingText = null;
+
+        function sendActionMessage(actionPayload) {
+            pendingAction = actionPayload;
+            const action = actionPayload.action;
+            const ctx = action.context || {};
+            const parts = [action.name.replace(/_/g, ' ')];
+            const ctxEntries = Object.entries(ctx).filter(([k, v]) => v && typeof v === 'string');
+            if (ctxEntries.length > 0) {
+                parts.push(ctxEntries.map(([k, v]) => `${k}: ${v}`).join(', '));
+            }
+            inputEl.value = `→ ${parts.join(' — ')}`;
+            sendMessage();
+        }
+
+        function askQuestion(text) {
+            pendingText = text;
+            inputEl.value = text.split('\n')[0] + '...';
+            sendMessage();
+        }
+
+        function askH2Oh() {
+            askQuestion(
+                'Create marketing previews for H2Oh, a premium reusable water bottle priced at $39.\n\n' +
+                'Product details:\n' +
+                '- Vacuum-insulated stainless steel, keeps water cold for 24 hours\n' +
+                '- Leak-proof lid with one-hand open\n' +
+                '- Available in 5 colors: Ocean Blue, Slate Grey, Sage Green, Blush Pink, Matte Black\n' +
+                '- BPA-free, eco-friendly — replaces 300+ plastic bottles per year\n' +
+                '- Fits standard cup holders\n\n' +
+                'Brand details:\n' +
+                '- Author name: H2Oh\n' +
+                '- LinkedIn headline: 5,200 followers\n' +
+                '- X handle: @DrinkH2Oh (verified)\n' +
+                '- Brand avatar URL: /images/AG2-square.png\n\n' +
+                'Image URLs to use:\n' +
+                '- Email banner: /images/bottle-hero.png\n' +
+                '- LinkedIn/X media: /images/bottle-hero.png\n\n' +
+                'Campaign: Launch email to eco-conscious consumers.\n' +
+                'Tone: Fresh, modern, sustainability-focused.\n' +
+                'CTA: Shop Now — Free Shipping on First Order'
+            );
+        }
+
+        function formatNumber(n) {
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return String(n);
+        }
+
+        // ─── A2UI Renderer ───
+
+        function extractSurfaceId(operations) {
+            for (const op of operations) {
+                const sid = (op.createSurface && op.createSurface.surfaceId)
+                    || (op.updateComponents && op.updateComponents.surfaceId)
+                    || (op.updateDataModel && op.updateDataModel.surfaceId)
+                    || (op.deleteSurface && op.deleteSurface.surfaceId);
+                if (sid) return sid;
+            }
+            return null;
+        }
+
+        function renderChildren(el, comp, componentsById) {
+            // Handle both 'children' (array of IDs) and 'child' (single ID)
+            const childIds = comp.children || (comp.child ? [comp.child] : []);
+            childIds.forEach(childId => {
+                const child = componentsById[childId];
+                if (child) el.appendChild(renderA2UIComponent(child, componentsById));
+            });
+        }
+
+        function renderA2UIComponent(comp, componentsById) {
+            const el = document.createElement('div');
+            el.className = 'a2ui-component';
+
+            switch (comp.component) {
+                case 'Column': {
+                    el.className = 'a2ui-column';
+                    renderChildren(el, comp, componentsById);
+                    break;
+                }
+                case 'Row': {
+                    el.className = 'a2ui-row';
+                    renderChildren(el, comp, componentsById);
+                    break;
+                }
+                case 'Card': {
+                    el.className = 'a2ui-card';
+                    renderChildren(el, comp, componentsById);
+                    break;
+                }
+                case 'Text': {
+                    const variant = comp.variant || 'body';
+                    el.className = `a2ui-text ${variant}`;
+                    el.innerHTML = marked.parse(comp.text || '');
+                    break;
+                }
+                case 'Image': {
+                    const img = document.createElement('img');
+                    img.className = 'a2ui-image';
+                    img.src = comp.url || '';
+                    img.alt = comp.id || 'image';
+                    if (comp.fit) img.style.objectFit = comp.fit === 'scaleDown' ? 'scale-down' : comp.fit;
+                    img.onerror = function() {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'a2ui-image-placeholder';
+                        placeholder.textContent = '🖼 ' + (comp.url || 'Image');
+                        this.replaceWith(placeholder);
+                    };
+                    el.appendChild(img);
+                    break;
+                }
+                case 'Button': {
+                    const btn = document.createElement('button');
+                    btn.className = 'a2ui-button';
+                    // v0.9: Button label comes from child Text component
+                    const childComp = comp.child ? componentsById[comp.child] : null;
+                    btn.textContent = (childComp && childComp.text) || 'Button';
+                    const action = comp.action;
+                    if (action && action.event) {
+                        const btnSurfaceId = currentSurfaceId;
+                        btn.onclick = () => {
+                            const rawContext = action.event.context || {};
+                            const resolvedContext = resolveActionContext(btnSurfaceId, rawContext);
+                            const actionPayload = {
+                                version: "v0.9",
+                                action: {
+                                    name: action.event.name || 'unknown',
+                                    surfaceId: btnSurfaceId || 'unknown',
+                                    sourceComponentId: comp.id,
+                                    timestamp: new Date().toISOString(),
+                                    context: resolvedContext
+                                }
+                            };
+                            sendActionMessage(actionPayload);
+                        };
+                        btn.style.cursor = 'pointer';
+                    }
+                    el.appendChild(btn);
+                    break;
+                }
+                case 'ChoicePicker': {
+                    el.className = 'a2ui-choicepicker';
+                    if (comp.label) {
+                        const lbl = document.createElement('label');
+                        lbl.className = 'a2ui-choicepicker-label';
+                        lbl.textContent = comp.label;
+                        el.appendChild(lbl);
+                    }
+                    const select = document.createElement('select');
+                    select.className = 'a2ui-choicepicker-select';
+                    (comp.options || []).forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.value;
+                        option.textContent = opt.label || opt.value;
+                        select.appendChild(option);
+                    });
+                    // Bind to data model — spec-compliant DataBinding: {path: "/foo"}
+                    const cpValRef = comp.value;
+                    const cpSurfaceId = currentSurfaceId;
+                    const cpPath = (cpValRef && typeof cpValRef === 'object' && cpValRef.path)
+                        ? cpValRef.path : null;
+                    if (cpPath) {
+                        const current = resolveDataPath(cpSurfaceId, cpPath);
+                        if (current && Array.isArray(current) && current.length > 0) {
+                            select.value = current[0];
+                        } else if (typeof current === 'string') {
+                            select.value = current;
+                        }
+                        select.addEventListener('change', () => {
+                            setDataPath(cpSurfaceId, cpPath, select.value);
+                        });
+                    }
+                    el.appendChild(select);
+                    break;
+                }
+                case 'TextField': {
+                    el.className = 'a2ui-textfield';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'a2ui-textfield-input';
+                    input.placeholder = comp.label || '';
+                    // Bind to data model — spec-compliant DataBinding: {path: "/foo"}
+                    const valRef = comp.value;
+                    const tfSurfaceId = currentSurfaceId;
+                    const tfPath = (valRef && typeof valRef === 'object' && valRef.path)
+                        ? valRef.path : null;
+                    if (tfPath) {
+                        input.value = resolveDataPath(tfSurfaceId, tfPath) || '';
+                        input.addEventListener('input', () => {
+                            setDataPath(tfSurfaceId, tfPath, input.value);
+                        });
+                    } else if (typeof valRef === 'string') {
+                        input.value = valRef;
+                    }
+                    if (comp.label) {
+                        const label = document.createElement('label');
+                        label.className = 'a2ui-textfield-label';
+                        label.textContent = comp.label;
+                        el.appendChild(label);
+                    }
+                    el.appendChild(input);
+                    break;
+                }
+                case 'Divider': {
+                    el.className = 'a2ui-divider';
+                    break;
+                }
+                case 'LinkedInPost': {
+                    el.className = 'a2ui-linkedin-post';
+                    el.innerHTML = `
+                        <div class="post-header">
+                            <img class="post-avatar" src="${comp.authorAvatarUrl || ''}" alt=""
+                                 onerror="this.style.background='#6366f1'">
+                            <div>
+                                <div class="post-author">${comp.authorName || ''}</div>
+                                <div class="post-headline">${comp.authorHeadline || ''}</div>
+                            </div>
+                        </div>
+                        <div class="post-body">${comp.body || ''}</div>
+                        ${comp.mediaChild && componentsById[comp.mediaChild] ?
+                            `<img class="a2ui-image" src="${componentsById[comp.mediaChild].url || ''}" alt=""
+                                  onerror="this.outerHTML='<div class=a2ui-image-placeholder>🖼 Media</div>'">` : ''}
+                        ${comp.hashtags ? `<div class="post-hashtags">${comp.hashtags}</div>` : ''}
+                        <div class="post-engagement">
+                            <span>👍 ${formatNumber(comp.likes || 0)}</span>
+                            <span>💬 ${formatNumber(comp.comments || 0)}</span>
+                            <span>🔄 ${formatNumber(comp.reposts || 0)}</span>
+                        </div>
+                    `;
+                    break;
+                }
+                case 'XPost': {
+                    el.className = 'a2ui-x-post';
+                    el.innerHTML = `
+                        <div class="post-header">
+                            <img class="post-avatar" src="${comp.authorAvatarUrl || ''}" alt=""
+                                 onerror="this.style.background='#334155'">
+                            <div>
+                                <div class="post-name-row">
+                                    <span class="post-author">${comp.authorName || ''}</span>
+                                    ${comp.verified ? '<span class="verified-badge">✓</span>' : ''}
+                                </div>
+                                <div class="post-handle">${comp.authorHandle || ''}</div>
+                            </div>
+                        </div>
+                        <div class="post-body">${comp.body || ''}</div>
+                        ${comp.mediaChild && componentsById[comp.mediaChild] ?
+                            `<img class="a2ui-image" src="${componentsById[comp.mediaChild].url || ''}" alt=""
+                                  onerror="this.outerHTML='<div class=a2ui-image-placeholder>🖼 Media</div>'">` : ''}
+                        <div class="post-engagement">
+                            <span>💬 ${formatNumber(comp.replies || 0)}</span>
+                            <span>🔄 ${formatNumber(comp.reposts || 0)}</span>
+                            <span>❤️ ${formatNumber(comp.likes || 0)}</span>
+                            <span>👁 ${formatNumber(comp.views || 0)}</span>
+                        </div>
+                    `;
+                    break;
+                }
+                default: {
+                    el.textContent = `[${comp.component}: ${JSON.stringify(comp).slice(0, 80)}...]`;
+                    el.style.color = '#94a3b8';
+                    el.style.fontSize = '12px';
+                }
+            }
+            return el;
+        }
+
+        function renderA2UISurface(operations) {
+            const surface = document.createElement('div');
+            surface.className = 'a2ui-surface';
+
+            const sid = extractSurfaceId(operations);
+            if (sid) currentSurfaceId = sid;
+
+            // Process data model updates FIRST so components can read initial values
+            for (const op of operations) {
+                if (op.updateDataModel) {
+                    const sid = op.updateDataModel.surfaceId;
+                    const path = op.updateDataModel.path || '/';
+                    const value = op.updateDataModel.value;
+                    if (path === '/' || path === '') {
+                        dataModels[sid] = value || {};
+                    } else {
+                        setDataPath(sid, path, value);
+                    }
+                }
+            }
+
+            // Then render components
+            for (const op of operations) {
+                if (op.updateComponents) {
+                    const components = op.updateComponents.components || [];
+                    const byId = {};
+                    components.forEach(c => { byId[c.id] = c; });
+
+                    const root = byId['root'];
+                    if (root) {
+                        surface.appendChild(renderA2UIComponent(root, byId));
+                    } else {
+                        components.forEach(c => {
+                            surface.appendChild(renderA2UIComponent(c, byId));
+                        });
+                    }
+                }
+            }
+            return surface;
+        }
+
+        // ─── Chat logic ───
+
+        async function sendMessage() {
+            const content = pendingText || inputEl.value.trim();
+            pendingText = null;
+            if (!content || isStreaming) return;
+
+            if (welcomeEl) welcomeEl.style.display = 'none';
+
+            const userRow = document.createElement('div');
+            userRow.className = 'msg-row user';
+            const userBubble = document.createElement('div');
+            userBubble.className = 'msg-bubble';
+            userBubble.textContent = content;
+            userRow.appendChild(userBubble);
+            messagesEl.appendChild(userRow);
+
+            messages.push({ id: String(++msgSeq), role: 'user', content });
+            inputEl.value = '';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            isStreaming = true;
+            sendBtn.disabled = true;
+
+            let currentBubble = null;
+            let currentLabel = null;
+            let assistantContent = '';
+
+            function ensureBotBubble(agentName) {
+                if (!currentBubble || currentLabel !== agentName) {
+                    const row = document.createElement('div');
+                    row.className = 'msg-row bot';
+                    const wrapper = document.createElement('div');
+                    if (agentName) {
+                        const label = document.createElement('div');
+                        label.className = 'msg-label';
+                        label.textContent = agentName;
+                        wrapper.appendChild(label);
+                    }
+                    currentBubble = document.createElement('div');
+                    currentBubble.className = 'msg-bubble';
+                    currentBubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+                    wrapper.appendChild(currentBubble);
+                    row.appendChild(wrapper);
+                    messagesEl.appendChild(row);
+                    currentLabel = agentName;
+                    assistantContent = '';
+                }
+                return currentBubble;
+            }
+
+            try {
+                const payload = {
+                    threadId,
+                    runId: 'run-' + msgSeq,
+                    messages,
+                    tools: [],
+                    context: [],
+                    state: {},
+                    forwardedProps: {},
+                };
+
+                // Attach A2UI action if pending
+                if (pendingAction) {
+                    payload.a2uiAction = pendingAction;
+                    pendingAction = null;
+                }
+
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                    body: JSON.stringify(payload),
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let currentAgent = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const data = line.slice(6);
+                        if (data === '[DONE]') continue;
+
+                        try {
+                            const event = JSON.parse(data);
+
+                            switch (event.type) {
+                                case 'RUN_STARTED':
+                                    statusDot.classList.add('running');
+                                    break;
+
+                                case 'RUN_FINISHED':
+                                    statusDot.classList.remove('running');
+                                    break;
+
+                                case 'TEXT_MESSAGE_START':
+                                    currentAgent = event.agentName || event.role || null;
+                                    ensureBotBubble(currentAgent);
+                                    break;
+
+                                case 'TEXT_MESSAGE_CONTENT':
+                                case 'TEXT_MESSAGE_CHUNK':
+                                    if (!currentAgent) currentAgent = event.agentName || null;
+                                    ensureBotBubble(currentAgent);
+                                    assistantContent += event.delta || '';
+                                    currentBubble.innerHTML = marked.parse(assistantContent);
+                                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                                    break;
+
+                                case 'TEXT_MESSAGE_END':
+                                    if (assistantContent) {
+                                        messages.push({ id: String(++msgSeq), role: 'assistant', content: assistantContent });
+                                    }
+                                    currentBubble = null;
+                                    currentLabel = null;
+                                    break;
+
+                                case 'ACTIVITY_SNAPSHOT': {
+                                    const actType = event.activityType || event.activity_type;
+                                    if (actType === 'a2ui-surface' && event.content && event.content.operations) {
+                                        const snapshotSurfaceId = extractSurfaceId(event.content.operations);
+                                        if (snapshotSurfaceId) currentSurfaceId = snapshotSurfaceId;
+                                        const surfaceEl = renderA2UISurface(event.content.operations);
+
+                                        // If surface already exists, replace it in-place
+                                        if (snapshotSurfaceId && surfaceElements[snapshotSurfaceId]) {
+                                            const existingWrapper = surfaceElements[snapshotSurfaceId];
+                                            // Replace the surface content inside the wrapper
+                                            const oldSurface = existingWrapper.querySelector('.a2ui-surface');
+                                            if (oldSurface) {
+                                                oldSurface.replaceWith(surfaceEl);
+                                            } else {
+                                                existingWrapper.appendChild(surfaceEl);
+                                            }
+                                        } else {
+                                            const row = document.createElement('div');
+                                            row.className = 'msg-row bot';
+                                            const wrapper = document.createElement('div');
+                                            const label = document.createElement('div');
+                                            label.className = 'msg-label';
+                                            label.textContent = '🎨 A2UI Surface' + (snapshotSurfaceId ? ': ' + snapshotSurfaceId : '');
+                                            wrapper.appendChild(label);
+                                            wrapper.appendChild(surfaceEl);
+                                            row.appendChild(wrapper);
+                                            messagesEl.appendChild(row);
+                                            if (snapshotSurfaceId) surfaceElements[snapshotSurfaceId] = wrapper;
+                                        }
+                                        messagesEl.scrollTop = messagesEl.scrollHeight;
+                                        currentBubble = null;
+                                        currentLabel = null;
+                                    }
+                                    break;
+                                }
+
+                                case 'RUN_ERROR':
+                                    statusDot.classList.remove('running');
+                                    ensureBotBubble('error');
+                                    currentBubble.innerHTML = `<span style="color: #f87171;">Error: ${event.message || 'Unknown error'}</span>`;
+                                    break;
+                            }
+                        } catch (e) { /* skip parse errors */ }
+                    }
+                }
+            } catch (error) {
+                statusDot.classList.remove('running');
+                ensureBotBubble('error');
+                currentBubble.innerHTML = `<span style="color: #f87171;">Connection error: ${error.message}</span>`;
+            }
+
+            isStreaming = false;
+            sendBtn.disabled = false;
+            inputEl.focus();
+        }
+
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
