@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Any, Union
+from typing import Any, Union, overload
 
 from fast_depends import Provider
 from pydantic import TypeAdapter
@@ -18,6 +18,24 @@ T = TypeVar313("T", default=str)
 
 
 class ResponseSchema(ResponseProto[T]):
+    @overload
+    def __init__(
+        self,
+        types: type[T],
+        /,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        types: ClassInfo,
+        /,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> None: ...
+
     def __init__(
         self,
         types: ClassInfo,
@@ -46,8 +64,8 @@ class ResponseSchema(ResponseProto[T]):
     @classmethod
     def ensure_schema(
         cls,
-        obj: ResponseProto[T] | type[T] | None,
-    ) -> ResponseProto[T] | None:
+        obj: "ResponseProto[T] | type[T] | ClassInfo | None",
+    ) -> "ResponseProto[T] | None":
         if obj is None:
             return None
         if isinstance(obj, ResponseProto):

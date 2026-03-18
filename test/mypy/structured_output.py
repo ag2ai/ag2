@@ -132,9 +132,9 @@ async def check_ask_overrides_response_type() -> None:
     assert_type(reply.content, str | None)
     assert_type(await reply.validate(), str | None)
 
-    reply = await agent.ask("Hi, agent!", response_schema=int)
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    reply2 = await agent.ask("Hi, agent!", response_schema=int)
+    assert_type(reply2.content, str | None)
+    assert_type(await reply2.validate(), int | None)
 
 
 async def check_ask_none_drops_response_type() -> None:

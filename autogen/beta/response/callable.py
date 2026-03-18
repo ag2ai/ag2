@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack
 from typing import Any, TypeAlias, cast, overload
 
@@ -23,7 +23,7 @@ ResponseValidator: TypeAlias = Callable[
     Awaitable[T],
 ]
 
-ResponseHook: TypeAlias = Callable[..., T] | Callable[..., Awaitable[T]]
+ResponseHook: TypeAlias = Callable[..., Coroutine[Any, Any, T]] | Callable[..., T]
 
 
 class CallableResponse(ResponseProto[T]):
@@ -51,7 +51,18 @@ class CallableResponse(ResponseProto[T]):
 
 @overload
 def response_schema(
-    func: ResponseHook[T],
+    func: Callable[..., Coroutine[Any, Any, T]],
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    schema: dict[str, Any] | None = None,
+    sync_to_thread: bool = True,
+) -> CallableResponse[T]: ...
+
+
+@overload
+def response_schema(
+    func: Callable[..., T],
     *,
     name: str | None = None,
     description: str | None = None,

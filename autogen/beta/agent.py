@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import types
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
+from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 
 from fast_depends import Provider
 from typing_extensions import TypeVar as TypeVar313
@@ -39,31 +40,18 @@ if TYPE_CHECKING:
 
 
 TResult = TypeVar313("TResult", default=str)
+TAgent = TypeVar313("TAgent", default=str)
+T2 = TypeVar("T2")
 
 
-class Askable(Protocol[TResult]):
-    async def ask(
-        self,
-        msg: str,
-        *,
-        dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
-        prompt: Iterable[str] = (),
-        config: ModelConfig | None = None,
-        tools: Iterable[Tool] = (),
-        middleware: Iterable["MiddlewareFactory"] = (),
-        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
-    ) -> "AgentReply[TResult]": ...
-
-
-class AgentReply(Askable[TResult]):
+class AgentReply(Generic[TResult, TAgent]):
     def __init__(
         self,
         response: ModelResponse,
         *,
         context: "Context",
         client: "LLMClient",
-        agent: "Agent",
+        agent: "Agent[TAgent]",
         provider: Provider | None,
         response_schema: ResponseProto[TResult] | None,
     ) -> None:
@@ -76,7 +64,7 @@ class AgentReply(Askable[TResult]):
 
     async def validate(self) -> TResult | None:
         if self.__schema is None:
-            return self.content
+            return self.content  # type: ignore[return-value]
 
         if (content := self.content) is None:
             return None
@@ -96,6 +84,61 @@ class AgentReply(Askable[TResult]):
     def history(self) -> History:
         return self.context.stream.history
 
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: type[T2],
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: ResponseProto[T2],
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: None,
+    ) -> "AgentReply[str, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+    ) -> "AgentReply[TAgent, TAgent]": ...
+
     async def ask(
         self,
         msg: str,
@@ -106,8 +149,8 @@ class AgentReply(Askable[TResult]):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
-    ) -> "AgentReply[TResult]":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest(content=msg)
 
         context = self.context
@@ -134,7 +177,67 @@ PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
 PromptType: TypeAlias = str | PromptHook
 
 
-class Agent(Askable[TResult]):
+class Agent(Generic[TResult]):
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: type[TResult],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: ResponseProto[TResult],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: types.UnionType,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: None = ...,
+    ) -> None: ...
+
     def __init__(
         self,
         name: str,
@@ -146,7 +249,7 @@ class Agent(Askable[TResult]):
         middleware: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
-        response_schema: ResponseProto[TResult] | type[TResult] | None = None,
+        response_schema: ResponseProto[TResult] | type[TResult] | types.UnionType | None = None,
     ):
         self.name = name
         self.config = config
@@ -258,6 +361,65 @@ class Agent(Askable[TResult]):
 
         return make_tool
 
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: type[T2],
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: ResponseProto[T2],
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: None,
+    ) -> "AgentReply[str, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+    ) -> "AgentReply[TResult, TResult]": ...
+
     async def ask(
         self,
         msg: str,
@@ -269,8 +431,8 @@ class Agent(Askable[TResult]):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
-    ) -> "AgentReply[TResult]":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
@@ -312,8 +474,8 @@ class Agent(Askable[TResult]):
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
-        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
-    ) -> "AgentReply[TResult]":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
         if response_schema is omit:
             final_schema = self._response_schema
         else:
@@ -381,7 +543,7 @@ class Agent(Askable[TResult]):
 
             message = await agent_turn(event, context)
 
-            return AgentReply[TResult](
+            return AgentReply(
                 message,
                 context=context,
                 agent=self,
