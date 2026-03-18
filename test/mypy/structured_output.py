@@ -53,7 +53,7 @@ async def check_dataclass_response_schema() -> None:
 
 
 async def check_union_response_schema() -> None:
-    agent = Agent(
+    agent = Agent[int | str](
         "test",
         config=TestConfig(),
         response_schema=int | str,

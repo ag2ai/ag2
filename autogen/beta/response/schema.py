@@ -56,7 +56,7 @@ class ResponseSchema(ResponseProto[T]):
 
         self.name = name
         self.description: str | None = description or schema.pop("description", None)
-        if (docstring := getattr(types, "__doc__", None)) and "PEP" not in docstring:
+        if not description and (docstring := getattr(types, "__doc__", None)) and "PEP" not in docstring:
             self.description = docstring
 
         self.json_schema = schema
