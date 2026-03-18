@@ -292,7 +292,7 @@ class TestStripMarkdownFences:
         assert strip_markdown_fences('```{"key": "value"}```') == '{"key": "value"}'
 
     def test_whitespace_around_fences(self) -> None:
-        assert strip_markdown_fences('  ```json\n[1, 2]\n```  ') == "[1, 2]"
+        assert strip_markdown_fences("  ```json\n[1, 2]\n```  ") == "[1, 2]"
 
     def test_empty_string(self) -> None:
         assert strip_markdown_fences("") == ""
@@ -317,10 +317,7 @@ class TestParseWithMarkdownFences:
 
     def test_parse_plain_fence(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
-        response = (
-            "Text\n---a2ui_JSON---\n```\n"
-            '{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```'
-        )
+        response = 'Text\n---a2ui_JSON---\n```\n{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```'
         result = parser.parse(response)
         assert result.has_a2ui is True
         assert len(result.operations) == 1

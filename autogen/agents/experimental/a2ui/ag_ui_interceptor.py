@@ -17,6 +17,8 @@ with optional_import_block():
 
     from ....agentchat.remote import ServiceResponse
 
+__all__ = ["a2ui_event_interceptor", "create_a2ui_event_interceptor"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +57,7 @@ def create_a2ui_event_interceptor(
     """
     parser = A2UIResponseParser(version_string=version_string, delimiter=delimiter)
 
-    async def interceptor(response: ServiceResponse) -> AsyncIterator[BaseEvent]:
+    async def a2ui_event_interceptor(response: ServiceResponse) -> AsyncIterator[BaseEvent]:
         if not response.message:
             return
 
@@ -85,7 +87,7 @@ def create_a2ui_event_interceptor(
         else:
             response.message = None  # type: ignore[assignment]
 
-    return interceptor
+    return a2ui_event_interceptor
 
 
 #: Default AG-UI event interceptor for A2UI with standard configuration.

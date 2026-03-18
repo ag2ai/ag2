@@ -74,12 +74,15 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         """Check incoming message parts for A2UI action DataParts."""
         assert context.message
         for part in context.message.parts:
-            if isinstance(part.root, DataPart) and part.root.metadata:
-                if part.root.metadata.get(MIME_TYPE_KEY) == A2UI_MIME_TYPE:
-                    messages = part.root.data.get("messages", [])
-                    for msg in messages:
-                        if isinstance(msg, dict) and "action" in msg:
-                            return msg["action"]
+            if (
+                isinstance(part.root, DataPart)
+                and part.root.metadata
+                and part.root.metadata.get(MIME_TYPE_KEY) == A2UI_MIME_TYPE
+            ):
+                messages = part.root.data.get("messages", [])
+                for msg in messages:
+                    if isinstance(msg, dict) and "action" in msg:
+                        return msg["action"]
         return None
 
     async def _handle_action(
@@ -115,11 +118,10 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             # Also check functions registered via register_for_llm
             if tool_func is None:
                 for func_map in self._agent.function_map.values():
-                    if callable(func_map):
-                        # Check by function name
-                        if getattr(func_map, "__name__", "") == action_def.tool_name:
-                            tool_func = func_map
-                            break
+                    # Check by function name
+                    if callable(func_map) and getattr(func_map, "__name__", "") == action_def.tool_name:
+                        tool_func = func_map
+                        break
 
             if tool_func is None:
                 logger.error("Tool '%s' not found on agent for action '%s'", action_def.tool_name, action_name)
@@ -283,10 +285,9 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-        if not full_response_text:
-            # input_required was handled inside _stream_agent_response
-            if not streaming_started:
-                return
+        # input_required was handled inside _stream_agent_response
+        if not full_response_text and not streaming_started:
+            return
 
         final_parts = self._build_final_parts(full_response_text, use_a2ui)
         if final_parts:

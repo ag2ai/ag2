@@ -19,7 +19,6 @@ from collections.abc import AsyncIterable
 from typing import Any
 
 import jsonschema
-from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -34,6 +33,8 @@ from prompt_builder import (
     get_ui_prompt,
 )
 from tools import get_restaurants
+
+from autogen.agents.experimental.a2ui.response_parser import A2UIResponseParser
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class RestaurantAgent:
 
     def _build_agent(self, use_ui: bool) -> LlmAgent:
         """Builds the LLM agent for the restaurant agent."""
-        LITELLM_MODEL = os.getenv("LITELLM_MODEL", "gemini/gemini-2.5-flash")
+        LITELLM_MODEL = os.getenv("LITELLM_MODEL", "gemini/gemini-2.5-flash")  # noqa #N806
 
         if use_ui:
             # Construct the full prompt with UI instructions, examples, and schema

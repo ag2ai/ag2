@@ -42,6 +42,7 @@ class A2UISchemaManager:
 
         v0_9/
         ├── prompt_example.json     # Our prompt example (version-specific)
+        ├── prompt_message_types.md # Message type examples to help the LLM (version-specific)
         └── spec/                   # Copied directly from google/A2UI
             ├── server_to_client.json
             ├── basic_catalog.json

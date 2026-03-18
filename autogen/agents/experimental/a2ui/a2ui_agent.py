@@ -141,9 +141,7 @@ class A2UIAgent(ConversableAgent):
                 A2UIAgent._a2ui_validating_reply,
             )
 
-    def _validate_a2ui_response(
-        self, response_text: str
-    ) -> tuple[A2UIParseResult, list[str] | None]:
+    def _validate_a2ui_response(self, response_text: str) -> tuple[A2UIParseResult, list[str] | None]:
         """Parse and validate an A2UI response.
 
         Returns:

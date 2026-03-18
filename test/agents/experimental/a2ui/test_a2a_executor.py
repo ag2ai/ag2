@@ -21,10 +21,7 @@ class TestBuildFinalParts:
     """Tests for _build_final_parts — the pure parsing/part-building logic."""
 
     def test_a2ui_response_returns_text_and_data_parts(self, executor: A2UIAgentExecutor) -> None:
-        response = (
-            "Here is your UI.\n---a2ui_JSON---\n"
-            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
-        )
+        response = 'Here is your UI.\n---a2ui_JSON---\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
         parts = executor._build_final_parts(response, use_a2ui=True)
         assert len(parts) == 2
         # First part is text
@@ -45,10 +42,7 @@ class TestBuildFinalParts:
         assert parts[0].root.text == "Just plain text."  # type: ignore[union-attr]
 
     def test_plain_text_when_a2ui_disabled(self, executor: A2UIAgentExecutor) -> None:
-        response = (
-            "Text\n---a2ui_JSON---\n"
-            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
-        )
+        response = 'Text\n---a2ui_JSON---\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]'
         parts = executor._build_final_parts(response, use_a2ui=False)
         # A2UI not active — returns full text as-is
         assert len(parts) == 1
@@ -67,8 +61,7 @@ class TestBuildFinalParts:
 
     def test_markdown_fences_stripped(self, executor: A2UIAgentExecutor) -> None:
         response = (
-            "UI below.\n---a2ui_JSON---\n```json\n"
-            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```'
+            'UI below.\n---a2ui_JSON---\n```json\n[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```'
         )
         parts = executor._build_final_parts(response, use_a2ui=True)
         assert len(parts) == 2

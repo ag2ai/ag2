@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 from collections.abc import Iterator
 from typing import Any, cast
 from uuid import uuid4
