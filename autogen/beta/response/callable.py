@@ -98,7 +98,7 @@ def response_schema(
         return CallableResponse[T](
             validator,
             name=final_name,
-            description=description or f.__doc__ or "",
+            description=description or f.__doc__ or None,
             schema=schema or json_schema,
         )
 
