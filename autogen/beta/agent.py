@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
+from typing_extensions import TypeVar as TypeVar313
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -24,18 +25,23 @@ from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
+from .types import Omittable, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
 
 
-class Askable(Protocol):
+TResult = TypeVar313("TResult", default=str)
+
+
+class Askable(Protocol[TResult]):
     async def ask(
         self,
         msg: str,
@@ -46,11 +52,11 @@ class Askable(Protocol):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
-        raise NotImplementedError
+        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
+    ) -> "AgentReply[TResult]": ...
 
 
-class AgentReply(Askable):
+class AgentReply(Askable[TResult]):
     def __init__(
         self,
         response: ModelResponse,
@@ -58,11 +64,28 @@ class AgentReply(Askable):
         context: "Context",
         client: "LLMClient",
         agent: "Agent",
+        provider: Provider | None,
+        response_schema: ResponseProto[TResult] | None,
     ) -> None:
         self.response = response
         self.context = context
         self.__client = client
         self.__agent = agent
+        self.__provider = provider
+        self.__schema = response_schema
+
+    async def validate(self) -> TResult | None:
+        if self.__schema is None:
+            return self.content
+
+        if (content := self.content) is None:
+            return None
+
+        return await self.__schema.validate(
+            content,
+            context=self.context,
+            provider=self.__provider,
+        )
 
     @property
     def content(self) -> str | None:
@@ -83,7 +106,8 @@ class AgentReply(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
+    ) -> "AgentReply[TResult]":
         initial_event = ModelRequest(content=msg)
 
         context = self.context
@@ -102,6 +126,7 @@ class AgentReply(Askable):
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
+            response_schema=response_schema,
         )
 
 
@@ -109,7 +134,7 @@ PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
 PromptType: TypeAlias = str | PromptHook
 
 
-class Agent(Askable):
+class Agent(Askable[TResult]):
     def __init__(
         self,
         name: str,
@@ -121,6 +146,7 @@ class Agent(Askable):
         middleware: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
+        response_schema: ResponseProto[TResult] | type[TResult] | None = None,
     ):
         self.name = name
         self.config = config
@@ -137,6 +163,8 @@ class Agent(Askable):
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
+
+        self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
@@ -241,7 +269,8 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
+    ) -> "AgentReply[TResult]":
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
@@ -272,6 +301,7 @@ class Agent(Askable):
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
+            response_schema=response_schema,
         )
 
     async def _execute(
@@ -282,7 +312,13 @@ class Agent(Askable):
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[TResult] | type[TResult] | None] = omit,
+    ) -> "AgentReply[TResult]":
+        if response_schema is omit:
+            final_schema = self._response_schema
+        else:
+            final_schema = ResponseSchema.ensure_schema(response_schema)
+
         all_tools: list[Tool] = list(
             chain(
                 self.tools,
@@ -302,7 +338,11 @@ class Agent(Askable):
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
-        llm_call: LLMCall = partial(client, tools=all_schemas)
+        llm_call: LLMCall = partial(
+            client,
+            tools=all_schemas,
+            response_schema=final_schema,
+        )
 
         for m in reversed(
             list(
@@ -341,11 +381,13 @@ class Agent(Askable):
 
             message = await agent_turn(event, context)
 
-            return AgentReply(
+            return AgentReply[TResult](
                 message,
                 context=context,
                 agent=self,
                 client=client,
+                provider=self.dependency_provider,
+                response_schema=final_schema,
             )
 
     def as_conversable(self) -> "ConversableAdapter":
@@ -372,12 +414,13 @@ def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awa
 
     async def wrapper(event: ModelRequest, context: Context) -> str:
         async with AsyncExitStack() as stack:
-            return await call_model.asolve(
+            r = await call_model.asolve(
                 event,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
                 **{CONTEXT_OPTION_NAME: context},
             )
+        return r
 
     return wrapper

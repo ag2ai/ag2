@@ -114,19 +114,19 @@ async def test_concurrent_tool_execution() -> None:
 
     async def slow_tool_a() -> str:
         execution_order.append("a_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("a_end")
         return "result_a"
 
     async def slow_tool_b() -> str:
         execution_order.append("b_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("b_end")
         return "result_b"
 
     async def slow_tool_c() -> str:
         execution_order.append("c_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("c_end")
         return "result_c"
 

@@ -7,10 +7,25 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
+    if not response or not response.json_schema:
+        return
+
+    schema = {
+        "schema": response.json_schema,
+        "name": response.name,
+    }
+    if response.description:
+        schema["description"] = response.description
+
+    return {"type": "json_schema", "json_schema": schema}
 
 
 def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
