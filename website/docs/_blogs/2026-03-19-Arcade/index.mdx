@@ -18,7 +18,7 @@ This solves common problems when connecting agents to external services:
 - Storing credentials securely and isolating them from the LLM layer
 - Handling scope negotiation and incremental authorization
 
-In this post we'll build a Gmail assistant using AG2 and the Arcade SDK. The agent will list, search, read threads, send, reply, and archive emails using AG2's `AssistantAgent` + `UserProxyAgent` pattern while Arcade handles all the authentication and API complexity behind the scenes.
+In this post, we'll build a Gmail assistant using AG2 and the Arcade SDK. The agent will list, search, read threads, send, reply, and archive emails using AG2's `AssistantAgent` + `UserProxyAgent`, pattern while Arcade handles all the authentication and API complexity behind the scenes.
 
 <!-- more -->
 
@@ -41,7 +41,7 @@ AG2 handles agent orchestration. Arcade handles tool infrastructure. Each does w
 
 ## Building a Gmail Agent
 
-You'll need an [OpenAI API key](https://platform.openai.com/api-keys), an [Arcade API key](https://docs.arcade.dev/home/api-keys), and the email you registered with at [arcade.dev](https://arcade.dev).
+You'll need an [OpenAI API key](https://platform.openai.com/api-keys), an [Arcade API key](https://docs.arcade.dev/home/api-keys), and the email you used to register at [arcade.dev](https://arcade.dev).
 
 ### Step 1: Initialize Arcade and the tool helper
 
@@ -77,7 +77,7 @@ The first time a tool is called, Arcade sends the user an OAuth link. After that
 
 ### Step 2: Create tool wrappers for AG2
 
-We create thin wrappers that call `call_arcade_tool` with the Arcade tool name and inputs. The full example includes 11 tools (search, archive, trash, reply, drafts, and more). Here are three core ones:
+We create thin wrappers that call `call_arcade_tool` with the Arcade tool name and inputs. The full example includes 11 tools (search, archive, trash, reply, drafts, and more). Here are three of the core ones:
 
 ```python title="main.py"
 def list_emails(
@@ -112,7 +112,7 @@ def send_email(to: str, subject: str, body: str) -> dict:
 
 ### Step 3: Wire up the AG2 agents
 
-The `AssistantAgent` decides which tools to call, the `UserProxyAgent` executes them. We register each function on both agents:
+The `AssistantAgent` decides which tools to call, and the `UserProxyAgent` executes them. We register each function on both agents:
 
 ```python title="main.py"
 import datetime
@@ -224,9 +224,8 @@ The Gmail agent uses Arcade's Gmail toolkit, but Arcade exposes the entire Googl
 
 A few ideas:
 
-**Multi-service agent**: Combine Gmail and Linear tools in the same agent. Read an email about a bug report, automatically create a Linear issue, and reply to the sender with the ticket link.
-
-**Multi-agent pipeline**: Use AG2's group chat to build a team of specialists. An email triage agent reads and categorizes incoming mail. A project management agent creates tasks in Linear for anything actionable. A response drafter agent prepares replies for emails that need one.
+- **Multi-service agent**: Combine Gmail and Linear tools in the same agent. Read an email about a bug report, automatically create a Linear issue, and reply to the sender with the ticket link.
+- **Multi-agent pipeline**: Use AG2's group chat to build a team of specialists. An email triage agent reads and categorizes incoming mail. A project management agent creates tasks in Linear for anything actionable. A response drafter agent prepares replies for emails that need one.
 
 ## Learn More
 
