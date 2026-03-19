@@ -5,25 +5,26 @@ sidebarTitle: A2UIAgent
 
 [`A2UIAgent`](/docs/api-reference/autogen/agents/experimental/A2UIAgent) is a specialized AG2 agent that produces rich user interfaces using the [A2UI protocol](https://a2ui.org/){.external-link target="_blank"}. Instead of returning plain text, the agent generates structured JSON that client-side renderers transform into interactive UI components — cards, forms, buttons, images, and more.
 
-A2UIAgent handles the full lifecycle: prompt engineering with schema instructions, response parsing to extract A2UI JSON, optional schema validation with automatic retry, and integration with [A2A (Agent-to-Agent)](https://google.github.io/A2A/){.external-link target="_blank"} for serving UI over the wire.
+A2UIAgent handles the full lifecycle: prompt engineering with schema instructions, response parsing to extract A2UI JSON, optional schema validation with automatic retry, and integration with [A2A (Agent-to-Agent)](https://google.github.io/A2A/){.external-link target="_blank"} for serving UI.
 
 ## When to Use A2UIAgent
 
 Use A2UIAgent when your agent needs to:
 
-- Display structured content (product cards, dashboards, forms) rather than plain text
-- Provide interactive elements (buttons, dropdowns, choice pickers) that trigger actions
-- Serve UI to multiple client platforms (web, mobile, Flutter) via a single backend
+- Return structured content (product cards, dashboards, forms) rather than plain text
+- Support interactive elements (buttons, dropdowns, choice pickers) that trigger actions
+- Support serving UI to multiple client platforms (web, mobile, Flutter) via a single backend
 - Support multi-surface flows (e.g. show previews on one surface, scheduling options on another)
 
 ## Supported Protocol
 
-A2UIAgent currently supports **A2UI v0.9** with the [basic catalog](https://a2ui.org/){.external-link target="_blank"}, which includes components like:
+A2UIAgent currently supports [**A2UI v0.9**](https://a2ui.org/specification/v0.9-a2ui/){.external-link target="_blank"}. Its basic catalog includes components like:
 
 - **Layout**: Column, Row, Card
 - **Content**: Text (with variants: h1, h2, h3, body, caption), Image, Divider
 - **Interactive**: Button, TextField, ChoicePicker
-- **Custom**: Extend with your own catalog components (e.g. LinkedInPost, XPost)
+
+A2UIAgent also supports the use of a custom catalog for your own catalog components. For example, if you wanted to generate LinkedIn post previews, you could create your own LinkedInPost component and put it in a custom catalog.
 
 ## Quick Start
 
@@ -40,7 +41,7 @@ agent = A2UIAgent(
 # through the response parser.
 ```
 
-The agent automatically generates a system prompt that instructs the LLM how to produce A2UI output, including the response format, available components, and catalog rules.
+The agent automatically generates a system prompt that instructs the LLM how to produce A2UI output, available components, and catalog rules.
 
 ## Key Parameters
 
@@ -56,8 +57,7 @@ agent = A2UIAgent(
 
     # Protocol settings
     protocol_version="v0.9",              # Currently only v0.9 supported
-    catalog_id=None,                       # Auto-detected from catalog
-    custom_catalog=Path("my_catalog.json"),  # Extend basic catalog with custom components
+    custom_catalog=Path("my_catalog.json"),  # Must include $id field
     custom_catalog_rules="Use MyCard for all product displays.",
 
     # Prompt control
@@ -68,16 +68,18 @@ agent = A2UIAgent(
     validate_responses=True,               # Enable schema validation + retry
     validation_retries=2,                  # Max retry attempts on validation failure
 
-    # Actions (button event handling)
+    # Actions (button handling)
     actions=[
         A2UIAction(
             name="book_table",
-            tool_name="book_restaurant",       # Routes to this tool directly
+            tool_name="book_restaurant",       # Server event routed to tool
             description="Book a table at the selected restaurant",
         ),
         A2UIAction(
-            name="show_details",
-            description="Show full details",   # No tool_name = routed to LLM
+            name="openUrl",
+            action_type="functionCall",        # Client-side function
+            description="Open restaurant website",
+            example_args={"url": "https://example.com"},
         ),
     ],
 )
@@ -86,12 +88,12 @@ agent = A2UIAgent(
 | Parameter | Description |
 |-----------|-------------|
 | `protocol_version` | A2UI protocol version. Currently `"v0.9"`. |
-| `custom_catalog` | Path or dict extending the basic catalog with custom components. |
+| `custom_catalog` | Path or dict extending the basic catalog with custom components. Must include a `$id` field. |
 | `custom_catalog_rules` | Plain-text rules for custom components, appended to the prompt. |
 | `include_schema_in_prompt` | Include the full JSON schema in the system prompt. Improves accuracy but uses more tokens. |
 | `validate_responses` | Enable schema validation. Invalid responses trigger the retry loop. |
 | `validation_retries` | Number of retry attempts when validation fails. Requires `validate_responses=True`. |
-| `actions` | List of `A2UIAction` definitions for button event handling. |
+| `actions` | List of `A2UIAction` definitions for button handling (server events and client functions). |
 
 ## How It Works
 
@@ -125,11 +127,11 @@ This ensures the LLM self-corrects common mistakes like missing required fields 
 
 ### Actions
 
-Actions connect UI buttons to backend logic. Each `A2UIAction` defines:
+Actions connect UI buttons to behavior. A2UI defines two action types, and `A2UIAction` supports both:
 
-- **`name`**: The action identifier (matches the button's `event.name` in A2UI JSON)
-- **`tool_name`** (optional): If set, the action calls this tool directly with the button's context
-- **`description`**: Injected into the system prompt so the LLM knows how to create buttons for it
+#### Server Actions (`action_type="event"`)
+
+Server actions dispatch named events to the server when a button is clicked. They can be routed to a registered tool or handled by the LLM.
 
 ```python
 # Tool action: button click calls schedule_posts(time="9:00 AM") directly
@@ -137,6 +139,48 @@ A2UIAction(name="schedule_9am", tool_name="schedule_posts", example_context={"ti
 
 # LLM action: button click sends a prompt to the LLM for a new response
 A2UIAction(name="rewrite", description="Regenerate with a different creative angle")
+```
+
+The LLM generates buttons with: `{"event": {"name": "schedule_9am", "context": {"time": "9:00 AM"}}}`
+
+#### Client Actions (`action_type="functionCall"`)
+
+Client actions execute client-side functions (e.g., opening a URL) without server communication. Use `example_args` to show the LLM what arguments to include.
+
+```python
+A2UIAction(
+    name="openUrl",
+    action_type="functionCall",
+    description="Open a URL in the user's browser",
+    example_args={"url": "https://example.com"},
+)
+```
+
+The LLM generates buttons with: `{"functionCall": {"name": "openUrl", "args": {"url": "https://..."}}}`
+
+#### Mixing Both Types
+
+```python
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+    actions=[
+        # Server: route to a tool
+        A2UIAction(
+            name="book_table",
+            tool_name="book_restaurant",
+            description="Book a table at the selected restaurant",
+            example_context={"restaurant_id": "abc123"},
+        ),
+        # Client: open link in browser
+        A2UIAction(
+            name="openUrl",
+            action_type="functionCall",
+            description="Open the restaurant's website",
+            example_args={"url": "https://example.com"},
+        ),
+    ],
+)
 ```
 
 ## Serving with AG-UI

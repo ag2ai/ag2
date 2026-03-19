@@ -56,7 +56,6 @@ class A2UIAgent(ConversableAgent):
         name: str = "a2ui_agent",
         system_message: str | None = None,
         protocol_version: str = "v0.9",
-        catalog_id: str | None = None,
         custom_catalog: str | Path | dict[str, Any] | None = None,
         custom_catalog_rules: str | None = None,
         include_schema_in_prompt: bool = True,
@@ -75,12 +74,9 @@ class A2UIAgent(ConversableAgent):
                 plus the A2UI prompt section.
             protocol_version: The A2UI protocol version to target. Currently only "v0.9"
                 is supported.
-            catalog_id: The A2UI catalog identifier. Defaults to the basic catalog for
-                the given protocol version. When using a custom catalog, this should
-                be set to the custom catalog's ID (or it will be inferred from the
-                catalog's ``$id`` field).
             custom_catalog: A custom catalog that extends the basic catalog. Can be a
                 file path (str/Path) to a JSON file, or a dict with the schema directly.
+                Must include a ``$id`` field (used as the catalogId in A2UI messages).
                 The custom catalog's components are available alongside all basic catalog
                 components.
             custom_catalog_rules: Plain-text rules for the custom catalog components,
@@ -93,15 +89,16 @@ class A2UIAgent(ConversableAgent):
                 and retry on failure. Requires the ``a2ui`` extra (jsonschema).
             validation_retries: Maximum number of retry attempts when validation fails.
                 Only used when ``validate_responses=True``. Default is 1.
-            actions: List of ``A2UIAction`` definitions for button event handling.
-                Actions with ``tool_name`` set are routed to the named tool directly.
-                Actions with ``tool_name=None`` are passed to the LLM as a prompt.
+            actions: List of ``A2UIAction`` definitions for button handling.
+                Server actions (``action_type="event"``) dispatch events to the
+                server — routed to a tool via ``tool_name`` or handled by the LLM.
+                Client actions (``action_type="functionCall"``) execute client-side
+                functions like ``openUrl`` without server communication.
                 Available actions are auto-injected into the system prompt.
             **kwargs: Additional arguments passed to ConversableAgent.
         """
         self._schema_manager = A2UISchemaManager(
             protocol_version=protocol_version,
-            catalog_id=catalog_id,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
         )

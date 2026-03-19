@@ -28,7 +28,7 @@ with optional_import_block():
     from a2a.types import Artifact, DataPart, InternalError, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.utils.errors import ServerError
 
-    from ....a2a.utils import make_input_required_message, new_artifact, request_message_from_a2a
+    from ....a2a.utils import make_input_required_message, new_artifact, request_message_from_a2a  # type: ignore[attr-defined]
     from ....agentchat.remote import AgentService
 
 from .a2a_helpers import (
@@ -82,7 +82,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                 messages = part.root.data.get("messages", [])
                 for msg in messages:
                     if isinstance(msg, dict) and "action" in msg:
-                        return msg["action"]
+                        action: dict[str, Any] = msg["action"]
+                        return action
         return None
 
     async def _handle_action(

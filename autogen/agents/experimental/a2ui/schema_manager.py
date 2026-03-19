@@ -54,7 +54,6 @@ class A2UISchemaManager:
     def __init__(
         self,
         protocol_version: str = "v0.9",
-        catalog_id: str | None = None,
         custom_catalog: str | Path | dict[str, Any] | None = None,
         custom_catalog_rules: str | None = None,
         spec_dir: str | Path | None = None,
@@ -63,12 +62,10 @@ class A2UISchemaManager:
 
         Args:
             protocol_version: The A2UI protocol version. Currently only "v0.9".
-            catalog_id: The catalog ID to use. Defaults to the basic catalog for
-                the protocol version. If a custom catalog is provided, this should
-                be set to the custom catalog's ID.
             custom_catalog: A custom catalog that extends the basic catalog. Can be:
                 - A file path (str or Path) to a JSON catalog file
                 - A dict with the catalog schema directly
+                Must include a ``$id`` field (used as the catalogId in A2UI messages).
                 The custom catalog should reference ``basic_catalog.json`` in its
                 ``$defs/anyComponent`` to inherit all basic components.
             custom_catalog_rules: Plain-text rules for the custom catalog components,
@@ -109,13 +106,17 @@ class A2UISchemaManager:
                 with open(path) as f:
                     self._custom_catalog = json.load(f)
 
-        # Set catalog ID — prefer explicit param, then custom catalog's $id, then default
-        if catalog_id:
-            self._catalog_id = catalog_id
-        elif self._custom_catalog and "$id" in self._custom_catalog:
-            self._catalog_id = self._custom_catalog["$id"]
+        # Set catalog ID from custom catalog's $id or default
+        if self._custom_catalog is not None:
+            if "$id" not in self._custom_catalog:
+                raise ValueError(
+                    "Custom catalog must include a '$id' field. "
+                    "This is used as the catalogId in A2UI createSurface messages. "
+                    'Example: {"$id": "https://mycompany.com/my_catalog.json", ...}'
+                )
+            self._catalog_id: str = self._custom_catalog["$id"]
         else:
-            self._catalog_id = _VERSION_CONFIG[protocol_version]["default_catalog_id"]
+            self._catalog_id = str(_VERSION_CONFIG[protocol_version]["default_catalog_id"])
 
     @property
     def protocol_version(self) -> str:
@@ -343,19 +344,42 @@ class A2UISchemaManager:
         if actions:
             action_lines = ["\n\n## Available Actions\n"]
             action_lines.append("The following actions can be triggered by buttons in the UI:\n")
-            for a in actions:
-                desc = f": {a.description}" if a.description else ""
-                action_lines.append(f"- `{a.name}`{desc}")
-                if a.example_context:
-                    action_lines.append(f"  Context: {json.dumps(a.example_context)}")
-            action_lines.append(
-                "\nTo create a button that triggers an action, use a Button with a child Text component:\n"
-                "```json\n"
-                '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
-                '"action": {"event": {"name": "<action_name>", "context": {...}}}},\n'
-                '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
-                "```"
-            )
+
+            event_actions = [a for a in actions if a.action_type == "event"]
+            func_actions = [a for a in actions if a.action_type == "functionCall"]
+
+            if event_actions:
+                action_lines.append("### Server Events\n")
+                for a in event_actions:
+                    desc = f": {a.description}" if a.description else ""
+                    action_lines.append(f"- `{a.name}`{desc}")
+                    if a.example_context:
+                        action_lines.append(f"  Context: {json.dumps(a.example_context)}")
+                action_lines.append(
+                    "\nTo create a button that triggers a server event:\n"
+                    "```json\n"
+                    '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
+                    '"action": {"event": {"name": "<action_name>", "context": {...}}}},\n'
+                    '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
+                    "```"
+                )
+
+            if func_actions:
+                action_lines.append("\n### Client Functions\n")
+                for a in func_actions:
+                    desc = f": {a.description}" if a.description else ""
+                    action_lines.append(f"- `{a.name}`{desc}")
+                    if a.example_args:
+                        action_lines.append(f"  Args: {json.dumps(a.example_args)}")
+                action_lines.append(
+                    "\nTo create a button that calls a client function:\n"
+                    "```json\n"
+                    '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
+                    '"action": {"functionCall": {"name": "<function_name>", "args": {...}}}},\n'
+                    '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
+                    "```"
+                )
+
             sections.append("\n".join(action_lines))
 
         if include_schema:

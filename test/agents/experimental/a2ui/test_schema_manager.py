@@ -20,9 +20,13 @@ class TestA2UISchemaManager:
         with pytest.raises(ValueError, match="Unsupported A2UI protocol version"):
             A2UISchemaManager(protocol_version="v0.7")
 
-    def test_custom_catalog_id(self) -> None:
-        manager = A2UISchemaManager(catalog_id="mycompany.com:custom")
-        assert manager.catalog_id == "mycompany.com:custom"
+    def test_custom_catalog_id_from_catalog(self) -> None:
+        manager = A2UISchemaManager(custom_catalog={"$id": "https://mycompany.com/custom.json", "components": {}})
+        assert manager.catalog_id == "https://mycompany.com/custom.json"
+
+    def test_custom_catalog_without_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="Custom catalog must include"):
+            A2UISchemaManager(custom_catalog={"components": {}})
 
     def test_server_to_client_schema_structure(self) -> None:
         manager = A2UISchemaManager()

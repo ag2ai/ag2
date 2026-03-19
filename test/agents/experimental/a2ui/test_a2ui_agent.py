@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from autogen.agents.experimental.a2ui import A2UIAgent
+from autogen.agents.experimental.a2ui import A2UIAction, A2UIAgent
 
 
 class TestA2UIAgent:
@@ -38,14 +38,22 @@ class TestA2UIAgent:
         with pytest.raises(ValueError, match="Unsupported A2UI protocol version"):
             A2UIAgent(name="test_agent", protocol_version="v0.7", llm_config=False)
 
-    def test_custom_catalog_id(self) -> None:
+    def test_custom_catalog_id_from_catalog(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
-            catalog_id="mycompany.com:custom",
+            custom_catalog={"$id": "https://mycompany.com/custom.json", "components": {}},
             llm_config=False,
         )
-        assert agent.catalog_id == "mycompany.com:custom"
-        assert "mycompany.com:custom" in agent.system_message
+        assert agent.catalog_id == "https://mycompany.com/custom.json"
+        assert "mycompany.com/custom.json" in agent.system_message
+
+    def test_custom_catalog_without_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="Custom catalog must include"):
+            A2UIAgent(
+                name="test_agent",
+                custom_catalog={"components": {}},
+                llm_config=False,
+            )
 
     def test_custom_delimiter(self) -> None:
         agent = A2UIAgent(
@@ -124,6 +132,86 @@ class TestA2UIAgent:
         from autogen.agents.experimental import A2UIAgent as ImportedAgent
 
         assert ImportedAgent is A2UIAgent
+
+    def test_action_type_defaults_to_event(self) -> None:
+        action = A2UIAction(name="test_action", description="Test")
+        assert action.action_type == "event"
+
+    def test_event_action_in_prompt(self) -> None:
+        agent = A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            actions=[
+                A2UIAction(
+                    name="book_table",
+                    tool_name="book_restaurant",
+                    description="Book a table",
+                    example_context={"restaurant_id": "abc123"},
+                ),
+            ],
+        )
+        msg = agent.system_message
+        assert "Server Events" in msg
+        assert "book_table" in msg
+        assert '"event"' in msg
+        assert "Client Functions" not in msg
+
+    def test_function_call_action_in_prompt(self) -> None:
+        agent = A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            actions=[
+                A2UIAction(
+                    name="openUrl",
+                    action_type="functionCall",
+                    description="Open a URL",
+                    example_args={"url": "https://example.com"},
+                ),
+            ],
+        )
+        msg = agent.system_message
+        assert "Client Functions" in msg
+        assert "openUrl" in msg
+        assert '"functionCall"' in msg
+        assert "Server Events" not in msg
+
+    def test_mixed_actions_in_prompt(self) -> None:
+        agent = A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            actions=[
+                A2UIAction(
+                    name="schedule",
+                    description="Schedule posts",
+                    example_context={"time": "2:00 PM"},
+                ),
+                A2UIAction(
+                    name="openUrl",
+                    action_type="functionCall",
+                    description="Open URL",
+                    example_args={"url": "https://example.com"},
+                ),
+            ],
+        )
+        msg = agent.system_message
+        assert "Server Events" in msg
+        assert "Client Functions" in msg
+        assert "schedule" in msg
+        assert "openUrl" in msg
+
+    def test_get_action_both_types(self) -> None:
+        actions = [
+            A2UIAction(name="save", description="Save data"),
+            A2UIAction(name="openUrl", action_type="functionCall", description="Open URL"),
+        ]
+        agent = A2UIAgent(name="test_agent", llm_config=False, actions=actions)
+        save_action = agent.get_action("save")
+        assert save_action is not None
+        assert save_action.action_type == "event"
+        open_action = agent.get_action("openUrl")
+        assert open_action is not None
+        assert open_action.action_type == "functionCall"
+        assert agent.get_action("nonexistent") is None
 
 
 class TestA2UIAgentValidationRetry:
