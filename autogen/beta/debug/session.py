@@ -35,15 +35,7 @@ class DebugSession:
         self._client = client
 
     async def record_event(self, event: BaseEvent) -> None:
-        """Stream subscriber — serialise and forward every emitted event."""
-        from ..events.types import ModelMessage, ModelMessageChunk
-
-        # Skip events that are redundant in the debugger:
-        # - ModelMessage: already nested in ModelResponse.message
-        # - ModelMessageChunk: streaming fragments, not needed since full message is in ModelResponse
-        if isinstance(event, (ModelMessage, ModelMessageChunk)):
-            return
-
+        """Called when a new event is persisted to storage — serialise and forward to the debug server."""
         from .client import serialize_event
 
         s = serialize_event(event)

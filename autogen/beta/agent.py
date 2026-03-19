@@ -248,6 +248,15 @@ class Agent(Askable):
             raise ConfigNotProvidedError()
         client = config.create()
 
+        debug_url = os.environ.get("AG2_DEBUG_SERVER_URL")
+        _debug_storage = None
+        if debug_url and not stream:
+            from .debug.storage import DebugStorage as _DebugStorage
+            from .history import MemoryStorage as _MemoryStorage
+
+            _debug_storage = _DebugStorage(_MemoryStorage())
+            stream = MemoryStream(_debug_storage)
+
         stream = stream or MemoryStream()
 
         initial_event = ModelRequest(content=msg)
@@ -269,7 +278,6 @@ class Agent(Askable):
 
         additional_middleware: list[MiddlewareFactory] = list(middleware)
 
-        debug_url = os.environ.get("AG2_DEBUG_SERVER_URL")
         if debug_url:
             from .debug.client import get_server as _get_debug_client
             from .debug.middleware import DebugMiddleware
@@ -280,7 +288,14 @@ class Agent(Askable):
             session_id = str(stream.id)
             await debug_client.register_session(session_id, list(context.prompt))
             debug_session = DebugSession(session_id, stream=stream, context=context, client=debug_client)
-            stream.subscribe(debug_session.record_event)
+            if _debug_storage is not None:
+                # Wire the callback now that the session exists.  From this point on,
+                # every event that is actually persisted to history is forwarded to the
+                # debug server — no stream subscription needed.
+                _debug_storage.set_callback(debug_session.record_event)
+            else:
+                # Caller supplied their own stream; fall back to a stream subscription.
+                stream.subscribe(debug_session.record_event)
             # Replay any events already in storage (e.g. loaded via stream.history.replace)
             # so the dashboard shows the full history, not just events from this run.
             await debug_session.replay_events(await stream.history.get_events())
