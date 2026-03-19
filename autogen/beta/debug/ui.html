@@ -294,8 +294,8 @@
           <span class="tok-label">total</span><span class="tok-total" id="tok-total">0</span>
         </div>
         <div class="tabs">
-          <button class="tab active" data-mode="events">Events</button>
-          <button class="tab" data-mode="chat">Chat</button>
+          <button class="tab" data-mode="events">Events</button>
+          <button class="tab active" data-mode="chat">Chat</button>
           <button class="tab" data-mode="history">History</button>
         </div>
       </div>
@@ -304,12 +304,12 @@
         <!-- Left: mode-specific content -->
         <div id="left-col" class="col">
           <!-- EVENTS MODE -->
-          <div id="cnt-events" class="mode-cnt" style="display:flex;flex-direction:column;overflow:hidden;flex:1">
+          <div id="cnt-events" class="mode-cnt" style="display:none;flex-direction:column;overflow:hidden;flex:1">
             <div class="col-header">Events <span class="count" id="ev-count">0</span></div>
             <div class="col-body" id="events-body"></div>
           </div>
           <!-- CHAT MODE -->
-          <div id="cnt-chat" class="mode-cnt" style="display:none;flex-direction:column;overflow:hidden;flex:1">
+          <div id="cnt-chat" class="mode-cnt" style="display:flex;flex-direction:column;overflow:hidden;flex:1">
             <div class="col-header">Conversation</div>
             <div class="col-body chat-body" id="chat-body"></div>
           </div>
@@ -329,7 +329,7 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────
-let currentMode    = 'events';
+let currentMode    = 'chat';
 let selectedId     = null;
 let currentSession = null;
 
@@ -468,6 +468,9 @@ function renderEventsMode(session) {
   document.getElementById('ev-count').textContent = session.events.length;
   const body = document.getElementById('events-body');
 
+  // Check scroll position BEFORE adding new content
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+
   // Inject system prompt once if not already present
   if (!body.querySelector('.system-prompt') && session.prompt && session.prompt.length) {
     const sp = systemPromptEl(session.prompt);
@@ -512,8 +515,7 @@ function renderEventsMode(session) {
     evMap.set(ev.id, card);
   });
 
-  // Auto-scroll if near bottom
-  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+  // Auto-scroll only if user was already at the bottom
   if (atBottom) body.scrollTop = body.scrollHeight;
 }
 
@@ -522,6 +524,9 @@ function renderEventsMode(session) {
 // ─────────────────────────────────────────────────────────────────────────
 function renderChatMode(session) {
   const body = document.getElementById('chat-body');
+
+  // Check scroll position BEFORE adding new content
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
 
   if (!body.querySelector('.system-prompt') && session.prompt && session.prompt.length) {
     const sp = systemPromptEl(session.prompt);
@@ -538,7 +543,7 @@ function renderChatMode(session) {
     chatMap.set(ev.id, el);
   });
 
-  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+  // Auto-scroll only if user was already at the bottom
   if (atBottom) body.scrollTop = body.scrollHeight;
 }
 
