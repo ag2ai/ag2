@@ -28,7 +28,11 @@ with optional_import_block():
     from a2a.types import Artifact, DataPart, InternalError, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.utils.errors import ServerError
 
-    from ....a2a.utils import make_input_required_message, new_artifact, request_message_from_a2a  # type: ignore[attr-defined]
+    from ....a2a.utils import (  # type: ignore[attr-defined]
+        make_input_required_message,
+        new_artifact,
+        request_message_from_a2a,
+    )
     from ....agentchat.remote import AgentService
 
 from .a2a_helpers import (
