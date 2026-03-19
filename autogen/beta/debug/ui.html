@@ -100,6 +100,18 @@
   .status-badge.running { background: #1a2e1a; color: var(--green); }
   .status-badge.done    { background: #1a1a2a; color: var(--muted); }
 
+  #token-usage {
+    display: flex; align-items: center; gap: 8px;
+    font-family: monospace; font-size: 10px; color: var(--muted);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 2px 8px;
+  }
+  #token-usage .tok-sep { color: var(--border); }
+  #token-usage .tok-label { color: var(--muted); }
+  #token-usage .tok-in    { color: var(--blue); }
+  #token-usage .tok-out   { color: var(--green); }
+  #token-usage .tok-total { color: var(--text); font-weight: 600; }
+
   /* ── Mode tabs ── */
   .tabs { display: flex; gap: 2px; margin-left: auto; }
   .tab {
@@ -320,6 +332,13 @@
       <div id="detail-header">
         <span class="sid-full" id="dh-id"></span>
         <span class="status-badge" id="dh-status"></span>
+        <div id="token-usage" style="display:none">
+          <span class="tok-label">in</span><span class="tok-in" id="tok-in">0</span>
+          <span class="tok-sep">·</span>
+          <span class="tok-label">out</span><span class="tok-out" id="tok-out">0</span>
+          <span class="tok-sep">·</span>
+          <span class="tok-label">total</span><span class="tok-total" id="tok-total">0</span>
+        </div>
         <div class="tabs">
           <button class="tab active" data-mode="events">Events</button>
           <button class="tab" data-mode="chat">Chat</button>
@@ -781,6 +800,38 @@ async function resume(sessionId, bpId, btn) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Token usage
+// ─────────────────────────────────────────────────────────────────────────
+// Estimate tokens the same way as TokenLimiter: chars / 4
+function renderTokenUsage(session) {
+  let inputChars = 0, outputChars = 0;
+  session.events.forEach(ev => {
+    const d = ev.event_data;
+    if (ev.event_type === 'ModelRequest') {
+      inputChars += (d.content || '').length;
+    } else if (ev.event_type === 'ToolResultsEvent') {
+      (d.results || []).forEach(r => {
+        const c = r.result && r.result.content !== undefined ? r.result.content : '';
+        inputChars += (typeof c === 'string' ? c : JSON.stringify(c)).length;
+      });
+    } else if (ev.event_type === 'ModelResponse') {
+      outputChars += (d.message && d.message.content ? d.message.content : '').length;
+      // include tool call arguments
+      const calls = d.tool_calls && d.tool_calls.calls || [];
+      calls.forEach(c => { outputChars += (c.arguments || '').length; });
+    }
+  });
+  const input  = Math.round(inputChars  / 4);
+  const output = Math.round(outputChars / 4);
+  const total  = input + output;
+  const box = document.getElementById('token-usage');
+  box.style.display = 'flex';
+  document.getElementById('tok-in').textContent    = input.toLocaleString();
+  document.getElementById('tok-out').textContent   = output.toLocaleString();
+  document.getElementById('tok-total').textContent = total.toLocaleString();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Top-level render dispatcher
 // ─────────────────────────────────────────────────────────────────────────
 function renderDetail(session) {
@@ -788,6 +839,8 @@ function renderDetail(session) {
   const sb = document.getElementById('dh-status');
   sb.textContent = session.status;
   sb.className = `status-badge ${session.status}`;
+
+  renderTokenUsage(session);
 
   renderBreakpoints(session);
 
