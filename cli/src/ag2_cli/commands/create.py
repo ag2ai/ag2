@@ -1,7 +1,8 @@
-"""ag2 create — scaffold projects, agents, tools, and teams."""
+"""ag2 create — scaffold projects, agents, tools, teams, and artifacts."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -9,7 +10,7 @@ import typer
 from ..ui import console
 
 app = typer.Typer(
-    help="Scaffold new AG2 projects, agents, tools, and teams.",
+    help="Scaffold new AG2 projects, agents, tools, teams, and artifacts.",
     rich_markup_mode="rich",
 )
 
@@ -438,3 +439,225 @@ def create_team(
 
     _write_file(out_path, content)
     console.print(f"  [success]✓[/success] Created [path]{out_path}[/path]")
+
+
+# ---------------------------------------------------------------------------
+# ag2 create artifact
+# ---------------------------------------------------------------------------
+
+ARTIFACT_TYPES = ["template", "tool", "dataset", "agent", "skills", "bundle"]
+
+
+def _artifact_json(name: str, artifact_type: str, **extra: object) -> str:
+    """Generate a starter artifact.json."""
+    data: dict = {
+        "name": name,
+        "type": artifact_type,
+        "display_name": name.replace("-", " ").title(),
+        "description": "",
+        "version": "0.1.0",
+        "authors": [],
+        "license": "Apache-2.0",
+        "tags": [],
+    }
+    data.update(extra)
+    return json.dumps(data, indent=2) + "\n"
+
+
+def _skill_md(name: str, description: str) -> str:
+    """Generate a placeholder SKILL.md."""
+    return f"""\
+---
+name: {name}
+description: {description}
+license: Apache-2.0
+---
+
+# {name.replace("-", " ").title()}
+
+TODO: Write skill content here.
+"""
+
+
+def _scaffold_template(name: str, out: Path) -> None:
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "template",
+            template={
+                "scaffold": "scaffold/",
+                "variables": {
+                    "project_name": {"prompt": "Project name", "default": f"my-{name}", "transform": "slug"},
+                    "description": {"prompt": "Project description", "default": ""},
+                },
+                "ignore": ["__pycache__", "*.pyc", ".git"],
+                "post_install": [],
+            },
+            skills={"dir": "skills/", "auto_install": True},
+        ),
+    )
+    _write_file(out / "scaffold" / "README.md.tmpl", "# {{ project_name }}\n\n{{ description }}\n")
+    _write_file(
+        out / "skills" / "rules" / f"{name}-architecture" / "SKILL.md",
+        _skill_md(f"{name}-architecture", f"Architecture overview and conventions for {name}"),
+    )
+    _write_file(
+        out / "skills" / "skills" / "add-feature" / "SKILL.md",
+        _skill_md("add-feature", f"Step-by-step guide to add features to {name}"),
+    )
+
+
+def _scaffold_tool(name: str, out: Path) -> None:
+    slug = _to_var_name(name)
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "tool",
+            tool={
+                "kind": "ag2",
+                "source": "src/",
+                "functions": [{"name": slug, "description": ""}],
+                "requires": [],
+                "install_to": "tools/",
+            },
+            skills={"dir": "skills/", "auto_install": True},
+        ),
+    )
+    _write_file(out / "src" / "__init__.py", "")
+    _write_file(out / "src" / f"{slug}.py", f'"""Tool: {name}"""\n\n\ndef {slug}(query: str) -> str:\n    raise NotImplementedError\n')
+    _write_file(out / "tests" / f"test_{slug}.py", f'"""Tests for {name}."""\n\nfrom src.{slug} import {slug}\n\n\ndef test_{slug}_placeholder():\n    pass\n')
+    _write_file(
+        out / "skills" / "skills" / f"integrate-{name}" / "SKILL.md",
+        _skill_md(f"integrate-{name}", f"How to register and use the {name} tool with AG2 agents"),
+    )
+
+
+def _scaffold_dataset(name: str, out: Path) -> None:
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "dataset",
+            dataset={
+                "inline": "data/",
+                "remote": [],
+                "format": "jsonl",
+                "schema": {"fields": []},
+                "splits": {"sample": "data/sample.jsonl"},
+                "eval_compatible": False,
+            },
+            skills={"dir": "skills/", "auto_install": True},
+        ),
+    )
+    _write_file(out / "data" / "sample.jsonl", '{"input": "example", "expected": "result"}\n')
+    _write_file(
+        out / "skills" / "rules" / f"{name}-schema" / "SKILL.md",
+        _skill_md(f"{name}-schema", f"Schema and usage guide for the {name} dataset"),
+    )
+
+
+def _scaffold_agent(name: str, out: Path) -> None:
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "agent",
+            agent={
+                "source": "agent.md",
+                "model": "sonnet",
+                "tools": [],
+                "max_turns": 50,
+                "memory": "project",
+                "mcp_servers": {},
+                "preload_skills": [],
+            },
+            skills={"dir": "skills/", "auto_install": True},
+        ),
+    )
+    _write_file(out / "agent.md", f"# {name.replace('-', ' ').title()}\n\nYou are {name}. Describe your role here.\n")
+    _write_file(
+        out / "skills" / "skills" / f"use-{name}" / "SKILL.md",
+        _skill_md(f"use-{name}", f"How to use the {name} agent effectively"),
+    )
+
+
+def _scaffold_skills(name: str, out: Path) -> None:
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "skills",
+            skills={"dir": ".", "auto_install": True},
+        ),
+    )
+    _write_file(
+        out / "rules" / name / "SKILL.md",
+        _skill_md(name, f"Conventions and patterns for {name}"),
+    )
+    _write_file(
+        out / "skills" / f"{name}-guide" / "SKILL.md",
+        _skill_md(f"{name}-guide", f"Step-by-step guide for {name}"),
+    )
+
+
+def _scaffold_bundle(name: str, out: Path) -> None:
+    _write_file(
+        out / "artifact.json",
+        _artifact_json(
+            name, "bundle",
+            bundle={
+                "artifacts": [],
+                "install_order": ["skills", "tools", "templates", "datasets", "agents"],
+            },
+        ),
+    )
+
+
+_SCAFFOLD_FNS = {
+    "template": _scaffold_template,
+    "tool": _scaffold_tool,
+    "dataset": _scaffold_dataset,
+    "agent": _scaffold_agent,
+    "skills": _scaffold_skills,
+    "bundle": _scaffold_bundle,
+}
+
+
+@app.command("artifact")
+def create_artifact(
+    artifact_type: str = typer.Argument(..., help=f"Artifact type ({', '.join(ARTIFACT_TYPES)})."),
+    name: str = typer.Argument(..., help="Artifact name (e.g. my-template)."),
+    output_dir: Path = typer.Option(None, "--output", "-o", help="Parent directory for output (default: cwd)."),
+) -> None:
+    """Scaffold a new artifact for the AG2 artifacts registry.
+
+    [dim]Creates the directory structure, artifact.json, and placeholder skills
+    ready for authoring. Publish with [command]ag2 publish artifact[/command].[/dim]
+
+    [dim]Examples:[/dim]
+      [command]ag2 create artifact template my-template[/command]
+      [command]ag2 create artifact tool web-scraper[/command]
+      [command]ag2 create artifact dataset eval-bench[/command]
+    """
+    if artifact_type not in ARTIFACT_TYPES:
+        console.print(f"[error]Unknown artifact type: {artifact_type}[/error]")
+        console.print(f"Available types: {', '.join(ARTIFACT_TYPES)}")
+        raise typer.Exit(1)
+
+    parent = output_dir or Path.cwd()
+    out = parent / name
+    if out.exists():
+        console.print(f"[error]Directory already exists: {out}[/error]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[heading]Creating {artifact_type} artifact:[/heading] {name}\n")
+
+    scaffold_fn = _SCAFFOLD_FNS[artifact_type]
+    scaffold_fn(name, out)
+
+    file_count = sum(1 for f in out.rglob("*") if f.is_file())
+    console.print(f"  [success]✓[/success] Created [path]{out}[/path] ({file_count} files)")
+    console.print()
+    console.print("  Next steps:")
+    console.print(f"    1. Edit [path]{out / 'artifact.json'}[/path] — fill in description, authors, tags")
+    if artifact_type != "bundle":
+        console.print(f"    2. Write your skills in [path]{out / 'skills'}[/path]")
+    console.print(f"    3. Publish with [command]ag2 publish artifact {out}[/command]")
+    console.print()

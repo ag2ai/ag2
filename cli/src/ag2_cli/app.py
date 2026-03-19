@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from .commands import create, install, run, serve, test
+from .commands import create, install, publish, run, serve, test
 from .ui import console, print_banner
 
 app = typer.Typer(
@@ -41,3 +41,4 @@ app.command("run")(run.run_cmd)
 app.command("chat")(run.chat_cmd)
 app.command("serve")(serve.serve_cmd)
 app.add_typer(test.app, name="test")
+app.add_typer(publish.app, name="publish")

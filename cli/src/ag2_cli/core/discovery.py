@@ -59,14 +59,16 @@ def import_agent_file(path: Path) -> ModuleType:
 
 
 def _is_agent_instance(obj: Any) -> bool:
-    """Check if an object is a ConversableAgent instance."""
+    """Check if an object is a ConversableAgent instance (or duck-types as one)."""
     try:
         from autogen import ConversableAgent
 
-        return isinstance(obj, ConversableAgent)
+        if isinstance(obj, ConversableAgent):
+            return True
     except ImportError:
-        # Fall back to duck-typing if autogen not installed
-        return hasattr(obj, "initiate_chat") and hasattr(obj, "name")
+        pass
+    # Fall back to duck-typing
+    return hasattr(obj, "initiate_chat") and hasattr(obj, "name")
 
 
 def _get_agent_name(obj: Any) -> str:
