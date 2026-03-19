@@ -155,6 +155,97 @@ async def main(message: str):
     return result
 ```
 
+### `ag2 create artifact` — Artifact scaffold for the AG2 registry
+
+```bash
+ag2 create artifact template my-template
+ag2 create artifact tool web-scraper
+ag2 create artifact dataset eval-bench
+ag2 create artifact agent research-analyst
+ag2 create artifact skills my-framework
+ag2 create artifact bundle starter-kit
+```
+
+Scaffolds a complete artifact directory ready for authoring and publishing
+to the AG2 artifacts registry (`ag2ai/artifacts`).
+
+**Arguments:**
+- `artifact_type` — one of: `template`, `tool`, `dataset`, `agent`, `skills`, `bundle`
+- `name` — artifact name (e.g. `my-template`)
+
+**Options:**
+- `--output` / `-o` — parent directory for output (default: current directory)
+
+Each artifact type generates a different directory structure:
+
+**template:**
+```
+my-template/
+├── artifact.json            # Manifest with template config + variables
+├── scaffold/
+│   └── README.md.tmpl       # Template file ({{ variable }} substitution)
+└── skills/
+    ├── rules/
+    │   └── my-template-architecture/SKILL.md
+    └── skills/
+        └── add-feature/SKILL.md
+```
+
+**tool:**
+```
+web-scraper/
+├── artifact.json            # Manifest with tool config (kind, functions, requires)
+├── src/
+│   ├── __init__.py
+│   └── web_scraper.py       # Tool implementation stub
+├── tests/
+│   └── test_web_scraper.py
+└── skills/
+    └── skills/
+        └── integrate-web-scraper/SKILL.md
+```
+
+**dataset:**
+```
+eval-bench/
+├── artifact.json            # Manifest with dataset config (schema, splits, format)
+├── data/
+│   └── sample.jsonl         # Inline sample data
+└── skills/
+    └── rules/
+        └── eval-bench-schema/SKILL.md
+```
+
+**agent:**
+```
+research-analyst/
+├── artifact.json            # Manifest with agent config (model, tools, max_turns)
+├── agent.md                 # Agent definition (system prompt)
+└── skills/
+    └── skills/
+        └── use-research-analyst/SKILL.md
+```
+
+**skills:**
+```
+my-framework/
+├── artifact.json            # Manifest (skills dir = ".")
+├── rules/
+│   └── my-framework/SKILL.md
+└── skills/
+    └── my-framework-guide/SKILL.md
+```
+
+**bundle:**
+```
+starter-kit/
+└── artifact.json            # Manifest with artifacts list + install_order
+```
+
+All non-bundle types include an `artifact.json` with the appropriate
+type-specific config block and placeholder skills. Publish with
+`ag2 publish artifact <path>`.
+
 ## AI-Powered Generation (`--from-description`)
 
 This is the differentiator. When a user provides `--from-description`:

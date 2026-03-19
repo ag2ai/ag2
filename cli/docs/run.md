@@ -30,6 +30,30 @@ echo "Summarize this document" | ag2 run my_agent.py
 
 # Verbose mode — show tool calls, token counts, speaker transitions
 ag2 run my_team.py -m "Analyze Q4 earnings" --verbose
+
+# JSON output for scripting and pipelines
+ag2 run my_team.py -m "Summarize trends" --json
+
+# Limit conversation turns (default: 10)
+ag2 run my_team.py -m "Research topic" --max-turns 5
+```
+
+**Options:**
+- `--message` / `-m` — input message (required unless piped via stdin)
+- `--verbose` / `-V` — show detailed agent activity
+- `--json` — output result as structured JSON (suppresses live rendering)
+- `--max-turns` — maximum conversation turns (default: 10)
+
+**JSON output format** (`--json`):
+```json
+{
+  "output": "The agent's final response text",
+  "turns": 3,
+  "elapsed": 4.52,
+  "agent_names": ["researcher", "writer"],
+  "errors": [],
+  "cost": { ... }
+}
 ```
 
 **Agent file convention**: `ag2 run` looks for one of these in the target file:
@@ -85,9 +109,20 @@ ag2 chat --model gpt-4o --system "You are a Python expert"
 # Chat with a multi-agent team — watch agents collaborate in real-time
 ag2 chat my_team.py --verbose
 
-# Resume a previous conversation
-ag2 chat my_agent.py --resume session_2024_03_18
+# Limit turns per message (default: 10)
+ag2 chat my_team.py --max-turns 5
 ```
+
+**Options:**
+- `--model` / `-M` — LLM model for ad-hoc chat (no agent file needed)
+- `--system` / `-s` — system prompt for ad-hoc chat
+- `--verbose` / `-V` — show detailed agent activity
+- `--max-turns` — maximum turns per message (default: 10)
+
+**Session commands** (type these during a chat session):
+- `/quit`, `/exit`, `/q` — end the session
+- `/cost` — show total accumulated token cost
+- `/history` — show the number of turns so far
 
 ## Terminal UI Design
 
@@ -121,25 +156,12 @@ You: █
 ```
 
 Features:
-- Agent messages in colored, labeled panels
+- Agent messages in colored, labeled panels (Rich)
 - Tool calls shown inline with status indicators
 - Running token/cost counter
 - Speaker transition indicators in group chats
-- Input history (arrow keys)
-- `/save` to export conversation, `/clear` to reset
-
-## Session Recording
-
-Every `ag2 run` and `ag2 chat` session is automatically recorded to
-`~/.ag2/sessions/` for later replay with `ag2 replay`.
-
-```bash
-# List recent sessions
-ag2 run --list-sessions
-
-# Re-run a specific session
-ag2 replay session_abc123
-```
+- Session commands: `/cost`, `/history`, `/quit`
+- Multi-turn conversation continuity (persistent user proxy)
 
 ## Implementation Notes
 

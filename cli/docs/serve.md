@@ -26,11 +26,11 @@ ag2 serve my_agent.py --protocol a2a --port 9000
 # Serve with auto-reload during development
 ag2 serve my_team.py --reload
 
-# Serve with a web playground for testing
-ag2 serve my_team.py --playground
+# Expose to the internet via ngrok tunnel
+ag2 serve my_team.py --ngrok
 
-# Serve multiple agents from a directory
-ag2 serve agents/ --port 8000
+# Serve with a web playground for testing (coming soon)
+ag2 serve my_team.py --playground
 ```
 
 ## Protocols
@@ -76,12 +76,14 @@ data: {"turns": 4, "tokens": 3200, "cost": 0.03}
 
 ### MCP Server
 
-Wraps the agent as a Model Context Protocol server. Each agent tool becomes
-an MCP tool. The agent itself becomes an MCP tool called `chat`.
+Wraps the agent as a Model Context Protocol server using FastMCP. Exposes
+two MCP tools:
+- `chat` — send a message to the AG2 agent and get a response
+- `list_agents` — list available agents and their orchestration type
 
 ```bash
 ag2 serve my_agent.py --protocol mcp
-# → MCP server running on stdio (or --transport sse for HTTP)
+# → MCP server running via SSE transport on http://localhost:8000
 ```
 
 This means any AG2 agent can be instantly used from:
@@ -90,44 +92,50 @@ This means any AG2 agent can be instantly used from:
 - Windsurf
 - Any MCP-compatible client
 
-AG2 already has `autogen.mcp` — this command just wires it up automatically.
-
 ### A2A Endpoint
 
-Wraps the agent using AG2's A2A integration (`autogen.a2a`). The agent
-publishes an Agent Card for discovery.
+Wraps the agent using AG2's built-in `A2aAgentServer` from `autogen.a2a`.
 
 ```bash
 ag2 serve my_agent.py --protocol a2a --port 9000
 # → A2A server at http://localhost:9000/.well-known/agent.json
 ```
 
+- **Single agent**: served at `/`
+- **Multiple agents** (exported as `agents` list): each agent is mounted
+  at `/<slug>/` where the slug is derived from the agent name
+
+A2A protocol requires an exported `agent` or `agents` variable — a
+`main()` function is not supported.
+
 Other A2A-compatible agents (Google, Salesforce, etc.) can discover and
 interact with your agent.
 
-### --playground
+### --playground (coming soon)
 
-Launches a simple web UI alongside the API:
+Will launch a simple web UI alongside the API for testing agents in a
+browser. For now, use `GET /docs` (Swagger UI) when serving with the
+REST protocol.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  AG2 Playground — research-team                     │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  [Agent conversation rendered here]                 │
-│                                                     │
-│  ┌─────────────────────────────────┐  ┌──────────┐ │
-│  │ Type your message...            │  │  Send  ▶ │ │
-│  └─────────────────────────────────┘  └──────────┘ │
-│                                                     │
-│  Agents: researcher, critic, writer                 │
-│  Pattern: auto | Model: gpt-4o                      │
-│  Tokens: 0 | Cost: $0.00                            │
-└─────────────────────────────────────────────────────┘
+### --ngrok
+
+Expose your agent to the internet via an ngrok tunnel:
+
+```bash
+ag2 serve my_agent.py --ngrok --port 8000
+# Local:  http://localhost:8000
+# Public: https://abc123.ngrok.app
 ```
 
-This is intentionally minimal — not AutoGen Studio. Just enough to test
-your agents in a browser.
+Requires:
+- The `ngrok` pip package (`pip install ngrok`)
+- An ngrok authtoken: set `NGROK_AUTHTOKEN` in your environment, or
+  configure it via `ngrok config add-authtoken <token>`
+
+The authtoken is resolved from (in order):
+1. `NGROK_AUTHTOKEN` environment variable
+2. ngrok config file (`~/Library/Application Support/ngrok/ngrok.yml`,
+   `~/.config/ngrok/ngrok.yml`, or `~/.ngrok2/ngrok.yml`)
 
 ## Agent Discovery
 
@@ -147,16 +155,21 @@ natural choice (same author as Typer). The serve command:
 3. Generates a FastAPI app dynamically
 4. Runs it with `uvicorn`
 
-### MCP: Use existing autogen.mcp
-AG2's MCP module already handles the protocol. The serve command just
-needs to:
-1. Import the agent
-2. Create an MCP server from its tools
-3. Add a `chat` tool that wraps `initiate_chat()`
-4. Start the server
+### MCP: Uses FastMCP
+The serve command builds a FastMCP server that wraps the agent:
+1. Import and discover the agent
+2. Register a `chat` tool that sends messages and returns responses
+3. Register a `list_agents` tool for introspection
+4. Start the server with SSE transport
 
-### A2A: Use existing autogen.a2a
-Similar to MCP — wrap the agent using AG2's A2A SDK integration.
+Requires the `mcp` pip package.
+
+### A2A: Uses AG2's A2aAgentServer
+Wraps `ConversableAgent` instances using `autogen.a2a.A2aAgentServer`:
+1. Single agent: `A2aAgentServer(agent, url=...).build()` served directly
+2. Multiple agents: each mounted as a Starlette `Mount` at `/<slug>/`
+
+Requires the `ag2[a2a]` optional extra and `uvicorn`.
 
 ### Hot Reload
 Use `watchfiles` (or uvicorn's built-in `--reload`) to watch the agent
@@ -165,5 +178,7 @@ file and restart on changes. Show a Rich notification on reload.
 ## Dependencies
 - `ag2` — required
 - `fastapi` + `uvicorn` — for REST serving
-- `watchfiles` — for --reload
-- (MCP and A2A deps already in ag2 optional extras)
+- `mcp` — for MCP serving (FastMCP)
+- `ag2[a2a]` + `uvicorn` — for A2A serving
+- `ngrok` — for `--ngrok` tunneling
+- `watchfiles` — for `--reload` (or uvicorn's built-in reload)

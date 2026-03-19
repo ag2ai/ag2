@@ -70,9 +70,9 @@ ag2 install agent code-reviewer
 # Bundles — curated collections
 ag2 install bundle customer-service-starter
 
-# Install from any source (not just official repo)
-ag2 install from github.com/someuser/my-skills
+# Install from a local path or GitHub URL
 ag2 install from ./local-artifact
+ag2 install from github.com/someuser/my-skills
 
 # Discovery and management
 ag2 install search "web scraping"           # Search across all types
@@ -616,6 +616,31 @@ Install with: ag2 install <type> <name>
 2. Prompt for optional artifacts
 3. Install each artifact in dependency order
 4. Install bundle-level skills (if any)
+
+### From (local path or URL)
+
+`ag2 install from <source>` installs an artifact from outside the official
+registry:
+
+```bash
+# Install from a local directory
+ag2 install from ./my-local-artifact
+
+# Install from a GitHub URL (coming soon)
+ag2 install from github.com/someuser/my-artifact
+```
+
+**Local path**: the directory must contain an `artifact.json`. The command
+reads the manifest, determines the artifact type, and delegates to the
+appropriate type-specific installer. The local artifact is staged into the
+client cache and then installed normally.
+
+Supported types for local install: `skills`, `template`, `tool`, `agent`,
+`dataset`.
+
+**Options:**
+- `--target` / `-t` — specific IDE target(s)
+- `--project-dir` / `-d` — target project directory
 
 ## Registry Architecture
 
