@@ -11,8 +11,9 @@ from .models import BreakpointRecord, BreakpointType, EventRecord
 
 
 class DebugSession:
-    def __init__(self, session_id: str) -> None:
+    def __init__(self, session_id: str, prompt: list[str] | None = None) -> None:
         self.id = session_id
+        self.prompt: list[str] = prompt or []
         self.events: list[EventRecord] = []
         self.breakpoints: list[BreakpointRecord] = []
         self._pending_bp: asyncio.Event | None = None

@@ -39,39 +39,21 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 16px;
+    padding: 9px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
-  header h1 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--blue);
-    letter-spacing: .5px;
-  }
-  header .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2s infinite;
-  }
-  #session-count {
-    margin-left: auto;
-    color: var(--muted);
-    font-size: 11px;
-  }
+  header h1 { font-size: 14px; font-weight: 600; color: var(--blue); letter-spacing: .4px; }
+  .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  #session-count { margin-left: auto; color: var(--muted); font-size: 11px; }
 
   /* ── Layout ── */
-  .layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+  .layout { display: flex; flex: 1; overflow: hidden; }
 
   /* ── Sidebar ── */
   aside {
-    width: 220px;
+    width: 210px;
     flex-shrink: 0;
     background: var(--surface);
     border-right: 1px solid var(--border);
@@ -80,242 +62,221 @@
     overflow: hidden;
   }
   aside h2 {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--muted);
-    padding: 10px 12px 6px;
-    border-bottom: 1px solid var(--border);
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); padding: 10px 12px 6px; border-bottom: 1px solid var(--border);
   }
-  #session-list {
-    overflow-y: auto;
-    flex: 1;
-  }
+  #session-list { overflow-y: auto; flex: 1; }
+  #no-sessions { text-align: center; padding: 20px 12px; color: var(--muted); font-size: 11px; line-height: 1.7; }
   .session-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    cursor: pointer;
-    border-left: 2px solid transparent;
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    cursor: pointer; border-left: 2px solid transparent;
     transition: background .1s, border-color .1s;
   }
   .session-item:hover  { background: var(--surface2); }
   .session-item.active { background: var(--surface2); border-left-color: var(--blue); }
-  .session-item .sid   { font-family: monospace; font-size: 11px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .status-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .status-dot.running { background: var(--green); animation: pulse 2s infinite; }
-  .status-dot.done    { background: var(--muted); }
-  .status-dot.pending { background: var(--yellow); animation: pulse 1s infinite; }
+  .session-item .sid   { font-family: monospace; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .s-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .s-dot.running { background: var(--green); animation: pulse 2s infinite; }
+  .s-dot.done    { background: var(--muted); }
 
-  /* ── Main panel ── */
-  main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  /* empty state */
+  /* ── Main ── */
+  main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: var(--muted);
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; color: var(--muted);
   }
-  .empty-state svg { opacity: .3; }
-  .empty-state p   { font-size: 13px; }
+  .empty-state p { font-size: 13px; }
 
-  /* session detail */
-  #detail {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  /* ── Detail ── */
+  #detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
   #detail-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    background: var(--surface);
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 16px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0; background: var(--surface);
   }
-  #detail-header .sid-full { font-family: monospace; font-size: 12px; color: var(--muted); }
-  #detail-header .badge    { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
-  .badge.running { background: #1a2e1a; color: var(--green); }
-  .badge.done    { background: #1a1a2e; color: var(--muted); }
+  #detail-header .sid-full { font-family: monospace; font-size: 11px; color: var(--muted); }
+  .status-badge { font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
+  .status-badge.running { background: #1a2e1a; color: var(--green); }
+  .status-badge.done    { background: #1a1a2a; color: var(--muted); }
 
-  /* two-column content */
-  .detail-body {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
+  /* ── Mode tabs ── */
+  .tabs { display: flex; gap: 2px; margin-left: auto; }
+  .tab {
+    padding: 3px 10px; font-size: 11px; font-weight: 500;
+    background: transparent; border: 1px solid transparent;
+    border-radius: 5px; color: var(--muted); cursor: pointer;
+    transition: all .1s;
   }
+  .tab:hover  { color: var(--text); border-color: var(--border); }
+  .tab.active { color: var(--blue); border-color: var(--blue); background: rgba(122,162,247,.08); }
 
-  /* ── Events column ── */
-  .col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border-right: 1px solid var(--border);
-  }
+  /* ── Detail body ── */
+  .detail-body { flex: 1; display: flex; overflow: hidden; }
+  .col { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
   .col:last-child { border-right: none; }
+  #left-col  { flex: 1.4; }
+  #right-col { flex: 1; min-width: 240px; max-width: 320px; }
+
   .col-header {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--muted);
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); padding: 7px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
   }
-  .col-header .count {
-    background: var(--surface2);
-    color: var(--muted);
-    border-radius: 10px;
-    padding: 0 5px;
-    font-size: 10px;
-  }
-  .col-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
+  .count { background: var(--surface2); color: var(--muted); border-radius: 10px; padding: 0 5px; font-size: 10px; }
+  .col-body { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
 
-  /* ── Event card ── */
+  /* ── System prompt banner ── */
+  .system-prompt {
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+    background: #181825; margin-bottom: 4px;
+  }
+  .system-prompt .label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--purple); margin-bottom: 4px; }
+  .system-prompt .content { font-size: 12px; color: var(--muted); white-space: pre-wrap; line-height: 1.5; }
+  .system-prompt-sep { font-size: 9px; text-align: center; color: var(--border); letter-spacing: 2px; margin: 2px 0 4px; }
+
+  /* ────────────────────────────────────────
+     EVENTS MODE
+  ──────────────────────────────────────── */
   .event-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px;
   }
-  .event-card .row1 {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-  }
-  .event-card .ts {
-    margin-left: auto;
-    font-size: 10px;
-    color: var(--muted);
-    font-family: monospace;
-  }
+  .event-card .row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .event-card .ts { margin-left: auto; font-size: 10px; color: var(--muted); font-family: monospace; }
   .event-card .data {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 80px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: max-height .2s;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 11px; color: var(--muted); white-space: pre-wrap; word-break: break-all;
+    max-height: 72px; overflow: hidden; cursor: pointer; transition: max-height .15s ease;
+    user-select: text;
   }
-  .event-card .data.expanded { max-height: 400px; }
-  .event-card .data:hover    { color: var(--text); }
+  .event-card .data.expanded { max-height: 2000px; color: var(--text); }
+  .event-card .expand-hint { font-size: 9px; color: var(--border); margin-top: 2px; cursor: pointer; user-select: none; }
 
-  /* ── Breakpoint card ── */
+  /* ────────────────────────────────────────
+     CHAT MODE
+  ──────────────────────────────────────── */
+  .chat-body { padding: 10px 12px; gap: 6px; }
+
+  .chat-row { display: flex; flex-direction: column; gap: 3px; }
+  .chat-row.user { align-items: flex-end; }
+  .chat-row.left { align-items: flex-start; }
+
+  .bubble-label { font-size: 9px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; padding: 0 4px; }
+
+  .bubble {
+    max-width: 78%; padding: 8px 12px; border-radius: 12px;
+    font-size: 13px; line-height: 1.55; word-break: break-word;
+  }
+  .bubble.user-msg {
+    background: #162540; color: #a8c8f0;
+    border-radius: 14px 14px 4px 14px;
+  }
+  .bubble.hitl-msg {
+    background: #211d14; color: #d4aa60;
+    border-radius: 14px 14px 4px 14px;
+    border: 1px solid #3a3020;
+  }
+  .bubble.assistant-msg {
+    background: var(--surface2); color: var(--text);
+    border-radius: 14px 14px 14px 4px;
+  }
+  .bubble.waiting-msg {
+    background: #1e1a0e; color: var(--yellow);
+    border-radius: 14px 14px 14px 4px;
+    border: 1px solid #3a3010; font-style: italic;
+  }
+
+  /* Tool call / result blocks in chat */
+  .tool-block {
+    max-width: 88%; padding: 6px 10px; border-radius: 6px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 11.5px;
+  }
+  .tool-block.call   { border-left: 3px solid var(--orange); background: rgba(255,158,100,.06); color: var(--orange); }
+  .tool-block.result { border-left: 3px solid var(--cyan);   background: rgba(125,207,255,.06); color: var(--cyan);   }
+  .tool-block.error  { border-left: 3px solid var(--red);    background: rgba(247,118,142,.06); color: var(--red);    }
+  .tool-block .tool-name { font-weight: 600; }
+
+  /* ────────────────────────────────────────
+     HISTORY MODE
+  ──────────────────────────────────────── */
+  #history-body { padding: 0; }
+  .history-view {
+    flex: 1; overflow-y: auto; padding: 14px 18px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 12.5px; line-height: 1.7; color: var(--text);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .h-system  { color: var(--purple); }
+  .h-user    { color: var(--blue);   }
+  .h-hitl    { color: var(--yellow); }
+  .h-ai      { color: var(--green);  }
+  .h-tool    { color: var(--orange); }
+  .h-result  { color: var(--cyan);   }
+  .h-error   { color: var(--red);    }
+  .h-label   { font-weight: 700; }
+  .h-divider { color: var(--border); }
+
+  /* ────────────────────────────────────────
+     BREAKPOINTS COLUMN
+  ──────────────────────────────────────── */
   .bp-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 5px;
   }
   .bp-card.pending { border-left: 3px solid var(--yellow); }
-  .bp-card.resumed { border-left: 3px solid var(--green); opacity: .6; }
+  .bp-card.resumed { border-left: 3px solid #2a2d3e; opacity: .55; }
   .bp-card .row1   { display: flex; align-items: center; gap: 6px; }
-  .bp-card .ev-type { font-size: 11px; color: var(--muted); font-family: monospace; }
-  .bp-card .ts     { margin-left: auto; font-size: 10px; color: var(--muted); font-family: monospace; }
-  .bp-card .status-label { font-size: 10px; color: var(--muted); }
-  .bp-card.pending .status-label { color: var(--yellow); }
-  .bp-card.resumed .status-label { color: var(--green); }
+  .bp-card .ev-info { font-size: 10px; color: var(--muted); font-family: monospace; }
+  .bp-card .ts-bp  { margin-left: auto; font-size: 10px; color: var(--muted); font-family: monospace; }
+  .bp-status { font-size: 10px; }
+  .bp-card.pending .bp-status { color: var(--yellow); }
+  .bp-card.resumed .bp-status { color: var(--muted); }
 
-  /* Resume button */
   .resume-btn {
-    align-self: flex-start;
-    padding: 3px 10px;
-    font-size: 11px;
-    font-weight: 600;
-    border: 1px solid var(--green);
-    background: transparent;
-    color: var(--green);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background .1s;
+    align-self: flex-start; padding: 3px 11px; font-size: 11px; font-weight: 600;
+    border: 1px solid var(--green); background: transparent; color: var(--green);
+    border-radius: 4px; cursor: pointer; transition: background .1s;
   }
-  .resume-btn:hover   { background: rgba(158,206,106,.15); }
-  .resume-btn:active  { background: rgba(158,206,106,.3); }
+  .resume-btn:hover    { background: rgba(158,206,106,.15); }
   .resume-btn:disabled { opacity: .4; cursor: default; }
 
-  /* ── Badges ── */
-  .type-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 10px;
-    white-space: nowrap;
-  }
-  .tb-ModelRequest       { background:#1a2533; color:var(--blue);   }
-  .tb-ModelResponse      { background:#1a2a1a; color:var(--green);  }
-  .tb-ModelMessage       { background:#1a2a1a; color:var(--green);  }
-  .tb-ModelMessageChunk  { background:#1a2a1a; color:var(--green);  }
-  .tb-ModelReasoning     { background:#221a33; color:var(--purple); }
+  /* ────────────────────────────────────────
+     TYPE BADGES
+  ──────────────────────────────────────── */
+  .type-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
+  .tb-ModelRequest       { background:#192436; color:var(--blue);   }
+  .tb-ModelResponse      { background:#192a19; color:var(--green);  }
+  .tb-ModelMessage       { background:#192a19; color:var(--green);  }
+  .tb-ModelMessageChunk  { background:#192a19; color:var(--green);  }
+  .tb-ModelReasoning     { background:#22193a; color:var(--purple); }
   .tb-ToolCallEvent      { background:#2a1f0f; color:var(--orange); }
   .tb-ToolCallsEvent     { background:#2a1f0f; color:var(--orange); }
   .tb-ToolResultEvent    { background:#0f2233; color:var(--cyan);   }
   .tb-ToolResultsEvent   { background:#0f2233; color:var(--cyan);   }
   .tb-ToolErrorEvent     { background:#2a0f0f; color:var(--red);    }
   .tb-ToolNotFoundEvent  { background:#2a0f0f; color:var(--red);    }
-  .tb-HumanInputRequest  { background:#2a1f00; color:var(--yellow); }
-  .tb-HumanMessage       { background:#2a1f00; color:var(--yellow); }
-  .tb-default            { background:#1a1a2e; color:var(--muted);  }
-
-  .bpt-TURN_START { background:#221a33; color:var(--purple); }
+  .tb-HumanInputRequest  { background:#2a1e05; color:var(--yellow); }
+  .tb-HumanMessage       { background:#2a1e05; color:var(--yellow); }
+  .bpt-TURN_START { background:#22193a; color:var(--purple); }
   .bpt-TOOL_CALL  { background:#2a1f0f; color:var(--orange); }
-  .bpt-LLM_CALL   { background:#1a2533; color:var(--blue);   }
+  .bpt-LLM_CALL   { background:#192436; color:var(--blue);   }
+  .tb-default { background:#1a1a2e; color:var(--muted); }
 
   /* ── Scrollbar ── */
-  ::-webkit-scrollbar            { width:5px; height:5px; }
-  ::-webkit-scrollbar-track      { background:transparent; }
-  ::-webkit-scrollbar-thumb      { background:var(--border); border-radius:3px; }
-  ::-webkit-scrollbar-thumb:hover{ background:var(--muted); }
+  ::-webkit-scrollbar            { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track      { background: transparent; }
+  ::-webkit-scrollbar-thumb      { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover{ background: var(--muted); }
 
-  /* ── Animations ── */
-  @keyframes pulse {
-    0%,100%{ opacity:1; }
-    50%     { opacity:.4; }
-  }
-
-  /* no sessions */
-  #no-sessions { display:none; text-align:center; padding:24px 12px; color:var(--muted); font-size:12px; line-height:1.6; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="dot"></div>
+  <div class="pulse-dot"></div>
   <h1>AG2 Debug</h1>
   <span id="session-count"></span>
 </header>
@@ -324,30 +285,53 @@
   <aside>
     <h2>Sessions</h2>
     <div id="session-list">
-      <div id="no-sessions">No sessions yet.<br>Run an agent with<br><code>AG2_DEBUG_SERVER_URL</code> set.</div>
+      <div id="no-sessions">No sessions yet.<br>Set <code>AG2_DEBUG_SERVER_URL</code><br>and run an agent.</div>
     </div>
   </aside>
 
-  <main id="main">
+  <main>
     <div class="empty-state" id="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".25">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/>
       </svg>
       <p>Select a session</p>
     </div>
+
     <div id="detail" style="display:none">
       <div id="detail-header">
         <span class="sid-full" id="dh-id"></span>
-        <span class="badge" id="dh-status"></span>
-      </div>
-      <div class="detail-body">
-        <div class="col">
-          <div class="col-header">Events <span class="count" id="ev-count">0</span></div>
-          <div class="col-body" id="events-list"></div>
+        <span class="status-badge" id="dh-status"></span>
+        <div class="tabs">
+          <button class="tab active" data-mode="events">Events</button>
+          <button class="tab" data-mode="chat">Chat</button>
+          <button class="tab" data-mode="history">History</button>
         </div>
-        <div class="col">
+      </div>
+
+      <div class="detail-body">
+        <!-- Left: mode-specific content -->
+        <div id="left-col" class="col">
+          <!-- EVENTS MODE -->
+          <div id="cnt-events" class="mode-cnt" style="display:flex;flex-direction:column;overflow:hidden;flex:1">
+            <div class="col-header">Events <span class="count" id="ev-count">0</span></div>
+            <div class="col-body" id="events-body"></div>
+          </div>
+          <!-- CHAT MODE -->
+          <div id="cnt-chat" class="mode-cnt" style="display:none;flex-direction:column;overflow:hidden;flex:1">
+            <div class="col-header">Conversation</div>
+            <div class="col-body chat-body" id="chat-body"></div>
+          </div>
+          <!-- HISTORY MODE -->
+          <div id="cnt-history" class="mode-cnt" style="display:none;flex-direction:column;overflow:hidden;flex:1">
+            <div class="col-header">History</div>
+            <div class="history-view" id="history-view"></div>
+          </div>
+        </div>
+
+        <!-- Right: breakpoints (always visible) -->
+        <div id="right-col" class="col">
           <div class="col-header">Breakpoints <span class="count" id="bp-count">0</span></div>
-          <div class="col-body" id="bp-list"></div>
+          <div class="col-body" id="bp-body"></div>
         </div>
       </div>
     </div>
@@ -357,56 +341,74 @@
 <script>
 'use strict';
 
-// ── State ──────────────────────────────────────────────────────────────────
-let selectedId = null;
-let sessions   = {};   // id -> {id, status}
-let resuming   = new Set();  // bp ids currently being resumed
+// ── State ─────────────────────────────────────────────────────────────────
+let currentMode = 'events';
+let selectedId  = null;
+let resuming    = new Set();
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) return null;
-  return r.json();
+// Incremental DOM maps (keyed by record id)
+const evMap   = new Map();  // eventId  -> element  (events mode)
+const chatMap = new Map();  // eventId  -> element  (chat mode)
+const bpMap   = new Map();  // bpId     -> element  (breakpoints)
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+async function apiFetch(path, opts) {
+  try {
+    const r = await fetch(path, opts);
+    return r.ok ? r.json() : null;
+  } catch { return null; }
 }
 
 function fmtTime(iso) {
   const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'}) +
-         '.' + String(d.getMilliseconds()).padStart(3,'0');
+  return d.toLocaleTimeString(undefined, {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'})
+       + '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function typeBadge(name) {
-  const cls = 'tb-' + name;
-  const knownPrefixes = ['ModelRequest','ModelResponse','ModelMessage','ModelMessageChunk','ModelReasoning',
+  const known = ['ModelRequest','ModelResponse','ModelMessage','ModelMessageChunk','ModelReasoning',
     'ToolCallEvent','ToolCallsEvent','ToolResultEvent','ToolResultsEvent','ToolErrorEvent',
     'ToolNotFoundEvent','HumanInputRequest','HumanMessage'];
-  const matched = knownPrefixes.find(p => name === p);
-  return `<span class="type-badge ${matched ? cls : 'tb-default'}">${name}</span>`;
+  const cls = known.includes(name) ? `tb-${name}` : 'tb-default';
+  return `<span class="type-badge ${cls}">${esc(name)}</span>`;
 }
 
-function bpTypeBadge(type) {
-  return `<span class="type-badge bpt-${type}">${type}</span>`;
+function bpTypeBadge(t) {
+  return `<span class="type-badge bpt-${t}">${t}</span>`;
 }
 
-function fmtData(data) {
-  return JSON.stringify(data, null, 2);
+// Parse tool call arguments string safely
+function parseArgs(argStr) {
+  try { return JSON.parse(argStr || '{}'); } catch { return {}; }
 }
 
-// ── Render sidebar ─────────────────────────────────────────────────────────
+function fmtArgs(argStr) {
+  const args = parseArgs(argStr);
+  return Object.entries(args).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', ');
+}
+
+// ── Mode switching ────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMode = btn.dataset.mode;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === btn));
+    document.querySelectorAll('.mode-cnt').forEach(el => el.style.display = 'none');
+    document.getElementById(`cnt-${currentMode}`).style.display = 'flex';
+  });
+});
+
+// ── Sidebar ───────────────────────────────────────────────────────────────
 function renderSidebar(list) {
   const el = document.getElementById('session-list');
-  const noSess = document.getElementById('no-sessions');
-  const countEl = document.getElementById('session-count');
+  document.getElementById('no-sessions').style.display = list.length ? 'none' : 'block';
+  document.getElementById('session-count').textContent = list.length ? `${list.length} session${list.length>1?'s':''}` : '';
 
-  countEl.textContent = list.length ? `${list.length} session${list.length>1?'s':''}` : '';
-  noSess.style.display = list.length ? 'none' : 'block';
-
-  // update or add items
-  const seen = new Set();
   list.forEach(s => {
-    seen.add(s.id);
-    sessions[s.id] = s;
-    let item = document.querySelector(`.session-item[data-id="${s.id}"]`);
+    let item = el.querySelector(`.session-item[data-id="${s.id}"]`);
     if (!item) {
       item = document.createElement('div');
       item.className = 'session-item';
@@ -415,116 +417,345 @@ function renderSidebar(list) {
       el.appendChild(item);
     }
     item.classList.toggle('active', s.id === selectedId);
-    item.innerHTML = `
-      <div class="status-dot ${s.status}"></div>
-      <span class="sid" title="${s.id}">${s.id.slice(0,8)}…</span>
-    `;
+    item.innerHTML = `<div class="s-dot ${s.status}"></div><span class="sid" title="${s.id}">${s.id.slice(0,8)}…</span>`;
   });
 
-  // auto-select first session
   if (!selectedId && list.length > 0) selectSession(list[0].id);
 }
 
-// ── Select session ─────────────────────────────────────────────────────────
 function selectSession(id) {
   selectedId = id;
-  document.querySelectorAll('.session-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === id);
-  });
+  document.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
   document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('detail').style.display = 'flex';
+  document.getElementById('detail').style.display     = 'flex';
+  // Clear incremental state when switching sessions
+  evMap.clear(); chatMap.clear(); bpMap.clear();
+  document.getElementById('events-body').innerHTML = '';
+  document.getElementById('chat-body').innerHTML   = '';
+  document.getElementById('history-view').innerHTML = '';
+  document.getElementById('bp-body').innerHTML     = '';
 }
 
-// ── Render session detail ──────────────────────────────────────────────────
-function renderDetail(session) {
-  document.getElementById('dh-id').textContent = session.id;
-  const sb = document.getElementById('dh-status');
-  sb.textContent = session.status;
-  sb.className = `badge ${session.status}`;
+// ── System prompt block ───────────────────────────────────────────────────
+function systemPromptEl(lines) {
+  if (!lines || !lines.length) return null;
+  const d = document.createElement('div');
+  d.className = 'system-prompt';
+  d.innerHTML = `<div class="label">System prompt</div><div class="content">${esc(lines.join('\n\n'))}</div>`;
+  return d;
+}
 
-  // Events
-  const evList = document.getElementById('events-list');
+// ─────────────────────────────────────────────────────────────────────────
+// EVENTS MODE — incremental (fix expand/collapse losing state on re-render)
+// ─────────────────────────────────────────────────────────────────────────
+function renderEventsMode(session) {
   document.getElementById('ev-count').textContent = session.events.length;
-  evList.innerHTML = '';
+  const body = document.getElementById('events-body');
+
+  // Inject system prompt once if not already present
+  if (!body.querySelector('.system-prompt') && session.prompt && session.prompt.length) {
+    const sp = systemPromptEl(session.prompt);
+    if (sp) body.insertBefore(sp, body.firstChild);
+    const sep = document.createElement('div');
+    sep.className = 'system-prompt-sep';
+    sep.textContent = '─── events ───';
+    body.insertBefore(sep, sp ? sp.nextSibling : body.firstChild);
+  }
+
   session.events.forEach(ev => {
+    if (evMap.has(ev.id)) return; // already rendered — don't touch it
+
     const card = document.createElement('div');
     card.className = 'event-card';
-    const dataStr = fmtData(ev.event_data);
+    const dataStr = JSON.stringify(ev.event_data, null, 2);
+    const shortened = dataStr.length > 200 ? dataStr.slice(0, 200) + '…' : dataStr;
+    const needsToggle = dataStr.length > 200;
+
     card.innerHTML = `
-      <div class="row1">
-        ${typeBadge(ev.event_type)}
-        <span class="ts">${fmtTime(ev.timestamp)}</span>
-      </div>
-      <div class="data" title="Click to expand">${escHtml(dataStr)}</div>
+      <div class="row1">${typeBadge(ev.event_type)}<span class="ts">${fmtTime(ev.timestamp)}</span></div>
+      <div class="data">${esc(shortened)}</div>
+      ${needsToggle ? '<div class="expand-hint">click to expand</div>' : ''}
     `;
-    card.querySelector('.data').addEventListener('click', function() {
-      this.classList.toggle('expanded');
+
+    if (needsToggle) {
+      const dataEl  = card.querySelector('.data');
+      const hintEl  = card.querySelector('.expand-hint');
+      let expanded  = false;
+      const toggle  = () => {
+        expanded = !expanded;
+        dataEl.textContent = expanded ? dataStr : shortened;
+        dataEl.classList.toggle('expanded', expanded);
+        hintEl.textContent = expanded ? 'click to collapse' : 'click to expand';
+      };
+      dataEl.addEventListener('click', toggle);
+      hintEl.addEventListener('click', toggle);
+    }
+
+    body.appendChild(card);
+    evMap.set(ev.id, card);
+  });
+
+  // Auto-scroll if near bottom
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+  if (atBottom) body.scrollTop = body.scrollHeight;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CHAT MODE — incremental
+// ─────────────────────────────────────────────────────────────────────────
+function renderChatMode(session) {
+  const body = document.getElementById('chat-body');
+
+  if (!body.querySelector('.system-prompt') && session.prompt && session.prompt.length) {
+    const sp = systemPromptEl(session.prompt);
+    if (sp) body.insertBefore(sp, body.firstChild);
+  }
+
+  session.events.forEach(ev => {
+    if (chatMap.has(ev.id)) return;
+
+    const el = buildChatItem(ev);
+    if (!el) return; // skip events we don't render in chat mode
+
+    body.appendChild(el);
+    chatMap.set(ev.id, el);
+  });
+
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+  if (atBottom) body.scrollTop = body.scrollHeight;
+}
+
+function buildChatItem(ev) {
+  const d = ev.event_data;
+  const type = ev.event_type;
+
+  // ── User messages (right side) ──
+  if (type === 'ModelRequest') {
+    return chatRow('user', 'User', `<div class="bubble user-msg">${esc(d.content || '')}</div>`);
+  }
+
+  if (type === 'HumanMessage') {
+    return chatRow('user', 'Human', `<div class="bubble hitl-msg">${esc(d.content || '')}</div>`);
+  }
+
+  // ── AI asking for human input (left side) ──
+  if (type === 'HumanInputRequest') {
+    return chatRow('left', 'Agent', `<div class="bubble waiting-msg">⏳ ${esc(d.content || '')}</div>`);
+  }
+
+  // ── Model response (left side) ──
+  if (type === 'ModelResponse') {
+    const hasText  = d.message && d.message.content;
+    const calls    = d.tool_calls && d.tool_calls.calls && d.tool_calls.calls.length ? d.tool_calls.calls : null;
+    if (!hasText && !calls) return null;
+
+    let inner = '';
+    if (hasText) inner += `<div class="bubble assistant-msg">${esc(d.message.content)}</div>`;
+    if (calls) {
+      calls.forEach(c => {
+        inner += `<div class="tool-block call"><span class="tool-name">${esc(c.name)}</span>(${esc(fmtArgs(c.arguments))})</div>`;
+      });
+    }
+    return chatRow('left', 'Assistant', inner);
+  }
+
+  // ── Tool results (left side) ──
+  if (type === 'ToolResultsEvent') {
+    const results = d.results || [];
+    if (!results.length) return null;
+    let inner = '';
+    results.forEach(r => {
+      if (r.type === 'ToolErrorEvent') {
+        inner += `<div class="tool-block error">✗ <span class="tool-name">${esc(r.name)}</span>: ${esc(r.error && r.error.message || 'error')}</div>`;
+      } else {
+        const content = r.result && r.result.content !== undefined ? r.result.content : '';
+        const display = typeof content === 'string' ? content : JSON.stringify(content);
+        inner += `<div class="tool-block result">✓ <span class="tool-name">${esc(r.name)}</span>: ${esc(display)}</div>`;
+      }
     });
-    evList.appendChild(card);
-  });
-  // scroll to bottom
-  evList.scrollTop = evList.scrollHeight;
+    return chatRow('left', 'Tools', inner);
+  }
 
-  // Breakpoints — pending first, then resumed
-  const bpList = document.getElementById('bp-list');
+  // ── Model reasoning (left side, collapsed) ──
+  if (type === 'ModelReasoning') {
+    return chatRow('left', 'Reasoning', `<div class="bubble assistant-msg" style="color:var(--purple);font-style:italic;font-size:12px">${esc(d.content || '')}</div>`);
+  }
+
+  return null; // skip ToolCallsEvent, ModelMessageChunk, etc.
+}
+
+function chatRow(side, label, innerHtml) {
+  const row = document.createElement('div');
+  row.className = `chat-row ${side}`;
+  row.innerHTML = `<div class="bubble-label">${label}</div>${innerHtml}`;
+  return row;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// HISTORY MODE — full re-render (scroll position preserved)
+// ─────────────────────────────────────────────────────────────────────────
+function renderHistoryMode(session) {
+  const view = document.getElementById('history-view');
+  const prevScroll = view.scrollTop;
+  const atBottom   = view.scrollHeight - prevScroll - view.clientHeight < 80;
+
+  view.innerHTML = '';
+
+  // System prompt
+  if (session.prompt && session.prompt.length) {
+    session.prompt.forEach(p => {
+      const span = mkSpan('h-system', `${mkLabel('SYSTEM')}\n${p}\n\n`);
+      view.appendChild(span);
+    });
+    view.appendChild(mkSpan('h-divider', '────────────────────────────────────────\n\n'));
+  }
+
+  session.events.forEach(ev => {
+    const d = ev.event_data;
+    const type = ev.event_type;
+    let el = null;
+
+    if (type === 'ModelRequest') {
+      el = mkSpan('h-user', `${mkLabel('USER')}\n${d.content || ''}\n\n`);
+    } else if (type === 'HumanMessage') {
+      el = mkSpan('h-hitl', `${mkLabel('HUMAN')}\n${d.content || ''}\n\n`);
+    } else if (type === 'HumanInputRequest') {
+      el = mkSpan('h-hitl', `${mkLabel('AGENT → waiting for human')}\n${d.content || ''}\n\n`);
+    } else if (type === 'ModelResponse') {
+      const hasText = d.message && d.message.content;
+      const calls   = d.tool_calls && d.tool_calls.calls && d.tool_calls.calls.length ? d.tool_calls.calls : null;
+      if (hasText) {
+        el = mkSpan('h-ai', `${mkLabel('ASSISTANT')}\n${d.message.content}\n\n`);
+      }
+      if (calls) {
+        const callStr = calls.map(c => `  ${c.name}(${fmtArgs(c.arguments)})`).join('\n');
+        const toolEl = mkSpan('h-tool', `${mkLabel('ASSISTANT → calling')}\n${callStr}\n\n`);
+        if (el) view.appendChild(el);
+        view.appendChild(toolEl);
+        el = null;
+      }
+    } else if (type === 'ToolResultsEvent') {
+      const results = d.results || [];
+      if (results.length) {
+        const lines = results.map(r => {
+          if (r.type === 'ToolErrorEvent') {
+            return `  ${r.name}: ERROR — ${r.error && r.error.message || 'unknown error'}`;
+          }
+          const content = r.result && r.result.content !== undefined ? r.result.content : '';
+          const display = typeof content === 'string' ? content : JSON.stringify(content);
+          return `  ${r.name}: ${display}`;
+        });
+        el = mkSpan('h-result', `${mkLabel('TOOL RESULTS')}\n${lines.join('\n')}\n\n`);
+      }
+    } else if (type === 'ModelReasoning') {
+      el = mkSpan('h-system', `${mkLabel('REASONING')}\n${d.content || ''}\n\n`);
+    }
+    // Skip: ToolCallsEvent, ModelMessageChunk, ToolCallEvent, ToolResultEvent (raw)
+
+    if (el) view.appendChild(el);
+  });
+
+  if (atBottom) view.scrollTop = view.scrollHeight;
+  else view.scrollTop = prevScroll;
+}
+
+function mkSpan(cls, text) {
+  const s = document.createElement('span');
+  s.className = cls;
+  s.textContent = text;
+  return s;
+}
+
+function mkLabel(t) {
+  return `┌── ${t} `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BREAKPOINTS — incremental with live status updates
+// ─────────────────────────────────────────────────────────────────────────
+function renderBreakpoints(session) {
   document.getElementById('bp-count').textContent = session.breakpoints.length;
-  bpList.innerHTML = '';
+  const body = document.getElementById('bp-body');
 
-  const sorted = [...session.breakpoints].sort((a,b) => {
-    if (a.resumed !== b.resumed) return a.resumed ? 1 : -1;
-    return new Date(a.timestamp) - new Date(b.timestamp);
-  });
+  session.breakpoints.forEach(bp => {
+    if (bpMap.has(bp.id)) {
+      // Update existing card if it just got resumed
+      const existing = bpMap.get(bp.id);
+      if (bp.resumed && existing.classList.contains('pending')) {
+        existing.classList.replace('pending', 'resumed');
+        existing.querySelector('.bp-status').textContent = '✓ resumed';
+        const btn = existing.querySelector('.resume-btn');
+        if (btn) btn.remove();
+      }
+      return;
+    }
 
-  sorted.forEach(bp => {
+    // New breakpoint card
     const card = document.createElement('div');
     card.className = `bp-card ${bp.resumed ? 'resumed' : 'pending'}`;
-    const resumeBtn = bp.resumed
-      ? ''
-      : `<button class="resume-btn" data-bp="${bp.id}" ${resuming.has(bp.id)?'disabled':''}>
-           ${resuming.has(bp.id) ? 'Resuming…' : '▶ Resume'}
-         </button>`;
     card.innerHTML = `
       <div class="row1">
         ${bpTypeBadge(bp.type)}
-        <span class="ev-type">${bp.event_type}</span>
-        <span class="ts">${fmtTime(bp.timestamp)}</span>
+        <span class="ts-bp">${fmtTime(bp.timestamp)}</span>
       </div>
-      <span class="status-label">${bp.resumed ? '✓ resumed' : '⏸ paused'}</span>
-      ${resumeBtn}
+      <span class="ev-info">${esc(bp.event_type)}</span>
+      <span class="bp-status">${bp.resumed ? '✓ resumed' : '⏸ paused'}</span>
+      ${bp.resumed ? '' : `<button class="resume-btn" data-bp="${bp.id}">▶ Resume</button>`}
     `;
+
     if (!bp.resumed) {
       const btn = card.querySelector('.resume-btn');
-      if (btn) btn.addEventListener('click', () => resume(session.id, bp.id, btn));
+      btn.addEventListener('click', () => resume(session.id, bp.id, btn));
     }
-    bpList.appendChild(card);
+
+    // Insert pending breakpoints at top, resumed at bottom
+    if (!bp.resumed) {
+      body.insertBefore(card, body.firstChild);
+    } else {
+      body.appendChild(card);
+    }
+    bpMap.set(bp.id, card);
   });
 }
 
 async function resume(sessionId, bpId, btn) {
   resuming.add(bpId);
-  if (btn) { btn.disabled = true; btn.textContent = 'Resuming…'; }
+  btn.disabled = true;
+  btn.textContent = 'Resuming…';
   try {
-    await api(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, {method:'POST'});
+    await apiFetch(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, { method: 'POST' });
   } finally {
     resuming.delete(bpId);
   }
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ─────────────────────────────────────────────────────────────────────────
+// Top-level render dispatcher
+// ─────────────────────────────────────────────────────────────────────────
+function renderDetail(session) {
+  document.getElementById('dh-id').textContent = session.id;
+  const sb = document.getElementById('dh-status');
+  sb.textContent = session.status;
+  sb.className = `status-badge ${session.status}`;
+
+  renderBreakpoints(session);
+
+  if (currentMode === 'events')  renderEventsMode(session);
+  if (currentMode === 'chat')    renderChatMode(session);
+  if (currentMode === 'history') renderHistoryMode(session);
 }
 
-// ── Poll loop ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Poll loop
+// ─────────────────────────────────────────────────────────────────────────
 async function poll() {
-  try {
-    const list = await api('/sessions');
-    if (list) renderSidebar(list);
+  const list = await apiFetch('/sessions');
+  if (list) renderSidebar(list);
 
-    if (selectedId) {
-      const session = await api(`/sessions/${selectedId}`);
-      if (session) renderDetail(session);
-    }
-  } catch(e) { /* server not ready yet */ }
+  if (selectedId) {
+    const session = await apiFetch(`/sessions/${selectedId}`);
+    if (session) renderDetail(session);
+  }
 }
 
 poll();

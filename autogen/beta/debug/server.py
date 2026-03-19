@@ -27,7 +27,8 @@ def create_app() -> FastAPI:
     async def create_session(body: dict[str, Any]) -> dict[str, str]:
         session_id = body.get("session_id") or str(uuid4())
         if session_id not in sessions:
-            sessions[session_id] = DebugSession(session_id)
+            prompt = body.get("prompt") or []
+            sessions[session_id] = DebugSession(session_id, prompt=prompt)
         return {"session_id": session_id}
 
     @app.get("/sessions")
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
             events=session.events,
             breakpoints=session.breakpoints,
             status=session.status,
+            prompt=session.prompt,
         )
 
     @app.post("/sessions/{session_id}/events")

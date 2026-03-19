@@ -42,8 +42,8 @@ class DebugClient:
         # timeout=None for breakpoints (they block until resumed); short timeout for events
         self._client = httpx.AsyncClient(base_url=self._base_url, timeout=None)
 
-    async def create_session(self, session_id: str) -> None:
-        await self._client.post("/sessions", json={"session_id": session_id})
+    async def create_session(self, session_id: str, prompt: list[str] | None = None) -> None:
+        await self._client.post("/sessions", json={"session_id": session_id, "prompt": prompt or []})
 
     async def send_event(self, session_id: str, event: BaseEvent) -> None:
         """Fire-and-forget event forwarding — errors are silently ignored."""

@@ -277,7 +277,7 @@ class Agent(Askable):
 
             session_id = str(stream.id)
             debug_client = DebugClient(debug_url)
-            await debug_client.create_session(session_id)
+            await debug_client.create_session(session_id, prompt=context.prompt)
 
             async def _forward_event(event: BaseEvent) -> None:
                 await debug_client.send_event(session_id, event)

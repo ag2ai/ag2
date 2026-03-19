@@ -36,3 +36,4 @@ class SessionState(BaseModel):
     events: list[EventRecord]
     breakpoints: list[BreakpointRecord]
     status: str  # "pending" | "running" | "done"
+    prompt: list[str] = Field(default_factory=list)
