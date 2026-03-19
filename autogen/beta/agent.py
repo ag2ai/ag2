@@ -279,9 +279,12 @@ class Agent(Askable):
             debug_client = _get_debug_client(debug_url)
             session_id = str(stream.id)
             await debug_client.register_session(session_id, list(context.prompt))
-            print(f"Registered debug session with id {session_id} for stream {stream.id}")
             debug_session = DebugSession(session_id, stream=stream, context=context, client=debug_client)
             stream.subscribe(debug_session.record_event)
+            # Replay any events already in storage (e.g. loaded via stream.history.replace)
+            # so the dashboard shows the full history, not just events from this run.
+            for _hist_event in await stream.history.get_events():
+                await debug_session.record_event(_hist_event)
             additional_middleware = [_Middleware(DebugMiddleware, session=debug_session), *additional_middleware]
 
         return await self._execute(

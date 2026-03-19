@@ -380,9 +380,10 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────
-let currentMode = 'events';
-let selectedId  = null;
-let resuming    = new Set();
+let currentMode    = 'events';
+let selectedId     = null;
+let currentSession = null;
+let resuming       = new Set();
 
 // Incremental DOM maps (keyed by record id)
 const evMap   = new Map();  // eventId  -> element  (events mode)
@@ -456,6 +457,11 @@ document.querySelectorAll('.tab').forEach(btn => {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === btn));
     document.querySelectorAll('.mode-cnt').forEach(el => el.style.display = 'none');
     document.getElementById(`cnt-${currentMode}`).style.display = 'flex';
+    if (currentSession) {
+      if (currentMode === 'events')  renderEventsMode(currentSession);
+      if (currentMode === 'chat')    renderChatMode(currentSession);
+      if (currentMode === 'history') renderHistoryMode(currentSession);
+    }
   });
 });
 
@@ -496,14 +502,17 @@ async function selectSession(id) {
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('detail').style.display     = 'flex';
   // Clear incremental state when switching sessions
+  currentSession = null;
   evMap.clear(); chatMap.clear(); bpMap.clear();
   document.getElementById('events-body').innerHTML = '';
   document.getElementById('chat-body').innerHTML   = '';
   document.getElementById('history-view').innerHTML = '';
   document.getElementById('bp-body').innerHTML     = '';
-  // Fetch current session state via HTTP
+  // Fetch current session state via HTTP — guard against stale responses
+  // if the user switched sessions again before this fetch resolved.
+  const targetId = id;
   const session = await apiFetch(`/sessions/${id}`);
-  if (session) renderDetail(session);
+  if (session && selectedId === targetId) renderDetail(session);
 }
 
 // ── System prompt block ───────────────────────────────────────────────────
@@ -847,6 +856,7 @@ function renderTokenUsage(session) {
 // Top-level render dispatcher
 // ─────────────────────────────────────────────────────────────────────────
 function renderDetail(session) {
+  currentSession = session;
   document.getElementById('dh-id').textContent = session.id;
   const sb = document.getElementById('dh-status');
   sb.textContent = session.status;

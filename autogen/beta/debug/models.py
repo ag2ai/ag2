@@ -34,7 +34,7 @@ class SessionView(BaseModel):
     prompt: list[str]
     events: list[dict[str, Any]]  # [{type, data}, …] — serialized at response time
     breakpoints: list[BreakpointView]
-    pending_bp_id: str | None
+    pending_bp_ids: list[str]
 
 
 class ResumeRequest(BaseModel):

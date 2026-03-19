@@ -46,14 +46,13 @@ class _Session:
         self.prompt = list(prompt)
         self.events: list[dict[str, Any]] = []
         self.breakpoints: list[_BreakpointMeta] = []
-        self._pending_waiter: asyncio.Event | None = None
-        self._pending_bp_id: str | None = None
-        self._pending_mods: dict[str, Any] | None = None
+        self._pending_waiters: dict[str, asyncio.Event] = {}
+        self._pending_mods_map: dict[str, dict[str, Any]] = {}
         self.status = "running"
 
     @property
-    def pending_bp_id(self) -> str | None:
-        return self._pending_bp_id
+    def pending_bp_ids(self) -> list[str]:
+        return list(self._pending_waiters.keys())
 
 
 # ── View helpers ───────────────────────────────────────────────────────────
@@ -77,7 +76,7 @@ def _session_view(session: _Session) -> SessionView:
         prompt=session.prompt,
         events=session.events,
         breakpoints=bp_views,
-        pending_bp_id=session.pending_bp_id,
+        pending_bp_ids=session.pending_bp_ids,
     )
 
 
@@ -123,7 +122,16 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
     @app.post("/sessions/{session_id}", status_code=201)
     async def register_session(session_id: str, body: dict[str, Any]) -> dict[str, str]:
         prompt: list[str] = body.get("prompt", [])
-        sessions[session_id] = _Session(session_id, prompt)
+        if session_id in sessions:
+            # Stream was reloaded — reset events (the agent will replay full history
+            # from storage immediately after registering) and mark as running again.
+            existing = sessions[session_id]
+            existing.prompt = prompt
+            existing.status = "running"
+            existing.events.clear()
+            existing.breakpoints.clear()
+        else:
+            sessions[session_id] = _Session(session_id, prompt)
         await _broadcast({
             "type": "sessions_list",
             "sessions": [{"id": s.id, "status": s.status} for s in sessions.values()],
@@ -185,34 +193,31 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
             event_index = max(0, len(session.events) - 1)
         meta = _BreakpointMeta(bp_id, bp_type, event_index, body.get("event", {}))
         session.breakpoints.append(meta)
-        session._pending_bp_id = bp_id
-        session._pending_mods = None
         waiter = asyncio.Event()
-        session._pending_waiter = waiter
+        session._pending_waiters[bp_id] = waiter
 
         await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
         await waiter.wait()
 
         meta.resumed = True
-        session._pending_bp_id = None
-        session._pending_waiter = None
+        session._pending_waiters.pop(bp_id, None)
+        mods = session._pending_mods_map.pop(bp_id, {})
 
         await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
-        return session._pending_mods or {}
+        return mods
 
     @app.post("/sessions/{session_id}/breakpoints/{bp_id}/resume")
     async def resume_breakpoint(session_id: str, bp_id: str, body: ResumeRequest) -> dict[str, Any]:
         session = sessions.get(session_id)
-        if not session or session._pending_bp_id != bp_id:
+        if not session or bp_id not in session._pending_waiters:
             return {"success": False}
 
-        session._pending_mods = {
+        session._pending_mods_map[bp_id] = {
             "event_modifications": body.event_modifications,
             "prompt": body.prompt,
             "variables": body.variables,
         }
-        if session._pending_waiter:
-            session._pending_waiter.set()
+        session._pending_waiters[bp_id].set()
         return {"success": True}
 
     # ── Context inspection ────────────────────────────────────────────────
