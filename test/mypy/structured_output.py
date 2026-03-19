@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from typing_extensions import assert_type
 
-from autogen.beta import Agent, ResponseSchema, response_schema
+from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.testing import TestConfig
 
 
@@ -163,3 +163,70 @@ async def check_ask_response_type_not_affect_next_turn() -> None:
     third_turn = await next_turn.ask("Hi, agent!")
     assert_type(third_turn.content, str | None)
     assert_type(await third_turn.validate(), float | None)
+
+
+async def check_prompted_schema_with_type() -> None:
+    agent = Agent(
+        "test",
+        config=TestConfig(),
+        response_schema=PromptedSchema(int),
+    )
+
+    reply = await agent.ask("Hi, agent!")
+    assert_type(reply.content, str | None)
+    assert_type(await reply.validate(), int | None)
+
+
+async def check_prompted_schema_with_dataclass() -> None:
+    @dataclass
+    class Response:
+        a: int
+        b: str
+
+    agent = Agent(
+        "test",
+        config=TestConfig(),
+        response_schema=PromptedSchema(Response),
+    )
+
+    reply = await agent.ask("Hi, agent!")
+    assert_type(reply.content, str | None)
+    assert_type(await reply.validate(), Response | None)
+
+
+async def check_prompted_schema_with_response_schema() -> None:
+    schema = ResponseSchema(int, name="Response")
+
+    agent = Agent(
+        "test",
+        config=TestConfig(),
+        response_schema=PromptedSchema(schema),
+    )
+
+    reply = await agent.ask("Hi, agent!")
+    assert_type(reply.content, str | None)
+    assert_type(await reply.validate(), int | None)
+
+
+async def check_prompted_schema_with_callable() -> None:
+    @response_schema
+    def func(content: str) -> int:
+        return int(content)
+
+    agent = Agent(
+        "test",
+        config=TestConfig(),
+        response_schema=PromptedSchema(func),
+    )
+
+    reply = await agent.ask("Hi, agent!")
+    assert_type(reply.content, str | None)
+    assert_type(await reply.validate(), int | None)
+
+
+async def check_prompted_schema_ask_override() -> None:
+    agent = Agent("test", config=TestConfig())
+
+    reply = await agent.ask("Hi, agent!", response_schema=PromptedSchema(int))
+    assert_type(reply.content, str | None)
+    assert_type(await reply.validate(), int | None)

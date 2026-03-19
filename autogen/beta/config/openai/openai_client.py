@@ -105,7 +105,12 @@ class OpenAIClient(LLMClient):
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        openai_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt = context.prompt + [response_schema.system_prompt]
+        else:
+            prompt = context.prompt
+
+        openai_messages = convert_messages(prompt, messages)
 
         openai_tools = [tool_to_api(t) for t in tools]
 

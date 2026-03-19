@@ -521,7 +521,10 @@ class Agent(Generic[TResult]):
             llm_call = partial(mw.on_llm_call, llm_call)
 
         async def _call_client(context: Context) -> None:
-            result = await llm_call(await context.stream.history.get_events(), context)
+            result = await llm_call(
+                await context.stream.history.get_events(),
+                context,
+            )
             await context.send(result)
 
         with ExitStack() as stack:

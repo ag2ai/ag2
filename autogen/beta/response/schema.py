@@ -60,6 +60,21 @@ class ResponseSchema(ResponseProto[T]):
             self.description = docstring
 
         self.json_schema = schema
+        self.system_prompt = None
+
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: "ResponseProto[T] | type[T] | ClassInfo",
+    ) -> "ResponseSchema[T]": ...
+
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: "None",
+    ) -> "None": ...
 
     @classmethod
     def ensure_schema(
@@ -102,6 +117,7 @@ class RawSchema(ResponseProto[str]):
         self.name = name
         self.description = description
         self.json_schema = schema
+        self.system_prompt = None
 
     async def validate(
         self,

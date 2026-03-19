@@ -38,6 +38,7 @@ class CallableResponse(ResponseProto[T]):
         self.name = name
         self.description = description
         self.json_schema = schema
+        self.system_prompt = None
         self.__execute = validator
 
     async def validate(
