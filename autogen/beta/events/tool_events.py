@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import traceback
 from dataclasses import dataclass, field
-from traceback import format_exc
 from typing import Any, Generic
 from uuid import uuid4
 
@@ -66,13 +66,13 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=list)
+    provider_data: dict[str, Any] = Field(default_factory=dict)
 
-    _serialized_arguments: dict[str, Any] = Field(default_factory=dict)
+    _serialized_arguments: dict[str, Any] | None = Field(default=None)
 
     @property
     def serialized_arguments(self) -> dict[str, Any]:
-        if not self._serialized_arguments:
+        if self._serialized_arguments is None:
             self._serialized_arguments = json.loads(self.arguments)
         return self._serialized_arguments
 
@@ -152,7 +152,7 @@ class ToolErrorEvent(ToolResultEvent):
     @property
     def content(self) -> str:
         if not self._content:
-            self._content = format_exc(limit=3)
+            self._content = "".join(traceback.format_exception(type(self.error), self.error, self.error.__traceback__))
         return self._content
 
     @content.setter
