@@ -102,7 +102,7 @@ class TestServeCommand:
         assert "port" in result.output.lower()
         assert "protocol" in result.output.lower()
 
-    def test_serve_mcp_coming_soon(self) -> None:
+    def test_serve_mcp_requires_file(self) -> None:
         result = runner.invoke(app, ["serve", "fake.py", "--protocol", "mcp"])
-        assert result.exit_code == 0
-        assert "coming soon" in result.output
+        # MCP is now implemented but requires a valid file and dependencies
+        assert result.exit_code == 1

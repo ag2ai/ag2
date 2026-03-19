@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +12,7 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
+from ..core.runner import RunResult, execute
 from ..testing import EvalCase, EvalSuite, check_assertion, load_eval_suite
 from ..testing.assertions import AssertionResult
 from ..ui import console
@@ -31,6 +33,7 @@ class CaseResult:
     turns: int = 0
     errors: list[str] = field(default_factory=list)
     elapsed: float = 0.0
+    cost: Any = None
 
     @property
     def passed(self) -> bool:
@@ -45,106 +48,38 @@ class CaseResult:
         return len(self.assertion_results)
 
 
-def _run_single_case(
-    agent_file: Path,
-    case: EvalCase,
-) -> CaseResult:
+def _run_single_case(agent_file: Path, case: EvalCase) -> CaseResult:
     """Run a single eval case against a fresh agent instance."""
-    errors: list[str] = []
-    output = ""
-    turns = 0
+    from ..core.discovery import discover
 
     start = time.time()
 
     try:
-        import autogen
-
-        # Discover agent fresh each time for isolation
-        from ..core.discovery import discover
-
         discovered = discover(agent_file)
+    except (ValueError, ImportError) as exc:
+        elapsed = time.time() - start
+        return CaseResult(
+            case=case,
+            errors=[str(exc)],
+            elapsed=elapsed,
+        )
 
-        if discovered.kind == "main" and discovered.main_fn is not None:
-            import asyncio
-            import inspect
-
-            kwargs: dict[str, Any] = {}
-            sig = inspect.signature(discovered.main_fn)
-            if "message" in sig.parameters:
-                kwargs["message"] = case.input
-
-            result = discovered.main_fn(**kwargs)
-            if asyncio.iscoroutine(result):
-                result = asyncio.run(result)
-
-            if hasattr(result, "chat_history"):
-                history = result.chat_history or []
-                turns = len(history)
-                agent_msgs = [
-                    m for m in history if m.get("role") != "user" and m.get("content")
-                ]
-                output = agent_msgs[-1]["content"] if agent_msgs else ""
-            else:
-                output = str(result)
-                turns = 1
-
-        elif discovered.kind == "agent":
-            user_proxy = autogen.UserProxyAgent(
-                name="user",
-                human_input_mode="NEVER",
-                max_consecutive_auto_reply=0,
-                code_execution_config=False,
-            )
-            result = user_proxy.initiate_chat(
-                discovered.agent,
-                message=case.input,
-            )
-            history = result.chat_history or []
-            turns = len(history)
-            agent_msgs = [
-                m for m in history if m.get("role") != "user" and m.get("content")
-            ]
-            output = agent_msgs[-1]["content"] if agent_msgs else ""
-
-        elif discovered.kind == "agents":
-            groupchat = autogen.GroupChat(
-                agents=discovered.agents,
-                messages=[],
-                max_round=10,
-            )
-            manager = autogen.GroupChatManager(groupchat=groupchat)
-            user_proxy = autogen.UserProxyAgent(
-                name="user",
-                human_input_mode="NEVER",
-                max_consecutive_auto_reply=0,
-                code_execution_config=False,
-            )
-            result = user_proxy.initiate_chat(manager, message=case.input)
-            history = result.chat_history or []
-            turns = len(history)
-            agent_msgs = [
-                m for m in history if m.get("role") != "user" and m.get("content")
-            ]
-            output = agent_msgs[-1]["content"] if agent_msgs else ""
-
-    except Exception as exc:
-        errors.append(str(exc))
-
-    elapsed = time.time() - start
+    result = execute(discovered, case.input)
 
     # Evaluate assertions
     assertion_results = [
-        check_assertion(a, output, turns=turns, errors=errors)
+        check_assertion(a, result.output, turns=result.turns, errors=result.errors)
         for a in case.assertions
     ]
 
     return CaseResult(
         case=case,
         assertion_results=assertion_results,
-        output=output,
-        turns=turns,
-        errors=errors,
-        elapsed=elapsed,
+        output=result.output,
+        turns=result.turns,
+        errors=result.errors,
+        elapsed=result.elapsed,
+        cost=result.cost,
     )
 
 
@@ -169,16 +104,22 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
 
     # Per-case results
     for r in results:
-        mark = "[success]✓[/success]" if r.passed else "[error]✗[/error]"
+        mark = "[success]\u2713[/success]" if r.passed else "[error]\u2717[/error]"
         assertions_str = f"{r.passed_count}/{r.total_count} assertions"
+        cost_str = ""
+        if r.cost and isinstance(r.cost, dict):
+            total_cost = r.cost.get("usage_excluding_cached_inference", {}).get("total_cost", 0)
+            cost_str = f"  ${total_cost:.6f}"
         console.print(
-            f"  {mark} {r.case.name:30s} {assertions_str:20s} {r.elapsed:.1f}s"
+            f"  {mark} {r.case.name:30s} {assertions_str:20s} {r.elapsed:.1f}s{cost_str}"
         )
 
         # Show failures
         for ar in r.assertion_results:
             if not ar.passed:
-                console.print(f"    [error]└─ FAIL:[/error] {ar.assertion_type}: {ar.message}")
+                console.print(
+                    f"    [error]\u2514\u2500 FAIL:[/error] {ar.assertion_type}: {ar.message}"
+                )
 
     # Summary
     console.print()
@@ -186,12 +127,31 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
     style = "success" if passed == total else "warning" if passed > 0 else "error"
     apct = (passed_assertions / total_assertions * 100) if total_assertions else 0
 
-    summary_table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
+    summary_table = Table(
+        show_header=False, show_edge=False, pad_edge=False, box=None
+    )
     summary_table.add_column(style="dim")
     summary_table.add_column()
-    summary_table.add_row("Passed:", f"[{style}]{passed}/{total} ({pct:.0f}%)[/{style}]")
-    summary_table.add_row("Assertions:", f"{passed_assertions}/{total_assertions} ({apct:.0f}%)")
+    summary_table.add_row(
+        "Passed:", f"[{style}]{passed}/{total} ({pct:.0f}%)[/{style}]"
+    )
+    summary_table.add_row(
+        "Assertions:", f"{passed_assertions}/{total_assertions} ({apct:.0f}%)"
+    )
     summary_table.add_row("Total time:", f"{total_time:.1f}s")
+
+    # Aggregate cost
+    total_cost = 0.0
+    total_tokens = 0
+    for r in results:
+        if r.cost and isinstance(r.cost, dict):
+            usage = r.cost.get("usage_excluding_cached_inference", {})
+            total_cost += usage.get("total_cost", 0)
+            for v in usage.values():
+                if isinstance(v, dict) and "total_tokens" in v:
+                    total_tokens += v["total_tokens"]
+    if total_cost > 0:
+        summary_table.add_row("Cost:", f"${total_cost:.6f} ({total_tokens} tokens)")
 
     console.print(
         Panel(summary_table, title="Results", border_style=style, width=60)
@@ -201,18 +161,30 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
 
 @app.command("eval")
 def test_eval(
-    agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to test."),
-    eval_file: Path = typer.Option(..., "--eval", "-e", help="Evaluation cases file (YAML)."),
-    models: str | None = typer.Option(None, "--models", help="Comma-separated models to compare."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running."),
-    baseline: Path | None = typer.Option(None, "--baseline", help="Previous results for regression."),
+    agent_file: Path = typer.Argument(
+        ..., help="Python file defining agent(s) to test."
+    ),
+    eval_file: Path = typer.Option(
+        ..., "--eval", "-e", help="Evaluation cases file (YAML)."
+    ),
+    models: str | None = typer.Option(
+        None, "--models", help="Comma-separated models to compare."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Estimate cost without running."
+    ),
+    baseline: Path | None = typer.Option(
+        None, "--baseline", help="Previous results for regression comparison."
+    ),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Output format: json, junit."
+    ),
 ) -> None:
     """Run evaluation suite against an agent.
 
     [dim]Examples:[/dim]
       [command]ag2 test eval my_agent.py --eval tests/cases.yaml[/command]
-      [command]ag2 test eval my_agent.py --eval tests/ --models gpt-4o,claude-sonnet-4-6[/command]
-      [command]ag2 test eval my_agent.py --eval tests/ --dry-run[/command]
+      [command]ag2 test eval my_agent.py --eval tests/ --output json[/command]
     """
     try:
         import autogen  # noqa: F401
@@ -230,9 +202,9 @@ def test_eval(
 
     # Load eval suite(s)
     if eval_path.is_dir():
-        import yaml  # noqa: F401
-
-        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(eval_path.glob("*.yml"))
+        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(
+            eval_path.glob("*.yml")
+        )
         if not yaml_files:
             console.print(f"[error]No YAML files found in {eval_path}[/error]")
             raise typer.Exit(1)
@@ -245,18 +217,54 @@ def test_eval(
 
     if dry_run:
         total_cases = sum(len(s.cases) for s in suites)
-        console.print(f"\n[heading]Dry run:[/heading] {total_cases} case(s) across {len(suites)} suite(s)")
+        console.print(
+            f"\n[heading]Dry run:[/heading] {total_cases} case(s) across {len(suites)} suite(s)"
+        )
         console.print("[dim]Estimated cost depends on model and input length.[/dim]")
         raise typer.Exit(0)
 
     # Run each suite
     all_passed = True
+    all_results: list[tuple[EvalSuite, list[CaseResult]]] = []
+
     for suite in suites:
-        console.print(f"\n[heading]Running:[/heading] {suite.name} ({len(suite.cases)} cases)\n")
+        console.print(
+            f"\n[heading]Running:[/heading] {suite.name} ({len(suite.cases)} cases)\n"
+        )
         results = [_run_single_case(agent_path, case) for case in suite.cases]
+        all_results.append((suite, results))
         _display_results(suite, results)
         if not all(r.passed for r in results):
             all_passed = False
+
+    # JSON output
+    if output == "json":
+        json_data = []
+        for suite, results in all_results:
+            suite_data = {
+                "suite": suite.name,
+                "cases": [
+                    {
+                        "name": r.case.name,
+                        "passed": r.passed,
+                        "output": r.output[:500],
+                        "turns": r.turns,
+                        "elapsed": round(r.elapsed, 2),
+                        "cost": str(r.cost) if r.cost else None,
+                        "assertions": [
+                            {
+                                "type": ar.assertion_type,
+                                "passed": ar.passed,
+                                "message": ar.message,
+                            }
+                            for ar in r.assertion_results
+                        ],
+                    }
+                    for r in results
+                ],
+            }
+            json_data.append(suite_data)
+        print(json.dumps(json_data, indent=2, default=str))
 
     if not all_passed:
         raise typer.Exit(1)
@@ -264,8 +272,15 @@ def test_eval(
 
 @app.command("bench")
 def test_bench(
-    agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to benchmark."),
-    suite: str = typer.Option(..., "--suite", "-s", help="Benchmark suite (gaia, humaneval, swe-bench-lite, or path)."),
+    agent_file: Path = typer.Argument(
+        ..., help="Python file defining agent(s) to benchmark."
+    ),
+    suite: str = typer.Option(
+        ...,
+        "--suite",
+        "-s",
+        help="Benchmark suite (gaia, humaneval, swe-bench-lite, or path).",
+    ),
 ) -> None:
     """Run standardized benchmarks against an agent.
 

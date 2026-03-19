@@ -140,8 +140,110 @@ def check_assertion(
             actual=errors if not passed else None,
         )
 
+    if atype == "llm_judge":
+        return _check_llm_judge(assertion, output)
+
     return AssertionResult(
         passed=False,
         assertion_type=atype,
         message=f"Unknown assertion type: {atype}",
     )
+
+
+def _check_llm_judge(assertion: EvalAssertion, output: str) -> AssertionResult:
+    """Use an LLM to judge whether the output meets the given criteria.
+
+    Requires ag2 to be installed. Uses the model specified in the assertion
+    (defaults to gpt-4o). The LLM is asked to evaluate the output against
+    the criteria and respond with PASS or FAIL plus a brief explanation.
+
+    YAML usage:
+        assertions:
+          - type: llm_judge
+            criteria: "Response correctly explains photosynthesis"
+            model: gpt-4o  # optional, defaults to gpt-4o
+    """
+    criteria = assertion.criteria
+    if not criteria:
+        return AssertionResult(
+            passed=False,
+            assertion_type="llm_judge",
+            message="No 'criteria' provided for llm_judge assertion",
+        )
+
+    model = getattr(assertion, "model", None) or "gpt-4o"
+
+    try:
+        import autogen
+        from autogen.io.base import IOStream
+    except ImportError:
+        return AssertionResult(
+            passed=False,
+            assertion_type="llm_judge",
+            message="ag2 is required for llm_judge assertions (pip install ag2)",
+        )
+
+    judge_prompt = (
+        "You are an evaluation judge. Given the following agent output and "
+        "evaluation criteria, determine if the output passes.\n\n"
+        f"## Agent Output\n{output}\n\n"
+        f"## Criteria\n{criteria}\n\n"
+        "Respond with ONLY one of these formats:\n"
+        "PASS: <brief explanation>\n"
+        "FAIL: <brief explanation>"
+    )
+
+    try:
+        llm_config = autogen.LLMConfig(api_type="openai", model=model)
+        with llm_config:
+            judge = autogen.AssistantAgent(
+                name="judge",
+                system_message="You are a strict evaluation judge. Always respond with PASS or FAIL followed by a brief explanation.",
+            )
+        user = autogen.UserProxyAgent(
+            name="eval_runner",
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=0,
+            code_execution_config=False,
+        )
+
+        # Suppress AG2's default print output during judge execution
+        class _SilentIO:
+            def print(self, *a: Any, **kw: Any) -> None:
+                pass
+
+            def send(self, message: Any) -> None:
+                pass
+
+            def input(self, prompt: str = "", *, password: bool = False) -> str:
+                return ""
+
+        with IOStream.set_default(_SilentIO()):  # type: ignore[arg-type]
+            chat_result = user.initiate_chat(judge, message=judge_prompt)
+
+        last_msg = ""
+        if chat_result.chat_history:
+            agent_msgs = [
+                m
+                for m in chat_result.chat_history
+                if m.get("role") != "user" and m.get("content")
+            ]
+            if agent_msgs:
+                last_msg = agent_msgs[-1]["content"]
+
+        passed = last_msg.strip().upper().startswith("PASS")
+        return AssertionResult(
+            passed=passed,
+            assertion_type="llm_judge",
+            message=last_msg.strip()[:200],
+            expected=criteria,
+            actual=output[:200],
+        )
+    except Exception as exc:
+        return AssertionResult(
+            passed=False,
+            assertion_type="llm_judge",
+            message=f"LLM judge failed: {exc}",
+            expected=criteria,
+            actual=output[:200],
+        )

@@ -17,6 +17,7 @@ class EvalAssertion:
     pattern: str | None = None
     criteria: str | None = None
     threshold: float | None = None
+    model: str | None = None  # LLM model for llm_judge assertions
 
 
 @dataclass
@@ -46,6 +47,7 @@ def _parse_assertion(raw: dict[str, Any]) -> EvalAssertion:
         pattern=raw.get("pattern"),
         criteria=raw.get("criteria"),
         threshold=raw.get("threshold"),
+        model=raw.get("model"),
     )
 
 
