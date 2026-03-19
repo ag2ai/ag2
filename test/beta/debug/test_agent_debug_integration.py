@@ -25,23 +25,25 @@ async def test_agent_ask_with_debug_server_url() -> None:
 
     mock_replay = AsyncMock()
 
-    with patch.dict(os.environ, {"AG2_DEBUG_SERVER_URL": "http://localhost:8765"}):
-        with (
-            patch(
-                "autogen.beta.debug.client.get_server",
-                return_value=mock_debug_client,
-            ) as mock_get_server,
-            patch.object(
-                type(mock_debug_client).__name__,
-                "register_session",
-                new=AsyncMock(),
-                create=True,
-            ) if False else patch(  # noqa: SIM210
-                "autogen.beta.debug.session.DebugSession.replay_events",
-                mock_replay,
-            ),
-        ):
-            reply = await agent.ask("hello")
+    with (
+        patch.dict(os.environ, {"AG2_DEBUG_SERVER_URL": "http://localhost:8765"}),
+        patch(
+            "autogen.beta.debug.client.get_server",
+            return_value=mock_debug_client,
+        ) as mock_get_server,
+        patch.object(
+            type(mock_debug_client).__name__,
+            "register_session",
+            new=AsyncMock(),
+            create=True,
+        )
+        if False
+        else patch(  # noqa: SIM210
+            "autogen.beta.debug.session.DebugSession.replay_events",
+            mock_replay,
+        ),
+    ):
+        reply = await agent.ask("hello")
 
     assert reply.content == "hello world"
     mock_get_server.assert_called_once_with("http://localhost:8765")
@@ -59,9 +61,8 @@ async def test_agent_ask_without_debug_server_url() -> None:
     env = os.environ.copy()
     env.pop("AG2_DEBUG_SERVER_URL", None)
 
-    with patch.dict(os.environ, env, clear=True):
-        with patch("autogen.beta.debug.client.get_server") as mock_get_server:
-            reply = await agent.ask("hello")
+    with patch.dict(os.environ, env, clear=True), patch("autogen.beta.debug.client.get_server") as mock_get_server:
+        reply = await agent.ask("hello")
 
     assert reply.content == "response"
     mock_get_server.assert_not_called()

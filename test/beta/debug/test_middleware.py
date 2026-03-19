@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -79,6 +78,7 @@ async def test_on_turn_passes_modified_event_to_call_next() -> None:
 
 
 # ── Serialisation tests ────────────────────────────────────────────────────
+
 
 def test_serialize_event_basic() -> None:
     event = ModelRequest(content="test")

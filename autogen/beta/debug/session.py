@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 from ..events.base import BaseEvent
 
 if TYPE_CHECKING:
-    from .client import DebugClient
     from ..context import Context
     from ..stream import MemoryStream
+    from .client import DebugClient
 
 
 class DebugSession:
@@ -56,11 +56,7 @@ class DebugSession:
 
         for event in events:
             await self.record_event(event)
-            if (
-                isinstance(event, ModelResponse)
-                and event.tool_calls
-                and event.tool_calls.calls
-            ):
+            if isinstance(event, ModelResponse) and event.tool_calls and event.tool_calls.calls:
                 await self.record_event(event.tool_calls)
 
     async def inject(self, event: BaseEvent) -> None:

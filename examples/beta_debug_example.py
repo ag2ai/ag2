@@ -33,15 +33,13 @@ blocked:
 
 import asyncio
 import os
-import threading
 import time
 
 import httpx
 
-from autogen.beta.debug.server import run_debug_server
 from autogen.beta.events import ToolCallEvent
-from autogen.beta.stream import MemoryStream
 from autogen.beta.events.types import ModelMessage, ModelResponse
+from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
 # ---------------------------------------------------------------------------
@@ -64,7 +62,7 @@ os.environ["AG2_DEBUG_SERVER_URL"] = DEBUG_URL
 # 3. Define the agent (fake LLM: tool call → text reply)
 # ---------------------------------------------------------------------------
 from autogen.beta import Agent
-from autogen.beta.tools import ToolResult, tool
+from autogen.beta.tools import tool
 
 
 @tool
@@ -109,7 +107,7 @@ async def main() -> None:
 
     driver_task = asyncio.create_task(wait_and_drive())
 
-    memory =  MemoryStream()
+    memory = MemoryStream()
 
     print("[main] running agent.ask() …")
     reply = await agent.ask("What's the weather in Paris?", stream=memory)
@@ -125,7 +123,7 @@ async def main() -> None:
         session_id = memory.id
         session = (await client.get(f"/sessions/{session_id}")).json()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Session: {session_id}")
     print(f"Status:  {session['status']}")
 

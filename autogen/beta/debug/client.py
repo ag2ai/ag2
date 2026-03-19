@@ -8,13 +8,13 @@ plus serialisation utilities for converting live BaseEvent objects into
 JSON-compatible dicts.
 """
 
-from dataclasses import fields as dataclass_fields, is_dataclass
+from dataclasses import fields as dataclass_fields
+from dataclasses import is_dataclass
 from typing import Any
 
 import httpx
 
 from ..events.base import BaseEvent
-
 
 # ── Serialisation ──────────────────────────────────────────────────────────
 
@@ -75,6 +75,7 @@ class DebugClient:
                 )
         except Exception:
             pass  # never crash the agent due to a debug side-channel failure
+
 
 def get_server(base_url: str) -> DebugClient:
     """Create and return an HTTP client connected to the debug server at *base_url*."""

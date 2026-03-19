@@ -108,14 +108,12 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
         session = sessions.get(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        session.events.append(
-            {
-                "id": f"ev-{len(session.events)}",
-                "event_type": body.get("event_type", ""),
-                "event_data": body.get("event_data", {}),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        session.events.append({
+            "id": f"ev-{len(session.events)}",
+            "event_type": body.get("event_type", ""),
+            "event_data": body.get("event_data", {}),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
         return {"ok": "true"}
 

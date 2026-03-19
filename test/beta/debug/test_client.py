@@ -10,7 +10,6 @@ import pytest
 from autogen.beta.debug.client import DebugClient, _serialize_value, get_server, serialize_event
 from autogen.beta.events.types import ModelRequest
 
-
 # ── _serialize_value edge cases ───────────────────────────────────────────
 
 

@@ -129,9 +129,7 @@ async def test_resume_wrong_bp_id(client_and_sessions) -> None:  # type: ignore[
     client, sessions = client_and_sessions
     sessions["s5"] = _make_session("s5")
 
-    task = asyncio.create_task(
-        client.post("/sessions/s5/breakpoints", json={"type": "TURN_START", "event": {}})
-    )
+    task = asyncio.create_task(client.post("/sessions/s5/breakpoints", json={"type": "TURN_START", "event": {}}))
     await asyncio.sleep(0.05)
 
     resp = await client.post("/sessions/s5/breakpoints/bad-id/resume", json={})
