@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCall
+from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
 from autogen.beta.middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -32,7 +32,7 @@ except ImportError as _err:
         "OpenTelemetry packages are required for TelemetryMiddleware. Install them with: pip install ag2[tracing]"
     ) from _err
 
-from autogen.beta.events.types import ToolError
+from autogen.beta.events import ToolErrorEvent
 
 _SCHEMA_URL = "https://opentelemetry.io/schemas/1.11.0"
 _INSTRUMENTING_MODULE = "opentelemetry.instrumentation.ag2.beta"
@@ -187,7 +187,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: ToolCall,
+        event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
         with self._tracer.start_as_current_span(
@@ -210,7 +210,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_status(StatusCode.ERROR, str(exc))
                 raise
 
-            if isinstance(result, ToolError):
+            if isinstance(result, ToolErrorEvent):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
             elif self._capture_content and hasattr(result, "content"):
