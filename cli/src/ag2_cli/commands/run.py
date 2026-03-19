@@ -254,8 +254,14 @@ def chat_cmd(
     max_turns: int = typer.Option(
         10, "--max-turns", help="Maximum turns per message."
     ),
+    no_record: bool = typer.Option(
+        False, "--no-record", help="Disable automatic session recording."
+    ),
 ) -> None:
     """Start an interactive terminal chat with an agent or team.
+
+    Sessions are automatically recorded for later replay with
+    [command]ag2 replay[/command]. Use --no-record to disable.
 
     [dim]Examples:[/dim]
       [command]ag2 chat my_agent.py[/command]
@@ -317,6 +323,7 @@ def chat_cmd(
 
     total_cost: Any = None
     turn_count = 0
+    chat_history: list[dict[str, Any]] = []
 
     while True:
         try:
@@ -350,6 +357,7 @@ def chat_cmd(
                 on_print=_on_print,
                 on_event=_on_event,
                 user_proxy=user_proxy,
+                clear_history=(turn_count == 1),
             )
             # Show output for main() that doesn't emit live events
             if result.output and discovered.kind == "main":
@@ -363,10 +371,49 @@ def chat_cmd(
                 )
             if result.cost:
                 total_cost = result.cost
+            # Accumulate history for session recording
+            chat_history.append({"role": "user", "content": user_input, "name": "user"})
+            if result.output:
+                speaker = result.last_speaker or "assistant"
+                chat_history.append({"role": "assistant", "content": result.output, "name": speaker})
         except Exception as exc:
             console.print(f"[error]Error: {exc}[/error]")
             if verbose:
                 console.print_exception()
+
+    # Record the chat session (always-on unless --no-record)
+    if not no_record and chat_history:
+        from datetime import datetime, timezone
+
+        from .replay import Session, SessionEvent, SessionMeta, create_session_id, save_session
+
+        session_id = create_session_id()
+        events = [
+            SessionEvent(
+                turn=i + 1,
+                speaker=msg["name"],
+                content=msg["content"],
+                role=msg["role"],
+            )
+            for i, msg in enumerate(chat_history)
+        ]
+        cost_val = 0.0
+        if total_cost and isinstance(total_cost, dict):
+            cost_val = total_cost.get("usage_excluding_cached_inference", {}).get("total_cost", 0)
+        meta = SessionMeta(
+            session_id=session_id,
+            agent_file=str(agent_file or "<ad-hoc>"),
+            agent_names=discovered.agent_names,
+            created_at=datetime.now(tz=timezone.utc).isoformat(),
+            turns=len(events),
+            duration=0.0,
+            total_cost=cost_val,
+            input_message=chat_history[0]["content"] if chat_history else "",
+            final_output=chat_history[-1]["content"] if chat_history else "",
+        )
+        session = Session(meta=meta, events=events)
+        save_session(session)
+        console.print(f"[dim]Session recorded: {session_id}[/dim]")
 
     console.print(f"\n[dim]Session ended after {turn_count} turn(s).[/dim]")
     if total_cost:

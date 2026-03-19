@@ -105,6 +105,7 @@ def execute(
     on_print: Callable[[str], None] | None = None,
     on_event: Callable[[Any], None] | None = None,
     user_proxy: Any = None,
+    clear_history: bool = True,
 ) -> RunResult:
     """Execute a discovered agent with optional live event callbacks.
 
@@ -115,6 +116,8 @@ def execute(
         on_print: Callback for agent print output (live rendering).
         on_event: Callback for structured AG2 events (live rendering).
         user_proxy: Reuse an existing UserProxyAgent (for multi-turn chat).
+        clear_history: Whether to clear chat history before this turn.
+            Set to False for multi-turn conversations to preserve context.
 
     Returns:
         RunResult with output, history, cost, timing, and errors.
@@ -165,7 +168,10 @@ def execute(
 
             with _set_iostream():
                 ret = user_proxy.initiate_chat(
-                    d.agent, message=message, max_turns=max_turns
+                    d.agent,
+                    message=message,
+                    max_turns=max_turns,
+                    clear_history=clear_history,
                 )
 
             _extract_chat_result(ret, result)
