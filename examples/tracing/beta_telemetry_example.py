@@ -32,7 +32,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen.beta import Agent
 from autogen.beta.annotations import Context
-from autogen.beta.events import HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCall, ToolCalls
+from autogen.beta.events import HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.middleware.builtin import TelemetryMiddleware
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import tool
@@ -89,12 +89,12 @@ def hitl_hook(event: HumanInputRequest) -> HumanMessage:
 # --- Helper to build a canned ModelResponse ---
 def _resp(
     content: str | None = None,
-    tool_calls: list[ToolCall] | None = None,
+    tool_calls: list[ToolCallEvent] | None = None,
     finish_reason: str = "stop",
 ) -> ModelResponse:
     return ModelResponse(
         message=ModelMessage(content=content) if content else None,
-        tool_calls=ToolCalls(calls=tool_calls) if tool_calls else ToolCalls(),
+        tool_calls=ToolCallsEvent(calls=tool_calls) if tool_calls else ToolCallsEvent(),
         usage={"prompt_tokens": 50, "completion_tokens": 20},
         model="gpt-4o-mini-2024-07-18",
         provider="openai",
@@ -109,7 +109,7 @@ async def main():
         "weather_assistant",
         config=TestConfig(
             _resp(
-                tool_calls=[ToolCall(id="c1", name="get_weather", arguments='{"city": "Tokyo"}')],
+                tool_calls=[ToolCallEvent(id="c1", name="get_weather", arguments='{"city": "Tokyo"}')],
                 finish_reason="tool_calls",
             ),
             _resp(content="The weather in Tokyo is Rainy, 18C."),
@@ -138,7 +138,7 @@ async def main():
         "hitl_assistant",
         config=TestConfig(
             _resp(
-                tool_calls=[ToolCall(id="c2", name="confirm_action", arguments='{"action": "deploy to production"}')],
+                tool_calls=[ToolCallEvent(id="c2", name="confirm_action", arguments='{"action": "deploy to production"}')],
                 finish_reason="tool_calls",
             ),
             _resp(content="Deployment confirmed and proceeding!"),
@@ -158,7 +158,7 @@ async def main():
         "stock_assistant",
         config=TestConfig(
             _resp(
-                tool_calls=[ToolCall(id="c3", name="get_stock_price", arguments='{"ticker": "INVALID"}')],
+                tool_calls=[ToolCallEvent(id="c3", name="get_stock_price", arguments='{"ticker": "INVALID"}')],
                 finish_reason="tool_calls",
             ),
             _resp(content="Sorry, that ticker is not available."),
