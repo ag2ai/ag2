@@ -271,19 +271,27 @@ class Agent(Askable):
 
         debug_url = os.environ.get("AG2_DEBUG_SERVER_URL")
         if debug_url:
-            from .debug.client import DebugClient
+            from urllib.parse import urlparse
+
             from .debug.middleware import DebugMiddleware
+            from .debug.server import get_or_create_server
+            from .debug.session import DebugSession
             from .middleware.base import Middleware as _Middleware
 
-            session_id = str(stream.id)
-            debug_client = DebugClient(debug_url)
-            await debug_client.create_session(session_id, prompt=context.prompt)
-
-            async def _forward_event(event: BaseEvent) -> None:
-                await debug_client.send_event(session_id, event)
-
-            stream.subscribe(_forward_event)
-            additional_middleware = [_Middleware(DebugMiddleware, client=debug_client, session_id=session_id), *additional_middleware]
+            parsed = urlparse(debug_url)
+            debug_server = await get_or_create_server(
+                host=parsed.hostname or "localhost",
+                port=parsed.port or 8765,
+            )
+            debug_session = DebugSession(
+                session_id=str(stream.id),
+                stream=stream,
+                context=context,
+                prompt=list(context.prompt),
+            )
+            debug_server.register(debug_session)
+            stream.subscribe(debug_session.record_event)
+            additional_middleware = [_Middleware(DebugMiddleware, session=debug_session), *additional_middleware]
 
         return await self._execute(
             initial_event,

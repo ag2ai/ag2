@@ -271,6 +271,25 @@
   ::-webkit-scrollbar-thumb:hover{ background: var(--muted); }
 
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  /* ── Event flash (jump-to highlight) ── */
+  @keyframes flash-highlight {
+    0%   { background: rgba(122,162,247,.35); border-color: var(--blue); box-shadow: 0 0 0 2px rgba(122,162,247,.25); }
+    100% { background: var(--surface2);       border-color: var(--border); box-shadow: none; }
+  }
+  .event-card.flashing { animation: flash-highlight 1s ease-out forwards; }
+
+  /* ── Breakpoint → event link button ── */
+  .ev-jump-btn {
+    display: flex; align-items: center; gap: 5px; width: fit-content;
+    background: none; border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 7px; cursor: pointer; transition: border-color .12s, color .12s;
+  }
+  .ev-jump-btn:hover { border-color: var(--blue); }
+  .ev-jump-btn:hover .ev-jump-arrow { color: var(--blue); }
+  .ev-jump-arrow { font-size: 10px; color: var(--muted); margin-left: 2px; }
+  .ev-idx { font-family: monospace; font-size: 10px; color: var(--muted);
+            background: var(--bg); border-radius: 3px; padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -391,6 +410,26 @@ function fmtArgs(argStr) {
   return Object.entries(args).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', ');
 }
 
+// ── Jump from a breakpoint to its associated event card ───────────────────
+function jumpToEvent(eventIndex) {
+  // Switch to Events tab first (mode-cnt swap)
+  if (currentMode !== 'events') {
+    const evBtn = document.querySelector('.tab[data-mode="events"]');
+    if (evBtn) evBtn.click();
+  }
+  // Give the container one frame to become visible before querying
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`#events-body .event-card[data-index="${eventIndex}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Restart the flash animation (even if triggered twice quickly)
+    card.classList.remove('flashing');
+    void card.offsetWidth; // force reflow so the animation restarts cleanly
+    card.classList.add('flashing');
+    card.addEventListener('animationend', () => card.classList.remove('flashing'), { once: true });
+  });
+}
+
 // ── Mode switching ────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -462,11 +501,12 @@ function renderEventsMode(session) {
     body.insertBefore(sep, sp ? sp.nextSibling : body.firstChild);
   }
 
-  session.events.forEach(ev => {
+  session.events.forEach((ev, idx) => {
     if (evMap.has(ev.id)) return; // already rendered — don't touch it
 
     const card = document.createElement('div');
     card.className = 'event-card';
+    card.dataset.index = idx;  // needed by jumpToEvent()
     const dataStr = JSON.stringify(ev.event_data, null, 2);
     const shortened = dataStr.length > 200 ? dataStr.slice(0, 200) + '…' : dataStr;
     const needsToggle = dataStr.length > 200;
@@ -691,17 +731,24 @@ function renderBreakpoints(session) {
     }
 
     // New breakpoint card
+    const evType = (bp.event && bp.event.type) || bp.event_type;
     const card = document.createElement('div');
     card.className = `bp-card ${bp.resumed ? 'resumed' : 'pending'}`;
     card.innerHTML = `
       <div class="row1">
         ${bpTypeBadge(bp.type)}
+        <span class="ev-idx">#${bp.event_index}</span>
         <span class="ts-bp">${fmtTime(bp.timestamp)}</span>
       </div>
-      <span class="ev-info">${esc(bp.event_type)}</span>
+      <button class="ev-jump-btn" title="Go to event #${bp.event_index} in Events tab">
+        ${typeBadge(evType)}
+        <span class="ev-jump-arrow">↗</span>
+      </button>
       <span class="bp-status">${bp.resumed ? '✓ resumed' : '⏸ paused'}</span>
       ${bp.resumed ? '' : `<button class="resume-btn" data-bp="${bp.id}">▶ Resume</button>`}
     `;
+
+    card.querySelector('.ev-jump-btn').addEventListener('click', () => jumpToEvent(bp.event_index));
 
     if (!bp.resumed) {
       const btn = card.querySelector('.resume-btn');
@@ -723,7 +770,11 @@ async function resume(sessionId, bpId, btn) {
   btn.disabled = true;
   btn.textContent = 'Resuming…';
   try {
-    await apiFetch(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, { method: 'POST' });
+    await apiFetch(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
   } finally {
     resuming.delete(bpId);
   }

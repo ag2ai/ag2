@@ -4,31 +4,36 @@
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent
-from autogen.beta.middleware.base import AgentTurn, BaseMiddleware, ToolExecution, ToolResultType
+from autogen.beta.middleware.base import AgentTurn, BaseMiddleware, ModelResponse, ToolExecution, ToolResultType
 
-from .client import DebugClient
+from .session import DebugSession
 
 
 class DebugMiddleware(BaseMiddleware):
+    """
+    Middleware that pauses agent execution at each turn and tool call.
+
+    Communicates directly with the in-process :class:`DebugSession` via
+    ``asyncio.Event`` — no HTTP round-trip on the hot path.
+    """
+
     def __init__(
         self,
         event: BaseEvent,
         context: Context,
         *,
-        client: DebugClient,
-        session_id: str,
+        session: DebugSession,
     ) -> None:
         super().__init__(event, context)
-        self._client = client
-        self._session_id = session_id
+        self._session = session
 
     async def on_turn(
         self,
         call_next: AgentTurn,
         event: BaseEvent,
         context: Context,
-    ) -> "BaseEvent":
-        await self._client.hit_breakpoint(self._session_id, "TURN_START", event)
+    ) -> ModelResponse:
+        event = await self._session.pause("TURN_START", event)
         return await call_next(event, context)
 
     async def on_tool_execution(
@@ -37,5 +42,5 @@ class DebugMiddleware(BaseMiddleware):
         event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
-        await self._client.hit_breakpoint(self._session_id, "TOOL_CALL", event)
+        event = await self._session.pause("TOOL_CALL", event)
         return await call_next(event, context)

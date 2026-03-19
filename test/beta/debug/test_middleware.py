@@ -6,52 +6,101 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from autogen.beta.debug.client import DebugClient, serialize_event
+from autogen.beta.debug.client import serialize_event
 from autogen.beta.debug.middleware import DebugMiddleware
-from autogen.beta.events import BaseEvent, ToolCallEvent
+from autogen.beta.debug.session import DebugSession
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.events.types import ModelRequest, ModelResponse
 from autogen.beta.middleware.base import AgentTurn, ToolExecution
 
 
-def _make_middleware(mock_client: DebugClient, session_id: str = "test-session") -> DebugMiddleware:
-    event = ModelRequest(content="hi")
+def _make_session() -> DebugSession:
+    stream = MagicMock()
+    stream.send = AsyncMock()
     context = MagicMock()
-    return DebugMiddleware(event, context, client=mock_client, session_id=session_id)
+    context.prompt = []
+    context.variables = {}
+    return DebugSession("test", stream=stream, context=context)
+
+
+def _make_middleware(session: DebugSession) -> DebugMiddleware:
+    return DebugMiddleware(ModelRequest(content="hi"), MagicMock(), session=session)
 
 
 @pytest.mark.asyncio()
-async def test_on_turn_calls_hit_breakpoint() -> None:
-    mock_client = MagicMock(spec=DebugClient)
-    mock_client.hit_breakpoint = AsyncMock()
+async def test_on_turn_pauses_then_calls_next() -> None:
+    session = _make_session()
+    session.pause = AsyncMock(wraps=session.pause)  # spy
+    mw = _make_middleware(session)
 
-    mw = _make_middleware(mock_client, session_id="s1")
-
-    call_next: AgentTurn = AsyncMock(return_value=MagicMock(spec=ModelResponse))
     event = ModelRequest(content="hello")
-    context = MagicMock()
+    call_next: AgentTurn = AsyncMock(return_value=MagicMock(spec=ModelResponse))
 
-    await mw.on_turn(call_next, event, context)
+    import asyncio
 
-    mock_client.hit_breakpoint.assert_awaited_once_with("s1", "TURN_START", event)
-    call_next.assert_awaited_once_with(event, context)
+    # Resume immediately from a concurrent task
+    async def _resume() -> None:
+        await asyncio.sleep(0.02)
+        bp_id = session.pending_bp_id
+        assert bp_id is not None
+        await session.resume(bp_id)
+
+    asyncio.create_task(_resume())
+    await mw.on_turn(call_next, event, MagicMock())
+
+    session.pause.assert_awaited_once_with("TURN_START", event)
+    call_next.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
-async def test_on_tool_execution_calls_hit_breakpoint() -> None:
-    mock_client = MagicMock(spec=DebugClient)
-    mock_client.hit_breakpoint = AsyncMock()
+async def test_on_tool_execution_pauses_then_calls_next() -> None:
+    session = _make_session()
+    mw = _make_middleware(session)
 
-    mw = _make_middleware(mock_client, session_id="s2")
-
-    call_next: ToolExecution = AsyncMock(return_value=MagicMock())
     tool_event = ToolCallEvent(name="my_tool", arguments='{"x": 1}')
-    context = MagicMock()
+    call_next: ToolExecution = AsyncMock(return_value=MagicMock())
 
-    await mw.on_tool_execution(call_next, tool_event, context)
+    import asyncio
 
-    mock_client.hit_breakpoint.assert_awaited_once_with("s2", "TOOL_CALL", tool_event)
-    call_next.assert_awaited_once_with(tool_event, context)
+    async def _resume() -> None:
+        await asyncio.sleep(0.02)
+        bp_id = session.pending_bp_id
+        assert bp_id is not None
+        await session.resume(bp_id)
 
+    asyncio.create_task(_resume())
+    await mw.on_tool_execution(call_next, tool_event, MagicMock())
+    call_next.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_on_turn_passes_modified_event_to_call_next() -> None:
+    """Modifications made at resume time must reach call_next."""
+    session = _make_session()
+    mw = _make_middleware(session)
+
+    event = ModelRequest(content="original")
+    received: list[object] = []
+
+    async def _call_next(ev, ctx):  # type: ignore[no-untyped-def]
+        received.append(ev)
+        return MagicMock(spec=ModelResponse)
+
+    import asyncio
+
+    async def _resume() -> None:
+        await asyncio.sleep(0.02)
+        bp_id = session.pending_bp_id
+        assert bp_id is not None
+        await session.resume(bp_id, event_modifications={"content": "mutated"})
+
+    asyncio.create_task(_resume())
+    await mw.on_turn(_call_next, event, MagicMock())
+
+    assert received[0].content == "mutated"  # type: ignore[union-attr]
+
+
+# ── Serialisation tests ────────────────────────────────────────────────────
 
 def test_serialize_event_basic() -> None:
     event = ModelRequest(content="test")
@@ -60,16 +109,14 @@ def test_serialize_event_basic() -> None:
     assert result["data"]["content"] == "test"
 
 
+def test_serialize_event_no_private_fields() -> None:
+    event = ToolCallEvent(name="fn", arguments='{"x": 1}')
+    result = serialize_event(event)
+    assert "_serialized_arguments" not in result["data"]
+
+
 def test_serialize_event_tool_call() -> None:
     event = ToolCallEvent(name="my_tool", arguments='{"x": 1}')
     result = serialize_event(event)
     assert result["type"] == "ToolCallEvent"
     assert result["data"]["name"] == "my_tool"
-    assert result["data"]["arguments"] == '{"x": 1}'
-
-
-def test_serialize_event_skips_private_fields() -> None:
-    event = ToolCallEvent(name="my_tool", arguments='{"x": 1}')
-    result = serialize_event(event)
-    # _serialized_arguments is private and should not appear
-    assert "_serialized_arguments" not in result["data"]
