@@ -481,7 +481,16 @@ function renderSidebar(list) {
   if (!selectedId && list.length > 0) selectSession(list[0].id);
 }
 
-function selectSession(id) {
+function updateSidebarItem(id, status) {
+  const item = document.querySelector(`.session-item[data-id="${id}"]`);
+  if (item) {
+    item.innerHTML = `<div class="s-dot ${status}"></div><span class="sid" title="${id}">${id.slice(0,8)}…</span>`;
+    item.classList.toggle('active', id === selectedId);
+  }
+}
+
+async function selectSession(id) {
+  if (selectedId === id) return;
   selectedId = id;
   document.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
   document.getElementById('empty-state').style.display = 'none';
@@ -492,6 +501,9 @@ function selectSession(id) {
   document.getElementById('chat-body').innerHTML   = '';
   document.getElementById('history-view').innerHTML = '';
   document.getElementById('bp-body').innerHTML     = '';
+  // Fetch current session state via HTTP
+  const session = await apiFetch(`/sessions/${id}`);
+  if (session) renderDetail(session);
 }
 
 // ── System prompt block ───────────────────────────────────────────────────
@@ -850,20 +862,45 @@ function renderDetail(session) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Poll loop
+// WebSocket connection
 // ─────────────────────────────────────────────────────────────────────────
-async function poll() {
-  const list = await apiFetch('/sessions');
-  if (list) renderSidebar(list);
+let ws = null;
+let wsReconnectTimer = null;
 
-  if (selectedId) {
-    const session = await apiFetch(`/sessions/${selectedId}`);
-    if (session) renderDetail(session);
-  }
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    // Re-sync selected session in case we reconnected mid-session
+    if (selectedId) {
+      apiFetch(`/sessions/${selectedId}`).then(s => { if (s) renderDetail(s); });
+    }
+  };
+
+  ws.onmessage = (event) => {
+    let msg;
+    try { msg = JSON.parse(event.data); } catch { return; }
+
+    if (msg.type === 'sessions_list') {
+      renderSidebar(msg.sessions);
+    } else if (msg.type === 'session_update') {
+      updateSidebarItem(msg.session.id, msg.session.status);
+      if (msg.session.id === selectedId) {
+        renderDetail(msg.session);
+      }
+    }
+  };
+
+  ws.onclose = () => {
+    wsReconnectTimer = setTimeout(connectWS, 1500);
+  };
+
+  ws.onerror = () => { ws.close(); };
 }
 
-poll();
-setInterval(poll, 500);
+connectWS();
 </script>
 </body>
 </html>

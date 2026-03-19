@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from .models import BreakpointView, ResumeRequest, SessionView
@@ -86,10 +86,37 @@ def _session_view(session: _Session) -> SessionView:
 
 def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
     app = FastAPI(title="AG2 Debug Server")
+    _ws_clients: set[WebSocket] = set()
+
+    async def _broadcast(msg: dict[str, Any]) -> None:
+        gone: list[WebSocket] = []
+        for client in _ws_clients:
+            try:
+                await client.send_json(msg)
+            except Exception:
+                gone.append(client)
+        for c in gone:
+            _ws_clients.discard(c)
 
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:
         return FileResponse(_UI_FILE, media_type="text/html")
+
+    @app.websocket("/ws")
+    async def ws_endpoint(ws: WebSocket) -> None:
+        await ws.accept()
+        _ws_clients.add(ws)
+        await ws.send_json({
+            "type": "sessions_list",
+            "sessions": [{"id": s.id, "status": s.status} for s in sessions.values()],
+        })
+        try:
+            while True:
+                await ws.receive_text()  # keep connection alive; ignore client messages
+        except WebSocketDisconnect:
+            pass
+        finally:
+            _ws_clients.discard(ws)
 
     # ── Session registration (called by agent on startup) ─────────────────
 
@@ -97,6 +124,10 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
     async def register_session(session_id: str, body: dict[str, Any]) -> dict[str, str]:
         prompt: list[str] = body.get("prompt", [])
         sessions[session_id] = _Session(session_id, prompt)
+        await _broadcast({
+            "type": "sessions_list",
+            "sessions": [{"id": s.id, "status": s.status} for s in sessions.values()],
+        })
         return {"session_id": session_id}
 
     # ── Event ingestion (called by agent stream subscriber) ───────────────
@@ -114,6 +145,7 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
+        await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
         return {"ok": "true"}
 
     # ── Sessions ──────────────────────────────────────────────────────────
@@ -158,12 +190,14 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
         waiter = asyncio.Event()
         session._pending_waiter = waiter
 
+        await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
         await waiter.wait()
 
         meta.resumed = True
         session._pending_bp_id = None
         session._pending_waiter = None
 
+        await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
         return session._pending_mods or {}
 
     @app.post("/sessions/{session_id}/breakpoints/{bp_id}/resume")
