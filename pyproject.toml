@@ -67,6 +67,12 @@ a2a = [
     "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
 
+beta-debug = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.6,<1",
+    "httpx>=0.28.1,<1",
+]
+
 ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]

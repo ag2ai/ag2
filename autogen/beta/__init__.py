@@ -6,6 +6,7 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
+from .debug import DebugMiddleware, run_debug_server
 from .stream import MemoryStream
 from .tools import ToolResult, tool
 
@@ -13,10 +14,12 @@ __all__ = (
     "Agent",
     "AgentReply",
     "Context",
+    "DebugMiddleware",
     "Depends",
     "Inject",
     "MemoryStream",
     "ToolResult",
     "Variable",
+    "run_debug_server",
     "tool",
 )

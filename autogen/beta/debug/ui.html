@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AG2 Debug</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f17;
+    --surface:  #13151f;
+    --surface2: #1c1f2e;
+    --border:   #2a2d3e;
+    --text:     #c9ccd8;
+    --muted:    #565a7a;
+    --blue:     #7aa2f7;
+    --green:    #9ece6a;
+    --orange:   #ff9e64;
+    --red:      #f7768e;
+    --purple:   #bb9af7;
+    --cyan:     #7dcfff;
+    --yellow:   #e0af68;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: .5px;
+  }
+  header .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  #session-count {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  aside h2 {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    padding: 10px 12px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  #session-list {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background .1s, border-color .1s;
+  }
+  .session-item:hover  { background: var(--surface2); }
+  .session-item.active { background: var(--surface2); border-left-color: var(--blue); }
+  .session-item .sid   { font-family: monospace; font-size: 11px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.running { background: var(--green); animation: pulse 2s infinite; }
+  .status-dot.done    { background: var(--muted); }
+  .status-dot.pending { background: var(--yellow); animation: pulse 1s infinite; }
+
+  /* ── Main panel ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+  }
+  .empty-state svg { opacity: .3; }
+  .empty-state p   { font-size: 13px; }
+
+  /* session detail */
+  #detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  #detail-header .sid-full { font-family: monospace; font-size: 12px; color: var(--muted); }
+  #detail-header .badge    { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+  .badge.running { background: #1a2e1a; color: var(--green); }
+  .badge.done    { background: #1a1a2e; color: var(--muted); }
+
+  /* two-column content */
+  .detail-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Events column ── */
+  .col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+  .col:last-child { border-right: none; }
+  .col-header {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .col-header .count {
+    background: var(--surface2);
+    color: var(--muted);
+    border-radius: 10px;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+  .col-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* ── Event card ── */
+  .event-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+  }
+  .event-card .row1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .event-card .ts {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: monospace;
+  }
+  .event-card .data {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 80px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: max-height .2s;
+  }
+  .event-card .data.expanded { max-height: 400px; }
+  .event-card .data:hover    { color: var(--text); }
+
+  /* ── Breakpoint card ── */
+  .bp-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .bp-card.pending { border-left: 3px solid var(--yellow); }
+  .bp-card.resumed { border-left: 3px solid var(--green); opacity: .6; }
+  .bp-card .row1   { display: flex; align-items: center; gap: 6px; }
+  .bp-card .ev-type { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .bp-card .ts     { margin-left: auto; font-size: 10px; color: var(--muted); font-family: monospace; }
+  .bp-card .status-label { font-size: 10px; color: var(--muted); }
+  .bp-card.pending .status-label { color: var(--yellow); }
+  .bp-card.resumed .status-label { color: var(--green); }
+
+  /* Resume button */
+  .resume-btn {
+    align-self: flex-start;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--green);
+    background: transparent;
+    color: var(--green);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .resume-btn:hover   { background: rgba(158,206,106,.15); }
+  .resume-btn:active  { background: rgba(158,206,106,.3); }
+  .resume-btn:disabled { opacity: .4; cursor: default; }
+
+  /* ── Badges ── */
+  .type-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .tb-ModelRequest       { background:#1a2533; color:var(--blue);   }
+  .tb-ModelResponse      { background:#1a2a1a; color:var(--green);  }
+  .tb-ModelMessage       { background:#1a2a1a; color:var(--green);  }
+  .tb-ModelMessageChunk  { background:#1a2a1a; color:var(--green);  }
+  .tb-ModelReasoning     { background:#221a33; color:var(--purple); }
+  .tb-ToolCallEvent      { background:#2a1f0f; color:var(--orange); }
+  .tb-ToolCallsEvent     { background:#2a1f0f; color:var(--orange); }
+  .tb-ToolResultEvent    { background:#0f2233; color:var(--cyan);   }
+  .tb-ToolResultsEvent   { background:#0f2233; color:var(--cyan);   }
+  .tb-ToolErrorEvent     { background:#2a0f0f; color:var(--red);    }
+  .tb-ToolNotFoundEvent  { background:#2a0f0f; color:var(--red);    }
+  .tb-HumanInputRequest  { background:#2a1f00; color:var(--yellow); }
+  .tb-HumanMessage       { background:#2a1f00; color:var(--yellow); }
+  .tb-default            { background:#1a1a2e; color:var(--muted);  }
+
+  .bpt-TURN_START { background:#221a33; color:var(--purple); }
+  .bpt-TOOL_CALL  { background:#2a1f0f; color:var(--orange); }
+  .bpt-LLM_CALL   { background:#1a2533; color:var(--blue);   }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar            { width:5px; height:5px; }
+  ::-webkit-scrollbar-track      { background:transparent; }
+  ::-webkit-scrollbar-thumb      { background:var(--border); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--muted); }
+
+  /* ── Animations ── */
+  @keyframes pulse {
+    0%,100%{ opacity:1; }
+    50%     { opacity:.4; }
+  }
+
+  /* no sessions */
+  #no-sessions { display:none; text-align:center; padding:24px 12px; color:var(--muted); font-size:12px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot"></div>
+  <h1>AG2 Debug</h1>
+  <span id="session-count"></span>
+</header>
+
+<div class="layout">
+  <aside>
+    <h2>Sessions</h2>
+    <div id="session-list">
+      <div id="no-sessions">No sessions yet.<br>Run an agent with<br><code>AG2_DEBUG_SERVER_URL</code> set.</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="empty-state" id="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p>Select a session</p>
+    </div>
+    <div id="detail" style="display:none">
+      <div id="detail-header">
+        <span class="sid-full" id="dh-id"></span>
+        <span class="badge" id="dh-status"></span>
+      </div>
+      <div class="detail-body">
+        <div class="col">
+          <div class="col-header">Events <span class="count" id="ev-count">0</span></div>
+          <div class="col-body" id="events-list"></div>
+        </div>
+        <div class="col">
+          <div class="col-header">Breakpoints <span class="count" id="bp-count">0</span></div>
+          <div class="col-body" id="bp-list"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let selectedId = null;
+let sessions   = {};   // id -> {id, status}
+let resuming   = new Set();  // bp ids currently being resumed
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'}) +
+         '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function typeBadge(name) {
+  const cls = 'tb-' + name;
+  const knownPrefixes = ['ModelRequest','ModelResponse','ModelMessage','ModelMessageChunk','ModelReasoning',
+    'ToolCallEvent','ToolCallsEvent','ToolResultEvent','ToolResultsEvent','ToolErrorEvent',
+    'ToolNotFoundEvent','HumanInputRequest','HumanMessage'];
+  const matched = knownPrefixes.find(p => name === p);
+  return `<span class="type-badge ${matched ? cls : 'tb-default'}">${name}</span>`;
+}
+
+function bpTypeBadge(type) {
+  return `<span class="type-badge bpt-${type}">${type}</span>`;
+}
+
+function fmtData(data) {
+  return JSON.stringify(data, null, 2);
+}
+
+// ── Render sidebar ─────────────────────────────────────────────────────────
+function renderSidebar(list) {
+  const el = document.getElementById('session-list');
+  const noSess = document.getElementById('no-sessions');
+  const countEl = document.getElementById('session-count');
+
+  countEl.textContent = list.length ? `${list.length} session${list.length>1?'s':''}` : '';
+  noSess.style.display = list.length ? 'none' : 'block';
+
+  // update or add items
+  const seen = new Set();
+  list.forEach(s => {
+    seen.add(s.id);
+    sessions[s.id] = s;
+    let item = document.querySelector(`.session-item[data-id="${s.id}"]`);
+    if (!item) {
+      item = document.createElement('div');
+      item.className = 'session-item';
+      item.dataset.id = s.id;
+      item.addEventListener('click', () => selectSession(s.id));
+      el.appendChild(item);
+    }
+    item.classList.toggle('active', s.id === selectedId);
+    item.innerHTML = `
+      <div class="status-dot ${s.status}"></div>
+      <span class="sid" title="${s.id}">${s.id.slice(0,8)}…</span>
+    `;
+  });
+
+  // auto-select first session
+  if (!selectedId && list.length > 0) selectSession(list[0].id);
+}
+
+// ── Select session ─────────────────────────────────────────────────────────
+function selectSession(id) {
+  selectedId = id;
+  document.querySelectorAll('.session-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === id);
+  });
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('detail').style.display = 'flex';
+}
+
+// ── Render session detail ──────────────────────────────────────────────────
+function renderDetail(session) {
+  document.getElementById('dh-id').textContent = session.id;
+  const sb = document.getElementById('dh-status');
+  sb.textContent = session.status;
+  sb.className = `badge ${session.status}`;
+
+  // Events
+  const evList = document.getElementById('events-list');
+  document.getElementById('ev-count').textContent = session.events.length;
+  evList.innerHTML = '';
+  session.events.forEach(ev => {
+    const card = document.createElement('div');
+    card.className = 'event-card';
+    const dataStr = fmtData(ev.event_data);
+    card.innerHTML = `
+      <div class="row1">
+        ${typeBadge(ev.event_type)}
+        <span class="ts">${fmtTime(ev.timestamp)}</span>
+      </div>
+      <div class="data" title="Click to expand">${escHtml(dataStr)}</div>
+    `;
+    card.querySelector('.data').addEventListener('click', function() {
+      this.classList.toggle('expanded');
+    });
+    evList.appendChild(card);
+  });
+  // scroll to bottom
+  evList.scrollTop = evList.scrollHeight;
+
+  // Breakpoints — pending first, then resumed
+  const bpList = document.getElementById('bp-list');
+  document.getElementById('bp-count').textContent = session.breakpoints.length;
+  bpList.innerHTML = '';
+
+  const sorted = [...session.breakpoints].sort((a,b) => {
+    if (a.resumed !== b.resumed) return a.resumed ? 1 : -1;
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+
+  sorted.forEach(bp => {
+    const card = document.createElement('div');
+    card.className = `bp-card ${bp.resumed ? 'resumed' : 'pending'}`;
+    const resumeBtn = bp.resumed
+      ? ''
+      : `<button class="resume-btn" data-bp="${bp.id}" ${resuming.has(bp.id)?'disabled':''}>
+           ${resuming.has(bp.id) ? 'Resuming…' : '▶ Resume'}
+         </button>`;
+    card.innerHTML = `
+      <div class="row1">
+        ${bpTypeBadge(bp.type)}
+        <span class="ev-type">${bp.event_type}</span>
+        <span class="ts">${fmtTime(bp.timestamp)}</span>
+      </div>
+      <span class="status-label">${bp.resumed ? '✓ resumed' : '⏸ paused'}</span>
+      ${resumeBtn}
+    `;
+    if (!bp.resumed) {
+      const btn = card.querySelector('.resume-btn');
+      if (btn) btn.addEventListener('click', () => resume(session.id, bp.id, btn));
+    }
+    bpList.appendChild(card);
+  });
+}
+
+async function resume(sessionId, bpId, btn) {
+  resuming.add(bpId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Resuming…'; }
+  try {
+    await api(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, {method:'POST'});
+  } finally {
+    resuming.delete(bpId);
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Poll loop ──────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const list = await api('/sessions');
+    if (list) renderSidebar(list);
+
+    if (selectedId) {
+      const session = await api(`/sessions/${selectedId}`);
+      if (session) renderDetail(session);
+    }
+  } catch(e) { /* server not ready yet */ }
+}
+
+poll();
+setInterval(poll, 500);
+</script>
+</body>
+</html>
