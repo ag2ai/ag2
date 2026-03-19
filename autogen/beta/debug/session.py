@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from ..events.base import BaseEvent
 
@@ -18,9 +19,6 @@ class DebugSession:
     stream and context objects.
 
     Events are forwarded to the external debug server via :class:`DebugClient`.
-    Breakpoints block by issuing an HTTP long-poll to the server; the server
-    returns any modifications the user requested at resume time, which are then
-    applied to the live event / context before execution continues.
     """
 
     def __init__(
@@ -43,32 +41,27 @@ class DebugSession:
         s = serialize_event(event)
         await self._client.send_event(self.id, s["type"], s["data"])
 
-    async def pause(self, bp_type: str, event: BaseEvent) -> BaseEvent:
+    async def replay_events(self, events: Iterable[BaseEvent]) -> None:
         """
-        Block agent execution until the UI resumes the breakpoint.
+        Replay historical events to the debug server.
 
-        Returns the (potentially mutated) event so the caller can pass it on
-        to the next middleware / handler.
+        Storage backends may only persist high-level events (ModelRequest,
+        ModelResponse, ToolResultsEvent) and not the intermediate stream
+        events (ToolCallsEvent, ToolCallEvent) that are synthesised at
+        runtime.  For each ModelResponse whose tool_calls are non-empty we
+        emit a synthetic ToolCallsEvent so the debugger UI can show tool
+        calls as discrete events.
         """
-        from .client import serialize_event
+        from ..events.types import ModelResponse
 
-        s = serialize_event(event)
-        mods: dict[str, Any] = await self._client.hit_breakpoint(self.id, bp_type, s)
-
-        # Apply context-level modifications returned by the server
-        if mods.get("prompt") is not None:
-            self.context.prompt[:] = mods["prompt"]
-        if mods.get("variables"):
-            self.context.variables.update(mods["variables"])
-
-        # Apply field-level mutations to the live event object
-        for key, value in (mods.get("event_modifications") or {}).items():
-            try:
-                setattr(event, key, value)
-            except Exception:
-                pass
-
-        return event
+        for event in events:
+            await self.record_event(event)
+            if (
+                isinstance(event, ModelResponse)
+                and event.tool_calls
+                and event.tool_calls.calls
+            ):
+                await self.record_event(event.tool_calls)
 
     async def inject(self, event: BaseEvent) -> None:
         """Push an event directly into the live stream (in-process only)."""

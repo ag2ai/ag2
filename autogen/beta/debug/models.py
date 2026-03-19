@@ -2,28 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from datetime import datetime
-from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-
-class BreakpointType(str, Enum):
-    TURN_START = "TURN_START"
-    TOOL_CALL = "TOOL_CALL"
-    LLM_CALL = "LLM_CALL"
-
-
-class BreakpointView(BaseModel):
-    """HTTP representation of a single breakpoint."""
-
-    id: str
-    type: str
-    event_index: int  # index into SessionView.events
-    timestamp: datetime
-    resumed: bool
-    event: dict[str, Any]  # serialized snapshot of the event at pause time
+from pydantic import BaseModel
 
 
 class SessionView(BaseModel):
@@ -33,18 +14,3 @@ class SessionView(BaseModel):
     status: str
     prompt: list[str]
     events: list[dict[str, Any]]  # [{type, data}, …] — serialized at response time
-    breakpoints: list[BreakpointView]
-    pending_bp_ids: list[str]
-
-
-class ResumeRequest(BaseModel):
-    """Body for POST /sessions/{id}/breakpoints/{bp_id}/resume."""
-
-    # Mutate fields on the paused event before it continues
-    event_modifications: dict[str, Any] = Field(default_factory=dict)
-    # Replace context.prompt in-place
-    prompt: list[str] | None = None
-    # Merge into context.variables
-    variables: dict[str, Any] = Field(default_factory=dict)
-
-

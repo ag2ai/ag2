@@ -76,22 +76,6 @@ class DebugClient:
         except Exception:
             pass  # never crash the agent due to a debug side-channel failure
 
-    async def hit_breakpoint(self, session_id: str, bp_type: str, event: dict[str, Any]) -> dict[str, Any]:
-        """
-        Notify the server of a breakpoint and **block** until the UI resumes it.
-
-        Returns the modification dict ``{event_modifications, prompt, variables}``
-        supplied by the caller at resume time.
-        """
-        async with httpx.AsyncClient(timeout=None) as c:
-            resp = await c.post(
-                f"{self._base_url}/sessions/{session_id}/breakpoints",
-                json={"type": bp_type, "event": event},
-            )
-            resp.raise_for_status()
-            return resp.json()  # type: ignore[no-any-return]
-
-
 def get_server(base_url: str) -> DebugClient:
     """Create and return an HTTP client connected to the debug server at *base_url*."""
     return DebugClient(base_url)

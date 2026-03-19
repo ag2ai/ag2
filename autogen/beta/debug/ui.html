@@ -127,8 +127,7 @@
   .detail-body { flex: 1; display: flex; overflow: hidden; }
   .col { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
   .col:last-child { border-right: none; }
-  #left-col  { flex: 1.4; }
-  #right-col { flex: 1; min-width: 240px; max-width: 320px; }
+  #left-col  { flex: 1; }
 
   .col-header {
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
@@ -230,31 +229,6 @@
   .h-divider { color: var(--border); }
 
   /* ────────────────────────────────────────
-     BREAKPOINTS COLUMN
-  ──────────────────────────────────────── */
-  .bp-card {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px;
-    display: flex; flex-direction: column; gap: 5px;
-  }
-  .bp-card.pending { border-left: 3px solid var(--yellow); }
-  .bp-card.resumed { border-left: 3px solid #2a2d3e; opacity: .55; }
-  .bp-card .row1   { display: flex; align-items: center; gap: 6px; }
-  .bp-card .ev-info { font-size: 10px; color: var(--muted); font-family: monospace; }
-  .bp-card .ts-bp  { margin-left: auto; font-size: 10px; color: var(--muted); font-family: monospace; }
-  .bp-status { font-size: 10px; }
-  .bp-card.pending .bp-status { color: var(--yellow); }
-  .bp-card.resumed .bp-status { color: var(--muted); }
-
-  .resume-btn {
-    align-self: flex-start; padding: 3px 11px; font-size: 11px; font-weight: 600;
-    border: 1px solid var(--green); background: transparent; color: var(--green);
-    border-radius: 4px; cursor: pointer; transition: background .1s;
-  }
-  .resume-btn:hover    { background: rgba(158,206,106,.15); }
-  .resume-btn:disabled { opacity: .4; cursor: default; }
-
-  /* ────────────────────────────────────────
      TYPE BADGES
   ──────────────────────────────────────── */
   .type-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
@@ -271,9 +245,6 @@
   .tb-ToolNotFoundEvent  { background:#2a0f0f; color:var(--red);    }
   .tb-HumanInputRequest  { background:#2a1e05; color:var(--yellow); }
   .tb-HumanMessage       { background:#2a1e05; color:var(--yellow); }
-  .bpt-TURN_START { background:#22193a; color:var(--purple); }
-  .bpt-TOOL_CALL  { background:#2a1f0f; color:var(--orange); }
-  .bpt-LLM_CALL   { background:#192436; color:var(--blue);   }
   .tb-default { background:#1a1a2e; color:var(--muted); }
 
   /* ── Scrollbar ── */
@@ -284,24 +255,7 @@
 
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-  /* ── Event flash (jump-to highlight) ── */
-  @keyframes flash-highlight {
-    0%   { background: rgba(122,162,247,.35); border-color: var(--blue); box-shadow: 0 0 0 2px rgba(122,162,247,.25); }
-    100% { background: var(--surface2);       border-color: var(--border); box-shadow: none; }
-  }
-  .event-card.flashing { animation: flash-highlight 1s ease-out forwards; }
 
-  /* ── Breakpoint → event link button ── */
-  .ev-jump-btn {
-    display: flex; align-items: center; gap: 5px; width: fit-content;
-    background: none; border: 1px solid var(--border); border-radius: 4px;
-    padding: 3px 7px; cursor: pointer; transition: border-color .12s, color .12s;
-  }
-  .ev-jump-btn:hover { border-color: var(--blue); }
-  .ev-jump-btn:hover .ev-jump-arrow { color: var(--blue); }
-  .ev-jump-arrow { font-size: 10px; color: var(--muted); margin-left: 2px; }
-  .ev-idx { font-family: monospace; font-size: 10px; color: var(--muted);
-            background: var(--bg); border-radius: 3px; padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -366,11 +320,6 @@
           </div>
         </div>
 
-        <!-- Right: breakpoints (always visible) -->
-        <div id="right-col" class="col">
-          <div class="col-header">Breakpoints <span class="count" id="bp-count">0</span></div>
-          <div class="col-body" id="bp-body"></div>
-        </div>
       </div>
     </div>
   </main>
@@ -383,12 +332,10 @@
 let currentMode    = 'events';
 let selectedId     = null;
 let currentSession = null;
-let resuming       = new Set();
 
 // Incremental DOM maps (keyed by record id)
-const evMap   = new Map();  // eventId  -> element  (events mode)
-const chatMap = new Map();  // eventId  -> element  (chat mode)
-const bpMap   = new Map();  // bpId     -> element  (breakpoints)
+const evMap   = new Map();  // eventId -> element  (events mode)
+const chatMap = new Map();  // eventId -> element  (chat mode)
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(path, opts) {
@@ -416,38 +363,29 @@ function typeBadge(name) {
   return `<span class="type-badge ${cls}">${esc(name)}</span>`;
 }
 
-function bpTypeBadge(t) {
-  return `<span class="type-badge bpt-${t}">${t}</span>`;
+// Parse tool call arguments string safely (handles pre-parsed objects too)
+function parseArgs(argStr) {
+  if (typeof argStr === 'object' && argStr !== null) return argStr;
+  try { return JSON.parse(argStr || '{}'); } catch { return {}; }
 }
 
-// Parse tool call arguments string safely
-function parseArgs(argStr) {
-  try { return JSON.parse(argStr || '{}'); } catch { return {}; }
+// Extract calls array from either AG2 ToolCallsEvent ({calls:[...]}) or a flat array
+function extractCalls(tool_calls) {
+  if (!tool_calls) return null;
+  const arr = tool_calls.calls || (Array.isArray(tool_calls) ? tool_calls : null);
+  return arr && arr.length ? arr : null;
+}
+
+// Extract content from either AG2 ToolResultEvent ({result:{content}}) or flat {content}
+function extractContent(r) {
+  if (r.result && r.result.content !== undefined) return r.result.content;
+  if (r.content !== undefined) return r.content;
+  return '';
 }
 
 function fmtArgs(argStr) {
   const args = parseArgs(argStr);
   return Object.entries(args).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', ');
-}
-
-// ── Jump from a breakpoint to its associated event card ───────────────────
-function jumpToEvent(eventIndex) {
-  // Switch to Events tab first (mode-cnt swap)
-  if (currentMode !== 'events') {
-    const evBtn = document.querySelector('.tab[data-mode="events"]');
-    if (evBtn) evBtn.click();
-  }
-  // Give the container one frame to become visible before querying
-  requestAnimationFrame(() => {
-    const card = document.querySelector(`#events-body .event-card[data-index="${eventIndex}"]`);
-    if (!card) return;
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Restart the flash animation (even if triggered twice quickly)
-    card.classList.remove('flashing');
-    void card.offsetWidth; // force reflow so the animation restarts cleanly
-    card.classList.add('flashing');
-    card.addEventListener('animationend', () => card.classList.remove('flashing'), { once: true });
-  });
 }
 
 // ── Mode switching ────────────────────────────────────────────────────────
@@ -503,11 +441,10 @@ async function selectSession(id) {
   document.getElementById('detail').style.display     = 'flex';
   // Clear incremental state when switching sessions
   currentSession = null;
-  evMap.clear(); chatMap.clear(); bpMap.clear();
+  evMap.clear(); chatMap.clear();
   document.getElementById('events-body').innerHTML = '';
   document.getElementById('chat-body').innerHTML   = '';
   document.getElementById('history-view').innerHTML = '';
-  document.getElementById('bp-body').innerHTML     = '';
   // Fetch current session state via HTTP — guard against stale responses
   // if the user switched sessions again before this fetch resolved.
   const targetId = id;
@@ -626,7 +563,7 @@ function buildChatItem(ev) {
   // ── Model response (left side) ──
   if (type === 'ModelResponse') {
     const hasText  = d.message && d.message.content;
-    const calls    = d.tool_calls && d.tool_calls.calls && d.tool_calls.calls.length ? d.tool_calls.calls : null;
+    const calls    = extractCalls(d.tool_calls);
     if (!hasText && !calls) return null;
 
     let inner = '';
@@ -648,7 +585,7 @@ function buildChatItem(ev) {
       if (r.type === 'ToolErrorEvent') {
         inner += `<div class="tool-block error">✗ <span class="tool-name">${esc(r.name)}</span>: ${esc(r.error && r.error.message || 'error')}</div>`;
       } else {
-        const content = r.result && r.result.content !== undefined ? r.result.content : '';
+        const content = extractContent(r);
         const display = typeof content === 'string' ? content : JSON.stringify(content);
         inner += `<div class="tool-block result">✓ <span class="tool-name">${esc(r.name)}</span>: ${esc(display)}</div>`;
       }
@@ -703,7 +640,7 @@ function renderHistoryMode(session) {
       el = mkSpan('h-hitl', `${mkLabel('AGENT → waiting for human')}\n${d.content || ''}\n\n`);
     } else if (type === 'ModelResponse') {
       const hasText = d.message && d.message.content;
-      const calls   = d.tool_calls && d.tool_calls.calls && d.tool_calls.calls.length ? d.tool_calls.calls : null;
+      const calls   = extractCalls(d.tool_calls);
       if (hasText) {
         el = mkSpan('h-ai', `${mkLabel('ASSISTANT')}\n${d.message.content}\n\n`);
       }
@@ -721,7 +658,7 @@ function renderHistoryMode(session) {
           if (r.type === 'ToolErrorEvent') {
             return `  ${r.name}: ERROR — ${r.error && r.error.message || 'unknown error'}`;
           }
-          const content = r.result && r.result.content !== undefined ? r.result.content : '';
+          const content = extractContent(r);
           const display = typeof content === 'string' ? content : JSON.stringify(content);
           return `  ${r.name}: ${display}`;
         });
@@ -751,76 +688,6 @@ function mkLabel(t) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// BREAKPOINTS — incremental with live status updates
-// ─────────────────────────────────────────────────────────────────────────
-function renderBreakpoints(session) {
-  document.getElementById('bp-count').textContent = session.breakpoints.length;
-  const body = document.getElementById('bp-body');
-
-  session.breakpoints.forEach(bp => {
-    if (bpMap.has(bp.id)) {
-      // Update existing card if it just got resumed
-      const existing = bpMap.get(bp.id);
-      if (bp.resumed && existing.classList.contains('pending')) {
-        existing.classList.replace('pending', 'resumed');
-        existing.querySelector('.bp-status').textContent = '✓ resumed';
-        const btn = existing.querySelector('.resume-btn');
-        if (btn) btn.remove();
-      }
-      return;
-    }
-
-    // New breakpoint card
-    const evType = (bp.event && bp.event.type) || bp.event_type;
-    const card = document.createElement('div');
-    card.className = `bp-card ${bp.resumed ? 'resumed' : 'pending'}`;
-    card.innerHTML = `
-      <div class="row1">
-        ${bpTypeBadge(bp.type)}
-        <span class="ev-idx">#${bp.event_index}</span>
-        <span class="ts-bp">${fmtTime(bp.timestamp)}</span>
-      </div>
-      <button class="ev-jump-btn" title="Go to event #${bp.event_index} in Events tab">
-        ${typeBadge(evType)}
-        <span class="ev-jump-arrow">↗</span>
-      </button>
-      <span class="bp-status">${bp.resumed ? '✓ resumed' : '⏸ paused'}</span>
-      ${bp.resumed ? '' : `<button class="resume-btn" data-bp="${bp.id}">▶ Resume</button>`}
-    `;
-
-    card.querySelector('.ev-jump-btn').addEventListener('click', () => jumpToEvent(bp.event_index));
-
-    if (!bp.resumed) {
-      const btn = card.querySelector('.resume-btn');
-      btn.addEventListener('click', () => resume(session.id, bp.id, btn));
-    }
-
-    // Insert pending breakpoints at top, resumed at bottom
-    if (!bp.resumed) {
-      body.insertBefore(card, body.firstChild);
-    } else {
-      body.appendChild(card);
-    }
-    bpMap.set(bp.id, card);
-  });
-}
-
-async function resume(sessionId, bpId, btn) {
-  resuming.add(bpId);
-  btn.disabled = true;
-  btn.textContent = 'Resuming…';
-  try {
-    await apiFetch(`/sessions/${sessionId}/breakpoints/${bpId}/resume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-  } finally {
-    resuming.delete(bpId);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
 // Token usage
 // ─────────────────────────────────────────────────────────────────────────
 // Estimate tokens the same way as TokenLimiter: chars / 4
@@ -832,14 +699,14 @@ function renderTokenUsage(session) {
       inputChars += (d.content || '').length;
     } else if (ev.event_type === 'ToolResultsEvent') {
       (d.results || []).forEach(r => {
-        const c = r.result && r.result.content !== undefined ? r.result.content : '';
+        const c = extractContent(r);
         inputChars += (typeof c === 'string' ? c : JSON.stringify(c)).length;
       });
     } else if (ev.event_type === 'ModelResponse') {
       outputChars += (d.message && d.message.content ? d.message.content : '').length;
       // include tool call arguments
-      const calls = d.tool_calls && d.tool_calls.calls || [];
-      calls.forEach(c => { outputChars += (c.arguments || '').length; });
+      const calls = extractCalls(d.tool_calls) || [];
+      calls.forEach(c => { outputChars += (typeof c.arguments === 'string' ? c.arguments : JSON.stringify(c.arguments || '')).length; });
     }
   });
   const input  = Math.round(inputChars  / 4);
@@ -863,8 +730,6 @@ function renderDetail(session) {
   sb.className = `status-badge ${session.status}`;
 
   renderTokenUsage(session);
-
-  renderBreakpoints(session);
 
   if (currentMode === 'events')  renderEventsMode(session);
   if (currentMode === 'chat')    renderChatMode(session);

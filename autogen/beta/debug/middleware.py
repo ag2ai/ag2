@@ -10,12 +10,7 @@ from .session import DebugSession
 
 
 class DebugMiddleware(BaseMiddleware):
-    """
-    Middleware that pauses agent execution at each turn and tool call.
-
-    Communicates directly with the in-process :class:`DebugSession` via
-    ``asyncio.Event`` — no HTTP round-trip on the hot path.
-    """
+    """Middleware that forwards agent events to the debug server."""
 
     def __init__(
         self,
@@ -33,7 +28,6 @@ class DebugMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> ModelResponse:
-        event = await self._session.pause("TURN_START", event)
         return await call_next(event, context)
 
     async def on_tool_execution(
@@ -42,5 +36,4 @@ class DebugMiddleware(BaseMiddleware):
         event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
-        event = await self._session.pause("TOOL_CALL", event)
         return await call_next(event, context)
