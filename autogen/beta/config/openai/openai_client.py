@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, Literal, TypedDict
 
 import httpx
@@ -106,7 +107,7 @@ class OpenAIClient(LLMClient):
         response_schema: ResponseProto | None,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
-            prompt = context.prompt + [response_schema.system_prompt]
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
