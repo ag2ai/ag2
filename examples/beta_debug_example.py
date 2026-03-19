@@ -38,8 +38,9 @@ import time
 
 import httpx
 
-from autogen.beta.debug.server import create_app
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.debug.server import run_debug_server
+from autogen.beta.events import ToolCallEvent
+from autogen.beta.stream import MemoryStream
 from autogen.beta.events.types import ModelMessage, ModelResponse
 from autogen.beta.testing import TestConfig
 
@@ -50,15 +51,6 @@ DEBUG_HOST = "localhost"
 DEBUG_PORT = 8765
 DEBUG_URL = f"http://{DEBUG_HOST}:{DEBUG_PORT}"
 
-
-def _start_server() -> None:
-    import uvicorn
-
-    uvicorn.run(create_app(), host=DEBUG_HOST, port=DEBUG_PORT, log_level="warning")
-
-
-server_thread = threading.Thread(target=_start_server, daemon=True)
-server_thread.start()
 
 # Give the server a moment to boot
 time.sleep(0.5)
@@ -117,17 +109,20 @@ async def main() -> None:
 
     driver_task = asyncio.create_task(wait_and_drive())
 
+    memory =  MemoryStream()
+
     print("[main] running agent.ask() …")
-    reply = await agent.ask("What's the weather in Paris?")
+    reply = await agent.ask("What's the weather in Paris?", stream=memory)
     print(f"[main] agent replied: {reply.content!r}")
 
     stop.set()
     await driver_task
 
+    print("memory session id:", memory.id)
+
     # Print the full session summary
     async with httpx.AsyncClient(base_url=DEBUG_URL) as client:
-        sessions = (await client.get("/sessions")).json()
-        session_id = sessions[0]["id"]
+        session_id = memory.id
         session = (await client.get(f"/sessions/{session_id}")).json()
 
     print(f"\n{'='*60}")

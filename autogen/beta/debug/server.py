@@ -3,74 +3,79 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from .models import BreakpointType, BreakpointView, InjectRequest, ResumeRequest, SessionView
-from .session import DebugSession
+from .models import BreakpointView, ResumeRequest, SessionView
 
 _UI_FILE = Path(__file__).parent / "ui.html"
 
-# ── Event type registry for injection ──────────────────────────────────────
-# Only constructable event types are listed; read-only / internal types are
-# omitted intentionally.
 
-def _build_event_registry() -> dict[str, type]:  # type: ignore[type-arg]
-    from ..events import (
-        HumanInputRequest,
-        HumanMessage,
-        ModelMessage,
-        ModelReasoning,
-        ModelRequest,
-        ToolCallEvent,
-    )
-
-    return {
-        "ModelRequest": ModelRequest,
-        "ModelMessage": ModelMessage,
-        "ModelReasoning": ModelReasoning,
-        "HumanInputRequest": HumanInputRequest,
-        "HumanMessage": HumanMessage,
-        "ToolCallEvent": ToolCallEvent,
-    }
+# ── Server-side session state ──────────────────────────────────────────────
 
 
-def _serialize_event(event: Any) -> dict[str, Any]:
-    """Import lazily to avoid a circular dependency at module load time."""
-    from .client import serialize_event
-    from ..events.base import BaseEvent
+class _BreakpointMeta:
+    __slots__ = ("id", "type", "event_index", "timestamp", "resumed", "event_snapshot")
 
-    if isinstance(event, BaseEvent):
-        return serialize_event(event)
-    return {"type": type(event).__name__, "data": {}}
+    def __init__(self, bp_id: str, bp_type: str, event_index: int, event_snapshot: dict[str, Any]) -> None:
+        self.id = bp_id
+        self.type = bp_type
+        self.event_index = event_index
+        self.timestamp: datetime = datetime.now(timezone.utc)
+        self.resumed: bool = False
+        self.event_snapshot = event_snapshot
 
 
-def _session_view(session: DebugSession) -> SessionView:
-    serialized_events = [_serialize_event(e) for e in session.events]
+class _Session:
+    """
+    Server-side representation of an agent debug session.
 
-    bp_views: list[BreakpointView] = []
-    for meta in session.breakpoints:
-        idx = meta.event_index
-        ev_snapshot = serialized_events[idx] if 0 <= idx < len(serialized_events) else {}
-        bp_views.append(
-            BreakpointView(
-                id=meta.id,
-                type=meta.type,
-                event_index=idx,
-                timestamp=meta.timestamp,
-                resumed=meta.resumed,
-                event=ev_snapshot,
-            )
+    Events and breakpoints arrive via HTTP from the agent process.
+    The pending breakpoint is kept alive with an ``asyncio.Event`` so that
+    the long-polling ``POST /sessions/{id}/breakpoints`` request blocks until
+    the UI calls ``/resume``.
+    """
+
+    def __init__(self, session_id: str, prompt: list[str]) -> None:
+        self.id = session_id
+        self.prompt = list(prompt)
+        self.events: list[dict[str, Any]] = []
+        self.breakpoints: list[_BreakpointMeta] = []
+        self._pending_waiter: asyncio.Event | None = None
+        self._pending_bp_id: str | None = None
+        self._pending_mods: dict[str, Any] | None = None
+        self.status = "running"
+
+    @property
+    def pending_bp_id(self) -> str | None:
+        return self._pending_bp_id
+
+
+# ── View helpers ───────────────────────────────────────────────────────────
+
+
+def _session_view(session: _Session) -> SessionView:
+    bp_views = [
+        BreakpointView(
+            id=meta.id,
+            type=meta.type,
+            event_index=meta.event_index,
+            timestamp=meta.timestamp,
+            resumed=meta.resumed,
+            event=meta.event_snapshot,
         )
-
+        for meta in session.breakpoints
+    ]
     return SessionView(
         id=session.id,
         status=session.status,
         prompt=session.prompt,
-        events=serialized_events,
+        events=session.events,
         breakpoints=bp_views,
         pending_bp_id=session.pending_bp_id,
     )
@@ -78,12 +83,38 @@ def _session_view(session: DebugSession) -> SessionView:
 
 # ── FastAPI app factory ────────────────────────────────────────────────────
 
-def _create_fastapi_app(sessions: dict[str, DebugSession]) -> FastAPI:
+
+def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
     app = FastAPI(title="AG2 Debug Server")
 
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:
         return FileResponse(_UI_FILE, media_type="text/html")
+
+    # ── Session registration (called by agent on startup) ─────────────────
+
+    @app.post("/sessions/{session_id}", status_code=201)
+    async def register_session(session_id: str, body: dict[str, Any]) -> dict[str, str]:
+        prompt: list[str] = body.get("prompt", [])
+        sessions[session_id] = _Session(session_id, prompt)
+        return {"session_id": session_id}
+
+    # ── Event ingestion (called by agent stream subscriber) ───────────────
+
+    @app.post("/sessions/{session_id}/events")
+    async def receive_event(session_id: str, body: dict[str, Any]) -> dict[str, str]:
+        session = sessions.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session.events.append(
+            {
+                "id": f"ev-{len(session.events)}",
+                "event_type": body.get("event_type", ""),
+                "event_data": body.get("event_data", {}),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return {"ok": "true"}
 
     # ── Sessions ──────────────────────────────────────────────────────────
 
@@ -100,116 +131,105 @@ def _create_fastapi_app(sessions: dict[str, DebugSession]) -> FastAPI:
 
     # ── Breakpoints ───────────────────────────────────────────────────────
 
+    @app.post("/sessions/{session_id}/breakpoints")
+    async def hit_breakpoint(session_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """
+        Called by the agent when it hits a breakpoint.  Blocks (long-poll)
+        until the UI calls ``/resume``, then returns the modification dict.
+        """
+        session = sessions.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        bp_id = str(uuid4())
+        bp_type = body.get("type", "")
+        # TURN_START fires *before* the triggering event flows through the stream,
+        # so the event will land at the current length (future index).
+        # All other breakpoints (TOOL_CALL, etc.) fire *after* the triggering event
+        # has already been recorded, so point to the last recorded event.
+        if bp_type == "TURN_START":
+            event_index = len(session.events)
+        else:
+            event_index = max(0, len(session.events) - 1)
+        meta = _BreakpointMeta(bp_id, bp_type, event_index, body.get("event", {}))
+        session.breakpoints.append(meta)
+        session._pending_bp_id = bp_id
+        session._pending_mods = None
+        waiter = asyncio.Event()
+        session._pending_waiter = waiter
+
+        await waiter.wait()
+
+        meta.resumed = True
+        session._pending_bp_id = None
+        session._pending_waiter = None
+
+        return session._pending_mods or {}
+
     @app.post("/sessions/{session_id}/breakpoints/{bp_id}/resume")
     async def resume_breakpoint(session_id: str, bp_id: str, body: ResumeRequest) -> dict[str, Any]:
         session = sessions.get(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        success = await session.resume(
-            bp_id,
-            event_modifications=body.event_modifications or None,
-            prompt=body.prompt,
-            variables=body.variables or None,
-        )
-        return {"success": success}
+        if not session or session._pending_bp_id != bp_id:
+            return {"success": False}
 
-    # ── Stream injection ──────────────────────────────────────────────────
+        session._pending_mods = {
+            "event_modifications": body.event_modifications,
+            "prompt": body.prompt,
+            "variables": body.variables,
+        }
+        if session._pending_waiter:
+            session._pending_waiter.set()
+        return {"success": True}
 
-    @app.post("/sessions/{session_id}/inject")
-    async def inject_event(session_id: str, body: InjectRequest) -> dict[str, str]:
-        session = sessions.get(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        registry = _build_event_registry()
-        event_cls = registry.get(body.event_type)
-        if not event_cls:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unknown injectable event type '{body.event_type}'. "
-                       f"Supported: {sorted(registry)}",
-            )
-        try:
-            event = event_cls(**body.event_data)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"Could not construct event: {exc}") from exc
-        await session.inject(event)
-        return {"status": "injected", "event_type": body.event_type}
-
-    # ── Context inspection / mutation ─────────────────────────────────────
+    # ── Context inspection ────────────────────────────────────────────────
 
     @app.get("/sessions/{session_id}/context")
     async def get_context(session_id: str) -> dict[str, Any]:
         session = sessions.get(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        return {
-            "prompt": session.context.prompt,
-            "variables": session.context.variables,
-        }
-
-    @app.patch("/sessions/{session_id}/context")
-    async def patch_context(session_id: str, body: dict[str, Any]) -> dict[str, Any]:
-        """Directly mutate context.prompt and/or context.variables (outside a breakpoint)."""
-        session = sessions.get(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        if "prompt" in body:
-            session.context.prompt[:] = body["prompt"]
-        if "variables" in body:
-            session.context.variables.update(body["variables"])
-        return {"prompt": session.context.prompt, "variables": session.context.variables}
+        return {"prompt": session.prompt}
 
     return app
 
 
-# ── DebugServer — runs in-process on the same asyncio event loop ──────────
+# ── DebugServer ────────────────────────────────────────────────────────────
+
 
 class DebugServer:
     """
-    Manages a FastAPI/uvicorn server that runs as an asyncio task inside the
-    agent's own event loop.  All ``DebugSession`` objects it holds are live
-    Python objects — no serialisation happens until an HTTP client requests
-    data.
+    Wraps the FastAPI app and its session registry.  Must be started externally
+    via :func:`start_debug_server` or :func:`run_debug_server` — the agent
+    never starts a server itself.
     """
 
     def __init__(self) -> None:
-        self._sessions: dict[str, DebugSession] = {}
+        self._sessions: dict[str, _Session] = {}
         self._app: FastAPI = _create_fastapi_app(self._sessions)
-        self._started = False
-
-    def register(self, session: DebugSession) -> None:
-        self._sessions[session.id] = session
-
-    async def start(self, host: str = "localhost", port: int = 8765) -> None:
-        if self._started:
-            return
-        import uvicorn
-
-        config = uvicorn.Config(self._app, host=host, port=port, log_level="warning")
-        server = uvicorn.Server(config)
-        # Suppress uvicorn's signal-handler installation — we're a guest in
-        # someone else's event loop and must not replace their SIGINT handler.
-        server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
-        asyncio.create_task(server.serve())
-        self._started = True
 
 
-# ── Module-level singleton (one server per host:port) ─────────────────────
+async def start_debug_server(host: str = "localhost", port: int = 8765) -> DebugServer:
+    """
+    Start a :class:`DebugServer` as an asyncio background task in the **current**
+    event loop and return it.  Call this once before running any agents::
 
-_servers: dict[tuple[str, int], DebugServer] = {}
+        server = await start_debug_server()
+        # set AG2_DEBUG_SERVER_URL=http://localhost:8765
+        await agent.ask(...)
+    """
+    import uvicorn
 
-
-async def get_or_create_server(host: str = "localhost", port: int = 8765) -> DebugServer:
-    key = (host, port)
-    if key not in _servers:
-        srv = DebugServer()
-        await srv.start(host, port)
-        _servers[key] = srv
-    return _servers[key]
+    srv = DebugServer()
+    config = uvicorn.Config(srv._app, host=host, port=port, log_level="warning")
+    uv_server = uvicorn.Server(config)
+    uv_server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+    asyncio.create_task(uv_server.serve())
+    return srv
 
 
 def run_debug_server(host: str = "localhost", port: int = 8765) -> None:
-    """Blocking entry-point for running the server standalone (e.g. from a shell)."""
+    """Blocking entry-point for running the server as a standalone process."""
     import uvicorn
 
-    uvicorn.run(_create_fastapi_app({}), host=host, port=port)
+    srv = DebugServer()
+    uvicorn.run(srv._app, host=host, port=port)

@@ -2,54 +2,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from ..events.base import BaseEvent
 
 if TYPE_CHECKING:
+    from .client import DebugClient
     from ..context import Context
     from ..stream import MemoryStream
 
 
-class _PendingBreakpoint:
-    """Internal state for a breakpoint that is currently blocking agent execution."""
-
-    __slots__ = ("id", "bp_type", "event", "waiter", "event_modifications", "prompt_override", "variable_updates")
-
-    def __init__(self, bp_id: str, bp_type: str, event: BaseEvent) -> None:
-        self.id = bp_id
-        self.bp_type = bp_type
-        self.event = event
-        self.waiter: asyncio.Event = asyncio.Event()
-        self.event_modifications: dict[str, Any] = {}
-        self.prompt_override: list[str] | None = None
-        self.variable_updates: dict[str, Any] = {}
-
-
-class _BreakpointMeta:
-    """Lightweight record kept after a breakpoint is created (serialised for the HTTP API)."""
-
-    __slots__ = ("id", "type", "event_index", "timestamp", "resumed")
-
-    def __init__(self, bp_id: str, bp_type: str, event_index: int) -> None:
-        self.id = bp_id
-        self.type = bp_type
-        self.event_index = event_index
-        self.timestamp: datetime = datetime.now(timezone.utc)
-        self.resumed: bool = False
-
-
 class DebugSession:
     """
-    In-process debug session that holds **live references** to the agent's
+    In-process agent-side session that holds **live references** to the agent's
     stream and context objects.
 
-    All blocking / modification logic runs in the same asyncio event loop as
-    the agent, so ``asyncio.Event`` is sufficient — no cross-thread locking
-    needed.
+    Events are forwarded to the external debug server via :class:`DebugClient`.
+    Breakpoints block by issuing an HTTP long-poll to the server; the server
+    returns any modifications the user requested at resume time, which are then
+    applied to the live event / context before execution continues.
     """
 
     def __init__(
@@ -58,47 +29,40 @@ class DebugSession:
         *,
         stream: "MemoryStream",
         context: "Context",
-        prompt: list[str] | None = None,
+        client: "DebugClient",
     ) -> None:
         self.id = session_id
         self.stream = stream  # live reference to the agent's MemoryStream
         self.context = context  # live reference to the agent's Context
-        self.prompt: list[str] = list(prompt or [])
-
-        # Live event objects — appended by the stream subscriber in agent.py
-        self.events: list[BaseEvent] = []
-        self.breakpoints: list[_BreakpointMeta] = []
-
-        self._pending: _PendingBreakpoint | None = None
-        self.status = "running"
+        self._client = client
 
     async def record_event(self, event: BaseEvent) -> None:
-        """Stream subscriber — stores a live reference to every emitted event."""
-        self.events.append(event)
+        """Stream subscriber — serialise and forward every emitted event."""
+        from .client import serialize_event
+
+        s = serialize_event(event)
+        await self._client.send_event(self.id, s["type"], s["data"])
 
     async def pause(self, bp_type: str, event: BaseEvent) -> BaseEvent:
         """
-        Block agent execution until :meth:`resume` is called.
+        Block agent execution until the UI resumes the breakpoint.
 
         Returns the (potentially mutated) event so the caller can pass it on
         to the next middleware / handler.
         """
-        bp_id = str(uuid4())
-        pending = _PendingBreakpoint(bp_id, bp_type, event)
-        meta = _BreakpointMeta(bp_id, bp_type, max(len(self.events) - 1, 0))
-        self.breakpoints.append(meta)
-        self._pending = pending
+        from .client import serialize_event
 
-        await pending.waiter.wait()
+        s = serialize_event(event)
+        mods: dict[str, Any] = await self._client.hit_breakpoint(self.id, bp_type, s)
 
-        # Apply context-level modifications requested via the HTTP API
-        if pending.prompt_override is not None:
-            self.context.prompt[:] = pending.prompt_override  # mutate in-place
-        if pending.variable_updates:
-            self.context.variables.update(pending.variable_updates)
+        # Apply context-level modifications returned by the server
+        if mods.get("prompt") is not None:
+            self.context.prompt[:] = mods["prompt"]
+        if mods.get("variables"):
+            self.context.variables.update(mods["variables"])
 
         # Apply field-level mutations to the live event object
-        for key, value in pending.event_modifications.items():
+        for key, value in (mods.get("event_modifications") or {}).items():
             try:
                 setattr(event, key, value)
             except Exception:
@@ -106,39 +70,6 @@ class DebugSession:
 
         return event
 
-    async def resume(
-        self,
-        bp_id: str,
-        *,
-        event_modifications: dict[str, Any] | None = None,
-        prompt: list[str] | None = None,
-        variables: dict[str, Any] | None = None,
-    ) -> bool:
-        """Unblock the pending breakpoint. Returns False if the id doesn't match."""
-        pending = self._pending
-        if not pending or pending.id != bp_id:
-            return False
-
-        if event_modifications:
-            pending.event_modifications = event_modifications
-        if prompt is not None:
-            pending.prompt_override = prompt
-        if variables:
-            pending.variable_updates = variables
-
-        for meta in self.breakpoints:
-            if meta.id == bp_id:
-                meta.resumed = True
-                break
-
-        pending.waiter.set()
-        self._pending = None
-        return True
-
     async def inject(self, event: BaseEvent) -> None:
-        """Push an event directly into the live stream."""
+        """Push an event directly into the live stream (in-process only)."""
         await self.stream.send(event, self.context)
-
-    @property
-    def pending_bp_id(self) -> str | None:
-        return self._pending.id if self._pending else None

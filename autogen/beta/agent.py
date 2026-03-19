@@ -271,25 +271,16 @@ class Agent(Askable):
 
         debug_url = os.environ.get("AG2_DEBUG_SERVER_URL")
         if debug_url:
-            from urllib.parse import urlparse
-
+            from .debug.client import get_server as _get_debug_client
             from .debug.middleware import DebugMiddleware
-            from .debug.server import get_or_create_server
             from .debug.session import DebugSession
             from .middleware.base import Middleware as _Middleware
 
-            parsed = urlparse(debug_url)
-            debug_server = await get_or_create_server(
-                host=parsed.hostname or "localhost",
-                port=parsed.port or 8765,
-            )
-            debug_session = DebugSession(
-                session_id=str(stream.id),
-                stream=stream,
-                context=context,
-                prompt=list(context.prompt),
-            )
-            debug_server.register(debug_session)
+            debug_client = _get_debug_client(debug_url)
+            session_id = str(stream.id)
+            await debug_client.register_session(session_id, list(context.prompt))
+            print(f"Registered debug session with id {session_id} for stream {stream.id}")
+            debug_session = DebugSession(session_id, stream=stream, context=context, client=debug_client)
             stream.subscribe(debug_session.record_event)
             additional_middleware = [_Middleware(DebugMiddleware, session=debug_session), *additional_middleware]
 

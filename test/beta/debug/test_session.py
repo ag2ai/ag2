@@ -2,117 +2,83 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autogen.beta.debug.client import DebugClient
 from autogen.beta.debug.session import DebugSession
 from autogen.beta.events.types import ModelRequest
 
 
-def _make_session() -> DebugSession:
+def _make_client(**overrides: AsyncMock) -> DebugClient:
+    """Return a DebugClient whose async methods are replaced with AsyncMocks."""
+    client = MagicMock(spec=DebugClient)
+    client.send_event = overrides.get("send_event", AsyncMock())
+    client.hit_breakpoint = overrides.get("hit_breakpoint", AsyncMock(return_value={}))
+    return client  # type: ignore[return-value]
+
+
+def _make_session(client: DebugClient | None = None) -> DebugSession:
     stream = MagicMock()
     stream.send = AsyncMock()
     context = MagicMock()
     context.prompt = ["You are helpful."]
     context.variables = {}
-    return DebugSession("test-session", stream=stream, context=context, prompt=["You are helpful."])
+    return DebugSession("test-session", stream=stream, context=context, client=client or _make_client())
 
 
 @pytest.mark.asyncio()
-async def test_record_event_stores_live_reference() -> None:
-    session = _make_session()
+async def test_record_event_forwards_to_server() -> None:
+    send_event = AsyncMock()
+    session = _make_session(_make_client(send_event=send_event))
     event = ModelRequest(content="hello")
     await session.record_event(event)
-    assert session.events[0] is event  # live reference, not a copy
+    send_event.assert_awaited_once()
+    args = send_event.call_args
+    assert args[0][0] == "test-session"
+    assert args[0][1] == "ModelRequest"
+    assert args[0][2]["content"] == "hello"
 
 
 @pytest.mark.asyncio()
-async def test_pause_blocks_until_resumed() -> None:
-    session = _make_session()
+async def test_pause_calls_hit_breakpoint_and_returns_event() -> None:
+    hit_bp = AsyncMock(return_value={})
+    session = _make_session(_make_client(hit_breakpoint=hit_bp))
     event = ModelRequest(content="hi")
-    completed = asyncio.Event()
-
-    async def _hit() -> None:
-        await session.pause("TURN_START", event)
-        completed.set()
-
-    task = asyncio.create_task(_hit())
-    await asyncio.sleep(0.01)
-    assert not completed.is_set()
-
-    bp_id = session.pending_bp_id
-    assert bp_id is not None
-    success = await session.resume(bp_id)
-    assert success
-
-    await asyncio.wait_for(task, timeout=1.0)
-    assert completed.is_set()
+    result = await session.pause("TURN_START", event)
+    hit_bp.assert_awaited_once()
+    assert result is event
 
 
 @pytest.mark.asyncio()
-async def test_resume_applies_event_modifications() -> None:
-    session = _make_session()
+async def test_pause_applies_event_modifications() -> None:
+    hit_bp = AsyncMock(return_value={"event_modifications": {"content": "mutated"}})
+    session = _make_session(_make_client(hit_breakpoint=hit_bp))
     event = ModelRequest(content="original")
-
-    task = asyncio.create_task(session.pause("TURN_START", event))
-    await asyncio.sleep(0.01)
-
-    bp_id = session.pending_bp_id
-    assert bp_id is not None
-    await session.resume(bp_id, event_modifications={"content": "modified"})
-
-    returned_event = await asyncio.wait_for(task, timeout=1.0)
-    assert returned_event.content == "modified"
-    # Same object — mutation applied in-place
-    assert returned_event is event
+    returned = await session.pause("TURN_START", event)
+    assert returned.content == "mutated"
+    assert returned is event  # same object, mutated in-place
 
 
 @pytest.mark.asyncio()
-async def test_resume_applies_context_modifications() -> None:
-    session = _make_session()
+async def test_pause_applies_context_modifications() -> None:
+    hit_bp = AsyncMock(return_value={"prompt": ["new prompt"], "variables": {"k": 1}})
+    session = _make_session(_make_client(hit_breakpoint=hit_bp))
     event = ModelRequest(content="hi")
-
-    task = asyncio.create_task(session.pause("TURN_START", event))
-    await asyncio.sleep(0.01)
-
-    bp_id = session.pending_bp_id
-    assert bp_id is not None
-    await session.resume(bp_id, prompt=["new prompt"], variables={"key": "val"})
-    await asyncio.wait_for(task, timeout=1.0)
-
+    await session.pause("TURN_START", event)
     assert session.context.prompt == ["new prompt"]
-    assert session.context.variables["key"] == "val"
+    assert session.context.variables["k"] == 1
 
 
 @pytest.mark.asyncio()
-async def test_resume_wrong_id_returns_false() -> None:
-    session = _make_session()
-    task = asyncio.create_task(session.pause("TURN_START", ModelRequest(content="x")))
-    await asyncio.sleep(0.01)
-
-    assert await session.resume("bad-id") is False
-
-    # Clean up
-    bp_id = session.pending_bp_id
-    assert bp_id is not None
-    await session.resume(bp_id)
-    await asyncio.wait_for(task, timeout=1.0)
-
-
-@pytest.mark.asyncio()
-async def test_breakpoint_marked_resumed_after_resume() -> None:
-    session = _make_session()
-    task = asyncio.create_task(session.pause("TOOL_CALL", ModelRequest(content="x")))
-    await asyncio.sleep(0.01)
-
-    bp_id = session.pending_bp_id
-    assert bp_id is not None
-    await session.resume(bp_id)
-    await asyncio.wait_for(task, timeout=1.0)
-
-    assert session.breakpoints[0].resumed is True
+async def test_pause_with_no_modifications() -> None:
+    """Empty mods dict must not crash or mutate anything."""
+    hit_bp = AsyncMock(return_value={})
+    session = _make_session(_make_client(hit_breakpoint=hit_bp))
+    event = ModelRequest(content="unchanged")
+    returned = await session.pause("TOOL_CALL", event)
+    assert returned.content == "unchanged"
 
 
 @pytest.mark.asyncio()

@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from autogen.beta.debug.client import serialize_event
+from autogen.beta.debug.client import DebugClient, serialize_event
 from autogen.beta.debug.middleware import DebugMiddleware
 from autogen.beta.debug.session import DebugSession
 from autogen.beta.events import ToolCallEvent
@@ -14,13 +15,17 @@ from autogen.beta.events.types import ModelRequest, ModelResponse
 from autogen.beta.middleware.base import AgentTurn, ToolExecution
 
 
-def _make_session() -> DebugSession:
+def _make_session(hit_breakpoint_return: dict | None = None) -> DebugSession:  # type: ignore[type-arg]
+    """Return a DebugSession whose HTTP client is fully mocked."""
     stream = MagicMock()
     stream.send = AsyncMock()
     context = MagicMock()
     context.prompt = []
     context.variables = {}
-    return DebugSession("test", stream=stream, context=context)
+    client = MagicMock(spec=DebugClient)
+    client.send_event = AsyncMock()
+    client.hit_breakpoint = AsyncMock(return_value=hit_breakpoint_return or {})
+    return DebugSession("test", stream=stream, context=context, client=client)  # type: ignore[arg-type]
 
 
 def _make_middleware(session: DebugSession) -> DebugMiddleware:
@@ -36,16 +41,7 @@ async def test_on_turn_pauses_then_calls_next() -> None:
     event = ModelRequest(content="hello")
     call_next: AgentTurn = AsyncMock(return_value=MagicMock(spec=ModelResponse))
 
-    import asyncio
-
-    # Resume immediately from a concurrent task
-    async def _resume() -> None:
-        await asyncio.sleep(0.02)
-        bp_id = session.pending_bp_id
-        assert bp_id is not None
-        await session.resume(bp_id)
-
-    asyncio.create_task(_resume())
+    # hit_breakpoint returns immediately (mock), so on_turn should run to completion
     await mw.on_turn(call_next, event, MagicMock())
 
     session.pause.assert_awaited_once_with("TURN_START", event)
@@ -60,23 +56,14 @@ async def test_on_tool_execution_pauses_then_calls_next() -> None:
     tool_event = ToolCallEvent(name="my_tool", arguments='{"x": 1}')
     call_next: ToolExecution = AsyncMock(return_value=MagicMock())
 
-    import asyncio
-
-    async def _resume() -> None:
-        await asyncio.sleep(0.02)
-        bp_id = session.pending_bp_id
-        assert bp_id is not None
-        await session.resume(bp_id)
-
-    asyncio.create_task(_resume())
     await mw.on_tool_execution(call_next, tool_event, MagicMock())
     call_next.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
 async def test_on_turn_passes_modified_event_to_call_next() -> None:
-    """Modifications made at resume time must reach call_next."""
-    session = _make_session()
+    """Modifications returned by hit_breakpoint must reach call_next."""
+    session = _make_session(hit_breakpoint_return={"event_modifications": {"content": "mutated"}})
     mw = _make_middleware(session)
 
     event = ModelRequest(content="original")
@@ -86,15 +73,6 @@ async def test_on_turn_passes_modified_event_to_call_next() -> None:
         received.append(ev)
         return MagicMock(spec=ModelResponse)
 
-    import asyncio
-
-    async def _resume() -> None:
-        await asyncio.sleep(0.02)
-        bp_id = session.pending_bp_id
-        assert bp_id is not None
-        await session.resume(bp_id, event_modifications={"content": "mutated"})
-
-    asyncio.create_task(_resume())
     await mw.on_turn(_call_next, event, MagicMock())
 
     assert received[0].content == "mutated"  # type: ignore[union-attr]

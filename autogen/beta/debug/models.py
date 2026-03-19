@@ -48,8 +48,3 @@ class ResumeRequest(BaseModel):
     variables: dict[str, Any] = Field(default_factory=dict)
 
 
-class InjectRequest(BaseModel):
-    """Body for POST /sessions/{id}/inject — push an event into the live stream."""
-
-    event_type: str
-    event_data: dict[str, Any] = Field(default_factory=dict)
