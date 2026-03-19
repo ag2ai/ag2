@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.panel import Panel
+from rich.table import Table
 
+from ..core.runner import RunResult, execute
 from ..ui import console
 
 
@@ -25,8 +27,64 @@ def _require_ag2() -> Any:
         raise typer.Exit(1)
 
 
-def _display_header(discovered: Any, verbose: bool = False) -> None:
-    """Display a header panel before running."""
+# ---------------------------------------------------------------------------
+# Live rendering callbacks
+# ---------------------------------------------------------------------------
+
+
+def _on_print(text: str) -> None:
+    """Forward AG2 print output to the Rich console in real-time."""
+    # Skip empty lines from AG2's default formatting
+    if text.strip():
+        console.print(text, highlight=False)
+
+
+def _on_event(event: Any) -> None:
+    """Render structured AG2 events (from run_group_chat) with Rich."""
+    try:
+        from autogen.events.agent_events import (
+            RunCompletionEvent,
+            TextEvent,
+            ToolCallEvent,
+            ToolResponseEvent,
+        )
+    except ImportError:
+        return
+
+    # Events from run_group_chat are wrapped: data is in event.content
+    content = getattr(event, "content", event)
+
+    if isinstance(event, TextEvent):
+        sender = getattr(content, "sender", "agent")
+        text = getattr(content, "content", "")
+        if text and str(text).strip():
+            console.print(
+                Panel(
+                    str(text),
+                    title=f"[bold]{sender}[/bold]",
+                    border_style="bright_cyan",
+                    padding=(0, 1),
+                )
+            )
+    elif isinstance(event, ToolCallEvent):
+        tool_calls = getattr(content, "tool_calls", [])
+        for tc in tool_calls:
+            fn = getattr(tc, "function", None)
+            name = getattr(fn, "name", "tool") if fn else "tool"
+            console.print(f"  [dim]>> tool: {name}[/dim]")
+    elif isinstance(event, ToolResponseEvent):
+        console.print("  [dim]>> tool response received[/dim]")
+    elif isinstance(event, RunCompletionEvent):
+        pass  # Handled via RunResult
+
+
+# ---------------------------------------------------------------------------
+# Display helpers
+# ---------------------------------------------------------------------------
+
+
+def _display_header(discovered: Any, title: str = "AG2 Run") -> None:
+    """Display a header panel with agent info."""
     from ..core.discovery import DiscoveredAgent
 
     d: DiscoveredAgent = discovered
@@ -40,7 +98,7 @@ def _display_header(discovered: Any, verbose: bool = False) -> None:
     console.print(
         Panel(
             f"[dim]{subtitle}[/dim]",
-            title="[bold cyan]AG2 Run[/bold cyan]",
+            title=f"[bold cyan]{title}[/bold cyan]",
             border_style="cyan",
             width=60,
         )
@@ -48,173 +106,154 @@ def _display_header(discovered: Any, verbose: bool = False) -> None:
     console.print()
 
 
-def _display_result(result: Any, verbose: bool = False) -> None:
-    """Display the result of an agent run."""
-    if result is None:
-        return
+def _display_summary(result: RunResult) -> None:
+    """Display a summary footer after execution."""
+    table = Table(show_header=False, show_edge=False, box=None, pad_edge=False)
+    table.add_column(style="dim", width=12)
+    table.add_column()
 
-    # Handle ChatResult objects
-    if hasattr(result, "chat_history") and result.chat_history:
-        for msg in result.chat_history:
-            speaker = msg.get("name", msg.get("role", "agent"))
-            content = msg.get("content", "")
-            if not content:
-                continue
+    table.add_row("Turns:", str(result.turns))
+    table.add_row("Time:", f"{result.elapsed:.1f}s")
 
-            if speaker == "user" or msg.get("role") == "user":
-                continue
+    if result.cost:
+        # Extract total cost from AG2's cost dict structure
+        cost_info = result.cost
+        if isinstance(cost_info, dict):
+            usage = cost_info.get("usage_excluding_cached_inference", {})
+            total = usage.get("total_cost", 0)
+            # Find token counts from first model entry
+            tokens = ""
+            for k, v in usage.items():
+                if isinstance(v, dict) and "total_tokens" in v:
+                    tokens = f" ({v['prompt_tokens']}+{v['completion_tokens']} tokens)"
+                    break
+            table.add_row("Cost:", f"${total:.6f}{tokens}")
+        else:
+            table.add_row("Cost:", str(cost_info))
 
-            console.print(
-                Panel(
-                    content,
-                    title=f"[bold]{speaker}[/bold]",
-                    border_style="bright_cyan",
-                    padding=(0, 1),
-                )
-            )
+    if result.last_speaker:
+        table.add_row("Last agent:", result.last_speaker)
 
-        if verbose and hasattr(result, "cost"):
-            console.print(f"\n[dim]Cost: {result.cost}[/dim]")
+    if result.errors:
+        table.add_row("Errors:", f"[error]{len(result.errors)}[/error]")
 
-    elif isinstance(result, str):
-        console.print(result)
-
-
-def _run_discovered(discovered: Any, message: str | None, verbose: bool) -> Any:
-    """Execute a discovered agent."""
-    ag2 = _require_ag2()
-    from ..core.discovery import DiscoveredAgent
-
-    d: DiscoveredAgent = discovered
-
-    if d.kind == "main":
-        fn = d.main_fn
-        if fn is None:
-            raise typer.Exit(1)
-        # main() may accept a message parameter
-        import inspect
-
-        sig = inspect.signature(fn)
-        kwargs: dict[str, Any] = {}
-        if "message" in sig.parameters and message:
-            kwargs["message"] = message
-
-        result = fn(**kwargs)
-        if asyncio.iscoroutine(result):
-            result = asyncio.run(result)
-        return result
-
-    if d.kind == "agent":
-        agent = d.agent
-        if message is None:
-            console.print("[error]--message / -m is required when running a single agent.[/error]")
-            raise typer.Exit(1)
-
-        user_proxy = ag2.UserProxyAgent(
-            name="user",
-            human_input_mode="NEVER",
-            max_consecutive_auto_reply=0,
-            code_execution_config=False,
-        )
-        result = user_proxy.initiate_chat(agent, message=message)
-        return result
-
-    if d.kind == "agents":
-        if message is None:
-            console.print("[error]--message / -m is required when running a team.[/error]")
-            raise typer.Exit(1)
-
-        agents = d.agents
-        try:
-            from autogen.agentchat.group import run_group_chat
-            from autogen.agentchat.group.patterns.pattern import AutoPattern
-
-            pattern = AutoPattern(
-                initial_agent=agents[0],
-                agents=agents,
-            )
-            response = run_group_chat(
-                pattern=pattern,
-                messages=message,
-                max_rounds=10,
-            )
-            # Consume the response
-            last = None
-            for event in response:
-                last = event
-            return last
-        except ImportError:
-            # Fallback to classic GroupChat
-            groupchat = ag2.GroupChat(agents=agents, messages=[], max_round=10)
-            manager = ag2.GroupChatManager(groupchat=groupchat)
-            user_proxy = ag2.UserProxyAgent(
-                name="user",
-                human_input_mode="NEVER",
-                max_consecutive_auto_reply=0,
-                code_execution_config=False,
-            )
-            result = user_proxy.initiate_chat(manager, message=message)
-            return result
-
-    console.print(f"[error]Unknown discovery kind: {d.kind}[/error]")
-    raise typer.Exit(1)
+    console.print()
+    console.print(Panel(table, border_style="dim", width=60))
 
 
-def run_cmd(
-    agent_file: Path = typer.Argument(..., help="Python file or YAML config defining agents."),
-    message: str | None = typer.Option(None, "--message", "-m", help="Input message to send."),
-    verbose: bool = typer.Option(False, "--verbose", "-V", help="Show detailed agent activity."),
-) -> None:
-    """Run an agent or team from a Python file or YAML config.
-
-    [dim]Examples:[/dim]
-      [command]ag2 run my_team.py[/command]
-      [command]ag2 run my_team.py --message "Research quantum computing"[/command]
-      [command]ag2 run team.yaml[/command]
-    """
-    _require_ag2()
+def _discover(agent_file: Path) -> Any:
+    """Discover agents from a file, with error handling."""
     path = Path(agent_file).resolve()
-
     if not path.exists():
         console.print(f"[error]File not found: {path}[/error]")
         raise typer.Exit(1)
-
-    # Read from stdin if no message provided and stdin has data
-    if message is None and not sys.stdin.isatty():
-        message = sys.stdin.read().strip()
 
     if path.suffix in (".yaml", ".yml"):
         from ..core.discovery import build_agents_from_yaml, load_yaml_config
 
         config = load_yaml_config(path)
-        discovered = build_agents_from_yaml(config)
-    else:
-        from ..core.discovery import discover
+        return build_agents_from_yaml(config)
 
-        try:
-            discovered = discover(path)
-        except (ValueError, ImportError) as exc:
-            console.print(f"[error]{exc}[/error]")
-            raise typer.Exit(1)
-
-    _display_header(discovered, verbose)
+    from ..core.discovery import discover
 
     try:
-        result = _run_discovered(discovered, message, verbose)
-        _display_result(result, verbose)
-    except Exception as exc:
-        console.print(f"\n[error]Error: {exc}[/error]")
-        if verbose:
-            console.print_exception()
+        return discover(path)
+    except (ValueError, ImportError) as exc:
+        console.print(f"[error]{exc}[/error]")
+        raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+
+def run_cmd(
+    agent_file: Path = typer.Argument(
+        ..., help="Python file or YAML config defining agents."
+    ),
+    message: str | None = typer.Option(
+        None, "--message", "-m", help="Input message to send."
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-V", help="Show detailed agent activity."
+    ),
+    output_json: bool = typer.Option(
+        False, "--json", help="Output result as JSON (suppresses live rendering)."
+    ),
+    max_turns: int = typer.Option(10, "--max-turns", help="Maximum conversation turns."),
+) -> None:
+    """Run an agent or team from a Python file or YAML config.
+
+    [dim]Examples:[/dim]
+      [command]ag2 run my_team.py -m "Research quantum computing"[/command]
+      [command]ag2 run team.yaml -m "Hello" --json[/command]
+      [command]echo "Hello" | ag2 run my_agent.py[/command]
+    """
+    _require_ag2()
+
+    # Read from stdin if no message and stdin has data
+    if message is None and not sys.stdin.isatty():
+        message = sys.stdin.read().strip()
+
+    discovered = _discover(agent_file)
+
+    if not output_json:
+        _display_header(discovered)
+
+    if message is None:
+        console.print("[error]--message / -m is required.[/error]")
+        raise typer.Exit(1)
+
+    # Execute with live rendering (unless JSON mode)
+    result = execute(
+        discovered,
+        message,
+        max_turns=max_turns,
+        on_print=None if output_json else _on_print,
+        on_event=None if output_json else _on_event,
+    )
+
+    if output_json:
+        data = {
+            "output": result.output,
+            "turns": result.turns,
+            "elapsed": round(result.elapsed, 2),
+            "agent_names": result.agent_names,
+            "errors": result.errors,
+        }
+        if result.cost:
+            data["cost"] = result.cost
+        print(json.dumps(data, indent=2, default=str))
+    else:
+        # Show output for main() that doesn't emit events
+        if result.output and not result.history:
+            console.print(result.output)
+        _display_summary(result)
+
+    if result.errors:
+        if not output_json:
+            for err in result.errors:
+                console.print(f"[error]{err}[/error]")
         raise typer.Exit(1)
 
 
 def chat_cmd(
-    agent_file: Path | None = typer.Argument(None, help="Python file defining agent(s)."),
-    model: str | None = typer.Option(None, "--model", "-M", help="LLM model for ad-hoc chat."),
-    system: str | None = typer.Option(None, "--system", "-s", help="System prompt for ad-hoc chat."),
-    resume: str | None = typer.Option(None, "--resume", help="Resume a previous session by ID."),
-    verbose: bool = typer.Option(False, "--verbose", "-V", help="Show detailed agent activity."),
+    agent_file: Path | None = typer.Argument(
+        None, help="Python file defining agent(s)."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-M", help="LLM model for ad-hoc chat."
+    ),
+    system: str | None = typer.Option(
+        None, "--system", "-s", help="System prompt for ad-hoc chat."
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-V", help="Show detailed agent activity."
+    ),
+    max_turns: int = typer.Option(
+        10, "--max-turns", help="Maximum turns per message."
+    ),
 ) -> None:
     """Start an interactive terminal chat with an agent or team.
 
@@ -225,28 +264,10 @@ def chat_cmd(
     """
     ag2 = _require_ag2()
 
-    # Build or discover agent
+    # Discover or create agent
     if agent_file is not None:
-        path = Path(agent_file).resolve()
-        if not path.exists():
-            console.print(f"[error]File not found: {path}[/error]")
-            raise typer.Exit(1)
-
-        if path.suffix in (".yaml", ".yml"):
-            from ..core.discovery import build_agents_from_yaml, load_yaml_config
-
-            config = load_yaml_config(path)
-            discovered = build_agents_from_yaml(config)
-        else:
-            from ..core.discovery import discover
-
-            try:
-                discovered = discover(path)
-            except (ValueError, ImportError) as exc:
-                console.print(f"[error]{exc}[/error]")
-                raise typer.Exit(1)
+        discovered = _discover(agent_file)
     elif model:
-        # Ad-hoc chat: create a single agent on the fly
         llm_config = ag2.LLMConfig(api_type="openai", model=model)
         system_msg = system or "You are a helpful assistant."
         with llm_config:
@@ -262,18 +283,20 @@ def chat_cmd(
     else:
         console.print("[error]Provide an agent file or use --model for ad-hoc chat.[/error]")
         console.print("  [command]ag2 chat my_agent.py[/command]")
-        console.print("  [command]ag2 chat --model gpt-4o --system \"You are a Python expert\"[/command]")
+        console.print(
+            '  [command]ag2 chat --model gpt-4o --system "You are a Python expert"[/command]'
+        )
         raise typer.Exit(1)
 
-    # Display chat header
-    if discovered.kind == "agents":
-        info = f"Team: {', '.join(discovered.agent_names)}"
-    else:
-        info = f"Agent: {', '.join(discovered.agent_names)}"
-
+    # Header
+    info = (
+        f"Team: {', '.join(discovered.agent_names)}"
+        if discovered.kind == "agents"
+        else f"Agent: {', '.join(discovered.agent_names)}"
+    )
     console.print(
         Panel(
-            f"[dim]{info}[/dim]\n[dim]Type /quit to exit[/dim]",
+            f"[dim]{info}[/dim]\n[dim]Type /quit to exit, /cost for token usage[/dim]",
             title="[bold cyan]AG2 Chat[/bold cyan]",
             border_style="cyan",
             width=60,
@@ -281,8 +304,20 @@ def chat_cmd(
     )
     console.print()
 
-    # Interactive chat loop
+    # Create persistent UserProxyAgent for multi-turn conversation continuity.
+    # Reusing the same proxy preserves chat history across turns.
+    user_proxy = None
+    if discovered.kind == "agent":
+        user_proxy = ag2.UserProxyAgent(
+            name="user",
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=0,
+            code_execution_config=False,
+        )
+
+    total_cost: Any = None
     turn_count = 0
+
     while True:
         try:
             user_input = console.input("[bold]You:[/bold] ")
@@ -296,14 +331,43 @@ def chat_cmd(
         if user_input.lower() in ("/quit", "/exit", "/q"):
             console.print("[dim]Goodbye![/dim]")
             break
+        if user_input.lower() == "/cost":
+            if total_cost:
+                console.print(f"[dim]Total cost: {total_cost}[/dim]")
+            else:
+                console.print("[dim]No cost data available yet.[/dim]")
+            continue
+        if user_input.lower() == "/history":
+            console.print(f"[dim]Turns so far: {turn_count}[/dim]")
+            continue
 
         turn_count += 1
         try:
-            result = _run_discovered(discovered, user_input, verbose)
-            _display_result(result, verbose)
+            result = execute(
+                discovered,
+                user_input,
+                max_turns=max_turns,
+                on_print=_on_print,
+                on_event=_on_event,
+                user_proxy=user_proxy,
+            )
+            # Show output for main() that doesn't emit live events
+            if result.output and discovered.kind == "main":
+                console.print(
+                    Panel(
+                        result.output,
+                        title="[bold]assistant[/bold]",
+                        border_style="bright_cyan",
+                        padding=(0, 1),
+                    )
+                )
+            if result.cost:
+                total_cost = result.cost
         except Exception as exc:
             console.print(f"[error]Error: {exc}[/error]")
             if verbose:
                 console.print_exception()
 
     console.print(f"\n[dim]Session ended after {turn_count} turn(s).[/dim]")
+    if total_cost:
+        console.print(f"[dim]Total cost: {total_cost}[/dim]")
