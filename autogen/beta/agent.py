@@ -64,14 +64,14 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__provider = provider
         self.__schema = response_schema
 
-    async def validate(
+    async def content(
         self,
         *,
         retry: int | bool = False,
     ) -> TResult | None:
         schema = self.__schema
         if schema is None:
-            return self.content  # type: ignore[return-value]
+            return self.body  # type: ignore[return-value]
 
         max_attempts = float("inf") if retry is True else max(int(retry), 1)
 
@@ -79,13 +79,13 @@ class AgentReply(Generic[TResult, TAgent]):
         attempt = 0
 
         while True:
-            if current.content is None:
+            if current.body is None:
                 return None
 
             attempt += 1
             try:
                 return await schema.validate(
-                    current.content,
+                    current.body,
                     context=current.context,
                     provider=current.__provider,
                 )
@@ -104,8 +104,8 @@ class AgentReply(Generic[TResult, TAgent]):
                 )
 
     @property
-    def content(self) -> str | None:
-        """Text content of the model's response for this turn."""
+    def body(self) -> str | None:
+        """Text body of the model's response for this turn."""
         return self.response.content
 
     @property

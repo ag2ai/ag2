@@ -19,7 +19,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -32,7 +32,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"x": 1.5, "y": 2.5}'), response_schema=Point)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == Point(x=1.5, y=2.5)
 
@@ -44,7 +44,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"name": "Alice", "age": 30}'), response_schema=User)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert isinstance(result, User)
         assert result.name == "Alice"
@@ -55,7 +55,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=schema)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -67,7 +67,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig("21"), response_schema=double)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -79,7 +79,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig("21"), response_schema=double)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -87,7 +87,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(int))
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -96,7 +96,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(inner))
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -108,7 +108,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig("21"), response_schema=PromptedSchema(double))
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -116,7 +116,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=TestConfig("hello"))
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == "hello"
 
@@ -126,7 +126,7 @@ class TestAgentLevelResponseSchema:
         reply = await agent.ask("Hi!")
 
         with pytest.raises(Exception):
-            await reply.validate()
+            await reply.content()
 
     async def test_retry_succeeds_on_second_attempt(self) -> None:
         tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
@@ -134,7 +134,7 @@ class TestAgentLevelResponseSchema:
 
         reply = await agent.ask("Hi!")
 
-        result = await reply.validate(retry=2)
+        result = await reply.content(retry=2)
         assert result == 42
 
         # 1 initial ask + 1 retry
@@ -149,7 +149,7 @@ class TestAgentLevelResponseSchema:
         reply = await agent.ask("Hi!")
 
         with pytest.raises(Exception):
-            await reply.validate(retry=2)
+            await reply.content(retry=2)
 
         # 1 initial ask + 1 retry (both fail)
         assert tracking.mock.call_count == 2
@@ -159,7 +159,7 @@ class TestAgentLevelResponseSchema:
         agent = Agent("test", config=tracking, response_schema=int)
 
         reply = await agent.ask("Hi!")
-        result = await reply.validate(retry=True)
+        result = await reply.content(retry=True)
 
         assert result == 7
         # 1 initial ask + 3 retries
@@ -173,7 +173,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=int)
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -181,7 +181,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=ResponseSchema(int, name="MyInt"))
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -193,7 +193,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig("21"))
 
         reply = await agent.ask("Hi!", response_schema=double)
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -201,7 +201,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=PromptedSchema(int))
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 42
 
@@ -209,7 +209,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 3.14}'), response_schema=int)
 
         reply = await agent.ask("Hi!", response_schema=float)
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == 3.14
 
@@ -217,7 +217,7 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig("hello"), response_schema=int)
 
         reply = await agent.ask("Hi!", response_schema=None)
-        result = await reply.validate()
+        result = await reply.content()
 
         assert result == "hello"
 
@@ -225,16 +225,16 @@ class TestAskLevelResponseSchema:
         agent = Agent("test", config=TestConfig('{"data": 42}', '{"data": 7}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
-        assert await reply.validate() == 42
+        assert await reply.content() == 42
 
         next_reply = await reply.ask("Again!")
-        assert await next_reply.validate() == 7
+        assert await next_reply.content() == 7
 
     async def test_ask_override_does_not_persist(self) -> None:
         agent = Agent("test", config=TestConfig('{"data": 3.14}', "42"))
 
         reply = await agent.ask("Hi!", response_schema=float)
-        assert await reply.validate() == 3.14
+        assert await reply.content() == 3.14
 
         next_reply = await reply.ask("Again!")
-        assert await next_reply.validate() == "42"
+        assert await next_reply.content() == "42"

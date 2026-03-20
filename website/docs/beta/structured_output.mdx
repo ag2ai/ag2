@@ -13,12 +13,12 @@ Every turn returns an [`AgentReply`](/docs/beta/agents). Two surfaces matter for
 
 | Surface | What it is |
 |--------|------------|
-| `reply.content` | Raw text from the model for that turn (a `str` or `None`). |
-| `#!python await reply.validate()` | Parsed value according to the **response schema** in effect for that turn. |
+| `reply.body` | Raw text from the model for that turn (a `str` or `None`). |
+| `#!python await reply.content()` | Parsed value according to the **response schema** in effect for that turn. |
 
-If the model’s output cannot be parsed or fails validation, `validate()` raises an error from the underlying parser (for example Pydantic’s validation errors). You can pass `retry` to automatically [re-ask the model](#validation-retries) on failure.
+If the model’s output cannot be parsed or fails validation, `content()` raises an error from the underlying parser (for example Pydantic’s validation errors). You can pass `retry` to automatically [re-ask the model](#validation-retries) on failure.
 
-With the default **OpenAI** client, when the schema exposes a JSON Schema to the API, the client sends a structured `response_format` so the model is guided to emit JSON matching that schema. [`PromptedSchema`](#promptedschema-models-without-native-structured-output) is the escape hatch when the provider does not support that mechanism: the schema is injected into the system prompt instead, and `validate()` still runs the same way afterward.
+With the default **OpenAI** client, when the schema exposes a JSON Schema to the API, the client sends a structured `response_format` so the model is guided to emit JSON matching that schema. [`PromptedSchema`](#promptedschema-models-without-native-structured-output) is the escape hatch when the provider does not support that mechanism: the schema is injected into the system prompt instead, and `content()` still runs the same way afterward.
 
 ## When to use which tool
 
@@ -41,8 +41,8 @@ agent = Agent(
 )
 
 reply = await agent.ask("How many bits are in a byte?")
-print(reply.content)       # e.g. '8' — raw model text
-result = await reply.validate()
+print(reply.body)       # e.g. '8' — raw model text
+result = await reply.content()
 print(result)              # 8 — Python int
 ```
 
@@ -82,7 +82,7 @@ body = (
     "This is blocking our quarter close."
 )
 reply = await agent.ask(f"Classify this ticket:\n\n{body}")
-triage = await reply.validate()
+triage = await reply.content()
 # triage.category, triage.urgency, triage.summary_one_line → use in routing rules
 ```
 
@@ -113,7 +113,7 @@ agent = Agent(
 reply = await agent.ask(
     "Customer said: drop off Tuesday between 2 and 5pm Pacific, before dinner."
 )
-window = await reply.validate()
+window = await reply.content()
 ```
 
 ### Score a review on a fixed scale (primitive + clear prompt)
@@ -134,7 +134,7 @@ agent = Agent(
 reply = await agent.ask(
     "Rate this review: 'Shipped fast, packaging was torn, product works great.'"
 )
-stars = await reply.validate()
+stars = await reply.content()
 ```
 
 ---
@@ -149,7 +149,7 @@ You can pass any type the stack can turn into a JSON Schema and parse back: prim
 agent = Agent("assistant", config=config, response_schema=int)
 
 reply = await agent.ask("What is 2 + 2?")
-result = await reply.validate()
+result = await reply.content()
 # 4 — int
 ```
 
@@ -166,7 +166,7 @@ class City:
 agent = Agent("assistant", config=config, response_schema=City)
 
 reply = await agent.ask("Give the city name and approximate population for Kyoto.")
-result = await reply.validate()
+result = await reply.content()
 ```
 
 ### Pydantic models
@@ -181,7 +181,7 @@ class Sentiment(BaseModel):
 agent = Agent("assistant", config=config, response_schema=Sentiment)
 
 reply = await agent.ask("Analyze: 'I love this product!'")
-result = await reply.validate()
+result = await reply.content()
 ```
 
 ### Unions
@@ -203,7 +203,7 @@ agent = Agent(
 )
 
 reply = await agent.ask("How many seats does the venue mention? (no number in text)")
-result = await reply.validate()
+result = await reply.content()
 # result is int or str, depending on the model output
 ```
 
@@ -246,7 +246,7 @@ def parse_rating(content: str) -> int:
 agent = Agent("assistant", config=config, response_schema=parse_rating)
 
 reply = await agent.ask("Rate this movie from 1 to 5.")
-result = await reply.validate()
+result = await reply.content()
 ```
 
 ### Async validator: enrich after JSON parse
@@ -316,7 +316,7 @@ def create_user(name: str, age: int, email: str) -> dict:
 agent = Agent("assistant", config=config, response_schema=create_user)
 
 reply = await agent.ask("Create a user for Alice, age 30, alice@example.com")
-result = await reply.validate()
+result = await reply.content()
 # {"name": "Alice", "age": 30, "email": "alice@example.com", "active": True}
 ```
 
@@ -381,7 +381,7 @@ agent = Agent(
 )
 
 reply = await agent.ask("How many oceans are there on Earth?")
-result = await reply.validate()
+result = await reply.content()
 ```
 
 You can keep a **single** schema definition (type, `ResponseSchema`, or `@response_schema` callable) and **only wrap it when** you need prompt-based delivery. The inner `validate` logic and JSON shape stay the same; `PromptedSchema` swaps how the schema reaches the model (system-prompt text instead of API `response_format`).
@@ -433,11 +433,11 @@ Pass `response_schema` to `ask()` (or `AgentReply.ask()`) to change the contract
 agent = Agent("assistant", config=config)
 
 turn = await agent.ask("How many seconds in a minute?", response_schema=int)
-result = await turn.validate()
+result = await turn.content()
 #> 60 - int
 
 turn2 = await turn.ask("Say hello.")
-result2 = await turn2.validate()
+result2 = await turn2.content()
 #> "Hello!" - str
 ```
 
@@ -447,7 +447,7 @@ Pass **`response_schema=None`** to drop a schema that was set on the agent for a
 agent = Agent("assistant", config=config, response_schema=int)
 
 reply = await agent.ask("Just say hello in plain text.", response_schema=None)
-result = await reply.validate()
+result = await reply.content()
 ```
 
 !!! note
@@ -455,13 +455,13 @@ result = await reply.validate()
 
 ## Validation retries
 
-When the model's response fails schema validation, you can automatically **re-ask** the model instead of raising immediately. Pass the `retry` keyword to `validate()`:
+When the model's response fails schema validation, you can automatically **re-ask** the model instead of raising immediately. Pass the `retry` keyword to `content()`:
 
 ```python linenums="1" hl_lines="4"
 agent = Agent("assistant", config=config, response_schema=int)
 
 reply = await agent.ask("How many planets in the solar system?")
-result = await reply.validate(retry=3)
+result = await reply.content(retry=3)
 ```
 
 The `retry` parameter controls how many **total attempts** are made (including the first). With `retry=3`, the initial response is validated; if it fails, the model is re-asked up to **2 more times** before the error is raised.
@@ -483,7 +483,7 @@ Each retry sends the validation error back to the model as a follow-up message i
 
 When a schema type is a **primitive** (`int`, `float`, `bool`, `list[…]`) or a **union** (`int | str`), the framework wraps it in a one-field JSON object by default. This is called **embedding**.
 
-Instead of asking the model to produce a bare value like `42`, the API schema asks for `{"data": 42}`. The `validate()` method transparently unwraps the envelope so your code still receives a plain Python value.
+Instead of asking the model to produce a bare value like `42`, the API schema asks for `{"data": 42}`. The `content()` method transparently unwraps the envelope so your code still receives a plain Python value.
 
 ### Why?
 
@@ -511,7 +511,7 @@ from autogen.beta import ResponseSchema
 
 schema = ResponseSchema(int, name="RawInt", embed=False)
 # Model must produce: 42
-# With embed=True (default): model produces {"data": 42}, validate() returns 42 either way
+# With embed=True (default): model produces {"data": 42}, content() returns 42 either way
 ```
 
 With the `@response_schema` decorator:
@@ -523,6 +523,6 @@ def parse_rating(value: int) -> int:
 ```
 
 !!! note
-    Embedding is transparent to your code. Whether `embed` is `True` or `False`, `validate()` always returns the unwrapped Python value. The only difference is the JSON shape the model is asked to produce.
+    Embedding is transparent to your code. Whether `embed` is `True` or `False`, `content()` always returns the unwrapped Python value. The only difference is the JSON shape the model is asked to produce.
 
 ---

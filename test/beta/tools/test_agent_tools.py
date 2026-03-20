@@ -104,7 +104,7 @@ async def test_final_tool() -> None:
     )
 
     result = await agent.ask("Hi!")
-    assert DataModel.model_validate_json(result.content) == DataModel(data="result")
+    assert DataModel.model_validate_json(result.body) == DataModel(data="result")
 
 
 @pytest.mark.asyncio()
@@ -150,7 +150,7 @@ async def test_concurrent_tool_execution() -> None:
 
     # Trigger tool calls - they should execute concurrently
     result = await agent.ask("Execute all tools")
-    assert result.content == "result"
+    assert result.body == "result"
 
     # Verify all tools were executed
     assert "a_start" in execution_order
