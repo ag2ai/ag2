@@ -32,7 +32,14 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from autogen.beta import Agent
 from autogen.beta.annotations import Context
-from autogen.beta.events import HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
+from autogen.beta.events import (
+    HumanInputRequest,
+    HumanMessage,
+    ModelMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+)
 from autogen.beta.middleware.builtin import TelemetryMiddleware
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import tool
@@ -138,7 +145,9 @@ async def main():
         "hitl_assistant",
         config=TestConfig(
             _resp(
-                tool_calls=[ToolCallEvent(id="c2", name="confirm_action", arguments='{"action": "deploy to production"}')],
+                tool_calls=[
+                    ToolCallEvent(id="c2", name="confirm_action", arguments='{"action": "deploy to production"}')
+                ],
                 finish_reason="tool_calls",
             ),
             _resp(content="Deployment confirmed and proceeding!"),
