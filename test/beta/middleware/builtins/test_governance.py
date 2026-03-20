@@ -368,6 +368,24 @@ class TestCircuitBreaker:
         assert mw.circuit_breaker._failures == 1
 
     @pytest.mark.asyncio
+    async def test_cancelled_error_in_closed_state(self):
+        """CancelledError in CLOSED state (no probe) must propagate cleanly."""
+        import asyncio
+
+        mw = GovernanceMiddleware(GovernanceConfig(failure_threshold=5))
+
+        async def cancel(events, ctx):
+            raise asyncio.CancelledError()
+
+        inst = mw(_make_event(), _make_context())
+        with pytest.raises(asyncio.CancelledError):
+            await inst.on_llm_call(cancel, [_make_event()], _make_context())
+
+        # No probe was claimed, CB still CLOSED, no side effects
+        assert mw.circuit_breaker.get_state() == CircuitState.CLOSED
+        assert mw.circuit_breaker._failures == 0
+
+    @pytest.mark.asyncio
     async def test_budget_blocked_during_probe_releases_probe(self):
         """If probe is claimed but budget blocks, probe must be released."""
         mw = GovernanceMiddleware(
