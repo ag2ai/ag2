@@ -16,7 +16,7 @@ Every turn returns an [`AgentReply`](/docs/beta/agents). Two surfaces matter for
 | `reply.content` | Raw text from the model for that turn (a `str` or `None`). |
 | `#!python await reply.validate()` | Parsed value according to the **response schema** in effect for that turn. |
 
-If the model’s output cannot be parsed or fails validation, `validate()` raises an error from the underlying parser (for example Pydantic’s validation errors).
+If the model’s output cannot be parsed or fails validation, `validate()` raises an error from the underlying parser (for example Pydantic’s validation errors). You can pass `retry` to automatically [re-ask the model](#validation-retries) on failure.
 
 With the default **OpenAI** client, when the schema exposes a JSON Schema to the API, the client sends a structured `response_format` so the model is guided to emit JSON matching that schema. [`PromptedSchema`](#promptedschema-models-without-native-structured-output) is the escape hatch when the provider does not support that mechanism: the schema is injected into the system prompt instead, and `validate()` still runs the same way afterward.
 
@@ -452,6 +452,32 @@ result = await reply.validate()
 
 !!! note
     The per-request override applies only to that turn. The conversation history is unchanged; only the schema used for the next completion differs.
+
+## Validation retries
+
+When the model's response fails schema validation, you can automatically **re-ask** the model instead of raising immediately. Pass the `retry` keyword to `validate()`:
+
+```python linenums="1" hl_lines="4"
+agent = Agent("assistant", config=config, response_schema=int)
+
+reply = await agent.ask("How many planets in the solar system?")
+result = await reply.validate(retry=3)
+```
+
+The `retry` parameter controls how many **total attempts** are made (including the first). With `retry=3`, the initial response is validated; if it fails, the model is re-asked up to **2 more times** before the error is raised.
+
+| Value | Behavior |
+|-------|----------|
+| `retry=False` (default) | No retries — raise on the first validation failure. |
+| `retry=3` | Up to 3 total attempts (1 initial + 2 re-asks). |
+| `retry=True` | Re-ask indefinitely until the model produces a valid response. |
+
+Each retry sends the validation error back to the model as a follow-up message in the **same conversation**, so the model can see what went wrong and correct its output.
+
+!!! warning
+    `retry=True` will loop forever if the model consistently produces invalid output. Use a finite count in production, and reserve `True` for interactive or experimental use.
+
+---
 
 ## Primitive embedding (`embed`)
 
