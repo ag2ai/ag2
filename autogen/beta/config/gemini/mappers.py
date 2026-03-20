@@ -4,15 +4,36 @@
 
 import json
 from collections.abc import Iterable
+from typing import Any
 
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
+    """Convert a ResponseProto to Gemini GenerateContentConfig kwargs."""
+    if not response or not response.json_schema:
+        return {}
+
+    return {
+        "response_mime_type": "application/json",
+        "response_json_schema": response.json_schema,
+    }
+
+
+def build_system_instruction(
+    system_prompt: Iterable[str],
+) -> str | None:
+    """Join system prompt parts into a single string for Gemini's system_instruction."""
+    joined = "\n".join(system_prompt)
+    return joined or None
 
 
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
