@@ -56,7 +56,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test]
+          uv pip install --system -e .[test,openai,anthropic,dashscope,gemini,ollama]
       - name: Test with pytest
         run: |
           pytest -vv --durations=10 --durations-min=1.0 test/beta/
@@ -80,10 +80,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.13"
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test]
@@ -97,7 +97,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: beta, macos-latest, 3.14
+          flags: beta, macos-latest, 3.13
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -110,10 +110,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.13"
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test]
@@ -127,7 +127,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: beta, windows-latest, 3.14
+          flags: beta, windows-latest, 3.13
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
