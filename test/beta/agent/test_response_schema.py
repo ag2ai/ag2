@@ -16,7 +16,7 @@ from autogen.beta.testing import TestConfig
 class TestAgentLevelResponseSchema:
     @pytest.mark.asyncio()
     async def test_type_response_schema(self) -> None:
-        agent = Agent("test", config=TestConfig("42"), response_schema=int)
+        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
         result = await reply.validate()
@@ -55,7 +55,7 @@ class TestAgentLevelResponseSchema:
     @pytest.mark.asyncio()
     async def test_response_schema_object(self) -> None:
         schema = ResponseSchema(int, name="MyInt")
-        agent = Agent("test", config=TestConfig("42"), response_schema=schema)
+        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=schema)
 
         reply = await agent.ask("Hi!")
         result = await reply.validate()
@@ -90,7 +90,7 @@ class TestAgentLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_prompted_schema_with_type(self) -> None:
-        agent = Agent("test", config=TestConfig("42"), response_schema=PromptedSchema(int))
+        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(int))
 
         reply = await agent.ask("Hi!")
         result = await reply.validate()
@@ -100,7 +100,7 @@ class TestAgentLevelResponseSchema:
     @pytest.mark.asyncio()
     async def test_prompted_schema_with_response_schema(self) -> None:
         inner = ResponseSchema(int, name="MyInt")
-        agent = Agent("test", config=TestConfig("42"), response_schema=PromptedSchema(inner))
+        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(inner))
 
         reply = await agent.ask("Hi!")
         result = await reply.validate()
@@ -145,7 +145,7 @@ class TestAgentLevelResponseSchema:
 class TestAskLevelResponseSchema:
     @pytest.mark.asyncio()
     async def test_ask_type_override(self) -> None:
-        agent = Agent("test", config=TestConfig("42"))
+        agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=int)
         result = await reply.validate()
@@ -154,7 +154,7 @@ class TestAskLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_ask_response_schema_object(self) -> None:
-        agent = Agent("test", config=TestConfig("42"))
+        agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=ResponseSchema(int, name="MyInt"))
         result = await reply.validate()
@@ -176,7 +176,7 @@ class TestAskLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_ask_prompted_schema_override(self) -> None:
-        agent = Agent("test", config=TestConfig("42"))
+        agent = Agent("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=PromptedSchema(int))
         result = await reply.validate()
@@ -185,7 +185,7 @@ class TestAskLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_ask_overrides_agent_schema(self) -> None:
-        agent = Agent("test", config=TestConfig("3.14"), response_schema=int)
+        agent = Agent("test", config=TestConfig('{"data": 3.14}'), response_schema=int)
 
         reply = await agent.ask("Hi!", response_schema=float)
         result = await reply.validate()
@@ -203,7 +203,7 @@ class TestAskLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_next_turn_preserves_agent_schema(self) -> None:
-        agent = Agent("test", config=TestConfig("42", "7"), response_schema=int)
+        agent = Agent("test", config=TestConfig('{"data": 42}', '{"data": 7}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
         assert await reply.validate() == 42
@@ -213,7 +213,7 @@ class TestAskLevelResponseSchema:
 
     @pytest.mark.asyncio()
     async def test_ask_override_does_not_persist(self) -> None:
-        agent = Agent("test", config=TestConfig("3.14", "42"))
+        agent = Agent("test", config=TestConfig('{"data": 3.14}', "42"))
 
         reply = await agent.ask("Hi!", response_schema=float)
         assert await reply.validate() == 3.14

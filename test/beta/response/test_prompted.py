@@ -130,7 +130,7 @@ class TestValidation:
         schema = PromptedSchema(int)
         context = AsyncMock()
 
-        result = await schema.validate("42", context)
+        result = await schema.validate('{"data": 42}', context)
         assert result == 42
 
     async def test_validates_dataclass(self) -> None:
@@ -163,7 +163,7 @@ class TestValidation:
         schema = PromptedSchema(inner)
         context = AsyncMock()
 
-        result = await schema.validate("42", context)
+        result = await schema.validate('{"data": 42}', context)
         assert result == 42
 
     async def test_delegates_to_inner_callable_schema(self) -> None:

@@ -4,56 +4,151 @@
 
 import warnings
 from dataclasses import dataclass
-from typing import Annotated
+from enum import Enum
+from typing import Annotated, Any, Union
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
 from autogen.beta.response import ResponseSchema
 from autogen.beta.response.schema import RawSchema
 from autogen.beta.types import ClassInfo
 
-# --- Primitive types ---
 
-
-class TestPrimitiveSchemas:
+class TestEmbeddedTypes:
     @pytest.mark.parametrize(
-        ("type_", "expected_schema"),
+        ("type_", "schema"),
         [
             pytest.param(int, {"type": "integer"}, id="int"),
             pytest.param(float, {"type": "number"}, id="float"),
             pytest.param(bool, {"type": "boolean"}, id="bool"),
             pytest.param(
-                list[int],
-                {"type": "array", "items": {"type": "integer"}},
-                id="list[int]",
+                [int, float],
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="[T1, T2]",
             ),
             pytest.param(
-                dict[str, int],
-                {"type": "object", "additionalProperties": {"type": "integer"}},
-                id="dict[str,int]",
+                (int, float),
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="(T1, T2)",
+            ),
+            pytest.param(
+                int | float,
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="typing.Union[T1, T2]",
+            ),
+            pytest.param(
+                Union[int, float],  # noqa: UP007
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="T1 | T2",
+            ),
+            pytest.param(
+                list[int],
+                {"type": "array", "items": {"type": "integer"}},
+                id="list[T]",
             ),
         ],
     )
-    def test_type_schema(self, type_: ClassInfo, expected_schema: dict) -> None:  # type: ignore[type-arg]
-        schema = ResponseSchema(type_, name="Test")
+    def test_primitive_types_not_embedded(
+        self,
+        type_: ClassInfo,
+        schema: dict[str, Any],
+    ) -> None:
+        response_schema = ResponseSchema(type_, embed=False)
+        assert not response_schema._embedded_type
+        assert response_schema.json_schema == schema
 
-        assert schema.name == "Test"
-        assert schema.json_schema == expected_schema
+    @pytest.mark.parametrize(
+        ("type_", "schema"),
+        [
+            pytest.param(int, {"type": "integer"}, id="int"),
+            pytest.param(float, {"type": "number"}, id="float"),
+            pytest.param(bool, {"type": "boolean"}, id="bool"),
+            pytest.param(
+                [int, float],
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="[T1, T2]",
+            ),
+            pytest.param(
+                (int, float),
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="(T1, T2)",
+            ),
+            pytest.param(
+                int | float,
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="typing.Union[T1, T2]",
+            ),
+            pytest.param(
+                Union[int, float],  # noqa: UP007
+                {"anyOf": [{"type": "integer"}, {"type": "number"}]},
+                id="T1 | T2",
+            ),
+            pytest.param(
+                list[int],
+                {"type": "array", "items": {"type": "integer"}},
+                id="list[T]",
+            ),
+        ],
+    )
+    def test_primitive_types_embedded(
+        self,
+        type_: ClassInfo,
+        schema: dict[str, Any],
+    ) -> None:
+        response_schema = ResponseSchema(type_)
+        assert response_schema._embedded_type
+        assert response_schema.json_schema == {
+            "properties": {
+                "data": {
+                    "description": 'Response with a one-field JSON `"{"data":...}"`',
+                    "title": "Data",
+                    **schema,
+                }
+            },
+            "required": ["data"],
+            "type": "object",
+        }
 
-    def test_str_schema(self) -> None:
-        # str has __len__, so must be wrapped in a tuple
-        # to avoid being treated as iterable inside ResponseSchema
-        schema = ResponseSchema((str,), name="StrResponse")
+    def test_str_has_no_schema(self) -> None:
+        response_schema = ResponseSchema(str)
+        assert response_schema._embedded_type is True
+        assert response_schema.json_schema is None
 
-        assert schema.name == "StrResponse"
-        assert schema.json_schema == {"type": "string"}
+    def test_dict_not_embedded(self) -> None:
+        response_schema = ResponseSchema(dict[str, int])
+        assert response_schema._embedded_type is False
+        assert response_schema.json_schema == {
+            "type": "object",
+            "additionalProperties": {"type": "integer"},
+        }
+
+    def test_dataclass_not_embedded(self) -> None:
+        @dataclass
+        class Model:
+            field: str
+
+        schema = ResponseSchema(Model)
+        assert not schema._embedded_type
+
+    def test_pydantic_model_not_embedded(self) -> None:
+        class Model(BaseModel):
+            field: str
+
+        schema = ResponseSchema(Model)
+        assert not schema._embedded_type
+
+    def test_typed_dict_not_embedded(self) -> None:
+        class Model(TypedDict):
+            field: str
+
+        schema = ResponseSchema(Model)
+        assert not schema._embedded_type
 
 
 # --- Dataclass schemas ---
-
-
 class TestDataclassSchemas:
     def test_simple_dataclass(self) -> None:
         @dataclass
@@ -122,8 +217,6 @@ class TestDataclassSchemas:
 
 
 # --- Pydantic model schemas ---
-
-
 class TestPydanticModelSchemas:
     def test_simple_model(self) -> None:
         class Item(BaseModel):
@@ -149,12 +242,12 @@ class TestPydanticModelSchemas:
 
         schema = ResponseSchema(Person)
 
-        assert schema.json_schema == IsPartialDict(
-            properties=IsPartialDict(
-                name=IsPartialDict(description="Full name"),
-                age=IsPartialDict(description="Age in years"),
-            ),
-        )
+        assert schema.json_schema == IsPartialDict({
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"description": "Full name"}),
+                "age": IsPartialDict({"description": "Age in years"}),
+            }),
+        })
 
     def test_model_with_docstring(self) -> None:
         class Result(BaseModel):
@@ -183,8 +276,6 @@ class TestPydanticModelSchemas:
         })
 
     def test_model_with_enum_field(self) -> None:
-        from enum import Enum
-
         class Color(Enum):
             RED = "red"
             GREEN = "green"
@@ -197,7 +288,13 @@ class TestPydanticModelSchemas:
 
         assert schema.name == "Palette"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(Color=IsPartialDict()),
+            "$defs": {
+                "Color": {
+                    "enum": ["red", "green", "blue"],
+                    "title": "Color",
+                    "type": "string",
+                }
+            },
         })
 
     def test_model_with_annotated_constraints(self) -> None:
@@ -214,8 +311,6 @@ class TestPydanticModelSchemas:
 
 
 # --- Union type schemas ---
-
-
 class TestUnionSchemas:
     @pytest.mark.parametrize(
         ("type_", "expected_any_of"),
@@ -233,7 +328,7 @@ class TestUnionSchemas:
         ],
     )
     def test_union_schema(self, type_: ClassInfo, expected_any_of: list) -> None:  # type: ignore[type-arg]
-        schema = ResponseSchema(type_, name="Union")
+        schema = ResponseSchema(type_, name="Union", embed=False)
 
         assert schema.name == "Union"
         assert schema.json_schema == {"anyOf": expected_any_of}
@@ -247,7 +342,7 @@ class TestUnionSchemas:
         class Success:
             value: int
 
-        schema = ResponseSchema((Error, Success), name="Result")
+        schema = ResponseSchema((Error, Success), name="Result", embed=False)
 
         assert schema.name == "Result"
         assert schema.json_schema == IsPartialDict({
@@ -259,8 +354,6 @@ class TestUnionSchemas:
 
 
 # --- Name and description resolution ---
-
-
 class TestNameDescription:
     def test_explicit_name_overrides_title(self) -> None:
         class MyModel(BaseModel):
@@ -316,8 +409,6 @@ class TestNameDescription:
 
 
 # --- ensure_schema ---
-
-
 class TestEnsureSchema:
     def test_none_returns_none(self) -> None:
         assert ResponseSchema.ensure_schema(None) is None
@@ -333,23 +424,39 @@ class TestEnsureSchema:
         result = ResponseSchema.ensure_schema(int)
 
         assert isinstance(result, ResponseSchema)
-        assert result.json_schema == {"type": "integer"}
+        assert result.json_schema == {
+            "properties": {
+                "data": {
+                    "description": 'Response with a one-field JSON `"{"data":...}"`',
+                    "title": "Data",
+                    "type": "integer",
+                }
+            },
+            "required": ["data"],
+            "type": "object",
+        }
 
     def test_union_type_wrapped(self) -> None:
         result = ResponseSchema.ensure_schema(int | str)
 
         assert isinstance(result, ResponseSchema)
-        assert result.json_schema == IsPartialDict(
-            anyOf=[
-                {"type": "integer"},
-                {"type": "string"},
-            ]
-        )
+        assert result.json_schema == {
+            "properties": {
+                "data": {
+                    "description": 'Response with a one-field JSON `"{"data":...}"`',
+                    "title": "Data",
+                    "anyOf": [
+                        {"type": "integer"},
+                        {"type": "string"},
+                    ],
+                }
+            },
+            "required": ["data"],
+            "type": "object",
+        }
 
 
 # --- RawSchema ---
-
-
 class TestRawSchema:
     def test_creation(self) -> None:
         raw = ResponseSchema.from_schema(
@@ -383,26 +490,46 @@ class TestRawSchema:
 
 
 # --- Validation ---
-
-
+@pytest.mark.asyncio()
 class TestValidation:
-    @pytest.mark.asyncio()
     @pytest.mark.parametrize(
-        ("type_", "name", "json_input", "expected"),
+        ("type_", "json_input", "expected"),
         [
-            pytest.param(int, "Int", "42", 42, id="int"),
-            pytest.param(float, "Float", "3.14", 3.14, id="float"),
-            pytest.param(bool, "Bool", "true", True, id="bool"),
+            pytest.param(int, '{"data": 42}', 42, id="int"),
+            pytest.param(float, '{"data": 3.14}', 3.14, id="float"),
+            pytest.param(bool, '{"data": true}', True, id="bool"),
         ],
     )
-    async def test_validate_primitive(self, type_: type, name: str, json_input: str, expected: object) -> None:
-        schema = ResponseSchema(type_, name=name)
-
+    async def test_validate_primitive(self, type_: type, json_input: str, expected: object) -> None:
+        schema = ResponseSchema(type_)
         result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
-
         assert result == expected
 
-    @pytest.mark.asyncio()
+    @pytest.mark.parametrize(
+        ("type_", "json_input", "expected"),
+        [
+            pytest.param(int, "42", 42, id="int"),
+            pytest.param(float, "3.14", 3.14, id="float"),
+            pytest.param(bool, "true", True, id="bool"),
+        ],
+    )
+    async def test_validate_not_embedded_primitive(self, type_: type, json_input: str, expected: object) -> None:
+        schema = ResponseSchema(type_, embed=False)
+        result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
+        assert result == expected
+
+    async def test_validate_union(self) -> None:
+        schema = ResponseSchema(int | str)
+
+        assert await schema.validate('{"data": 42}', context=None) == 42  # type: ignore[arg-type]
+        assert await schema.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
+
+    async def test_validate_not_embedded_union(self) -> None:
+        schema = ResponseSchema(int | str, embed=False)
+
+        assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
+        assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]
+
     async def test_validate_dataclass(self) -> None:
         @dataclass
         class Point:
@@ -415,7 +542,6 @@ class TestValidation:
 
         assert result == Point(x=1, y=2)
 
-    @pytest.mark.asyncio()
     async def test_validate_pydantic_model(self) -> None:
         class Item(BaseModel):
             name: str
@@ -427,16 +553,8 @@ class TestValidation:
 
         assert result == Item(name="Widget", price=9.99)
 
-    @pytest.mark.asyncio()
-    async def test_validate_union(self) -> None:
-        schema = ResponseSchema(int | str, name="IntOrStr")
-
-        assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
-        assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]
-
-    @pytest.mark.asyncio()
     async def test_validate_invalid_json_raises(self) -> None:
-        schema = ResponseSchema(int, name="Int")
+        schema = ResponseSchema(int, embed=False)
 
         with pytest.raises(Exception):
             await schema.validate("not a number", context=None)  # type: ignore[arg-type]

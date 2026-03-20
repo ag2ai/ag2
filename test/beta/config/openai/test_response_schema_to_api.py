@@ -14,6 +14,21 @@ from autogen.beta.response import ResponseSchema
 from autogen.beta.response.schema import RawSchema
 
 
+def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+    """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
+    return {
+        "properties": {
+            "data": {
+                "description": 'Response with a one-field JSON `"{"data":...}"`',
+                "title": "Data",
+                **inner,
+            }
+        },
+        "required": ["data"],
+        "type": "object",
+    }
+
+
 class TestResponseProtoToSchemaNone:
     def test_none_returns_none(self) -> None:
         assert response_proto_to_schema(None) is None
@@ -41,7 +56,10 @@ class TestPrimitiveSchemas:
         assert result == {
             "type": "json_schema",
             "json_schema": IsPartialDict(
-                schema=expected_inner_schema,
+                schema=IsPartialDict(
+                    **_embedded_data_schema(expected_inner_schema),
+                    title="ResponseSchema",
+                ),
                 name=name,
                 # built-in types have docstrings -> description is included
                 description=type_.__doc__,
@@ -143,15 +161,20 @@ class TestUnionSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": {
-                "schema": {
-                    "anyOf": [
-                        {"type": "integer"},
-                        {"type": "string"},
-                    ],
-                },
-                "name": "IntOrStr",
-            },
+            "json_schema": IsPartialDict(
+                name="IntOrStr",
+                schema=IsPartialDict(
+                    **_embedded_data_schema(
+                        {
+                            "anyOf": [
+                                {"type": "integer"},
+                                {"type": "string"},
+                            ],
+                        },
+                    ),
+                    title="ResponseSchema",
+                ),
+            ),
         }
 
     def test_tuple_of_types(self) -> None:
@@ -163,11 +186,17 @@ class TestUnionSchemas:
             "type": "json_schema",
             "json_schema": IsPartialDict(
                 name="Number",
+                description=(int, float).__doc__,
                 schema=IsPartialDict(
-                    anyOf=[
-                        {"type": "integer"},
-                        {"type": "number"},
-                    ],
+                    **_embedded_data_schema(
+                        {
+                            "anyOf": [
+                                {"type": "integer"},
+                                {"type": "number"},
+                            ],
+                        },
+                    ),
+                    title="ResponseSchema",
                 ),
             ),
         }

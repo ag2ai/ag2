@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Any, Union, overload
+from dataclasses import is_dataclass
+from types import UnionType
+from typing import Annotated, Any, Union, get_origin, overload
 
 from fast_depends import Provider
-from pydantic import TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 from typing_extensions import TypeVar as TypeVar313
 
 from autogen.beta.annotations import Context
@@ -25,6 +27,7 @@ class ResponseSchema(ResponseProto[T]):
         /,
         name: str | None = None,
         description: str | None = None,
+        embed: bool = True,
     ) -> None: ...
 
     @overload
@@ -34,6 +37,7 @@ class ResponseSchema(ResponseProto[T]):
         /,
         name: str | None = None,
         description: str | None = None,
+        embed: bool = True,
     ) -> None: ...
 
     def __init__(
@@ -42,22 +46,27 @@ class ResponseSchema(ResponseProto[T]):
         /,
         name: str | None = None,
         description: str | None = None,
+        embed: bool = True,
     ) -> None:
-        if hasattr(types, "__len__"):
-            self._adapter: TypeAdapter[T] = TypeAdapter(Union[tuple(types)])  # noqa: UP007
-        else:
-            self._adapter = TypeAdapter(types)
+        self._adapter, self._embedded_type = make_adapter(types, embed=embed)
+        schema = self._adapter.json_schema() if self._adapter else None
 
-        schema = self._adapter.json_schema()
-
-        name = name or schema.pop("title", None) or "ResponseSchema"
+        name = name
+        if not name:
+            name = schema_title if (schema_title := (schema or {}).pop("title", None)) else "ResponseSchema"
         if not name:
             raise ValueError("You should provide `name` explicitly")
-
         self.name = name
-        self.description: str | None = description or schema.pop("description", None)
-        if not description and (docstring := getattr(types, "__doc__", None)) and "PEP" not in docstring:
-            self.description = docstring
+
+        if not description:
+            if schema_description := (schema or {}).pop("description", None):
+                self.description = schema_description
+            elif (docstring := getattr(types, "__doc__", None)) and "PEP" not in docstring:
+                self.description = docstring
+            else:
+                self.description = None
+        else:
+            self.description = description
 
         self.json_schema = schema
         self.system_prompt = None
@@ -103,7 +112,12 @@ class ResponseSchema(ResponseProto[T]):
         context: "Context",
         provider: "Provider | None" = None,
     ) -> T:
-        return self._adapter.validate_json(response)
+        if self._adapter is None:
+            return response
+        result = self._adapter.validate_json(response)
+        if self._embedded_type:
+            return result.data
+        return result
 
 
 class RawSchema(ResponseProto[str]):
@@ -133,3 +147,59 @@ class RawSchema(ResponseProto[str]):
             stacklevel=2,
         )
         return response
+
+
+@overload
+def make_adapter(types: type[T], *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]: ...
+
+
+@overload
+def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]: ...
+
+
+def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
+    origin = get_origin(types)
+    embedded_type = True
+
+    if types is str:
+        return None, True
+
+    if _is_safe_subclass(types, (list, tuple)):
+        # Process `T1, T2]` and `(T1, T2)`
+        _final_type = Union[tuple(types)]  # noqa: UP007
+
+    elif origin and origin in (Union, UnionType):
+        # Process `typing.Union[T1, T2]` and `T1 | T2`
+        _final_type = types
+
+    elif any((
+        is_dataclass(types),
+        origin and issubclass(origin, dict),
+        _is_safe_subclass(types, BaseModel),
+        _is_safe_subclass(types, dict),
+    )):
+        embedded_type = False
+        _final_type = types
+
+    else:
+        # Process primitive types
+        _final_type = types
+
+    if not embed:
+        embedded_type = False
+
+    if embedded_type:
+
+        class ResponseSchema(BaseModel):
+            data: Annotated[_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')]
+
+        _final_type = ResponseSchema
+
+    return TypeAdapter[T](_final_type), embedded_type
+
+
+def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
+    try:
+        return issubclass(cls, base)
+    except Exception:
+        return issubclass(type(cls), base)

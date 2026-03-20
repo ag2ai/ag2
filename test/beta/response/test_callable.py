@@ -53,8 +53,6 @@ class TestNameDescription:
 
 
 # --- Schema generation by parameter type ---
-
-
 class TestSchemaGeneration:
     def test_single_str_param_no_schema(self) -> None:
         @response_schema
@@ -68,7 +66,17 @@ class TestSchemaGeneration:
         def double(value: int) -> int:
             return value * 2
 
-        assert double.json_schema == {"type": "integer"}
+        assert double.json_schema == IsPartialDict(
+            type="object",
+            properties=IsPartialDict(
+                data=IsPartialDict(
+                    description='Response with a one-field JSON `"{"data":...}"`',
+                    title="Data",
+                    type="integer",
+                ),
+            ),
+            required=["data"],
+        )
 
     def test_single_dataclass_param_generates_schema(self) -> None:
         @dataclass
@@ -94,10 +102,18 @@ class TestSchemaGeneration:
             return str(value)
 
         assert process.json_schema == IsPartialDict(
-            anyOf=[
-                {"type": "integer"},
-                {"type": "string"},
-            ],
+            type="object",
+            properties=IsPartialDict(
+                data=IsPartialDict(
+                    description='Response with a one-field JSON `"{"data":...}"`',
+                    title="Data",
+                    anyOf=[
+                        {"type": "integer"},
+                        {"type": "string"},
+                    ],
+                ),
+            ),
+            required=["data"],
         )
 
     def test_multi_params_generates_object_schema(self) -> None:
@@ -224,7 +240,7 @@ class TestValidation:
         def double(value: int) -> int:
             return value * 2
 
-        result = await double.validate("21", context=None)  # type: ignore[arg-type]
+        result = await double.validate('{"data": 21}', context=None)  # type: ignore[arg-type]
 
         assert result == 42
 
@@ -252,8 +268,8 @@ class TestValidation:
         def to_str(value: int | str) -> str:
             return str(value)
 
-        assert await to_str.validate("42", context=None) == "42"  # type: ignore[arg-type]
-        assert await to_str.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]
+        assert await to_str.validate('{"data": 42}', context=None) == "42"  # type: ignore[arg-type]
+        assert await to_str.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
 
     @pytest.mark.asyncio()
     async def test_multi_params_with_defaults_uses_default(self) -> None:
@@ -419,8 +435,9 @@ class TestDependencyInjection:
         ) -> str:
             return f"{name}({age}) [{lang}]"
 
-        # DI params excluded from schema
+        # DI params excluded from schema (multi-arg message body is a flat object, not ``data``-wrapped)
         assert parse.json_schema == IsPartialDict(
+            type="object",
             properties=IsPartialDict(
                 name=IsPartialDict(type="string"),
                 age=IsPartialDict(type="integer"),
