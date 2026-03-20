@@ -59,9 +59,9 @@ jobs:
           uv pip install --system -e .[test,openai,anthropic,dashscope,gemini,ollama]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
       - name: Show coverage report
-        run: bash scripts/show-coverage-report.sh
+        run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
@@ -89,9 +89,9 @@ jobs:
           uv pip install --system -e .[test]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
       - name: Show coverage report
-        run: bash scripts/show-coverage-report.sh
+        run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
@@ -119,9 +119,9 @@ jobs:
           uv pip install --system -e .[test]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
       - name: Show coverage report
-        run: bash scripts/show-coverage-report.sh
+        run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
