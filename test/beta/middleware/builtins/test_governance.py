@@ -337,6 +337,37 @@ class TestCircuitBreaker:
         mw.circuit_breaker.release_probe()
 
     @pytest.mark.asyncio
+    async def test_cancelled_error_releases_probe_without_tripping(self):
+        """CancelledError (BaseException) must release probe without recording failure."""
+        import asyncio
+
+        # threshold=1, timeout=0 -> trips on first failure, immediately HALF_OPEN
+        mw = GovernanceMiddleware(GovernanceConfig(failure_threshold=1, recovery_timeout_s=0.0))
+
+        async def fail(events, ctx):
+            raise RuntimeError("fail")
+
+        # Trip breaker
+        inst = mw(_make_event(), _make_context())
+        with pytest.raises(RuntimeError):
+            await inst.on_llm_call(fail, [_make_event()], _make_context())
+
+        # timeout=0 -> immediately HALF_OPEN
+        assert mw.circuit_breaker.get_state() == CircuitState.HALF_OPEN
+
+        # Probe via CancelledError -- must release probe, NOT record failure
+        async def cancel(events, ctx):
+            raise asyncio.CancelledError()
+
+        inst2 = mw(_make_event(), _make_context())
+        with pytest.raises(asyncio.CancelledError):
+            await inst2.on_llm_call(cancel, [_make_event()], _make_context())
+
+        # Probe released, failure count unchanged (still 1, not 2)
+        assert mw.circuit_breaker._probe_in_flight is False
+        assert mw.circuit_breaker._failures == 1
+
+    @pytest.mark.asyncio
     async def test_budget_blocked_during_probe_releases_probe(self):
         """If probe is claimed but budget blocks, probe must be released."""
         mw = GovernanceMiddleware(
