@@ -351,7 +351,9 @@ async function apiFetch(path, opts) {
   const safePath = sanitizeApiPath(path);
   if (!safePath) return null;
   try {
-    const r = await fetch(safePath, opts);
+    const url = new URL(safePath, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    const r = await fetch(url.href, opts);
     return r.ok ? r.json() : null;
   } catch { return null; }
 }
