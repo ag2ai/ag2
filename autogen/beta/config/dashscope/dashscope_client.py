@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import dashscope
@@ -22,9 +23,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_to_api
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -60,8 +62,14 @@ class DashScopeClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        ds_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        ds_messages = convert_messages(prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {
@@ -71,6 +79,9 @@ class DashScopeClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+
+        if r := response_proto_to_format(response_schema):
+            kwargs["response_format"] = r
 
         # Set the base URL for this call (SDK uses a global)
         dashscope.base_http_api_url = self._base_url
