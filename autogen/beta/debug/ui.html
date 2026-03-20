@@ -338,9 +338,20 @@ const evMap   = new Map();  // eventId -> element  (events mode)
 const chatMap = new Map();  // eventId -> element  (chat mode)
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+function sanitizeApiPath(path) {
+  if (typeof path !== 'string') path = String(path ?? '');
+  path = path.trim();
+  if (!path || path.startsWith('//') || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path)) return null;
+  if (!path.startsWith('/')) return null;
+  if (path.split('/').some(seg => seg === '..')) return null;
+  return path;
+}
+
 async function apiFetch(path, opts) {
+  const safePath = sanitizeApiPath(path);
+  if (!safePath) return null;
   try {
-    const r = await fetch(path, opts);
+    const r = await fetch(safePath, opts);
     return r.ok ? r.json() : null;
   } catch { return null; }
 }
@@ -419,7 +430,16 @@ function renderSidebar(list) {
       el.appendChild(item);
     }
     item.classList.toggle('active', s.id === selectedId);
-    item.innerHTML = `<div class="s-dot ${s.status}"></div><span class="sid" title="${s.id}">${s.id.slice(0,8)}…</span>`;
+    item.innerHTML = '';
+    const dot = document.createElement('div');
+    dot.className = 's-dot';
+    if (s.status) dot.classList.add(s.status);
+    const span = document.createElement('span');
+    span.className = 'sid';
+    span.title = s.id;
+    span.textContent = s.id.slice(0, 8) + '…';
+    item.appendChild(dot);
+    item.appendChild(span);
   });
 
   if (!selectedId && list.length > 0) selectSession(list[0].id);
@@ -428,7 +448,16 @@ function renderSidebar(list) {
 function updateSidebarItem(id, status) {
   const item = document.querySelector(`.session-item[data-id="${id}"]`);
   if (item) {
-    item.innerHTML = `<div class="s-dot ${status}"></div><span class="sid" title="${id}">${id.slice(0,8)}…</span>`;
+    item.innerHTML = '';
+    const dot = document.createElement('div');
+    dot.className = 's-dot';
+    if (status) dot.classList.add(status);
+    const span = document.createElement('span');
+    span.className = 'sid';
+    span.title = id;
+    span.textContent = id.slice(0, 8) + '…';
+    item.appendChild(dot);
+    item.appendChild(span);
     item.classList.toggle('active', id === selectedId);
   }
 }
