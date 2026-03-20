@@ -271,7 +271,8 @@ The framework introspects your function with **fast_depends** (the same dependen
 | Annotated type | What the model’s message must look like | JSON Schema sent to the API? |
 |----------------|----------------------------------------|------------------------------|
 | `str` | Any text. The **raw** completion string is passed in; nothing is parsed as JSON for you. | **No** — there is no derived schema, so clients such as OpenAI do not get a `response_format` schema from this callable alone. |
-| Any other type (`int`, `float`, `dataclass`, Pydantic model, union, …) | A JSON value that can be validated for that type: a JSON **number** for `int` (e.g. `7`, not `"7"`), a JSON **object** for a structured type, etc. | **Yes**, when the client supports structured output and emits `json_schema` from the derived schema. |
+| Primitive or union (`int`, `float`, `bool`, `int \| str`, …) | By default (**`embed=True`**), a JSON object `{"data": <value>}`. The framework unwraps it before calling your function. With `embed=False`, a bare JSON value. | **Yes**, when the client supports structured output and emits `json_schema` from the derived schema. |
+| Structured type (`dataclass`, Pydantic model, `dict`, …) | A JSON **object** matching the type’s schema. These are never embedded regardless of the `embed` flag. | **Yes**. |
 
 Illustrative shapes (each function would be decorated with `@response_schema` and used as `response_schema=...` on an `Agent`):
 
@@ -451,3 +452,51 @@ result = await reply.validate()
 
 !!! note
     The per-request override applies only to that turn. The conversation history is unchanged; only the schema used for the next completion differs.
+
+## Primitive embedding (`embed`)
+
+When a schema type is a **primitive** (`int`, `float`, `bool`, `list[…]`) or a **union** (`int | str`), the framework wraps it in a one-field JSON object by default. This is called **embedding**.
+
+Instead of asking the model to produce a bare value like `42`, the API schema asks for `{"data": 42}`. The `validate()` method transparently unwraps the envelope so your code still receives a plain Python value.
+
+### Why?
+
+Most structured-output APIs (OpenAI, etc.) are designed around JSON **objects**. A bare value (`42`, `true`, `"hello"`) is technically valid JSON but some providers handle it less reliably. Wrapping the value in `{"data": …}` gives the model a proper object to fill in, which improves reliability without changing your application code.
+
+### Which types are embedded?
+
+| Type | Embedded by default? | Reason |
+|------|---------------------|--------|
+| `str` | No schema generated | Raw text is passed through as-is. |
+| `int`, `float`, `bool` | **Yes** | Bare primitives benefit from the object wrapper. |
+| `list[T]`, `tuple[T, ...]` | **Yes** | Array values also benefit from the wrapper. |
+| `int \| str`, `Union[T1, T2]`, `(T1, T2)` | **Yes** | Union of primitives. |
+| `BaseModel` subclass | No | Already a JSON object. |
+| `@dataclass` | No | Already a JSON object. |
+| `TypedDict` | No | Already a JSON object. |
+| `dict[K, V]` | No | Already a JSON object. |
+
+### Opting out
+
+Pass `embed=False` to `ResponseSchema` or `@response_schema` to disable wrapping. The model must then produce the bare JSON value directly (e.g. `42` instead of `{"data": 42}`).
+
+```python linenums="1" hl_lines="3"
+from autogen.beta import ResponseSchema
+
+schema = ResponseSchema(int, name="RawInt", embed=False)
+# Model must produce: 42
+# With embed=True (default): model produces {"data": 42}, validate() returns 42 either way
+```
+
+With the `@response_schema` decorator:
+
+```python linenums="1" hl_lines="1"
+@response_schema(embed=False)
+def parse_rating(value: int) -> int:
+    return max(1, min(5, value))
+```
+
+!!! note
+    Embedding is transparent to your code. Whether `embed` is `True` or `False`, `validate()` always returns the unwrapped Python value. The only difference is the JSON shape the model is asked to produce.
+
+---
