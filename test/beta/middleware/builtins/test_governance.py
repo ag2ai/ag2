@@ -59,7 +59,6 @@ def _make_tool_call(name="search", call_id="call_001"):
 
 
 class TestBudgetEnforcement:
-
     @pytest.mark.asyncio
     async def test_allows_within_budget(self):
         mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
@@ -155,11 +154,13 @@ class TestBudgetEnforcement:
         """Gemini-style prompt_token_count/candidates_token_count must be recognized."""
         mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
         inst = mw(_make_event(), _make_context())
-        resp = ModelResponse(usage={
-            "prompt_token_count": 1000,
-            "candidates_token_count": 500,
-            "total_token_count": 1500,
-        })
+        resp = ModelResponse(
+            usage={
+                "prompt_token_count": 1000,
+                "candidates_token_count": 500,
+                "total_token_count": 1500,
+            }
+        )
 
         async def ok(events, ctx):
             return resp
@@ -234,7 +235,6 @@ class TestBudgetEnforcement:
 
 
 class TestCircuitBreaker:
-
     @pytest.mark.asyncio
     async def test_trips_after_threshold(self):
         mw = GovernanceMiddleware(GovernanceConfig(failure_threshold=2))
@@ -339,11 +339,13 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_budget_blocked_during_probe_releases_probe(self):
         """If probe is claimed but budget blocks, probe must be released."""
-        mw = GovernanceMiddleware(GovernanceConfig(
-            failure_threshold=1,
-            recovery_timeout_s=0.0,
-            max_cost_usd=0.001,
-        ))
+        mw = GovernanceMiddleware(
+            GovernanceConfig(
+                failure_threshold=1,
+                recovery_timeout_s=0.0,
+                max_cost_usd=0.001,
+            )
+        )
 
         async def fail(events, ctx):
             raise RuntimeError("fail")
@@ -386,7 +388,6 @@ class TestCircuitBreaker:
 
 
 class TestToolPolicy:
-
     @pytest.mark.asyncio
     async def test_blocks_disallowed(self):
         mw = GovernanceMiddleware(GovernanceConfig(blocked_tools=["dangerous"]))
@@ -447,7 +448,6 @@ class TestToolPolicy:
 
 
 class TestDegradation:
-
     @pytest.mark.asyncio
     async def test_logged_once(self, caplog):
         import logging
@@ -516,7 +516,6 @@ class TestDegradation:
 
 
 class TestConcurrency:
-
     def test_concurrent_budget_record(self):
         mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=100000.0))
         errors: list[str] = []
@@ -567,7 +566,6 @@ class TestConcurrency:
 
 
 class TestAdversarial:
-
     @pytest.mark.asyncio
     async def test_negative_tokens_clamped_to_zero(self):
         """Negative token values must not reduce budget spent."""
@@ -620,10 +618,12 @@ class TestAdversarial:
     @pytest.mark.asyncio
     async def test_blocklist_overrides_allowlist(self):
         """Tool in both blocked and allowed -> blocked wins."""
-        mw = GovernanceMiddleware(GovernanceConfig(
-            blocked_tools=["search"],
-            allowed_tools=["search", "calc"],
-        ))
+        mw = GovernanceMiddleware(
+            GovernanceConfig(
+                blocked_tools=["search"],
+                allowed_tools=["search", "calc"],
+            )
+        )
         inst = mw(_make_event(), _make_context())
         tc = _make_tool_call(name="search")
 
@@ -689,7 +689,6 @@ class TestAdversarial:
 
 
 class TestConfigValidation:
-
     def test_negative_budget_rejected(self):
         with pytest.raises(ValueError, match="max_cost_usd"):
             GovernanceConfig(max_cost_usd=-1.0)
@@ -713,15 +712,18 @@ class TestConfigValidation:
         config = GovernanceConfig(disable_tools_on_degrade=["web_search"])
         assert isinstance(config.disable_tools_on_degrade, tuple)
 
-    @pytest.mark.parametrize("field_name,bad_value", [
-        ("cost_per_1k_input_tokens", -0.001),
-        ("cost_per_1k_input_tokens", float("nan")),
-        ("cost_per_1k_output_tokens", float("inf")),
-        ("max_cost_usd", float("nan")),
-        ("recovery_timeout_s", float("inf")),
-        ("degradation_threshold", float("nan")),
-        ("failure_threshold", 0),
-    ])
+    @pytest.mark.parametrize(
+        "field_name,bad_value",
+        [
+            ("cost_per_1k_input_tokens", -0.001),
+            ("cost_per_1k_input_tokens", float("nan")),
+            ("cost_per_1k_output_tokens", float("inf")),
+            ("max_cost_usd", float("nan")),
+            ("recovery_timeout_s", float("inf")),
+            ("degradation_threshold", float("nan")),
+            ("failure_threshold", 0),
+        ],
+    )
     def test_non_finite_or_negative_pricing_rejected(self, field_name, bad_value):
         """NaN/Inf/negative pricing fields must be rejected."""
         with pytest.raises(ValueError, match=field_name):
@@ -740,7 +742,6 @@ class TestConfigValidation:
 
 
 class TestStatsProperties:
-
     @pytest.mark.asyncio
     async def test_llm_call_counter(self):
         mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
@@ -777,14 +778,15 @@ class TestStatsProperties:
 
 
 class TestCircuitBreakerTimerRefresh:
-
     @pytest.mark.asyncio
     async def test_failure_during_open_restarts_recovery_timer(self):
         """Additional failures while OPEN refresh opened_at (intentional design)."""
-        mw = GovernanceMiddleware(GovernanceConfig(
-            failure_threshold=1,
-            recovery_timeout_s=1000.0,
-        ))
+        mw = GovernanceMiddleware(
+            GovernanceConfig(
+                failure_threshold=1,
+                recovery_timeout_s=1000.0,
+            )
+        )
 
         async def fail(events, ctx):
             raise RuntimeError("fail")

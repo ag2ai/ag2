@@ -20,6 +20,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelResponse, ToolCall, ToolError
 from autogen.beta.middleware.base import (
@@ -149,10 +150,7 @@ class _BudgetTracker:
         # Coerce to float; reject None/NaN/Inf/non-numeric strings.
         input_tokens = _safe_float(input_tokens)
         output_tokens = _safe_float(output_tokens)
-        cost = (
-            max(input_tokens, 0) / 1000.0 * self._cost_1k_in
-            + max(output_tokens, 0) / 1000.0 * self._cost_1k_out
-        )
+        cost = max(input_tokens, 0) / 1000.0 * self._cost_1k_in + max(output_tokens, 0) / 1000.0 * self._cost_1k_out
         with self._lock:
             self._spent += cost
         return cost
@@ -378,10 +376,7 @@ class _GovernanceMiddlewareInstance(BaseMiddleware):
 
         # Degradation: log once per factory lifetime
         utilization = self._budget.utilization()
-        if (
-            self._config.fallback_model
-            and utilization >= self._config.degradation_threshold
-        ):
+        if self._config.fallback_model and utilization >= self._config.degradation_threshold:
             with self._owner._stats_lock:
                 already = self._owner._degraded
                 self._owner._degraded = True
@@ -439,10 +434,7 @@ class _GovernanceMiddlewareInstance(BaseMiddleware):
 
         # Degradation: disable expensive tools
         utilization = self._budget.utilization()
-        if (
-            tool_name in self._config.disable_tools_on_degrade
-            and utilization >= self._config.degradation_threshold
-        ):
+        if tool_name in self._config.disable_tools_on_degrade and utilization >= self._config.degradation_threshold:
             msg = f"Tool '{tool_name}' disabled -- budget at {utilization * 100:.0f}%"
             logger.info("%s %s", _LOG_PREFIX, msg)
             return _make_tool_error(event, msg)
