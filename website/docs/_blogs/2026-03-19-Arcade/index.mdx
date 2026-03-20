@@ -26,16 +26,7 @@ In this post, we'll build a Gmail assistant using AG2 and the Arcade SDK. The ag
 
 Your AG2 agent calls tools by name. Arcade routes each call to the right service with the right credentials:
 
-```
-┌─────────────┐      ┌─────────────┐      ┌──────────────────┐
-│   AG2       │      │  Arcade.dev │      │  Gmail API       │
-│   Agent     │─────▶│  Runtime    │─────▶│  Linear API      │
-│             │      │             │      │  Slack API       │
-│  (orchestr- │◀─────│  (auth,     │◀─────│  Google Drive    │
-│   ation)    │      │   routing,  │      │  ... 8,000+      │
-│             │      │   policy)   │      │                  │
-└─────────────┘      └─────────────┘      └──────────────────┘
-```
+![AG2 x Arcade.dev diagram](img/ag2-arcade-diagram.png)
 
 AG2 handles agent orchestration. Arcade handles tool infrastructure. Each does what it's best at.
 
