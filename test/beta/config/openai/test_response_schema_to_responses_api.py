@@ -41,7 +41,13 @@ class TestPrimitiveSchemas:
         assert result == {
             "format": IsPartialDict(
                 type="json_schema",
-                schema=expected_inner_schema,
+                schema=IsPartialDict(
+                    type="object",
+                    properties=IsPartialDict(
+                        data=IsPartialDict(**expected_inner_schema),
+                    ),
+                    required=["data"],
+                ),
                 name=name,
             ),
         }
@@ -138,16 +144,22 @@ class TestUnionSchemas:
         result = response_proto_to_text_config(schema)
 
         assert result == {
-            "format": {
-                "type": "json_schema",
-                "schema": {
-                    "anyOf": [
-                        {"type": "integer"},
-                        {"type": "string"},
-                    ],
-                },
-                "name": "IntOrStr",
-            },
+            "format": IsPartialDict(
+                type="json_schema",
+                schema=IsPartialDict(
+                    type="object",
+                    properties=IsPartialDict(
+                        data=IsPartialDict(
+                            anyOf=[
+                                {"type": "integer"},
+                                {"type": "string"},
+                            ],
+                        ),
+                    ),
+                    required=["data"],
+                ),
+                name="IntOrStr",
+            ),
         }
 
 
@@ -183,12 +195,14 @@ class TestAdditionalPropertiesFalse:
                 if def_schema.get("type") == "object":
                     assert def_schema["additionalProperties"] is False
 
-    def test_not_added_to_primitives(self) -> None:
+    def test_primitives_wrapped_in_object(self) -> None:
         schema = ResponseSchema(int, name="IntSchema")
         result = response_proto_to_text_config(schema)
 
         assert result is not None
-        assert "additionalProperties" not in result["format"]["schema"]
+        # Primitives are now embedded in an object wrapper with a "data" field
+        assert result["format"]["schema"]["type"] == "object"
+        assert result["format"]["schema"]["additionalProperties"] is False
 
 
 class TestDescriptionHandling:

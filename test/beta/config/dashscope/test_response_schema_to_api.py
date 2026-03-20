@@ -41,7 +41,13 @@ class TestPrimitiveSchemas:
         assert result == {
             "type": "json_schema",
             "json_schema": IsPartialDict(
-                schema=expected_inner_schema,
+                schema=IsPartialDict(
+                    type="object",
+                    properties=IsPartialDict(
+                        data=IsPartialDict(**expected_inner_schema),
+                    ),
+                    required=["data"],
+                ),
                 name=name,
                 description=type_.__doc__,
             ),
@@ -142,15 +148,21 @@ class TestUnionSchemas:
 
         assert result == {
             "type": "json_schema",
-            "json_schema": {
-                "schema": {
-                    "anyOf": [
-                        {"type": "integer"},
-                        {"type": "string"},
-                    ],
-                },
-                "name": "IntOrStr",
-            },
+            "json_schema": IsPartialDict(
+                schema=IsPartialDict(
+                    type="object",
+                    properties=IsPartialDict(
+                        data=IsPartialDict(
+                            anyOf=[
+                                {"type": "integer"},
+                                {"type": "string"},
+                            ],
+                        ),
+                    ),
+                    required=["data"],
+                ),
+                name="IntOrStr",
+            ),
         }
 
 

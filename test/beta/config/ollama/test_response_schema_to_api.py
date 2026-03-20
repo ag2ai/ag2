@@ -37,7 +37,13 @@ class TestPrimitiveSchemas:
 
         result = response_proto_to_format(schema)
 
-        assert result == expected_schema
+        assert result == IsPartialDict(
+            type="object",
+            properties=IsPartialDict(
+                data=IsPartialDict(**expected_schema),
+            ),
+            required=["data"],
+        )
 
 
 class TestDataclassSchemas:
@@ -99,12 +105,18 @@ class TestUnionSchemas:
 
         result = response_proto_to_format(schema)
 
-        assert result == {
-            "anyOf": [
-                {"type": "integer"},
-                {"type": "string"},
-            ],
-        }
+        assert result == IsPartialDict(
+            type="object",
+            properties=IsPartialDict(
+                data=IsPartialDict(
+                    anyOf=[
+                        {"type": "integer"},
+                        {"type": "string"},
+                    ],
+                ),
+            ),
+            required=["data"],
+        )
 
 
 class TestNoJsonSchema:

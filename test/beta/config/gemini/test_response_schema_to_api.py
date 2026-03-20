@@ -39,7 +39,13 @@ class TestPrimitiveSchemas:
 
         assert result == {
             "response_mime_type": "application/json",
-            "response_json_schema": expected_inner_schema,
+            "response_json_schema": IsPartialDict(
+                type="object",
+                properties=IsPartialDict(
+                    data=IsPartialDict(**expected_inner_schema),
+                ),
+                required=["data"],
+            ),
         }
 
 
@@ -113,12 +119,18 @@ class TestUnionSchemas:
 
         assert result == {
             "response_mime_type": "application/json",
-            "response_json_schema": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "string"},
-                ],
-            },
+            "response_json_schema": IsPartialDict(
+                type="object",
+                properties=IsPartialDict(
+                    data=IsPartialDict(
+                        anyOf=[
+                            {"type": "integer"},
+                            {"type": "string"},
+                        ],
+                    ),
+                ),
+                required=["data"],
+            ),
         }
 
 
