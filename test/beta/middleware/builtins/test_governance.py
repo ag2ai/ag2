@@ -151,6 +151,49 @@ class TestBudgetEnforcement:
         assert mw.budget.spent == 0.0
 
     @pytest.mark.asyncio
+    async def test_gemini_token_keys(self):
+        """Gemini-style prompt_token_count/candidates_token_count must be recognized."""
+        mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
+        inst = mw(_make_event(), _make_context())
+        resp = ModelResponse(usage={
+            "prompt_token_count": 1000,
+            "candidates_token_count": 500,
+            "total_token_count": 1500,
+        })
+
+        async def ok(events, ctx):
+            return resp
+
+        await inst.on_llm_call(ok, [_make_event()], _make_context())
+        assert abs(mw.budget.spent - 0.0005) < 1e-9
+
+    @pytest.mark.asyncio
+    async def test_string_token_values_coerced(self):
+        """String token values (from some APIs) must not raise TypeError."""
+        mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
+        inst = mw(_make_event(), _make_context())
+        resp = ModelResponse(usage={"prompt_tokens": "1000", "output_tokens": "500"})
+
+        async def ok(events, ctx):
+            return resp
+
+        await inst.on_llm_call(ok, [_make_event()], _make_context())
+        assert abs(mw.budget.spent - 0.0005) < 1e-9
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_string_tokens_ignored(self):
+        """Non-numeric strings must be treated as 0, not raise."""
+        mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
+        inst = mw(_make_event(), _make_context())
+        resp = ModelResponse(usage={"prompt_tokens": "garbage", "output_tokens": "N/A"})
+
+        async def ok(events, ctx):
+            return resp
+
+        await inst.on_llm_call(ok, [_make_event()], _make_context())
+        assert mw.budget.spent == 0.0
+
+    @pytest.mark.asyncio
     async def test_nan_tokens_ignored(self):
         """NaN token values must not corrupt budget."""
         mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
@@ -638,3 +681,122 @@ class TestAdversarial:
         # content should be the policy reason, not "NoneType: None"
         assert "bad" in result.content
         assert "NoneType" not in result.content
+
+
+# ---------------------------------------------------------------------------
+# Config Validation (Round 1 fixes: B4)
+# ---------------------------------------------------------------------------
+
+
+class TestConfigValidation:
+
+    def test_negative_budget_rejected(self):
+        with pytest.raises(ValueError, match="max_cost_usd"):
+            GovernanceConfig(max_cost_usd=-1.0)
+
+    def test_zero_failure_threshold_rejected(self):
+        with pytest.raises(ValueError, match="failure_threshold"):
+            GovernanceConfig(failure_threshold=0)
+
+    def test_negative_recovery_timeout_rejected(self):
+        with pytest.raises(ValueError, match="recovery_timeout_s"):
+            GovernanceConfig(recovery_timeout_s=-1.0)
+
+    def test_degradation_threshold_out_of_range(self):
+        with pytest.raises(ValueError, match="degradation_threshold"):
+            GovernanceConfig(degradation_threshold=0.0)
+        with pytest.raises(ValueError, match="degradation_threshold"):
+            GovernanceConfig(degradation_threshold=1.5)
+
+    def test_disable_tools_frozen_after_init(self):
+        """disable_tools_on_degrade must be immutable after construction (S2)."""
+        config = GovernanceConfig(disable_tools_on_degrade=["web_search"])
+        assert isinstance(config.disable_tools_on_degrade, tuple)
+
+    @pytest.mark.parametrize("field_name,bad_value", [
+        ("cost_per_1k_input_tokens", -0.001),
+        ("cost_per_1k_input_tokens", float("nan")),
+        ("cost_per_1k_output_tokens", float("inf")),
+        ("max_cost_usd", float("nan")),
+        ("recovery_timeout_s", float("inf")),
+        ("degradation_threshold", float("nan")),
+        ("failure_threshold", 0),
+    ])
+    def test_non_finite_or_negative_pricing_rejected(self, field_name, bad_value):
+        """NaN/Inf/negative pricing fields must be rejected."""
+        with pytest.raises(ValueError, match=field_name):
+            GovernanceConfig(**{field_name: bad_value})
+
+    @pytest.mark.parametrize("bad_threshold", [float("nan"), float("inf"), 0.5, "2"])
+    def test_failure_threshold_must_be_positive_int(self, bad_threshold):
+        """failure_threshold must be a finite integer >= 1."""
+        with pytest.raises(ValueError, match="failure_threshold"):
+            GovernanceConfig(failure_threshold=bad_threshold)
+
+
+# ---------------------------------------------------------------------------
+# Stats Properties (Round 1 fixes: Q4)
+# ---------------------------------------------------------------------------
+
+
+class TestStatsProperties:
+
+    @pytest.mark.asyncio
+    async def test_llm_call_counter(self):
+        mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
+        assert mw.total_llm_calls == 0
+
+        async def ok(events, ctx):
+            return _make_model_response()
+
+        for _ in range(3):
+            inst = mw(_make_event(), _make_context())
+            await inst.on_llm_call(ok, [_make_event()], _make_context())
+
+        assert mw.total_llm_calls == 3
+
+    @pytest.mark.asyncio
+    async def test_tool_call_counter(self):
+        mw = GovernanceMiddleware(GovernanceConfig(max_cost_usd=10.0))
+        assert mw.total_tool_calls == 0
+        expected = mock.MagicMock()
+
+        async def ok(event, ctx):
+            return expected
+
+        for _ in range(2):
+            inst = mw(_make_event(), _make_context())
+            await inst.on_tool_execution(ok, _make_tool_call(), _make_context())
+
+        assert mw.total_tool_calls == 2
+
+
+# ---------------------------------------------------------------------------
+# CB Timer Refresh (Round 1 fix: B2 -- explicit test)
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitBreakerTimerRefresh:
+
+    @pytest.mark.asyncio
+    async def test_failure_during_open_restarts_recovery_timer(self):
+        """Additional failures while OPEN refresh opened_at (intentional design)."""
+        mw = GovernanceMiddleware(GovernanceConfig(
+            failure_threshold=1,
+            recovery_timeout_s=1000.0,
+        ))
+
+        async def fail(events, ctx):
+            raise RuntimeError("fail")
+
+        # Trip breaker
+        inst = mw(_make_event(), _make_context())
+        with pytest.raises(RuntimeError):
+            await inst.on_llm_call(fail, [_make_event()], _make_context())
+
+        assert mw.circuit_breaker.get_state() == CircuitState.OPEN
+        first_opened_at = mw.circuit_breaker._opened_at
+
+        # Record another failure -- opened_at should refresh
+        mw.circuit_breaker.record_failure()
+        assert mw.circuit_breaker._opened_at >= first_opened_at

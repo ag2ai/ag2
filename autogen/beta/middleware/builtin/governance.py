@@ -53,6 +53,12 @@ class GovernanceConfig:
     Note on ``allowed_tools``: ``None`` means no restriction (all tools
     allowed). An empty list ``[]`` means *no* tools are allowed -- every
     tool call will be blocked. This distinction is intentional.
+
+    Budget enforcement is a soft limit: concurrent LLM calls can each
+    pass the budget check before any records cost, allowing a small
+    overshoot. This is by design -- hard reservation would require
+    estimating max_tokens before each call, adding complexity with
+    little practical benefit for typical agent workloads.
     """
 
     # Budget
@@ -68,15 +74,43 @@ class GovernanceConfig:
     blocked_tools: list[str] = field(default_factory=list)
     allowed_tools: list[str] | None = None
 
-    # Degradation
+    # Degradation (observation-only -- logs when utilization exceeds threshold;
+    # does NOT switch models automatically).
     degradation_threshold: float = 0.8
     fallback_model: str | None = None
-    disable_tools_on_degrade: list[str] = field(default_factory=list)
+    disable_tools_on_degrade: list[str] | tuple[str, ...] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.max_cost_usd) or self.max_cost_usd < 0:
+            raise ValueError(f"max_cost_usd must be finite and >= 0, got {self.max_cost_usd}")
+        if not math.isfinite(self.cost_per_1k_input_tokens) or self.cost_per_1k_input_tokens < 0:
+            raise ValueError(f"cost_per_1k_input_tokens must be finite and >= 0, got {self.cost_per_1k_input_tokens}")
+        if not math.isfinite(self.cost_per_1k_output_tokens) or self.cost_per_1k_output_tokens < 0:
+            raise ValueError(f"cost_per_1k_output_tokens must be finite and >= 0, got {self.cost_per_1k_output_tokens}")
+        if not isinstance(self.failure_threshold, int) or self.failure_threshold < 1:
+            raise ValueError(f"failure_threshold must be an integer >= 1, got {self.failure_threshold}")
+        if not math.isfinite(self.recovery_timeout_s) or self.recovery_timeout_s < 0:
+            raise ValueError(f"recovery_timeout_s must be finite and >= 0, got {self.recovery_timeout_s}")
+        if not math.isfinite(self.degradation_threshold) or not (0.0 < self.degradation_threshold <= 1.0):
+            raise ValueError(f"degradation_threshold must be finite and in (0, 1], got {self.degradation_threshold}")
+        # Freeze mutable lists to prevent post-construction mutation.
+        object.__setattr__(self, "disable_tools_on_degrade", tuple(self.disable_tools_on_degrade))
 
 
 # ---------------------------------------------------------------------------
 # Internal state (shared across turns via the factory)
 # ---------------------------------------------------------------------------
+
+
+def _safe_float(value: object) -> float:
+    """Coerce token count to non-negative float. Returns 0.0 on bad input."""
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(f) or f < 0:
+        return 0.0
+    return f
 
 
 class _BudgetTracker:
@@ -93,25 +127,28 @@ class _BudgetTracker:
                 return False, f"Budget exhausted: ${self._spent:.4f} / ${self._limit:.4f}"
             return True, ""
 
-    def record(self, usage: dict[str, float]) -> float:
-        # Prefer prompt_tokens/completion_tokens (OpenAI), fall back to
-        # input_tokens/output_tokens (Gemini). Use `in` check, not `or`,
-        # to avoid masking legitimate zero values.
-        input_tokens = (
-            usage["prompt_tokens"]
-            if "prompt_tokens" in usage
-            else usage.get("input_tokens", 0)
-        )
-        output_tokens = (
-            usage["completion_tokens"]
-            if "completion_tokens" in usage
-            else usage.get("output_tokens", 0)
-        )
-        # Clamp to non-negative; reject None/NaN/Inf.
-        if input_tokens is None or not math.isfinite(input_tokens):
-            input_tokens = 0
-        if output_tokens is None or not math.isfinite(output_tokens):
-            output_tokens = 0
+    def record(self, usage: dict[str, object]) -> float:
+        # Provider-specific token key resolution:
+        #   OpenAI:  prompt_tokens / completion_tokens
+        #   Gemini:  prompt_token_count / candidates_token_count
+        #   Generic: input_tokens / output_tokens
+        # Use `in` check, not `or`, to avoid masking legitimate zero values.
+        if "prompt_tokens" in usage:
+            input_tokens = usage["prompt_tokens"]
+        elif "prompt_token_count" in usage:
+            input_tokens = usage["prompt_token_count"]
+        else:
+            input_tokens = usage.get("input_tokens", 0)
+
+        if "completion_tokens" in usage:
+            output_tokens = usage["completion_tokens"]
+        elif "candidates_token_count" in usage:
+            output_tokens = usage["candidates_token_count"]
+        else:
+            output_tokens = usage.get("output_tokens", 0)
+        # Coerce to float; reject None/NaN/Inf/non-numeric strings.
+        input_tokens = _safe_float(input_tokens)
+        output_tokens = _safe_float(output_tokens)
         cost = (
             max(input_tokens, 0) / 1000.0 * self._cost_1k_in
             + max(output_tokens, 0) / 1000.0 * self._cost_1k_out
@@ -279,6 +316,16 @@ class GovernanceMiddleware(MiddlewareFactory):
     def circuit_breaker(self) -> _CircuitBreaker:
         return self._cb
 
+    @property
+    def total_llm_calls(self) -> int:
+        with self._stats_lock:
+            return self._total_llm_calls
+
+    @property
+    def total_tool_calls(self) -> int:
+        with self._stats_lock:
+            return self._total_tool_calls
+
 
 def _blocked_response() -> ModelResponse:
     """Fresh blocked response per call to avoid shared mutable state."""
@@ -352,6 +399,7 @@ class _GovernanceMiddlewareInstance(BaseMiddleware):
         try:
             response = await call_next(events, context)
         except Exception:
+            # Real model failure -- record as CB failure.
             new_state = self._cb.record_failure()
             if new_state == CircuitState.OPEN:
                 logger.warning(
@@ -359,6 +407,12 @@ class _GovernanceMiddlewareInstance(BaseMiddleware):
                     _LOG_PREFIX,
                     self._config.failure_threshold,
                 )
+            raise
+        except BaseException:
+            # Caller-driven cancellation (CancelledError, KeyboardInterrupt).
+            # Release probe without recording failure to avoid false trips.
+            if probe_claimed:
+                self._cb.release_probe()
             raise
 
         # Record success + cost
