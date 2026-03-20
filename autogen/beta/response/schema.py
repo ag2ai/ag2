@@ -51,11 +51,8 @@ class ResponseSchema(ResponseProto[T]):
         self._adapter, self._embedded_type = make_adapter(types, embed=embed)
         schema = self._adapter.json_schema() if self._adapter else None
 
-        name = name
         if not name:
             name = schema_title if (schema_title := (schema or {}).pop("title", None)) else "ResponseSchema"
-        if not name:
-            raise ValueError("You should provide `name` explicitly")
         self.name = name
 
         if not description:
@@ -190,10 +187,11 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
 
     if embedded_type:
 
-        class ResponseSchema(BaseModel):
+        class _EmbeddedSchema(BaseModel):
             data: Annotated[_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')]
+            model_config = {"title": "ResponseSchema"}
 
-        _final_type = ResponseSchema
+        _final_type = _EmbeddedSchema
 
     return TypeAdapter[T](_final_type), embedded_type
 
@@ -201,5 +199,5 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
 def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
     try:
         return issubclass(cls, base)
-    except Exception:
+    except TypeError:
         return issubclass(type(cls), base)

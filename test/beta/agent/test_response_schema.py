@@ -142,6 +142,18 @@ class TestAgentLevelResponseSchema:
         retry_msg = tracking.mock.call_args_list[1][0][0]
         assert "not a number" in retry_msg.content
 
+    async def test_retry_with_prompted_schema_omits_null_schema(self) -> None:
+        tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
+        agent = Agent("test", config=tracking, response_schema=PromptedSchema(int))
+
+        reply = await agent.ask("Hi!")
+
+        result = await reply.content(retry=2)
+        assert result == 42
+
+        retry_msg = tracking.mock.call_args_list[1][0][0]
+        assert "null" not in retry_msg.content
+
     async def test_retry_exhausted_raises(self) -> None:
         tracking = TrackingConfig(TestConfig("bad", "still bad"))
         agent = Agent("test", config=tracking, response_schema=int)

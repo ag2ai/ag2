@@ -59,8 +59,10 @@ class TestPrimitiveSchemas:
                 schema=IsPartialDict(
                     **_embedded_data_schema(expected_inner_schema),
                     title="ResponseSchema",
+                    additionalProperties=False,
                 ),
                 name=name,
+                strict=True,
                 # built-in types have docstrings -> description is included
                 description=type_.__doc__,
             ),
@@ -254,9 +256,10 @@ class TestRawSchema:
         assert result == {
             "type": "json_schema",
             "json_schema": {
-                "schema": {"type": "object", "properties": {"x": {"type": "integer"}}},
+                "schema": {"type": "object", "properties": {"x": {"type": "integer"}}, "additionalProperties": False},
                 "name": "Custom",
                 "description": "A custom schema",
+                "strict": True,
             },
         }
 
@@ -273,5 +276,6 @@ class TestRawSchema:
             "json_schema": {
                 "schema": {"type": "string"},
                 "name": "Simple",
+                "strict": True,
             },
         }

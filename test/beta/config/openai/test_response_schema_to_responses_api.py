@@ -246,5 +246,6 @@ class TestRawSchema:
                 "schema": {"type": "object", "properties": {"x": {"type": "integer"}}, "additionalProperties": False},
                 "name": "Custom",
                 "description": "A custom schema",
+                "strict": True,
             },
         }

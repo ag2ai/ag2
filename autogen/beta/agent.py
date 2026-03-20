@@ -93,10 +93,12 @@ class AgentReply(Generic[TResult, TAgent]):
                 if attempt >= max_attempts:
                     raise e
 
+                schema_section = (
+                    f"\n\n== Schema ==\n{json.dumps(schema.json_schema)}." if schema.json_schema is not None else ""
+                )
                 current = await current.ask(
-                    "Your previous response could not be validated by schema\n"
-                    "\n\n== Schema ==\n"
-                    f"{json.dumps(schema.json_schema)}."
+                    "Your previous response could not be validated by schema."
+                    f"{schema_section}"
                     "\n\nPlease try again."
                     "\n\n== Validation Error ==\n"
                     f"{e.json()}",

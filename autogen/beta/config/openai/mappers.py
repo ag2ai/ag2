@@ -19,9 +19,11 @@ def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] |
     if not response or not response.json_schema:
         return
 
-    schema = {
-        "schema": response.json_schema,
+    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    schema: dict[str, Any] = {
+        "schema": strict_schema,
         "name": response.name,
+        "strict": True,
     }
     if response.description:
         schema["description"] = response.description
@@ -73,6 +75,7 @@ def response_proto_to_text_config(response: ResponseProto | None) -> dict[str, A
         "type": "json_schema",
         "name": response.name,
         "schema": strict_schema,
+        "strict": True,
     }
     if response.description:
         fmt["description"] = response.description

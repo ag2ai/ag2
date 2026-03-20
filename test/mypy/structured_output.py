@@ -18,8 +18,8 @@ async def check_default_response_schema() -> None:
 
     reply = await agent.ask("Hi, agent!")
 
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), str | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), str | None)
 
 
 async def check_int_response_schema() -> None:
@@ -31,8 +31,8 @@ async def check_int_response_schema() -> None:
 
     reply = await agent.ask("Hi, agent!")
 
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_dataclass_response_schema() -> None:
@@ -48,8 +48,8 @@ async def check_dataclass_response_schema() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), Response | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), Response | None)
 
 
 async def check_union_response_schema() -> None:
@@ -61,8 +61,8 @@ async def check_union_response_schema() -> None:
 
     reply = await agent.ask("Hi, agent!")
 
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | str | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | str | None)
 
 
 async def check_response_schema_object() -> None:
@@ -73,8 +73,8 @@ async def check_response_schema_object() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_sync_callable_reponse() -> None:
@@ -89,8 +89,8 @@ async def check_sync_callable_reponse() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_async_callable_reponse() -> None:
@@ -105,8 +105,8 @@ async def check_async_callable_reponse() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_converstation_save_type() -> None:
@@ -117,24 +117,24 @@ async def check_converstation_save_type() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
     next_turn = await reply.ask("Hi, agent!")
-    assert_type(next_turn.content, str | None)
-    assert_type(await next_turn.validate(), int | None)
+    assert_type(next_turn.body, str | None)
+    assert_type(await next_turn.content(), int | None)
 
 
 async def check_ask_overrides_response_type() -> None:
     agent = Agent("test", config=TestConfig())
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), str | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), str | None)
 
     reply2 = await agent.ask("Hi, agent!", response_schema=int)
-    assert_type(reply2.content, str | None)
-    assert_type(await reply2.validate(), int | None)
+    assert_type(reply2.body, str | None)
+    assert_type(await reply2.content(), int | None)
 
 
 async def check_ask_none_drops_response_type() -> None:
@@ -145,24 +145,24 @@ async def check_ask_none_drops_response_type() -> None:
     )
 
     reply = await agent.ask("Hi, agent!", response_schema=None)
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), str | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), str | None)
 
 
 async def check_ask_response_type_not_affect_next_turn() -> None:
     agent = Agent("test", config=TestConfig(), response_schema=float)
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), float | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), float | None)
 
     next_turn = await reply.ask("Hi, agent!", response_schema=int)
-    assert_type(next_turn.content, str | None)
-    assert_type(await next_turn.validate(), int | None)
+    assert_type(next_turn.body, str | None)
+    assert_type(await next_turn.content(), int | None)
 
     third_turn = await next_turn.ask("Hi, agent!")
-    assert_type(third_turn.content, str | None)
-    assert_type(await third_turn.validate(), float | None)
+    assert_type(third_turn.body, str | None)
+    assert_type(await third_turn.content(), float | None)
 
 
 async def check_prompted_schema_with_type() -> None:
@@ -173,8 +173,8 @@ async def check_prompted_schema_with_type() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_prompted_schema_with_dataclass() -> None:
@@ -190,8 +190,8 @@ async def check_prompted_schema_with_dataclass() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), Response | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), Response | None)
 
 
 async def check_prompted_schema_with_response_schema() -> None:
@@ -204,8 +204,8 @@ async def check_prompted_schema_with_response_schema() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_prompted_schema_with_callable() -> None:
@@ -220,13 +220,13 @@ async def check_prompted_schema_with_callable() -> None:
     )
 
     reply = await agent.ask("Hi, agent!")
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)
 
 
 async def check_prompted_schema_ask_override() -> None:
     agent = Agent("test", config=TestConfig())
 
     reply = await agent.ask("Hi, agent!", response_schema=PromptedSchema(int))
-    assert_type(reply.content, str | None)
-    assert_type(await reply.validate(), int | None)
+    assert_type(reply.body, str | None)
+    assert_type(await reply.content(), int | None)

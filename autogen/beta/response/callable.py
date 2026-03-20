@@ -113,7 +113,7 @@ def response_schema(
             schema=schema or response_schema.json_schema,
         )
 
-    if func:
+    if func is not None:
         return make_callable_schema(func)
     return make_callable_schema
 
