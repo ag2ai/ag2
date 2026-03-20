@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCall, ToolError
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolErrorEvent
 from autogen.beta.middleware.builtin.governance import (
     CircuitState,
     GovernanceConfig,
@@ -47,7 +47,7 @@ def _make_model_response(
 
 
 def _make_tool_call(name="search", call_id="call_001"):
-    tc = mock.MagicMock(spec=ToolCall)
+    tc = mock.MagicMock(spec=ToolCallEvent)
     tc.name = name
     tc.id = call_id
     return tc
@@ -398,7 +398,7 @@ class TestToolPolicy:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
         assert "blocked" in str(result.error)
         assert result.content == str(result.error)
 
@@ -425,7 +425,7 @@ class TestToolPolicy:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
         assert "not in the allowed list" in str(result.error)
 
     @pytest.mark.asyncio
@@ -488,7 +488,7 @@ class TestDegradation:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
         assert "disabled" in str(result.error)
 
     @pytest.mark.asyncio
@@ -613,7 +613,7 @@ class TestAdversarial:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
 
     @pytest.mark.asyncio
     async def test_blocklist_overrides_allowlist(self):
@@ -631,7 +631,7 @@ class TestAdversarial:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
         assert "blocked" in str(result.error)
 
     @pytest.mark.asyncio
@@ -668,7 +668,7 @@ class TestAdversarial:
 
     @pytest.mark.asyncio
     async def test_tool_error_content_matches_reason(self):
-        """ToolError.content must be the reason string, not format_exc()."""
+        """ToolErrorEvent.content must be the reason string, not format_exc()."""
         mw = GovernanceMiddleware(GovernanceConfig(blocked_tools=["bad"]))
         inst = mw(_make_event(), _make_context())
         tc = _make_tool_call(name="bad")
@@ -677,7 +677,7 @@ class TestAdversarial:
             raise AssertionError("should not be called")
 
         result = await inst.on_tool_execution(fail, tc, _make_context())
-        assert isinstance(result, ToolError)
+        assert isinstance(result, ToolErrorEvent)
         # content should be the policy reason, not "NoneType: None"
         assert "bad" in result.content
         assert "NoneType" not in result.content

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCall, ToolError
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolErrorEvent
 from autogen.beta.middleware.base import (
     BaseMiddleware,
     LLMCall,
@@ -246,9 +246,9 @@ class _ToolPolicy:
 # ---------------------------------------------------------------------------
 
 
-def _make_tool_error(event: ToolCall, reason: str) -> ToolError:
-    """Create a ToolError with explicit content to avoid format_exc() trap."""
-    err = ToolError(
+def _make_tool_error(event: ToolCallEvent, reason: str) -> ToolErrorEvent:
+    """Create a ToolErrorEvent with explicit content to avoid format_exc() trap."""
+    err = ToolErrorEvent(
         parent_id=getattr(event, "id", ""),
         name=event.name,
         error=RuntimeError(reason),
@@ -421,7 +421,7 @@ class _GovernanceMiddlewareInstance(BaseMiddleware):
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: ToolCall,
+        event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
         tool_name = event.name
