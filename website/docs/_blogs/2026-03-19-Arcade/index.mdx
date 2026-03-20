@@ -34,6 +34,12 @@ AG2 handles agent orchestration. Arcade handles tool infrastructure. Each does w
 
 You'll need an [OpenAI API key](https://platform.openai.com/api-keys), an [Arcade API key](https://docs.arcade.dev/home/api-keys), and the email you used to register at [arcade.dev](https://arcade.dev).
 
+### Installation
+
+```bash
+pip install "ag2[openai]" arcadepy
+```
+
 ### Step 1: Initialize Arcade and the tool helper
 
 The `call_arcade_tool` helper handles authorization automatically: if a tool hasn't been authorized yet, it prints a URL for the user to visit, then waits for completion.
@@ -103,11 +109,11 @@ def send_email(to: str, subject: str, body: str) -> dict:
 
 ### Step 3: Wire up the AG2 agents
 
-The `AssistantAgent` decides which tools to call, and the `UserProxyAgent` executes them. We register each function on both agents:
+The `AssistantAgent` decides which tools to call, and the `ConversableAgent` executes them. We register each function on both agents:
 
 ```python title="main.py"
 import datetime
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, ConversableAgent
 
 llm_config = {
     "config_list": [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
@@ -128,12 +134,11 @@ assistant = AssistantAgent(
     is_termination_msg=lambda msg: "TERMINATE" in (msg.get("content") or ""),
 )
 
-user_proxy = UserProxyAgent(
+user_proxy = ConversableAgent(
     name="User",
     human_input_mode="NEVER",
     max_consecutive_auto_reply=20,
     is_termination_msg=lambda msg: "TERMINATE" in (msg.get("content") or ""),
-    code_execution_config=False,
 )
 
 # Register tools on both agents
@@ -156,11 +161,11 @@ if __name__ == "__main__":
         if not message or message.lower() in ("exit", "quit", "bye"):
             print("Goodbye!")
             break
-        user_proxy.initiate_chat(
+        user_proxy.run(
             recipient=assistant,
             message=message,
             clear_history=False,
-        )
+        ).process()
         print("\nAnything else? (type your next request or 'exit' to quit)")
 ```
 
