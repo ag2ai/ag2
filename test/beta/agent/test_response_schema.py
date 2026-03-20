@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 from dataclasses import dataclass
 
 import pytest
@@ -134,7 +135,7 @@ class TestAgentLevelResponseSchema:
 
         reply = await agent.ask("Hi!")
 
-        result = await reply.content(retry=2)
+        result = await reply.content(retries=1)
         assert result == 42
 
         # 1 initial ask + 1 retry
@@ -148,7 +149,7 @@ class TestAgentLevelResponseSchema:
 
         reply = await agent.ask("Hi!")
 
-        result = await reply.content(retry=2)
+        result = await reply.content(retries=1)
         assert result == 42
 
         retry_msg = tracking.mock.call_args_list[1][0][0]
@@ -161,17 +162,17 @@ class TestAgentLevelResponseSchema:
         reply = await agent.ask("Hi!")
 
         with pytest.raises(Exception):
-            await reply.content(retry=2)
+            await reply.content(retries=1)
 
         # 1 initial ask + 1 retry (both fail)
         assert tracking.mock.call_count == 2
 
-    async def test_retry_true_keeps_retrying(self) -> None:
+    async def test_retries_keeps_retrying(self) -> None:
         tracking = TrackingConfig(TestConfig("bad", "bad", "bad", '{"data": 7}'))
         agent = Agent("test", config=tracking, response_schema=int)
 
         reply = await agent.ask("Hi!")
-        result = await reply.content(retry=True)
+        result = await reply.content(retries=math.inf)
 
         assert result == 7
         # 1 initial ask + 3 retries

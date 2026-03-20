@@ -67,13 +67,13 @@ class AgentReply(Generic[TResult, TAgent]):
     async def content(
         self,
         *,
-        retry: int | bool = False,
+        retries: int | float = 0,
     ) -> TResult | None:
         schema = self.__schema
         if schema is None:
             return self.body  # type: ignore[return-value]
 
-        max_attempts = float("inf") if retry is True else max(int(retry), 1)
+        max_retries = max(retries, 0)
 
         current = self
         attempt = 0
@@ -90,7 +90,7 @@ class AgentReply(Generic[TResult, TAgent]):
                     provider=current.__provider,
                 )
             except ValidationError as e:
-                if attempt >= max_attempts:
+                if attempt > max_retries:
                     raise e
 
                 schema_section = (
