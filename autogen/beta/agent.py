@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import types
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
@@ -11,6 +12,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 
 from fast_depends import Provider
+from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
 from .annotations import Context
@@ -62,18 +64,44 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__provider = provider
         self.__schema = response_schema
 
-    async def validate(self) -> TResult | None:
-        if self.__schema is None:
+    async def validate(
+        self,
+        *,
+        retry: int | bool = False,
+    ) -> TResult | None:
+        schema = self.__schema
+        if schema is None:
             return self.content  # type: ignore[return-value]
 
-        if (content := self.content) is None:
-            return None
+        max_attempts = float("inf") if retry is True else max(int(retry), 1)
 
-        return await self.__schema.validate(
-            content,
-            context=self.context,
-            provider=self.__provider,
-        )
+        current = self
+        attempt = 0
+
+        while True:
+            if current.content is None:
+                return None
+
+            attempt += 1
+            try:
+                return await schema.validate(
+                    current.content,
+                    context=current.context,
+                    provider=current.__provider,
+                )
+            except ValidationError as e:
+                if attempt >= max_attempts:
+                    raise e
+
+                current = await current.ask(
+                    "Your previous response could not be validated by schema\n"
+                    "\n\n== Schema ==\n"
+                    f"{json.dumps(schema.json_schema)}."
+                    "\n\nPlease try again."
+                    "\n\n== Validation Error ==\n"
+                    f"{e.json()}",
+                    response_schema=schema,
+                )
 
     @property
     def content(self) -> str | None:
