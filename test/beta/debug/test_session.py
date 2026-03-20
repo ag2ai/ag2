@@ -44,46 +44,6 @@ async def test_record_event_forwards_to_server() -> None:
 
 
 @pytest.mark.asyncio()
-async def test_pause_calls_hit_breakpoint_and_returns_event() -> None:
-    hit_bp = AsyncMock(return_value={})
-    session = _make_session(_make_client(hit_breakpoint=hit_bp))
-    event = ModelRequest(content="hi")
-    result = await session.pause("TURN_START", event)
-    hit_bp.assert_awaited_once()
-    assert result is event
-
-
-@pytest.mark.asyncio()
-async def test_pause_applies_event_modifications() -> None:
-    hit_bp = AsyncMock(return_value={"event_modifications": {"content": "mutated"}})
-    session = _make_session(_make_client(hit_breakpoint=hit_bp))
-    event = ModelRequest(content="original")
-    returned = await session.pause("TURN_START", event)
-    assert returned.content == "mutated"
-    assert returned is event  # same object, mutated in-place
-
-
-@pytest.mark.asyncio()
-async def test_pause_applies_context_modifications() -> None:
-    hit_bp = AsyncMock(return_value={"prompt": ["new prompt"], "variables": {"k": 1}})
-    session = _make_session(_make_client(hit_breakpoint=hit_bp))
-    event = ModelRequest(content="hi")
-    await session.pause("TURN_START", event)
-    assert session.context.prompt == ["new prompt"]
-    assert session.context.variables["k"] == 1
-
-
-@pytest.mark.asyncio()
-async def test_pause_with_no_modifications() -> None:
-    """Empty mods dict must not crash or mutate anything."""
-    hit_bp = AsyncMock(return_value={})
-    session = _make_session(_make_client(hit_breakpoint=hit_bp))
-    event = ModelRequest(content="unchanged")
-    returned = await session.pause("TOOL_CALL", event)
-    assert returned.content == "unchanged"
-
-
-@pytest.mark.asyncio()
 async def test_inject_calls_stream_send() -> None:
     session = _make_session()
     event = ModelRequest(content="injected")

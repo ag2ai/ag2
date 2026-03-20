@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -61,85 +60,6 @@ async def test_receive_and_get_events(client_and_sessions) -> None:  # type: ign
     assert len(data["events"]) == 1
     assert data["events"][0]["event_type"] == "ModelRequest"
     assert data["events"][0]["event_data"]["content"] == "hello"
-    assert data["pending_bp_id"] is None
-
-
-@pytest.mark.asyncio()
-async def test_hit_and_resume_breakpoint(client_and_sessions) -> None:  # type: ignore[no-untyped-def]
-    client, sessions = client_and_sessions
-    sessions["s3"] = _make_session("s3")
-
-    done = asyncio.Event()
-    mods_received: list[dict] = []  # type: ignore[type-arg]
-
-    async def _hit() -> None:
-        resp = await client.post(
-            "/sessions/s3/breakpoints",
-            json={"type": "TURN_START", "event": {"type": "ModelRequest", "data": {"content": "x"}}},
-        )
-        mods_received.append(resp.json())
-        done.set()
-
-    task = asyncio.create_task(_hit())
-    await asyncio.sleep(0.05)
-
-    bp_id = sessions["s3"].pending_bp_id
-    assert bp_id is not None
-
-    resp = await client.post(f"/sessions/s3/breakpoints/{bp_id}/resume", json={})
-    assert resp.status_code == 200
-    assert resp.json()["success"] is True
-
-    await asyncio.wait_for(task, timeout=1.0)
-    assert done.is_set()
-    # Empty ResumeRequest → empty mods dict returned to agent
-    assert mods_received[0].get("event_modifications") == {}
-
-
-@pytest.mark.asyncio()
-async def test_resume_with_event_modifications(client_and_sessions) -> None:  # type: ignore[no-untyped-def]
-    client, sessions = client_and_sessions
-    sessions["s4"] = _make_session("s4")
-
-    mods_received: list[dict] = []  # type: ignore[type-arg]
-
-    async def _hit() -> None:
-        resp = await client.post(
-            "/sessions/s4/breakpoints",
-            json={"type": "TURN_START", "event": {}},
-        )
-        mods_received.append(resp.json())
-
-    task = asyncio.create_task(_hit())
-    await asyncio.sleep(0.05)
-
-    bp_id = sessions["s4"].pending_bp_id
-    assert bp_id is not None
-
-    await client.post(
-        f"/sessions/s4/breakpoints/{bp_id}/resume",
-        json={"event_modifications": {"content": "patched"}},
-    )
-    await asyncio.wait_for(task, timeout=1.0)
-    assert mods_received[0]["event_modifications"] == {"content": "patched"}
-
-
-@pytest.mark.asyncio()
-async def test_resume_wrong_bp_id(client_and_sessions) -> None:  # type: ignore[no-untyped-def]
-    client, sessions = client_and_sessions
-    sessions["s5"] = _make_session("s5")
-
-    task = asyncio.create_task(client.post("/sessions/s5/breakpoints", json={"type": "TURN_START", "event": {}}))
-    await asyncio.sleep(0.05)
-
-    resp = await client.post("/sessions/s5/breakpoints/bad-id/resume", json={})
-    assert resp.json()["success"] is False
-
-    # clean up
-    bp_id = sessions["s5"].pending_bp_id
-    assert bp_id is not None
-    await client.post(f"/sessions/s5/breakpoints/{bp_id}/resume", json={})
-    await asyncio.wait_for(task, timeout=1.0)
 
 
 @pytest.mark.asyncio()

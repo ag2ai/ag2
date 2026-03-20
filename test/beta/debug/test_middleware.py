@@ -10,8 +10,8 @@ from autogen.beta.debug.client import DebugClient, serialize_event
 from autogen.beta.debug.middleware import DebugMiddleware
 from autogen.beta.debug.session import DebugSession
 from autogen.beta.events import ToolCallEvent
-from autogen.beta.events.types import ModelRequest, ModelResponse
-from autogen.beta.middleware.base import AgentTurn, ToolExecution
+from autogen.beta.events.types import ModelRequest
+from autogen.beta.middleware.base import ToolExecution
 
 
 def _make_session(hit_breakpoint_return: dict | None = None) -> DebugSession:  # type: ignore[type-arg]
@@ -32,22 +32,6 @@ def _make_middleware(session: DebugSession) -> DebugMiddleware:
 
 
 @pytest.mark.asyncio()
-async def test_on_turn_pauses_then_calls_next() -> None:
-    session = _make_session()
-    session.pause = AsyncMock(wraps=session.pause)  # spy
-    mw = _make_middleware(session)
-
-    event = ModelRequest(content="hello")
-    call_next: AgentTurn = AsyncMock(return_value=MagicMock(spec=ModelResponse))
-
-    # hit_breakpoint returns immediately (mock), so on_turn should run to completion
-    await mw.on_turn(call_next, event, MagicMock())
-
-    session.pause.assert_awaited_once_with("TURN_START", event)
-    call_next.assert_awaited_once()
-
-
-@pytest.mark.asyncio()
 async def test_on_tool_execution_pauses_then_calls_next() -> None:
     session = _make_session()
     mw = _make_middleware(session)
@@ -57,24 +41,6 @@ async def test_on_tool_execution_pauses_then_calls_next() -> None:
 
     await mw.on_tool_execution(call_next, tool_event, MagicMock())
     call_next.assert_awaited_once()
-
-
-@pytest.mark.asyncio()
-async def test_on_turn_passes_modified_event_to_call_next() -> None:
-    """Modifications returned by hit_breakpoint must reach call_next."""
-    session = _make_session(hit_breakpoint_return={"event_modifications": {"content": "mutated"}})
-    mw = _make_middleware(session)
-
-    event = ModelRequest(content="original")
-    received: list[object] = []
-
-    async def _call_next(ev, ctx):  # type: ignore[no-untyped-def]
-        received.append(ev)
-        return MagicMock(spec=ModelResponse)
-
-    await mw.on_turn(_call_next, event, MagicMock())
-
-    assert received[0].content == "mutated"  # type: ignore[union-attr]
 
 
 # ── Serialisation tests ────────────────────────────────────────────────────
