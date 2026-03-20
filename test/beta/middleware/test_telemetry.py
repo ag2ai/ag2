@@ -116,7 +116,9 @@ async def test_tool_span(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "NYC"}')]),
+                tool_calls=ToolCallsEvent(
+                    calls=[ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "NYC"}')]
+                ),
             ),
             ModelResponse(message=ModelMessage(content="It's sunny in NYC")),
         ),
@@ -150,7 +152,9 @@ async def test_tool_span_with_content_capture(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]),
+                tool_calls=ToolCallsEvent(
+                    calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]
+                ),
             ),
             ModelResponse(message=ModelMessage(content="Done")),
         ),
@@ -318,7 +322,9 @@ async def test_tool_span_has_tool_type(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]),
+                tool_calls=ToolCallsEvent(
+                    calls=[ToolCallEvent(id="call_1", name="greet", arguments='{"name": "World"}')]
+                ),
             ),
             ModelResponse(message=ModelMessage(content="Done")),
         ),
