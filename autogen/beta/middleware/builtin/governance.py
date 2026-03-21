@@ -95,7 +95,9 @@ class GovernanceConfig:
         if not math.isfinite(self.degradation_threshold) or not (0.0 < self.degradation_threshold <= 1.0):
             raise ValueError(f"degradation_threshold must be finite and in (0, 1], got {self.degradation_threshold}")
         # Freeze mutable lists to prevent post-construction mutation.
-        object.__setattr__(self, "blocked_tools", list(self.blocked_tools))
+        object.__setattr__(self, "blocked_tools", tuple(self.blocked_tools))
+        if self.allowed_tools is not None:
+            object.__setattr__(self, "allowed_tools", tuple(self.allowed_tools))
         object.__setattr__(self, "disable_tools_on_degrade", tuple(self.disable_tools_on_degrade))
 
 

@@ -761,6 +761,16 @@ class TestConfigValidation:
         config = GovernanceConfig(disable_tools_on_degrade=["web_search"])
         assert isinstance(config.disable_tools_on_degrade, tuple)
 
+    def test_blocked_tools_frozen_after_init(self):
+        """blocked_tools must be immutable after construction."""
+        config = GovernanceConfig(blocked_tools=["rm"])
+        assert isinstance(config.blocked_tools, tuple)
+
+    def test_allowed_tools_frozen_after_init(self):
+        """allowed_tools must be immutable after construction."""
+        config = GovernanceConfig(allowed_tools=["search"])
+        assert isinstance(config.allowed_tools, tuple)
+
     @pytest.mark.parametrize(
         "field_name,bad_value",
         [
