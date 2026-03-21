@@ -56,7 +56,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama]
+          uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama,tracing]
       - name: Test with pytest
         run: |
           pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
