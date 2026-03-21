@@ -156,7 +156,5 @@ class BaseEvent(metaclass=_ConditionMeta):
                 if not f.repr:
                     hidden.add(name)
 
-        fields = ", ".join(
-            f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden
-        )
+        fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden)
         return f"{self.__class__.__name__}({fields})"
