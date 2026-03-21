@@ -113,11 +113,9 @@ The `AssistantAgent` decides which tools to call, and the `ConversableAgent` exe
 
 ```python title="main.py"
 import datetime
-from autogen import AssistantAgent, ConversableAgent
+from autogen import AssistantAgent, ConversableAgent, LLMConfig
 
-llm_config = {
-    "config_list": [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-}
+llm_config = LLMConfig({"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]})
 
 _today = datetime.date.today().strftime("%Y-%m-%d")
 
