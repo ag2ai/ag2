@@ -19,12 +19,16 @@ def _missing_optional_dependency(name: str, extra: str, error: ImportError) -> M
     return Mock(side_effect=_raise_helpful_import_error)
 
 
+from .governance import GovernanceConfig, GovernanceMiddleware
+
 try:
     from .telemetry import TelemetryMiddleware
 except ImportError as e:
     TelemetryMiddleware = _missing_optional_dependency("TelemetryMiddleware", "tracing", e)
 
 __all__ = (
+    "GovernanceConfig",
+    "GovernanceMiddleware",
     "HistoryLimiter",
     "LoggingMiddleware",
     "RetryMiddleware",
