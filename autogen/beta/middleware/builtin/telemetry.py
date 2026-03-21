@@ -2,11 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import json
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
@@ -19,9 +16,6 @@ from autogen.beta.middleware.base import (
     ToolExecution,
     ToolResultType,
 )
-
-if TYPE_CHECKING:
-    pass
 
 try:
     from opentelemetry import trace
