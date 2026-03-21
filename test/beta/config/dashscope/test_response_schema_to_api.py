@@ -14,6 +14,21 @@ from autogen.beta.response import ResponseSchema
 from autogen.beta.response.schema import RawSchema
 
 
+def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+    """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
+    return {
+        "properties": {
+            "data": {
+                "description": 'Response with a one-field JSON `"{"data":...}"`',
+                "title": "Data",
+                **inner,
+            }
+        },
+        "required": ["data"],
+        "type": "object",
+    }
+
+
 class TestResponseProtoToFormatNone:
     def test_none_returns_none(self) -> None:
         assert response_proto_to_format(None) is None
@@ -42,11 +57,8 @@ class TestPrimitiveSchemas:
             "type": "json_schema",
             "json_schema": IsPartialDict(
                 schema=IsPartialDict(
-                    type="object",
-                    properties=IsPartialDict(
-                        data=IsPartialDict(**expected_inner_schema),
-                    ),
-                    required=["data"],
+                    **_embedded_data_schema(expected_inner_schema),
+                    title="ResponseSchema",
                 ),
                 name=name,
                 description=type_.__doc__,
@@ -149,19 +161,18 @@ class TestUnionSchemas:
         assert result == {
             "type": "json_schema",
             "json_schema": IsPartialDict(
+                name="IntOrStr",
                 schema=IsPartialDict(
-                    type="object",
-                    properties=IsPartialDict(
-                        data=IsPartialDict(
-                            anyOf=[
+                    **_embedded_data_schema(
+                        {
+                            "anyOf": [
                                 {"type": "integer"},
                                 {"type": "string"},
                             ],
-                        ),
+                        },
                     ),
-                    required=["data"],
+                    title="ResponseSchema",
                 ),
-                name="IntOrStr",
             ),
         }
 

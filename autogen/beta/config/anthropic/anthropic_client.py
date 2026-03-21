@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
@@ -28,9 +29,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_output_config, tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -76,22 +78,34 @@ class AnthropicClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 
-        if context.prompt:
-            system: Any = self._build_system(context.prompt)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
-            system = NOT_GIVEN
+            prompt = context.prompt
+
+        system: Any = (
+            self._build_system(prompt)
+            if context.prompt or (response_schema and response_schema.system_prompt)
+            else NOT_GIVEN
+        )
 
         if self._prompt_caching and anthropic_messages:
             self._inject_cache_control(anthropic_messages)
 
         tools_list = [tool_to_api(t) for t in tools]
 
+        kwargs: dict[str, Any] = {}
+        if r := response_proto_to_output_config(response_schema):
+            kwargs["output_config"] = r
+
         if self._streaming:
             async with self._client.messages.stream(
                 **self._create_options,
+                **kwargs,
                 system=system,
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
@@ -100,14 +114,15 @@ class AnthropicClient(LLMClient):
         else:
             response = await self._client.messages.create(
                 **self._create_options,
+                **kwargs,
                 system=system,
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             )
             return await self._process_response(response, context)
 
-    def _build_system(self, prompt: list[str]) -> Any:
-        text = "\n\n".join(prompt)
+    def _build_system(self, prompt: Iterable[str]) -> Any:
+        text = "\n".join(prompt)
         if self._prompt_caching:
             return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
         return text

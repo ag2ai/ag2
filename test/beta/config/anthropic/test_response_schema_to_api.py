@@ -9,7 +9,7 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 
-from autogen.beta.config.openai.mappers import response_proto_to_text_config
+from autogen.beta.config.anthropic.mappers import response_proto_to_output_config
 from autogen.beta.response import ResponseSchema
 from autogen.beta.response.schema import RawSchema
 
@@ -29,9 +29,9 @@ def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
     }
 
 
-class TestResponseProtoToTextConfigNone:
+class TestResponseProtoToOutputConfigNone:
     def test_none_returns_none(self) -> None:
-        assert response_proto_to_text_config(None) is None
+        assert response_proto_to_output_config(None) is None
 
 
 class TestPrimitiveSchemas:
@@ -51,18 +51,17 @@ class TestPrimitiveSchemas:
     ) -> None:
         schema = ResponseSchema(type_, name=name)
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result == {
-            "format": IsPartialDict(
-                type="json_schema",
-                name=name,
-            ),
+            "format": {
+                "type": "json_schema",
+                "schema": IsPartialDict(
+                    **_embedded_data_schema(expected_inner_schema),
+                    title="ResponseSchema",
+                ),
+            },
         }
-        # Embedded schema should be an object with additionalProperties: false
-        fmt_schema = result["format"]["schema"]
-        assert fmt_schema["type"] == "object"
-        assert fmt_schema["additionalProperties"] is False
 
 
 class TestDataclassSchemas:
@@ -74,12 +73,12 @@ class TestDataclassSchemas:
 
         schema = ResponseSchema(User)
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result == {
-            "format": IsPartialDict(
-                name="User",
-                schema=IsPartialDict(
+            "format": {
+                "type": "json_schema",
+                "schema": IsPartialDict(
                     type="object",
                     additionalProperties=False,
                     properties=IsPartialDict(
@@ -87,7 +86,7 @@ class TestDataclassSchemas:
                         age=IsPartialDict(type="integer"),
                     ),
                 ),
-            ),
+            },
         }
 
     def test_dataclass_with_description(self) -> None:
@@ -99,11 +98,10 @@ class TestDataclassSchemas:
 
         schema = ResponseSchema(Response, description="Custom desc")
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
-        assert result == {
-            "format": IsPartialDict(description="Custom desc"),
-        }
+        assert result is not None
+        assert result["format"]["type"] == "json_schema"
 
 
 class TestPydanticModelSchemas:
@@ -114,12 +112,12 @@ class TestPydanticModelSchemas:
 
         schema = ResponseSchema(Item)
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result == {
-            "format": IsPartialDict(
-                name="Item",
-                schema=IsPartialDict(
+            "format": {
+                "type": "json_schema",
+                "schema": IsPartialDict(
                     type="object",
                     additionalProperties=False,
                     properties=IsPartialDict(
@@ -127,7 +125,7 @@ class TestPydanticModelSchemas:
                         price=IsPartialDict(type="number"),
                     ),
                 ),
-            ),
+            },
         }
 
     def test_model_with_field_constraints(self) -> None:
@@ -136,16 +134,17 @@ class TestPydanticModelSchemas:
 
         schema = ResponseSchema(Bounded)
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result == {
-            "format": IsPartialDict(
-                schema=IsPartialDict(
+            "format": {
+                "type": "json_schema",
+                "schema": IsPartialDict(
                     properties=IsPartialDict(
                         value=IsPartialDict(minimum=0, maximum=100),
                     ),
                 ),
-            ),
+            },
         }
 
 
@@ -153,7 +152,7 @@ class TestUnionSchemas:
     def test_union_type(self) -> None:
         schema = ResponseSchema(int | str, name="IntOrStr")
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result is not None
         fmt_schema = result["format"]["schema"]
@@ -161,9 +160,19 @@ class TestUnionSchemas:
         assert fmt_schema["type"] == "object"
         assert fmt_schema["additionalProperties"] is False
 
+    def test_tuple_of_types(self) -> None:
+        schema = ResponseSchema((int, float), name="Number")
+
+        result = response_proto_to_output_config(schema)
+
+        assert result is not None
+        fmt_schema = result["format"]["schema"]
+        assert fmt_schema["type"] == "object"
+        assert fmt_schema["additionalProperties"] is False
+
 
 class TestAdditionalPropertiesFalse:
-    """Responses API requires additionalProperties: false on all object schemas."""
+    """Anthropic requires additionalProperties: false on all object schemas."""
 
     def test_added_to_top_level_object(self) -> None:
         @dataclass
@@ -171,7 +180,7 @@ class TestAdditionalPropertiesFalse:
             x: int
 
         schema = ResponseSchema(Simple)
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result is not None
         assert result["format"]["schema"]["additionalProperties"] is False
@@ -184,7 +193,7 @@ class TestAdditionalPropertiesFalse:
             inner: Inner
 
         schema = ResponseSchema(Outer)
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result is not None
         outer_schema = result["format"]["schema"]
@@ -196,35 +205,45 @@ class TestAdditionalPropertiesFalse:
     def test_not_added_to_primitives_raw(self) -> None:
         """RawSchema with a primitive type should not get additionalProperties."""
         raw = RawSchema({"type": "string"}, name="Simple")
-        result = response_proto_to_text_config(raw)
+        result = response_proto_to_output_config(raw)
 
         assert result is not None
         assert "additionalProperties" not in result["format"]["schema"]
 
+    def test_embedded_primitive_gets_additional_properties(self) -> None:
+        """Embedded primitives produce an object wrapper that should get additionalProperties: false."""
+        schema = ResponseSchema(int, name="IntSchema")
+        result = response_proto_to_output_config(schema)
+
+        assert result is not None
+        assert result["format"]["schema"]["type"] == "object"
+        assert result["format"]["schema"]["additionalProperties"] is False
+
 
 class TestDescriptionHandling:
-    def test_no_description_omitted(self) -> None:
+    def test_no_description_not_in_output(self) -> None:
+        """Anthropic output_config has no description field — verify schema still works."""
+
         class Simple(BaseModel):
             x: int
 
         schema = ResponseSchema(Simple, name="NoDesc")
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
         assert result is not None
-        assert "description" not in result["format"]
+        assert result["format"]["type"] == "json_schema"
 
-    def test_description_included(self) -> None:
+    def test_description_not_passed_to_api(self) -> None:
+        """Anthropic output_config format does not include name or description."""
         schema = ResponseSchema(int, name="WithDesc", description="An integer value")
 
-        result = response_proto_to_text_config(schema)
+        result = response_proto_to_output_config(schema)
 
-        assert result == {
-            "format": IsPartialDict(
-                name="WithDesc",
-                description="An integer value",
-            ),
-        }
+        assert result is not None
+        # Anthropic format only has type + schema, no name/description
+        assert "name" not in result["format"]
+        assert "description" not in result["format"]
 
 
 class TestRawSchema:
@@ -235,14 +254,38 @@ class TestRawSchema:
             description="A custom schema",
         )
 
-        result = response_proto_to_text_config(raw)
+        result = response_proto_to_output_config(raw)
 
         assert result == {
             "format": {
                 "type": "json_schema",
                 "schema": {"type": "object", "properties": {"x": {"type": "integer"}}, "additionalProperties": False},
-                "name": "Custom",
-                "description": "A custom schema",
-                "strict": True,
             },
         }
+
+    def test_from_schema_no_description(self) -> None:
+        raw = RawSchema(
+            {"type": "string"},
+            name="Simple",
+        )
+
+        result = response_proto_to_output_config(raw)
+
+        assert result == {
+            "format": {
+                "type": "json_schema",
+                "schema": {"type": "string"},
+            },
+        }
+
+
+class TestNoJsonSchema:
+    def test_no_schema_returns_none(self) -> None:
+        class FakeProto:
+            name = "test"
+            description = None
+            json_schema = None
+            system_prompt = None
+
+        result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
+        assert result is None

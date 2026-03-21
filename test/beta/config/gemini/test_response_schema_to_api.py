@@ -13,6 +13,21 @@ from autogen.beta.config.gemini.mappers import response_proto_to_config
 from autogen.beta.response import ResponseSchema
 
 
+def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+    """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
+    return {
+        "properties": {
+            "data": {
+                "description": 'Response with a one-field JSON `"{"data":...}"`',
+                "title": "Data",
+                **inner,
+            }
+        },
+        "required": ["data"],
+        "type": "object",
+    }
+
+
 class TestResponseProtoToConfigNone:
     def test_none_returns_empty(self) -> None:
         assert response_proto_to_config(None) == {}
@@ -40,11 +55,8 @@ class TestPrimitiveSchemas:
         assert result == {
             "response_mime_type": "application/json",
             "response_json_schema": IsPartialDict(
-                type="object",
-                properties=IsPartialDict(
-                    data=IsPartialDict(**expected_inner_schema),
-                ),
-                required=["data"],
+                **_embedded_data_schema(expected_inner_schema),
+                title="ResponseSchema",
             ),
         }
 
@@ -120,16 +132,15 @@ class TestUnionSchemas:
         assert result == {
             "response_mime_type": "application/json",
             "response_json_schema": IsPartialDict(
-                type="object",
-                properties=IsPartialDict(
-                    data=IsPartialDict(
-                        anyOf=[
+                **_embedded_data_schema(
+                    {
+                        "anyOf": [
                             {"type": "integer"},
                             {"type": "string"},
                         ],
-                    ),
+                    },
                 ),
-                required=["data"],
+                title="ResponseSchema",
             ),
         }
 

@@ -13,6 +13,21 @@ from autogen.beta.config.ollama.mappers import response_proto_to_format
 from autogen.beta.response import ResponseSchema
 
 
+def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+    """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
+    return {
+        "properties": {
+            "data": {
+                "description": 'Response with a one-field JSON `"{"data":...}"`',
+                "title": "Data",
+                **inner,
+            }
+        },
+        "required": ["data"],
+        "type": "object",
+    }
+
+
 class TestResponseProtoToFormatNone:
     def test_none_returns_none(self) -> None:
         assert response_proto_to_format(None) is None
@@ -20,7 +35,7 @@ class TestResponseProtoToFormatNone:
 
 class TestPrimitiveSchemas:
     @pytest.mark.parametrize(
-        ("type_", "name", "expected_schema"),
+        ("type_", "name", "expected_inner_schema"),
         [
             pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
             pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
@@ -31,18 +46,16 @@ class TestPrimitiveSchemas:
         self,
         type_: type,
         name: str,
-        expected_schema: dict,  # type: ignore[type-arg]
+        expected_inner_schema: dict,  # type: ignore[type-arg]
     ) -> None:
         schema = ResponseSchema(type_, name=name)
 
         result = response_proto_to_format(schema)
 
+        # Ollama passes raw json_schema — which is now embedded for primitives
         assert result == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                data=IsPartialDict(**expected_schema),
-            ),
-            required=["data"],
+            **_embedded_data_schema(expected_inner_schema),
+            title="ResponseSchema",
         )
 
 
@@ -106,16 +119,15 @@ class TestUnionSchemas:
         result = response_proto_to_format(schema)
 
         assert result == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                data=IsPartialDict(
-                    anyOf=[
+            **_embedded_data_schema(
+                {
+                    "anyOf": [
                         {"type": "integer"},
                         {"type": "string"},
                     ],
-                ),
+                },
             ),
-            required=["data"],
+            title="ResponseSchema",
         )
 
 
