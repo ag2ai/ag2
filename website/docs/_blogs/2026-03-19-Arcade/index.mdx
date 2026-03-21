@@ -1,0 +1,229 @@
+---
+title: "Connect AG2 Agents to 8,000+ Tools with Arcade.dev"
+authors: [faridun-ag2]
+tags: [AG2, Connectors, MCP, Arcade, Gmail]
+date: 2026-03-19
+---
+
+![AG2 x Arcade.dev](img/ag2-arcade-banner.webp)
+
+## Overview
+
+[Arcade.dev](https://www.arcade.dev/) is a tool execution runtime that provides 8,000+ pre-built integrations with just-in-time authorization. It sits between your agents and enterprise systems: your agent calls a tool, the user authenticates once through Arcade, and Arcade handles token management, scope negotiation, and credential storage from that point on. No service accounts, no secrets in your codebase.
+
+This solves common problems when connecting agents to external services:
+
+- Building and maintaining OAuth flows for each API (Gmail, Linear, Slack, etc.)
+- Managing token lifecycle: refresh, rotation, expiry
+- Storing credentials securely and isolating them from the LLM layer
+- Handling scope negotiation and incremental authorization
+
+In this post, we'll build a Gmail assistant using AG2 and the Arcade SDK. The agent will list, search, read threads, send, reply, and archive emails using AG2's `AssistantAgent` + `UserProxyAgent`, pattern while Arcade handles all the authentication and API complexity behind the scenes.
+
+<!-- more -->
+
+## How It Works
+
+Your AG2 agent calls tools by name. Arcade routes each call to the right service with the right credentials:
+
+![AG2 x Arcade.dev diagram](img/ag2-arcade-diagram.png)
+
+AG2 handles agent orchestration. Arcade handles tool infrastructure. Each does what it's best at.
+
+## Building a Gmail Agent
+
+You'll need an [OpenAI API key](https://platform.openai.com/api-keys), an [Arcade API key](https://docs.arcade.dev/home/api-keys), and the email you used to register at [arcade.dev](https://arcade.dev).
+
+### Installation
+
+```bash
+pip install "ag2[openai]" arcadepy
+```
+
+### Step 1: Initialize Arcade and the tool helper
+
+The `call_arcade_tool` helper handles authorization automatically: if a tool hasn't been authorized yet, it prints a URL for the user to visit, then waits for completion.
+
+```python title="main.py"
+import os
+from arcadepy import Arcade
+
+arcade = Arcade(api_key=os.environ["ARCADE_API_KEY"])
+ARCADE_USER_ID = os.environ["ARCADE_USER_ID"]
+
+
+def call_arcade_tool(tool_name: str, inputs: dict) -> dict:
+    """Authorize (if needed) and execute an Arcade tool, returning the output."""
+    auth = arcade.tools.authorize(tool_name=tool_name, user_id=ARCADE_USER_ID)
+    if auth.status != "completed":
+        print(f"\n[Auth required] Visit this URL to authorize {tool_name}:\n  {auth.url}\n")
+        arcade.auth.wait_for_completion(auth.id)
+
+    result = arcade.tools.execute(
+        tool_name=tool_name,
+        input=inputs,
+        user_id=ARCADE_USER_ID,
+    )
+    if not result.output:
+        return {}
+    data = result.output.model_dump()
+    return data.get("value") or {}
+```
+
+The first time a tool is called, Arcade sends the user an OAuth link. After that, tokens are cached automatically.
+
+### Step 2: Create tool wrappers for AG2
+
+We create thin wrappers that call `call_arcade_tool` with the Arcade tool name and inputs. The full example includes 11 tools (search, archive, trash, reply, drafts, and more). Here are three of the core ones:
+
+```python title="main.py"
+def list_emails(
+    sender: str = None, max_results: int = 50, is_unread: bool = False
+) -> dict:
+    """List emails from Gmail inbox.
+    - sender: filter by sender email address (optional)
+    - max_results: maximum number of emails to return (default 50)
+    - is_unread: if True, return only unread emails
+    """
+    inputs: dict = {"max_results": max_results, "is_unread": is_unread}
+    if sender:
+        inputs["sender"] = sender
+    return call_arcade_tool("Gmail.ListEmails", inputs)
+
+
+def get_thread(thread_id: str) -> dict:
+    """Fetch the full conversation thread by thread ID."""
+    return call_arcade_tool("Gmail.GetThread", {"thread_id": thread_id})
+
+
+def send_email(to: str, subject: str, body: str) -> dict:
+    """Send a new email.
+    - to: recipient email address
+    - subject: email subject line
+    - body: plain-text email body
+    """
+    return call_arcade_tool(
+        "Gmail.SendEmail", {"recipient": to, "subject": subject, "body": body}
+    )
+```
+
+### Step 3: Wire up the AG2 agents
+
+The `AssistantAgent` decides which tools to call, and the `ConversableAgent` executes them. We register each function on both agents:
+
+```python title="main.py"
+import datetime
+from autogen import AssistantAgent, ConversableAgent, LLMConfig
+
+llm_config = LLMConfig({"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]})
+
+_today = datetime.date.today().strftime("%Y-%m-%d")
+
+assistant = AssistantAgent(
+    name="GmailAssistant",
+    llm_config=llm_config,
+    system_message=(
+        f"Today's date is {_today}.\n\n"
+        "You are a helpful Gmail assistant that manages emails via Arcade tools. "
+        "Use the provided tools to complete the user's requests.\n\n"
+        "Always confirm with the user before sending any email. "
+        "After completing a task, end your reply with TERMINATE."
+    ),
+    is_termination_msg=lambda msg: "TERMINATE" in (msg.get("content") or ""),
+)
+
+user_proxy = ConversableAgent(
+    name="User",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=20,
+    is_termination_msg=lambda msg: "TERMINATE" in (msg.get("content") or ""),
+)
+
+# Register tools on both agents
+for func, description in [
+    (list_emails, "List emails from Gmail. Filter by sender, unread status, and max results."),
+    (get_thread, "Get the full conversation thread by thread ID."),
+    (send_email, "Send a new email to a recipient with subject and body."),
+]:
+    user_proxy.register_for_execution()(func)
+    assistant.register_for_llm(description=description)(func)
+```
+
+### Step 4: Conversation loop
+
+```python title="main.py"
+if __name__ == "__main__":
+    print("Gmail Assistant ready. Type your request (or 'exit' to quit).")
+    while True:
+        message = input("\nYou: ").strip()
+        if not message or message.lower() in ("exit", "quit", "bye"):
+            print("Goodbye!")
+            break
+        user_proxy.run(
+            recipient=assistant,
+            message=message,
+            clear_history=False,
+        ).process()
+        print("\nAnything else? (type your next request or 'exit' to quit)")
+```
+
+Run it:
+
+```bash
+source .env && uv run python main.py
+```
+
+On the first run, Arcade will print an authorization URL. Open it in your browser, sign in with Google, and grant the requested Gmail permissions. This happens once. Subsequent runs skip this step since Arcade caches the token.
+
+```
+Gmail Assistant ready. Type your request (or 'exit' to quit).
+
+You: Show my unread emails
+
+GmailAssistant: Let me fetch your unread emails.
+  [Calling Gmail.ListEmails with is_unread=True]
+
+GmailAssistant: Here are your unread emails:
+
+1. From: alice@company.com | Subject: Q2 Planning Doc | Date: 2026-03-18
+   Snippet: Hey, I've attached the Q2 planning document...
+
+2. From: bob@company.com | Subject: Re: API design review | Date: 2026-03-17
+   Snippet: Looks good overall, just a few comments on the auth flow...
+
+...
+
+TERMINATE
+
+Anything else? (type your next request or 'exit' to quit)
+```
+
+## What Arcade Handles For You
+
+- **OAuth flow**: No Google Cloud Console project, no client secrets file, no redirect URIs. Arcade manages the entire handshake.
+- **Token lifecycle**: Access token refresh and rotation handled transparently.
+- **Scope management**: Just-in-time authorization instead of broad scopes upfront.
+- **Credential isolation**: Tokens never reach the LLM or your agent code.
+
+## Try It Yourself
+
+The complete working code is available in the [build-with-ag2](https://github.com/ag2ai/build-with-ag2) repository:
+
+- **[Gmail Agent](https://github.com/ag2ai/build-with-ag2/tree/main/arcade/gmail-agent)**: The full example from this post with 11 Gmail tools, runnable end-to-end
+- **[Linear Agent](https://github.com/ag2ai/build-with-ag2/tree/main/arcade/linear-agent)**: Manage Linear issues (list, create, update) using the same Arcade pattern
+
+## Where to Take It Next
+
+The Gmail agent uses Arcade's Gmail toolkit, but Arcade exposes the entire Google Workspace suite (Calendar, Drive, Docs) plus Linear, Slack, GitHub, and thousands more. The pattern stays exactly the same: write a thin wrapper, register it with your AG2 agent, and Arcade handles the rest.
+
+A few ideas:
+
+- **Multi-service agent**: Combine Gmail and Linear tools in the same agent. Read an email about a bug report, automatically create a Linear issue, and reply to the sender with the ticket link.
+- **Multi-agent pipeline**: Use AG2's group chat to build a team of specialists. An email triage agent reads and categorizes incoming mail. A project management agent creates tasks in Linear for anything actionable. A response drafter agent prepares replies for emails that need one.
+
+## Learn More
+
+- [Arcade.dev Documentation](https://docs.arcade.dev) -- Full API reference and tool catalog
+- [AG2 Documentation](https://docs.ag2.ai) -- AG2 user guide, agent patterns, and tool registration
+- [build-with-ag2 Repository](https://github.com/ag2ai/build-with-ag2) -- Sample code for this and other AG2 integrations
+- [Arcade Tool Catalog](https://docs.arcade.dev/en/resources/integrations) -- Browse 8,000+ available integrations
