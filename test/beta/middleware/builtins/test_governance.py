@@ -851,3 +851,33 @@ class TestCircuitBreakerTimerRefresh:
         # Record another failure -- opened_at should refresh
         mw.circuit_breaker.record_failure()
         assert mw.circuit_breaker._opened_at >= first_opened_at
+
+
+# ---------------------------------------------------------------------------
+# R1 gap tests: __init__ import + zero-budget async path
+# ---------------------------------------------------------------------------
+
+
+def test_governance_importable_from_builtin_init() -> None:
+    """GovernanceMiddleware must be importable from the builtin package."""
+    from autogen.beta.middleware.builtin import GovernanceConfig, GovernanceMiddleware
+
+    assert GovernanceConfig is not None
+    assert GovernanceMiddleware is not None
+
+
+@pytest.mark.asyncio
+async def test_zero_budget_allows_calls() -> None:
+    """max_cost_usd=0 means unlimited -- full async path must pass."""
+    config = GovernanceConfig(max_cost_usd=0.0)
+    mw = GovernanceMiddleware(config)
+    inst = mw(_make_event(), _make_context())
+    resp = _make_model_response()
+
+    async def ok(events, ctx):
+        return resp
+
+    response = await inst.on_llm_call(ok, [_make_event()], _make_context())
+    assert response is resp
+    # budget=0 means unlimited, so even with cost > 0 it should not block
+    assert mw.budget.utilization() == 0.0  # limit=0 -> utilization always 0
