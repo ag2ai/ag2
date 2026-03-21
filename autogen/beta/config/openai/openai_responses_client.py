@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
@@ -33,9 +34,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import events_to_responses_input, tool_to_responses_api
+from .mappers import events_to_responses_input, response_proto_to_text_config, tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -92,14 +94,26 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
-        instructions = "\n\n".join(context.prompt) if context.prompt else None
+
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        instructions = "\n".join(prompt) or None
 
         openai_tools = [tool_to_responses_api(t) for t in tools]
 
+        kwargs: dict[str, Any] = {}
+        if r := response_proto_to_text_config(response_schema):
+            kwargs["text"] = r
+
         response = await self._client.responses.create(
             **self._create_options,
+            **kwargs,
             input=input_items,
             instructions=instructions,
             tools=openai_tools or omit,

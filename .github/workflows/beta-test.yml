@@ -1,0 +1,162 @@
+name: Beta tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+    types:
+      - checks_requested
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions: {}
+
+jobs:
+  paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/beta/**"
+            test:
+              - "test/beta/**"
+            workflows:
+              - ".github/workflows/beta-test.yml"
+            setup:
+              - "pyproject.toml"
+
+  test-ubuntu:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.hasChanges == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama]
+      - name: Test with pytest
+        run: |
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+      - name: Show coverage report
+        run: coverage report -m --include="autogen/beta/*"
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: beta, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-macos:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.hasChanges == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test-core]
+      - name: Test with pytest
+        run: |
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+      - name: Show coverage report
+        run: coverage report -m --include="autogen/beta/*"
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: beta, macos-latest, 3.13
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-windows:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.hasChanges == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test-core]
+      - name: Test with pytest
+        run: |
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+      - name: Show coverage report
+        run: coverage report -m --include="autogen/beta/*"
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: beta, windows-latest, 3.13
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build-check:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [test-ubuntu, test-macos, test-windows]
+    steps:
+      - name: Get Date
+        shell: bash
+        run: |
+          echo "date=$(date +'%m/%d/%Y %H:%M:%S')" >> "$GITHUB_ENV"
+
+      - name: Run Type is ${{ github.event_name }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'}}
+        shell: bash
+        run: |
+          echo "run_type=${{ github.event_name }}" >> "$GITHUB_ENV"
+
+      - name: Fail workflow if build failed
+        id: check_build_failed
+        if: contains(join(needs.*.result, ','), 'failure')
+        uses: actions/github-script@v8
+        with:
+          script: core.setFailed('Build Failed!')
+
+      - name: Fail workflow if build cancelled
+        id: check_build_cancelled
+        if: contains(join(needs.*.result, ','), 'cancelled')
+        uses: actions/github-script@v8
+        with:
+          script: core.setFailed('Build Cancelled!')

@@ -7,8 +7,24 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
+    """Convert a ResponseProto to DashScope response_format (OpenAI-compatible)."""
+    if not response or not response.json_schema:
+        return None
+
+    schema: dict[str, Any] = {
+        "schema": response.json_schema,
+        "name": response.name,
+    }
+    if response.description:
+        schema["description"] = response.description
+
+    return {"type": "json_schema", "json_schema": schema}
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:

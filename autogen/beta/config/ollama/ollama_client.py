@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 from ollama import AsyncClient
@@ -21,9 +22,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_to_api
 
 OLLAMA_DEFAULT_HOST = "http://localhost:11434"
 
@@ -58,8 +60,14 @@ class OllamaClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        ollama_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        ollama_messages = convert_messages(prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}
@@ -68,6 +76,9 @@ class OllamaClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+
+        if fmt := response_proto_to_format(response_schema):
+            kwargs["format"] = fmt
 
         if self._streaming:
             return await self._call_streaming(ollama_messages, kwargs, context)

@@ -2,14 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+import types
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
+from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 
 from fast_depends import Provider
+from pydantic import ValidationError
+from typing_extensions import TypeVar as TypeVar313
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -24,54 +28,146 @@ from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
+from .types import Omittable, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
 
 
-class Askable(Protocol):
-    async def ask(
-        self,
-        msg: str,
-        *,
-        dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
-        prompt: Iterable[str] = (),
-        config: ModelConfig | None = None,
-        tools: Iterable[Tool] = (),
-        middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
-        raise NotImplementedError
+TResult = TypeVar313("TResult", default=str)
+TAgent = TypeVar313("TAgent", default=str)
+T2 = TypeVar("T2")
 
 
-class AgentReply(Askable):
+class AgentReply(Generic[TResult, TAgent]):
     def __init__(
         self,
         response: ModelResponse,
         *,
         context: "Context",
         client: "LLMClient",
-        agent: "Agent",
+        agent: "Agent[TAgent]",
+        provider: Provider | None,
+        response_schema: ResponseProto[TResult] | None,
     ) -> None:
         self.response = response
         self.context = context
         self.__client = client
         self.__agent = agent
+        self.__provider = provider
+        self.__schema = response_schema
+
+    async def content(
+        self,
+        *,
+        retries: int | float = 0,
+    ) -> TResult | None:
+        schema = self.__schema
+        if schema is None:
+            return self.body  # type: ignore[return-value]
+
+        max_retries = max(retries, 0)
+
+        current = self
+        attempt = 0
+
+        while True:
+            if current.body is None:
+                return None
+
+            attempt += 1
+            try:
+                return await schema.validate(
+                    current.body,
+                    context=current.context,
+                    provider=current.__provider,
+                )
+            except ValidationError as e:
+                if attempt > max_retries:
+                    raise e
+
+                schema_section = (
+                    f"\n\n== Schema ==\n{json.dumps(schema.json_schema)}." if schema.json_schema is not None else ""
+                )
+                current = await current.ask(
+                    "Your previous response could not be validated by schema."
+                    f"{schema_section}"
+                    "\n\nPlease try again."
+                    "\n\n== Validation Error ==\n"
+                    f"{e.json()}",
+                    response_schema=schema,
+                )
 
     @property
-    def content(self) -> str | None:
-        """Text content of the model's response for this turn."""
+    def body(self) -> str | None:
+        """Text body of the model's response for this turn."""
         return self.response.content
 
     @property
     def history(self) -> History:
         return self.context.stream.history
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: type[T2],
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: ResponseProto[T2],
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: None,
+    ) -> "AgentReply[str, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+    ) -> "AgentReply[TAgent, TAgent]": ...
 
     async def ask(
         self,
@@ -83,7 +179,8 @@ class AgentReply(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest(content=msg)
 
         context = self.context
@@ -102,6 +199,7 @@ class AgentReply(Askable):
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
+            response_schema=response_schema,
         )
 
 
@@ -109,7 +207,67 @@ PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
 PromptType: TypeAlias = str | PromptHook
 
 
-class Agent(Askable):
+class Agent(Generic[TResult]):
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: type[TResult],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: ResponseProto[TResult],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: types.UnionType,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: None = ...,
+    ) -> None: ...
+
     def __init__(
         self,
         name: str,
@@ -121,6 +279,7 @@ class Agent(Askable):
         middleware: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
+        response_schema: ResponseProto[TResult] | type[TResult] | types.UnionType | None = None,
     ):
         self.name = name
         self.config = config
@@ -137,6 +296,8 @@ class Agent(Askable):
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
+
+        self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
@@ -230,6 +391,65 @@ class Agent(Askable):
 
         return make_tool
 
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: type[T2],
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: ResponseProto[T2],
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        response_schema: None,
+    ) -> "AgentReply[str, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+    ) -> "AgentReply[TResult, TResult]": ...
+
     async def ask(
         self,
         msg: str,
@@ -241,7 +461,8 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
@@ -272,6 +493,7 @@ class Agent(Askable):
             client=client,
             additional_tools=tools,
             additional_middleware=middleware,
+            response_schema=response_schema,
         )
 
     async def _execute(
@@ -282,7 +504,13 @@ class Agent(Askable):
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
-    ) -> "AgentReply":
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> "AgentReply[Any, Any]":
+        if response_schema is omit:
+            final_schema = self._response_schema
+        else:
+            final_schema = ResponseSchema.ensure_schema(response_schema)
+
         all_tools: list[Tool] = list(
             chain(
                 self.tools,
@@ -302,7 +530,11 @@ class Agent(Askable):
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
-        llm_call: LLMCall = partial(client, tools=all_schemas)
+        llm_call: LLMCall = partial(
+            client,
+            tools=all_schemas,
+            response_schema=final_schema,
+        )
 
         for m in reversed(
             list(
@@ -319,7 +551,10 @@ class Agent(Askable):
             llm_call = partial(mw.on_llm_call, llm_call)
 
         async def _call_client(context: Context) -> None:
-            result = await llm_call(await context.stream.history.get_events(), context)
+            result = await llm_call(
+                await context.stream.history.get_events(),
+                context,
+            )
             await context.send(result)
 
         with ExitStack() as stack:
@@ -346,6 +581,8 @@ class Agent(Askable):
                 context=context,
                 agent=self,
                 client=client,
+                provider=self.dependency_provider,
+                response_schema=final_schema,
             )
 
     def as_conversable(self) -> "ConversableAdapter":
@@ -372,12 +609,13 @@ def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awa
 
     async def wrapper(event: ModelRequest, context: Context) -> str:
         async with AsyncExitStack() as stack:
-            return await call_model.asolve(
+            r = await call_model.asolve(
                 event,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
                 **{CONTEXT_OPTION_NAME: context},
             )
+        return r
 
     return wrapper

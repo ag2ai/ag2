@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent, ModelResponse
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
 
@@ -18,4 +19,5 @@ class LLMClient(Protocol):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse: ...

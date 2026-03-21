@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, Literal, TypedDict
 
 import httpx
@@ -25,9 +26,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -39,7 +41,6 @@ class CreateOptions(TypedDict, total=False):
     top_p: float | None | Omit
     max_tokens: int | None | Omit
     max_completion_tokens: int | None | Omit
-    response_format: dict[str, Any] | None | Omit
     frequency_penalty: float | None | Omit
     presence_penalty: float | None | Omit
     seed: int | None | Omit
@@ -103,13 +104,24 @@ class OpenAIClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        openai_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        openai_messages = convert_messages(prompt, messages)
 
         openai_tools = [tool_to_api(t) for t in tools]
 
+        kwargs = {}
+        if r := response_proto_to_schema(response_schema):
+            kwargs["response_format"] = r
+
         response = await self._client.chat.completions.create(
             **self._create_options,
+            **kwargs,
             messages=openai_messages,
             tools=openai_tools,
         )

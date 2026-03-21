@@ -43,6 +43,11 @@
 AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from all organizations to contribute.
 </p>
 
+> [!IMPORTANT]
+> **AG2 is on the path to v1.0.** The current framework will be tidied up through deprecations over the next few minor versions and moved to maintenance mode. The beta framework (`autogen.beta`) will become the official version of AG2 at v1.0.
+>
+> [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/release-roadmap/)
+
 # AG2: Open-Source AgentOS for AI Agents
 
 AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.

@@ -8,8 +8,17 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | str | None:
+    """Convert a ResponseProto to Ollama's format parameter."""
+    if not response or not response.json_schema:
+        return None
+
+    return response.json_schema
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:

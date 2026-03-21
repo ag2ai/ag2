@@ -8,10 +8,59 @@ from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively add additionalProperties: false to all object schemas.
+
+    Anthropic requires this on every object node in output_config.format.schema.
+    """
+    schema = dict(schema)
+
+    if schema.get("type") == "object":
+        schema.setdefault("additionalProperties", False)
+
+    if "properties" in schema:
+        schema["properties"] = {
+            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v
+            for k, v in schema["properties"].items()
+        }
+
+    if "$defs" in schema:
+        schema["$defs"] = {
+            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()
+        }
+
+    for key in ("anyOf", "oneOf", "allOf"):
+        if key in schema:
+            schema[key] = [
+                _ensure_additional_properties_false(item) if isinstance(item, dict) else item for item in schema[key]
+            ]
+
+    if "items" in schema and isinstance(schema["items"], dict):
+        schema["items"] = _ensure_additional_properties_false(schema["items"])
+
+    return schema
+
+
+def response_proto_to_output_config(response: ResponseProto | None) -> dict[str, Any] | None:
+    """Convert a ResponseProto to Anthropic output_config."""
+    if not response or not response.json_schema:
+        return None
+
+    strict_schema = _ensure_additional_properties_false(response.json_schema)
+
+    return {
+        "format": {
+            "type": "json_schema",
+            "schema": strict_schema,
+        },
+    }
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:

@@ -152,7 +152,13 @@ class ToolErrorEvent(ToolResultEvent):
     @property
     def content(self) -> str:
         if not self._content:
-            self._content = "".join(traceback.format_exception(type(self.error), self.error, self.error.__traceback__))
+            self._content = "".join(
+                traceback.format_exception(
+                    type(self.error),
+                    self.error,
+                    self.error.__traceback__,
+                )
+            )
         return self._content
 
     @content.setter
