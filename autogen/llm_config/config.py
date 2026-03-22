@@ -148,7 +148,29 @@ class LLMConfig:
                 config_list = config.pop("config_list")
                 if isinstance(config_list, dict):
                     config_list = [config_list]
-                return LLMConfig(*config_list, **config)
+                # Separate known LLMConfig params from provider-specific options
+                # (e.g. stream=True) so they get pushed into each config entry
+                # where LLMConfigEntry(extra="allow") accepts them.
+                init_params = {
+                    "top_p",
+                    "temperature",
+                    "max_tokens",
+                    "check_every_ms",
+                    "allow_format_str_template",
+                    "response_format",
+                    "timeout",
+                    "seed",
+                    "cache_seed",
+                    "parallel_tool_calls",
+                    "tools",
+                    "functions",
+                    "routing_method",
+                }
+                llm_kwargs = {k: v for k, v in config.items() if k in init_params}
+                extra = {k: v for k, v in config.items() if k not in init_params}
+                if extra:
+                    config_list = [{**entry, **extra} if isinstance(entry, dict) else entry for entry in config_list]
+                return LLMConfig(*config_list, **llm_kwargs)
             return LLMConfig(config)
 
         return LLMConfig(*config)

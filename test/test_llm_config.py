@@ -913,3 +913,12 @@ class TestLLMConfig:
         # Verify LLMConfig doesn't have these attributes
         assert not hasattr(config, "workspace_dir")
         assert not hasattr(config, "allowed_paths")
+
+    def test_ensure_config_with_provider_specific_options(self) -> None:
+        """Provider-specific options like stream should be pushed into config entries
+        when passed at the top level of a config_list-style dict. Regression test for #1791."""
+        config = LLMConfig.ensure_config({
+            "config_list": [{"model": "gpt-4", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}],
+            "stream": True,
+        })
+        assert config.config_list[0].stream is True  # type: ignore[union-attr]
