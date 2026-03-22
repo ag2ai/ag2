@@ -125,7 +125,7 @@ def handoff_to_human(ticket_id: str) -> ToolResult[str]:
 agent = Agent(name="SupportBot", tools=[handoff_to_human])
 
 reply = await agent.ask("I need help with my ticket #123456.")
-print(reply.content)
+print(reply.body)
 # Output: "Ticket 123456 was escalated to a human agent."
 ```
 

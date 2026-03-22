@@ -51,7 +51,7 @@ async def test_toolkit_executes_tool(mock: MagicMock) -> None:
     result = await agent.ask("Hi!")
 
     mock.assert_called_once_with(a=2, b=3)
-    assert result.content == "done"
+    assert result.body == "done"
 
 
 @pytest.mark.asyncio()
@@ -223,4 +223,4 @@ async def test_toolkit_empty() -> None:
     agent = Agent("", config=config, tools=[toolkit])
     result = await agent.ask("Hi!")
 
-    assert result.content == "done"
+    assert result.body == "done"

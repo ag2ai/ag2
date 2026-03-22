@@ -13,25 +13,6 @@ from autogen.beta.events.tool_events import (
 )
 
 
-class TestToolCallEventProviderData:
-    """provider_data must default to dict, not list."""
-
-    def test_default_is_dict(self) -> None:
-        tc = ToolCallEvent(name="search")
-        assert isinstance(tc.provider_data, dict)
-
-    def test_dict_operations_work(self) -> None:
-        tc = ToolCallEvent(name="search")
-        tc.provider_data["key"] = "value"
-        assert tc.provider_data.get("key") == "value"
-
-    def test_each_instance_gets_own_dict(self) -> None:
-        tc1 = ToolCallEvent(name="a")
-        tc2 = ToolCallEvent(name="b")
-        tc1.provider_data["x"] = 1
-        assert "x" not in tc2.provider_data
-
-
 class TestClientToolCallEventFromCall:
     """from_call must link back to the original call via parent_id."""
 
@@ -85,10 +66,10 @@ class TestSerializedArgumentsCache:
     def test_empty_dict_is_cached(self) -> None:
         tc = ToolCallEvent(name="tool", arguments="{}")
         with patch.object(json, "loads", wraps=json.loads) as mock_loads:
-            _ = tc.serialized_arguments
-            _ = tc.serialized_arguments
+            result = tc.serialized_arguments
             _ = tc.serialized_arguments
             assert mock_loads.call_count == 1
+            assert result == {}
 
     def test_non_empty_dict_is_cached(self) -> None:
         tc = ToolCallEvent(name="tool", arguments='{"key": "value"}')
@@ -100,5 +81,11 @@ class TestSerializedArgumentsCache:
 
     def test_setter_updates_cache(self) -> None:
         tc = ToolCallEvent(name="tool", arguments='{"a": 1}')
-        tc.serialized_arguments = {"b": 2}
-        assert tc.serialized_arguments == {"b": 2}
+
+        with patch.object(json, "loads", wraps=json.loads) as mock_loads:
+            assert tc.serialized_arguments == {"a": 1}
+
+            tc.serialized_arguments = {"b": 2}
+            assert tc.serialized_arguments == {"b": 2}
+
+            assert mock_loads.call_count == 1

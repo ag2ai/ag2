@@ -26,7 +26,7 @@ async def test_mock_llm_answer():
     )
 
     # The agent returns the mocked response
-    assert res.content == "This is a mocked response."
+    assert res.body == "This is a mocked response."
 ```
 
 ## How to test tool execution
@@ -61,7 +61,7 @@ async def test_tool_success():
     res = await agent.ask("Please use my_tool", config=test_config)
 
     # After the tool is called and succeeds, the agent returns the second mocked event
-    assert res.content == "final result"
+    assert res.body == "final result"
 ```
 
 ### Errors

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
@@ -33,9 +34,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import events_to_responses_input, tool_to_responses_api
+from .mappers import events_to_responses_input, response_proto_to_text_config, tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -92,14 +94,26 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
-        instructions = "\n\n".join(context.prompt) if context.prompt else None
+
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        instructions = "\n".join(prompt) or None
 
         openai_tools = [tool_to_responses_api(t) for t in tools]
 
+        kwargs: dict[str, Any] = {}
+        if r := response_proto_to_text_config(response_schema):
+            kwargs["text"] = r
+
         response = await self._client.responses.create(
             **self._create_options,
+            **kwargs,
             input=input_items,
             instructions=instructions,
             tools=openai_tools or omit,
@@ -144,6 +158,9 @@ class OpenAIResponsesClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=response.model,
+            provider="openai",
+            finish_reason=response.status,
         )
 
     async def _process_stream(
@@ -154,6 +171,8 @@ class OpenAIResponsesClient(LLMClient):
         full_content: str = ""
         usage: dict[str, Any] = {}
         calls: list[ToolCallEvent] = []
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         async for event in response_stream:
             event: ResponseStreamEvent
@@ -174,6 +193,8 @@ class OpenAIResponsesClient(LLMClient):
             elif isinstance(event, ResponseCompletedEvent):
                 if event.response.usage:
                     usage = event.response.usage.model_dump()
+                finish_reason = event.response.status
+                resolved_model = event.response.model
 
         message: ModelMessage | None = None
         if full_content:
@@ -184,4 +205,7 @@ class OpenAIResponsesClient(LLMClient):
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=resolved_model,
+            provider="openai",
+            finish_reason=finish_reason,
         )
