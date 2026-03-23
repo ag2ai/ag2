@@ -54,6 +54,16 @@ class TestInteroperability:
 
             assert tool.func(args=args) == "Hello, World!"
 
+    def test_unsupported_type_error_message(self) -> None:
+        """The error for an unsupported interop type should list the actual type names."""
+        from unittest.mock import MagicMock, patch
+
+        mock_registry = MagicMock()
+        mock_registry.get_supported_types.return_value = ["langchain", "pydanticai"]
+
+        with patch.object(Interoperability, "registry", mock_registry), pytest.raises(ValueError, match="'langchain'"):
+            Interoperability.get_interoperability_class("nonexistent")
+
     @pytest.mark.skip("This test is not yet implemented")
     @run_for_optional_imports("langchain", "interop-langchain")
     def test_langchain(self) -> None:
