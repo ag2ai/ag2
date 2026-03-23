@@ -22,10 +22,11 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -58,7 +59,7 @@ if ag_ui_images.exists():
     app.mount("/images", StaticFiles(directory=ag_ui_images), name="images")
 
 
-async def sse_stream(messages: list[dict], a2ui_action: dict | None = None) -> asyncio.AsyncIterator[str]:
+async def sse_stream(messages: list[dict[str, Any]], a2ui_action: dict[str, Any] | None = None) -> AsyncIterator[str]:
     """Connect to the A2A agent and stream responses as SSE events."""
     run_id = str(uuid4())
     thread_id = "a2a-demo"

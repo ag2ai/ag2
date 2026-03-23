@@ -99,7 +99,7 @@ social_previewer = A2UIAgent(
         "IMPORTANT: The 'marketing' surface with previews must remain untouched when approving.\n\n"
         "IMPORTANT: When the brief mentions image URLs, use those exact URLs.\n\n"
         "IMPORTANT: For ALL Image components, use this product image URL: "
-        "http://localhost:8899/images/bottle-hero.png\n"
+        "http://localhost:8456/images/bottle-hero.png\n"
         "Do NOT invent or guess image URLs. Always use the URL above.\n\n"
         "First write a short text summary, then the A2UI JSON."
     ),
@@ -161,7 +161,7 @@ server = A2aAgentServer(
     ),
 )
 server.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],

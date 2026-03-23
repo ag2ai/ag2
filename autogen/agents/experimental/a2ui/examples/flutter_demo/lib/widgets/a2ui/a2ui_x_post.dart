@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../state/chat_state.dart';
 import 'component_factory.dart';
 
-/// Custom XPost (Twitter/X) component.
+/// Custom XPost (Twitter/X) component — matches real X dark theme formatting.
 class A2UIXPost extends StatelessWidget {
   final Map<String, dynamic> component;
   final Map<String, Map<String, dynamic>> components;
@@ -18,10 +18,16 @@ class A2UIXPost extends StatelessWidget {
     required this.state,
   });
 
+  String _formatNumber(int n) {
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName = component['authorName'] as String? ?? component['displayName'] as String? ?? '';
     final handle = component['authorHandle'] as String? ?? component['handle'] as String? ?? '';
+    final avatarUrl = component['authorAvatarUrl'] as String?;
     final verified = component['verified'] as bool? ?? false;
     final body = component['body'] as String? ?? '';
     final likes = component['likes'] as int? ?? 0;
@@ -32,63 +38,75 @@ class A2UIXPost extends StatelessWidget {
     final children = mediaChild != null ? [mediaChild] : (component['children'] as List<dynamic>?)?.cast<String>() ?? [];
 
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        border: Border.all(color: const Color(0xFF334155)),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.black,
+        border: Border.all(color: const Color(0xFF2F3336)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           // Header
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: const Color(0xFF334155),
-                child: Text(
-                  displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Color(0xFFE2E8F0), fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFF2F3336),
+                  backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl == null || avatarUrl.isEmpty
+                      ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                          style: const TextStyle(color: Color(0xFFE7E9EA), fontWeight: FontWeight.bold))
+                      : null,
                 ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Row(
                     children: [
-                      Text(displayName, style: const TextStyle(color: Color(0xFFE2E8F0), fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text(displayName,
+                          style: const TextStyle(
+                              color: Color(0xFFE7E9EA), fontWeight: FontWeight.w700, fontSize: 15, height: 1.33)),
                       if (verified) ...[
                         const SizedBox(width: 4),
                         const Icon(Icons.verified, size: 16, color: Color(0xFF1D9BF0)),
                       ],
+                      const SizedBox(width: 4),
+                      Text(handle.startsWith('@') ? handle : '@$handle',
+                          style: const TextStyle(color: Color(0xFF71767B), fontSize: 15, height: 1.33)),
+                      const Text(' · ',
+                          style: TextStyle(color: Color(0xFF71767B), fontSize: 15)),
+                      const Text('1h',
+                          style: TextStyle(color: Color(0xFF71767B), fontSize: 15)),
                     ],
                   ),
-                  Text('@$handle', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
           // Body
-          Text(body, style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 14)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Text(body,
+                style: const TextStyle(color: Color(0xFFE7E9EA), fontSize: 15, height: 1.33)),
+          ),
           // Media child
-          for (final childId in children) ...[
-            const SizedBox(height: 10),
+          for (final childId in children)
             buildComponent(childId, components, surfaceId, state),
-          ],
-          const Divider(color: Color(0xFF334155), height: 20),
           // Engagement
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _engagementItem(Icons.chat_bubble_outline, '$replies'),
-              _engagementItem(Icons.repeat, '$reposts'),
-              _engagementItem(Icons.favorite_outline, '$likes'),
-              _engagementItem(Icons.bar_chart, '$views'),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _engagementItem(Icons.chat_bubble_outline, _formatNumber(replies)),
+                _engagementItem(Icons.repeat, _formatNumber(reposts)),
+                _engagementItem(Icons.favorite_outline, _formatNumber(likes)),
+                _engagementItem(Icons.bar_chart, _formatNumber(views)),
+                const Icon(Icons.bookmark_border, size: 16, color: Color(0xFF71767B)),
+              ],
+            ),
           ),
         ],
       ),
@@ -99,9 +117,9 @@ class A2UIXPost extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
+        Icon(icon, size: 16, color: const Color(0xFF71767B)),
         const SizedBox(width: 4),
-        Text(count, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        Text(count, style: const TextStyle(color: Color(0xFF71767B), fontSize: 13)),
       ],
     );
   }

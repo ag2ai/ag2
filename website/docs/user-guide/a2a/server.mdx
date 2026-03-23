@@ -240,33 +240,7 @@ general_agent = A2aRemoteAgent(
 
 ## Rich UI with A2UIAgent
 
-[`A2UIAgent`](/docs/user-guide/reference-agents/a2uiagent) is a specialized agent that generates rich user interfaces using the [A2UI protocol](https://a2ui.org/){.external-link target="_blank"}. When wrapped in `A2aAgentServer`, it is auto-detected and the server automatically:
-
-- Uses `A2UIAgentExecutor` to split responses into text + A2UI DataParts
-- Declares A2UI v0.9 extension support in the agent card
-- Handles extension negotiation — clients that don't request A2UI get text-only responses
-
-```python title="a2ui_server.py" linenums="1" hl_lines="1 6-10"
-from autogen.agents.experimental import A2UIAgent
-from autogen.a2a import A2aAgentServer, CardSettings
-
-agent = A2UIAgent(
-    name="ui_agent",
-    llm_config=llm_config,
-    validate_responses=True,
-)
-
-server = A2aAgentServer(
-    agent,
-    url="http://0.0.0.0:9000",
-    agent_card=CardSettings(
-        name="My UI Agent",
-        description="An agent that generates rich UI.",
-    ),
-).build()
-```
-
-Clients request the A2UI extension via the `X-A2A-Extensions` HTTP header. See the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for details on configuration, validation, actions, and custom catalogs.
+A2UIAgent can serve rich, interactive UI components over A2A. See the dedicated [A2UI page](/docs/user-guide/a2a/a2ui) for setup details, or the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for configuration, validation, actions, and custom catalogs.
 
 ## Advanced A2A Configuration
 

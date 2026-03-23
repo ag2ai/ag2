@@ -61,7 +61,7 @@ class A2UIAgent(ConversableAgent):
         include_schema_in_prompt: bool = True,
         include_rules_in_prompt: bool = True,
         response_delimiter: str = A2UI_DEFAULT_DELIMITER,
-        validate_responses: bool = False,
+        validate_responses: bool = True,
         validation_retries: int = 1,
         actions: list[A2UIAction] | None = None,
         **kwargs: Any,

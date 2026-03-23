@@ -194,71 +194,191 @@ body {
     gap: 6px;
 }
 
-/* LinkedIn Post Styling */
+/* LinkedIn Post Styling — matches real LinkedIn formatting */
 .a2ui-linkedin-post {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 10px;
-    padding: 16px;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 0;
     margin: 8px 0;
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", "Fira Sans", Ubuntu, Oxygen, Cantarell, "Droid Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Lucida Grande", Helvetica, Arial, sans-serif;
+    color: rgba(0, 0, 0, 0.9);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 3px rgba(0, 0, 0, 0.04);
 }
 .a2ui-linkedin-post .post-header {
     display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 12px;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 12px 16px 0;
 }
 .a2ui-linkedin-post .post-avatar {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: #334155;
+    background: #e0e0e0;
+    flex-shrink: 0;
 }
-.a2ui-linkedin-post .post-author { font-weight: 600; }
-.a2ui-linkedin-post .post-headline { font-size: 12px; color: #94a3b8; }
-.a2ui-linkedin-post .post-body { margin: 8px 0; font-size: 14px; line-height: 1.6; white-space: pre-line; }
-.a2ui-linkedin-post .post-hashtags { color: #6366f1; font-size: 13px; margin: 8px 0; }
+.a2ui-linkedin-post .post-author {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 20px;
+    color: rgba(0, 0, 0, 0.9);
+}
+.a2ui-linkedin-post .post-headline {
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.6);
+    line-height: 16px;
+}
+.a2ui-linkedin-post .post-timestamp {
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.6);
+    line-height: 16px;
+}
+.a2ui-linkedin-post .post-body {
+    padding: 12px 16px 0;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgba(0, 0, 0, 0.9);
+    white-space: pre-line;
+}
+.a2ui-linkedin-post .post-media {
+    margin-top: 12px;
+}
+.a2ui-linkedin-post .post-media img {
+    width: 100%;
+    display: block;
+}
+.a2ui-linkedin-post .post-hashtags {
+    padding: 4px 16px 0;
+    color: #0a66c2;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
 .a2ui-linkedin-post .post-engagement {
     display: flex;
-    gap: 16px;
-    padding-top: 10px;
-    border-top: 1px solid #334155;
+    gap: 4px;
+    padding: 8px 16px;
     font-size: 12px;
-    color: #94a3b8;
+    color: rgba(0, 0, 0, 0.6);
+    align-items: center;
+}
+.a2ui-linkedin-post .post-engagement span {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.a2ui-linkedin-post .post-actions {
+    display: flex;
+    border-top: 1px solid #e0e0e0;
+    padding: 4px 8px;
+}
+.a2ui-linkedin-post .post-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border: none;
+    background: none;
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.a2ui-linkedin-post .post-action-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
 }
 
-/* X Post Styling */
+/* X Post Styling — matches real X/Twitter formatting */
 .a2ui-x-post {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 10px;
-    padding: 16px;
+    background: #000000;
+    border: 1px solid #2f3336;
+    border-radius: 0px;
+    padding: 0;
     margin: 8px 0;
+    font-family: TwitterChirp, -apple-system, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: rgb(231, 233, 234);
 }
 .a2ui-x-post .post-header {
     display: flex;
     gap: 10px;
-    align-items: center;
-    margin-bottom: 8px;
+    align-items: flex-start;
+    padding: 12px 16px 0;
 }
 .a2ui-x-post .post-avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #334155;
+    background: #2f3336;
+    flex-shrink: 0;
 }
-.a2ui-x-post .post-name-row { display: flex; gap: 4px; align-items: center; }
-.a2ui-x-post .post-author { font-weight: 600; font-size: 14px; }
-.a2ui-x-post .verified-badge { color: #1d9bf0; font-size: 14px; }
-.a2ui-x-post .post-handle { font-size: 13px; color: #94a3b8; }
-.a2ui-x-post .post-body { margin: 4px 0 10px; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+.a2ui-x-post .post-name-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.a2ui-x-post .post-author {
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 20px;
+    color: rgb(231, 233, 234);
+}
+.a2ui-x-post .verified-badge {
+    color: #1d9bf0;
+    font-size: 15px;
+}
+.a2ui-x-post .post-handle {
+    font-size: 15px;
+    font-weight: 400;
+    color: rgb(113, 118, 123);
+    line-height: 20px;
+}
+.a2ui-x-post .post-timestamp {
+    font-size: 15px;
+    font-weight: 400;
+    color: rgb(113, 118, 123);
+}
+.a2ui-x-post .post-body {
+    padding: 0 16px 12px;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgb(231, 233, 234);
+    white-space: pre-line;
+}
+.a2ui-x-post .post-hashtags {
+    padding: 0 16px 4px;
+    font-size: 15px;
+    font-weight: 400;
+    color: rgb(29, 155, 240);
+}
+.a2ui-x-post .post-media {
+    margin: 0;
+}
+.a2ui-x-post .post-media img {
+    width: 100%;
+    display: block;
+    border-top: 1px solid #2f3336;
+    border-bottom: 1px solid #2f3336;
+}
 .a2ui-x-post .post-engagement {
     display: flex;
-    gap: 20px;
-    padding-top: 10px;
-    border-top: 1px solid #334155;
-    font-size: 12px;
-    color: #94a3b8;
+    justify-content: space-between;
+    padding: 4px 16px 4px;
+    margin-top: 4px;
+    font-size: 13px;
+    color: rgb(113, 118, 123);
+}
+.a2ui-x-post .post-engagement span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .input-area {

@@ -121,23 +121,7 @@ data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 
 ## Rich UI with A2UIAgent
 
-[`A2UIAgent`](/docs/user-guide/reference-agents/a2uiagent) extends `AGUIStream` with support for the [A2UI protocol](https://a2ui.org/){.external-link target="_blank"}, enabling agents to generate structured UI components (cards, forms, buttons, images) instead of plain text.
-
-The agent works with AG-UI through an **event interceptor** that extracts A2UI JSON from responses and emits `ActivitySnapshotEvent` events:
-
-```python title="a2ui_ag_ui.py" linenums="1" hl_lines="2 9"
-from autogen.ag_ui import AGUIStream
-from autogen.agents.experimental.a2ui import A2UIAgent, a2ui_event_interceptor
-
-agent = A2UIAgent(
-    name="ui_agent",
-    llm_config=llm_config,
-)
-
-stream = AGUIStream(agent, event_interceptors=[a2ui_event_interceptor])
-```
-
-Frontend renderers like CopilotKit's `@copilotkit/a2ui-renderer` consume the `ACTIVITY_SNAPSHOT` events and render the UI components. See the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for configuration, validation, actions, and A2A integration.
+A2UIAgent extends AG-UI with support for the A2UI protocol, enabling agents to generate structured UI components (cards, forms, buttons, images) instead of plain text. See the dedicated [A2UI page](/docs/user-guide/ag-ui/a2ui) for setup details, or the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for configuration, validation, actions, and A2A integration.
 
 ## UI clients
 

@@ -293,51 +293,75 @@
                 }
                 case 'LinkedInPost': {
                     el.className = 'a2ui-linkedin-post';
+                    const likeCount = comp.likes || 0;
+                    const commentCount = comp.comments || 0;
+                    const repostCount = comp.reposts || 0;
+                    const mediaHtml = comp.mediaChild && componentsById[comp.mediaChild]
+                        ? `<div class="post-media"><img src="${componentsById[comp.mediaChild].url || ''}" alt=""
+                              onerror="this.parentElement.style.display='none'"></div>` : '';
                     el.innerHTML = `
                         <div class="post-header">
                             <img class="post-avatar" src="${comp.authorAvatarUrl || ''}" alt=""
-                                 onerror="this.style.background='#6366f1'">
+                                 onerror="this.style.background='#e0e0e0'">
                             <div>
                                 <div class="post-author">${comp.authorName || ''}</div>
                                 <div class="post-headline">${comp.authorHeadline || ''}</div>
+                                <div class="post-timestamp">1d &bull; &#127760;</div>
                             </div>
                         </div>
                         <div class="post-body">${comp.body || ''}</div>
-                        ${comp.mediaChild && componentsById[comp.mediaChild] ?
-                            `<img class="a2ui-image" src="${componentsById[comp.mediaChild].url || ''}" alt=""
-                                  onerror="this.outerHTML='<div class=a2ui-image-placeholder>🖼 Media</div>'">` : ''}
                         ${comp.hashtags ? `<div class="post-hashtags">${comp.hashtags}</div>` : ''}
+                        ${mediaHtml}
                         <div class="post-engagement">
-                            <span>👍 ${formatNumber(comp.likes || 0)}</span>
-                            <span>💬 ${formatNumber(comp.comments || 0)}</span>
-                            <span>🔄 ${formatNumber(comp.reposts || 0)}</span>
+                            <span>&#128077; ${formatNumber(likeCount)}</span>
+                            <span>&bull;</span>
+                            <span>${formatNumber(commentCount)} comments</span>
+                            <span>&bull;</span>
+                            <span>${formatNumber(repostCount)} reposts</span>
+                        </div>
+                        <div class="post-actions">
+                            <button class="post-action-btn">&#128077; Like</button>
+                            <button class="post-action-btn">&#128172; Comment</button>
+                            <button class="post-action-btn">&#128260; Repost</button>
+                            <button class="post-action-btn">&#9993; Send</button>
                         </div>
                     `;
                     break;
                 }
                 case 'XPost': {
                     el.className = 'a2ui-x-post';
+                    let xMediaUrl = comp.mediaChild && componentsById[comp.mediaChild]
+                        ? (componentsById[comp.mediaChild].url || '') : '';
+                    if (xMediaUrl) {
+                        try {
+                            const u = new URL(xMediaUrl, window.location.origin);
+                            if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') xMediaUrl = u.pathname;
+                        } catch(e) {}
+                    }
+                    const xMediaHtml = xMediaUrl
+                        ? `<div class="post-media"><img src="${xMediaUrl}" alt=""
+                              onerror="this.parentElement.style.display='none'"></div>` : '';
                     el.innerHTML = `
                         <div class="post-header">
                             <img class="post-avatar" src="${comp.authorAvatarUrl || ''}" alt=""
-                                 onerror="this.style.background='#334155'">
+                                 onerror="this.style.background='#2f3336'">
                             <div>
                                 <div class="post-name-row">
                                     <span class="post-author">${comp.authorName || ''}</span>
-                                    ${comp.verified ? '<span class="verified-badge">✓</span>' : ''}
+                                    ${comp.verified ? '<span class="verified-badge">&#10004;</span>' : ''}
+                                    <span class="post-handle">${comp.authorHandle || ''}</span>
+                                    <span class="post-timestamp">&middot; 1h</span>
                                 </div>
-                                <div class="post-handle">${comp.authorHandle || ''}</div>
                             </div>
                         </div>
                         <div class="post-body">${comp.body || ''}</div>
-                        ${comp.mediaChild && componentsById[comp.mediaChild] ?
-                            `<img class="a2ui-image" src="${componentsById[comp.mediaChild].url || ''}" alt=""
-                                  onerror="this.outerHTML='<div class=a2ui-image-placeholder>🖼 Media</div>'">` : ''}
+                        ${xMediaHtml}
                         <div class="post-engagement">
-                            <span>💬 ${formatNumber(comp.replies || 0)}</span>
-                            <span>🔄 ${formatNumber(comp.reposts || 0)}</span>
-                            <span>❤️ ${formatNumber(comp.likes || 0)}</span>
-                            <span>👁 ${formatNumber(comp.views || 0)}</span>
+                            <span>&#128172; ${formatNumber(comp.replies || 0)}</span>
+                            <span>&#128260; ${formatNumber(comp.reposts || 0)}</span>
+                            <span>&#10084; ${formatNumber(comp.likes || 0)}</span>
+                            <span>&#128202; ${formatNumber(comp.views || 0)}</span>
+                            <span>&#128278;</span>
                         </div>
                     `;
                     break;
