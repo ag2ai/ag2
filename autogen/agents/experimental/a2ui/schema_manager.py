@@ -365,19 +365,21 @@ class A2UISchemaManager:
 
             if func_actions:
                 action_lines.append("\n### Client Functions\n")
+                action_lines.append(
+                    "Client functions execute on the client without a server round-trip. "
+                    "Use the **exact** function name, argument structure, and returnType shown below. "
+                    "Do not add extra properties.\n"
+                )
                 for a in func_actions:
                     desc = f": {a.description}" if a.description else ""
-                    action_lines.append(f"- `{a.name}`{desc}")
-                    if a.example_args:
-                        action_lines.append(f"  Args: {json.dumps(a.example_args)}")
-                action_lines.append(
-                    "\nTo create a button that calls a client function:\n"
-                    "```json\n"
-                    '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
-                    '"action": {"functionCall": {"call": "<function_name>", "args": {...}, "returnType": "void"}}},\n'
-                    '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
-                    "```"
-                )
+                    example_args = json.dumps(a.example_args) if a.example_args else "{}"
+                    action_lines.append(f"- **`{a.name}`**{desc}")
+                    action_lines.append(
+                        f"  ```json\n"
+                        f'  {{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
+                        f'"action": {{"functionCall": {{"call": "{a.name}", "args": {example_args}, "returnType": "void"}}}}}}\n'
+                        f"  ```"
+                    )
 
             sections.append("\n".join(action_lines))
 
