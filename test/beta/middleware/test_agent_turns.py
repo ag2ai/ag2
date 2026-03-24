@@ -90,4 +90,4 @@ async def test_middleware_incoming_message_mutation() -> None:
     result = await agent.ask("1")
 
     tracking_config.mock.assert_called_once_with(ModelRequest(content="1" * (2**3)))
-    assert result.content == "2" * (2**3)
+    assert result.body == "2" * (2**3)

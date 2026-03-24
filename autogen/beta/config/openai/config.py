@@ -27,7 +27,6 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     streaming: bool
     max_tokens: int | None | Omit
     max_completion_tokens: int | None | Omit
-    response_format: dict[str, Any] | None | Omit
     websocket_base_url: str | None
     organization: str | None
     project: str | None
@@ -70,7 +69,6 @@ class OpenAIConfig(ModelConfig):
     streaming: bool = False
     max_tokens: int | None | Omit = omit
     max_completion_tokens: int | None | Omit = omit
-    response_format: dict[str, Any] | None | Omit = omit
     websocket_base_url: str | None = None
     organization: str | None = None
     project: str | None = None
@@ -114,7 +112,6 @@ class OpenAIConfig(ModelConfig):
             top_p=self.top_p,
             max_tokens=self.max_tokens,
             max_completion_tokens=self.max_completion_tokens,
-            response_format=self.response_format,
             frequency_penalty=self.frequency_penalty,
             presence_penalty=self.presence_penalty,
             seed=self.seed,

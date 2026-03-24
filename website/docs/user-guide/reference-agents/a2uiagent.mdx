@@ -1,0 +1,395 @@
+---
+title: A2UIAgent
+sidebarTitle: A2UIAgent
+---
+
+[`A2UIAgent`](/docs/api-reference/autogen/agents/experimental/A2UIAgent) is a specialized AG2 agent that produces rich user interfaces using the [A2UI protocol](https://a2ui.org/){.external-link target="_blank"}. Instead of returning plain text, the agent generates structured JSON that client-side renderers transform into interactive UI components — cards, forms, buttons, images, and more.
+
+A2UIAgent handles the full lifecycle: prompt engineering with schema instructions, response parsing to extract A2UI JSON, optional schema validation with automatic retry, and integration with [A2A (Agent-to-Agent)](https://google.github.io/A2A/){.external-link target="_blank"} for serving UI.
+
+## Architecture
+
+![A2UIAgent Architecture](./assets/a2ui-architecture.png)
+
+A2UIAgent produces A2UI JSON — a standard, transport-agnostic UI specification. The same agent connects to frontend renderers through two transport options:
+
+- **A2A transport**: `A2aAgentServer` with `A2UIAgentExecutor` serves responses as TextPart + DataPart over A2A (JSON-RPC). The server auto-detects A2UIAgent, declares A2UI v0.9 extension support in the agent card, and handles extension negotiation — clients that support A2UI get rich DataParts, others get plain text. Actions flow back as DataParts.
+- **AG-UI transport**: `AGUIStream` with the A2UI interceptor streams `ActivitySnapshotEvent` events over AG-UI (SSE). The interceptor extracts A2UI JSON from the agent's response and emits it as structured events that frontend renderers consume directly.
+
+Both transports deliver the same A2UI operations to the frontend. The [A2UI Renderer](https://a2ui.org/reference/renderers/) — such as React, Lit, Angular, or Flutter — receives the operations and renders native UI components. The renderer is transport-agnostic; it doesn't know or care whether the operations arrived via A2A or AG-UI.
+
+## When to Use A2UIAgent
+
+Use A2UIAgent when your agent needs to:
+
+- Return structured content (product cards, dashboards, forms) rather than plain text
+- Support interactive elements (buttons, dropdowns, choice pickers) that trigger actions
+- Support serving UI to multiple client platforms (web, mobile, Flutter) via a single backend
+- Support multi-surface flows (e.g. show previews on one surface, scheduling options on another)
+
+## Supported Protocol
+
+A2UIAgent currently supports [**A2UI v0.9**](https://a2ui.org/specification/v0.9-a2ui/){.external-link target="_blank"}. Its basic catalog includes components like:
+
+- **Layout**: Column, Row, Card
+- **Content**: Text (with variants: h1, h2, h3, body, caption), Image, Divider
+- **Interactive**: Button, TextField, ChoicePicker
+
+A2UIAgent also supports the use of a custom catalog for your own catalog components. For example, if you wanted to generate LinkedIn post previews, you could create your own LinkedInPost component and put it in a custom catalog.
+
+## Quick Start
+
+Install AG2 with the A2UI extra (includes `jsonschema` for schema validation):
+
+```bash
+pip install "ag2[a2ui]"
+```
+
+Then create an agent:
+
+```python title="basic_a2ui_agent.py" linenums="1"
+from autogen import LLMConfig
+from autogen.agents.experimental import A2UIAgent
+
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+)
+
+# The agent's system message automatically includes A2UI protocol instructions.
+# When the LLM's response contains A2UI JSON, it's parsed and available
+# through the response parser.
+```
+
+The agent automatically generates a system prompt that instructs the LLM how to produce A2UI output, available components, and catalog rules.
+
+## Key Parameters
+
+```python title="full_configuration.py" linenums="1"
+from pathlib import Path
+
+from autogen.agents.experimental import A2UIAgent
+from autogen.agents.experimental.a2ui import A2UIAction
+
+agent = A2UIAgent(
+    name="ui_agent",
+    system_message="You are a restaurant finder.",  # Prepended to A2UI instructions
+    llm_config=llm_config,
+
+    # Protocol settings
+    protocol_version="v0.9",              # Currently only v0.9 supported
+    custom_catalog=Path("my_catalog.json"),
+    custom_catalog_rules="Use MyCard for all product displays.",
+
+    # Prompt control
+    include_schema_in_prompt=True,         # Include JSON schema (uses more tokens)
+    include_rules_in_prompt=True,          # Include catalog rules
+
+    # Validation (validate_responses defaults to True)
+    validation_retries=2,                  # Max retry attempts on validation failure (default: 1)
+
+    # Actions (button handling)
+    actions=[
+        A2UIAction(
+            name="book_table",
+            tool_name="book_restaurant",       # Server event routed to tool
+            description="Book a table at the selected restaurant",
+        ),
+        A2UIAction(
+            name="openUrl",
+            action_type="functionCall",        # Client-side function
+            description="Open restaurant website",
+            example_args={"url": "https://example.com"},
+        ),
+    ],
+)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `protocol_version` | A2UI protocol version. Currently `"v0.9"`. |
+| `custom_catalog` | Path or dict extending the basic catalog with custom components. Must include a `$id` field. |
+| `custom_catalog_rules` | Plain-text rules for custom components, appended to the prompt. |
+| `include_schema_in_prompt` | Include the full JSON schema in the system prompt. Improves accuracy but uses more tokens. |
+| `include_rules_in_prompt` | Include catalog rules in the system prompt. Default: `True`. |
+| `validate_responses` | Enable schema validation with retry. Default: `True`. |
+| `validation_retries` | Number of retry attempts when validation fails. Requires `validate_responses=True`. |
+| `actions` | List of `A2UIAction` definitions for button handling (server events and client functions). |
+
+## How It Works
+
+### Response Format
+
+The agent instructs the LLM to respond with conversational text followed by a delimiter and A2UI JSON:
+
+```
+Here are the restaurants you requested.
+---a2ui_JSON---
+[
+  {"version": "v0.9", "createSurface": {"surfaceId": "results", "catalogId": "..."}},
+  {"version": "v0.9", "updateComponents": {"surfaceId": "results", "components": [...]}}
+]
+```
+
+The built-in response parser splits the text from the A2UI JSON, handles markdown code fences (`` ```json ``), and normalizes single objects to arrays.
+
+### Validation Loop
+
+When `validate_responses=True` (the default), the agent runs a *generate-validate-retry* loop:
+
+1. **Generate**: Call the LLM to produce a response
+2. **Parse**: Extract A2UI JSON from the response
+3. **Validate**: Check against the A2UI schema
+4. **If valid**: Return the response as-is
+5. **If invalid**: Format the validation errors as feedback, append to the conversation, and retry
+6. **If retries exhausted**: Return the text portion only (graceful degradation)
+
+This ensures the LLM self-corrects common mistakes like missing required fields or invalid component structures.
+
+### Actions
+
+Actions connect UI buttons to behavior. A2UI defines two action types (agent/server-side and client-side), and `A2UIAction` supports both:
+
+#### Server Actions (`action_type="event"`)
+
+Server actions dispatch named events to the server when a button is clicked. They can be routed to a registered tool or handled by the LLM.
+
+This is the default action type.
+
+```python
+# Tool action: button click calls schedule_posts(time="9:00 AM") directly
+A2UIAction(name="schedule_9am", tool_name="schedule_posts", example_context={"time": "9:00 AM"})
+
+# LLM action: button click sends a prompt to the LLM for a new response
+A2UIAction(name="rewrite", description="Regenerate with a different creative angle")
+```
+
+In the first example, the aim is for the LLM to generate buttons with: `{"event": {"name": "schedule_9am", "context": {"time": "9:00 AM"}}}` and these will be rendered on the UI.
+
+#### Client Actions (`action_type="functionCall"`)
+
+Client actions execute client-side functions (e.g., opening a URL) without server communication. Use `example_args` to show the LLM what arguments to include.
+
+```python
+A2UIAction(
+    name="openUrl",
+    action_type="functionCall",
+    description="Open a URL in the user's browser",
+    example_args={"url": "https://example.com"},
+)
+```
+
+For this example, the LLM generates a button like: `{"functionCall": {"name": "openUrl", "args": {"url": "https://..."}}}`
+
+#### Mixing Both Types
+
+Both server and client-side actions can be used at the same time.
+
+```python
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+    actions=[
+        # Server: route to a tool
+        A2UIAction(
+            name="book_table",
+            tool_name="book_restaurant",
+            description="Book a table at the selected restaurant",
+            example_context={"restaurant_id": "abc123"},
+        ),
+        # Client: open link in browser
+        A2UIAction(
+            name="openUrl",
+            action_type="functionCall",
+            description="Open the restaurant's website",
+            example_args={"url": "https://example.com"},
+        ),
+    ],
+)
+```
+
+## A2A Transport
+
+A2UIAgent integrates with the A2A protocol through `A2aAgentServer`, which auto-detects A2UIAgent and:
+
+- Uses `A2UIAgentExecutor` to split responses into TextPart + A2UI DataPart (MIME: `application/json+a2ui`)
+- Declares the A2UI v0.9 extension in the agent card
+- Handles extension negotiation (clients that don't support A2UI get text-only responses)
+- Routes incoming A2UI actions from DataParts to registered tools or the LLM
+
+```python title="a2a_server.py" linenums="1"
+from autogen import LLMConfig
+from autogen.a2a import A2aAgentServer, CardSettings
+from autogen.agents.experimental import A2UIAgent
+
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+    validate_responses=True,
+)
+
+server = A2aAgentServer(
+    agent=agent,
+    url="http://localhost:9000",
+    agent_card=CardSettings(
+        name="My UI Agent",
+        description="An agent that generates rich UI.",
+    ),
+)
+
+app = server.build()
+
+# Run with: uvicorn app:app --host 0.0.0.0 --port 9000
+```
+
+Clients connect via A2A JSON-RPC and request the A2UI extension through the A2A protocol's extension negotiation. The server activates it if the client includes the A2UI extension URI in its request, and falls back to text-only for clients that don't.
+
+The response contains standard A2A parts:
+- **TextPart**: The conversational text
+- **DataPart**: A2UI operations with MIME type `application/json+a2ui`
+
+### Flutter Frontend
+
+Flutter's [`genui`](https://github.com/flutter/genui){.external-link target="_blank"} packages provide a native A2UI renderer that connects to an A2A server, renders surfaces, and handles actions. Add `genui` and `genui_a2a` to your `pubspec.yaml`:
+
+```yaml title="pubspec.yaml"
+dependencies:
+  genui:
+    git:
+      url: https://github.com/flutter/genui.git
+      path: packages/genui
+  genui_a2a:
+    git:
+      url: https://github.com/flutter/genui.git
+      path: packages/genui_a2a
+```
+
+Then wire up the connector, surface controller, and conversation:
+
+```dart title="main.dart" linenums="1"
+import 'package:genui/genui.dart';
+import 'package:genui_a2a/genui_a2a.dart';
+
+// 1. Create a SurfaceController with the basic catalog
+final controller = SurfaceController(
+  catalogs: [BasicCatalogItems.asCatalog()],
+);
+
+// 2. Connect to the A2A server
+final connector = A2uiAgentConnector(
+  url: Uri.parse('http://localhost:9000'),
+);
+
+// 3. Bridge the connector to the transport layer
+final transport = A2uiTransportAdapter(
+  onSend: (message) => connector.connectAndSend(
+    message,
+    clientCapabilities: controller.clientCapabilities,
+  ),
+);
+
+// 4. Create a Conversation that ties it all together
+final conversation = Conversation(
+  controller: controller,
+  transport: transport,
+);
+
+// 5. Pipe A2UI messages and text from the connector into the transport
+connector.stream.listen(transport.addMessage);
+connector.textStream.listen(transport.addChunk);
+```
+
+The `SurfaceController` manages A2UI surfaces and renders components using the catalog. The `A2uiAgentConnector` handles A2A communication — including A2UI extension negotiation — and streams back `A2uiMessage` objects that the transport adapter converts into surface updates.
+
+Use `SurfaceWidget` from `genui` to render each surface in your widget tree. Actions (button clicks) flow back through the transport automatically.
+
+A complete Flutter + A2UIAgent example is available in the [Build with AG2](https://github.com/ag2ai/build-with-ag2/tree/main/a2ui/flutter){.external-link target="_blank"} repository.
+
+## AG-UI Transport
+
+A2UIAgent works with `AGUIStream` from the [AG-UI protocol](/docs/user-guide/ag-ui/), which provides real-time bidirectional streaming between backend agents and frontend UIs over SSE. The agent works with AG-UI through an **event interceptor** that extracts A2UI JSON from the agent's response stream and emits it as `ActivitySnapshotEvent` events — which frontend renderers (like CopilotKit's `@copilotkit/a2ui-renderer`) consume directly.
+
+```python title="ag_ui_server.py" linenums="1" hl_lines="2 10"
+from autogen.ag_ui import AGUIStream
+from autogen.agents.experimental.a2ui import A2UIAgent, a2ui_event_interceptor
+
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+    ...
+)
+
+stream = AGUIStream(agent, event_interceptors=[a2ui_event_interceptor])
+```
+
+### How the Interceptor Works
+
+The interceptor sits between the agent and the AG-UI stream:
+
+1. The agent generates a response containing text + A2UI JSON (separated by `---a2ui_JSON---`)
+2. The interceptor parses the response and splits it:
+    - **A2UI operations** are emitted as an `ActivitySnapshotEvent` with `activityType: "a2ui-surface"`
+    - **Text content** is passed through as a normal text message
+    - **A2UI JSON is stripped** from the text to prevent duplication
+3. The frontend renderer receives the `ActivitySnapshotEvent` and renders the UI components
+
+The default `a2ui_event_interceptor` works out of the box. For custom configuration, use the factory:
+
+```python
+from autogen.agents.experimental.a2ui import create_a2ui_event_interceptor
+
+# Custom interceptor with different activity type
+interceptor = create_a2ui_event_interceptor(
+    activity_type="custom-surface",  # Match your frontend renderer
+)
+
+stream = AGUIStream(agent, event_interceptors=[interceptor])
+```
+
+### Frontend Integration
+
+On the frontend, use a renderer that handles `ACTIVITY_SNAPSHOT` events with A2UI content. CopilotKit, the creators of AG-UI, have a compatible React renderer, [see their A2UI documentation](https://docs.copilotkit.ai/a2a/generative-ui/declarative-a2ui).
+
+## Custom Catalogs
+
+Extend the basic catalog with domain-specific components:
+
+```python title="custom_catalog.py" linenums="1"
+agent = A2UIAgent(
+    name="social_previewer",
+    llm_config=llm_config,
+    custom_catalog="social_catalog.json",  # Your custom catalog
+    custom_catalog_rules="""
+    - For 'LinkedInPost', populate ALL fields: authorName, authorHeadline, body, hashtags.
+    - Engagement metrics (likes, comments, reposts) are integers, not strings.
+    """,
+)
+```
+
+The custom catalog JSON extends the basic catalog by referencing it in `$defs/anyComponent`. All basic catalog components remain available alongside your custom ones.
+
+Find out more in the [A2UI documentation](https://a2ui.org/guides/custom-components/).
+
+## Installation
+
+A2UIAgent requires the `a2ui` extra for schema validation:
+
+```bash
+pip install ag2[a2ui]
+```
+
+For A2A server support:
+
+```bash
+pip install ag2[a2a]
+```
+
+## Further Reading
+
+- [A2UI Protocol Specification](https://a2ui.org/){.external-link target="_blank"} — Full protocol documentation
+- [AG-UI Integration](/docs/user-guide/ag-ui/a2ui) — Streaming A2UI over the AG-UI protocol
+- [A2A Documentation](/docs/user-guide/a2a/a2ui/) — Agent-to-Agent protocol

@@ -329,7 +329,7 @@ class TestResponseMessageFromA2AMessage:
         )
         result = response_message_from_a2a_message(message)
 
-        assert result == ResponseMessage(messages=[{"content": ""}])
+        assert result == ResponseMessage(messages=[])
 
     def test_single_text_part(self) -> None:
         message = Message(
@@ -376,11 +376,13 @@ class TestResponseMessageFromA2AMessage:
             ],
             message_id=str(uuid4()),
         )
+        result = response_message_from_a2a_message(message)
 
-        with pytest.raises(NotImplementedError, match="Data parts and text parts are not supported together"):
-            response_message_from_a2a_message(message)
+        assert result == ResponseMessage(
+            messages=[{"content": "Text 1"}, {"result": "42"}],
+        )
 
-    def test_multiple_data_parts_raises_error(self) -> None:
+    def test_multiple_data_parts(self) -> None:
         message = Message(
             role=Role.agent,
             parts=[
@@ -389,9 +391,11 @@ class TestResponseMessageFromA2AMessage:
             ],
             message_id=str(uuid4()),
         )
+        result = response_message_from_a2a_message(message)
 
-        with pytest.raises(NotImplementedError, match="Multiple data parts are not supported"):
-            response_message_from_a2a_message(message)
+        assert result == ResponseMessage(
+            messages=[{"key1": "value1"}, {"key2": "value2"}],
+        )
 
     def test_message_with_context(self) -> None:
         message = Message(
@@ -403,7 +407,7 @@ class TestResponseMessageFromA2AMessage:
         response = response_message_from_a2a_message(message)
 
         assert response == ResponseMessage(
-            messages=[{"content": ""}],
+            messages=[],
             context={"session_id": "abc123"},
         )
 
