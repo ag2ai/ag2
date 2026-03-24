@@ -125,6 +125,13 @@ class Hub:
         description: str = "",
     ) -> RegistrationHandle:
         """Register an agent with the network. Returns a handle for unregistering."""
+        if agent.name in self._agents:
+            logger.warning(
+                "Agent '%s' is already registered — overwriting. "
+                "Call hub.unregister('%s') first to avoid this warning.",
+                agent.name,
+                agent.name,
+            )
         info = ActorInfo(
             name=agent.name,
             capabilities=capabilities or [],
@@ -490,6 +497,13 @@ class Hub:
         When ``host`` is None (default), behaves as before — just manages
         lifecycle without starting a server.
 
+        .. note::
+
+            No authentication is applied to HTTP endpoints. Intended for
+            trusted networks or development. Production deployments should
+            add authentication middleware to the aiohttp app or use a
+            reverse proxy.
+
         Example::
 
             # Headless (no HTTP server)
@@ -562,8 +576,12 @@ class Hub:
             data = await resp.json()
 
         registered: list[str] = []
+        conflicts: list[str] = []
         for agent_info in data.get("agents", []):
             name = agent_info["name"]
+            if name in self._agents:
+                conflicts.append(name)
+                continue
             capabilities = agent_info.get("capabilities", [])
             description = agent_info.get("description", "")
 
@@ -578,6 +596,16 @@ class Hub:
             )
             await self.register(remote, capabilities=capabilities, description=description)
             registered.append(name)
+
+        if conflicts:
+            logger.warning(
+                "Skipped %d remote agent(s) from %s due to name conflicts "
+                "with locally registered agents: %s. Unregister them first "
+                "if you want the remote versions.",
+                len(conflicts),
+                endpoint,
+                ", ".join(conflicts),
+            )
 
         logger.info(
             "Connected to %s — registered %d remote agents: %s",
