@@ -211,7 +211,7 @@ async def verify_documents(applicant_name: str, document_types: str) -> str:
     for doc in docs:
         status = random.choice(["VERIFIED", "VERIFIED", "VERIFIED", "PENDING"])
         lines.append(f"  {doc}: {status}")
-    all_verified = all("PENDING" not in l for l in lines)
+    all_verified = all(line.strip() for line in lines if "PENDING" not in line.strip())
     lines.append(f"\n  Overall: {'ALL VERIFIED' if all_verified else 'SOME PENDING — follow up required'}")
     return "\n".join(lines)
 
