@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .code_execution import CodeExecutionTool
+from .memory import MemoryTool
 from .web_search import UserLocation, WebSearchTool
 
-__all__ = ("CodeExecutionTool", "UserLocation", "WebSearchTool")
+__all__ = ("CodeExecutionTool", "MemoryTool", "UserLocation", "WebSearchTool")

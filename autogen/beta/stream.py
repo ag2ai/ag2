@@ -10,9 +10,11 @@ from uuid import uuid4
 
 from fast_depends.core import CallModel
 
+from autogen.beta.types import ClassInfo
+
 from .context import Context, Stream, StreamId, SubId
 from .events import BaseEvent
-from .events.conditions import ClassInfo, Condition, TypeCondition
+from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, build_model
 
