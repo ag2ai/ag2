@@ -95,6 +95,7 @@ class Hub:
         self._topology = topology
         self._plugins: list[Plugin] = list(plugins or [])
         self._hub_context = HubContext(self)
+        self._additional_tasks: set[asyncio.Task[None]] = set()
 
         # Server state (populated by serve())
         self._server_runner: web.AppRunner | None = None
@@ -263,6 +264,17 @@ class Hub:
             agent = rerouted_agent
             envelope = primary
 
+            # Ensure envelope event target is consistent with routed recipient.
+            # Topology plugins typically modify envelope.recipient but not the
+            # inner event — fix up so channel subscribers see correct target.
+            if (
+                isinstance(envelope.event, DelegationRequest)
+                and envelope.event.target != to_agent
+            ):
+                envelope.event = DelegationRequest(
+                    source=source, target=to_agent, task=task
+                )
+
         # Dispatch additional delegations from topology (fire-and-forget, parallel)
         if additional:
             self._dispatch_additional(additional)
@@ -302,17 +314,19 @@ class Hub:
         Each additional envelope is executed as an independent delegation
         through the full Hub path (depth tracking, topology, events).
         Errors are logged and emitted on the hub stream but do not affect
-        the primary delegation.
+        the primary delegation. Tasks are tracked so close() can await them.
         """
         for env in envelopes:
             target = env.recipient
             task_text = getattr(env.event, "task", "")
             source = env.sender or ""
             if target and task_text:
-                asyncio.create_task(
+                t = asyncio.create_task(
                     self._execute_additional(target, task_text, source),
                     name=f"additional-delegation-{target}",
                 )
+                self._additional_tasks.add(t)
+                t.add_done_callback(self._additional_tasks.discard)
 
     async def _execute_additional(self, target: str, task: str, source: str) -> None:
         """Execute a single additional delegation with error handling."""
@@ -363,6 +377,13 @@ class Hub:
         Called automatically by ``serve()`` context manager, or call manually
         when using the Hub without ``serve()``.
         """
+        # Cancel and await in-flight additional delegations
+        for t in self._additional_tasks:
+            t.cancel()
+        if self._additional_tasks:
+            await asyncio.gather(*self._additional_tasks, return_exceptions=True)
+        self._additional_tasks.clear()
+
         # Close remote agent sessions
         from .remote import RemoteAgent
 
