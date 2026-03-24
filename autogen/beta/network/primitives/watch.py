@@ -333,8 +333,9 @@ class Sequence(_BaseWatch):
 
     async def _step_handler(self, events: list[BaseEvent], ctx: Context) -> None:
         self._all_events.extend(events)
-        # Disarm current watch before advancing
-        self._watches[self._current_index].disarm()
+        # Disarm current watch before advancing (guard for auto-disarming watches like DelayWatch)
+        if self._watches[self._current_index].is_armed:
+            self._watches[self._current_index].disarm()
         self._current_index += 1
 
         if self._current_index >= len(self._watches):

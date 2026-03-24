@@ -145,7 +145,9 @@ class Scheduler:
             entry.status = WatchStatus.PAUSED
 
     def resume(self, watch_id: str) -> None:
-        """Re-arm a paused watch."""
+        """Re-arm a paused watch. Only works when the scheduler is running."""
+        if not self._running:
+            return
         entry = self._entries.get(watch_id)
         if entry and entry.status == WatchStatus.PAUSED:
             self._arm_entry(entry)
@@ -156,7 +158,6 @@ class Scheduler:
         if entry:
             if entry.status == WatchStatus.ARMED:
                 entry.watch.disarm()
-            entry.status = WatchStatus.CANCELLED
             return True
         return False
 
@@ -189,9 +190,6 @@ class Scheduler:
         if not self._running:
             return
 
-        # Determine the task
-        task = entry.task_factory(events) if entry.task_factory is not None else entry.task
-
         if entry.callback is not None:
             # Standalone mode: call the callback directly
             try:
@@ -201,6 +199,13 @@ class Scheduler:
             return
 
         if self._hub and entry.target:
+            # Determine the task (only needed for hub mode)
+            try:
+                task = entry.task_factory(events) if entry.task_factory is not None else entry.task
+            except Exception:
+                logger.exception("Scheduler task_factory for watch %s failed", entry.id)
+                return
+
             # Hub mode: emit event and delegate
             hub_ctx = ContextType(stream=self._hub.stream)
             await self._hub.stream.send(
@@ -219,3 +224,9 @@ class Scheduler:
                     entry.id,
                     entry.target,
                 )
+            return
+
+        logger.warning(
+            "Watch %s fired but has no callback or hub target — nothing to do",
+            entry.id,
+        )
