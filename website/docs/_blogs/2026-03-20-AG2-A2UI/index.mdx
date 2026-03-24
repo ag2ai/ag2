@@ -33,11 +33,14 @@ The [A2UI protocol](https://a2ui.org/) (Agent-to-Agent UI) solves this by defini
 ## Quick Example
 
 ```python
+from autogen import LLMConfig
 from autogen.agents.experimental import A2UIAgent
+
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
 
 agent = A2UIAgent(
     name="ui_agent",
-    llm_config={"api_type": "google", "model": "gemini-2.5-flash", "api_key": "..."},
+    llm_config=llm_config,
     validate_responses=True,
     validation_retries=2,
 )
@@ -87,7 +90,7 @@ A2UIAgent supports two types of button actions:
 **Tool actions** route directly to a registered tool:
 
 ```python
-from autogen.agents.experimental import A2UIAction
+from autogen.agents.experimental.a2ui import A2UIAction
 
 A2UIAction(
     name="schedule_9am",
@@ -122,15 +125,13 @@ agent = A2UIAgent(
 
 Custom catalogs reference the basic catalog and add new component types. The agent's prompt includes both catalogs automatically.
 
-## Transport: AG-UI and A2A
-
-A2UIAgent produces A2UI JSON — a transport-agnostic UI specification. The same agent connects to frontend renderers through two transport options:
+## Transport Options
 
 ![A2UIAgent Architecture](img/a2ui-architecture.png)
 
-### A2A Transport (JSON-RPC)
+## Serving Over A2A
 
-Wrap in `A2aAgentServer` for serving via the A2A protocol:
+A2UIAgent produces A2UI JSON — a transport-agnostic UI specification. Wrap it in `A2aAgentServer` to serve via the A2A protocol:
 
 ```python
 from autogen.a2a import A2aAgentServer, CardSettings
@@ -140,38 +141,36 @@ server = A2aAgentServer(
     url="http://localhost:9000",
     agent_card=CardSettings(name="UI Agent", description="Generates rich UI."),
 )
+
+app = server.build()
 ```
 
 The server auto-detects A2UIAgent and uses `A2UIAgentExecutor` to split responses into TextPart + DataPart (MIME: `application/json+a2ui`). It declares A2UI v0.9 extension support in the agent card and handles extension negotiation — clients that support A2UI get rich DataParts, others get plain text. Actions flow back from the frontend as DataParts.
 
-### AG-UI Transport (SSE)
-
-Use `AGUIStream` with the A2UI event interceptor to stream to AG-UI frontends:
-
-```python
-from autogen.ag_ui import AGUIStream
-from autogen.agents.experimental.a2ui import A2UIAgent, a2ui_event_interceptor
-
-agent = A2UIAgent(name="ui_agent", llm_config=llm_config)
-stream = AGUIStream(agent, event_interceptors=[a2ui_event_interceptor])
-```
-
-The interceptor extracts A2UI JSON and emits `ACTIVITY_SNAPSHOT` events over SSE. Any AG-UI compatible frontend — CopilotKit, plain HTML, Angular — renders the A2UI surfaces.
-
-Both transports deliver the same A2UI operations. The frontend renderer is transport-agnostic — it renders the same components regardless of how they arrived.
+A2UIAgent also supports the [AG-UI protocol](/docs/user-guide/ag-ui/a2ui) for streaming A2UI over SSE to web frontends like CopilotKit.
 
 ## Building a Marketing Preview Demo
 
-Here's a complete example: an agent that generates email, LinkedIn, and X/Twitter preview cards for a product campaign.
+Here are the key components for a demo that generates email, LinkedIn, and X/Twitter preview cards for a product campaign, served over A2A to a Flutter frontend. The [complete runnable example](https://github.com/ag2ai/build-with-ag2/tree/main/a2ui/flutter){.external-link target="_blank"} — including the full backend with tool functions and the complete Flutter app — is available in the Build with AG2 repository.
 
-```python title="a2a_agent.py"
+The email mockup will be created dynamically by the A2UIAgent using the basic component catalog. The LinkedIn and X mockups will be created using a custom catalog.
+
+### Backend
+
+Here we create the A2UIAgent, include our custom socials catalog, and add the actions that can be triggered.
+
+```python title="backend.py"
+from autogen import LLMConfig
 from autogen.a2a import A2aAgentServer, CardSettings
-from autogen.agents.experimental import A2UIAction, A2UIAgent
+from autogen.agents.experimental import A2UIAgent
+from autogen.agents.experimental.a2ui import A2UIAction
+
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
 
 agent = A2UIAgent(
     name="social_previewer",
     system_message="You are a marketing content designer. Generate three preview cards: Email, LinkedIn, and X/Twitter.",
-    llm_config={"api_type": "google", "model": "gemini-3.1-flash-lite-preview", "api_key": "..."},
+    llm_config=llm_config,
     custom_catalog="social_catalog.json",
     validate_responses=True,
     validation_retries=2,
@@ -190,14 +189,67 @@ server = A2aAgentServer(
 )
 
 app = server.build()
-# uvicorn a2a_agent:app --port 9000
+# uvicorn backend:app --port 9000
 ```
 
-Any A2UI-compatible client (web, Flutter, native) can connect to this agent and render the previews. The same agent serves all platforms.
+### Flutter Frontend
 
-## Getting Started
+On the client side, Flutter's [`genui`](https://github.com/flutter/genui){.external-link target="_blank"} packages provide a native A2UI renderer. Add `genui` and `genui_a2a` to your `pubspec.yaml`:
 
-Install:
+```yaml title="pubspec.yaml"
+dependencies:
+  genui:
+    git:
+      url: https://github.com/flutter/genui.git
+      path: packages/genui
+  genui_a2a:
+    git:
+      url: https://github.com/flutter/genui.git
+      path: packages/genui_a2a
+```
+
+Then connect to the A2A backend:
+
+```dart title="main.dart"
+import 'package:genui/genui.dart';
+import 'package:genui_a2a/genui_a2a.dart';
+
+// Surface controller manages A2UI surfaces and renders components
+final controller = SurfaceController(
+  catalogs: [BasicCatalogItems.asCatalog()],
+);
+
+// Connect to the A2A server
+final connector = A2uiAgentConnector(
+  url: Uri.parse('http://localhost:9000'),
+);
+
+// Bridge sends and pipe responses
+final transport = A2uiTransportAdapter(
+  onSend: (message) => connector.connectAndSend(
+    message,
+    clientCapabilities: controller.clientCapabilities,
+  ),
+);
+
+final conversation = Conversation(
+  controller: controller,
+  transport: transport,
+);
+
+connector.stream.listen(transport.addMessage);
+connector.textStream.listen(transport.addChunk);
+```
+
+The `A2uiAgentConnector` handles A2A communication and A2UI extension negotiation automatically. The `SurfaceController` receives A2UI operations and renders them as native Flutter widgets. Actions (button clicks) flow back through the transport to the A2A server, where they're routed to tools or the LLM.
+
+The same A2A backend can serve any A2UI-compatible client — Flutter, web, or other renderers.
+
+The complete demo code — including the Flutter frontend — is available in the [Build with AG2](https://github.com/ag2ai/build-with-ag2/tree/main/a2ui/flutter){.external-link target="_blank"} repository.
+
+## Installing AG2 for A2UI
+
+Install `ag2` with A2UI and A2A extras:
 
 ```bash
 pip install "ag2[a2ui,a2a]"
@@ -210,14 +262,4 @@ Read the docs:
 - [AG-UI Integration](/docs/user-guide/ag-ui/) — Streaming A2UI over AG-UI
 - [A2A Server](/docs/user-guide/a2a/server/) — Serving agents via A2A
 
-The complete demo code is available in the AG2 repository under `autogen/agents/experimental/a2ui/examples/`.
-
-## What's Next
-
-A2UIAgent currently supports A2UI v0.9 with the basic catalog. Coming soon:
-
-- **v0.10 support** — Enhanced catalog with more components and interaction patterns
-- **More renderers** — Vue and native mobile renderers (Angular and Flutter demos already available)
-- **Streaming A2UI** — Progressive UI updates as the LLM generates components
-
-We'd love your feedback. Try A2UIAgent, build something with it, and let us know what you think on [GitHub](https://github.com/ag2ai/ag2) or [Discord](https://discord.gg/ag2).
+We'd love your feedback. Try A2UIAgent, build something with it, and let us know what you think on [GitHub](https://github.com/ag2ai/ag2) or [Discord](https://discord.gg/pAbnFJrkgZ).
