@@ -19,7 +19,7 @@ from autogen.beta.tools.final import tool
 # Ports
 # ---------------------------------------------------------------------------
 
-PORTS = {"medical": 8901, "police": 8902}
+PORTS = {"dispatch": 8900, "medical": 8901, "police": 8902, "fire": 8903}
 
 # ---------------------------------------------------------------------------
 # ANSI
@@ -184,6 +184,61 @@ async def assign_specialist(specialty: str, urgency: str = "stat") -> str:
     return f"{doctor} ({specialty}) assigned, urgency: {urgency}, ETA: {random.randint(2, 8)} min"
 
 # ---------------------------------------------------------------------------
+# Fire department tools
+# ---------------------------------------------------------------------------
+
+@tool
+async def dispatch_fire_engine(location: str, engine_type: str = "standard") -> str:
+    """Dispatch a fire engine to the specified location.
+
+    Args:
+        location: Address or location description.
+        engine_type: Type of engine (standard/ladder/hazmat).
+    """
+    uid = f"ENG-{random.randint(100, 999)}"
+    eta = random.randint(4, 12)
+    crew = random.randint(4, 6)
+    return (
+        f"Fire Engine {uid} ({engine_type}) dispatched to {location}.\n"
+        f"  ETA: {eta} min, Crew: {crew} firefighters"
+    )
+
+@tool
+async def assess_fire_hazard(location: str, situation: str) -> str:
+    """Assess fire hazard conditions at the scene.
+
+    Args:
+        location: Location of the incident.
+        situation: Description of current conditions.
+    """
+    wind_dir = random.choice(["N", "S", "E", "W", "NE", "SW"])
+    wind_speed = random.randint(5, 25)
+    structures = random.randint(2, 8)
+    return (
+        f"Fire Hazard Assessment at {location}:\n"
+        f"  Situation: {situation}\n"
+        f"  Wind: {wind_dir} at {wind_speed} mph\n"
+        f"  Risk Level: {'EXTREME' if wind_speed > 15 else 'HIGH'}\n"
+        f"  Nearby structures: {structures} within hazard radius\n"
+        f"  Recommendation: Establish {200 if wind_speed > 15 else 100}ft perimeter"
+    )
+
+@tool
+async def establish_perimeter(location: str, radius_feet: int = 200) -> str:
+    """Establish a safety perimeter around the incident scene.
+
+    Args:
+        location: Center of the perimeter.
+        radius_feet: Perimeter radius in feet.
+    """
+    civilians = random.randint(10, 50)
+    return (
+        f"Safety perimeter established at {location}.\n"
+        f"  Radius: {radius_feet} ft, Access points: 2 (north, south)\n"
+        f"  Evacuation: {civilians} civilians cleared"
+    )
+
+# ---------------------------------------------------------------------------
 # Actor factories
 # ---------------------------------------------------------------------------
 
@@ -191,13 +246,22 @@ def make_dispatch(model: str = "gemini-3.1-pro-preview") -> Actor:
     return Actor(
         "dispatch",
         prompt=(
-            "You are a 911 Emergency Dispatch Operator.\n"
-            "1. Log the emergency using log_emergency\n"
+            "You are a 911 Emergency Dispatch Operator.\n\n"
+            "PROTOCOL:\n"
+            "1. Log the emergency using log_emergency — assess severity as:\n"
+            "   - CRITICAL: life-threatening injuries, trapped persons, active fire/danger\n"
+            "   - SERIOUS: significant injuries, major property damage\n"
+            "   - MODERATE: minor injuries, localized incident\n"
+            "   - MINOR: no injuries, property damage only\n"
             "2. Use discover_agents to see available services\n"
-            "3. Delegate to 'ems' for medical response\n"
-            "4. Delegate to 'police' for traffic/security\n"
-            "5. Summarize the coordinated response\n\n"
-            "Include all relevant details when delegating."
+            "3. Delegate to relevant services based on the incident:\n"
+            "   - Medical emergencies: delegate to 'ems'\n"
+            "   - Traffic/security needs: delegate to 'police'\n"
+            "   - Fire/hazmat/rescue: delegate to 'fire' (only if available)\n"
+            "   - For CRITICAL/SERIOUS: delegate to ALL relevant services\n"
+            "   - For MINOR: delegate only to the single most relevant service\n"
+            "4. Include full incident details and severity in EVERY delegation\n"
+            "5. Summarize the coordinated response with priority classification"
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=[log_emergency],
@@ -208,12 +272,18 @@ def make_ems(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "ems",
         prompt=(
-            "You are an EMS Coordinator.\n"
+            "You are an EMS Coordinator managing pre-hospital emergency care.\n\n"
+            "PROTOCOL:\n"
             "1. Dispatch an ambulance using dispatch_ambulance\n"
             "2. Assess the patient using assess_patient\n"
-            "3. Delegate to 'hospital' to coordinate receiving — include full medical details\n"
-            "4. Provide a complete status summary\n\n"
-            "Always dispatch first, assess second, then coordinate with hospital."
+            "3. Delegate to 'hospital' with your initial assessment — include injury\n"
+            "   details, triage category, and ETA so they can prepare the trauma bay\n"
+            "4. Update patient status using update_patient_status (simulating en-route care)\n"
+            "5. Delegate to 'hospital' AGAIN with updated vitals and revised ETA —\n"
+            "   this is the live transport update so the receiving team is ready\n"
+            "6. Provide a complete status summary\n\n"
+            "You MUST delegate to hospital TWICE: once for initial preparation,\n"
+            "and once with transport updates before arrival."
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=[dispatch_ambulance, assess_patient, update_patient_status],
@@ -240,16 +310,39 @@ def make_hospital(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "hospital",
         prompt=(
-            "You are a Hospital ER Coordinator.\n"
-            "1. Check ER capacity using check_er_capacity\n"
-            "2. Prepare a trauma bay using prepare_trauma_bay\n"
-            "3. Assign specialists using assign_specialist\n"
-            "4. Report full readiness status\n\n"
+            "You are a Hospital ER Coordinator.\n\n"
+            "Handle two types of requests:\n\n"
+            "INITIAL ALERT (incoming patient notification):\n"
+            "  1. Check ER capacity using check_er_capacity\n"
+            "  2. Prepare a trauma bay using prepare_trauma_bay\n"
+            "  3. Assign specialists using assign_specialist\n"
+            "  4. Report full readiness status\n\n"
+            "TRANSPORT UPDATE (en-route status update from EMS):\n"
+            "  1. Acknowledge updated vitals and ETA\n"
+            "  2. Adjust preparations if needed (reassign specialists, prep equipment)\n"
+            "  3. Confirm readiness for arrival\n\n"
             "Check capacity first, then prepare and assign."
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=[check_er_capacity, prepare_trauma_bay, assign_specialist],
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000)],
+    )
+
+def make_fire_chief(model: str = "gemini-3-flash-preview") -> Actor:
+    return Actor(
+        "fire",
+        prompt=(
+            "You are a Fire Department Chief.\n"
+            "1. Dispatch a fire engine using dispatch_fire_engine\n"
+            "   (use 'ladder' type for structure fires, 'hazmat' for chemical incidents)\n"
+            "2. Assess fire hazards using assess_fire_hazard\n"
+            "3. Establish safety perimeter using establish_perimeter\n"
+            "4. Report scene status and actions taken\n\n"
+            "Priority order: life safety, exposure protection, property conservation."
+        ),
+        config=GeminiConfig(model=model, temperature=0.3),
+        tools=[dispatch_fire_engine, assess_fire_hazard, establish_perimeter],
+        observers=[LoopDetector(repeat_threshold=3)],
     )
 
 # ---------------------------------------------------------------------------
