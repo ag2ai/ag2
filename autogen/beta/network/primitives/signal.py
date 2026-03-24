@@ -70,6 +70,14 @@ class InjectToPrompt:
 
     async def deliver(self, signals: list[Signal], context: Context) -> None:
         fatal = [s for s in signals if s.severity == Severity.FATAL]
+        non_fatal = [s for s in signals if s.severity != Severity.FATAL]
+
+        # Always deliver non-fatal signals first so diagnostic context
+        # (e.g. warnings explaining why a FATAL occurred) is not lost.
+        alert_text = self._format_alerts(non_fatal)
+        if alert_text:
+            context.prompt.append(alert_text)
+
         if fatal:
             await context.send(
                 HaltEvent(
@@ -79,11 +87,6 @@ class InjectToPrompt:
                 )
             )
             return
-
-        # Non-fatal: inject into prompt temporarily
-        alert_text = self._format_alerts(signals)
-        if alert_text:
-            context.prompt.append(alert_text)
 
     @staticmethod
     def _format_alerts(signals: list[Signal]) -> str:
