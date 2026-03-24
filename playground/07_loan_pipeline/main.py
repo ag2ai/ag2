@@ -24,20 +24,19 @@ import time
 from datetime import datetime
 
 from autogen.beta.config.gemini import GeminiConfig
-from autogen.beta.events import BaseEvent
 from autogen.beta.network import (
     Actor,
+    BasePlugin,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
     Envelope,
+    HubContext,
+    LoopDetector,
     Network,
     Pipeline,
-    BasePlugin,
-    HubContext,
     TelemetryPlugin,
     TokenMonitor,
-    LoopDetector,
 )
 from autogen.beta.tools.final import tool
 
@@ -143,21 +142,20 @@ class ApprovalGate(BasePlugin):
             return envelope
 
         # Prompt for human input (blocking input in async context)
-        response = await asyncio.get_event_loop().run_in_executor(
-            None, input, f"  {_BOLD}Approve? [Y/n]: {_RESET}"
-        )
+        response = await asyncio.get_event_loop().run_in_executor(None, input, f"  {_BOLD}Approve? [Y/n]: {_RESET}")
         print()
 
         if response.strip().lower() in ("n", "no", "reject"):
             self.total_rejected += 1
-            print(f"  {_BG_RED}{_WHITE}{_BOLD} REJECTED {_RESET}"
-                  f"  {_RED}Delegation to {target} was rejected by loan officer{_RESET}")
+            print(
+                f"  {_BG_RED}{_WHITE}{_BOLD} REJECTED {_RESET}"
+                f"  {_RED}Delegation to {target} was rejected by loan officer{_RESET}"
+            )
             print()
             return None
 
         self.total_approved += 1
-        print(f"  {_BG_GREEN}{_BLACK}{_BOLD} APPROVED {_RESET}"
-              f"  {_GREEN}Delegation to {target} proceeding{_RESET}")
+        print(f"  {_BG_GREEN}{_BLACK}{_BOLD} APPROVED {_RESET}" f"  {_GREEN}Delegation to {target} proceeding{_RESET}")
         print()
         return envelope
 
@@ -165,6 +163,7 @@ class ApprovalGate(BasePlugin):
 # =====================================================================
 # Tools — Intake Agent
 # =====================================================================
+
 
 @tool
 async def collect_application(
@@ -227,10 +226,13 @@ async def calculate_dti(monthly_income: float, monthly_debts: float) -> str:
     """
     dti = (monthly_debts / monthly_income * 100) if monthly_income > 0 else 0
     assessment = (
-        "Excellent (under 20%)" if dti < 20
-        else "Good (20-35%)" if dti < 36
-        else "Acceptable (36-43%)" if dti < 44
-        else "High (over 43%) — may affect approval"
+        "Excellent (under 20%)"
+        if dti < 20
+        else (
+            "Good (20-35%)"
+            if dti < 36
+            else "Acceptable (36-43%)" if dti < 44 else "High (over 43%) — may affect approval"
+        )
     )
     return (
         f"Debt-to-Income Calculation\n"
@@ -248,6 +250,7 @@ intake_tools = [collect_application, verify_documents, calculate_dti]
 # =====================================================================
 # Tools — Credit Analyst
 # =====================================================================
+
 
 @tool
 async def pull_credit_report(applicant_name: str) -> str:
@@ -318,29 +321,31 @@ async def check_fraud_indicators(applicant_name: str) -> str:
     Args:
         applicant_name: Full name of the applicant.
     """
-    flags = random.choice([
-        [],
-        [],
-        [],
-        ["Address mismatch between application and credit report"],
-        ["Multiple recent applications at different lenders"],
-    ])
+    flags = random.choice(
+        [
+            [],
+            [],
+            [],
+            ["Address mismatch between application and credit report"],
+            ["Multiple recent applications at different lenders"],
+        ]
+    )
     lines = [
         f"Fraud Check — {applicant_name}",
         "=" * 40,
-        f"  Identity Verification: PASSED",
-        f"  OFAC/SDN Check: CLEAR",
+        "  Identity Verification: PASSED",
+        "  OFAC/SDN Check: CLEAR",
         f"  Address Verification: {'FLAG' if any('Address' in f for f in flags) else 'CLEAR'}",
         f"  Application Velocity: {'FLAG' if any('Multiple' in f for f in flags) else 'NORMAL'}",
     ]
     if flags:
-        lines.append(f"\n  Flags Found:")
+        lines.append("\n  Flags Found:")
         for flag in flags:
             lines.append(f"    - {flag}")
-        lines.append(f"  Recommendation: Proceed with caution, flag for manual review")
+        lines.append("  Recommendation: Proceed with caution, flag for manual review")
     else:
-        lines.append(f"\n  No fraud indicators detected.")
-        lines.append(f"  Recommendation: Clear to proceed")
+        lines.append("\n  No fraud indicators detected.")
+        lines.append("  Recommendation: Clear to proceed")
     return "\n".join(lines)
 
 
@@ -350,6 +355,7 @@ credit_tools = [pull_credit_report, assess_risk, check_fraud_indicators]
 # =====================================================================
 # Tools — Underwriter
 # =====================================================================
+
 
 @tool
 async def review_application(
@@ -425,25 +431,25 @@ async def issue_decision(
     """
     decision_upper = decision.upper()
     lines = [
-        f"UNDERWRITING DECISION",
+        "UNDERWRITING DECISION",
         "=" * 40,
         f"  Application: {application_id}",
         f"  Decision: {decision_upper}",
         f"  Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"  Underwriter: Automated Review + Human Approval",
+        "  Underwriter: Automated Review + Human Approval",
     ]
     if conditions:
-        lines.append(f"\n  Conditions:")
+        lines.append("\n  Conditions:")
         for cond in conditions.split(";"):
             cond = cond.strip()
             if cond:
                 lines.append(f"    - {cond}")
     if decision_upper == "APPROVE":
-        lines.append(f"\n  Next Steps: Proceed to closing, schedule appraisal, title search")
+        lines.append("\n  Next Steps: Proceed to closing, schedule appraisal, title search")
     elif decision_upper == "CONDITIONAL":
-        lines.append(f"\n  Next Steps: Applicant must satisfy conditions before final approval")
+        lines.append("\n  Next Steps: Applicant must satisfy conditions before final approval")
     else:
-        lines.append(f"\n  Next Steps: Notify applicant, provide adverse action notice")
+        lines.append("\n  Next Steps: Notify applicant, provide adverse action notice")
     return "\n".join(lines)
 
 
@@ -623,8 +629,7 @@ async def main() -> None:
             )
             preview = event.task[:120].replace("\n", " ")
             print(
-                f"  {_DIM}{' ' * 12}{_RESET}       "
-                f"{_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
+                f"  {_DIM}{' ' * 12}{_RESET}       " f"{_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
             )
         elif isinstance(event, DelegationResult):
             preview = event.result[:100].replace("\n", " | ")
@@ -652,18 +657,19 @@ async def main() -> None:
     print(f"  {_CYAN}Scenario:{_RESET}  {title}")
     print(f"  {_CYAN}Model:{_RESET}     {model}")
     print(f"  {_CYAN}Agents:{_RESET}    intake -> credit-analyst -> underwriter")
-    print(f"  {_CYAN}Gate:{_RESET}      ApprovalGate on [underwriter]"
-          f"{' (auto-approve)' if auto_approve else ''}")
+    print(f"  {_CYAN}Gate:{_RESET}      ApprovalGate on [underwriter]" f"{' (auto-approve)' if auto_approve else ''}")
     print()
     print(f"  {_BOLD}Application:{_RESET}")
     print(_wrap(loan_message, indent=4, width=72))
     print()
     print(f"  {_DIM}{'─' * 60}{_RESET}")
-    print(f"  {_BOLD}Log legend:{_RESET}  "
-          f"{_YELLOW}TOOL{_RESET}=tool call  "
-          f"{_MAGENTA}HUB{_RESET}=delegation  "
-          f"{_GREEN}HUB{_RESET}=completed  "
-          f"{_RED}REJECTED{_RESET}=blocked")
+    print(
+        f"  {_BOLD}Log legend:{_RESET}  "
+        f"{_YELLOW}TOOL{_RESET}=tool call  "
+        f"{_MAGENTA}HUB{_RESET}=delegation  "
+        f"{_GREEN}HUB{_RESET}=completed  "
+        f"{_RED}REJECTED{_RESET}=blocked"
+    )
     print(f"  {_DIM}{'─' * 60}{_RESET}")
     print()
 

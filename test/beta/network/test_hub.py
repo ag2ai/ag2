@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 
 import pytest
 
@@ -112,6 +113,20 @@ class TestHubRegistry:
 
         results = await hub.discover()
         assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_double_register_warns(self, caplog) -> None:
+        """Registering the same name twice logs a warning but succeeds."""
+        hub = Hub()
+        await hub.register(_AskableAgent("worker", result="v1"), capabilities=["x"])
+
+        with caplog.at_level(logging.WARNING):
+            await hub.register(_AskableAgent("worker", result="v2"), capabilities=["x"])
+
+        assert "already registered" in caplog.text
+        # The second agent replaces the first
+        result = await hub.delegate("src", "worker", "task")
+        assert result == "v2"
 
     @pytest.mark.asyncio
     async def test_registration_handle_unregister(self) -> None:
@@ -784,3 +799,51 @@ class TestHubAdditionalTaskTracking:
         assert len(hub._additional_tasks) <= 1  # May have already completed
         await hub.close()
         assert len(hub._additional_tasks) == 0
+
+
+class TestHubConnectNameCollision:
+    """Verify that connect() skips remote agents that conflict with local names."""
+
+    @pytest.mark.asyncio
+    async def test_connect_skips_conflicting_names(self, caplog) -> None:
+        """connect() should skip remote agents whose names collide with local agents."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        hub = Hub()
+        await hub.register(_AskableAgent("writer"), capabilities=["writing"])
+
+        # Mock the HTTP call to return a remote agent named "writer" (conflict)
+        # and "researcher" (no conflict)
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(
+            return_value={
+                "agents": [
+                    {"name": "writer", "capabilities": ["writing"]},
+                    {"name": "researcher", "capabilities": ["research"]},
+                ]
+            }
+        )
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("autogen.beta.network.hub.ClientSession", return_value=mock_session), caplog.at_level(
+            logging.WARNING
+        ):
+            registered = await hub.connect("http://fake:8900")
+
+        # Only researcher should be registered, writer skipped
+        assert "researcher" in registered
+        assert "writer" not in registered
+        assert "name conflicts" in caplog.text
+
+        # Local writer is still the original, not a RemoteAgent
+        from autogen.beta.network.remote import RemoteAgent
+
+        assert not isinstance(hub.agents["writer"], RemoteAgent)
+        assert isinstance(hub.agents["researcher"], RemoteAgent)

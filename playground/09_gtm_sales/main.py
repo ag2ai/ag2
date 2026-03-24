@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 
 from autogen.beta.annotations import Context
 from autogen.beta.config.gemini import GeminiConfig
-from autogen.beta.events import BaseEvent
 from autogen.beta.network import (
     Actor,
     BasePlugin,
@@ -178,31 +177,80 @@ CRM_COMPANIES = {
 
 # Simulated existing pipeline
 CRM_PIPELINE = [
-    {"id": "OPP-2026-0147", "company": "CloudForge Technologies", "contact": "Sarah Chen",
-     "deal_size": 120_000, "stage": "Demo", "next_step": "Technical deep-dive scheduled",
-     "days_in_stage": 8, "close_date": "2026-05-15"},
-    {"id": "OPP-2026-0152", "company": "Meridian Health Systems", "contact": "Dr. Lisa Patel",
-     "deal_size": 250_000, "stage": "Proposal", "next_step": "Awaiting procurement review",
-     "days_in_stage": 12, "close_date": "2026-06-01"},
-    {"id": "OPP-2026-0158", "company": "NovaPay Financial", "contact": "Priya Sharma",
-     "deal_size": 180_000, "stage": "Negotiation", "next_step": "Legal redline in progress",
-     "days_in_stage": 5, "close_date": "2026-04-30"},
-    {"id": "OPP-2026-0161", "company": "RetailEdge Inc.", "contact": "Tom Baker",
-     "deal_size": 95_000, "stage": "Discovery", "next_step": "Initial requirements call",
-     "days_in_stage": 3, "close_date": "2026-07-15"},
+    {
+        "id": "OPP-2026-0147",
+        "company": "CloudForge Technologies",
+        "contact": "Sarah Chen",
+        "deal_size": 120_000,
+        "stage": "Demo",
+        "next_step": "Technical deep-dive scheduled",
+        "days_in_stage": 8,
+        "close_date": "2026-05-15",
+    },
+    {
+        "id": "OPP-2026-0152",
+        "company": "Meridian Health Systems",
+        "contact": "Dr. Lisa Patel",
+        "deal_size": 250_000,
+        "stage": "Proposal",
+        "next_step": "Awaiting procurement review",
+        "days_in_stage": 12,
+        "close_date": "2026-06-01",
+    },
+    {
+        "id": "OPP-2026-0158",
+        "company": "NovaPay Financial",
+        "contact": "Priya Sharma",
+        "deal_size": 180_000,
+        "stage": "Negotiation",
+        "next_step": "Legal redline in progress",
+        "days_in_stage": 5,
+        "close_date": "2026-04-30",
+    },
+    {
+        "id": "OPP-2026-0161",
+        "company": "RetailEdge Inc.",
+        "contact": "Tom Baker",
+        "deal_size": 95_000,
+        "stage": "Discovery",
+        "next_step": "Initial requirements call",
+        "days_in_stage": 3,
+        "close_date": "2026-07-15",
+    },
 ]
 
 # Simulated existing customers
 CRM_CUSTOMERS = [
-    {"company": "Synapse Analytics", "contract_value": 85_000, "renewal_date": "2026-09-01",
-     "health_score": 92, "nps": 9, "adoption_rate": 87, "support_tickets_30d": 2,
-     "expansion_signals": ["Added 3 new teams", "API usage up 140%"]},
-    {"company": "Guardian Insurance Group", "contract_value": 320_000, "renewal_date": "2026-12-01",
-     "health_score": 78, "nps": 7, "adoption_rate": 65, "support_tickets_30d": 8,
-     "expansion_signals": ["Claims team interested in advanced module"]},
-    {"company": "Velocity Logistics", "contract_value": 145_000, "renewal_date": "2026-08-15",
-     "health_score": 88, "nps": 8, "adoption_rate": 82, "support_tickets_30d": 3,
-     "expansion_signals": ["Expanding to EU operations", "Requested multi-region support"]},
+    {
+        "company": "Synapse Analytics",
+        "contract_value": 85_000,
+        "renewal_date": "2026-09-01",
+        "health_score": 92,
+        "nps": 9,
+        "adoption_rate": 87,
+        "support_tickets_30d": 2,
+        "expansion_signals": ["Added 3 new teams", "API usage up 140%"],
+    },
+    {
+        "company": "Guardian Insurance Group",
+        "contract_value": 320_000,
+        "renewal_date": "2026-12-01",
+        "health_score": 78,
+        "nps": 7,
+        "adoption_rate": 65,
+        "support_tickets_30d": 8,
+        "expansion_signals": ["Claims team interested in advanced module"],
+    },
+    {
+        "company": "Velocity Logistics",
+        "contract_value": 145_000,
+        "renewal_date": "2026-08-15",
+        "health_score": 88,
+        "nps": 8,
+        "adoption_rate": 82,
+        "support_tickets_30d": 3,
+        "expansion_signals": ["Expanding to EU operations", "Requested multi-region support"],
+    },
 ]
 
 
@@ -299,22 +347,26 @@ class DealTracker(BasePlugin):
         self._sub_ids.clear()
 
     async def _on_request(self, event: DelegationRequest, ctx: Context) -> None:  # type: ignore[override]
-        self.delegation_log.append({
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "type": "request",
-            "source": event.source,
-            "target": event.target,
-            "task_preview": event.task[:120],
-        })
+        self.delegation_log.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "type": "request",
+                "source": event.source,
+                "target": event.target,
+                "task_preview": event.task[:120],
+            }
+        )
 
     async def _on_result(self, event: DelegationResult, ctx: Context) -> None:  # type: ignore[override]
-        self.delegation_log.append({
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "type": "result",
-            "source": event.source,
-            "target": event.target,
-            "result_preview": event.result[:120],
-        })
+        self.delegation_log.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "type": "result",
+                "source": event.source,
+                "target": event.target,
+                "result_preview": event.result[:120],
+            }
+        )
 
 
 # =====================================================================
@@ -383,11 +435,7 @@ async def enrich_lead(company_name: str) -> str:
         f"Tech Stack: {', '.join(data['tech_stack'])}\n"
         f"Funding: {data['funding']}\n"
         f"Recent News: {data['news']}\n"
-        f"Contacts:\n"
-        + "\n".join(
-            f"  - {c['name']}, {c['title']} ({c['email']})"
-            for c in data["contacts"]
-        )
+        f"Contacts:\n" + "\n".join(f"  - {c['name']}, {c['title']} ({c['email']})" for c in data["contacts"])
     )
 
 
@@ -463,9 +511,7 @@ async def send_outreach(
 
 
 @tool
-async def create_opportunity(
-    company_name: str, contact_name: str, deal_size: int, stage: str = "Discovery"
-) -> str:
+async def create_opportunity(company_name: str, contact_name: str, deal_size: int, stage: str = "Discovery") -> str:
     """Create a new CRM opportunity.
 
     Args:
@@ -489,9 +535,7 @@ async def create_opportunity(
 
 
 @tool
-async def schedule_demo(
-    company_name: str, contact_name: str, demo_type: str = "standard"
-) -> str:
+async def schedule_demo(company_name: str, contact_name: str, demo_type: str = "standard") -> str:
     """Schedule a product demo.
 
     Args:
@@ -513,9 +557,7 @@ async def schedule_demo(
 
 
 @tool
-async def prepare_proposal(
-    company_name: str, use_case: str, deal_size: int, contract_term: int = 12
-) -> str:
+async def prepare_proposal(company_name: str, use_case: str, deal_size: int, contract_term: int = 12) -> str:
     """Generate a sales proposal.
 
     Args:
@@ -569,9 +611,7 @@ async def update_deal_stage(deal_id: str, new_stage: str, notes: str = "") -> st
 
 
 @tool
-async def assess_technical_requirements(
-    company_name: str, use_case: str, current_stack: str = ""
-) -> str:
+async def assess_technical_requirements(company_name: str, use_case: str, current_stack: str = "") -> str:
     """Evaluate technical fit and integration requirements.
 
     Args:
@@ -580,12 +620,14 @@ async def assess_technical_requirements(
         current_stack: Customer's current technology stack.
     """
     fit_score = random.randint(70, 98)
-    risks = random.choice([
-        ["Legacy system integration may require custom connector"],
-        ["Data migration complexity — 6+ data sources"],
-        ["Compliance requirements need security review"],
-        ["No significant technical risks identified"],
-    ])
+    risks = random.choice(
+        [
+            ["Legacy system integration may require custom connector"],
+            ["Data migration complexity — 6+ data sources"],
+            ["Compliance requirements need security review"],
+            ["No significant technical risks identified"],
+        ]
+    )
     return (
         f"=== Technical Assessment: {company_name} ===\n"
         f"Use Case: {use_case}\n"
@@ -594,15 +636,14 @@ async def assess_technical_requirements(
         f"Technical Fit Score: {fit_score}/100\n"
         f"Integration Points: API, SSO, data warehouse connector\n"
         f"Estimated Effort: {random.randint(2, 8)} weeks implementation\n"
-        f"Risks:\n" + "\n".join(f"  - {r}" for r in risks) +
-        f"\nRecommendation: {'Proceed with POC' if fit_score >= 80 else 'Address risks before proceeding'}"
+        f"Risks:\n"
+        + "\n".join(f"  - {r}" for r in risks)
+        + f"\nRecommendation: {'Proceed with POC' if fit_score >= 80 else 'Address risks before proceeding'}"
     )
 
 
 @tool
-async def design_solution(
-    company_name: str, requirements: str, constraints: str = ""
-) -> str:
+async def design_solution(company_name: str, requirements: str, constraints: str = "") -> str:
     """Create solution architecture for a prospect.
 
     Args:
@@ -629,9 +670,7 @@ async def design_solution(
 
 
 @tool
-async def create_poc_plan(
-    company_name: str, scope: str, success_criteria: str = ""
-) -> str:
+async def create_poc_plan(company_name: str, scope: str, success_criteria: str = "") -> str:
     """Design a proof-of-concept plan.
 
     Args:
@@ -674,9 +713,7 @@ async def review_security_compliance(company_name: str, requirements: str = "") 
     return (
         f"=== Security & Compliance: {company_name} ===\n"
         f"Requirements: {requirements or 'Standard enterprise'}\n"
-        f"{'─' * 40}\n"
-        + "\n".join(f"  {name}: {status}" for name, status in checks)
-        + f"\n{'─' * 40}\n"
+        f"{'─' * 40}\n" + "\n".join(f"  {name}: {status}" for name, status in checks) + f"\n{'─' * 40}\n"
         f"Overall: {'Ready for enterprise deployment' if all(s != 'REVIEW NEEDED' for _, s in checks) else 'Minor items need review — see HIPAA status'}"
     )
 
@@ -706,14 +743,12 @@ async def analyze_campaign_performance(campaign_name: str = "all") -> str:
             f"Conversions: {conversions}\n"
             f"    CPL: ${cpl:.2f} | Pipeline generated: {pipeline}"
         )
-    lines.append(f"\n  Total pipeline: $455K | Avg CPL: $34.93")
+    lines.append("\n  Total pipeline: $455K | Avg CPL: $34.93")
     return "\n".join(lines)
 
 
 @tool
-async def generate_content(
-    content_type: str, topic: str, target_persona: str = "VP of Engineering"
-) -> str:
+async def generate_content(content_type: str, topic: str, target_persona: str = "VP of Engineering") -> str:
     """Generate content brief for sales enablement.
 
     Args:
@@ -746,32 +781,31 @@ async def score_lead_engagement(company_name: str) -> str:
     Args:
         company_name: Company to score.
     """
-    activities = random.sample([
-        "Downloaded whitepaper (2 days ago)",
-        "Attended webinar (1 week ago)",
-        "Visited pricing page (3 times this month)",
-        "Opened 4/5 recent emails",
-        "Clicked demo CTA on blog post",
-        "Viewed case study for similar industry",
-        "Returned to site 6 times in 30 days",
-    ], k=random.randint(2, 5))
+    activities = random.sample(
+        [
+            "Downloaded whitepaper (2 days ago)",
+            "Attended webinar (1 week ago)",
+            "Visited pricing page (3 times this month)",
+            "Opened 4/5 recent emails",
+            "Clicked demo CTA on blog post",
+            "Viewed case study for similar industry",
+            "Returned to site 6 times in 30 days",
+        ],
+        k=random.randint(2, 5),
+    )
     score = random.randint(40, 95)
     mql = score >= 65
     return (
         f"=== Engagement Score: {company_name} ===\n"
         f"Score: {score}/100 {'(MQL)' if mql else '(Not yet MQL)'}\n"
         f"{'─' * 40}\n"
-        f"Recent Activity:\n"
-        + "\n".join(f"  - {a}" for a in activities)
-        + f"\n{'─' * 40}\n"
+        f"Recent Activity:\n" + "\n".join(f"  - {a}" for a in activities) + f"\n{'─' * 40}\n"
         f"Recommendation: {'Ready for sales outreach — high intent signals' if mql else 'Continue nurturing with targeted content'}"
     )
 
 
 @tool
-async def create_abm_campaign(
-    company_name: str, contacts: str = "", campaign_type: str = "awareness"
-) -> str:
+async def create_abm_campaign(company_name: str, contacts: str = "", campaign_type: str = "awareness") -> str:
     """Create an account-based marketing campaign.
 
     Args:
@@ -801,9 +835,7 @@ async def create_abm_campaign(
 
 
 @tool
-async def create_onboarding_plan(
-    company_name: str, deal_size: int = 0, product_modules: str = ""
-) -> str:
+async def create_onboarding_plan(company_name: str, deal_size: int = 0, product_modules: str = "") -> str:
     """Create a 90-day customer onboarding plan.
 
     Args:
@@ -875,8 +907,7 @@ async def check_health_score(company_name: str) -> str:
         f"NPS: {customer['nps']}/10\n"
         f"Adoption Rate: {customer['adoption_rate']}%\n"
         f"Support Tickets (30d): {customer['support_tickets_30d']}\n"
-        f"Expansion Signals:\n"
-        + ("\n".join(f"  - {s}" for s in customer["expansion_signals"]) or "  (none detected)")
+        f"Expansion Signals:\n" + ("\n".join(f"  - {s}" for s in customer["expansion_signals"]) or "  (none detected)")
     )
 
 
@@ -887,24 +918,40 @@ async def identify_expansion_opportunity(company_name: str) -> str:
     Args:
         company_name: Customer name.
     """
-    opportunities = random.sample([
-        {"type": "Upsell", "module": "Advanced Analytics", "value": random.randint(30, 80) * 1000,
-         "signal": "Usage data shows heavy reporting needs"},
-        {"type": "Cross-sell", "module": "Integration Hub", "value": random.randint(20, 50) * 1000,
-         "signal": "Customer connecting 5+ external tools via workarounds"},
-        {"type": "Expansion", "module": "Additional seats (50)", "value": random.randint(15, 40) * 1000,
-         "signal": "New department onboarding request"},
-        {"type": "Upsell", "module": "Enterprise Security", "value": random.randint(25, 60) * 1000,
-         "signal": "Compliance audit triggered advanced security discussion"},
-    ], k=random.randint(1, 3))
+    opportunities = random.sample(
+        [
+            {
+                "type": "Upsell",
+                "module": "Advanced Analytics",
+                "value": random.randint(30, 80) * 1000,
+                "signal": "Usage data shows heavy reporting needs",
+            },
+            {
+                "type": "Cross-sell",
+                "module": "Integration Hub",
+                "value": random.randint(20, 50) * 1000,
+                "signal": "Customer connecting 5+ external tools via workarounds",
+            },
+            {
+                "type": "Expansion",
+                "module": "Additional seats (50)",
+                "value": random.randint(15, 40) * 1000,
+                "signal": "New department onboarding request",
+            },
+            {
+                "type": "Upsell",
+                "module": "Enterprise Security",
+                "value": random.randint(25, 60) * 1000,
+                "signal": "Compliance audit triggered advanced security discussion",
+            },
+        ],
+        k=random.randint(1, 3),
+    )
 
     total = sum(int(o["value"]) for o in opportunities)
     lines = [f"=== Expansion Opportunities: {company_name} ===\n"]
     for o in opportunities:
-        lines.append(
-            f"  [{o['type']}] {o['module']} — ${o['value']:,}/yr\n"
-            f"    Signal: {o['signal']}"
-        )
+        lines.append(f"  [{o['type']}] {o['module']} — ${o['value']:,}/yr\n" f"    Signal: {o['signal']}")
     lines.append(f"\n{'─' * 40}")
     lines.append(f"Total expansion potential: ${total:,}/yr")
     lines.append(f"Recommendation: Create opportunities and assign to AE for {company_name}")
@@ -1140,16 +1187,31 @@ async def main() -> None:
         max_delegation_depth=5,
     )
 
-    await network.register(sdr, capabilities=["prospecting", "outreach", "qualification"],
-                           description="SDR — researches, qualifies, and nurtures leads")
-    await network.register(ae, capabilities=["deals", "negotiation", "demos", "proposals"],
-                           description="AE — manages deals from demo to close")
-    await network.register(se, capabilities=["technical", "architecture", "integration", "security"],
-                           description="SE — validates technical fit and designs solutions")
-    await network.register(marketing, capabilities=["content", "campaigns", "analytics", "lead-scoring"],
-                           description="Marketing — provides lead intelligence and content")
-    await network.register(cs, capabilities=["onboarding", "retention", "expansion", "health"],
-                           description="CS — onboards customers and drives expansion")
+    await network.register(
+        sdr,
+        capabilities=["prospecting", "outreach", "qualification"],
+        description="SDR — researches, qualifies, and nurtures leads",
+    )
+    await network.register(
+        ae,
+        capabilities=["deals", "negotiation", "demos", "proposals"],
+        description="AE — manages deals from demo to close",
+    )
+    await network.register(
+        se,
+        capabilities=["technical", "architecture", "integration", "security"],
+        description="SE — validates technical fit and designs solutions",
+    )
+    await network.register(
+        marketing,
+        capabilities=["content", "campaigns", "analytics", "lead-scoring"],
+        description="Marketing — provides lead intelligence and content",
+    )
+    await network.register(
+        cs,
+        capabilities=["onboarding", "retention", "expansion", "health"],
+        description="CS — onboards customers and drives expansion",
+    )
 
     # -- Subscribe to hub stream for live logging ---------------------
     async def _on_hub_event(event: object) -> None:
@@ -1170,8 +1232,7 @@ async def main() -> None:
             )
             task_preview = event.task[:120]
             print(
-                f"  {_DIM}{' ' * 13}{_RESET}  "
-                f"{_DIM}{task_preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
+                f"  {_DIM}{' ' * 13}{_RESET}  " f"{_DIM}{task_preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
             )
         elif isinstance(event, DelegationResult):
             preview = event.result[:120].replace("\n", " | ")
@@ -1180,10 +1241,7 @@ async def main() -> None:
                 f"{_GREEN}{_BOLD}RESULT{_RESET}   "
                 f"{_GREEN}{event.target} -> {event.source}{_RESET}"
             )
-            print(
-                f"  {_DIM}{' ' * 13}{_RESET}  "
-                f"{_DIM}{preview}{'...' if len(event.result) > 120 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 13}{_RESET}  " f"{_DIM}{preview}{'...' if len(event.result) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationRejected):
             print(
                 f"  {_DIM}{_ts()}{_RESET}  "
@@ -1193,10 +1251,7 @@ async def main() -> None:
         elif isinstance(event, Signal):
             sev = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
             color = _RED if "CRITICAL" in sev or "FATAL" in sev else _YELLOW
-            print(
-                f"  {_DIM}{_ts()}{_RESET}  "
-                f"{color}{_BOLD}ALERT [{sev}]{_RESET} {color}{event.message}{_RESET}"
-            )
+            print(f"  {_DIM}{_ts()}{_RESET}  " f"{color}{_BOLD}ALERT [{sev}]{_RESET} {color}{event.message}{_RESET}")
 
     network.hub.stream.subscribe(_on_hub_event)
 
@@ -1211,11 +1266,11 @@ async def main() -> None:
     print(f"  {_CYAN}Agents:{_RESET}    SDR, AE (pro), SE (pro), Marketing, CS (pro)")
     print()
     print(f"  {_BOLD}Pipeline Routing Rules (PipelineGuard):{_RESET}")
-    print(f"    SDR -> AE, Marketing")
-    print(f"    AE  -> SE, CS, SDR")
-    print(f"    SE  -> AE")
-    print(f"    Marketing -> SDR")
-    print(f"    CS  -> AE")
+    print("    SDR -> AE, Marketing")
+    print("    AE  -> SE, CS, SDR")
+    print("    SE  -> AE")
+    print("    Marketing -> SDR")
+    print("    CS  -> AE")
     print()
 
     if message:
@@ -1278,9 +1333,9 @@ async def main() -> None:
 
         print(f"  {_BOLD}Starting autonomous pipeline operations...{_RESET}")
         print(f"  {_DIM}(Scheduler running for {args.duration}s with 3 autonomous cycles){_RESET}")
-        print(f"    AE pipeline review: every 15s")
-        print(f"    SDR lead nurture: every 20s")
-        print(f"    CS health check: every 25s")
+        print("    AE pipeline review: every 15s")
+        print("    SDR lead nurture: every 20s")
+        print("    CS health check: every 25s")
         print()
 
         async with network:
@@ -1309,7 +1364,7 @@ async def main() -> None:
     print(f"    Routes validated: {pipeline_guard.total_routed}")
     print(f"    Warnings: {_YELLOW}{pipeline_guard.total_warnings}{_RESET}")
     if pipeline_guard.route_log:
-        print(f"    Route log:")
+        print("    Route log:")
         for src, tgt, ok in pipeline_guard.route_log:
             status = f"{_GREEN}OK{_RESET}" if ok else f"{_YELLOW}WARN{_RESET}"
             print(f"      {src} -> {tgt}: {status}")
@@ -1319,15 +1374,9 @@ async def main() -> None:
     for entry in deal_tracker.delegation_log[-6:]:
         etype = entry["type"]
         if etype == "request":
-            print(
-                f"    {_DIM}{entry['time']}{_RESET} "
-                f"{_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}"
-            )
+            print(f"    {_DIM}{entry['time']}{_RESET} " f"{_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}")
         else:
-            print(
-                f"    {_DIM}{entry['time']}{_RESET} "
-                f"{_GREEN}{entry['target']} completed{_RESET}"
-            )
+            print(f"    {_DIM}{entry['time']}{_RESET} " f"{_GREEN}{entry['target']} completed{_RESET}")
     print()
     print(f"  {_BOLD}Telemetry:{_RESET}")
     m = telemetry.metrics

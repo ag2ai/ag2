@@ -113,7 +113,7 @@ class TechnicalScreener(BasePlugin):
         tech_keywords = ["python", "engineering", "senior", "architect", "lead", "10 years",
                          "machine learning", "distributed", "systems", "phd", "masters"]
         matches = sum(1 for kw in tech_keywords if kw.lower() in task_text.lower())
-        if matches >= 3:
+        if matches >= 5:
             self.last_result = "strong"
         elif matches >= 1:
             self.last_result = "adequate"

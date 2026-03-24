@@ -197,6 +197,14 @@ class Topology(ABC):
         """Uninstall all plugins in this topology."""
         ...
 
+    # Conform to Plugin protocol so nested topologies can be used as children
+    # in Pipeline/Fanout without special-casing.
+    def install(self, hub: Hub) -> None:
+        self.install_plugins(hub)
+
+    def uninstall(self) -> None:
+        self.uninstall_plugins()
+
 
 class Pipeline(Topology):
     """Sequential processing. Each plugin sees the output of the previous.

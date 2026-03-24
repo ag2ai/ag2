@@ -43,8 +43,8 @@ from autogen.beta.network import (
     TelemetryPlugin,
     register_event,
 )
-from autogen.beta.network.topology import BasePlugin, HubContext
 from autogen.beta.network.primitives.envelope import Envelope
+from autogen.beta.network.topology import BasePlugin, HubContext
 from autogen.beta.tools.final import tool
 
 if TYPE_CHECKING:
@@ -198,31 +198,37 @@ class ComplianceAudit(BasePlugin):
         self._hub = None
 
     async def _on_request(self, event: DelegationRequest) -> None:
-        self._audit_log.append({
-            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-            "type": "DELEGATION_REQUEST",
-            "source": event.source,
-            "target": event.target,
-            "task_preview": event.task[:100],
-        })
+        self._audit_log.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                "type": "DELEGATION_REQUEST",
+                "source": event.source,
+                "target": event.target,
+                "task_preview": event.task[:100],
+            }
+        )
 
     async def _on_result(self, event: DelegationResult) -> None:
-        self._audit_log.append({
-            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-            "type": "DELEGATION_RESULT",
-            "source": event.source,
-            "target": event.target,
-            "result_preview": event.result[:100],
-        })
+        self._audit_log.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                "type": "DELEGATION_RESULT",
+                "source": event.source,
+                "target": event.target,
+                "result_preview": event.result[:100],
+            }
+        )
 
     async def _on_rejected(self, event: DelegationRejected) -> None:
-        self._audit_log.append({
-            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-            "type": "DELEGATION_REJECTED",
-            "source": event.source,
-            "target": event.target,
-            "reason": event.reason,
-        })
+        self._audit_log.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                "type": "DELEGATION_REJECTED",
+                "source": event.source,
+                "target": event.target,
+                "reason": event.reason,
+            }
+        )
 
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Return the full audit trail."""
@@ -728,12 +734,12 @@ async def main() -> None:
     print(f"  {_CYAN}Actors:{_RESET}     analyst, trader, risk-manager, compliance-officer")
     print()
     print(f"  {_BLUE}Customization points:{_RESET}")
-    print(f"    Priority:   TradePriorityScheme (ANALYSIS < LIMIT < MARKET < RISK_ALERT)")
-    print(f"    Events:     PriceSignal, TradeExecution (custom @register_event)")
-    print(f"    Topology:   Pipeline(RiskGate, RateLimiter)")
-    print(f"    Plugins:    ComplianceAudit (system), TelemetryPlugin (system)")
-    print(f"    Harness:    NetworkHarness (analyst, trader), ConversationHarness (others)")
-    print(f"    Conflict:   HighestPriorityWins")
+    print("    Priority:   TradePriorityScheme (ANALYSIS < LIMIT < MARKET < RISK_ALERT)")
+    print("    Events:     PriceSignal, TradeExecution (custom @register_event)")
+    print("    Topology:   Pipeline(RiskGate, RateLimiter)")
+    print("    Plugins:    ComplianceAudit (system), TelemetryPlugin (system)")
+    print("    Harness:    NetworkHarness (analyst, trader), ConversationHarness (others)")
+    print("    Conflict:   HighestPriorityWins")
     print()
     print(f"  {_BOLD}Task:{_RESET}")
     words = task_message.split()
@@ -748,11 +754,13 @@ async def main() -> None:
         print(line)
     print()
     print(f"  {_DIM}{'─' * 64}{_RESET}")
-    print(f"  {_BOLD}Log legend:{_RESET}  "
-          f"{_MAGENTA}ROUTE{_RESET}=delegation  "
-          f"{_GREEN}DONE{_RESET}=completed  "
-          f"{_RED}VETO{_RESET}=rejected  "
-          f"{_YELLOW}ALERT{_RESET}=signal")
+    print(
+        f"  {_BOLD}Log legend:{_RESET}  "
+        f"{_MAGENTA}ROUTE{_RESET}=delegation  "
+        f"{_GREEN}DONE{_RESET}=completed  "
+        f"{_RED}VETO{_RESET}=rejected  "
+        f"{_YELLOW}ALERT{_RESET}=signal"
+    )
     print(f"  {_DIM}{'─' * 64}{_RESET}")
     print()
 
