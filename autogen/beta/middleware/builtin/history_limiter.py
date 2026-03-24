@@ -5,7 +5,7 @@
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
@@ -51,6 +51,6 @@ class _HistoryLimiter(BaseMiddleware):
 
 
 def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
-    while start < len(events) and isinstance(events[start], ToolResults):
+    while start < len(events) and isinstance(events[start], ToolResultsEvent):
         start += 1
     return start

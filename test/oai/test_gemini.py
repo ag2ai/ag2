@@ -1831,6 +1831,34 @@ class TestGeminiClient:
         mock_chat.send_message.assert_called_once()
         mock_chat.send_message_stream.assert_not_called()
 
+    def test_oai_content_to_gemini_content_missing_content_key(self, gemini_client):
+        """Test that messages without a 'content' key are handled gracefully.
+
+        Reproduces the KeyError crash when a DataPart-originated message
+        (e.g. from A2UI action) enters the conversation history without
+        a 'content' field.
+        """
+        from google.genai.types import Part
+
+        message = {
+            "role": "user",
+            "version": "v0.9",
+            "action": {"name": "approve_previews", "surfaceId": "marketing"},
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "text"
+        assert len(parts) == 1
+        assert isinstance(parts[0], Part)
+        # Should serialize non-role fields as JSON
+        import json
+
+        serialized = json.loads(parts[0].text)
+        assert serialized["version"] == "v0.9"
+        assert serialized["action"]["name"] == "approve_previews"
+        assert "role" not in serialized
+
     @patch("autogen.oai.gemini.GenerativeModel")
     @patch("autogen.oai.gemini.vertexai.init")
     @patch("autogen.oai.gemini.calculate_gemini_cost")

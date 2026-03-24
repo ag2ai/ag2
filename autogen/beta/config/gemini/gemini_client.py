@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 from google import genai
@@ -19,12 +20,13 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_tools, convert_messages
+from .mappers import build_system_instruction, build_tools, convert_messages, response_proto_to_config
 
 
 class CreateConfig(TypedDict, total=False):
@@ -57,16 +59,23 @@ class GeminiClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         contents = convert_messages(messages)
-        system_instruction = "\n\n".join(context.prompt) if context.prompt else None
 
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        system_instruction = build_system_instruction(prompt)
         gemini_tools = build_tools(list(tools))
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
+            **response_proto_to_config(response_schema),
             **self._create_config,
         )
 
@@ -91,28 +100,29 @@ class GeminiClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
 
-        if response.candidates:
-            for part in response.candidates[0].content.parts:
-                if part.thought and part.text:
-                    await context.send(ModelReasoning(content=part.text))
-                elif part.text is not None:
-                    model_msg = ModelMessage(content=part.text)
-                    await context.send(model_msg)
-                elif part.function_call:
-                    fc = part.function_call
-                    pdata: dict[str, Any] = {}
-                    if part.thought_signature is not None:
-                        pdata["thought_signature"] = part.thought_signature
-                    calls.append(
-                        ToolCall(
-                            id=fc.id or fc.name or "",
-                            name=fc.name or "",
-                            arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                            provider_data=pdata,
+        for candidate in response.candidates or ():
+            if candidate.content:
+                for part in candidate.content.parts or ():
+                    if part.thought and part.text:
+                        await context.send(ModelReasoning(content=part.text))
+                    elif part.text is not None:
+                        model_msg = ModelMessage(content=part.text)
+                        await context.send(model_msg)
+                    elif part.function_call:
+                        fc = part.function_call
+                        pdata: dict[str, Any] = {}
+                        if part.thought_signature is not None:
+                            pdata["thought_signature"] = part.thought_signature
+                        calls.append(
+                            ToolCallEvent(
+                                id=fc.id or fc.name or "",
+                                name=fc.name or "",
+                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                                provider_data=pdata,
+                            )
                         )
-                    )
 
         usage = {}
         if response.usage_metadata:
@@ -122,10 +132,19 @@ class GeminiClient(LLMClient):
                 "total_token_count": response.usage_metadata.total_token_count,
             }
 
+        finish_reason = None
+        if response.candidates:
+            fr = response.candidates[0].finish_reason
+            if fr is not None:
+                finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )
 
     async def _process_stream(
@@ -134,30 +153,32 @@ class GeminiClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
         usage: dict[str, Any] = {}
+        finish_reason: str | None = None
 
         async for chunk in stream:
-            if chunk.candidates:
-                for part in chunk.candidates[0].content.parts:
-                    if part.thought and part.text:
-                        await context.send(ModelReasoning(content=part.text))
-                    elif part.text is not None:
-                        full_content += part.text
-                        await context.send(ModelMessageChunk(content=part.text))
-                    elif part.function_call:
-                        fc = part.function_call
-                        pdata: dict[str, Any] = {}
-                        if part.thought_signature is not None:
-                            pdata["thought_signature"] = part.thought_signature
-                        calls.append(
-                            ToolCall(
-                                id=fc.id or fc.name or "",
-                                name=fc.name or "",
-                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                                provider_data=pdata,
+            for candidate in chunk.candidates or ():
+                if candidate.content:
+                    for part in candidate.content.parts or ():
+                        if part.thought and part.text:
+                            await context.send(ModelReasoning(content=part.text))
+                        elif part.text is not None:
+                            full_content += part.text
+                            await context.send(ModelMessageChunk(content=part.text))
+                        elif part.function_call:
+                            fc = part.function_call
+                            pdata: dict[str, Any] = {}
+                            if part.thought_signature is not None:
+                                pdata["thought_signature"] = part.thought_signature
+                            calls.append(
+                                ToolCallEvent(
+                                    id=fc.id or fc.name or "",
+                                    name=fc.name or "",
+                                    arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                                    provider_data=pdata,
+                                )
                             )
-                        )
 
             if chunk.usage_metadata:
                 usage = {
@@ -166,6 +187,11 @@ class GeminiClient(LLMClient):
                     "total_token_count": chunk.usage_metadata.total_token_count,
                 }
 
+            if chunk.candidates:
+                fr = chunk.candidates[0].finish_reason
+                if fr is not None:
+                    finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
@@ -173,6 +199,9 @@ class GeminiClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )

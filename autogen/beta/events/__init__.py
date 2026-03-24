@@ -4,8 +4,16 @@
 
 from .base import BaseEvent, Field
 from .conditions import Condition
+from .tool_events import (
+    ClientToolCallEvent,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+    ToolNotFoundEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
+)
 from .types import (
-    ClientToolCall,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -13,17 +21,11 @@ from .types import (
     ModelReasoning,
     ModelRequest,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
-    ToolError,
-    ToolNotFoundEvent,
-    ToolResult,
-    ToolResults,
 )
 
 __all__ = (
     "BaseEvent",
-    "ClientToolCall",
+    "ClientToolCallEvent",
     "Condition",
     "Field",
     "HumanInputRequest",
@@ -33,10 +35,10 @@ __all__ = (
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
-    "ToolCall",
-    "ToolCalls",
-    "ToolError",
+    "ToolCallEvent",
+    "ToolCallsEvent",
+    "ToolErrorEvent",
     "ToolNotFoundEvent",
-    "ToolResult",
-    "ToolResults",
+    "ToolResultEvent",
+    "ToolResultsEvent",
 )
