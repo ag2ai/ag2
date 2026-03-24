@@ -14,13 +14,7 @@ from pydantic import Field
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
 
-from ..import_utils import optional_import_block
 from .agent_executor import AutogenAgentExecutor
-
-with optional_import_block():
-    from autogen.agents.experimental.a2ui import A2UIAgent
-    from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
-    from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
 
 if TYPE_CHECKING:
     from a2a.server.agent_execution import RequestContextBuilder
@@ -161,6 +155,9 @@ class A2aAgentServer:
         # Declares the extension URI and supportedCatalogIds in the agent card
         # so clients know what A2UI version and catalogs this agent supports.
         try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
+
             if isinstance(agent, A2UIAgent):
                 existing_extensions = list(self.card.capabilities.extensions or [])
                 if not any(e.uri == A2UI_EXTENSION_URI for e in existing_extensions):
@@ -176,7 +173,7 @@ class A2aAgentServer:
                         )
                     )
                     self.card.capabilities.extensions = existing_extensions
-        except ImportError:
+        except (ImportError, NameError):
             pass
 
         self.card_modifier = card_modifier
@@ -195,13 +192,16 @@ class A2aAgentServer:
         preserves A2UI DataParts in responses and handles extension negotiation.
         """
         try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
+
             if isinstance(self.agent, A2UIAgent):
                 return A2UIAgentExecutor(  # type: ignore[return-value]
                     self.agent,
                     delimiter=self.agent._response_delimiter,
                     version_string=self.agent.protocol_version,
                 )
-        except ImportError:
+        except (ImportError, NameError):
             pass
         return AutogenAgentExecutor(self.agent)
 

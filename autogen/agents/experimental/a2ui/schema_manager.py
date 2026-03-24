@@ -375,7 +375,7 @@ class A2UISchemaManager:
                     "\nTo create a button that calls a client function:\n"
                     "```json\n"
                     '{"id": "action_btn", "component": "Button", "child": "action_btn_text", '
-                    '"action": {"functionCall": {"name": "<function_name>", "args": {...}}}},\n'
+                    '"action": {"functionCall": {"call": "<function_name>", "args": {...}, "returnType": "void"}}},\n'
                     '{"id": "action_btn_text", "component": "Text", "text": "Button Label"}\n'
                     "```"
                 )

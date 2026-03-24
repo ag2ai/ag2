@@ -25,12 +25,11 @@ with optional_import_block():
     from a2a.server.agent_execution import AgentExecutor, RequestContext
     from a2a.server.events import EventQueue
     from a2a.server.tasks import TaskUpdater
-    from a2a.types import Artifact, DataPart, InternalError, Part, Task, TaskState, TaskStatus, TextPart
+    from a2a.types import DataPart, InternalError, Message, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.utils.errors import ServerError
 
     from ....a2a.utils import (  # type: ignore[attr-defined]
         make_input_required_message,
-        new_artifact,
         request_message_from_a2a,
     )
     from ....agentchat.remote import AgentService
@@ -75,19 +74,27 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         self._parser = A2UIResponseParser(version_string=version_string, delimiter=delimiter)
 
     def _extract_incoming_action(self, context: RequestContext) -> dict[str, Any] | None:
-        """Check incoming message parts for A2UI action DataParts."""
+        """Check incoming message parts for A2UI action DataParts.
+
+        Supports two formats:
+        1. A2UI MIME-typed DataPart: ``{"messages": [{"action": {...}}]}``
+        2. genui v0.9 DataPart (no MIME): ``{"version": "v0.9", "action": {...}}``
+        """
         assert context.message
         for part in context.message.parts:
-            if (
-                isinstance(part.root, DataPart)
-                and part.root.metadata
-                and part.root.metadata.get(MIME_TYPE_KEY) == A2UI_MIME_TYPE
-            ):
-                messages = part.root.data.get("messages", [])
-                for msg in messages:
-                    if isinstance(msg, dict) and "action" in msg:
-                        action: dict[str, Any] = msg["action"]
-                        return action
+            if isinstance(part.root, DataPart):
+                data = part.root.data
+                # Format 1: A2UI MIME-typed DataPart with messages wrapper
+                if part.root.metadata and part.root.metadata.get(MIME_TYPE_KEY) == A2UI_MIME_TYPE:
+                    messages = data.get("messages", [])
+                    for msg in messages:
+                        if isinstance(msg, dict) and "action" in msg:
+                            action: dict[str, Any] = msg["action"]
+                            return action
+                # Format 2: genui v0.9 action DataPart (from genui SurfaceController)
+                elif isinstance(data, dict) and "action" in data:
+                    action2: dict[str, Any] = data["action"]
+                    return action2
         return None
 
     async def _handle_action(
@@ -139,16 +146,10 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                     logger.error("Tool '%s' failed: %s", action_def.tool_name, e, exc_info=True)
                     result_text = f"Error calling {action_def.tool_name}: {e}"
 
-            # Publish text-only result
+            # Publish text-only result via status update
             text_part = Part(root=TextPart(text=result_text))
-            await updater.add_artifact(
-                parts=[text_part],
-                artifact_id=str(uuid4()),
-                name=RESULT_ARTIFACT_NAME,
-                append=False,
-                last_chunk=True,
-            )
-            await updater.complete()
+            message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
+            await updater.update_status(state=TaskState.completed, message=message, final=True)
             return True
 
         else:
@@ -199,9 +200,9 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         return task, updater
 
     async def _stream_agent_response(
-        self, context: RequestContext, task: Task, updater: TaskUpdater, artifact: Artifact
+        self, context: RequestContext, task: Task, updater: TaskUpdater
     ) -> tuple[str, bool]:
-        """Stream the agent response, forwarding chunks to the updater.
+        """Stream the agent response, forwarding chunks via status updates.
 
         Returns:
             A tuple of (full_response_text, streaming_started).
@@ -226,13 +227,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             if response.streaming_text:
                 full_response_text += response.streaming_text
                 text_part = Part(root=TextPart(text=response.streaming_text))
-                await updater.add_artifact(
-                    parts=[text_part],
-                    artifact_id=artifact.artifact_id,
-                    name=artifact.name,
-                    append=streaming_started,
-                    last_chunk=False,
-                )
+                message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
+                await updater.update_status(state=TaskState.working, message=message)
                 streaming_started = True
 
             elif response.message:
@@ -255,7 +251,11 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                 parts: list[Part] = []
                 if parse_result.text:
                     parts.append(Part(root=TextPart(text=parse_result.text)))
-                parts.append(create_a2ui_part(parse_result.operations))
+                a2ui_parts = create_a2ui_part(parse_result.operations)
+                if isinstance(a2ui_parts, list):
+                    parts.extend(a2ui_parts)
+                else:
+                    parts.append(a2ui_parts)
                 return parts
 
         if full_response_text:
@@ -283,10 +283,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             if handled:
                 return
 
-        artifact = new_artifact(name=RESULT_ARTIFACT_NAME, parts=[], description=None)
-
         try:
-            full_response_text, streaming_started = await self._stream_agent_response(context, task, updater, artifact)
+            full_response_text, streaming_started = await self._stream_agent_response(context, task, updater)
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
@@ -295,21 +293,12 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             return
 
         final_parts = self._build_final_parts(full_response_text, use_a2ui)
-        if final_parts:
-            artifact = Artifact(
-                artifact_id=artifact.artifact_id,
-                name=artifact.name,
-                parts=final_parts,
-            )
+        if not final_parts:
+            final_parts = [Part(root=TextPart(text=full_response_text))] if full_response_text else []
 
-        await updater.add_artifact(
-            artifact_id=artifact.artifact_id,
-            name=artifact.name,
-            parts=artifact.parts,
-            append=streaming_started,
-            last_chunk=True,
-        )
-        await updater.complete()
+        # Send final response via status update so genui_a2a connector can process it
+        message = Message(role="agent", message_id=str(uuid4()), parts=final_parts)
+        await updater.update_status(state=TaskState.completed, message=message, final=True)
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass

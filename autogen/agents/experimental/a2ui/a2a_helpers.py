@@ -30,31 +30,35 @@ A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"
 
 
 @require_optional_import(["a2a"], "a2a")
-def create_a2ui_part(a2ui_data: dict[str, Any] | list[dict[str, Any]]) -> Part:
-    """Create an A2A Part containing A2UI data.
+def create_a2ui_part(a2ui_data: dict[str, Any] | list[dict[str, Any]]) -> Part | list[Part]:
+    """Create A2A Part(s) containing A2UI data.
 
-    Per the A2UI extension spec, the ``data`` field of the DataPart contains
-    a **list** of A2UI JSON messages. If a single dict is passed, it is wrapped
-    in a list automatically.
-
-    Since the A2A SDK types ``DataPart.data`` as ``dict``, the list is wrapped
-    in ``{"messages": [...]}`` for transport compatibility.
+    Each A2UI operation (e.g., ``createSurface``, ``updateComponents``) is
+    sent as a separate DataPart with the operation key at the top level of
+    the ``data`` field. This matches what genui_a2a's ``A2uiAgentConnector``
+    expects when processing A2UI messages from status-update events.
 
     Args:
         a2ui_data: A2UI message(s) — either a single operation dict or a list
             of operation dicts (e.g., ``[createSurface, updateComponents]``).
 
     Returns:
-        An A2A ``Part`` with the A2UI DataPart.
+        A single ``Part`` if one operation, or a list of ``Part`` objects
+        if multiple operations.
     """
     if isinstance(a2ui_data, dict):
         a2ui_data = [a2ui_data]
-    return Part(
-        root=DataPart(
-            data={"messages": a2ui_data},
-            metadata={MIME_TYPE_KEY: A2UI_MIME_TYPE},
+
+    parts = [
+        Part(
+            root=DataPart(
+                data=op,
+                metadata={MIME_TYPE_KEY: A2UI_MIME_TYPE},
+            )
         )
-    )
+        for op in a2ui_data
+    ]
+    return parts[0] if len(parts) == 1 else parts
 
 
 def is_a2ui_part(part: Part) -> bool:

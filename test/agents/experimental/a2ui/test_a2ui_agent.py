@@ -175,6 +175,57 @@ class TestA2UIAgent:
         assert '"functionCall"' in msg
         assert "Server Events" not in msg
 
+    def test_function_call_prompt_uses_call_not_name(self) -> None:
+        """The functionCall example in the prompt must use 'call' (not 'name') per A2UI v0.9 spec."""
+        agent = A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            actions=[
+                A2UIAction(
+                    name="openUrl",
+                    action_type="functionCall",
+                    description="Open a URL",
+                    example_args={"url": "https://example.com"},
+                ),
+            ],
+        )
+        msg = agent.system_message
+        # The prompt example should use "call", not "name", inside functionCall
+        assert '"call":' in msg or '"call": ' in msg
+        assert '"returnType"' in msg
+
+    def test_function_call_validates_against_schema(self) -> None:
+        """A functionCall button with 'call' and 'returnType' should pass A2UI schema validation."""
+        agent = A2UIAgent(
+            name="test_agent",
+            llm_config=False,
+            validate_responses=True,
+            actions=[
+                A2UIAction(
+                    name="openUrl",
+                    action_type="functionCall",
+                    description="Open a URL",
+                    example_args={"url": "https://example.com"},
+                ),
+            ],
+        )
+        # A response with a functionCall button using the correct v0.9 format
+        response = (
+            "Here is a link.\n---a2ui_JSON---\n"
+            "["
+            '{"version": "v0.9", "createSurface": {"surfaceId": "s1", '
+            '"catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"}},'
+            '{"version": "v0.9", "updateComponents": {"surfaceId": "s1", "components": ['
+            '{"id": "btn", "component": "Button", "child": "btn_text", '
+            '"action": {"functionCall": {"call": "openUrl", "args": {"url": "https://example.com"}, "returnType": "void"}}},'
+            '{"id": "btn_text", "component": "Text", "text": "Open Link"}'
+            "]}}"
+            "]"
+        )
+        parse_result, errors = agent._validate_a2ui_response(response)
+        assert parse_result.has_a2ui is True
+        assert errors is None, f"Validation errors: {errors}"
+
     def test_mixed_actions_in_prompt(self) -> None:
         agent = A2UIAgent(
             name="test_agent",
