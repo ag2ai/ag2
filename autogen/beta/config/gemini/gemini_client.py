@@ -96,7 +96,7 @@ class GeminiClient(LLMClient):
         for candidate in response.candidates or ():
             if candidate.content:
                 for part in candidate.content.parts or ():
-                    if part.thought and part.text:
+                    if getattr(part, "thought", False) and part.text:
                         await context.send(ModelReasoning(content=part.text))
                     elif part.text is not None:
                         model_msg = ModelMessage(content=part.text)
@@ -104,8 +104,9 @@ class GeminiClient(LLMClient):
                     elif part.function_call:
                         fc = part.function_call
                         pdata: dict[str, Any] = {}
-                        if part.thought_signature is not None:
-                            pdata["thought_signature"] = part.thought_signature
+                        thought_sig = getattr(part, "thought_signature", None)
+                        if thought_sig is not None:
+                            pdata["thought_signature"] = thought_sig
                         calls.append(
                             ToolCallEvent(
                                 id=fc.id or fc.name or "",
@@ -117,10 +118,17 @@ class GeminiClient(LLMClient):
 
         usage = {}
         if response.usage_metadata:
+            prompt = response.usage_metadata.prompt_token_count or 0
+            completion = response.usage_metadata.candidates_token_count or 0
+            total = response.usage_metadata.total_token_count or 0
             usage = {
-                "prompt_token_count": response.usage_metadata.prompt_token_count,
-                "candidates_token_count": response.usage_metadata.candidates_token_count,
-                "total_token_count": response.usage_metadata.total_token_count,
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                "total_tokens": total,
+                # Keep native keys for backward compatibility
+                "prompt_token_count": prompt,
+                "candidates_token_count": completion,
+                "total_token_count": total,
             }
 
         return ModelResponse(
@@ -142,7 +150,7 @@ class GeminiClient(LLMClient):
             for candidate in chunk.candidates or ():
                 if candidate.content:
                     for part in candidate.content.parts or ():
-                        if part.thought and part.text:
+                        if getattr(part, "thought", False) and part.text:
                             await context.send(ModelReasoning(content=part.text))
                         elif part.text is not None:
                             full_content += part.text
@@ -150,8 +158,9 @@ class GeminiClient(LLMClient):
                         elif part.function_call:
                             fc = part.function_call
                             pdata: dict[str, Any] = {}
-                            if part.thought_signature is not None:
-                                pdata["thought_signature"] = part.thought_signature
+                            thought_sig = getattr(part, "thought_signature", None)
+                            if thought_sig is not None:
+                                pdata["thought_signature"] = thought_sig
                             calls.append(
                                 ToolCallEvent(
                                     id=fc.id or fc.name or "",
@@ -162,10 +171,17 @@ class GeminiClient(LLMClient):
                             )
 
             if chunk.usage_metadata:
+                prompt = chunk.usage_metadata.prompt_token_count or 0
+                completion = chunk.usage_metadata.candidates_token_count or 0
+                total = chunk.usage_metadata.total_token_count or 0
                 usage = {
-                    "prompt_token_count": chunk.usage_metadata.prompt_token_count,
-                    "candidates_token_count": chunk.usage_metadata.candidates_token_count,
-                    "total_token_count": chunk.usage_metadata.total_token_count,
+                    "prompt_tokens": prompt,
+                    "completion_tokens": completion,
+                    "total_tokens": total,
+                    # Keep native keys for backward compatibility
+                    "prompt_token_count": prompt,
+                    "candidates_token_count": completion,
+                    "total_token_count": total,
                 }
 
         message: ModelMessage | None = None
