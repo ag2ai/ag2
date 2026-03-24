@@ -30,7 +30,7 @@ class _AskableAgent:
 
     async def ask(self, message, **kwargs):
         self.asked.append(message)
-        return type("Reply", (), {"content": self._result})()
+        return type("Reply", (), {"content": self._result, "body": self._result})()
 
 
 class _FailingAgent:

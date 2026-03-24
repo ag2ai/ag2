@@ -31,7 +31,7 @@ class _AskableAgent:
 
     async def ask(self, message: str, **kwargs):
         self.last_message = message
-        return type("Reply", (), {"content": self._result})()
+        return type("Reply", (), {"content": self._result, "body": self._result})()
 
 
 class _MockAgent:

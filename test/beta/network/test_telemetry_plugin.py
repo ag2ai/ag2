@@ -17,7 +17,7 @@ class _MockAgent:
         self._result = result
 
     async def ask(self, message, **kwargs):
-        return type("Reply", (), {"content": self._result})()
+        return type("Reply", (), {"content": self._result, "body": self._result})()
 
 
 class TestTelemetryPluginInstall:

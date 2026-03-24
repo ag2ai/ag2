@@ -39,7 +39,7 @@ class _AskableAgent:
     async def ask(self, message: str, **kwargs):
         self.received_messages.append(message)
         self.received_tools = list(kwargs.get("tools", []))
-        return type("Reply", (), {"content": self._result})()
+        return type("Reply", (), {"content": self._result, "body": self._result})()
 
 
 class _FailingAgent:
@@ -227,7 +227,7 @@ class TestHubDelegation:
             name = "empty"
 
             async def ask(self, message, **kwargs):
-                return type("Reply", (), {"content": None})()
+                return type("Reply", (), {"content": None, "body": None})()
 
         hub = Hub()
         await hub.register(_NoneReplyAgent())
@@ -559,7 +559,7 @@ class TestHubTopologyIntegration:
 
             async def ask(self, message, **kwargs):
                 dispatched_to.append(self.name)
-                return type("Reply", (), {"content": f"{self.name} done"})()
+                return type("Reply", (), {"content": f"{self.name} done", "body": f"{self.name} done"})()
 
         class _MulticastPlugin(BasePlugin):
             """Only multicast for the primary, let additional pass through."""
@@ -605,7 +605,7 @@ class TestHubTopologyIntegration:
 
             async def ask(self, message, **kwargs):
                 dispatched.append(self.name)
-                return type("Reply", (), {"content": "done"})()
+                return type("Reply", (), {"content": "done", "body": "done"})()
 
         class _RejectWithNotify(BasePlugin):
             """Rejects only the primary target, passes through additional."""
@@ -768,7 +768,7 @@ class TestHubAdditionalTaskTracking:
             async def ask(self, message, **kwargs):
                 await asyncio.sleep(0.1)
                 execution_log.append(self.name)
-                return type("Reply", (), {"content": "done"})()
+                return type("Reply", (), {"content": "done", "body": "done"})()
 
         class _FanOncePlugin(BasePlugin):
             """Only fan out for the primary target, not for the additional."""

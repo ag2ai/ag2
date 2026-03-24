@@ -375,7 +375,7 @@ class TestDelegateKwargsPassthrough:
         hub = Hub()
 
         mock_reply = MagicMock()
-        mock_reply.content = "done"
+        mock_reply.body = "done"
         mock_agent = MagicMock()
         mock_agent.name = "target"
         mock_agent.ask = AsyncMock(return_value=mock_reply)
@@ -572,7 +572,7 @@ class TestHttpDelegateUsesPipeline:
                 self._result = result
 
             async def ask(self, message, **kwargs):
-                return type("Reply", (), {"content": self._result})()
+                return type("Reply", (), {"content": self._result, "body": self._result})()
 
         await hub.register(_Agent("worker", result="task completed"))
 
@@ -622,7 +622,7 @@ class TestHttpDelegateUsesPipeline:
             async def ask(self, message, **kwargs):
                 # Try to delegate to self (via another name) — would loop
                 result = await self._hub._delegate("looper", "keep going", source=self.name)
-                return type("Reply", (), {"content": result})()
+                return type("Reply", (), {"content": result, "body": result})()
 
         hub = Hub(max_delegation_depth=2)
         agent = _DelegatingAgent("looper", hub)
@@ -914,3 +914,190 @@ class TestObserverDetachFailureStillEmitsCompleted:
         completed = [e for e in sent_events if isinstance(e, ObserverCompleted)]
         assert len(completed) == 1
         assert completed[0].name == "good-observer"
+
+
+# ---------------------------------------------------------------------------
+# Bug 14: Actor._execute() missing response_schema parameter
+# ---------------------------------------------------------------------------
+
+
+class TestActorExecuteResponseSchema:
+    """Actor._execute() must accept and forward the response_schema kwarg
+    that Agent.ask() passes through. Without this, calling hub.ask() or
+    actor.ask() raises TypeError."""
+
+    @pytest.mark.asyncio
+    async def test_actor_execute_forwards_response_schema(self) -> None:
+        """Actor._execute() should forward response_schema to Agent._execute()."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from autogen.beta.events import ModelMessage
+        from autogen.beta.network.actor import Actor
+        from autogen.beta.types import omit
+
+        actor = Actor("test-actor")
+
+        mock_reply = MagicMock()
+        mock_reply.content = "ok"
+        mock_reply.response = None
+
+        mock_stream = MagicMock()
+        mock_stream.where.return_value = mock_stream
+        mock_stream.subscribe.return_value = "sub-id"
+        mock_stream.unsubscribe = MagicMock()
+
+        ctx = MagicMock()
+        ctx.stream = mock_stream
+        ctx.prompt = []
+        ctx.send = AsyncMock()
+
+        with patch(
+            "autogen.beta.agent.Agent._execute",
+            new_callable=AsyncMock,
+            return_value=mock_reply,
+        ) as mock_super_execute:
+            mock_client = MagicMock()
+            await actor._execute(
+                ModelMessage(content="test"),
+                context=ctx,
+                client=mock_client,
+                response_schema=str,
+            )
+
+            # Verify Agent._execute was called with response_schema forwarded
+            call_kwargs = mock_super_execute.call_args.kwargs
+            assert call_kwargs["response_schema"] is str
+
+    @pytest.mark.asyncio
+    async def test_actor_execute_defaults_response_schema_to_omit(self) -> None:
+        """When response_schema is not passed, it should default to omit."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from autogen.beta.events import ModelMessage
+        from autogen.beta.network.actor import Actor
+        from autogen.beta.types import omit
+
+        actor = Actor("test-actor")
+
+        mock_reply = MagicMock()
+        mock_reply.content = "ok"
+        mock_reply.response = None
+
+        mock_stream = MagicMock()
+        mock_stream.where.return_value = mock_stream
+        mock_stream.subscribe.return_value = "sub-id"
+        mock_stream.unsubscribe = MagicMock()
+
+        ctx = MagicMock()
+        ctx.stream = mock_stream
+        ctx.prompt = []
+        ctx.send = AsyncMock()
+
+        with patch(
+            "autogen.beta.agent.Agent._execute",
+            new_callable=AsyncMock,
+            return_value=mock_reply,
+        ) as mock_super_execute:
+            mock_client = MagicMock()
+            # Call without response_schema — should default to omit
+            await actor._execute(
+                ModelMessage(content="test"),
+                context=ctx,
+                client=mock_client,
+            )
+
+            call_kwargs = mock_super_execute.call_args.kwargs
+            assert call_kwargs["response_schema"] is omit
+
+    @pytest.mark.asyncio
+    async def test_hub_ask_actor_does_not_raise_type_error(self) -> None:
+        """Regression: hub.ask() on an Actor should not raise TypeError
+        about unexpected 'response_schema' kwarg."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from autogen.beta.network.actor import Actor
+        from autogen.beta.network.hub import Hub
+
+        hub = Hub()
+        actor = Actor("dispatch")
+
+        mock_reply = MagicMock()
+        mock_reply.content = "dispatched"
+
+        # Patch actor.ask to verify it can be called without TypeError
+        with patch.object(actor, "ask", new_callable=AsyncMock, return_value=mock_reply):
+            await hub.register(actor, capabilities=["dispatch"])
+            reply = await hub.ask("dispatch", "emergency call")
+            assert reply.content == "dispatched"
+
+
+# ---------------------------------------------------------------------------
+# Bug 15: AgentReply.content changed from property to async method
+# ---------------------------------------------------------------------------
+
+
+class TestReplyBodyAccess:
+    """Hub._delegate(), Actor._run_task(), and RemoteAgentReply must read
+    .body (the property) instead of .content (now an async method)."""
+
+    @pytest.mark.asyncio
+    async def test_hub_delegate_reads_body(self) -> None:
+        """hub._delegate() should use reply.body, not reply.content."""
+        from autogen.beta.network.hub import Hub
+
+        class _BodyAgent:
+            name = "worker"
+
+            async def ask(self, message, **kwargs):
+                # Mimic real AgentReply: .body is a str, .content is a method
+                reply = type("Reply", (), {
+                    "body": "result via body",
+                    "content": lambda self: None,  # method, not str
+                    "response": None,
+                })()
+                return reply
+
+        hub = Hub()
+        await hub.register(_BodyAgent())
+
+        result = await hub._delegate("worker", "task", source="src")
+        assert result == "result via body"
+
+    @pytest.mark.asyncio
+    async def test_hub_delegate_body_none_returns_empty(self) -> None:
+        """When reply.body is None, _delegate should return empty string."""
+        from autogen.beta.network.hub import Hub
+
+        class _NoneBodyAgent:
+            name = "worker"
+
+            async def ask(self, message, **kwargs):
+                return type("Reply", (), {"body": None, "response": None})()
+
+        hub = Hub()
+        await hub.register(_NoneBodyAgent())
+
+        result = await hub._delegate("worker", "task", source="src")
+        assert result == ""
+
+    def test_remote_agent_reply_has_body_property(self) -> None:
+        """RemoteAgentReply.body should return the same text as .content."""
+        from unittest.mock import MagicMock
+
+        from autogen.beta.network.remote import RemoteAgentReply
+
+        reply = RemoteAgentReply(
+            content="hello world",
+            remote_agent=MagicMock(),
+        )
+        assert reply.body == "hello world"
+        assert reply.body == reply.content
+
+    def test_remote_agent_reply_body_none(self) -> None:
+        """RemoteAgentReply.body should return None when content is None."""
+        from unittest.mock import MagicMock
+
+        from autogen.beta.network.remote import RemoteAgentReply
+
+        reply = RemoteAgentReply(content=None, remote_agent=MagicMock())
+        assert reply.body is None

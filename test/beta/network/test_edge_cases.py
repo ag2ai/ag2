@@ -64,7 +64,7 @@ class _AskableAgent:
     async def ask(self, message, **kwargs):
         self.asked.append(message)
         self.tools_received.extend(kwargs.get("tools", []))
-        return type("Reply", (), {"content": self._result})()
+        return type("Reply", (), {"content": self._result, "body": self._result})()
 
 
 class _DelegatingAgent:
@@ -85,8 +85,8 @@ class _DelegatingAgent:
                 self._delegate_task,
                 source=self.name,
             )
-            return type("Reply", (), {"content": result})()
-        return type("Reply", (), {"content": "no hub"})()
+            return type("Reply", (), {"content": result, "body": result})()
+        return type("Reply", (), {"content": "no hub", "body": "no hub"})()
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +373,7 @@ class TestConcurrentDelegation:
             async def ask(self, message, **kwargs):
                 self.ask_count += 1
                 await asyncio.sleep(self._delay)
-                return type("Reply", (), {"content": f"{self._result}"})()
+                return type("Reply", (), {"content": f"{self._result}", "body": f"{self._result}"})()
 
         agent_a = _SlowAgent("a", delay=0.05, result="result-a")
         agent_b = _SlowAgent("b", delay=0.05, result="result-b")
@@ -458,8 +458,8 @@ class TestHubSelfDelegation:
                     if _tool_name(t) == "delegate_to":
                         # The tool checks caller == agent_name and returns error
                         # We verify the tool exists with the right name
-                        return type("Reply", (), {"content": "has delegate_to"})()
-                return type("Reply", (), {"content": "no tools"})()
+                        return type("Reply", (), {"content": "has delegate_to", "body": "has delegate_to"})()
+                return type("Reply", (), {"content": "no tools", "body": "no tools"})()
 
         hub = Hub()
         agent = _SelfDelegator("self-ref", hub)
@@ -501,7 +501,7 @@ class TestHubDiscoverExcludesSelf:
                 # The discover_agents tool is injected via hub.ask()
                 # We verify indirectly: the hub's discover() returns all agents,
                 # but the tool should filter out the caller
-                return type("Reply", (), {"content": "ok"})()
+                return type("Reply", (), {"content": "ok", "body": "ok"})()
 
         hub = Hub()
         await hub.register(_AskableAgent("me"), capabilities=["shared"])
