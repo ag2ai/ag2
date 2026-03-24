@@ -6,9 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from autogen.a2a.constants import A2UI_MIME_TYPE
 from autogen.agents.experimental.a2ui import A2UIAgent
 from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
-from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI, A2UI_MIME_TYPE
+from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
 
 
 @pytest.fixture()

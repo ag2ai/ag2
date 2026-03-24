@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 """A2A executor that preserves A2UI DataParts in responses.
 
 Extends the standard ``AutogenAgentExecutor`` to parse agent responses for
@@ -11,7 +13,6 @@ through the A2A artifact. Also handles A2UI extension negotiation.
 Requires the ``a2a`` extra: ``pip install ag2[a2a]``
 """
 
-from __future__ import annotations
 
 import json
 import logging
@@ -34,9 +35,9 @@ with optional_import_block():
     )
     from ....agentchat.remote import AgentService
 
+from ....a2a.constants import A2UI_MIME_TYPE
 from .a2a_helpers import (
     A2UI_DEFAULT_DELIMITER,
-    A2UI_MIME_TYPE,
     MIME_TYPE_KEY,
     create_a2ui_part,
     try_activate_a2ui_extension,
@@ -47,9 +48,6 @@ if TYPE_CHECKING:
     from ....agentchat.conversable_agent import ConversableAgent
 
 logger = logging.getLogger(__name__)
-
-CONTEXT_KEY = "ag2_context"
-RESULT_ARTIFACT_NAME = "ag2_result"
 
 
 class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]

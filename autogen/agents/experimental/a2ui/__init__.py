@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from ....a2a.constants import A2UI_MIME_TYPE
 from .a2a_executor import A2UIAgentExecutor
 from .a2a_helpers import (
     A2UI_DEFAULT_ACTIVITY_TYPE,
     A2UI_DEFAULT_DELIMITER,
     A2UI_DEFAULT_VERSION,
     A2UI_EXTENSION_URI,
-    A2UI_MIME_TYPE,
     create_a2ui_part,
     get_a2ui_agent_extension,
     get_a2ui_datapart,

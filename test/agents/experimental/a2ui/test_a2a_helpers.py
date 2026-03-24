@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 
+from autogen.a2a.constants import A2UI_MIME_TYPE
 from autogen.agents.experimental.a2ui.a2a_helpers import (
     A2UI_EXTENSION_URI,
-    A2UI_MIME_TYPE,
     create_a2ui_part,
     get_a2ui_agent_extension,
     get_a2ui_datapart,

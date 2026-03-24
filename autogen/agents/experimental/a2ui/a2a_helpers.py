@@ -10,10 +10,9 @@ for A2UI content, and negotiating the A2UI extension during A2A sessions.
 Requires the ``a2a`` extra: ``pip install ag2[a2a]``
 """
 
-from __future__ import annotations
-
 from typing import Any
 
+from ....a2a.constants import A2UI_MIME_TYPE
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -23,7 +22,6 @@ with optional_import_block():
 A2UI_EXTENSION_URI = "https://a2ui.org/a2a-extension/a2ui/v0.9"
 
 MIME_TYPE_KEY = "mimeType"
-A2UI_MIME_TYPE = "application/json+a2ui"
 A2UI_DEFAULT_DELIMITER = "---a2ui_JSON---"
 A2UI_DEFAULT_VERSION = "v0.9"
 A2UI_DEFAULT_ACTIVITY_TYPE = "a2ui-surface"

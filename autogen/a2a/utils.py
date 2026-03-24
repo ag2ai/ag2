@@ -19,6 +19,8 @@ CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
 
 RESULT_ARTIFACT_NAME = "result"
 
+from autogen.a2a.constants import A2UI_MIME_TYPE
+
 
 def request_message_to_a2a(
     request_message: RequestMessage,
@@ -98,7 +100,7 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     has_data = any(isinstance(p.root, DataPart) for p in artifact.parts)
 
     if not has_data:
-        # Text-only: preserve original behavior (keeps metadata like name, role)
+        # Text-only (metadata like name, role)
         return ResponseMessage(
             messages=[message_from_part(p) for p in artifact.parts],
             context=(artifact.metadata or {}).get(CONTEXT_KEY),
@@ -106,7 +108,7 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
 
     # Check if any data parts are A2UI — if so, merge text + data into single dict
     has_a2ui = any(
-        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == "application/json+a2ui"
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == A2UI_MIME_TYPE
         for p in artifact.parts
     )
 
@@ -130,7 +132,7 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
             context=(artifact.metadata or {}).get(CONTEXT_KEY),
         )
 
-    # Non-A2UI: keep text and data as separate messages (original behavior)
+    # Non-A2UI: keep text and data as separate messages
     messages: list[dict[str, Any]] = []
     if text_content:
         messages.append({"content": "\n".join(text_content)})
@@ -165,7 +167,7 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
             raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
 
     has_a2ui = any(
-        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == "application/json+a2ui"
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == A2UI_MIME_TYPE
         for p in data_parts
     )
 
@@ -180,7 +182,7 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
             combined.update(message_from_part(dp))
         messages.append(combined)
     else:
-        # Non-A2UI: keep text and data as separate messages (original behavior)
+        # Non-A2UI: keep text and data as separate messages
         if len(text_parts) == 1:
             messages.append(message_from_part(text_parts[0]))
         elif len(text_parts) > 1:
