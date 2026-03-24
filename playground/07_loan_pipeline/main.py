@@ -684,7 +684,7 @@ async def main() -> None:
     print(f"  {_GREEN}{_BOLD}PIPELINE COMPLETE{_RESET}  {_DIM}({elapsed:.1f}s){_RESET}")
     print(f"  {_BOLD}{'=' * 60}{_RESET}")
     print()
-    for line in (reply.content or "(no content)").split("\n"):
+    for line in (reply.body or "(no content)").split("\n"):
         print(f"  {line}")
     print()
 

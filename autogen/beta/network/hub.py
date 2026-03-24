@@ -295,7 +295,7 @@ class Hub:
             await self._channel.send(envelope)
             network_tools = self._build_network_tools(caller=to_agent)
             reply = await agent.ask(task, tools=network_tools, **kwargs)
-            result = reply.content or ""
+            result = reply.body or ""
             result_event = DelegationResult(source=source, target=to_agent, result=result)
             await self._emit(result_event)
             await self._channel.send(envelope.child(event=result_event, sender=to_agent, recipient=source))

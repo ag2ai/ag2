@@ -50,6 +50,11 @@ class RemoteAgentReply:
         """Text content of the remote agent's response."""
         return self._content
 
+    @property
+    def body(self) -> str | None:
+        """Text body of the remote agent's response."""
+        return self._content
+
     async def ask(self, msg: str, **kwargs: Any) -> RemoteAgentReply:
         """Continue conversation with a fresh remote call."""
         return await self._remote_agent.ask(msg, **kwargs)

@@ -741,7 +741,7 @@ async def main() -> None:
     print(f"  {_BOLD}{'=' * 60}{_RESET}")
     print()
 
-    result = reply.content or "(no content)"
+    result = reply.body or "(no content)"
     for line in result.split("\n"):
         print(f"  {line}")
     print()

@@ -91,7 +91,7 @@ async def main() -> None:
     print(f"  {GREEN}{BOLD}DISPATCH RESPONSE{RESET}  {DIM}({elapsed:.1f}s){RESET}")
     print(f"  {GREEN}{BOLD}{'=' * 60}{RESET}")
     print()
-    for rline in (reply.content or "").split("\n"):
+    for rline in (reply.body or "").split("\n"):
         print(f"  {rline}")
     print()
 

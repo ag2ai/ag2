@@ -497,7 +497,7 @@ async def main() -> None:
     # Print the final response
     print(f"\n{DIM}{'─' * 64}{RESET}")
     print(f"{DIM}[{_ts()}]{RESET} {GREEN}{BOLD}Final Response:{RESET}\n")
-    print(f"{GREEN}{reply.content}{RESET}")
+    print(f"{GREEN}{reply.body}{RESET}")
     print(f"\n{DIM}{'─' * 64}{RESET}")
     print(f"{DIM}Done.{RESET}\n")
 

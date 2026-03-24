@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import suppress
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from autogen.beta.agent import Agent, AgentReply, PromptType
@@ -30,6 +30,10 @@ from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
+from autogen.beta.types import Omittable, omit
+
+if TYPE_CHECKING:
+    from autogen.beta.response import ResponseProto
 
 from .events import ObserverCompleted, ObserverStarted, TaskProgress, TaskRequest, TaskResult
 from .observer import Observer
@@ -185,7 +189,7 @@ class Actor(Agent):
         finally:
             sat_stream.unsubscribe(chunk_sub)
 
-        result_text = reply.content or ""
+        result_text = reply.body or ""
         usage = reply.response.usage if reply.response else {}
 
         await ctx.send(
@@ -210,6 +214,7 @@ class Actor(Agent):
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> AgentReply:
         spawn_tools = self._build_spawn_tools()
 
@@ -240,6 +245,7 @@ class Actor(Agent):
                 client=client,
                 additional_tools=list(additional_tools) + spawn_tools,
                 additional_middleware=[harness_mw, signal_mw] + list(additional_middleware),
+                response_schema=response_schema,
             )
         finally:
             for obs in self._observers:

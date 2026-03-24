@@ -487,8 +487,8 @@ async def scenario_investigation(model: str) -> None:
     print(f"  {_GREEN}{_BOLD}INVESTIGATION COMPLETE{_RESET} ({elapsed:.1f}s)")
     print(f"  {_BOLD}{'=' * 60}{_RESET}")
     print()
-    if reply.content:
-        for line in reply.content.split("\n"):
+    if reply.body:
+        for line in reply.body.split("\n"):
             print(f"  {_GREEN}{line}{_RESET}")
     print()
 
@@ -567,9 +567,9 @@ async def scenario_combined(model: str, interval: int) -> None:
     print(f"  {_BOLD}Session complete. {cycle} scheduled cycle(s) + 1 investigation.{_RESET}")
     print(f"  {_BOLD}{'=' * 60}{_RESET}")
     print()
-    if reply.content:
+    if reply.body:
         print(f"  {_GREEN}{_BOLD}Investigation result:{_RESET}")
-        for line in reply.content.split("\n"):
+        for line in reply.body.split("\n"):
             print(f"  {_GREEN}{line}{_RESET}")
     print()
 

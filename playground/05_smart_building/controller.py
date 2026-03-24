@@ -153,7 +153,7 @@ async def main() -> None:
         print()
         print(f"  {GREEN}{BOLD}SECURITY RESPONSE{RESET}  {DIM}({elapsed:.1f}s){RESET}")
         print()
-        for rline in (reply.content or "").split("\n"):
+        for rline in (reply.body or "").split("\n"):
             print(f"  {rline}")
         print()
         await network.hub.close()
@@ -169,7 +169,7 @@ async def main() -> None:
             print()
             print(f"  {GREEN}{BOLD}EMERGENCY RESPONSE{RESET}  {DIM}({elapsed_task:.1f}s){RESET}")
             print()
-            for rline in (reply.content or "").split("\n"):
+            for rline in (reply.body or "").split("\n"):
                 print(f"  {rline}")
             print()
             remaining = max(0, duration - (time.monotonic() - t0))
@@ -184,7 +184,7 @@ async def main() -> None:
             print()
             print(f"  {GREEN}{BOLD}RESPONSE:{RESET}")
             print()
-            for rline in (reply.content or "").split("\n"):
+            for rline in (reply.body or "").split("\n"):
                 print(f"  {rline}")
             print()
             remaining = max(0, duration - (time.monotonic() - t0))

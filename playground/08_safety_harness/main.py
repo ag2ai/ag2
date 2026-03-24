@@ -887,7 +887,7 @@ async def main() -> None:
     print(f"  {_GREEN}{_BOLD}ANALYST RESPONSE{_RESET}  {_DIM}({elapsed:.1f}s){_RESET}")
     print(f"  {_BOLD}{'=' * width}{_RESET}")
     print()
-    for rline in (reply.content or "").split("\n"):
+    for rline in (reply.body or "").split("\n"):
         print(f"  {rline}")
     print()
 
