@@ -8,9 +8,7 @@ import pytest
 
 from autogen.beta.debug.client import DebugClient
 from autogen.beta.debug.session import DebugSession
-from autogen.beta.events import ToolCallEvent
-from autogen.beta.events.tool_events import ToolCallsEvent
-from autogen.beta.events.types import ModelRequest, ModelResponse
+from autogen.beta.events.types import ModelRequest
 
 
 def _make_client(**overrides: AsyncMock) -> DebugClient:
@@ -24,18 +22,9 @@ def _make_client(**overrides: AsyncMock) -> DebugClient:
     return client  # type: ignore[return-value]
 
 
-def _make_stream(stream_id: str = "stream-123") -> MagicMock:
-    stream = MagicMock()
-    stream.id = stream_id
-    stream.send = AsyncMock()
-    stream.subscribe = MagicMock()
-    stream.history = MagicMock()
-    stream.history.get_events = AsyncMock(return_value=[])
-    return stream
-
-
-def _make_context() -> MagicMock:
+def _make_context(stream_id: str = "stream-123") -> MagicMock:
     context = MagicMock()
+    context.stream.id = stream_id
     context.prompt = ["You are helpful."]
     context.variables = {}
     return context
@@ -48,25 +37,14 @@ def _make_session(client: DebugClient | None = None) -> DebugSession:
     return session
 
 
-async def _attach_session(
-    session: DebugSession,
-    stream: MagicMock | None = None,
-    context: MagicMock | None = None,
-) -> None:
-    """Attach session to a stream so it can record events."""
-    stream = stream or _make_stream()
-    context = context or _make_context()
-    await session._attach(stream, context)
-
-
 @pytest.mark.asyncio()
 async def test_record_event_forwards_to_server() -> None:
     send_event = AsyncMock()
     session = _make_session(_make_client(send_event=send_event))
-    await _attach_session(session)
+    context = _make_context()
 
     event = ModelRequest(content="hello")
-    await session.record_event(event)
+    await session.record_event(event, context)
     send_event.assert_awaited_once()
     args = send_event.call_args
     assert args[0][0] == "stream-123"
@@ -75,98 +53,50 @@ async def test_record_event_forwards_to_server() -> None:
 
 
 @pytest.mark.asyncio()
-async def test_inject_calls_stream_send() -> None:
-    session = _make_session(_make_client())
-    stream = _make_stream()
-    context = _make_context()
-    await _attach_session(session, stream, context)
-
-    event = ModelRequest(content="injected")
-    await session.inject(event)
-    stream.send.assert_awaited_once_with(event, context)
-
-
-@pytest.mark.asyncio()
-async def test_replay_events_emits_tool_calls() -> None:
-    """replay_events should emit a synthetic ToolCallsEvent for ModelResponse with tool_calls."""
-    send_event = AsyncMock()
-    session = _make_session(_make_client(send_event=send_event))
-    await _attach_session(session)
-
-    tool_calls = ToolCallsEvent(calls=[ToolCallEvent(name="fn", arguments="{}")])
-    response = ModelResponse(tool_calls=tool_calls)
-    request = ModelRequest(content="hi")
-
-    await session.replay_events([request, response])
-
-    # Should have 3 calls: request, response, then the synthetic tool_calls event
-    assert send_event.await_count == 3
-    event_types = [call.args[1] for call in send_event.call_args_list]
-    assert event_types == ["ModelRequest", "ModelResponse", "ToolCallsEvent"]
-
-
-@pytest.mark.asyncio()
-async def test_replay_events_skips_empty_tool_calls() -> None:
-    """replay_events should NOT emit synthetic ToolCallsEvent when tool_calls is empty."""
-    send_event = AsyncMock()
-    session = _make_session(_make_client(send_event=send_event))
-    await _attach_session(session)
-
-    response = ModelResponse()  # no tool_calls
-    await session.replay_events([response])
-
-    assert send_event.await_count == 1
-    assert send_event.call_args.args[1] == "ModelResponse"
-
-
-@pytest.mark.asyncio()
-async def test_attach_registers_stream_and_session() -> None:
-    """First attach should register stream and session with the server."""
+async def test_ensure_stream_registers_stream_and_session() -> None:
+    """First record_event should register stream and session with the server."""
     register_stream = AsyncMock()
     register_session = AsyncMock()
     client = _make_client(register_stream=register_stream, register_session=register_session)
     session = _make_session(client)
-    stream = _make_stream()
     context = _make_context()
 
-    await session._attach(stream, context)
+    await session.record_event(ModelRequest(content="hi"), context)
 
     register_stream.assert_awaited_once_with("stream-123", ["You are helpful."])
     register_session.assert_awaited_once_with(session.id, "test-session", "stream-123")
 
 
 @pytest.mark.asyncio()
-async def test_attach_subscribes_once() -> None:
-    """Multiple attaches with the same stream should only subscribe once."""
-    client = _make_client()
+async def test_ensure_stream_registers_once_per_stream() -> None:
+    """Multiple record_event calls with the same stream should only register once."""
+    register_stream = AsyncMock()
+    client = _make_client(register_stream=register_stream)
     session = _make_session(client)
-    stream = _make_stream()
     context = _make_context()
 
-    await session._attach(stream, context)
-    await session._attach(stream, context)
+    await session.record_event(ModelRequest(content="hi"), context)
+    await session.record_event(ModelRequest(content="hello"), context)
 
-    assert stream.subscribe.call_count == 1
+    register_stream.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
-async def test_attach_multiple_streams() -> None:
-    """Attaching a second stream should call add_stream_to_session."""
+async def test_multiple_streams_adds_to_session() -> None:
+    """Recording events from a second stream should call add_stream_to_session."""
     add_stream = AsyncMock()
     client = _make_client(add_stream_to_session=add_stream)
     session = _make_session(client)
 
-    stream_a = _make_stream("stream-a")
-    stream_b = _make_stream("stream-b")
-    context = _make_context()
+    context_a = _make_context("stream-a")
+    context_b = _make_context("stream-b")
 
-    await session._attach(stream_a, context)
-    await session._attach(stream_b, context)
+    await session.record_event(ModelRequest(content="hi"), context_a)
+    await session.record_event(ModelRequest(content="hello"), context_b)
 
     # First stream uses register_session, second uses add_stream_to_session
     client.register_session.assert_awaited_once()
     add_stream.assert_awaited_once_with(session.id, "stream-b")
-    assert session.stream_ids == ["stream-a", "stream-b"]
 
 
 @pytest.mark.asyncio()
@@ -176,22 +106,11 @@ async def test_multi_stream_events_routed_correctly() -> None:
     client = _make_client(send_event=send_event)
     session = _make_session(client)
 
-    stream_a = _make_stream("stream-a")
-    stream_b = _make_stream("stream-b")
-    context = _make_context()
+    context_a = _make_context("stream-a")
+    context_b = _make_context("stream-b")
 
-    await session._attach(stream_a, context)
-    await session._attach(stream_b, context)
-
-    # Get the subscriber callbacks that were registered
-    assert stream_a.subscribe.call_count == 1
-    assert stream_b.subscribe.call_count == 1
-
-    callback_a = stream_a.subscribe.call_args[0][0]
-    callback_b = stream_b.subscribe.call_args[0][0]
-
-    await callback_a(ModelRequest(content="from-a"))
-    await callback_b(ModelRequest(content="from-b"))
+    await session.record_event(ModelRequest(content="from-a"), context_a)
+    await session.record_event(ModelRequest(content="from-b"), context_b)
 
     assert send_event.await_count == 2
     assert send_event.call_args_list[0][0][0] == "stream-a"
@@ -222,7 +141,8 @@ async def test_session_without_url_is_noop() -> None:
         session = DebugSession(name="no-url")
         assert session._client is None
         # record_event should not raise
-        await session.record_event(ModelRequest(content="hi"))
+        context = _make_context()
+        await session.record_event(ModelRequest(content="hi"), context)
         await session.close()
 
 

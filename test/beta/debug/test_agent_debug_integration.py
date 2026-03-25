@@ -2,80 +2,83 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the debug integration in Agent.ask()."""
+"""Tests for the debug integration via DebugMiddleware."""
 
 import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from autogen.beta import Agent
+from autogen.beta.debug.client import DebugClient
+from autogen.beta.debug.middleware import DebugMiddleware
+from autogen.beta.debug.session import DEBUG_SESSION_VAR, DebugSession
 from autogen.beta.testing import TestConfig
 
 
+def _mock_client() -> MagicMock:
+    client = MagicMock(spec=DebugClient)
+    client.send_event = AsyncMock()
+    client.register_stream = AsyncMock()
+    client.register_session = AsyncMock()
+    client.add_stream_to_session = AsyncMock()
+    client.end_session = AsyncMock()
+    return client
+
+
 @pytest.mark.asyncio()
-async def test_agent_ask_with_debug_server_url() -> None:
-    """When AG2_DEBUG_SERVER_URL is set, Agent.ask() should set up a debug session."""
+async def test_middleware_with_env_var_creates_auto_session() -> None:
+    """When AG2_DEBUG_SERVER_URL is set, DebugMiddleware should auto-create and close a session."""
     config = TestConfig("hello world")
     agent = Agent("test-agent", prompt="Be helpful.", config=config)
 
-    mock_attach = AsyncMock()
-    mock_close = AsyncMock()
+    mock_client = _mock_client()
 
     with (
         patch.dict(os.environ, {"AG2_DEBUG_SERVER_URL": "http://localhost:8765"}),
-        patch("autogen.beta.debug.session.DebugSession._attach", mock_attach),
-        patch("autogen.beta.debug.session.DebugSession.close", mock_close),
+        patch("autogen.beta.debug.session.DebugClient", return_value=mock_client),
     ):
-        reply = await agent.ask("hello")
+        reply = await agent.ask("hello", middleware=[DebugMiddleware])
 
-    assert reply.content == "hello world"
-    mock_attach.assert_awaited_once()
+    assert reply.body == "hello world"
+    # Should have recorded events via send_event
+    assert mock_client.send_event.await_count >= 1
     # Auto-created session should be closed after ask()
-    mock_close.assert_awaited_once()
+    mock_client.end_session.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
-async def test_agent_ask_with_explicit_session_via_variables() -> None:
-    """When a session is passed via variables, ask() should attach it but NOT close it."""
-    from autogen.beta.debug.session import DEBUG_SESSION_VAR, DebugSession
-
+async def test_middleware_with_explicit_session_does_not_close() -> None:
+    """When a session is passed via variables, middleware should NOT close it."""
     config = TestConfig("hello world")
     agent = Agent("test-agent", prompt="Be helpful.", config=config)
-
-    mock_attach = AsyncMock()
-    mock_close = AsyncMock()
 
     session = DebugSession(name="my-run", url="http://localhost:8765")
+    mock_client = _mock_client()
+    session._client = mock_client
 
-    with (
-        patch.dict(os.environ, {"AG2_DEBUG_SERVER_URL": "http://localhost:8765"}),
-        patch.object(session, "_attach", mock_attach),
-        patch.object(session, "close", mock_close),
-    ):
-        reply = await agent.ask("hello", variables={DEBUG_SESSION_VAR: session})
+    reply = await agent.ask(
+        "hello",
+        variables={DEBUG_SESSION_VAR: session},
+        middleware=[DebugMiddleware],
+    )
 
-    assert reply.content == "hello world"
-    mock_attach.assert_awaited_once()
+    assert reply.body == "hello world"
+    assert mock_client.send_event.await_count >= 1
     # Caller-provided session should NOT be auto-closed
-    mock_close.assert_not_awaited()
+    mock_client.end_session.assert_not_awaited()
 
 
 @pytest.mark.asyncio()
-async def test_agent_ask_without_debug_server_url() -> None:
-    """When AG2_DEBUG_SERVER_URL is NOT set, no debug setup should happen."""
+async def test_middleware_disabled_without_env_var() -> None:
+    """When AG2_DEBUG_SERVER_URL is NOT set and no session provided, middleware is a no-op."""
     config = TestConfig("response")
     agent = Agent("test-agent", prompt="Be helpful.", config=config)
 
-    # Ensure the env var is not set
     env = os.environ.copy()
     env.pop("AG2_DEBUG_SERVER_URL", None)
 
-    with (
-        patch.dict(os.environ, env, clear=True),
-        patch("autogen.beta.debug.session.DebugSession._attach") as mock_attach,
-    ):
-        reply = await agent.ask("hello")
+    with patch.dict(os.environ, env, clear=True):
+        reply = await agent.ask("hello", middleware=[DebugMiddleware])
 
-    assert reply.content == "response"
-    mock_attach.assert_not_called()
+    assert reply.body == "response"
