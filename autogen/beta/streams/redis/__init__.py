@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .serializer import Serializer
 from .storage import RedisStorage
 from .stream import RedisStream
 
-__all__ = ("RedisStorage", "RedisStream")
+__all__ = ("RedisStorage", "RedisStream", "Serializer")

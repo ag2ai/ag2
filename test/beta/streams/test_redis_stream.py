@@ -12,6 +12,7 @@ import pytest_asyncio
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ModelRequest, ToolCallEvent
+from autogen.beta.streams.redis.serializer import Serializer
 
 try:
     import redis  # noqa: F401
@@ -121,14 +122,16 @@ def mock_redis():
     return MockRedis()
 
 
-@pytest_asyncio.fixture()
-async def redis_stream(mock_redis):
+@pytest_asyncio.fixture(params=[Serializer.JSON, Serializer.PICKLE], ids=["json", "pickle"])
+async def redis_stream(mock_redis, request):
     from autogen.beta.streams.redis import RedisStream
 
+    serializer = request.param
     streams: list = []
 
     def _make(**kwargs):
         kwargs.setdefault("prefix", f"ag2:test:{uuid4()}")
+        kwargs.setdefault("serializer", serializer)
         with (
             patch("autogen.beta.streams.redis.stream.aioredis", create=True) as mock_aioredis,
             patch("autogen.beta.streams.redis.storage.aioredis", create=True) as mock_storage_aioredis,
@@ -145,14 +148,16 @@ async def redis_stream(mock_redis):
         await s.close()
 
 
-@pytest.fixture()
-def redis_storage(mock_redis):
+@pytest.fixture(params=[Serializer.JSON, Serializer.PICKLE], ids=["json", "pickle"])
+def redis_storage(mock_redis, request):
     from autogen.beta.streams.redis import RedisStorage
+
+    serializer = request.param
 
     def _make(prefix=None):
         with patch("autogen.beta.streams.redis.storage.aioredis", create=True) as mock_aioredis:
             mock_aioredis.from_url.return_value = mock_redis
-            return RedisStorage(REDIS_URL, prefix=prefix or f"ag2:test:{uuid4()}")
+            return RedisStorage(REDIS_URL, prefix=prefix or f"ag2:test:{uuid4()}", serializer=serializer)
 
     return _make
 
