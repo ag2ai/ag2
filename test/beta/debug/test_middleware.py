@@ -165,3 +165,108 @@ def test_serialize_event_tool_call() -> None:
     result = serialize_event(event)
     assert result["type"] == "ToolCallEvent"
     assert result["data"]["name"] == "my_tool"
+
+
+@pytest.mark.asyncio()
+async def test_on_llm_call_enabled() -> None:
+    """on_llm_call should forward the result and record it."""
+    session = _make_session()
+    mw = _make_middleware(session)
+    response = ModelResponse(message=ModelMessage(content="reply"))
+    call_next = AsyncMock(return_value=response)
+    context = _make_context(session)
+
+    result = await mw.on_llm_call(call_next, [ModelRequest(content="hi")], context)
+
+    assert result is response
+    call_next.assert_awaited_once()
+    # Should have recorded the response event
+    assert session._client.send_event.await_count >= 1
+
+
+@pytest.mark.asyncio()
+async def test_on_llm_call_disabled() -> None:
+    """on_llm_call should pass through when disabled."""
+    context = MagicMock()
+    context.stream.id = "stream-123"
+    context.prompt = []
+    context.variables = {}
+
+    with patch.dict("os.environ", {}, clear=True):
+        mw = DebugMiddleware(ModelRequest(content="hi"), context)
+
+    assert mw._enabled is False
+    response = ModelResponse(message=ModelMessage(content="reply"))
+    call_next = AsyncMock(return_value=response)
+
+    result = await mw.on_llm_call(call_next, [ModelRequest(content="hi")], context)
+    assert result is response
+    call_next.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_on_tool_execution_disabled() -> None:
+    """on_tool_execution should pass through when disabled."""
+    context = MagicMock()
+    context.stream.id = "stream-123"
+    context.prompt = []
+    context.variables = {}
+
+    with patch.dict("os.environ", {}, clear=True):
+        mw = DebugMiddleware(ModelRequest(content="hi"), context)
+
+    assert mw._enabled is False
+    tool_event = ToolCallEvent(name="my_tool", arguments='{"x": 1}')
+    tool_result = MagicMock()
+    call_next: ToolExecution = AsyncMock(return_value=tool_result)
+
+    result = await mw.on_tool_execution(call_next, tool_event, context)
+    assert result is tool_result
+    call_next.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_on_turn_disabled() -> None:
+    """on_turn should pass through when disabled."""
+    context = MagicMock()
+    context.stream.id = "stream-123"
+    context.prompt = []
+    context.variables = {}
+
+    with patch.dict("os.environ", {}, clear=True):
+        mw = DebugMiddleware(ModelRequest(content="hi"), context)
+
+    assert mw._enabled is False
+    response = ModelResponse(message=ModelMessage(content="bye"))
+    call_next = AsyncMock(return_value=response)
+
+    result = await mw.on_turn(call_next, ModelRequest(content="hi"), context)
+    assert result is response
+    call_next.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_on_turn_closes_auto_session_on_exception() -> None:
+    """Auto-session should be closed even when call_next raises."""
+    context = MagicMock()
+    context.stream.id = "stream-123"
+    context.prompt = []
+    context.variables = {}
+
+    with patch.dict("os.environ", {"AG2_DEBUG_SERVER_URL": "http://test:8765"}):
+        mw = DebugMiddleware(ModelRequest(content="hi"), context)
+
+    # Mock the auto-created session's client
+    mw._session._client = MagicMock(spec=DebugClient)
+    mw._session._client.send_event = AsyncMock()
+    mw._session._client.register_stream = AsyncMock()
+    mw._session._client.register_session = AsyncMock()
+    mw._session._client.end_session = AsyncMock()
+
+    call_next = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await mw.on_turn(call_next, ModelRequest(content="hi"), context)
+
+    # Auto-session should still be closed via the finally block
+    mw._session._client.end_session.assert_awaited_once()

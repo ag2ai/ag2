@@ -212,6 +212,23 @@ async def test_end_session_swallows_exceptions() -> None:
 # ── get_server factory ────────────────────────────────────────────────────
 
 
+@pytest.mark.asyncio()
+async def test_add_stream_to_session_swallows_exceptions() -> None:
+    """add_stream_to_session must never raise — it's fire-and-forget."""
+    client = DebugClient("http://localhost:8765")
+    mock_http_client = AsyncMock()
+    mock_http_client.post = AsyncMock(side_effect=ConnectionError("fail"))
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("autogen.beta.debug.client.httpx.AsyncClient", return_value=mock_http_client):
+        await client.add_stream_to_session("sess-1", "stream-2")
+    # No exception raised
+
+
+# ── get_server factory ────────────────────────────────────────────────────
+
+
 def test_get_server_returns_debug_client() -> None:
     client = get_server("http://localhost:8765")
     assert isinstance(client, DebugClient)
