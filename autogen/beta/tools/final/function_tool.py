@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, TypeAlias, overload
@@ -40,9 +41,7 @@ class FunctionToolSchema(ToolSchema):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
         func_data = data.get("function", {})
-        return cls(
-            function=FunctionDefinition(**func_data),
-        )
+        return cls(function=FunctionDefinition(**func_data))
 
 
 class FunctionTool(Tool):
@@ -75,7 +74,7 @@ class FunctionTool(Tool):
         *,
         provider: Provider | None = None,
     ) -> "FunctionTool":
-        t = func if isinstance(func, Tool) else tool(func)
+        t = deepcopy(func) if isinstance(func, Tool) else tool(func)
         t.provider = provider
         return t
 

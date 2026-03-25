@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 from google import genai
@@ -22,9 +23,10 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_tools, convert_messages
+from .mappers import build_system_instruction, build_tools, convert_messages, response_proto_to_config
 
 
 class CreateConfig(TypedDict, total=False):
@@ -57,16 +59,23 @@ class GeminiClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         contents = convert_messages(messages)
-        system_instruction = "\n\n".join(context.prompt) if context.prompt else None
 
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        system_instruction = build_system_instruction(prompt)
         gemini_tools = build_tools(list(tools))
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
+            **response_proto_to_config(response_schema),
             **self._create_config,
         )
 
@@ -123,10 +132,19 @@ class GeminiClient(LLMClient):
                 "total_token_count": response.usage_metadata.total_token_count,
             }
 
+        finish_reason = None
+        if response.candidates:
+            fr = response.candidates[0].finish_reason
+            if fr is not None:
+                finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )
 
     async def _process_stream(
@@ -137,6 +155,7 @@ class GeminiClient(LLMClient):
         full_content: str = ""
         calls: list[ToolCallEvent] = []
         usage: dict[str, Any] = {}
+        finish_reason: str | None = None
 
         async for chunk in stream:
             for candidate in chunk.candidates or ():
@@ -168,6 +187,11 @@ class GeminiClient(LLMClient):
                     "total_token_count": chunk.usage_metadata.total_token_count,
                 }
 
+            if chunk.candidates:
+                fr = chunk.candidates[0].finish_reason
+                if fr is not None:
+                    finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(content=full_content)
@@ -177,4 +201,7 @@ class GeminiClient(LLMClient):
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=self._model_name,
+            provider="google",
+            finish_reason=finish_reason,
         )

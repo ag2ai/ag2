@@ -104,7 +104,7 @@ async def test_final_tool() -> None:
     )
 
     result = await agent.ask("Hi!")
-    assert DataModel.model_validate_json(result.content) == DataModel(data="result")
+    assert DataModel.model_validate_json(result.body) == DataModel(data="result")
 
 
 @pytest.mark.asyncio()
@@ -114,19 +114,19 @@ async def test_concurrent_tool_execution() -> None:
 
     async def slow_tool_a() -> str:
         execution_order.append("a_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("a_end")
         return "result_a"
 
     async def slow_tool_b() -> str:
         execution_order.append("b_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("b_end")
         return "result_b"
 
     async def slow_tool_c() -> str:
         execution_order.append("c_start")
-        await asyncio.sleep(0.001)  # Simulate slow operation
+        await asyncio.sleep(0.005)  # Simulate slow operation
         execution_order.append("c_end")
         return "result_c"
 
@@ -150,7 +150,7 @@ async def test_concurrent_tool_execution() -> None:
 
     # Trigger tool calls - they should execute concurrently
     result = await agent.ask("Execute all tools")
-    assert result.content == "result"
+    assert result.body == "result"
 
     # Verify all tools were executed
     assert "a_start" in execution_order
