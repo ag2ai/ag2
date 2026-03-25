@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
@@ -267,36 +266,13 @@ class Agent(Askable):
                 p = await dp(initial_event, context)
                 context.prompt.append(p)
 
-        additional_middleware: list[MiddlewareFactory] = list(middleware)
-        auto_session = False
-
-        if os.environ.get("AG2_DEBUG_SERVER_URL"):
-            from .debug.middleware import DebugMiddleware
-            from .debug.session import DEBUG_SESSION_VAR, DebugSession as _DebugSession
-            from .middleware.base import Middleware as _Middleware
-
-            session: _DebugSession | None = context.variables.get(DEBUG_SESSION_VAR)
-
-            if session is None:
-                session = _DebugSession()
-                context.variables[DEBUG_SESSION_VAR] = session
-                auto_session = True
-
-            await session._attach(stream, context)
-            additional_middleware = [_Middleware(DebugMiddleware, session=session), *additional_middleware]
-
-        result = await self._execute(
+        return await self._execute(
             initial_event,
             context=context,
             client=client,
             additional_tools=tools,
-            additional_middleware=additional_middleware,
+            additional_middleware=middleware,
         )
-
-        if auto_session and session is not None:
-            await session.close()
-
-        return result
 
     async def _execute(
         self,

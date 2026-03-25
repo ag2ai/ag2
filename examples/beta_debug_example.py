@@ -32,15 +32,17 @@ blocked:
 """
 
 import asyncio
-import os
 import time
 
 import httpx
 
+from autogen.beta import Agent
+from autogen.beta.debug import DebugMiddleware
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.events.types import ModelMessage, ModelResponse
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
+from autogen.beta.tools import tool
 
 # ---------------------------------------------------------------------------
 # 1. Start the debug server in a background thread
@@ -49,20 +51,12 @@ DEBUG_HOST = "localhost"
 DEBUG_PORT = 8765
 DEBUG_URL = f"http://{DEBUG_HOST}:{DEBUG_PORT}"
 
-
 # Give the server a moment to boot
 time.sleep(0.5)
 
 # ---------------------------------------------------------------------------
-# 2. Set the env var so Agent.ask() auto-injects DebugMiddleware
+# 2. Define the agent (fake LLM: tool call → text reply)
 # ---------------------------------------------------------------------------
-os.environ["AG2_DEBUG_SERVER_URL"] = DEBUG_URL
-
-# ---------------------------------------------------------------------------
-# 3. Define the agent (fake LLM: tool call → text reply)
-# ---------------------------------------------------------------------------
-from autogen.beta import Agent
-from autogen.beta.tools import tool
 
 
 @tool
@@ -110,7 +104,7 @@ async def main() -> None:
     memory = MemoryStream()
 
     print("[main] running agent.ask() …")
-    reply = await agent.ask("What's the weather in Paris?", stream=memory)
+    reply = await agent.ask("What's the weather in Paris?", stream=memory, middleware=[DebugMiddleware])
     print(f"[main] agent replied: {reply.content!r}")
 
     stop.set()

@@ -4,7 +4,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from pathlib import Path
+from importlib import resources
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 
 from .models import SessionView
 
-_UI_FILE = Path(__file__).parent / "ui.html"
+_UI_FILE = resources.files(__package__) / "ui.html"
 
 
 # ── Server-side stream state ─────────────────────────────────────────────

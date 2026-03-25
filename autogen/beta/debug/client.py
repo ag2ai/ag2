@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from ..events.base import BaseEvent
+from autogen.beta.events.base import BaseEvent
 
 # ── Serialisation ──────────────────────────────────────────────────────────
 
