@@ -5,22 +5,18 @@ Covers: target resolution, search, list, uninstall, install subcommands.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
-from typer.testing import CliRunner
-
 from ag2_cli.commands.install import (
     _is_interactive,
-    _list_installed,
-    _list_targets,
     _resolve_targets,
     app,
 )
 from ag2_cli.install.lockfile import Lockfile
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -53,18 +49,22 @@ class TestResolveTargets:
 
     def test_no_target_no_detection_exits_noninteractive(self, tmp_path: Path):
         """Non-interactive mode with no detected targets should exit."""
-        with patch("ag2_cli.commands.install._is_interactive", return_value=False):
-            with patch("ag2_cli.commands.install.detect_targets", return_value=[]):
-                with pytest.raises(typer.Exit):
-                    _resolve_targets(None, tmp_path)
+        with (
+            patch("ag2_cli.commands.install._is_interactive", return_value=False),
+            patch("ag2_cli.commands.install.detect_targets", return_value=[]),
+            pytest.raises(typer.Exit),
+        ):
+            _resolve_targets(None, tmp_path)
 
     def test_no_target_with_detection_returns_detected(self, tmp_path: Path):
         """When targets are detected, they should be used."""
         mock_target = MagicMock()
         mock_target.name = "claude"
-        with patch("ag2_cli.commands.install._is_interactive", return_value=False):
-            with patch("ag2_cli.commands.install.detect_targets", return_value=[mock_target]):
-                targets = _resolve_targets(None, tmp_path)
+        with (
+            patch("ag2_cli.commands.install._is_interactive", return_value=False),
+            patch("ag2_cli.commands.install.detect_targets", return_value=[mock_target]),
+        ):
+            targets = _resolve_targets(None, tmp_path)
         assert len(targets) == 1
 
 
@@ -88,12 +88,24 @@ class TestListCmd:
         """Listing all remote artifacts should work or fail gracefully."""
         mock_registry = {
             "artifacts": [
-                {"type": "skills", "owner": "ag2ai", "name": "fastapi", "version": "1.0.0", "description": "FastAPI skills"},
-                {"type": "tool", "owner": "ag2ai", "name": "web-search", "version": "1.0.0", "description": "Web search"},
+                {
+                    "type": "skills",
+                    "owner": "ag2ai",
+                    "name": "fastapi",
+                    "version": "1.0.0",
+                    "description": "FastAPI skills",
+                },
+                {
+                    "type": "tool",
+                    "owner": "ag2ai",
+                    "name": "web-search",
+                    "version": "1.0.0",
+                    "description": "Web search",
+                },
             ]
         }
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.return_value = mock_registry
             mock.list_artifacts.return_value = mock_registry["artifacts"]
             result = runner.invoke(app, ["list", "all"])
@@ -102,11 +114,17 @@ class TestListCmd:
     def test_list_specific_type(self):
         mock_registry = {
             "artifacts": [
-                {"type": "tool", "owner": "ag2ai", "name": "web-search", "version": "1.0.0", "description": "Web search"},
+                {
+                    "type": "tool",
+                    "owner": "ag2ai",
+                    "name": "web-search",
+                    "version": "1.0.0",
+                    "description": "Web search",
+                },
             ]
         }
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.return_value = mock_registry
             mock.list_artifacts.return_value = mock_registry["artifacts"]
             result = runner.invoke(app, ["list", "tools"])
@@ -115,8 +133,8 @@ class TestListCmd:
     def test_list_registry_failure_handled(self):
         from ag2_cli.install.client import FetchError
 
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.side_effect = FetchError("network error")
             result = runner.invoke(app, ["list", "all"])
         # Should handle gracefully, not crash
@@ -132,11 +150,17 @@ class TestSearchCmd:
     def test_search_returns_results(self):
         mock_registry = {
             "artifacts": [
-                {"type": "skills", "owner": "ag2ai", "name": "fastapi", "version": "1.0.0", "description": "FastAPI skills"},
+                {
+                    "type": "skills",
+                    "owner": "ag2ai",
+                    "name": "fastapi",
+                    "version": "1.0.0",
+                    "description": "FastAPI skills",
+                },
             ]
         }
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.return_value = mock_registry
             mock.search.return_value = mock_registry["artifacts"]
             result = runner.invoke(app, ["search", "fastapi"])
@@ -144,8 +168,8 @@ class TestSearchCmd:
         assert "fastapi" in result.output.lower()
 
     def test_search_no_results(self):
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.return_value = {"artifacts": []}
             mock.search.return_value = []
             result = runner.invoke(app, ["search", "nonexistent"])
@@ -155,8 +179,8 @@ class TestSearchCmd:
     def test_search_registry_failure(self):
         from ag2_cli.install.client import FetchError
 
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.side_effect = FetchError("network error")
             result = runner.invoke(app, ["search", "test"])
         assert result.exit_code != 0
@@ -183,9 +207,7 @@ class TestUninstallCmd:
             files=[tracked_file],
         )
 
-        result = runner.invoke(
-            app, ["uninstall", "skills/ag2ai/test", "--project-dir", str(tmp_path)]
-        )
+        result = runner.invoke(app, ["uninstall", "skills/ag2ai/test", "--project-dir", str(tmp_path)])
         assert result.exit_code == 0
         assert "Removed" in result.output
         assert not tracked_file.exists()
@@ -281,8 +303,8 @@ class TestUpdateCmd:
                 {"type": "skills", "owner": "ag2ai", "name": "test", "version": "1.0.0"},
             ]
         }
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client:
+            mock = mock_client.return_value
             mock.fetch_registry.return_value = registry
             result = runner.invoke(app, ["update", "--project-dir", str(tmp_path)])
         assert result.exit_code == 0

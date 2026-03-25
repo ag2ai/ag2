@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from ..install import detect_targets, get_all_targets, get_target, list_packs, load_pack
+from ..install import detect_targets, get_all_targets, get_target, load_pack
 from ..install.artifact import InstallResult
 from ..install.client import ArtifactClient, FetchError
 from ..install.lockfile import Lockfile
@@ -30,12 +30,12 @@ app = typer.Typer(
 
 def _make_installers(project_dir: Path):
     """Create all installer instances with shared client, lockfile, and resolver."""
+    from ..install.installers.agents import AgentInstaller
+    from ..install.installers.bundles import BundleInstaller
+    from ..install.installers.datasets import DatasetInstaller
     from ..install.installers.skills import SkillsInstaller
     from ..install.installers.templates import TemplateInstaller
     from ..install.installers.tools import ToolInstaller
-    from ..install.installers.datasets import DatasetInstaller
-    from ..install.installers.agents import AgentInstaller
-    from ..install.installers.bundles import BundleInstaller
 
     client = ArtifactClient()
     lockfile = Lockfile(project_dir)
@@ -68,9 +68,9 @@ def _make_installers(project_dir: Path):
 
 @app.command("skills")
 def install_skills(
-    packs: Optional[list[str]] = typer.Argument(None, help="Skill packs to install (default: ag2)."),
-    name: Optional[str] = typer.Option(None, "--name", "-n", help="Install a specific item by name."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent (comma-separated, or "all").'),
+    packs: list[str] | None = typer.Argument(None, help="Skill packs to install (default: ag2)."),
+    name: str | None = typer.Option(None, "--name", "-n", help="Install a specific item by name."),
+    target: str | None = typer.Option(None, "--target", "-t", help='Target IDE/agent (comma-separated, or "all").'),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
     refresh: bool = typer.Option(False, "--refresh", help="Force refresh registry cache."),
 ) -> None:
@@ -85,10 +85,8 @@ def install_skills(
     stack = _make_installers(project)
 
     if refresh:
-        try:
+        with contextlib.suppress(FetchError):
             stack["client"].fetch_registry(force_refresh=True)
-        except FetchError:
-            pass  # Proceed with cache or bundled
 
     console.print(f"\n[heading]Installing skills[/heading] ({', '.join(pack_names)})\n")
 
@@ -119,9 +117,9 @@ def install_skills(
 @app.command("template")
 def install_template(
     name: str = typer.Argument(..., help="Template name to install."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
-    var: Optional[list[str]] = typer.Option(None, "--var", help="Template variable (key=value)."),
+    var: list[str] | None = typer.Option(None, "--var", help="Template variable (key=value)."),
     preview: bool = typer.Option(False, "--preview", help="Preview without writing."),
 ) -> None:
     """Install a project template with full AI context.
@@ -160,7 +158,7 @@ def install_template(
 @app.command("tool")
 def install_tool(
     name: str = typer.Argument(..., help="Tool name to install."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Install an AG2 tool function or MCP server.
@@ -201,7 +199,7 @@ def install_tool(
 @app.command("dataset")
 def install_dataset(
     name: str = typer.Argument(..., help="Dataset name to install."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
     full: bool = typer.Option(False, "--full", help="Download all remote files (may be large)."),
 ) -> None:
@@ -233,7 +231,7 @@ def install_dataset(
 @app.command("agent")
 def install_agent(
     name: str = typer.Argument(..., help="Agent name to install."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Install a pre-built Claude Code subagent.
@@ -272,7 +270,7 @@ def install_agent(
 @app.command("bundle")
 def install_bundle(
     name: str = typer.Argument(..., help="Bundle name to install."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Install a curated collection of artifacts.
@@ -303,7 +301,7 @@ def install_bundle(
 @app.command("search")
 def search_cmd(
     query: str = typer.Argument(..., help="Search query."),
-    artifact_type: Optional[str] = typer.Option(None, "--type", help="Filter by type."),
+    artifact_type: str | None = typer.Option(None, "--type", help="Filter by type."),
 ) -> None:
     """Search for artifacts across all types."""
     client = ArtifactClient()
@@ -334,11 +332,13 @@ def search_cmd(
         panel_lines.append("")
 
     console.print()
-    console.print(Panel(
-        "\n".join(panel_lines),
-        title=f'AG2 Artifacts \u2014 Results for "{query}"',
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(panel_lines),
+            title=f'AG2 Artifacts \u2014 Results for "{query}"',
+            border_style="cyan",
+        )
+    )
     console.print("  Install with: [command]ag2 install <type> <owner/name>[/command]\n")
 
 
@@ -349,7 +349,9 @@ def search_cmd(
 
 @app.command("list")
 def list_cmd(
-    what: str = typer.Argument("all", help="What to list: all, skills, templates, tools, datasets, agents, bundles, targets, or installed."),
+    what: str = typer.Argument(
+        "all", help="What to list: all, skills, templates, tools, datasets, agents, bundles, targets, or installed."
+    ),
 ) -> None:
     """List available artifacts, targets, or installed items."""
     if what == "targets":
@@ -369,7 +371,7 @@ def list_cmd(
 
 @app.command("update")
 def update_cmd(
-    name: Optional[str] = typer.Argument(None, help="Specific artifact to update (default: all)."),
+    name: str | None = typer.Argument(None, help="Specific artifact to update (default: all)."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Update installed artifacts to their latest versions."""
@@ -427,7 +429,7 @@ def update_cmd(
 @app.command("uninstall")
 def uninstall_cmd(
     name: str = typer.Argument("skills", help="Artifact to uninstall (ref like 'skills/ag2' or shorthand)."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Remove installed artifacts from your project."""
@@ -473,7 +475,7 @@ def uninstall_cmd(
 @app.command("from")
 def install_from(
     source: str = typer.Argument(..., help="Source URL or local path."),
-    target: Optional[str] = typer.Option(None, "--target", "-t", help='Target IDE/agent.'),
+    target: str | None = typer.Option(None, "--target", "-t", help="Target IDE/agent."),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project directory."),
 ) -> None:
     """Install an artifact from a URL or local path.
@@ -532,14 +534,12 @@ def _print_result(result: InstallResult, preview: bool = False) -> None:
     for w in result.warnings:
         console.print(f"  [warning]![/warning] {w}")
 
-    console.print(f"\n[success]Done.[/success]\n")
+    console.print("\n[success]Done.[/success]\n")
 
 
 def _install_local_artifact(artifact, stack, project, targets) -> None:
     """Install a locally-resolved artifact by delegating to the right installer."""
     from ..install.installers.skills import load_skills_from_artifact
-    from ..install.installers.agents import AgentInstaller
-    from ..install.installers.datasets import DatasetInstaller
 
     if artifact.type == "skills":
         items = load_skills_from_artifact(artifact)
@@ -635,7 +635,9 @@ def _list_skills_pack() -> None:
     if pack is None:
         console.print("[error]Skills pack not found.[/error]")
         raise typer.Exit(1)
-    console.print(f"\n[heading]{pack.display_name}[/heading] v{pack.version} ([count]{len(pack.items)}[/count] items)\n")
+    console.print(
+        f"\n[heading]{pack.display_name}[/heading] v{pack.version} ([count]{len(pack.items)}[/count] items)\n"
+    )
     for category in ["rule", "skill", "agent", "command"]:
         items = [i for i in pack.items if i.category == category]
         if items:
@@ -737,7 +739,14 @@ def _list_remote(artifact_type: str) -> None:
         table.add_row(qualified, entry.get("version", "?"), entry.get("description", ""))
     console.print()
     console.print(table)
-    cmd_map = {"skills": "skills", "template": "template", "tool": "tool", "dataset": "dataset", "agent": "agent", "bundle": "bundle"}
+    cmd_map = {
+        "skills": "skills",
+        "template": "template",
+        "tool": "tool",
+        "dataset": "dataset",
+        "agent": "agent",
+        "bundle": "bundle",
+    }
     cmd = cmd_map.get(normalized, normalized)
     console.print(f"\n  Install: [command]ag2 install {cmd} <owner/name>[/command]\n")
 
@@ -768,7 +777,9 @@ def _resolve_targets(target: str | None, project: Path):
             return _interactive_select(detected)
         if not detected:
             console.print("[warning]No IDE/agent detected in this project.[/warning]")
-            console.print("Use [command]--target[/command] to specify one, or [command]--target all[/command] for everything.")
+            console.print(
+                "Use [command]--target[/command] to specify one, or [command]--target all[/command] for everything."
+            )
             raise typer.Exit(1)
         return detected
 
@@ -792,9 +803,7 @@ def _interactive_select(detected: list) -> list:
     console.print()
 
     if detected:
-        default_nums = [
-            str(i) for i, t in enumerate(all_targets, 1) if t.name in detected_names
-        ]
+        default_nums = [str(i) for i, t in enumerate(all_targets, 1) if t.name in detected_names]
         default = ",".join(default_nums)
         raw = typer.prompt(
             "Enter numbers (comma-separated), 'all', or press Enter to use detected",

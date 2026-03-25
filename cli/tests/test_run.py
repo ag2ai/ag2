@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.core.discovery import DiscoveredAgent
 from ag2_cli.core.runner import RunResult
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -36,16 +35,16 @@ def _make_discovered_main(source: Path, fn=None) -> DiscoveredAgent:
 
 
 def _make_result(**overrides) -> RunResult:
-    defaults = dict(
-        output="Hello from agent",
-        turns=3,
-        cost=None,
-        elapsed=1.23,
-        errors=[],
-        history=[],
-        agent_names=["assistant"],
-        last_speaker="assistant",
-    )
+    defaults = {
+        "output": "Hello from agent",
+        "turns": 3,
+        "cost": None,
+        "elapsed": 1.23,
+        "errors": [],
+        "history": [],
+        "agent_names": ["assistant"],
+        "last_speaker": "assistant",
+    }
     defaults.update(overrides)
     return RunResult(**defaults)
 
@@ -66,7 +65,6 @@ class TestRunCmd:
         """run_cmd shows error when message is None and stdin is tty (tested directly)."""
         import sys
         from io import StringIO
-        from unittest.mock import PropertyMock
 
         # Directly test: when message stays None, the code exits with error.
         # CliRunner always provides non-tty stdin, so we test the _discover +
@@ -101,9 +99,7 @@ class TestRunCmd:
             output="json result",
             cost={"usage_excluding_cached_inference": {"total_cost": 0.005}},
         )
-        result = runner.invoke(
-            app, ["run", str(agent_file_with_main), "-m", "hi", "--json"]
-        )
+        result = runner.invoke(app, ["run", str(agent_file_with_main), "-m", "hi", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["output"] == "json result"
@@ -120,9 +116,7 @@ class TestRunCmd:
     ) -> None:
         """run_cmd invokes execute and renders output for a main() agent."""
         mock_execute.return_value = _make_result(output="main output", history=[])
-        result = runner.invoke(
-            app, ["run", str(agent_file_with_main), "-m", "hello"]
-        )
+        result = runner.invoke(app, ["run", str(agent_file_with_main), "-m", "hello"])
         assert result.exit_code == 0
         assert "main output" in result.output
 
@@ -136,9 +130,7 @@ class TestRunCmd:
     ) -> None:
         """run_cmd exits with code 1 and prints errors from RunResult."""
         mock_execute.return_value = _make_result(errors=["something went wrong"])
-        result = runner.invoke(
-            app, ["run", str(agent_file_with_main), "-m", "hi"]
-        )
+        result = runner.invoke(app, ["run", str(agent_file_with_main), "-m", "hi"])
         assert result.exit_code != 0
         assert "something went wrong" in result.output
 
@@ -255,9 +247,7 @@ class TestHelpers:
         yaml_file.write_text("agents: []\n")
 
         mock_load.return_value = {"agents": []}
-        expected = DiscoveredAgent(
-            kind="agents", source_file=Path("<yaml>"), agent_names=["a"]
-        )
+        expected = DiscoveredAgent(kind="agents", source_file=Path("<yaml>"), agent_names=["a"])
         mock_build.return_value = expected
 
         result = _discover(yaml_file)
@@ -283,10 +273,9 @@ class TestHelpers:
 
     def test_discover_exits_for_missing_file(self, tmp_path: Path) -> None:
         """_discover raises typer.Exit for a file that does not exist."""
-        from ag2_cli.commands.run import _discover
-
-        import typer
         import pytest
+        import typer
+        from ag2_cli.commands.run import _discover
 
         missing = tmp_path / "gone.py"
         with pytest.raises((SystemExit, typer.Exit)):

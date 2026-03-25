@@ -286,7 +286,7 @@ def create_project(
     console.print("  Next steps:")
     console.print(f"    [command]cd {name}[/command]")
     console.print("    [command]pip install -e .[/command]")
-    console.print("    [command]ag2 run main.py --message \"Hello!\"[/command]")
+    console.print('    [command]ag2 run main.py --message "Hello!"[/command]')
     console.print()
 
 
@@ -313,10 +313,7 @@ def create_agent(
 
     # Determine output path
     agents_dir = Path.cwd() / "agents"
-    if agents_dir.is_dir():
-        out_path = agents_dir / f"{var}.py"
-    else:
-        out_path = Path.cwd() / f"{var}.py"
+    out_path = agents_dir / f"{var}.py" if agents_dir.is_dir() else Path.cwd() / f"{var}.py"
 
     if out_path.exists():
         console.print(f"[error]File already exists: {out_path}[/error]")
@@ -325,13 +322,10 @@ def create_agent(
     if tools:
         tool_names = [t.strip() for t in tools.split(",")]
         tool_imports = "\n".join(
-            f"# from tools.{_to_var_name(t)} import {_to_var_name(t)}_tool  # TODO: create tool"
-            for t in tool_names
+            f"# from tools.{_to_var_name(t)} import {_to_var_name(t)}_tool  # TODO: create tool" for t in tool_names
         )
         tool_imports += "\n# Register tools:\n"
-        tool_imports += "\n".join(
-            f"# {_to_var_name(t)}_tool.register_tool({var})" for t in tool_names
-        )
+        tool_imports += "\n".join(f"# {_to_var_name(t)}_tool.register_tool({var})" for t in tool_names)
         content = _AGENT_WITH_TOOLS_TEMPLATE.format(
             name=name,
             var_name=var,
@@ -364,10 +358,7 @@ def create_tool(
 
     # Determine output path
     tools_dir = Path.cwd() / "tools"
-    if tools_dir.is_dir():
-        out_path = tools_dir / f"{func_name}.py"
-    else:
-        out_path = Path.cwd() / f"{func_name}.py"
+    out_path = tools_dir / f"{func_name}.py" if tools_dir.is_dir() else Path.cwd() / f"{func_name}.py"
 
     if out_path.exists():
         console.print(f"[error]File already exists: {out_path}[/error]")
@@ -420,10 +411,7 @@ def create_team(
     for aname in agent_names:
         avar = _to_var_name(aname)
         agent_defs.append(
-            f'    {avar} = AssistantAgent(\n'
-            f'        name="{aname}",\n'
-            f'        system_message="You are {aname}.",\n'
-            f'    )'
+            f'    {avar} = AssistantAgent(\n        name="{aname}",\n        system_message="You are {aname}.",\n    )'
         )
 
     agent_list = ", ".join(_to_var_name(a) for a in agent_names)
@@ -483,7 +471,8 @@ def _scaffold_template(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "template",
+            name,
+            "template",
             template={
                 "scaffold": "scaffold/",
                 "variables": {
@@ -512,7 +501,8 @@ def _scaffold_tool(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "tool",
+            name,
+            "tool",
             tool={
                 "kind": "ag2",
                 "source": "src/",
@@ -524,8 +514,14 @@ def _scaffold_tool(name: str, out: Path) -> None:
         ),
     )
     _write_file(out / "src" / "__init__.py", "")
-    _write_file(out / "src" / f"{slug}.py", f'"""Tool: {name}"""\n\n\ndef {slug}(query: str) -> str:\n    raise NotImplementedError\n')
-    _write_file(out / "tests" / f"test_{slug}.py", f'"""Tests for {name}."""\n\nfrom src.{slug} import {slug}\n\n\ndef test_{slug}_placeholder():\n    pass\n')
+    _write_file(
+        out / "src" / f"{slug}.py",
+        f'"""Tool: {name}"""\n\n\ndef {slug}(query: str) -> str:\n    raise NotImplementedError\n',
+    )
+    _write_file(
+        out / "tests" / f"test_{slug}.py",
+        f'"""Tests for {name}."""\n\nfrom src.{slug} import {slug}\n\n\ndef test_{slug}_placeholder():\n    pass\n',
+    )
     _write_file(
         out / "skills" / "skills" / f"integrate-{name}" / "SKILL.md",
         _skill_md(f"integrate-{name}", f"How to register and use the {name} tool with AG2 agents"),
@@ -536,7 +532,8 @@ def _scaffold_dataset(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "dataset",
+            name,
+            "dataset",
             dataset={
                 "inline": "data/",
                 "remote": [],
@@ -559,7 +556,8 @@ def _scaffold_agent(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "agent",
+            name,
+            "agent",
             agent={
                 "source": "agent.md",
                 "model": "sonnet",
@@ -583,7 +581,8 @@ def _scaffold_skills(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "skills",
+            name,
+            "skills",
             skills={"dir": ".", "auto_install": True},
         ),
     )
@@ -601,7 +600,8 @@ def _scaffold_bundle(name: str, out: Path) -> None:
     _write_file(
         out / "artifact.json",
         _artifact_json(
-            name, "bundle",
+            name,
+            "bundle",
             bundle={
                 "artifacts": [],
                 "install_order": ["skills", "tools", "templates", "datasets", "agents"],

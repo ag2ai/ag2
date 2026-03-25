@@ -125,10 +125,7 @@ class BundleInstaller:
             import questionary
 
             if optional:
-                choices = [
-                    questionary.Choice(title=r.ref, value=r.ref, checked=True)
-                    for r in optional
-                ]
+                choices = [questionary.Choice(title=r.ref, value=r.ref, checked=True) for r in optional]
                 selected = questionary.checkbox(
                     "Select optional artifacts to include:",
                     choices=choices,

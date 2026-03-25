@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 
 class TestParseFrontmatter:
     """Test parse_frontmatter with various inputs."""
@@ -51,7 +49,7 @@ class TestParseFrontmatter:
     def test_quoted_strings_have_quotes_stripped(self):
         from ag2_cli.install.registry import parse_frontmatter
 
-        text = '---\nname: "my-skill"\ndescription: \'A quoted description\'\n---\n\nBody.'
+        text = "---\nname: \"my-skill\"\ndescription: 'A quoted description'\n---\n\nBody."
         fm, body = parse_frontmatter(text)
 
         assert fm["name"] == "my-skill"

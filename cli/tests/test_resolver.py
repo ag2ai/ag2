@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -62,12 +62,15 @@ class TestResolveSingleDependency:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "helper",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "helper",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir
@@ -87,12 +90,15 @@ class TestResolveSingleDependency:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "helper",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "2.0.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "helper",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "2.0.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir
@@ -119,30 +125,39 @@ class TestResolveDiamondDependencies:
 
         # Build cached artifact directories for B, C, D
         dir_b = tmp_path / "cache" / "b"
-        _write_artifact_json(dir_b, {
-            "name": "b",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-            "depends": ["skills/ag2ai/d"],
-        })
+        _write_artifact_json(
+            dir_b,
+            {
+                "name": "b",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+                "depends": ["skills/ag2ai/d"],
+            },
+        )
 
         dir_c = tmp_path / "cache" / "c"
-        _write_artifact_json(dir_c, {
-            "name": "c",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-            "depends": ["skills/ag2ai/d"],
-        })
+        _write_artifact_json(
+            dir_c,
+            {
+                "name": "c",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+                "depends": ["skills/ag2ai/d"],
+            },
+        )
 
         dir_d = tmp_path / "cache" / "d"
-        _write_artifact_json(dir_d, {
-            "name": "d",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-        })
+        _write_artifact_json(
+            dir_d,
+            {
+                "name": "d",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+            },
+        )
 
         def fake_fetch(artifact_type, name, owner="ag2ai"):
             return {"b": dir_b, "c": dir_c, "d": dir_d}[name]
@@ -174,12 +189,15 @@ class TestResolveSkipsInstalled:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "helper",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "helper",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir
@@ -204,12 +222,15 @@ class TestResolveSkipsInstalled:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "helper",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "2.0.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "helper",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "2.0.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir
@@ -334,12 +355,15 @@ class TestFetchDependency:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "my-skill",
-            "type": "skill",
-            "owner": "ag2ai",
-            "version": "1.0.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "my-skill",
+                "type": "skill",
+                "owner": "ag2ai",
+                "version": "1.0.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir
@@ -359,12 +383,15 @@ class TestFetchDependency:
         from ag2_cli.install.resolver import DependencyResolver
 
         dep_dir = tmp_path / "cache" / "dep"
-        _write_artifact_json(dep_dir, {
-            "name": "custom-tool",
-            "type": "tool",
-            "owner": "myorg",
-            "version": "2.1.0",
-        })
+        _write_artifact_json(
+            dep_dir,
+            {
+                "name": "custom-tool",
+                "type": "tool",
+                "owner": "myorg",
+                "version": "2.1.0",
+            },
+        )
 
         client = MagicMock()
         client.fetch_artifact_dir.return_value = dep_dir

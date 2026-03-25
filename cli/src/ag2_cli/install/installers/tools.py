@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -199,10 +198,7 @@ def _resolve_tool_dir(config: dict, tool_dir: Path) -> dict:
         if isinstance(value, str):
             resolved[key] = value.replace("${toolDir}", str(tool_dir))
         elif isinstance(value, list):
-            resolved[key] = [
-                v.replace("${toolDir}", str(tool_dir)) if isinstance(v, str) else v
-                for v in value
-            ]
+            resolved[key] = [v.replace("${toolDir}", str(tool_dir)) if isinstance(v, str) else v for v in value]
         elif isinstance(value, dict):
             resolved[key] = _resolve_tool_dir(value, tool_dir)
         else:

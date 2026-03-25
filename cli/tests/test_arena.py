@@ -9,8 +9,6 @@ from unittest.mock import patch
 
 import pytest
 import typer
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.commands.arena import (
     ContenderResult,
@@ -24,6 +22,7 @@ from ag2_cli.commands.arena import (
 from ag2_cli.testing import CaseResult
 from ag2_cli.testing.assertions import AssertionResult
 from ag2_cli.testing.cases import EvalCase, EvalSuite
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -153,15 +152,11 @@ class TestContenderResult:
         cases = [
             CaseResult(
                 case=EvalCase(name="c1", input=""),
-                assertion_results=[
-                    AssertionResult(passed=True, assertion_type="x", message="ok")
-                ],
+                assertion_results=[AssertionResult(passed=True, assertion_type="x", message="ok")],
             ),
             CaseResult(
                 case=EvalCase(name="c2", input=""),
-                assertion_results=[
-                    AssertionResult(passed=False, assertion_type="x", message="fail")
-                ],
+                assertion_results=[AssertionResult(passed=False, assertion_type="x", message="fail")],
             ),
         ]
         cr = ContenderResult(name="test", source="test.py", case_results=cases)
@@ -184,15 +179,11 @@ class TestDetermineWinner:
     def test_one_passes_one_fails(self) -> None:
         r_pass = CaseResult(
             case=EvalCase(name="c", input=""),
-            assertion_results=[
-                AssertionResult(passed=True, assertion_type="x", message="ok")
-            ],
+            assertion_results=[AssertionResult(passed=True, assertion_type="x", message="ok")],
         )
         r_fail = CaseResult(
             case=EvalCase(name="c", input=""),
-            assertion_results=[
-                AssertionResult(passed=False, assertion_type="x", message="fail")
-            ],
+            assertion_results=[AssertionResult(passed=False, assertion_type="x", message="fail")],
         )
         winner = _determine_case_winner({"a": r_pass, "b": r_fail})
         assert winner == "a"
@@ -200,9 +191,7 @@ class TestDetermineWinner:
     def test_both_pass_same_score_is_tie(self) -> None:
         r = CaseResult(
             case=EvalCase(name="c", input=""),
-            assertion_results=[
-                AssertionResult(passed=True, assertion_type="x", message="ok")
-            ],
+            assertion_results=[AssertionResult(passed=True, assertion_type="x", message="ok")],
             elapsed=1.0,
         )
         winner = _determine_case_winner({"a": r, "b": r})
@@ -328,9 +317,7 @@ class TestArenaCompare:
         result = runner.invoke(app, ["arena", "compare", str(f), "--eval", str(eval_file)])
         assert result.exit_code != 0
 
-    def test_compare_dry_run(
-        self, two_agent_files: tuple[Path, Path], eval_file: Path
-    ) -> None:
+    def test_compare_dry_run(self, two_agent_files: tuple[Path, Path], eval_file: Path) -> None:
         f1, f2 = two_agent_files
         result = runner.invoke(
             app,
@@ -339,9 +326,7 @@ class TestArenaCompare:
         assert result.exit_code == 0
         assert "Dry run" in result.output
 
-    def test_compare_runs_eval(
-        self, two_agent_files: tuple[Path, Path], eval_file: Path, tmp_path: Path
-    ) -> None:
+    def test_compare_runs_eval(self, two_agent_files: tuple[Path, Path], eval_file: Path, tmp_path: Path) -> None:
         f1, f2 = two_agent_files
         lb_path = tmp_path / ".ag2" / "arena" / "leaderboard.json"
         with patch("ag2_cli.commands.arena.LEADERBOARD_PATH", lb_path):
@@ -353,18 +338,21 @@ class TestArenaCompare:
         assert "Arena" in result.output
         assert "Summary" in result.output
 
-    def test_compare_json_output(
-        self, two_agent_files: tuple[Path, Path], eval_file: Path, tmp_path: Path
-    ) -> None:
+    def test_compare_json_output(self, two_agent_files: tuple[Path, Path], eval_file: Path, tmp_path: Path) -> None:
         f1, f2 = two_agent_files
         lb_path = tmp_path / ".ag2" / "arena" / "leaderboard.json"
         with patch("ag2_cli.commands.arena.LEADERBOARD_PATH", lb_path):
             result = runner.invoke(
                 app,
                 [
-                    "arena", "compare", str(f1), str(f2),
-                    "--eval", str(eval_file),
-                    "--output", "json",
+                    "arena",
+                    "compare",
+                    str(f1),
+                    str(f2),
+                    "--eval",
+                    str(eval_file),
+                    "--output",
+                    "json",
                 ],
             )
         assert result.exit_code == 0
@@ -404,12 +392,14 @@ class TestArenaLeaderboard:
     def test_leaderboard_with_data(self, tmp_path: Path) -> None:
         lb_path = tmp_path / "lb.json"
         lb_path.parent.mkdir(parents=True, exist_ok=True)
-        lb_path.write_text(json.dumps({
-            "agents": {
-                "alpha": {"elo": 1550.0, "wins": 5, "losses": 2, "ties": 1},
-                "beta": {"elo": 1450.0, "wins": 2, "losses": 5, "ties": 1},
-            }
-        }))
+        lb_path.write_text(
+            json.dumps({
+                "agents": {
+                    "alpha": {"elo": 1550.0, "wins": 5, "losses": 2, "ties": 1},
+                    "beta": {"elo": 1450.0, "wins": 2, "losses": 5, "ties": 1},
+                }
+            })
+        )
         with patch("ag2_cli.commands.arena.LEADERBOARD_PATH", lb_path):
             result = runner.invoke(app, ["arena", "leaderboard"])
         assert result.exit_code == 0

@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

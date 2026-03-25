@@ -9,7 +9,6 @@ from .base import DirectoryTarget, SingleFileTarget, Target
 from .claude import ClaudeTarget
 from .copilot import CopilotTarget
 
-
 # -- Frontmatter transform functions --
 
 

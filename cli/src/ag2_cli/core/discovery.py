@@ -9,12 +9,14 @@ Discovery order for Python files:
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -58,10 +60,8 @@ def import_agent_file(path: Path) -> ModuleType:
         raise
     finally:
         if path_added:
-            try:
+            with contextlib.suppress(ValueError):
                 sys.path.remove(parent)
-            except ValueError:
-                pass  # Already removed by the loaded module
     return module
 
 
@@ -132,8 +132,7 @@ def discover(path: Path) -> DiscoveredAgent:
             )
 
     raise ValueError(
-        f"No runnable agent found in {path}. "
-        "Define main(), or a variable named 'agent', 'team', or 'agents'."
+        f"No runnable agent found in {path}. Define main(), or a variable named 'agent', 'team', or 'agents'."
     )
 
 
@@ -172,9 +171,7 @@ def build_agents_from_yaml(config: dict[str, Any]) -> DiscoveredAgent:
     try:
         from autogen import AssistantAgent, LLMConfig
     except ImportError as exc:
-        raise ImportError(
-            "ag2 is required to run YAML configs. Install with: pip install ag2"
-        ) from exc
+        raise ImportError("ag2 is required to run YAML configs. Install with: pip install ag2") from exc
 
     # Build LLM config
     llm_section = config.get("llm", {})

@@ -244,11 +244,7 @@ def _check_llm_judge(assertion: EvalAssertion, output: str) -> AssertionResult:
 
         last_msg = ""
         if chat_result.chat_history:
-            agent_msgs = [
-                m
-                for m in chat_result.chat_history
-                if m.get("role") != "user" and m.get("content")
-            ]
+            agent_msgs = [m for m in chat_result.chat_history if m.get("role") != "user" and m.get("content")]
             if agent_msgs:
                 last_msg = agent_msgs[-1]["content"]
 

@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .discovery import DiscoveredAgent
@@ -47,9 +48,7 @@ class CliIOStream:
         self._on_print = on_print
         self._on_event = on_event
 
-    def print(
-        self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False
-    ) -> None:
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
         text = sep.join(str(o) for o in objects)
         if self._on_print:
             self._on_print(text)
@@ -76,11 +75,7 @@ def _extract_chat_result(ret: Any, result: RunResult) -> None:
             # Fallback: get last message not from the "user" proxy (by name, not role).
             # In AG2 chat history, role is relative to the initiator, so we filter
             # by the 'name' field instead.
-            agent_msgs = [
-                m
-                for m in result.history
-                if m.get("name", "").lower() != "user" and m.get("content")
-            ]
+            agent_msgs = [m for m in result.history if m.get("name", "").lower() != "user" and m.get("content")]
             result.output = agent_msgs[-1]["content"] if agent_msgs else ""
 
         if hasattr(ret, "cost"):
@@ -222,9 +217,7 @@ def execute(
                 # Fallback to classic GroupChat
                 import autogen
 
-                groupchat = autogen.GroupChat(
-                    agents=d.agents, messages=[], max_round=max_turns
-                )
+                groupchat = autogen.GroupChat(agents=d.agents, messages=[], max_round=max_turns)
                 manager = autogen.GroupChatManager(groupchat=groupchat)
                 if user_proxy is None:
                     user_proxy = _create_user_proxy(autogen)

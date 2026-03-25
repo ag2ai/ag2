@@ -248,7 +248,9 @@ def publish_artifact(
         branch_name = branch or f"add-{artifact_type}-{artifact_name}"
         subprocess.run(
             ["git", "checkout", "-b", branch_name],
-            cwd=repo_path, capture_output=True, check=True,
+            cwd=repo_path,
+            capture_output=True,
+            check=True,
         )
 
         # Copy artifact to correct location
@@ -271,13 +273,18 @@ def publish_artifact(
         subprocess.run(["git", "add", "."], cwd=repo_path, capture_output=True, check=True)
         subprocess.run(
             ["git", "commit", "-m", f"Add {artifact_type}: {artifact_name}"],
-            cwd=repo_path, capture_output=True, check=True,
+            cwd=repo_path,
+            capture_output=True,
+            check=True,
         )
 
         console.print("  Pushing branch...")
         push_result = subprocess.run(
             ["git", "push", "-u", "origin", branch_name],
-            cwd=repo_path, capture_output=True, text=True, check=False,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if push_result.returncode != 0:
             console.print(f"[error]Push failed: {push_result.stderr.strip()}[/error]")
@@ -297,11 +304,17 @@ def publish_artifact(
 
         pr_result = subprocess.run(
             [
-                "gh", "pr", "create",
-                "--repo", repo,
-                "--title", f"Add {artifact_type}: {artifact_name}",
-                "--body", pr_body,
-                "--head", branch_name,
+                "gh",
+                "pr",
+                "create",
+                "--repo",
+                repo,
+                "--title",
+                f"Add {artifact_type}: {artifact_name}",
+                "--body",
+                pr_body,
+                "--head",
+                branch_name,
             ],
             cwd=repo_path,
             capture_output=True,

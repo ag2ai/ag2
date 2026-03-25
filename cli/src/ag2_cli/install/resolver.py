@@ -88,7 +88,7 @@ class DependencyResolver:
     def _topological_sort(self, graph: dict[str, list[str]]) -> list[str]:
         """Kahn's algorithm for topological ordering."""
         # Compute in-degrees
-        in_degree: dict[str, int] = {node: 0 for node in graph}
+        in_degree: dict[str, int] = dict.fromkeys(graph, 0)
         for node in graph:
             for dep in graph[node]:
                 if dep not in in_degree:

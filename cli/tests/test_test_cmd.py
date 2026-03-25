@@ -9,12 +9,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.testing import CaseResult
 from ag2_cli.testing.assertions import AssertionResult
 from ag2_cli.testing.cases import EvalAssertion, EvalCase
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -59,9 +58,7 @@ class TestTestEval:
         # Patch _run_single_case to ensure nothing actually runs.
         # The --dry-run path exits before reaching _run_single_case,
         # but we patch it as a safety net and to verify it is never called.
-        with patch(
-            "ag2_cli.commands.test._run_single_case"
-        ) as mock_run:
+        with patch("ag2_cli.commands.test._run_single_case") as mock_run:
             # _run_single_case should never be called with --dry-run
             result = runner.invoke(
                 app,

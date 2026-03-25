@@ -50,24 +50,28 @@ def load_skills_from_artifact(artifact: Artifact) -> list[ContentItem]:
                     continue
                 text = skill_md.read_text()
                 fm, body = parse_frontmatter(text)
-                items.append(ContentItem(
-                    name=fm.get("name", entry.name),
-                    description=fm.get("description", ""),
-                    category=category,
-                    frontmatter=fm,
-                    body=body,
-                ))
+                items.append(
+                    ContentItem(
+                        name=fm.get("name", entry.name),
+                        description=fm.get("description", ""),
+                        category=category,
+                        frontmatter=fm,
+                        body=body,
+                    )
+                )
             # Flat format: entry.md (current bundled format)
             elif entry.is_file() and entry.suffix == ".md":
                 text = entry.read_text()
                 fm, body = parse_frontmatter(text)
-                items.append(ContentItem(
-                    name=fm.get("name", entry.stem),
-                    description=fm.get("description", ""),
-                    category=category,
-                    frontmatter=fm,
-                    body=body,
-                ))
+                items.append(
+                    ContentItem(
+                        name=fm.get("name", entry.stem),
+                        description=fm.get("description", ""),
+                        category=category,
+                        frontmatter=fm,
+                        body=body,
+                    )
+                )
 
     return items
 

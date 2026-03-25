@@ -5,8 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from ag2_cli.install.artifact import BundleConfig, BundleRef, InstallResult
+from ag2_cli.install.artifact import BundleRef, InstallResult
 from ag2_cli.install.client import ArtifactClient, FetchError
 from ag2_cli.install.installers.bundles import BundleInstaller
 from ag2_cli.install.installers.datasets import DatasetInstaller
@@ -14,7 +13,6 @@ from ag2_cli.install.installers.skills import SkillsInstaller
 from ag2_cli.install.installers.tools import ToolInstaller
 from ag2_cli.install.lockfile import Lockfile
 from ag2_cli.install.resolver import DependencyResolver
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,12 +203,15 @@ class TestToolInstaller:
         _make_mcp_tool_artifact(tmp_path / "cache")
 
         # Patch configure_mcp_server to avoid writing real IDE config files
-        with patch(
-            "ag2_cli.install.installers.tools.configure_mcp_server",
-            return_value=[],
-        ), patch(
-            "ag2_cli.install.installers.tools.detect_mcp_targets",
-            return_value=[],
+        with (
+            patch(
+                "ag2_cli.install.installers.tools.configure_mcp_server",
+                return_value=[],
+            ),
+            patch(
+                "ag2_cli.install.installers.tools.detect_mcp_targets",
+                return_value=[],
+            ),
         ):
             result = installer.install("mcp-server", project, [])
 

@@ -1,9 +1,6 @@
 """Tests for the lockfile system."""
 
-import json
 from pathlib import Path
-
-import pytest
 
 
 class TestLockfile:

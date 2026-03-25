@@ -6,9 +6,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from ag2_cli.core.discovery import (
-    DiscoveredAgent,
     discover,
     import_agent_file,
     load_yaml_config,

@@ -18,9 +18,7 @@ def _require_fastapi() -> tuple[Any, Any]:
         return fastapi, uvicorn
     except ImportError:
         console.print("[error]FastAPI and uvicorn are required for REST serving.[/error]")
-        console.print(
-            "Install with: [command]pip install fastapi 'uvicorn[standard]'[/command]"
-        )
+        console.print("Install with: [command]pip install fastapi 'uvicorn[standard]'[/command]")
         raise typer.Exit(1)
 
 
@@ -177,13 +175,8 @@ def _build_a2a_app(discovered: Any, port: int) -> Any:
         return Starlette(routes=routes)
 
     if d.kind == "main":
-        console.print(
-            "[error]A2A protocol requires an exported agent or agents list, "
-            "not a main() function.[/error]"
-        )
-        console.print(
-            "Export your agent as a module-level variable named 'agent' or 'agents'."
-        )
+        console.print("[error]A2A protocol requires an exported agent or agents list, not a main() function.[/error]")
+        console.print("Export your agent as a module-level variable named 'agent' or 'agents'.")
         raise typer.Exit(1)
 
     console.print("[error]No agents found to serve via A2A.[/error]")
@@ -229,8 +222,7 @@ def _start_ngrok(port: int) -> str:
     if not authtoken:
         console.print("[error]No ngrok authtoken found.[/error]")
         console.print(
-            "Set NGROK_AUTHTOKEN in your environment or run "
-            "[command]ngrok config add-authtoken <token>[/command]."
+            "Set NGROK_AUTHTOKEN in your environment or run [command]ngrok config add-authtoken <token>[/command]."
         )
         raise typer.Exit(1)
 
@@ -249,19 +241,11 @@ def _start_ngrok(port: int) -> str:
 
 
 def serve_cmd(
-    agent_file: Path = typer.Argument(
-        ..., help="Python file defining agent(s) to serve."
-    ),
+    agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to serve."),
     port: int = typer.Option(8000, "--port", "-p", help="Port to listen on."),
-    protocol: str = typer.Option(
-        "rest", "--protocol", help="Protocol: rest, mcp, or a2a."
-    ),
-    ngrok: bool = typer.Option(
-        False, "--ngrok", help="Expose via ngrok tunnel (requires ngrok SDK + auth)."
-    ),
-    playground: bool = typer.Option(
-        False, "--playground", help="Launch web playground UI."
-    ),
+    protocol: str = typer.Option("rest", "--protocol", help="Protocol: rest, mcp, or a2a."),
+    ngrok: bool = typer.Option(False, "--ngrok", help="Expose via ngrok tunnel (requires ngrok SDK + auth)."),
+    playground: bool = typer.Option(False, "--playground", help="Launch web playground UI."),
 ) -> None:
     """Serve agents as APIs, MCP servers, or A2A endpoints.
 
@@ -309,9 +293,7 @@ def serve_cmd(
         public_url = _start_ngrok(port)
 
     # Display header
-    console.print(
-        f"\n[heading]AG2 Serve[/heading] — {', '.join(discovered.agent_names)}"
-    )
+    console.print(f"\n[heading]AG2 Serve[/heading] — {', '.join(discovered.agent_names)}")
     console.print(f"  Protocol: [info]{protocol}[/info]")
     console.print(f"  Endpoint: [info]http://localhost:{port}[/info]")
     if public_url:

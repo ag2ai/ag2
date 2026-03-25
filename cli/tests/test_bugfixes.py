@@ -5,7 +5,7 @@ Tests are grouped by bug number and cover the specific fix applied.
 
 from __future__ import annotations
 
-import json
+import contextlib
 import sys
 import textwrap
 from html import escape as html_escape
@@ -37,9 +37,9 @@ class TestUpdateCmdRefFormat:
 
     def test_update_detects_version_mismatch(self, tmp_path: Path):
         """End-to-end: update_cmd should detect when registry has a newer version."""
-        from typer.testing import CliRunner
         from ag2_cli.commands.install import app
         from ag2_cli.install.lockfile import Lockfile
+        from typer.testing import CliRunner
 
         runner = CliRunner()
 
@@ -59,8 +59,8 @@ class TestUpdateCmdRefFormat:
             ]
         }
 
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock_client = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
             mock_client.fetch_registry.return_value = registry
 
             result = runner.invoke(app, ["update", "--project-dir", str(tmp_path)])
@@ -71,9 +71,9 @@ class TestUpdateCmdRefFormat:
 
     def test_update_all_up_to_date_when_versions_match(self, tmp_path: Path):
         """update_cmd should report up-to-date when versions match."""
-        from typer.testing import CliRunner
         from ag2_cli.commands.install import app
         from ag2_cli.install.lockfile import Lockfile
+        from typer.testing import CliRunner
 
         runner = CliRunner()
 
@@ -91,8 +91,8 @@ class TestUpdateCmdRefFormat:
             ]
         }
 
-        with patch("ag2_cli.commands.install.ArtifactClient") as MockClient:
-            mock_client = MockClient.return_value
+        with patch("ag2_cli.commands.install.ArtifactClient") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
             mock_client.fetch_registry.return_value = registry
 
             result = runner.invoke(app, ["update", "--project-dir", str(tmp_path)])
@@ -116,9 +116,11 @@ class TestFetchArtifactDirOwner:
             client = ArtifactClient(cache_dir=tmp_path)
 
         files = ["tools/web-search/artifact.json"]
-        with patch.object(client, "_list_contents_recursive", return_value=files) as mock_list:
-            with patch.object(client, "_get_bytes", return_value=b"{}"):
-                client.fetch_artifact_dir("tool", "web-search", owner="ag2ai")
+        with (
+            patch.object(client, "_list_contents_recursive", return_value=files) as mock_list,
+            patch.object(client, "_get_bytes", return_value=b"{}"),
+        ):
+            client.fetch_artifact_dir("tool", "web-search", owner="ag2ai")
 
         # Should use flat path for ag2ai
         mock_list.assert_called_once_with("tools/web-search")
@@ -131,9 +133,11 @@ class TestFetchArtifactDirOwner:
             client = ArtifactClient(cache_dir=tmp_path)
 
         files = ["tools/myorg/custom-tool/artifact.json"]
-        with patch.object(client, "_list_contents_recursive", return_value=files) as mock_list:
-            with patch.object(client, "_get_bytes", return_value=b"{}"):
-                client.fetch_artifact_dir("tool", "custom-tool", owner="myorg")
+        with (
+            patch.object(client, "_list_contents_recursive", return_value=files) as mock_list,
+            patch.object(client, "_get_bytes", return_value=b"{}"),
+        ):
+            client.fetch_artifact_dir("tool", "custom-tool", owner="myorg")
 
         # Should use namespaced path for non-ag2ai
         mock_list.assert_called_once_with("tools/myorg/custom-tool")
@@ -179,9 +183,11 @@ class TestPostInstallConfirmation:
 
         installer = TemplateInstaller.__new__(TemplateInstaller)
 
-        with patch("ag2_cli.install.installers.templates.typer.confirm", return_value=False):
-            with patch("ag2_cli.install.installers.templates.subprocess.run") as mock_run:
-                installer._run_post_install(["echo hello"], tmp_path)
+        with (
+            patch("ag2_cli.install.installers.templates.typer.confirm", return_value=False),
+            patch("ag2_cli.install.installers.templates.subprocess.run") as mock_run,
+        ):
+            installer._run_post_install(["echo hello"], tmp_path)
 
         mock_run.assert_not_called()
 
@@ -195,9 +201,11 @@ class TestPostInstallConfirmation:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("ag2_cli.install.installers.templates.typer.confirm", return_value=True):
-            with patch("ag2_cli.install.installers.templates.subprocess.run", return_value=mock_result) as mock_run:
-                installer._run_post_install(["echo hello"], tmp_path)
+        with (
+            patch("ag2_cli.install.installers.templates.typer.confirm", return_value=True),
+            patch("ag2_cli.install.installers.templates.subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            installer._run_post_install(["echo hello"], tmp_path)
 
         mock_run.assert_called_once()
 
@@ -207,9 +215,11 @@ class TestPostInstallConfirmation:
 
         installer = TemplateInstaller.__new__(TemplateInstaller)
 
-        with patch("ag2_cli.install.installers.templates.typer.confirm", side_effect=EOFError):
-            with patch("ag2_cli.install.installers.templates.subprocess.run") as mock_run:
-                installer._run_post_install(["rm -rf /"], tmp_path)
+        with (
+            patch("ag2_cli.install.installers.templates.typer.confirm", side_effect=EOFError),
+            patch("ag2_cli.install.installers.templates.subprocess.run") as mock_run,
+        ):
+            installer._run_post_install(["rm -rf /"], tmp_path)
 
         mock_run.assert_not_called()
 
@@ -335,6 +345,7 @@ class TestServeCmdYaml:
         """Verify that .yaml suffix triggers the YAML discovery path in serve_cmd."""
         # Read the serve_cmd source to verify it handles .yaml extensions
         import inspect
+
         from ag2_cli.commands.serve import serve_cmd
 
         source = inspect.getsource(serve_cmd)
@@ -348,24 +359,24 @@ class TestServeCmdYaml:
         py_file = tmp_path / "agent.py"
         py_file.write_text("x = 42\n")  # no agent, will fail
 
-        with patch("ag2_cli.commands.serve._require_ag2"):
-            with patch("ag2_cli.core.discovery.discover") as mock_discover:
-                mock_discover.side_effect = ValueError("No agent found")
+        with (
+            patch("ag2_cli.commands.serve._require_ag2"),
+            patch("ag2_cli.core.discovery.discover") as mock_discover,
+        ):
+            mock_discover.side_effect = ValueError("No agent found")
 
-                from ag2_cli.commands.serve import serve_cmd
+            from ag2_cli.commands.serve import serve_cmd
 
-                try:
-                    serve_cmd(
-                        agent_file=py_file,
-                        port=8000,
-                        protocol="rest",
-                        ngrok=False,
-                        playground=False,
-                    )
-                except (SystemExit, Exception):
-                    pass  # Expected — serve_cmd calls typer.Exit(1)
+            with contextlib.suppress(SystemExit, Exception):
+                serve_cmd(
+                    agent_file=py_file,
+                    port=8000,
+                    protocol="rest",
+                    ngrok=False,
+                    playground=False,
+                )
 
-                mock_discover.assert_called_once()
+            mock_discover.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -381,10 +392,10 @@ class TestReplayHtmlEscaping:
             Session,
             SessionEvent,
             SessionMeta,
+            app,
             save_session,
         )
         from typer.testing import CliRunner
-        from ag2_cli.commands.replay import app
 
         runner = CliRunner()
 
@@ -418,6 +429,7 @@ class TestReplayHtmlEscaping:
         finally:
             # Clean up
             from ag2_cli.commands.replay import _session_path
+
             path = _session_path("test-xss-session")
             if path.exists():
                 path.unlink()
@@ -427,10 +439,10 @@ class TestReplayHtmlEscaping:
             Session,
             SessionEvent,
             SessionMeta,
+            app,
             save_session,
         )
         from typer.testing import CliRunner
-        from ag2_cli.commands.replay import app
 
         runner = CliRunner()
 
@@ -459,6 +471,7 @@ class TestReplayHtmlEscaping:
             assert 'onerror="alert(1)"' not in result.output
         finally:
             from ag2_cli.commands.replay import _session_path
+
             path = _session_path("test-xss-speaker")
             if path.exists():
                 path.unlink()
@@ -481,8 +494,8 @@ class TestLockfilePathSafety:
             version="1.0.0",
             targets=["claude"],
             files=[
-                tmp_path / "inside" / "file.md",           # Inside project
-                Path("/outside/project/file.md"),            # Outside project
+                tmp_path / "inside" / "file.md",  # Inside project
+                Path("/outside/project/file.md"),  # Outside project
             ],
         )
 

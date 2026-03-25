@@ -19,7 +19,6 @@ from rich.table import Table
 
 from ..core.runner import execute
 from ..testing import CaseResult, EvalCase, EvalSuite, check_assertion, load_eval_suite
-from ..testing.assertions import AssertionResult
 from ..ui import console
 from ._shared import extract_cost
 
@@ -85,8 +84,7 @@ def _run_single_case(agent_file: Path, case: EvalCase) -> CaseResult:
     result = execute(discovered, case.input)
 
     assertion_results = [
-        check_assertion(a, result.output, turns=result.turns, errors=result.errors)
-        for a in case.assertions
+        check_assertion(a, result.output, turns=result.turns, errors=result.errors) for a in case.assertions
     ]
 
     return CaseResult(
@@ -100,27 +98,21 @@ def _run_single_case(agent_file: Path, case: EvalCase) -> CaseResult:
     )
 
 
-def _run_contender(
-    agent_file: Path, suites: list[EvalSuite], *, name: str | None = None
-) -> ContenderResult:
+def _run_contender(agent_file: Path, suites: list[EvalSuite], *, name: str | None = None) -> ContenderResult:
     """Run all eval cases for one contender."""
     contender_name = name or agent_file.stem
     results: list[CaseResult] = []
     for suite in suites:
         for case in suite.cases:
             results.append(_run_single_case(agent_file, case))
-    return ContenderResult(
-        name=contender_name, source=str(agent_file), case_results=results
-    )
+    return ContenderResult(name=contender_name, source=str(agent_file), case_results=results)
 
 
 def _load_suites(eval_path: Path) -> list[EvalSuite]:
     """Load eval suites from a file or directory."""
     eval_path = eval_path.resolve()
     if eval_path.is_dir():
-        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(
-            eval_path.glob("*.yml")
-        )
+        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(eval_path.glob("*.yml"))
         if not yaml_files:
             console.print(f"[error]No YAML files found in {eval_path}[/error]")
             raise typer.Exit(1)
@@ -189,9 +181,7 @@ def _determine_case_winner(
 # ---------------------------------------------------------------------------
 
 
-def _compute_elo(
-    rating_a: float, rating_b: float, winner: str | None, k: float = 32.0
-) -> tuple[float, float]:
+def _compute_elo(rating_a: float, rating_b: float, winner: str | None, k: float = 32.0) -> tuple[float, float]:
     """Standard ELO computation. winner is 'a', 'b', or None for draw."""
     ea = 1.0 / (1.0 + 10 ** ((rating_b - rating_a) / 400.0))
     eb = 1.0 - ea
@@ -257,9 +247,7 @@ def _flat_cases(suites: list[EvalSuite]) -> list[EvalCase]:
     return [case for suite in suites for case in suite.cases]
 
 
-def _display_comparison(
-    contenders: list[ContenderResult], suites: list[EvalSuite]
-) -> dict[str, int]:
+def _display_comparison(contenders: list[ContenderResult], suites: list[EvalSuite]) -> dict[str, int]:
     """Display side-by-side comparison. Returns win counts per contender."""
     names = [c.name for c in contenders]
     cases = _flat_cases(suites)
@@ -282,7 +270,7 @@ def _display_comparison(
         table.add_column(name, justify="center", min_width=12)
     table.add_column("Winner", justify="center", min_width=12)
 
-    wins: dict[str, int] = {n: 0 for n in names}
+    wins: dict[str, int] = dict.fromkeys(names, 0)
     ties = 0
 
     for i, case in enumerate(cases):
@@ -377,18 +365,10 @@ def _display_comparison(
 
 @app.command("compare")
 def arena_compare(
-    contenders: list[Path] = typer.Argument(
-        ..., help="Agent files or directories to compare."
-    ),
-    eval_file: Path = typer.Option(
-        ..., "--eval", "-e", help="Evaluation cases file (YAML) or directory."
-    ),
-    output: str | None = typer.Option(
-        None, "--output", "-o", help="Output format: json."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Estimate cost without running."
-    ),
+    contenders: list[Path] = typer.Argument(..., help="Agent files or directories to compare."),
+    eval_file: Path = typer.Option(..., "--eval", "-e", help="Evaluation cases file (YAML) or directory."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output format: json."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running."),
 ) -> None:
     """Compare agent implementations on the same eval suite.
 
@@ -430,11 +410,7 @@ def arena_compare(
     # Update leaderboard for pairwise matchups
     if len(results) == 2:
         a, b = results
-        overall = (
-            a.name
-            if wins[a.name] > wins[b.name]
-            else b.name if wins[b.name] > wins[a.name] else None
-        )
+        overall = a.name if wins[a.name] > wins[b.name] else b.name if wins[b.name] > wins[a.name] else None
         _update_leaderboard(a.name, b.name, overall)
 
     # JSON output
@@ -468,21 +444,11 @@ def arena_compare(
 
 @app.command("models")
 def arena_models(
-    agent_file: Path = typer.Argument(
-        ..., help="Agent file to test across models."
-    ),
-    models: str = typer.Option(
-        ..., "--models", "-m", help="Comma-separated model names."
-    ),
-    eval_file: Path = typer.Option(
-        ..., "--eval", "-e", help="Evaluation cases file (YAML) or directory."
-    ),
-    output: str | None = typer.Option(
-        None, "--output", "-o", help="Output format: json."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Estimate cost without running."
-    ),
+    agent_file: Path = typer.Argument(..., help="Agent file to test across models."),
+    models: str = typer.Option(..., "--models", "-m", help="Comma-separated model names."),
+    eval_file: Path = typer.Option(..., "--eval", "-e", help="Evaluation cases file (YAML) or directory."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output format: json."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running."),
 ) -> None:
     """Compare same agent across different LLM models.
 
@@ -554,9 +520,7 @@ def arena_models(
 
 @app.command("interactive")
 def arena_interactive(
-    contenders: list[Path] = typer.Argument(
-        ..., help="Two agent files for head-to-head comparison."
-    ),
+    contenders: list[Path] = typer.Argument(..., help="Two agent files for head-to-head comparison."),
 ) -> None:
     """Interactive head-to-head with human judgment.
 
@@ -658,10 +622,7 @@ def arena_interactive(
             _update_leaderboard(real_names[0], real_names[1], None)
 
         rounds += 1
-        console.print(
-            f"  [dim]Score: Agent A: {scores['A']}  "
-            f"Agent B: {scores['B']}  Ties: {scores['ties']}[/dim]\n"
-        )
+        console.print(f"  [dim]Score: Agent A: {scores['A']}  Agent B: {scores['B']}  Ties: {scores['ties']}[/dim]\n")
 
     # Reveal identities
     if rounds > 0:

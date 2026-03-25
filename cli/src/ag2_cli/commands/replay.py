@@ -170,10 +170,7 @@ def record_from_run_result(
                 speaker=msg.get("name", msg.get("role", "unknown")),
                 content=msg.get("content", ""),
                 role=msg.get("role", "assistant"),
-                metadata={
-                    k: v for k, v in msg.items()
-                    if k not in ("content", "role", "name")
-                },
+                metadata={k: v for k, v in msg.items() if k not in ("content", "role", "name")},
             )
         )
 
@@ -272,8 +269,7 @@ def replay_list(
     if not sessions:
         console.print("[dim]No recorded sessions yet.[/dim]")
         console.print(
-            "[dim]Use [command]ag2 chat[/command] to start a recorded session "
-            "(recording is automatic).[/dim]"
+            "[dim]Use [command]ag2 chat[/command] to start a recorded session (recording is automatic).[/dim]"
         )
         raise typer.Exit(0)
 
@@ -345,16 +341,12 @@ def replay_step(
 
     idx = 0
     while 0 <= idx < len(events):
-        console.print(
-            f"[dim]Turn {idx + 1}/{len(events)}[/dim]"
-        )
+        console.print(f"[dim]Turn {idx + 1}/{len(events)}[/dim]")
         console.print(_render_event(events[idx]))
         console.print()
 
         try:
-            cmd = console.input(
-                "[dim][Enter] next | [p] prev | [g N] goto | [q] quit > [/dim]"
-            ).strip().lower()
+            cmd = console.input("[dim][Enter] next | [p] prev | [g N] goto | [q] quit > [/dim]").strip().lower()
         except (KeyboardInterrupt, EOFError):
             break
 
@@ -383,12 +375,8 @@ def replay_step(
 @app.command("branch")
 def replay_branch(
     session_id: str = typer.Argument(..., help="Session ID to branch from."),
-    at: int = typer.Option(
-        ..., "--at", help="Turn number to branch from."
-    ),
-    message: str = typer.Option(
-        None, "--message", "-m", help="New message for the branch (default: re-run same)."
-    ),
+    at: int = typer.Option(..., "--at", help="Turn number to branch from."),
+    message: str = typer.Option(None, "--message", "-m", help="New message for the branch (default: re-run same)."),
 ) -> None:
     """Branch a session at a specific turn and re-run with a new message.
 
@@ -404,21 +392,16 @@ def replay_branch(
     session = load_session(session_id)
 
     if at < 1 or at > len(session.events):
-        console.print(
-            f"[error]Turn {at} is out of range (session has {len(session.events)} turns).[/error]"
-        )
+        console.print(f"[error]Turn {at} is out of range (session has {len(session.events)} turns).[/error]")
         raise typer.Exit(1)
 
     # Get the events up to the branch point
     prefix_events = session.events[:at]
-    branch_msg = message or (
-        prefix_events[-1].content if prefix_events else session.meta.input_message
-    )
+    branch_msg = message or (prefix_events[-1].content if prefix_events else session.meta.input_message)
 
     console.print(
         Panel(
-            f"[dim]Branching from session {session.meta.session_id}\n"
-            f"At turn {at}, with message:[/dim]\n\n{branch_msg}",
+            f"[dim]Branching from session {session.meta.session_id}\nAt turn {at}, with message:[/dim]\n\n{branch_msg}",
             title="[bold cyan]AG2 Replay \u2014 Branch[/bold cyan]",
             border_style="cyan",
             width=64,
@@ -427,6 +410,7 @@ def replay_branch(
 
     # Re-run: replay prior turns to rebuild context, then send new message
     import autogen
+
     from ..core.discovery import discover
     from ..core.runner import _create_user_proxy, execute
 
@@ -439,9 +423,7 @@ def replay_branch(
     discovered = discover(agent_path)
 
     # Replay prior turns to rebuild agent memory
-    prior_user_msgs = [
-        e.content for e in prefix_events if e.role == "user" and e.content
-    ]
+    prior_user_msgs = [e.content for e in prefix_events if e.role == "user" and e.content]
 
     if discovered.kind == "agent" and prior_user_msgs:
         user_proxy = _create_user_proxy(autogen)
@@ -569,12 +551,8 @@ def replay_compare(
 @app.command("export")
 def replay_export(
     session_id: str = typer.Argument(..., help="Session ID to export."),
-    format: str = typer.Option(
-        "md", "--format", "-f", help="Export format: md, json, html."
-    ),
-    output: Path | None = typer.Option(
-        None, "--output", "-o", help="Output file (default: stdout)."
-    ),
+    format: str = typer.Option("md", "--format", "-f", help="Export format: md, json, html."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)."),
 ) -> None:
     """Export a session transcript.
 

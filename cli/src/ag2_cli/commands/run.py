@@ -13,8 +13,8 @@ from rich.table import Table
 
 from ..core.runner import RunResult, execute
 from ..ui import console
-from ._shared import extract_cost, require_ag2 as _require_ag2
-
+from ._shared import extract_cost
+from ._shared import require_ag2 as _require_ag2
 
 # ---------------------------------------------------------------------------
 # Live rendering callbacks
@@ -154,18 +154,10 @@ def _discover(agent_file: Path) -> Any:
 
 
 def run_cmd(
-    agent_file: Path = typer.Argument(
-        ..., help="Python file or YAML config defining agents."
-    ),
-    message: str | None = typer.Option(
-        None, "--message", "-m", help="Input message to send."
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-V", help="Show detailed agent activity."
-    ),
-    output_json: bool = typer.Option(
-        False, "--json", help="Output result as JSON (suppresses live rendering)."
-    ),
+    agent_file: Path = typer.Argument(..., help="Python file or YAML config defining agents."),
+    message: str | None = typer.Option(None, "--message", "-m", help="Input message to send."),
+    verbose: bool = typer.Option(False, "--verbose", "-V", help="Show detailed agent activity."),
+    output_json: bool = typer.Option(False, "--json", help="Output result as JSON (suppresses live rendering)."),
     max_turns: int = typer.Option(10, "--max-turns", help="Maximum conversation turns."),
 ) -> None:
     """Run an agent or team from a Python file or YAML config.
@@ -224,24 +216,12 @@ def run_cmd(
 
 
 def chat_cmd(
-    agent_file: Path | None = typer.Argument(
-        None, help="Python file defining agent(s)."
-    ),
-    model: str | None = typer.Option(
-        None, "--model", "-M", help="LLM model for ad-hoc chat."
-    ),
-    system: str | None = typer.Option(
-        None, "--system", "-s", help="System prompt for ad-hoc chat."
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-V", help="Show detailed agent activity."
-    ),
-    max_turns: int = typer.Option(
-        10, "--max-turns", help="Maximum turns per message."
-    ),
-    no_record: bool = typer.Option(
-        False, "--no-record", help="Disable automatic session recording."
-    ),
+    agent_file: Path | None = typer.Argument(None, help="Python file defining agent(s)."),
+    model: str | None = typer.Option(None, "--model", "-M", help="LLM model for ad-hoc chat."),
+    system: str | None = typer.Option(None, "--system", "-s", help="System prompt for ad-hoc chat."),
+    verbose: bool = typer.Option(False, "--verbose", "-V", help="Show detailed agent activity."),
+    max_turns: int = typer.Option(10, "--max-turns", help="Maximum turns per message."),
+    no_record: bool = typer.Option(False, "--no-record", help="Disable automatic session recording."),
 ) -> None:
     """Start an interactive terminal chat with an agent or team.
 
@@ -274,9 +254,7 @@ def chat_cmd(
     else:
         console.print("[error]Provide an agent file or use --model for ad-hoc chat.[/error]")
         console.print("  [command]ag2 chat my_agent.py[/command]")
-        console.print(
-            '  [command]ag2 chat --model gpt-4o --system "You are a Python expert"[/command]'
-        )
+        console.print('  [command]ag2 chat --model gpt-4o --system "You are a Python expert"[/command]')
         raise typer.Exit(1)
 
     # Header

@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 
 class TestConfigureMcpServer:
     """Test MCP server config writing."""
@@ -125,12 +123,8 @@ class TestRemoveMcpServer:
     def test_removes_server_entry(self, tmp_path: Path):
         from ag2_cli.install.mcp_config import configure_mcp_server, remove_mcp_server
 
-        configure_mcp_server(
-            tmp_path, "to-remove", {"command": "test"}, ide_targets=["claude"]
-        )
-        configure_mcp_server(
-            tmp_path, "to-keep", {"command": "test2"}, ide_targets=["claude"]
-        )
+        configure_mcp_server(tmp_path, "to-remove", {"command": "test"}, ide_targets=["claude"])
+        configure_mcp_server(tmp_path, "to-keep", {"command": "test2"}, ide_targets=["claude"])
 
         removed = remove_mcp_server(tmp_path, "to-remove")
         assert len(removed) == 1

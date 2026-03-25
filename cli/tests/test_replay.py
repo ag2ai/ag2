@@ -7,8 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.commands.replay import (
     Session,
@@ -21,6 +19,7 @@ from ag2_cli.commands.replay import (
     record_from_run_result,
     save_session,
 )
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -98,9 +97,7 @@ def saved_session(sessions_dir: Path, sample_session: Session) -> Session:
 
 class TestSessionEvent:
     def test_creation(self) -> None:
-        event = SessionEvent(
-            turn=1, speaker="researcher", content="Hello", role="assistant"
-        )
+        event = SessionEvent(turn=1, speaker="researcher", content="Hello", role="assistant")
         assert event.turn == 1
         assert event.speaker == "researcher"
         assert event.metadata == {}
@@ -157,13 +154,10 @@ class TestSaveAndLoad:
     def test_load_missing_exits(self, sessions_dir: Path) -> None:
         import typer
 
-        with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
-            with pytest.raises(typer.Exit):
-                load_session("nonexistent-session-id")
+        with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir), pytest.raises(typer.Exit):
+            load_session("nonexistent-session-id")
 
-    def test_roundtrip_preserves_data(
-        self, sessions_dir: Path, sample_session: Session
-    ) -> None:
+    def test_roundtrip_preserves_data(self, sessions_dir: Path, sample_session: Session) -> None:
         with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
             save_session(sample_session)
             loaded = load_session(sample_session.meta.session_id)
@@ -191,7 +185,7 @@ class TestListSessions:
                     session_id=f"session-{i}",
                     agent_file="agent.py",
                     agent_names=[],
-                    created_at=f"2026-03-{19+i}T00:00:00",
+                    created_at=f"2026-03-{19 + i}T00:00:00",
                     turns=1,
                     duration=1.0,
                 ),
@@ -262,9 +256,7 @@ class TestRecordFromRunResult:
             cost = None
             agent_names = ["researcher"]
 
-        session = record_from_run_result(
-            FakeResult(), "my_agent.py", "What is the capital?"
-        )
+        session = record_from_run_result(FakeResult(), "my_agent.py", "What is the capital?")
         assert session.meta.turns == 2
         assert session.meta.agent_file == "my_agent.py"
         assert session.meta.input_message == "What is the capital?"
@@ -305,9 +297,7 @@ class TestReplayList:
 class TestReplayShow:
     def test_show_session(self, sessions_dir: Path, saved_session: Session) -> None:
         with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
-            result = runner.invoke(
-                app, ["replay", "show", saved_session.meta.session_id]
-            )
+            result = runner.invoke(app, ["replay", "show", saved_session.meta.session_id])
         assert result.exit_code == 0
         assert "researcher" in result.output
         assert "Replay" in result.output
@@ -348,17 +338,19 @@ class TestReplayExport:
         assert result.exit_code == 0
         assert "<html>" in result.output
 
-    def test_export_to_file(
-        self, sessions_dir: Path, saved_session: Session, tmp_path: Path
-    ) -> None:
+    def test_export_to_file(self, sessions_dir: Path, saved_session: Session, tmp_path: Path) -> None:
         output = tmp_path / "export.json"
         with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
             result = runner.invoke(
                 app,
                 [
-                    "replay", "export", saved_session.meta.session_id,
-                    "--format", "json",
-                    "--output", str(output),
+                    "replay",
+                    "export",
+                    saved_session.meta.session_id,
+                    "--format",
+                    "json",
+                    "--output",
+                    str(output),
                 ],
             )
         assert result.exit_code == 0
@@ -370,9 +362,7 @@ class TestReplayExport:
 class TestReplayDelete:
     def test_delete_session(self, sessions_dir: Path, saved_session: Session) -> None:
         with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
-            result = runner.invoke(
-                app, ["replay", "delete", saved_session.meta.session_id]
-            )
+            result = runner.invoke(app, ["replay", "delete", saved_session.meta.session_id])
         assert result.exit_code == 0
         assert "Deleted" in result.output
 
@@ -411,9 +401,7 @@ class TestReplayCompare:
                     duration=1.0,
                 ),
                 events=[
-                    SessionEvent(
-                        turn=1, speaker="user", content="Hello", role="user"
-                    ),
+                    SessionEvent(turn=1, speaker="user", content="Hello", role="user"),
                     SessionEvent(
                         turn=2,
                         speaker="agent",
@@ -426,8 +414,6 @@ class TestReplayCompare:
                 save_session(session)
 
         with patch("ag2_cli.commands.replay.SESSIONS_DIR", sessions_dir):
-            result = runner.invoke(
-                app, ["replay", "compare", "session-a", "session-b"]
-            )
+            result = runner.invoke(app, ["replay", "compare", "session-a", "session-b"])
         assert result.exit_code == 0
         assert "Comparison" in result.output

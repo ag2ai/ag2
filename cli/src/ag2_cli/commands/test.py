@@ -5,15 +5,13 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
 
 import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from ..core.runner import RunResult, execute
+from ..core.runner import execute
 from ..testing import CaseResult, EvalCase, EvalSuite, check_assertion, load_eval_suite
-from ..testing.assertions import AssertionResult
 from ..ui import console
 from ._shared import extract_cost
 
@@ -43,8 +41,7 @@ def _run_single_case(agent_file: Path, case: EvalCase) -> CaseResult:
 
     # Evaluate assertions
     assertion_results = [
-        check_assertion(a, result.output, turns=result.turns, errors=result.errors)
-        for a in case.assertions
+        check_assertion(a, result.output, turns=result.turns, errors=result.errors) for a in case.assertions
     ]
 
     return CaseResult(
@@ -86,16 +83,12 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
             case_cost = extract_cost(r.cost)
             if case_cost > 0:
                 cost_str = f"  ${case_cost:.6f}"
-        console.print(
-            f"  {mark} {r.case.name:30s} {assertions_str:20s} {r.elapsed:.1f}s{cost_str}"
-        )
+        console.print(f"  {mark} {r.case.name:30s} {assertions_str:20s} {r.elapsed:.1f}s{cost_str}")
 
         # Show failures
         for ar in r.assertion_results:
             if not ar.passed:
-                console.print(
-                    f"    [error]\u2514\u2500 FAIL:[/error] {ar.assertion_type}: {ar.message}"
-                )
+                console.print(f"    [error]\u2514\u2500 FAIL:[/error] {ar.assertion_type}: {ar.message}")
 
     # Summary
     console.print()
@@ -103,17 +96,11 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
     style = "success" if passed == total else "warning" if passed > 0 else "error"
     apct = (passed_assertions / total_assertions * 100) if total_assertions else 0
 
-    summary_table = Table(
-        show_header=False, show_edge=False, pad_edge=False, box=None
-    )
+    summary_table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
     summary_table.add_column(style="dim")
     summary_table.add_column()
-    summary_table.add_row(
-        "Passed:", f"[{style}]{passed}/{total} ({pct:.0f}%)[/{style}]"
-    )
-    summary_table.add_row(
-        "Assertions:", f"{passed_assertions}/{total_assertions} ({apct:.0f}%)"
-    )
+    summary_table.add_row("Passed:", f"[{style}]{passed}/{total} ({pct:.0f}%)[/{style}]")
+    summary_table.add_row("Assertions:", f"{passed_assertions}/{total_assertions} ({apct:.0f}%)")
     summary_table.add_row("Total time:", f"{total_time:.1f}s")
 
     # Aggregate cost
@@ -127,32 +114,18 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
     if total_cost > 0:
         summary_table.add_row("Cost:", f"${total_cost:.6f} ({total_tokens} tokens)")
 
-    console.print(
-        Panel(summary_table, title="Results", border_style=style, width=60)
-    )
+    console.print(Panel(summary_table, title="Results", border_style=style, width=60))
     console.print()
 
 
 @app.command("eval")
 def test_eval(
-    agent_file: Path = typer.Argument(
-        ..., help="Python file defining agent(s) to test."
-    ),
-    eval_file: Path = typer.Option(
-        ..., "--eval", "-e", help="Evaluation cases file (YAML)."
-    ),
-    models: str | None = typer.Option(
-        None, "--models", help="Comma-separated models to compare."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Estimate cost without running."
-    ),
-    baseline: Path | None = typer.Option(
-        None, "--baseline", help="Previous results for regression comparison."
-    ),
-    output: str | None = typer.Option(
-        None, "--output", "-o", help="Output format: json, junit."
-    ),
+    agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to test."),
+    eval_file: Path = typer.Option(..., "--eval", "-e", help="Evaluation cases file (YAML)."),
+    models: str | None = typer.Option(None, "--models", help="Comma-separated models to compare."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running."),
+    baseline: Path | None = typer.Option(None, "--baseline", help="Previous results for regression comparison."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output format: json, junit."),
 ) -> None:
     """Run evaluation suite against an agent.
 
@@ -176,9 +149,7 @@ def test_eval(
 
     # Load eval suite(s)
     if eval_path.is_dir():
-        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(
-            eval_path.glob("*.yml")
-        )
+        yaml_files = sorted(eval_path.glob("*.yaml")) + sorted(eval_path.glob("*.yml"))
         if not yaml_files:
             console.print(f"[error]No YAML files found in {eval_path}[/error]")
             raise typer.Exit(1)
@@ -191,9 +162,7 @@ def test_eval(
 
     if dry_run:
         total_cases = sum(len(s.cases) for s in suites)
-        console.print(
-            f"\n[heading]Dry run:[/heading] {total_cases} case(s) across {len(suites)} suite(s)"
-        )
+        console.print(f"\n[heading]Dry run:[/heading] {total_cases} case(s) across {len(suites)} suite(s)")
         console.print("[dim]Estimated cost depends on model and input length.[/dim]")
         raise typer.Exit(0)
 
@@ -202,9 +171,7 @@ def test_eval(
     all_results: list[tuple[EvalSuite, list[CaseResult]]] = []
 
     for suite in suites:
-        console.print(
-            f"\n[heading]Running:[/heading] {suite.name} ({len(suite.cases)} cases)\n"
-        )
+        console.print(f"\n[heading]Running:[/heading] {suite.name} ({len(suite.cases)} cases)\n")
         results = [_run_single_case(agent_path, case) for case in suite.cases]
         all_results.append((suite, results))
         _display_results(suite, results)
@@ -246,9 +213,7 @@ def test_eval(
 
 @app.command("bench")
 def test_bench(
-    agent_file: Path = typer.Argument(
-        ..., help="Python file defining agent(s) to benchmark."
-    ),
+    agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to benchmark."),
     suite: str = typer.Option(
         ...,
         "--suite",

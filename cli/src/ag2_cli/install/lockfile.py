@@ -82,9 +82,7 @@ class Lockfile:
         info = self.installed.get(ref)
         if info is None:
             return False
-        if version is not None and info.version != version:
-            return False
-        return True
+        return version is None or info.version == version
 
     def get_installed(self, ref: str) -> InstalledArtifact | None:
         return self.installed.get(ref)

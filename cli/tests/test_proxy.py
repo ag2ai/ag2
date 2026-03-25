@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.commands.proxy import (
     ToolParam,
@@ -20,6 +18,7 @@ from ag2_cli.commands.proxy import (
     _python_type,
     _wrap_scripts,
 )
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -241,7 +240,7 @@ class TestInspectModule:
     def test_inspect_skips_private(self) -> None:
         tools = _inspect_module_functions("json")
         names = {t.name for t in tools}
-        assert not any("_" == n[0] for n in names if n.startswith("json_"))
+        assert not any(n[0] == "_" for n in names if n.startswith("json_"))
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +316,7 @@ class TestGenerateToolFile:
 
 class TestProxyCLI:
     def test_cli_preview(self) -> None:
-        result = runner.invoke(
-            app, ["proxy", "cli", "echo", "--preview"]
-        )
+        result = runner.invoke(app, ["proxy", "cli", "echo", "--preview"])
         assert result.exit_code == 0
         assert "echo" in result.output
 
@@ -327,9 +324,13 @@ class TestProxyCLI:
         result = runner.invoke(
             app,
             [
-                "proxy", "cli", "git",
-                "--subcommands", "status",
-                "--output", str(tmp_path / "tools.py"),
+                "proxy",
+                "cli",
+                "git",
+                "--subcommands",
+                "status",
+                "--output",
+                str(tmp_path / "tools.py"),
             ],
         )
         assert result.exit_code == 0
@@ -338,15 +339,11 @@ class TestProxyCLI:
 
 class TestProxyOpenAPI:
     def test_openapi_preview(self, openapi_spec_file: Path) -> None:
-        result = runner.invoke(
-            app, ["proxy", "openapi", str(openapi_spec_file), "--preview"]
-        )
+        result = runner.invoke(app, ["proxy", "openapi", str(openapi_spec_file), "--preview"])
         assert result.exit_code == 0
         assert "list_users" in result.output
 
-    def test_openapi_generates_file(
-        self, openapi_spec_file: Path, tmp_path: Path
-    ) -> None:
+    def test_openapi_generates_file(self, openapi_spec_file: Path, tmp_path: Path) -> None:
         output = tmp_path / "api_tools.py"
         result = runner.invoke(
             app,
@@ -358,16 +355,18 @@ class TestProxyOpenAPI:
         assert "def list_users" in content
         assert "def create_user" in content
 
-    def test_openapi_filter_endpoints(
-        self, openapi_spec_file: Path, tmp_path: Path
-    ) -> None:
+    def test_openapi_filter_endpoints(self, openapi_spec_file: Path, tmp_path: Path) -> None:
         output = tmp_path / "filtered.py"
         result = runner.invoke(
             app,
             [
-                "proxy", "openapi", str(openapi_spec_file),
-                "--endpoints", "list_users",
-                "--output", str(output),
+                "proxy",
+                "openapi",
+                str(openapi_spec_file),
+                "--endpoints",
+                "list_users",
+                "--output",
+                str(output),
             ],
         )
         assert result.exit_code == 0
@@ -391,9 +390,13 @@ class TestProxyModule:
         result = runner.invoke(
             app,
             [
-                "proxy", "module", "json",
-                "--functions", "dumps",
-                "--output", str(output),
+                "proxy",
+                "module",
+                "json",
+                "--functions",
+                "dumps",
+                "--output",
+                str(output),
             ],
         )
         assert result.exit_code == 0
@@ -402,15 +405,11 @@ class TestProxyModule:
 
 class TestProxyScripts:
     def test_scripts_preview(self, scripts_dir: Path) -> None:
-        result = runner.invoke(
-            app, ["proxy", "scripts", str(scripts_dir), "--preview"]
-        )
+        result = runner.invoke(app, ["proxy", "scripts", str(scripts_dir), "--preview"])
         assert result.exit_code == 0
         assert "deploy" in result.output
 
-    def test_scripts_generates_file(
-        self, scripts_dir: Path, tmp_path: Path
-    ) -> None:
+    def test_scripts_generates_file(self, scripts_dir: Path, tmp_path: Path) -> None:
         output = tmp_path / "script_tools.py"
         result = runner.invoke(
             app,

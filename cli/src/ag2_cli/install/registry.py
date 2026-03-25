@@ -98,8 +98,4 @@ def list_packs() -> list[str]:
     """List available pack names."""
     if not CONTENT_DIR.is_dir():
         return []
-    return [
-        d.name
-        for d in sorted(CONTENT_DIR.iterdir())
-        if d.is_dir() and (d / "manifest.json").exists()
-    ]
+    return [d.name for d in sorted(CONTENT_DIR.iterdir()) if d.is_dir() and (d / "manifest.json").exists()]

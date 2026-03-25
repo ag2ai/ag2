@@ -2,9 +2,6 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 class TestSkillsInstaller:
@@ -70,7 +67,7 @@ class TestLoadSkillsFromArtifact:
     """Test loading skills from both flat and directory formats."""
 
     def test_loads_flat_format(self, tmp_path: Path):
-        from ag2_cli.install.artifact import Artifact, SkillsConfig
+        from ag2_cli.install.artifact import Artifact
         from ag2_cli.install.installers.skills import load_skills_from_artifact
 
         # Create flat format skills
@@ -87,7 +84,7 @@ class TestLoadSkillsFromArtifact:
         assert "Rule content here." in items[0].body
 
     def test_loads_directory_format(self, tmp_path: Path):
-        from ag2_cli.install.artifact import Artifact, SkillsConfig
+        from ag2_cli.install.artifact import Artifact
         from ag2_cli.install.installers.skills import load_skills_from_artifact
 
         # Create Agent Skills standard format
@@ -165,7 +162,7 @@ class TestTemplateInstaller:
         from ag2_cli.install.lockfile import Lockfile
         from ag2_cli.install.resolver import DependencyResolver
 
-        template_dir = self._make_template(tmp_path)
+        self._make_template(tmp_path)
         project = tmp_path / "project"
         project.mkdir()
 
@@ -175,7 +172,7 @@ class TestTemplateInstaller:
         skills = SkillsInstaller(client, lockfile, resolver)
         installer = TemplateInstaller(client, lockfile, resolver, skills)
 
-        result = installer.install("test-app", project, [], variables={"project_name": "my-cool-app"})
+        installer.install("test-app", project, [], variables={"project_name": "my-cool-app"})
 
         # Check scaffold was copied
         assert (project / "main.py").exists()
@@ -253,7 +250,7 @@ class TestAgentInstaller:
         skills = SkillsInstaller(client, lockfile, resolver)
         installer = AgentInstaller(client, lockfile, resolver, skills)
 
-        result = installer.install("test-agent", project, [])
+        installer.install("test-agent", project, [])
 
         # Check agent file installed
         agent_file = project / ".claude" / "agents" / "ag2-test-agent.md"

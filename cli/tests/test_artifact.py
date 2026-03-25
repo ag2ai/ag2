@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 
 class TestLoadArtifactJson:
     """Test parsing artifact.json for all types."""

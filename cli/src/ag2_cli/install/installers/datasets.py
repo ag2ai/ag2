@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ..artifact import Artifact, InstallResult, load_artifact_json, parse_artifact_id
+from ..artifact import InstallResult, load_artifact_json, parse_artifact_id
 from ..client import ArtifactClient, FetchError
 from ..lockfile import Lockfile
 from ..resolver import DependencyResolver

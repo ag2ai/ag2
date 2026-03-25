@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from ag2_cli.install.registry import ContentItem
 from ag2_cli.install.targets.base import (
     AG2_MARKER,
@@ -130,9 +128,7 @@ class TestSingleFileTarget:
 
         # Write initial content with an existing AG2 section
         rules_file = tmp_path / "RULES.md"
-        rules_file.write_text(
-            f"User rules here.\n\n{AG2_MARKER}\n# Old AG2 content\n{AG2_MARKER}\n"
-        )
+        rules_file.write_text(f"User rules here.\n\n{AG2_MARKER}\n# Old AG2 content\n{AG2_MARKER}\n")
 
         items = [_make_item(name="new-skill", body="New content.")]
         target.install(tmp_path, items)
@@ -152,9 +148,7 @@ class TestSingleFileTarget:
 
         # Simulate corrupted file with only one marker
         rules_file = tmp_path / "RULES.md"
-        rules_file.write_text(
-            f"User rules.\n\n{AG2_MARKER}\n# Broken section without closing marker"
-        )
+        rules_file.write_text(f"User rules.\n\n{AG2_MARKER}\n# Broken section without closing marker")
 
         items = [_make_item(name="fixed-skill", body="Fixed content.")]
         target.install(tmp_path, items)
@@ -174,9 +168,7 @@ class TestSingleFileTarget:
         )
 
         rules_file = tmp_path / "RULES.md"
-        rules_file.write_text(
-            f"User rules here.\n\n{AG2_MARKER}\n# AG2 stuff\n{AG2_MARKER}\n\nMore user content."
-        )
+        rules_file.write_text(f"User rules here.\n\n{AG2_MARKER}\n# AG2 stuff\n{AG2_MARKER}\n\nMore user content.")
 
         removed = target.uninstall(tmp_path)
 
@@ -193,9 +185,7 @@ class TestSingleFileTarget:
         )
 
         rules_file = tmp_path / "RULES.md"
-        rules_file.write_text(
-            f"{AG2_MARKER}\n# AG2 only content\n{AG2_MARKER}\n"
-        )
+        rules_file.write_text(f"{AG2_MARKER}\n# AG2 only content\n{AG2_MARKER}\n")
 
         removed = target.uninstall(tmp_path)
 
@@ -222,7 +212,9 @@ class TestClaudeTarget:
 
     def test_install_creates_command_files(self, tmp_path: Path):
         target = ClaudeTarget()
-        items = [_make_item(name="run-tests", description="Run the test suite", category="command", body="Execute tests.")]
+        items = [
+            _make_item(name="run-tests", description="Run the test suite", category="command", body="Execute tests.")
+        ]
 
         paths = target.install(tmp_path, items)
 

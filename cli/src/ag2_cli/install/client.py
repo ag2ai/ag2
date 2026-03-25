@@ -130,7 +130,7 @@ class ArtifactClient:
         dest.mkdir(parents=True, exist_ok=True)
         prefix = f"{repo_path}/"
         for file_path in files:
-            rel_path = file_path[len(prefix):] if file_path.startswith(prefix) else file_path
+            rel_path = file_path[len(prefix) :] if file_path.startswith(prefix) else file_path
             local_path = dest / rel_path
             local_path.parent.mkdir(parents=True, exist_ok=True)
             content = self._get_bytes(self._raw_url(file_path))
@@ -167,13 +167,12 @@ class ArtifactClient:
         """Download a single file with optional checksum verification."""
         dest.parent.mkdir(parents=True, exist_ok=True)
 
-        with httpx.Client(follow_redirects=True, timeout=300) as client:
-            with client.stream("GET", url) as response:
-                if response.status_code != 200:
-                    raise FetchError(f"Failed to download {url}: HTTP {response.status_code}")
-                with open(dest, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
+        with httpx.Client(follow_redirects=True, timeout=300) as client, client.stream("GET", url) as response:
+            if response.status_code != 200:
+                raise FetchError(f"Failed to download {url}: HTTP {response.status_code}")
+            with open(dest, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    f.write(chunk)
 
         if sha256:
             import hashlib

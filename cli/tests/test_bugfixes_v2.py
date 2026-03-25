@@ -9,10 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from ag2_cli.testing.assertions import AssertionResult, check_assertion
 from ag2_cli.testing.cases import EvalAssertion, EvalCase, _parse_assertion, _parse_case
-
 
 # ---------------------------------------------------------------------------
 # Fix: Command injection in proxy.py script wrapping
@@ -75,7 +73,7 @@ class TestFrontmatterQuoteEscaping:
         from ag2_cli.install.targets.base import format_frontmatter
 
         result = format_frontmatter({"desc": 'She said "hello"'})
-        assert r'She said \"hello\"' in result
+        assert r"She said \"hello\"" in result
 
     def test_value_with_backslash_escaped(self):
         from ag2_cli.install.targets.base import format_frontmatter
@@ -177,9 +175,7 @@ class TestSharedModules:
 
         r = CaseResult(
             case=EvalCase(name="t", input="hi"),
-            assertion_results=[
-                AssertionResult(passed=True, assertion_type="x", message="ok")
-            ],
+            assertion_results=[AssertionResult(passed=True, assertion_type="x", message="ok")],
         )
         assert r.passed is True
         assert r.score == 1.0

@@ -234,7 +234,12 @@ class TemplateInstaller:
         for cmd in commands:
             try:
                 result = subprocess.run(
-                    cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=120,
+                    cmd,
+                    shell=True,
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                 )
                 if result.returncode == 0:
                     console.print(f"  [success]\u2713[/success] {cmd}")

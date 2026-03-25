@@ -123,16 +123,13 @@ def _parse_cli_help(command: str, subcommand: str | None = None) -> ToolSpec:
         if p.type == "bool":
             impl_lines.append(f'if {p.name}:\n        cmd.append("{flag}")')
         else:
-            impl_lines.append(
-                f"if {p.name} is not None:\n"
-                f'        cmd.extend(["{flag}", str({p.name})])'
-            )
+            impl_lines.append(f'if {p.name} is not None:\n        cmd.extend(["{flag}", str({p.name})])')
 
     impl_lines.extend([
-        'result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)',
-        'if result.returncode != 0:',
+        "result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)",
+        "if result.returncode != 0:",
         '    return f"Error: {result.stderr}"',
-        'return result.stdout',
+        "return result.stdout",
     ])
 
     return ToolSpec(
@@ -249,44 +246,43 @@ def _parse_openapi_spec(spec: dict[str, Any]) -> list[ToolSpec]:
             path_params = re.findall(r"\{(\w+)\}", path)
             impl_lines = ["import httpx"]
 
-            if path_params:
-                url_expr = f'f"{url}"'
-            else:
-                url_expr = f'"{url}"'
+            url_expr = f'f"{url}"' if path_params else f'"{url}"'
             impl_lines.append(f"url = {url_expr}")
 
             # Build query params
             query_params = [p for p in params if p.name not in path_params]
             body_params = []
             if request_body:
-                body_params = [p for p in query_params if p.name in
-                              [prop for prop in (request_body.get("content", {})
-                               .get("application/json", {}).get("schema", {})
-                               .get("properties", {}))]]
+                body_params = [
+                    p
+                    for p in query_params
+                    if p.name
+                    in list(
+                        request_body.get("content", {})
+                        .get("application/json", {})
+                        .get("schema", {})
+                        .get("properties", {})
+                    )
+                ]
                 query_params = [p for p in query_params if p not in body_params]
 
             if query_params:
                 impl_lines.append(
-                    "params = {" +
-                    ", ".join(f'"{p.name}": {p.name}' for p in query_params
-                              if p.name not in path_params) +
-                    "}"
+                    "params = {"
+                    + ", ".join(f'"{p.name}": {p.name}' for p in query_params if p.name not in path_params)
+                    + "}"
                 )
                 impl_lines.append("params = {k: v for k, v in params.items() if v is not None}")
 
             if body_params:
-                impl_lines.append(
-                    "body = {" +
-                    ", ".join(f'"{p.name}": {p.name}' for p in body_params) +
-                    "}"
-                )
+                impl_lines.append("body = {" + ", ".join(f'"{p.name}": {p.name}' for p in body_params) + "}")
 
             req_args = "url"
             if query_params:
                 req_args += ", params=params"
             if body_params:
                 req_args += ", json=body"
-            impl_lines.append(f'resp = httpx.{method}({req_args}, timeout=30)')
+            impl_lines.append(f"resp = httpx.{method}({req_args}, timeout=30)")
             impl_lines.append("resp.raise_for_status()")
             impl_lines.append("return resp.text")
 
@@ -308,9 +304,7 @@ def _parse_openapi_spec(spec: dict[str, Any]) -> list[ToolSpec]:
 # ---------------------------------------------------------------------------
 
 
-def _inspect_module_functions(
-    module_name: str, function_names: list[str] | None = None
-) -> list[ToolSpec]:
+def _inspect_module_functions(module_name: str, function_names: list[str] | None = None) -> list[ToolSpec]:
     """Inspect a Python module and extract tool specs from functions."""
     try:
         module = importlib.import_module(module_name)
@@ -350,9 +344,7 @@ def _inspect_module_functions(
             )
 
         # Build implementation
-        args_str = ", ".join(
-            f"{p.name}={p.name}" for p in params
-        )
+        args_str = ", ".join(f"{p.name}={p.name}" for p in params)
         impl = f"import {module_name}\n    return {module_name}.{name}({args_str})"
 
         tools.append(
@@ -383,8 +375,7 @@ def _wrap_scripts(scripts_dir: Path) -> list[ToolSpec]:
     tools: list[ToolSpec] = []
     for script in sorted(scripts_dir.iterdir()):
         if script.is_file() and (
-            script.suffix in (".sh", ".bash", ".zsh", ".py")
-            or script.stat().st_mode & 0o111  # executable
+            script.suffix in (".sh", ".bash", ".zsh", ".py") or script.stat().st_mode & 0o111  # executable
         ):
             name = script.stem.replace("-", "_").replace(" ", "_")
             tools.append(
@@ -405,7 +396,7 @@ def _wrap_scripts(scripts_dir: Path) -> list[ToolSpec]:
                         f"import shlex\n"
                         f"    cmd = [{repr(str(script))}] + (shlex.split(args) if args else [])\n"
                         f"    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)\n"
-                        f'    if result.returncode != 0:\n'
+                        f"    if result.returncode != 0:\n"
                         f'        return f"Error: {{result.stderr}}"\n'
                         f"    return result.stdout"
                     ),
@@ -422,8 +413,7 @@ def _wrap_scripts(scripts_dir: Path) -> list[ToolSpec]:
 
 def _python_type(t: str) -> str:
     """Normalize type string for Python annotation."""
-    mapping = {"str": "str", "int": "int", "float": "float", "bool": "bool",
-               "list": "list", "dict": "dict"}
+    mapping = {"str": "str", "int": "int", "float": "float", "bool": "bool", "list": "list", "dict": "dict"}
     return mapping.get(t, "str")
 
 
@@ -509,9 +499,7 @@ def proxy_cli(
         "-o",
         help="Output Python file.",
     ),
-    preview: bool = typer.Option(
-        False, "--preview", help="Preview generated code without writing."
-    ),
+    preview: bool = typer.Option(False, "--preview", help="Preview generated code without writing."),
 ) -> None:
     """Wrap a CLI tool as AG2 tool functions.
 
@@ -519,27 +507,15 @@ def proxy_cli(
       [command]ag2 proxy cli git --subcommands status,log,diff[/command]
       [command]ag2 proxy cli kubectl --subcommands "get,describe,logs" --preview[/command]
     """
-    cmds = (
-        [s.strip() for s in subcommands.split(",") if s.strip()]
-        if subcommands
-        else [None]
-    )
+    cmds = [s.strip() for s in subcommands.split(",") if s.strip()] if subcommands else [None]
 
     tools: list[ToolSpec] = []
     for sub in cmds:
-        console.print(
-            f"[dim]Parsing {command}"
-            + (f" {sub}" if sub else "")
-            + " --help...[/dim]"
-        )
+        console.print(f"[dim]Parsing {command}" + (f" {sub}" if sub else "") + " --help...[/dim]")
         try:
             tools.append(_parse_cli_help(command, sub))
         except typer.Exit:
-            console.print(
-                f"[warning]Could not parse help for {command}"
-                + (f" {sub}" if sub else "")
-                + "[/warning]"
-            )
+            console.print(f"[warning]Could not parse help for {command}" + (f" {sub}" if sub else "") + "[/warning]")
 
     if not tools:
         console.print("[error]No tools generated.[/error]")
@@ -559,9 +535,7 @@ def proxy_cli(
 
 @app.command("openapi")
 def proxy_openapi(
-    source: str = typer.Argument(
-        ..., help="OpenAPI spec URL or file path."
-    ),
+    source: str = typer.Argument(..., help="OpenAPI spec URL or file path."),
     endpoints: str | None = typer.Option(
         None,
         "--endpoints",
@@ -574,9 +548,7 @@ def proxy_openapi(
         "-o",
         help="Output Python file.",
     ),
-    preview: bool = typer.Option(
-        False, "--preview", help="Preview generated code without writing."
-    ),
+    preview: bool = typer.Option(False, "--preview", help="Preview generated code without writing."),
 ) -> None:
     """Wrap a REST API as AG2 tool functions from its OpenAPI spec.
 
@@ -615,9 +587,7 @@ def proxy_openapi(
 
 @app.command("module")
 def proxy_module(
-    module_name: str = typer.Argument(
-        ..., help="Python module to wrap (e.g., 'json', 'pandas')."
-    ),
+    module_name: str = typer.Argument(..., help="Python module to wrap (e.g., 'json', 'pandas')."),
     functions: str | None = typer.Option(
         None,
         "--functions",
@@ -630,9 +600,7 @@ def proxy_module(
         "-o",
         help="Output Python file.",
     ),
-    preview: bool = typer.Option(
-        False, "--preview", help="Preview generated code without writing."
-    ),
+    preview: bool = typer.Option(False, "--preview", help="Preview generated code without writing."),
 ) -> None:
     """Wrap Python module functions as AG2 tool functions.
 
@@ -640,11 +608,7 @@ def proxy_module(
       [command]ag2 proxy module json --functions "dumps,loads"[/command]
       [command]ag2 proxy module pandas --functions "read_csv" --preview[/command]
     """
-    func_list = (
-        [f.strip() for f in functions.split(",") if f.strip()]
-        if functions
-        else None
-    )
+    func_list = [f.strip() for f in functions.split(",") if f.strip()] if functions else None
 
     console.print(f"[dim]Inspecting module {module_name}...[/dim]")
     tools = _inspect_module_functions(module_name, func_list)
@@ -667,18 +631,14 @@ def proxy_module(
 
 @app.command("scripts")
 def proxy_scripts(
-    scripts_dir: Path = typer.Argument(
-        ..., help="Directory containing shell scripts."
-    ),
+    scripts_dir: Path = typer.Argument(..., help="Directory containing shell scripts."),
     output: Path = typer.Option(
         Path("tools_generated.py"),
         "--output",
         "-o",
         help="Output Python file.",
     ),
-    preview: bool = typer.Option(
-        False, "--preview", help="Preview generated code without writing."
-    ),
+    preview: bool = typer.Option(False, "--preview", help="Preview generated code without writing."),
 ) -> None:
     """Wrap shell scripts in a directory as AG2 tool functions.
 

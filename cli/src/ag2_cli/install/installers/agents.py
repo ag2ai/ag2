@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ..artifact import Artifact, InstallResult, load_artifact_json, parse_artifact_id
+from ..artifact import InstallResult, load_artifact_json, parse_artifact_id
 from ..client import ArtifactClient, FetchError
 from ..lockfile import Lockfile
 from ..resolver import DependencyResolver
@@ -54,10 +54,7 @@ class AgentInstaller:
         # Check Claude Code is available
         claude_dir = project_dir / ".claude"
         if not claude_dir.exists():
-            warnings.append(
-                "No .claude/ directory found. Creating one. "
-                "Agents currently only work with Claude Code."
-            )
+            warnings.append("No .claude/ directory found. Creating one. Agents currently only work with Claude Code.")
 
         # Install agent definition
         agent_name = f"ag2-{artifact.name}"

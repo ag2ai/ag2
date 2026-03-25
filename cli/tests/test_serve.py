@@ -6,11 +6,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from typer.testing import CliRunner
-
 from ag2_cli.app import app
 from ag2_cli.core.discovery import DiscoveredAgent
 from ag2_cli.core.runner import RunResult
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -25,9 +24,7 @@ try:
 except ImportError:
     _HAS_FASTAPI = False
 
-needs_fastapi = pytest.mark.skipif(
-    not _HAS_FASTAPI, reason="fastapi/starlette not installed"
-)
+needs_fastapi = pytest.mark.skipif(not _HAS_FASTAPI, reason="fastapi/starlette not installed")
 
 
 def _make_discovered(
@@ -143,25 +140,19 @@ class TestServeCommand:
     """
 
     def test_serve_rejects_unknown_protocol(self) -> None:
-        result = runner.invoke(
-            app, ["serve", "agent.py", "--protocol", "grpc"]
-        )
+        result = runner.invoke(app, ["serve", "agent.py", "--protocol", "grpc"])
         assert result.exit_code == 1
         assert "Unknown protocol" in result.output
 
     @patch("ag2_cli.commands.serve._require_ag2")
     def test_serve_requires_file_to_exist(self, mock_ag2: MagicMock) -> None:
         mock_ag2.return_value = MagicMock()
-        result = runner.invoke(
-            app, ["serve", "/tmp/_no_such_agent_file_12345.py"]
-        )
+        result = runner.invoke(app, ["serve", "/tmp/_no_such_agent_file_12345.py"])
         assert result.exit_code == 1
         assert "File not found" in result.output
 
     @patch("ag2_cli.commands.serve._require_ag2")
-    def test_serve_playground_shows_coming_soon(
-        self, mock_ag2: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_serve_playground_shows_coming_soon(self, mock_ag2: MagicMock, tmp_path: Path) -> None:
         mock_ag2.return_value = MagicMock()
         # Create a real file so we get past the existence check,
         # but mock discover (imported locally in serve_cmd) to avoid needing actual agents.

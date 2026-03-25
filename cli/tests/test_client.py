@@ -7,9 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from ag2_cli.install.client import REGISTRY_TTL, ArtifactClient, FetchError
-
 
 # -- Fixtures --
 
@@ -131,9 +129,7 @@ class TestFetchRegistry:
         # Write cache files that are still fresh
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "registry.json").write_text(json.dumps(SAMPLE_REGISTRY))
-        (tmp_path / "registry.meta.json").write_text(
-            json.dumps({"fetched_at": time.time()})
-        )
+        (tmp_path / "registry.meta.json").write_text(json.dumps({"fetched_at": time.time()}))
 
         # Should NOT call _get_json since cache is fresh
         with patch.object(client, "_get_json") as mock_get:
@@ -149,9 +145,7 @@ class TestFetchRegistry:
         # Write stale cache (older than TTL)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "registry.json").write_text(json.dumps({"artifacts": []}))
-        (tmp_path / "registry.meta.json").write_text(
-            json.dumps({"fetched_at": time.time() - REGISTRY_TTL - 100})
-        )
+        (tmp_path / "registry.meta.json").write_text(json.dumps({"fetched_at": time.time() - REGISTRY_TTL - 100}))
 
         with patch.object(client, "_get_json", return_value=SAMPLE_REGISTRY):
             result = client.fetch_registry()
@@ -180,9 +174,7 @@ class TestFetchRegistry:
         tmp_path.mkdir(parents=True, exist_ok=True)
         old_data = {"artifacts": [{"name": "old"}]}
         (tmp_path / "registry.json").write_text(json.dumps(old_data))
-        (tmp_path / "registry.meta.json").write_text(
-            json.dumps({"fetched_at": time.time()})
-        )
+        (tmp_path / "registry.meta.json").write_text(json.dumps({"fetched_at": time.time()}))
 
         with patch.object(client, "_get_json", return_value=SAMPLE_REGISTRY):
             result = client.fetch_registry(force_refresh=True)
@@ -212,9 +204,11 @@ class TestFetchArtifactDir:
         with patch.dict("os.environ", {}, clear=True):
             client = ArtifactClient(cache_dir=tmp_path)
 
-        with patch.object(client, "_list_contents_recursive", return_value=[]):
-            with pytest.raises(FetchError, match="Artifact not found"):
-                client.fetch_artifact_dir("skill", "nonexistent")
+        with (
+            patch.object(client, "_list_contents_recursive", return_value=[]),
+            pytest.raises(FetchError, match="Artifact not found"),
+        ):
+            client.fetch_artifact_dir("skill", "nonexistent")
 
     def test_downloads_files_to_cache(self, tmp_path: Path):
         with patch.dict("os.environ", {}, clear=True):
@@ -225,9 +219,11 @@ class TestFetchArtifactDir:
             "skills/fastapi/rules/SKILL.md",
         ]
 
-        with patch.object(client, "_list_contents_recursive", return_value=file_list):
-            with patch.object(client, "_get_bytes", return_value=b"content"):
-                result = client.fetch_artifact_dir("skill", "fastapi")
+        with (
+            patch.object(client, "_list_contents_recursive", return_value=file_list),
+            patch.object(client, "_get_bytes", return_value=b"content"),
+        ):
+            result = client.fetch_artifact_dir("skill", "fastapi")
 
         dest = tmp_path / "skills" / "ag2ai" / "fastapi" / "latest"
         assert result == dest
@@ -284,9 +280,7 @@ class TestFetchFile:
         mock_client.__exit__ = MagicMock(return_value=False)
 
         with patch("ag2_cli.install.client.httpx.Client", return_value=mock_client):
-            result = client.fetch_file(
-                "https://example.com/file.txt", dest, sha256=expected_sha
-            )
+            result = client.fetch_file("https://example.com/file.txt", dest, sha256=expected_sha)
 
         assert result == dest
         assert dest.exists()
@@ -309,11 +303,11 @@ class TestFetchFile:
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
-        with patch("ag2_cli.install.client.httpx.Client", return_value=mock_client):
-            with pytest.raises(FetchError, match="Checksum mismatch"):
-                client.fetch_file(
-                    "https://example.com/file.txt", dest, sha256="bad_hash"
-                )
+        with (
+            patch("ag2_cli.install.client.httpx.Client", return_value=mock_client),
+            pytest.raises(FetchError, match="Checksum mismatch"),
+        ):
+            client.fetch_file("https://example.com/file.txt", dest, sha256="bad_hash")
 
         # File should be deleted after checksum failure
         assert not dest.exists()
@@ -334,9 +328,11 @@ class TestFetchFile:
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
-        with patch("ag2_cli.install.client.httpx.Client", return_value=mock_client):
-            with pytest.raises(FetchError, match="HTTP 500"):
-                client.fetch_file("https://example.com/file.txt", dest)
+        with (
+            patch("ag2_cli.install.client.httpx.Client", return_value=mock_client),
+            pytest.raises(FetchError, match="HTTP 500"),
+        ):
+            client.fetch_file("https://example.com/file.txt", dest)
 
 
 class TestSearch:
@@ -455,9 +451,11 @@ class TestGetJson:
         mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
         mock_http_client.__exit__ = MagicMock(return_value=False)
 
-        with patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client):
-            with pytest.raises(FetchError, match="Not found"):
-                client._get_json("https://example.com/missing")
+        with (
+            patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client),
+            pytest.raises(FetchError, match="Not found"),
+        ):
+            client._get_json("https://example.com/missing")
 
     def test_403_raises_rate_limit(self, tmp_path: Path):
         with patch.dict("os.environ", {}, clear=True):
@@ -471,9 +469,11 @@ class TestGetJson:
         mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
         mock_http_client.__exit__ = MagicMock(return_value=False)
 
-        with patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client):
-            with pytest.raises(FetchError, match="rate limit"):
-                client._get_json("https://example.com/limited")
+        with (
+            patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client),
+            pytest.raises(FetchError, match="rate limit"),
+        ):
+            client._get_json("https://example.com/limited")
 
     def test_500_raises_http_error(self, tmp_path: Path):
         with patch.dict("os.environ", {}, clear=True):
@@ -487,9 +487,11 @@ class TestGetJson:
         mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
         mock_http_client.__exit__ = MagicMock(return_value=False)
 
-        with patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client):
-            with pytest.raises(FetchError, match="HTTP 500"):
-                client._get_json("https://example.com/error")
+        with (
+            patch("ag2_cli.install.client.httpx.Client", return_value=mock_http_client),
+            pytest.raises(FetchError, match="HTTP 500"),
+        ):
+            client._get_json("https://example.com/error")
 
     def test_200_returns_json(self, tmp_path: Path):
         with patch.dict("os.environ", {}, clear=True):

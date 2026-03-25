@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from ag2_cli.testing.assertions import AssertionResult, check_assertion
-from ag2_cli.testing.cases import EvalAssertion, EvalCase, EvalSuite, load_eval_suite
+from ag2_cli.testing.assertions import check_assertion
+from ag2_cli.testing.cases import EvalAssertion, load_eval_suite
 
 
 class TestLoadEvalSuite:

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..registry import ContentItem
 
@@ -12,7 +12,14 @@ AG2_MARKER = "<!-- ag2-skills -->"
 
 
 _YAML_SPECIAL_VALUES = frozenset({
-    "true", "false", "yes", "no", "on", "off", "null", "~",
+    "true",
+    "false",
+    "yes",
+    "no",
+    "on",
+    "off",
+    "null",
+    "~",
 })
 
 
@@ -29,9 +36,7 @@ def _needs_quoting(v: str) -> bool:
     except ValueError:
         pass
     # Strings with special YAML chars
-    if " " in v or any(c in v for c in "{}[],:&*?|-<>=!%@#"):
-        return True
-    return False
+    return " " in v or any(c in v for c in "{}[],:&*?|-<>=!%@#")
 
 
 def format_frontmatter(fm: dict) -> str:
@@ -149,11 +154,7 @@ class SingleFileTarget(Target):
     def install(self, project_dir: Path, items: list[ContentItem]) -> list[Path]:
         path = project_dir / self.file_path
         sections = [self._format_section(item) for item in items]
-        block = (
-            f"\n\n{AG2_MARKER}\n# AG2 Framework Skills\n\n"
-            + "\n\n".join(sections)
-            + f"\n{AG2_MARKER}\n"
-        )
+        block = f"\n\n{AG2_MARKER}\n# AG2 Framework Skills\n\n" + "\n\n".join(sections) + f"\n{AG2_MARKER}\n"
 
         if path.exists():
             existing = path.read_text()
