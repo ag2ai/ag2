@@ -126,6 +126,7 @@ def _pluralize_type(artifact_type: str) -> str:
     mapping = {
         "template": "templates",
         "skill": "skills",
+        "skills": "skills",
         "tool": "tools",
         "dataset": "datasets",
         "agent": "agents",

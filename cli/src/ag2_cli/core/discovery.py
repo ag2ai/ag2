@@ -52,9 +52,16 @@ def import_agent_file(path: Path) -> ModuleType:
     try:
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
+    except Exception:
+        # Remove the broken module so it doesn't pollute sys.modules
+        sys.modules.pop(module_name, None)
+        raise
     finally:
         if path_added:
-            sys.path.remove(parent)
+            try:
+                sys.path.remove(parent)
+            except ValueError:
+                pass  # Already removed by the loaded module
     return module
 
 

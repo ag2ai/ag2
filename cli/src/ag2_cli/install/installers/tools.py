@@ -12,6 +12,7 @@ from ..lockfile import Lockfile
 from ..mcp_config import configure_mcp_server, detect_mcp_targets
 from ..resolver import DependencyResolver
 from ..targets import Target
+from ._utils import copy_tree
 from .skills import SkillsInstaller, load_skills_from_artifact
 
 
@@ -70,7 +71,7 @@ class ToolInstaller:
         dest = project_dir / tool_config.install_to / artifact.name
         source = artifact.source_dir / tool_config.source
         if source.is_dir():
-            copied = _copy_tree(source, dest)
+            copied = copy_tree(source, dest)
             all_files.extend(copied)
 
         # Install bundled skills
@@ -120,7 +121,7 @@ class ToolInstaller:
         dest = project_dir / tool_config.install_to / artifact.name
         source = artifact.source_dir / tool_config.source
         if source.is_dir():
-            copied = _copy_tree(source, dest)
+            copied = copy_tree(source, dest)
             all_files.extend(copied)
 
         # Install Python/Node dependencies
@@ -169,21 +170,6 @@ class ToolInstaller:
             targets_used=target_names,
             dependencies_installed=deps_installed,
         )
-
-
-def _copy_tree(source: Path, dest: Path) -> list[Path]:
-    """Copy a directory tree, returning list of created files."""
-    dest.mkdir(parents=True, exist_ok=True)
-    created: list[Path] = []
-    for src_file in sorted(source.rglob("*")):
-        if not src_file.is_file():
-            continue
-        rel = src_file.relative_to(source)
-        dst_file = dest / rel
-        dst_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_file, dst_file)
-        created.append(dst_file)
-    return created
 
 
 def _install_dependencies(requires: list[str], tool_dir: Path) -> None:

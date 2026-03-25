@@ -391,14 +391,19 @@ def update_cmd(
         console.print(f"[error]Could not fetch registry: {e}[/error]")
         raise typer.Exit(1)
 
-    registry_versions = {
-        f"{e['type']}/{e['name']}": e.get("version", "0.0.0")
-        for e in registry.get("artifacts", [])
-    }
+    # Build registry lookup keyed by the same ref format used in lockfile:
+    # "{type_dir}/{owner}/{name}" e.g. "tools/ag2ai/web-search"
+    from ..install.artifact import _pluralize_type
+
+    registry_versions = {}
+    for e in registry.get("artifacts", []):
+        type_dir = _pluralize_type(e.get("type", ""))
+        owner = e.get("owner", "ag2ai")
+        ref = f"{type_dir}/{owner}/{e['name']}"
+        registry_versions[ref] = e.get("version", "0.0.0")
 
     updates = []
     for info in installed:
-        # Normalize ref to match registry format
         remote_version = registry_versions.get(info.ref)
         if remote_version and remote_version != info.version:
             updates.append((info, remote_version))

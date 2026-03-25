@@ -11,7 +11,10 @@ import asyncio
 import inspect
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from .discovery import DiscoveredAgent
 
 
 @dataclass
@@ -98,7 +101,7 @@ def _create_user_proxy(ag2: Any) -> Any:
 
 
 def execute(
-    discovered: Any,
+    discovered: DiscoveredAgent,
     message: str,
     *,
     max_turns: int = 10,
@@ -122,9 +125,7 @@ def execute(
     Returns:
         RunResult with output, history, cost, timing, and errors.
     """
-    from .discovery import DiscoveredAgent
-
-    d: DiscoveredAgent = discovered
+    d = discovered
     start = time.time()
     result = RunResult(agent_names=d.agent_names)
     iostream = CliIOStream(on_print=on_print, on_event=on_event)
@@ -156,7 +157,23 @@ def execute(
             with _set_iostream():
                 ret = fn(**kwargs)
                 if asyncio.iscoroutine(ret):
-                    ret = asyncio.run(ret)
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop is not None and loop.is_running():
+                        import concurrent.futures
+
+                        # Wrap asyncio.run so the IOStream context is set
+                        # inside the worker thread's new event loop as well.
+                        def _run_with_iostream(coro):
+                            with _set_iostream():
+                                return asyncio.run(coro)
+
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            ret = pool.submit(_run_with_iostream, ret).result()
+                    else:
+                        ret = asyncio.run(ret)
 
             _extract_chat_result(ret, result)
 

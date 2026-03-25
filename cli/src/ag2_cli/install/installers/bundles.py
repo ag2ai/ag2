@@ -152,7 +152,9 @@ class BundleInstaller:
         """Dispatch installation to the appropriate installer."""
         if type_key == "skills":
             results = self.skills.install([name], targets, project_dir)
-            return results[0] if results else InstallResult(artifact=None)  # type: ignore[arg-type]
+            if not results:
+                raise FetchError(f"Skills pack '{name}' not found")
+            return results[0]
         elif type_key in ("template", "templates"):
             return self.templates.install(name, project_dir, targets)
         elif type_key in ("tool", "tools"):

@@ -13,18 +13,7 @@ from rich.table import Table
 
 from ..core.runner import RunResult, execute
 from ..ui import console
-
-
-def _require_ag2() -> Any:
-    """Import autogen or exit with a helpful error."""
-    try:
-        import autogen
-
-        return autogen
-    except ImportError:
-        console.print("[error]ag2 is not installed.[/error]")
-        console.print("Install it with: [command]pip install ag2[/command]")
-        raise typer.Exit(1)
+from ._shared import extract_cost, require_ag2 as _require_ag2
 
 
 # ---------------------------------------------------------------------------
@@ -116,20 +105,16 @@ def _display_summary(result: RunResult) -> None:
     table.add_row("Time:", f"{result.elapsed:.1f}s")
 
     if result.cost:
-        # Extract total cost from AG2's cost dict structure
-        cost_info = result.cost
-        if isinstance(cost_info, dict):
-            usage = cost_info.get("usage_excluding_cached_inference", {})
-            total = usage.get("total_cost", 0)
-            # Find token counts from first model entry
-            tokens = ""
+        total = extract_cost(result.cost)
+        # Find token counts from first model entry
+        tokens = ""
+        if isinstance(result.cost, dict):
+            usage = result.cost.get("usage_excluding_cached_inference", {})
             for k, v in usage.items():
                 if isinstance(v, dict) and "total_tokens" in v:
                     tokens = f" ({v['prompt_tokens']}+{v['completion_tokens']} tokens)"
                     break
-            table.add_row("Cost:", f"${total:.6f}{tokens}")
-        else:
-            table.add_row("Cost:", str(cost_info))
+        table.add_row("Cost:", f"${total:.6f}{tokens}")
 
     if result.last_speaker:
         table.add_row("Last agent:", result.last_speaker)
@@ -397,9 +382,7 @@ def chat_cmd(
             )
             for i, msg in enumerate(chat_history)
         ]
-        cost_val = 0.0
-        if total_cost and isinstance(total_cost, dict):
-            cost_val = total_cost.get("usage_excluding_cached_inference", {}).get("total_cost", 0)
+        cost_val = extract_cost(total_cost) if total_cost else 0.0
         meta = SessionMeta(
             session_id=session_id,
             agent_file=str(agent_file or "<ad-hoc>"),

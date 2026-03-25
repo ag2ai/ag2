@@ -6,7 +6,7 @@
 
 You've created an artifact (template, tool, dataset, agent, skills, or bundle)
 and want to share it with the community. The AG2 artifacts registry
-(`ag2ai/artifacts`) accepts contributions via pull request, but manually
+(`ag2ai/resource-hub`) accepts contributions via pull request, but manually
 forking, cloning, copying files, and opening PRs is tedious.
 
 `ag2 publish artifact` automates the entire flow: validate your artifact,
@@ -38,7 +38,7 @@ ag2 publish artifact . --branch my-custom-branch
 
 **Options:**
 - `--dry-run` — validate the artifact without publishing
-- `--repo` / `-r` — target artifacts repository (default: `ag2ai/artifacts`)
+- `--repo` / `-r` — target resource hub repository (default: `ag2ai/resource-hub`)
 - `--branch` / `-b` — branch name (default: auto-generated as `add-<type>-<name>`)
 
 ## Validation
@@ -100,7 +100,7 @@ ag2 publish artifact . --dry-run
 
 # 4. Publish to the registry
 ag2 publish artifact .
-# → Validates, forks ag2ai/artifacts, creates PR
+# → Validates, forks ag2ai/resource-hub, creates PR
 ```
 
 ## Implementation Notes

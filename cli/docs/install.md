@@ -89,10 +89,10 @@ ag2 install uninstall <name>               # Remove an artifact
 
 ## Artifact Repository
 
-All artifacts are hosted at `github.com/ag2ai/artifacts`:
+All artifacts are hosted at `github.com/ag2ai/resource-hub`:
 
 ```
-ag2ai/artifacts/
+ag2ai/resource-hub/
 ├── registry.json                    # Auto-generated global index
 ├── schema/
 │   └── v1.json                      # JSON Schema for artifact.json
@@ -165,7 +165,7 @@ Every artifact has this core schema:
 
 ```json
 {
-  "$schema": "https://ag2ai.github.io/artifacts/schema/v1.json",
+  "$schema": "https://ag2ai.github.io/resource-hub/schema/v1.json",
   "name": "my-artifact",
   "type": "skills | template | tool | dataset | agent | bundle",
   "display_name": "My Artifact",
@@ -567,14 +567,14 @@ Install with: ag2 install <type> <name>
 
 ### Skills
 
-1. Fetch skill pack from artifacts repo (or use bundled cache for AG2)
+1. Fetch skill pack from resource hub (or use bundled cache for AG2)
 2. Transform each `SKILL.md` to target IDE's native format
 3. Install to detected (or specified) IDE targets
 4. Always generate/append AGENTS.md for universal compatibility
 
 ### Templates
 
-1. Fetch template from artifacts repo
+1. Fetch template from resource hub
 2. Prompt for variables (interactive or `--var key=value`)
 3. Copy scaffold to current directory with variable substitution
 4. Install bundled skills to IDE targets
@@ -680,7 +680,7 @@ Enables `ag2 install update` to check for newer versions.
 
 Use `httpx` (already a dependency) to fetch from GitHub:
 
-1. `registry.json` → `https://raw.githubusercontent.com/ag2ai/artifacts/main/registry.json`
+1. `registry.json` → `https://raw.githubusercontent.com/ag2ai/resource-hub/main/registry.json`
 2. Individual files → GitHub Contents API or raw URLs
 3. Full artifact directories → GitHub API tree endpoint or tarball
 
@@ -727,7 +727,7 @@ agent using the bundled skills, not by a template engine.
 ### Upgrade from Bundled Skills
 
 Current: AG2 skills bundled in `cli/src/ag2_cli/content/skills/`.
-Future: skills live in `ag2ai/artifacts` repo, CLI fetches remotely.
+Future: skills live in `ag2ai/resource-hub` repo, CLI fetches remotely.
 
 Transition path:
 1. Keep bundled skills as offline fallback

@@ -403,7 +403,7 @@ def _wrap_scripts(scripts_dir: Path) -> list[ToolSpec]:
                     source_type="script",
                     implementation=(
                         f"import shlex\n"
-                        f'    cmd = ["{script}"] + (shlex.split(args) if args else [])\n'
+                        f"    cmd = [{repr(str(script))}] + (shlex.split(args) if args else [])\n"
                         f"    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)\n"
                         f'    if result.returncode != 0:\n'
                         f'        return f"Error: {{result.stderr}}"\n'
@@ -427,7 +427,7 @@ def _python_type(t: str) -> str:
     return mapping.get(t, "str")
 
 
-def _generate_tool_file(tools: list[ToolSpec], output_path: Path) -> str:
+def _generate_tool_file(tools: list[ToolSpec], output_path: Path, *, write: bool = True) -> str:
     """Generate a Python file with AG2 tool functions."""
     imports = {"from __future__ import annotations", "import subprocess"}
 
@@ -469,9 +469,9 @@ def _generate_tool_file(tools: list[ToolSpec], output_path: Path) -> str:
 
     content = "\n".join(lines)
 
-    # Write file
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content)
+    if write:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(content)
     return content
 
 
@@ -549,11 +549,11 @@ def proxy_cli(
     _display_tools(tools)
     console.print()
 
-    content = _generate_tool_file(tools, output)
-
     if preview:
+        content = _generate_tool_file(tools, output, write=False)
         console.print(Syntax(content, "python", theme="monokai", line_numbers=True))
     else:
+        _generate_tool_file(tools, output)
         console.print(f"[success]Generated {len(tools)} tools in {output}[/success]")
 
 
@@ -605,11 +605,11 @@ def proxy_openapi(
     _display_tools(tools)
     console.print()
 
-    content = _generate_tool_file(tools, output)
-
     if preview:
+        content = _generate_tool_file(tools, output, write=False)
         console.print(Syntax(content, "python", theme="monokai", line_numbers=True))
     else:
+        _generate_tool_file(tools, output)
         console.print(f"[success]Generated {len(tools)} tools in {output}[/success]")
 
 
@@ -657,11 +657,11 @@ def proxy_module(
     _display_tools(tools)
     console.print()
 
-    content = _generate_tool_file(tools, output)
-
     if preview:
+        content = _generate_tool_file(tools, output, write=False)
         console.print(Syntax(content, "python", theme="monokai", line_numbers=True))
     else:
+        _generate_tool_file(tools, output)
         console.print(f"[success]Generated {len(tools)} tools in {output}[/success]")
 
 
@@ -696,9 +696,9 @@ def proxy_scripts(
     _display_tools(tools)
     console.print()
 
-    content = _generate_tool_file(tools, output)
-
     if preview:
+        content = _generate_tool_file(tools, output, write=False)
         console.print(Syntax(content, "python", theme="monokai", line_numbers=True))
     else:
+        _generate_tool_file(tools, output)
         console.print(f"[success]Generated {len(tools)} tools in {output}[/success]")

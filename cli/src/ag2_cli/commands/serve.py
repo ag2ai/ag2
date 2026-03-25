@@ -6,23 +6,7 @@ from typing import Any
 import typer
 
 from ..ui import console
-
-
-# ---------------------------------------------------------------------------
-# Dependency helpers
-# ---------------------------------------------------------------------------
-
-
-def _require_ag2() -> Any:
-    """Import autogen or exit with a helpful error."""
-    try:
-        import autogen
-
-        return autogen
-    except ImportError:
-        console.print("[error]ag2 is not installed.[/error]")
-        console.print("Install with: [command]pip install ag2[/command]")
-        raise typer.Exit(1)
+from ._shared import require_ag2 as _require_ag2
 
 
 def _require_fastapi() -> tuple[Any, Any]:
@@ -89,7 +73,9 @@ def _build_rest_app(discovered: Any) -> Any:
 
     @app.post("/chat")
     async def chat(req: ChatRequest) -> ChatResponse:
-        result = execute(d, req.message, max_turns=req.max_turns)
+        import asyncio
+
+        result = await asyncio.to_thread(execute, d, req.message, max_turns=req.max_turns)
         return ChatResponse(
             output=result.output,
             turns=result.turns,
@@ -276,9 +262,6 @@ def serve_cmd(
     playground: bool = typer.Option(
         False, "--playground", help="Launch web playground UI."
     ),
-    reload: bool = typer.Option(
-        False, "--reload", help="Auto-reload on file changes (REST only)."
-    ),
 ) -> None:
     """Serve agents as APIs, MCP servers, or A2A endpoints.
 
@@ -309,7 +292,13 @@ def serve_cmd(
     from ..core.discovery import discover
 
     try:
-        discovered = discover(path)
+        if path.suffix in (".yaml", ".yml"):
+            from ..core.discovery import build_agents_from_yaml, load_yaml_config
+
+            config = load_yaml_config(path)
+            discovered = build_agents_from_yaml(config)
+        else:
+            discovered = discover(path)
     except (ValueError, ImportError) as exc:
         console.print(f"[error]{exc}[/error]")
         raise typer.Exit(1)
@@ -335,7 +324,7 @@ def serve_cmd(
     if protocol == "rest":
         _, uvicorn = _require_fastapi()
         fast_app = _build_rest_app(discovered)
-        uvicorn.run(fast_app, host="0.0.0.0", port=port, reload=reload)
+        uvicorn.run(fast_app, host="0.0.0.0", port=port)
 
     elif protocol == "mcp":
         mcp = _build_mcp_server(discovered, host="0.0.0.0", port=port)

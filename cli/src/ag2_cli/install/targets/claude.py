@@ -47,16 +47,18 @@ class ClaudeTarget(Target):
         return path
 
     def uninstall(self, project_dir: Path) -> list[Path]:
+        import shutil
+
         removed = []
         skills_dir = project_dir / ".claude" / "skills"
         if skills_dir.is_dir():
             for d in skills_dir.iterdir():
                 if d.is_dir() and d.name.startswith("ag2-"):
-                    for f in d.iterdir():
-                        f.unlink()
-                        removed.append(f)
-                    d.rmdir()
-                    removed.append(d)
+                    # Collect all files before removal for reporting
+                    for f in d.rglob("*"):
+                        if f.is_file():
+                            removed.append(f)
+                    shutil.rmtree(d)
         cmd_dir = project_dir / ".claude" / "commands"
         if cmd_dir.is_dir():
             for f in cmd_dir.glob("ag2-*.md"):

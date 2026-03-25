@@ -10,6 +10,7 @@ from ..client import ArtifactClient, FetchError
 from ..lockfile import Lockfile
 from ..resolver import DependencyResolver
 from ..targets import Target
+from ._utils import copy_tree
 from .skills import SkillsInstaller, load_skills_from_artifact
 
 
@@ -76,7 +77,7 @@ class AgentInstaller:
                 if mcp_source.is_dir():
                     mcp_name = mcp_source.name
                     mcp_dest = mcp_dest_base / mcp_name
-                    copied = _copy_tree(mcp_source, mcp_dest)
+                    copied = copy_tree(mcp_source, mcp_dest)
                     all_files.extend(copied)
 
         # Install bundled skills
@@ -109,18 +110,3 @@ class AgentInstaller:
             dependencies_installed=deps_installed,
             warnings=warnings,
         )
-
-
-def _copy_tree(source: Path, dest: Path) -> list[Path]:
-    """Copy a directory tree, returning list of created files."""
-    dest.mkdir(parents=True, exist_ok=True)
-    created: list[Path] = []
-    for src_file in sorted(source.rglob("*")):
-        if not src_file.is_file():
-            continue
-        rel = src_file.relative_to(source)
-        dst_file = dest / rel
-        dst_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_file, dst_file)
-        created.append(dst_file)
-    return created

@@ -11,6 +11,29 @@ from ..registry import ContentItem
 AG2_MARKER = "<!-- ag2-skills -->"
 
 
+_YAML_SPECIAL_VALUES = frozenset({
+    "true", "false", "yes", "no", "on", "off", "null", "~",
+})
+
+
+def _needs_quoting(v: str) -> bool:
+    """Check if a YAML string value needs quoting."""
+    if not v:
+        return True
+    if v.lower() in _YAML_SPECIAL_VALUES:
+        return True
+    # Strings that look like numbers
+    try:
+        float(v)
+        return True
+    except ValueError:
+        pass
+    # Strings with special YAML chars
+    if " " in v or any(c in v for c in "{}[],:&*?|-<>=!%@#"):
+        return True
+    return False
+
+
 def format_frontmatter(fm: dict) -> str:
     """Format a dict as YAML frontmatter."""
     if not fm:
@@ -19,10 +42,14 @@ def format_frontmatter(fm: dict) -> str:
     for k, v in fm.items():
         if isinstance(v, bool):
             lines.append(f"{k}: {str(v).lower()}")
-        elif isinstance(v, str) and (
-            " " in v or any(c in v for c in "{}[],:&*?|-<>=!%@#")
-        ):
-            lines.append(f'{k}: "{v}"')
+        elif isinstance(v, list):
+            items = ", ".join(str(i) for i in v)
+            lines.append(f"{k}: [{items}]")
+        elif isinstance(v, (int, float)):
+            lines.append(f"{k}: {v}")
+        elif isinstance(v, str) and _needs_quoting(v):
+            escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(f'{k}: "{escaped}"')
         else:
             lines.append(f"{k}: {v}")
     lines.append("---")
@@ -132,7 +159,11 @@ class SingleFileTarget(Target):
             existing = path.read_text()
             if AG2_MARKER in existing:
                 start = existing.index(AG2_MARKER)
-                end = existing.index(AG2_MARKER, start + 1) + len(AG2_MARKER)
+                try:
+                    end = existing.index(AG2_MARKER, start + 1) + len(AG2_MARKER)
+                except ValueError:
+                    # Single marker found (corrupted) — replace from marker to end
+                    end = len(existing)
                 content = existing[:start].rstrip() + block + existing[end:].lstrip("\n")
             else:
                 content = existing.rstrip() + block
@@ -151,7 +182,11 @@ class SingleFileTarget(Target):
         if AG2_MARKER not in content:
             return []
         start = content.index(AG2_MARKER)
-        end = content.index(AG2_MARKER, start + 1) + len(AG2_MARKER)
+        try:
+            end = content.index(AG2_MARKER, start + 1) + len(AG2_MARKER)
+        except ValueError:
+            # Single marker (corrupted) — remove from marker to end
+            end = len(content)
         new_content = content[:start].rstrip() + content[end:].lstrip("\n")
         if new_content.strip():
             path.write_text(new_content)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -13,39 +12,15 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..core.runner import RunResult, execute
-from ..testing import EvalCase, EvalSuite, check_assertion, load_eval_suite
+from ..testing import CaseResult, EvalCase, EvalSuite, check_assertion, load_eval_suite
 from ..testing.assertions import AssertionResult
 from ..ui import console
+from ._shared import extract_cost
 
 app = typer.Typer(
     help="Test, evaluate, and benchmark agents.",
     rich_markup_mode="rich",
 )
-
-
-@dataclass
-class CaseResult:
-    """Result of running a single eval case."""
-
-    case: EvalCase
-    assertion_results: list[AssertionResult] = field(default_factory=list)
-    output: str = ""
-    turns: int = 0
-    errors: list[str] = field(default_factory=list)
-    elapsed: float = 0.0
-    cost: Any = None
-
-    @property
-    def passed(self) -> bool:
-        return all(r.passed for r in self.assertion_results)
-
-    @property
-    def passed_count(self) -> int:
-        return sum(1 for r in self.assertion_results if r.passed)
-
-    @property
-    def total_count(self) -> int:
-        return len(self.assertion_results)
 
 
 def _run_single_case(agent_file: Path, case: EvalCase) -> CaseResult:
@@ -107,9 +82,10 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
         mark = "[success]\u2713[/success]" if r.passed else "[error]\u2717[/error]"
         assertions_str = f"{r.passed_count}/{r.total_count} assertions"
         cost_str = ""
-        if r.cost and isinstance(r.cost, dict):
-            total_cost = r.cost.get("usage_excluding_cached_inference", {}).get("total_cost", 0)
-            cost_str = f"  ${total_cost:.6f}"
+        if r.cost:
+            case_cost = extract_cost(r.cost)
+            if case_cost > 0:
+                cost_str = f"  ${case_cost:.6f}"
         console.print(
             f"  {mark} {r.case.name:30s} {assertions_str:20s} {r.elapsed:.1f}s{cost_str}"
         )
@@ -141,13 +117,11 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
     summary_table.add_row("Total time:", f"{total_time:.1f}s")
 
     # Aggregate cost
-    total_cost = 0.0
+    total_cost = sum(extract_cost(r.cost) for r in results if r.cost)
     total_tokens = 0
     for r in results:
         if r.cost and isinstance(r.cost, dict):
-            usage = r.cost.get("usage_excluding_cached_inference", {})
-            total_cost += usage.get("total_cost", 0)
-            for v in usage.values():
+            for v in r.cost.get("usage_excluding_cached_inference", {}).values():
                 if isinstance(v, dict) and "total_tokens" in v:
                     total_tokens += v["total_tokens"]
     if total_cost > 0:

@@ -13,7 +13,6 @@ from typer.testing import CliRunner
 
 from ag2_cli.app import app
 from ag2_cli.commands.arena import (
-    CaseResult,
     ContenderResult,
     _compute_elo,
     _determine_case_winner,
@@ -22,10 +21,26 @@ from ag2_cli.commands.arena import (
     _resolve_contender_files,
     _save_leaderboard,
 )
+from ag2_cli.testing import CaseResult
 from ag2_cli.testing.assertions import AssertionResult
 from ag2_cli.testing.cases import EvalCase, EvalSuite
 
 runner = CliRunner()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _mock_autogen():
+    """Mock the `import autogen` guard so arena commands work without ag2 installed."""
+    import types
+
+    fake_autogen = types.ModuleType("autogen")
+    with patch.dict("sys.modules", {"autogen": fake_autogen}):
+        yield
 
 
 # ---------------------------------------------------------------------------

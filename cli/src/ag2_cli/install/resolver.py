@@ -64,13 +64,20 @@ class DependencyResolver:
                     self._collect(dep_artifact, manifests, graph)
 
     def _fetch_dependency(self, ref: str) -> Artifact | None:
-        """Fetch a dependency's manifest from the remote registry."""
-        parts = ref.split("/", 1)
-        if len(parts) != 2:
+        """Fetch a dependency's manifest from the remote registry.
+
+        Refs can be 2-part ("type/name") or 3-part ("type/owner/name").
+        """
+        parts = ref.split("/")
+        if len(parts) == 3:
+            artifact_type, owner, name = parts
+        elif len(parts) == 2:
+            artifact_type, name = parts
+            owner = "ag2ai"
+        else:
             return None
-        artifact_type, name = parts
         try:
-            cached_dir = self.client.fetch_artifact_dir(artifact_type, name)
+            cached_dir = self.client.fetch_artifact_dir(artifact_type, name, owner=owner)
             artifact_json = cached_dir / "artifact.json"
             if artifact_json.exists():
                 return load_artifact_json(artifact_json)
@@ -106,6 +113,6 @@ class DependencyResolver:
             cycle_nodes = [n for n in in_degree if n not in visited]
             raise CyclicDependencyError(f"Circular dependency detected involving: {', '.join(cycle_nodes)}")
 
-        # Reverse: dependencies first, dependents last
+        # Reverse: dependencies first, dependents last (install order)
         result.reverse()
         return result

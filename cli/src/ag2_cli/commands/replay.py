@@ -272,8 +272,8 @@ def replay_list(
     if not sessions:
         console.print("[dim]No recorded sessions yet.[/dim]")
         console.print(
-            "[dim]Use [command]ag2 run --record[/command] or "
-            "[command]ag2 chat --record[/command] to start recording.[/dim]"
+            "[dim]Use [command]ag2 chat[/command] to start a recorded session "
+            "(recording is automatic).[/dim]"
         )
         raise typer.Exit(0)
 
@@ -362,12 +362,16 @@ def replay_step(
             idx += 1
         elif cmd == "p":
             idx = max(0, idx - 1)
-        elif cmd.startswith("g ") or cmd.startswith("g"):
-            try:
-                target = int(cmd.split()[-1])
-                idx = max(0, min(target - 1, len(events) - 1))
-            except (ValueError, IndexError):
+        elif cmd.startswith("g ") or cmd == "g":
+            parts = cmd.split()
+            if len(parts) < 2:
                 console.print("[warning]Usage: g <turn_number>[/warning]")
+            else:
+                try:
+                    target = int(parts[1])
+                    idx = max(0, min(target - 1, len(events) - 1))
+                except ValueError:
+                    console.print("[warning]Usage: g <turn_number>[/warning]")
         elif cmd in ("q", "quit"):
             break
         else:
@@ -609,19 +613,25 @@ def replay_export(
         content = "\n".join(lines)
 
     elif format == "html":
+        from html import escape as html_escape
+
         html_events = []
         for event in session.events:
             color = "#4a9eff" if event.role == "user" else "#50c878"
+            speaker = html_escape(event.speaker)
+            body = html_escape(event.content) if event.content else ""
             html_events.append(
                 f'<div style="margin:10px 0;padding:10px;border-left:3px solid {color};">'
-                f"<strong>Turn {event.turn}: {event.speaker}</strong><br>"
-                f"<pre>{event.content}</pre></div>"
+                f"<strong>Turn {event.turn}: {speaker}</strong><br>"
+                f"<pre>{body}</pre></div>"
             )
+        sid = html_escape(session.meta.session_id)
+        agent_file = html_escape(session.meta.agent_file)
         content = (
-            f"<html><head><title>Session {session.meta.session_id}</title>"
+            f"<html><head><title>Session {sid}</title>"
             "<style>body{font-family:monospace;max-width:800px;margin:0 auto;}</style></head>"
-            f"<body><h1>Session: {session.meta.session_id}</h1>"
-            f"<p>Agent: {session.meta.agent_file} | "
+            f"<body><h1>Session: {sid}</h1>"
+            f"<p>Agent: {agent_file} | "
             f"Turns: {session.meta.turns} | "
             f"Duration: {session.meta.duration:.1f}s</p>"
             f"{''.join(html_events)}</body></html>"

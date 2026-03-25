@@ -7,6 +7,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import typer
+
 from ..artifact import Artifact, InstallResult, TemplateConfig, load_artifact_json, parse_artifact_id
 from ..client import ArtifactClient, FetchError
 from ..lockfile import Lockfile
@@ -168,7 +170,10 @@ class TemplateInstaller:
 
             # Apply variable substitution to path
             dest_rel = _substitute(dest_rel, variables)
-            dest_path = dest / dest_rel
+            dest_path = (dest / dest_rel).resolve()
+            # Prevent path traversal via malicious variable values (e.g. "../")
+            if not dest_path.is_relative_to(dest.resolve()):
+                continue
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
             if is_template:
@@ -210,8 +215,21 @@ class TemplateInstaller:
         )
 
     def _run_post_install(self, commands: list[str], cwd: Path) -> None:
-        """Run post-install shell commands."""
+        """Run post-install shell commands after user confirmation."""
         from ...ui import console
+
+        console.print("\n  [warning]This template wants to run post-install commands:[/warning]")
+        for cmd in commands:
+            console.print(f"    [command]{cmd}[/command]")
+
+        try:
+            answer = typer.confirm("\n  Allow these commands to run?", default=False)
+        except (EOFError, KeyboardInterrupt):
+            answer = False
+
+        if not answer:
+            console.print("  [dim]Skipped post-install commands.[/dim]")
+            return
 
         for cmd in commands:
             try:

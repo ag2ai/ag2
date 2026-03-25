@@ -64,7 +64,9 @@ class Lockfile:
             try:
                 relative_files.append(str(f.relative_to(project_dir)))
             except ValueError:
-                relative_files.append(str(f))
+                # Skip files outside the project directory to prevent
+                # accidental deletion of external files during uninstall.
+                continue
 
         self.installed[ref] = InstalledArtifact(
             ref=ref,

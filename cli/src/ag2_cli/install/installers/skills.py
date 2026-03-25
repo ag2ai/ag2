@@ -1,4 +1,4 @@
-"""Skills installer — installs skill packs from bundled content or remote artifacts repo."""
+"""Skills installer — installs skill packs from bundled content or remote resource hub."""
 
 from __future__ import annotations
 

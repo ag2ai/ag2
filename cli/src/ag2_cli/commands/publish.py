@@ -17,7 +17,7 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-ARTIFACTS_REPO = "ag2ai/artifacts"
+ARTIFACTS_REPO = "ag2ai/resource-hub"
 
 # Required fields in every artifact.json
 REQUIRED_FIELDS = ["name", "type", "description", "version", "authors"]
@@ -42,7 +42,7 @@ TYPE_DIRS: dict[str, list[str]] = {
     "bundle": [],
 }
 
-# Type name → plural directory in artifacts repo
+# Type name → plural directory in resource hub repo
 TYPE_TO_DIR = {
     "template": "templates",
     "tool": "tools",
@@ -153,13 +153,13 @@ def _run_gh(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 @app.command("artifact")
 def publish_artifact(
     path: Path = typer.Argument(".", help="Path to artifact directory."),
-    repo: str = typer.Option(ARTIFACTS_REPO, "--repo", "-r", help="Target artifacts repository."),
+    repo: str = typer.Option(ARTIFACTS_REPO, "--repo", "-r", help="Target resource hub repository."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate only, don't publish."),
     branch: str = typer.Option("", "--branch", "-b", help="Branch name (default: add-<type>-<name>)."),
 ) -> None:
     """Validate and publish an artifact to the AG2 registry via pull request.
 
-    [dim]Validates the artifact structure, then forks the artifacts repo,
+    [dim]Validates the artifact structure, then forks the resource hub repo,
     copies the artifact, and opens a PR.[/dim]
 
     [dim]Examples:[/dim]

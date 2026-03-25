@@ -18,9 +18,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..core.runner import execute
-from ..testing import EvalCase, EvalSuite, check_assertion, load_eval_suite
+from ..testing import CaseResult, EvalCase, EvalSuite, check_assertion, load_eval_suite
 from ..testing.assertions import AssertionResult
 from ..ui import console
+from ._shared import extract_cost
 
 app = typer.Typer(
     help="A/B test agent implementations — compare quality, cost, and speed.",
@@ -28,42 +29,6 @@ app = typer.Typer(
 )
 
 LEADERBOARD_PATH = Path.home() / ".ag2" / "arena" / "leaderboard.json"
-
-
-# ---------------------------------------------------------------------------
-# Data models
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class CaseResult:
-    """Result of running a single eval case."""
-
-    case: EvalCase
-    assertion_results: list[AssertionResult] = field(default_factory=list)
-    output: str = ""
-    turns: int = 0
-    errors: list[str] = field(default_factory=list)
-    elapsed: float = 0.0
-    cost: Any = None
-
-    @property
-    def passed(self) -> bool:
-        return all(r.passed for r in self.assertion_results)
-
-    @property
-    def passed_count(self) -> int:
-        return sum(1 for r in self.assertion_results if r.passed)
-
-    @property
-    def total_count(self) -> int:
-        return len(self.assertion_results)
-
-    @property
-    def score(self) -> float:
-        if not self.assertion_results:
-            return 0.0
-        return self.passed_count / self.total_count
 
 
 @dataclass
@@ -98,12 +63,7 @@ class ContenderResult:
 
     @property
     def total_cost(self) -> float:
-        total = 0.0
-        for r in self.case_results:
-            if r.cost and isinstance(r.cost, dict):
-                usage = r.cost.get("usage_excluding_cached_inference", {})
-                total += usage.get("total_cost", 0)
-        return total
+        return sum(extract_cost(r.cost) for r in self.case_results if r.cost)
 
 
 # ---------------------------------------------------------------------------
@@ -657,9 +617,8 @@ def arena_interactive(
                 result = execute(discovered, user_input)
                 output = result.output or "[dim]No output[/dim]"
                 meta = f"{result.turns} turns, {result.elapsed:.1f}s"
-                if result.cost and isinstance(result.cost, dict):
-                    usage = result.cost.get("usage_excluding_cached_inference", {})
-                    cost = usage.get("total_cost", 0)
+                if result.cost:
+                    cost = extract_cost(result.cost)
                     if cost > 0:
                         meta += f", ${cost:.4f}"
             except Exception as exc:

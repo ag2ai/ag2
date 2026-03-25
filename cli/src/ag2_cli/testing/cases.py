@@ -40,6 +40,8 @@ class EvalSuite:
 
 def _parse_assertion(raw: dict[str, Any]) -> EvalAssertion:
     """Parse a single assertion from YAML dict."""
+    if "type" not in raw:
+        raise ValueError(f"Assertion is missing required 'type' field: {raw}")
     return EvalAssertion(
         type=raw["type"],
         value=raw.get("value"),
@@ -53,6 +55,10 @@ def _parse_assertion(raw: dict[str, Any]) -> EvalAssertion:
 
 def _parse_case(raw: dict[str, Any]) -> EvalCase:
     """Parse a single eval case from YAML dict."""
+    if "name" not in raw:
+        raise ValueError(f"Eval case is missing required 'name' field: {raw}")
+    if "input" not in raw:
+        raise ValueError(f"Eval case '{raw.get('name', '?')}' is missing required 'input' field")
     assertions = [_parse_assertion(a) for a in raw.get("assertions", [])]
     return EvalCase(
         name=raw["name"],

@@ -1,4 +1,4 @@
-"""Remote artifact client — fetches from ag2ai/artifacts GitHub repo with local caching."""
+"""Remote artifact client — fetches from ag2ai/resource-hub GitHub repo with local caching."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 
-ARTIFACTS_REPO = "ag2ai/artifacts"
+ARTIFACTS_REPO = "ag2ai/resource-hub"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 GITHUB_API_BASE = "https://api.github.com"
 CACHE_DIR = Path.home() / ".ag2" / "cache" / "artifacts"
@@ -26,7 +26,7 @@ class ArtifactClient:
 
     1. Fetch registry.json (single GET, cached 1hr) — knows what exists
     2. For the requested artifact, use GitHub Contents API to list its directory
-       (e.g. GET /repos/ag2ai/artifacts/contents/skills/fastapi)
+       (e.g. GET /repos/ag2ai/resource-hub/contents/skills/fastapi)
     3. Download each file via raw.githubusercontent.com to local cache
     4. Cache is keyed by {type}/{name}/{version}/ — immutable once fetched
     5. Installer reads from cache as if it were a local directory
@@ -86,6 +86,7 @@ class ArtifactClient:
         mapping = {
             "template": "templates",
             "skill": "skills",
+            "skills": "skills",
             "tool": "tools",
             "dataset": "datasets",
             "agent": "agents",
@@ -114,8 +115,12 @@ class ArtifactClient:
         if marker.exists():
             return dest
 
-        # List files in the specific artifact directory via Contents API
+        # List files in the specific artifact directory via Contents API.
+        # Try owner-namespaced path first (e.g. skills/ag2ai/fastapi), then
+        # fall back to flat path (e.g. skills/fastapi) for backward compat.
         repo_path = f"{type_dir}/{name}"
+        if owner != "ag2ai":
+            repo_path = f"{type_dir}/{owner}/{name}"
         files = self._list_contents_recursive(repo_path)
 
         if not files:
@@ -173,13 +178,17 @@ class ArtifactClient:
         if sha256:
             import hashlib
 
-            hasher = hashlib.sha256()
-            with open(dest, "rb") as f:
-                for chunk in iter(lambda: f.read(8192), b""):
-                    hasher.update(chunk)
-            if hasher.hexdigest() != sha256:
-                dest.unlink()
-                raise FetchError(f"Checksum mismatch for {dest.name}: expected {sha256}")
+            try:
+                hasher = hashlib.sha256()
+                with open(dest, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        hasher.update(chunk)
+                if hasher.hexdigest() != sha256:
+                    raise FetchError(f"Checksum mismatch for {dest.name}: expected {sha256}")
+            except Exception:
+                # Clean up the downloaded file on any verification failure
+                dest.unlink(missing_ok=True)
+                raise
 
         return dest
 

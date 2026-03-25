@@ -41,7 +41,13 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
         if ":" in line:
             key, _, value = line.partition(":")
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            value = value.strip()
+            # Handle bracket list syntax: [a, b, c]
+            if value.startswith("[") and value.endswith("]"):
+                inner = value[1:-1]
+                fm[key] = [item.strip().strip('"').strip("'") for item in inner.split(",") if item.strip()]
+                continue
+            value = value.strip('"').strip("'")
             if value.lower() == "true":
                 value = True
             elif value.lower() == "false":

@@ -96,7 +96,14 @@ def check_assertion(
         )
 
     if atype == "min_length":
-        min_len = int(assertion.value)
+        try:
+            min_len = int(assertion.value)
+        except (TypeError, ValueError):
+            return AssertionResult(
+                passed=False,
+                assertion_type=atype,
+                message=f"Invalid min_length value (expected integer, got {assertion.value!r})",
+            )
         actual_len = len(output)
         passed = actual_len >= min_len
         return AssertionResult(
@@ -108,7 +115,14 @@ def check_assertion(
         )
 
     if atype == "max_length":
-        max_len = int(assertion.value)
+        try:
+            max_len = int(assertion.value)
+        except (TypeError, ValueError):
+            return AssertionResult(
+                passed=False,
+                assertion_type=atype,
+                message=f"Invalid max_length value (expected integer, got {assertion.value!r})",
+            )
         actual_len = len(output)
         passed = actual_len <= max_len
         return AssertionResult(
@@ -120,7 +134,14 @@ def check_assertion(
         )
 
     if atype == "max_turns":
-        max_t = int(assertion.value)
+        try:
+            max_t = int(assertion.value)
+        except (TypeError, ValueError):
+            return AssertionResult(
+                passed=False,
+                assertion_type=atype,
+                message=f"Invalid max_turns value (expected integer, got {assertion.value!r})",
+            )
         passed = turns <= max_t
         return AssertionResult(
             passed=passed,

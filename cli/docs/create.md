@@ -167,7 +167,7 @@ ag2 create artifact bundle starter-kit
 ```
 
 Scaffolds a complete artifact directory ready for authoring and publishing
-to the AG2 artifacts registry (`ag2ai/artifacts`).
+to the AG2 registry (`ag2ai/resource-hub`).
 
 **Arguments:**
 - `artifact_type` — one of: `template`, `tool`, `dataset`, `agent`, `skills`, `bundle`
@@ -271,8 +271,8 @@ etc.).
 
 ### Template System
 Project templates are Jinja2-based (AG2 already uses Jinja2 for its existing
-template system in `/templates/`). Templates are stored in the artifacts repo
-(`ag2ai/artifacts/templates/`) and cached locally.
+template system in `/templates/`). Templates are stored in the resource hub
+(`ag2ai/resource-hub/templates/`) and cached locally.
 
 ### Built-in Tool Registry
 `ag2 create agent --tools web-search` needs to know what tools exist. Maintain
