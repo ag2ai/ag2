@@ -12,7 +12,7 @@ The API is built around two simple methods:
 * `Agent.ask(...)` initiates a new turn and returns an `AgentReply` object.
 * `AgentReply.ask(...)` continues an existing conversation, preserving its context and history.
 
-The final result of any turn is safely stored in `reply.response`; use `reply.content` for the text.
+The final result of any turn is safely stored in `reply.response`; use `reply.body` for the text.
 
 ## Basic Communication Example
 
@@ -30,11 +30,11 @@ agent = Agent(
 
 # Start a new conversation
 reply = await agent.ask("Give me one sentence about AG2 beta.")
-print(reply.content)
+print(reply.body)
 
 # Continue the exact same conversation context
 next_turn = await reply.ask("Now make it shorter.")
-print(next_turn.content)
+print(next_turn.body)
 
 ...
 ```
@@ -60,7 +60,7 @@ agent = Agent(
 )
 
 reply = await agent.ask("Call the echo tool with 'hello'.")
-print(reply.content)
+print(reply.body)
 ```
 
 ## Adding Human-in-the-Loop (HITL)
@@ -93,7 +93,7 @@ agent = Agent(
 )
 
 reply = await agent.ask("Request confirmation through the tool.")
-print(reply.content)
+print(reply.body)
 ```
 
 ## Observing Agent Actions

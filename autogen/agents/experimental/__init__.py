@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .a2ui import A2UIAgent
 from .deep_research import DeepResearchAgent
 from .discord import DiscordAgent
 from .document_agent import DocAgent, DoclingDocIngestAgent, InMemoryQueryEngine, VectorChromaQueryEngine
@@ -12,6 +13,7 @@ from .websurfer import WebSurferAgent
 from .wikipedia import WikipediaAgent
 
 __all__ = [
+    "A2UIAgent",
     "DeepResearchAgent",
     "DiscordAgent",
     "DocAgent",

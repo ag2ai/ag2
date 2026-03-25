@@ -1,0 +1,78 @@
+---
+title: A2UI - Rich UI
+sidebarTitle: A2UI
+---
+
+[A2UI](https://a2ui.org/){.external-link target="_blank"} is an open protocol for agents to generate rich, interactive user interfaces. Instead of returning plain text, agents produce structured JSON that client-side renderers transform into UI components — cards, forms, buttons, images, and more. A2UI is transport-agnostic and works over both A2A and AG-UI. See the [A2UI documentation](https://a2ui.org/){.external-link target="_blank"} for the full protocol specification.
+
+## A2UIAgent
+
+AG2 supports A2UI through [`A2UIAgent`](/docs/user-guide/reference-agents/a2uiagent), a specialized agent that handles prompt engineering with A2UI schema instructions, response parsing, optional schema validation with automatic retry, and integration with A2A and AG-UI serving.
+
+## AG-UI Integration
+
+A2UIAgent works with `AGUIStream` through an **event interceptor** that extracts A2UI JSON from the agent's response stream and emits it as `ActivitySnapshotEvent` events — which frontend renderers (like CopilotKit's `@copilotkit/a2ui-renderer`) consume directly.
+
+```python title="a2ui_ag_ui.py" linenums="1" hl_lines="2 9"
+from autogen.ag_ui import AGUIStream
+from autogen.agents.experimental.a2ui import A2UIAgent, a2ui_event_interceptor
+
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+)
+
+stream = AGUIStream(agent, event_interceptors=[a2ui_event_interceptor])
+```
+
+### How the Interceptor Works
+
+The interceptor sits between the agent and the AG-UI stream:
+
+1. The agent generates a response containing text + A2UI JSON (separated by `---a2ui_JSON---`)
+2. The interceptor parses the response and splits it:
+    - **A2UI operations** are emitted as an `ActivitySnapshotEvent` with `activityType: "a2ui-surface"`
+    - **Text content** is passed through as a normal text message
+    - **A2UI JSON is stripped** from the text to prevent duplication
+3. The frontend renderer receives the `ActivitySnapshotEvent` and renders the UI components
+
+The default `a2ui_event_interceptor` works out of the box. For custom configuration, use the factory:
+
+```python
+from autogen.agents.experimental.a2ui import create_a2ui_event_interceptor
+
+# Custom interceptor with different activity type
+interceptor = create_a2ui_event_interceptor(
+    activity_type="custom-surface",  # Match your frontend renderer
+)
+
+stream = AGUIStream(agent, event_interceptors=[interceptor])
+```
+
+### Frontend Integration
+
+On the frontend, use a renderer that handles `ACTIVITY_SNAPSHOT` events with A2UI content. For example, with CopilotKit and React:
+
+```tsx title="App.tsx"
+import { CopilotKit } from "@copilotkit/react-core";
+import { CopilotChat } from "@copilotkit/react-ui";
+import { A2UIRenderer } from "@copilotkit/a2ui-renderer";
+
+function App() {
+  return (
+    <CopilotKit runtimeUrl="/api/copilotkit">
+      <CopilotChat
+        renderActivitySnapshot={(props) => (
+          <A2UIRenderer {...props} />
+        )}
+      />
+    </CopilotKit>
+  );
+}
+```
+
+The A2UI renderer handles all v0.9 basic catalog components and can be extended with custom component renderers.
+
+## Further Reading
+
+See the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for details on configuration, validation, actions, custom catalogs, and A2A integration.

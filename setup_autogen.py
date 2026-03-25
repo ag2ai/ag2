@@ -28,6 +28,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     install_requires=["ag2==" + __version__],
     extras_require={
+        "a2ui": ["ag2[a2ui]==" + __version__],
         "a2a": ["ag2[a2a]==" + __version__],
         "beta-debug": ["ag2[beta-debug]==" + __version__],
         "ag-ui": ["ag2[ag-ui]==" + __version__],
@@ -90,6 +91,7 @@ setuptools.setup(
         "commsagent-telegram": ["ag2[commsagent-telegram]==" + __version__],
         "duckduckgo": ["ag2[duckduckgo]==" + __version__],
         "tavily": ["ag2[tavily]==" + __version__],
+        "test-core": ["ag2[test-core]==" + __version__],
         "test": ["ag2[test]==" + __version__],
         "docs": ["ag2[docs]==" + __version__],
         "types": ["ag2[types]==" + __version__],

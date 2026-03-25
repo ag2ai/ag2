@@ -14,7 +14,7 @@ from autogen.a2a.errors import A2aClientError
 
 
 class NoEventClient:
-    async def send_message(self, message: Message):
+    async def send_message(self, message: Message, **kwargs: Any):
         if False:
             yield
 

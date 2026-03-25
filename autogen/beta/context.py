@@ -11,8 +11,10 @@ from uuid import UUID
 
 from fast_depends import Provider
 
+from autogen.beta.types import ClassInfo
+
 from .events import BaseEvent, HumanInputRequest, HumanMessage
-from .events.conditions import ClassInfo, Condition
+from .events.conditions import Condition
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
