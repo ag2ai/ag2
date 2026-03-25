@@ -108,10 +108,7 @@ def _create_fastapi_app(
             _ws_clients.discard(c)
 
     def _sessions_summary() -> list[dict[str, Any]]:
-        return [
-            {"id": s.id, "name": s.name, "stream_ids": s.stream_ids, "status": s.status}
-            for s in sessions.values()
-        ]
+        return [{"id": s.id, "name": s.name, "stream_ids": s.stream_ids, "status": s.status} for s in sessions.values()]
 
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:

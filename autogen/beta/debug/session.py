@@ -13,8 +13,7 @@ from ..events.base import BaseEvent
 DEBUG_SESSION_VAR = "_debug_session"
 
 if TYPE_CHECKING:
-    from ..context import Context
-    from ..stream import MemoryStream
+    from autogen.beta.context import Context
 
 from .client import DebugClient, serialize_event
 

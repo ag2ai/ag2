@@ -7,7 +7,14 @@ from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent
-from autogen.beta.middleware.base import AgentTurn, BaseMiddleware, LLMCall, ModelResponse, ToolExecution, ToolResultType
+from autogen.beta.middleware.base import (
+    AgentTurn,
+    BaseMiddleware,
+    LLMCall,
+    ModelResponse,
+    ToolExecution,
+    ToolResultType,
+)
 
 from .session import DEBUG_SESSION_VAR, DebugSession
 
