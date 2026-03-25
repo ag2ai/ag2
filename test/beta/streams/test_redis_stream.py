@@ -119,8 +119,8 @@ async def redis_stream(mock_redis):
     def _make(**kwargs):
         kwargs.setdefault("prefix", f"ag2:test:{uuid4()}")
         with (
-            patch("autogen.beta.streams.redis.stream.aioredis") as mock_aioredis,
-            patch("autogen.beta.streams.redis.storage.aioredis") as mock_storage_aioredis,
+            patch("autogen.beta.streams.redis.stream.aioredis", create=True) as mock_aioredis,
+            patch("autogen.beta.streams.redis.storage.aioredis", create=True) as mock_storage_aioredis,
         ):
             mock_aioredis.from_url.return_value = mock_redis
             mock_storage_aioredis.from_url.return_value = mock_redis
@@ -139,7 +139,7 @@ def redis_storage(mock_redis):
     from autogen.beta.streams.redis import RedisStorage
 
     def _make(prefix=None):
-        with patch("autogen.beta.streams.redis.storage.aioredis") as mock_aioredis:
+        with patch("autogen.beta.streams.redis.storage.aioredis", create=True) as mock_aioredis:
             mock_aioredis.from_url.return_value = mock_redis
             return RedisStorage(REDIS_URL, prefix=prefix or f"ag2:test:{uuid4()}")
 
