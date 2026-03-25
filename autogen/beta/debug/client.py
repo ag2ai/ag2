@@ -60,19 +60,46 @@ class DebugClient:
     def __init__(self, base_url: str) -> None:
         self._base_url = base_url.rstrip("/")
 
-    async def register_session(self, session_id: str, prompt: list[str]) -> None:
-        """Tell the server a new agent session has started."""
+    async def register_stream(self, stream_id: str, prompt: list[str]) -> None:
+        """Tell the server a new stream has started (or reset an existing one)."""
         async with httpx.AsyncClient() as c:
-            await c.post(f"{self._base_url}/sessions/{session_id}", json={"prompt": prompt})
+            await c.post(f"{self._base_url}/streams/{stream_id}", json={"prompt": prompt})
 
-    async def send_event(self, session_id: str, event_type: str, event_data: dict[str, Any]) -> None:
+    async def register_session(self, session_id: str, name: str, stream_id: str) -> None:
+        """Register a named session that references a stream."""
+        async with httpx.AsyncClient() as c:
+            await c.post(
+                f"{self._base_url}/sessions",
+                json={"session_id": session_id, "name": name, "stream_id": stream_id},
+            )
+
+    async def send_event(self, stream_id: str, event_type: str, event_data: dict[str, Any]) -> None:
         """Forward a stream event to the server (fire-and-forget)."""
         try:
             async with httpx.AsyncClient() as c:
                 await c.post(
-                    f"{self._base_url}/sessions/{session_id}/events",
+                    f"{self._base_url}/streams/{stream_id}/events",
                     json={"event_type": event_type, "event_data": event_data},
                 )
+        except Exception:
+            pass  # never crash the agent due to a debug side-channel failure
+
+    async def add_stream_to_session(self, session_id: str, stream_id: str) -> None:
+        """Add an additional stream to an existing session."""
+        try:
+            async with httpx.AsyncClient() as c:
+                await c.post(
+                    f"{self._base_url}/sessions/{session_id}/streams",
+                    json={"stream_id": stream_id},
+                )
+        except Exception:
+            pass  # never crash the agent due to a debug side-channel failure
+
+    async def end_session(self, session_id: str) -> None:
+        """Mark a session as done, freezing its event snapshot."""
+        try:
+            async with httpx.AsyncClient() as c:
+                await c.post(f"{self._base_url}/sessions/{session_id}/done")
         except Exception:
             pass  # never crash the agent due to a debug side-channel failure
 

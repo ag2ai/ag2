@@ -268,30 +268,35 @@ class Agent(Askable):
                 context.prompt.append(p)
 
         additional_middleware: list[MiddlewareFactory] = list(middleware)
+        auto_session = False
 
-        if debug_url := os.environ.get("AG2_DEBUG_SERVER_URL"):
-            from .debug.client import get_server as _get_debug_client
+        if os.environ.get("AG2_DEBUG_SERVER_URL"):
             from .debug.middleware import DebugMiddleware
-            from .debug.session import DebugSession
+            from .debug.session import DEBUG_SESSION_VAR, DebugSession as _DebugSession
             from .middleware.base import Middleware as _Middleware
 
-            debug_client = _get_debug_client(debug_url)
-            session_id = str(stream.id)
-            await debug_client.register_session(session_id, list(context.prompt))
-            debug_session = DebugSession(session_id, stream=stream, context=context, client=debug_client)
-            stream.subscribe(debug_session.record_event)
-            # Replay any events already in storage (e.g. loaded via stream.history.replace)
-            # so the dashboard shows the full history, not just events from this run.
-            await debug_session.replay_events(await stream.history.get_events())
-            additional_middleware = [_Middleware(DebugMiddleware, session=debug_session), *additional_middleware]
+            session: _DebugSession | None = context.variables.get(DEBUG_SESSION_VAR)
 
-        return await self._execute(
+            if session is None:
+                session = _DebugSession()
+                context.variables[DEBUG_SESSION_VAR] = session
+                auto_session = True
+
+            await session._attach(stream, context)
+            additional_middleware = [_Middleware(DebugMiddleware, session=session), *additional_middleware]
+
+        result = await self._execute(
             initial_event,
             context=context,
             client=client,
             additional_tools=tools,
             additional_middleware=additional_middleware,
         )
+
+        if auto_session and session is not None:
+            await session.close()
+
+        return result
 
     async def _execute(
         self,

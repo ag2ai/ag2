@@ -15,39 +15,85 @@ from .models import SessionView
 _UI_FILE = Path(__file__).parent / "ui.html"
 
 
-# ── Server-side session state ──────────────────────────────────────────────
+# ── Server-side stream state ─────────────────────────────────────────────
+
+
+class _Stream:
+    """
+    Server-side accumulating event log for an agent stream.
+
+    Events arrive via HTTP from the agent process. Multiple sessions
+    may reference the same stream.
+    """
+
+    def __init__(self, stream_id: str, prompt: list[str]) -> None:
+        self.id = stream_id
+        self.prompt = list(prompt)
+        self.events: list[dict[str, Any]] = []
+
+
+# ── Server-side session state ────────────────────────────────────────────
 
 
 class _Session:
     """
-    Server-side representation of an agent debug session.
+    A named viewing context that references one or more streams.
 
-    Events arrive via HTTP from the agent process.
+    While running, events are served live from all referenced streams.
+    When done, ``event_snapshot`` holds a frozen copy.
     """
 
-    def __init__(self, session_id: str, prompt: list[str]) -> None:
+    def __init__(self, session_id: str, name: str, stream_id: str) -> None:
         self.id = session_id
-        self.prompt = list(prompt)
-        self.events: list[dict[str, Any]] = []
+        self.name = name
+        self.stream_ids: list[str] = [stream_id]
         self.status = "running"
+        self.event_snapshot: list[dict[str, Any]] | None = None
 
 
-# ── View helpers ───────────────────────────────────────────────────────────
+# ── View helpers ──────────────────────────────────────────────────────────
 
 
-def _session_view(session: _Session) -> SessionView:
+def _collect_events(session: _Session, streams: dict[str, _Stream]) -> list[dict[str, Any]]:
+    """Collect events across all streams for a session, sorted by timestamp."""
+    if session.status == "done" and session.event_snapshot is not None:
+        return session.event_snapshot
+    events: list[dict[str, Any]] = []
+    for sid in session.stream_ids:
+        stream = streams.get(sid)
+        if stream:
+            events.extend(stream.events)
+    events.sort(key=lambda e: e.get("timestamp", ""))
+    return events
+
+
+def _collect_prompt(session: _Session, streams: dict[str, _Stream]) -> list[str]:
+    """Collect prompt from the first stream of the session."""
+    for sid in session.stream_ids:
+        stream = streams.get(sid)
+        if stream:
+            return stream.prompt
+    return []
+
+
+def _session_view(session: _Session, streams: dict[str, _Stream]) -> SessionView:
     return SessionView(
         id=session.id,
+        name=session.name,
+        stream_ids=session.stream_ids,
         status=session.status,
-        prompt=session.prompt,
-        events=session.events,
+        prompt=_collect_prompt(session, streams),
+        events=_collect_events(session, streams),
     )
 
 
-# ── FastAPI app factory ────────────────────────────────────────────────────
+# ── FastAPI app factory ──────────────────────────────────────────────────
 
 
-def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
+def _create_fastapi_app(
+    streams: dict[str, _Stream],
+    sessions: dict[str, _Session],
+) -> FastAPI:
     app = FastAPI(title="AG2 Debug Server")
     _ws_clients: set[WebSocket] = set()
 
@@ -61,6 +107,12 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
         for c in gone:
             _ws_clients.discard(c)
 
+    def _sessions_summary() -> list[dict[str, Any]]:
+        return [
+            {"id": s.id, "name": s.name, "stream_ids": s.stream_ids, "status": s.status}
+            for s in sessions.values()
+        ]
+
     @app.get("/", include_in_schema=False)
     async def ui() -> FileResponse:
         return FileResponse(_UI_FILE, media_type="text/html")
@@ -69,10 +121,7 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
         _ws_clients.add(ws)
-        await ws.send_json({
-            "type": "sessions_list",
-            "sessions": [{"id": s.id, "status": s.status} for s in sessions.values()],
-        })
+        await ws.send_json({"type": "sessions_list", "sessions": _sessions_summary()})
         try:
             while True:
                 await ws.receive_text()  # keep connection alive; ignore client messages
@@ -81,80 +130,117 @@ def _create_fastapi_app(sessions: dict[str, _Session]) -> FastAPI:
         finally:
             _ws_clients.discard(ws)
 
-    # ── Session registration (called by agent on startup) ─────────────────
+    # ── Stream registration (called by agent on startup) ─────────────────
 
-    @app.post("/sessions/{session_id}", status_code=201)
-    async def register_session(session_id: str, body: dict[str, Any]) -> dict[str, str]:
+    @app.post("/streams/{stream_id}", status_code=201)
+    async def register_stream(stream_id: str, body: dict[str, Any]) -> dict[str, str]:
         prompt: list[str] = body.get("prompt", [])
-        if session_id in sessions:
-            # Stream was reloaded — reset events (the agent will replay full history
-            # from storage immediately after registering) and mark as running again.
-            existing = sessions[session_id]
+        if stream_id in streams:
+            existing = streams[stream_id]
             existing.prompt = prompt
-            existing.status = "running"
             existing.events.clear()
         else:
-            sessions[session_id] = _Session(session_id, prompt)
-        await _broadcast({
-            "type": "sessions_list",
-            "sessions": [{"id": s.id, "status": s.status} for s in sessions.values()],
-        })
-        return {"session_id": session_id}
+            streams[stream_id] = _Stream(stream_id, prompt)
+        return {"stream_id": stream_id}
 
-    # ── Event ingestion (called by agent stream subscriber) ───────────────
+    # ── Event ingestion (called by agent stream subscriber) ──────────────
 
-    @app.post("/sessions/{session_id}/events")
-    async def receive_event(session_id: str, body: dict[str, Any]) -> dict[str, str]:
-        session = sessions.get(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        session.events.append({
-            "id": f"ev-{len(session.events)}",
+    @app.post("/streams/{stream_id}/events")
+    async def receive_event(stream_id: str, body: dict[str, Any]) -> dict[str, str]:
+        stream = streams.get(stream_id)
+        if not stream:
+            raise HTTPException(status_code=404, detail="Stream not found")
+        stream.events.append({
+            "id": f"ev-{len(stream.events)}",
+            "stream_id": stream_id,
             "event_type": body.get("event_type", ""),
             "event_data": body.get("event_data", {}),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        await _broadcast({"type": "session_update", "session": _session_view(session).model_dump(mode="json")})
+        # Broadcast update for all running sessions that include this stream
+        for sess in sessions.values():
+            if stream_id in sess.stream_ids and sess.status == "running":
+                await _broadcast({
+                    "type": "session_update",
+                    "session": _session_view(sess, streams).model_dump(mode="json"),
+                })
         return {"ok": "true"}
 
-    # ── Sessions ──────────────────────────────────────────────────────────
+    # ── Session registration ─────────────────────────────────────────────
+
+    @app.post("/sessions", status_code=201)
+    async def register_session(body: dict[str, Any]) -> dict[str, str]:
+        session_id: str = body["session_id"]
+        name: str = body["name"]
+        stream_id: str = body["stream_id"]
+        if stream_id not in streams:
+            raise HTTPException(status_code=404, detail="Stream not found")
+        sessions[session_id] = _Session(session_id, name, stream_id)
+        await _broadcast({"type": "sessions_list", "sessions": _sessions_summary()})
+        return {"session_id": session_id}
+
+    @app.post("/sessions/{session_id}/streams")
+    async def add_stream_to_session(session_id: str, body: dict[str, Any]) -> dict[str, str]:
+        session = sessions.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        stream_id: str = body["stream_id"]
+        if stream_id not in streams:
+            raise HTTPException(status_code=404, detail="Stream not found")
+        if stream_id not in session.stream_ids:
+            session.stream_ids.append(stream_id)
+        await _broadcast({"type": "sessions_list", "sessions": _sessions_summary()})
+        return {"ok": "true"}
+
+    @app.post("/sessions/{session_id}/done")
+    async def end_session(session_id: str) -> dict[str, str]:
+        session = sessions.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session.status = "done"
+        session.event_snapshot = _collect_events(session, streams)
+        await _broadcast({"type": "sessions_list", "sessions": _sessions_summary()})
+        return {"ok": "true"}
+
+    # ── Sessions ─────────────────────────────────────────────────────────
 
     @app.get("/sessions")
-    async def list_sessions() -> list[dict[str, str]]:
-        return [{"id": s.id, "status": s.status} for s in sessions.values()]
+    async def list_sessions() -> list[dict[str, Any]]:
+        return _sessions_summary()
 
     @app.get("/sessions/{session_id}", response_model=SessionView)
     async def get_session(session_id: str) -> SessionView:
         session = sessions.get(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        return _session_view(session)
+        return _session_view(session, streams)
 
-    # ── Context inspection ────────────────────────────────────────────────
+    # ── Context inspection ───────────────────────────────────────────────
 
     @app.get("/sessions/{session_id}/context")
     async def get_context(session_id: str) -> dict[str, Any]:
         session = sessions.get(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        return {"prompt": session.prompt}
+        return {"prompt": _collect_prompt(session, streams)}
 
     return app
 
 
-# ── DebugServer ────────────────────────────────────────────────────────────
+# ── DebugServer ───────────────────────────────────────────────────────────
 
 
 class DebugServer:
     """
-    Wraps the FastAPI app and its session registry.  Must be started externally
-    via :func:`start_debug_server` or :func:`run_debug_server` — the agent
-    never starts a server itself.
+    Wraps the FastAPI app and its stream/session registries.  Must be started
+    externally via :func:`start_debug_server` or :func:`run_debug_server` —
+    the agent never starts a server itself.
     """
 
     def __init__(self) -> None:
+        self._streams: dict[str, _Stream] = {}
         self._sessions: dict[str, _Session] = {}
-        self._app: FastAPI = _create_fastapi_app(self._sessions)
+        self._app: FastAPI = _create_fastapi_app(self._streams, self._sessions)
 
 
 async def start_debug_server(host: str = "localhost", port: int = 8765) -> DebugServer:

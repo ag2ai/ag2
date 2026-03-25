@@ -53,7 +53,7 @@
 
   /* ── Sidebar ── */
   aside {
-    width: 210px;
+    width: 240px;
     flex-shrink: 0;
     background: var(--surface);
     border-right: 1px solid var(--border);
@@ -61,23 +61,64 @@
     flex-direction: column;
     overflow: hidden;
   }
-  aside h2 {
+
+  /* Sessions panel (top) */
+  .sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-panel.sessions-panel {
+    flex: 1;
+    min-height: 0;
+  }
+  .sidebar-panel.streams-panel {
+    flex: 0 0 auto;
+    max-height: 35%;
+    border-top: 1px solid var(--border);
+  }
+  .panel-header {
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
     color: var(--muted); padding: 10px 12px 6px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
   }
-  #session-list { overflow-y: auto; flex: 1; }
+  .panel-header .panel-count {
+    background: var(--surface2); color: var(--muted); border-radius: 10px;
+    padding: 0 6px; font-size: 10px; margin-left: auto;
+  }
+  .panel-body { overflow-y: auto; flex: 1; }
+
   #no-sessions { text-align: center; padding: 20px 12px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+
+  /* Session items */
   .session-item {
-    display: flex; align-items: center; gap: 8px; padding: 7px 12px;
-    cursor: pointer; border-left: 2px solid transparent;
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    cursor: pointer; border-left: 3px solid transparent;
     transition: background .1s, border-color .1s;
   }
   .session-item:hover  { background: var(--surface2); }
   .session-item.active { background: var(--surface2); border-left-color: var(--blue); }
-  .session-item .sid   { font-family: monospace; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .s-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .session-item .s-info { display: flex; flex-direction: column; flex: 1; overflow: hidden; gap: 1px; }
+  .session-item .s-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .session-item .s-meta { font-family: monospace; font-size: 9px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .s-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .s-dot.running { background: var(--green); animation: pulse 2s infinite; }
   .s-dot.done    { background: var(--muted); }
+
+  /* Stream items */
+  .stream-item {
+    display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+    font-family: monospace; font-size: 10px; color: var(--muted);
+    cursor: pointer; border-left: 2px solid transparent;
+    transition: background .1s, border-color .1s, color .1s;
+  }
+  .stream-item:hover { background: var(--surface2); color: var(--text); }
+  .stream-item.active { background: var(--surface2); border-left-color: var(--purple); color: var(--text); }
+  .stream-item .stream-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--purple); flex-shrink: 0; }
+  .stream-item.active .stream-dot { background: var(--cyan); }
+  .stream-item .stream-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .stream-item .stream-label { font-family: 'Segoe UI', system-ui, sans-serif; }
+  #no-streams { text-align: center; padding: 10px 12px; color: var(--muted); font-size: 10px; }
 
   /* ── Main ── */
   main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -95,7 +136,8 @@
     padding: 7px 16px; border-bottom: 1px solid var(--border);
     flex-shrink: 0; background: var(--surface);
   }
-  #detail-header .sid-full { font-family: monospace; font-size: 11px; color: var(--muted); }
+  #detail-header .dh-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  #detail-header .dh-meta { font-family: monospace; font-size: 10px; color: var(--muted); }
   .status-badge { font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
   .status-badge.running { background: #1a2e1a; color: var(--green); }
   .status-badge.done    { background: #1a1a2a; color: var(--muted); }
@@ -268,9 +310,26 @@
 
 <div class="layout">
   <aside>
-    <h2>Sessions</h2>
-    <div id="session-list">
-      <div id="no-sessions">No sessions yet.<br>Set <code>AG2_DEBUG_SERVER_URL</code><br>and run an agent.</div>
+    <!-- Sessions panel (top) -->
+    <div class="sidebar-panel sessions-panel">
+      <div class="panel-header">
+        Sessions
+        <span class="panel-count" id="sessions-count">0</span>
+      </div>
+      <div class="panel-body" id="session-list">
+        <div id="no-sessions">No sessions yet.<br>Set <code>AG2_DEBUG_SERVER_URL</code><br>and run an agent.</div>
+      </div>
+    </div>
+
+    <!-- Streams panel (bottom) -->
+    <div class="sidebar-panel streams-panel" id="streams-panel" style="display:none">
+      <div class="panel-header">
+        Streams
+        <span class="panel-count" id="streams-count">0</span>
+      </div>
+      <div class="panel-body" id="stream-list">
+        <div id="no-streams">No streams</div>
+      </div>
     </div>
   </aside>
 
@@ -284,7 +343,8 @@
 
     <div id="detail" style="display:none">
       <div id="detail-header">
-        <span class="sid-full" id="dh-id"></span>
+        <span class="dh-name" id="dh-name"></span>
+        <span class="dh-meta" id="dh-meta"></span>
         <span class="status-badge" id="dh-status"></span>
         <div id="token-usage" style="display:none">
           <span class="tok-label">in</span><span class="tok-in" id="tok-in">0</span>
@@ -329,9 +389,11 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────
-let currentMode    = 'chat';
-let selectedId     = null;
-let currentSession = null;
+let currentMode      = 'chat';
+let selectedId       = null;
+let currentSession   = null;
+let sessionsList     = [];   // cached sessions list for stream panel lookups
+let selectedStreamId = null; // null = show all streams
 
 // Incremental DOM maps (keyed by record id)
 const evMap   = new Map();  // eventId -> element  (events mode)
@@ -416,11 +478,13 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
-// ── Sidebar ───────────────────────────────────────────────────────────────
+// ── Sessions Sidebar ─────────────────────────────────────────────────────
 function renderSidebar(list) {
+  sessionsList = list;
   const el = document.getElementById('session-list');
   document.getElementById('no-sessions').style.display = list.length ? 'none' : 'block';
   document.getElementById('session-count').textContent = list.length ? `${list.length} session${list.length>1?'s':''}` : '';
+  document.getElementById('sessions-count').textContent = list.length;
 
   list.forEach(s => {
     let item = el.querySelector(`.session-item[data-id="${s.id}"]`);
@@ -432,41 +496,121 @@ function renderSidebar(list) {
       el.appendChild(item);
     }
     item.classList.toggle('active', s.id === selectedId);
-    item.innerHTML = '';
-    const dot = document.createElement('div');
-    dot.className = 's-dot';
-    if (s.status) dot.classList.add(s.status);
-    const span = document.createElement('span');
-    span.className = 'sid';
-    span.title = s.id;
-    span.textContent = s.id.slice(0, 8) + '…';
-    item.appendChild(dot);
-    item.appendChild(span);
+    _renderSessionItem(item, s);
   });
 
   if (!selectedId && list.length > 0) selectSession(list[0].id);
 }
 
-function updateSidebarItem(id, status) {
-  const item = document.querySelector(`.session-item[data-id="${id}"]`);
+function _renderSessionItem(item, s) {
+  item.innerHTML = '';
+  const dot = document.createElement('div');
+  dot.className = 's-dot';
+  if (s.status) dot.classList.add(s.status);
+
+  const info = document.createElement('div');
+  info.className = 's-info';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 's-name';
+  nameEl.textContent = s.name || s.id.slice(0, 8);
+
+  const metaEl = document.createElement('span');
+  metaEl.className = 's-meta';
+  const streamCount = (s.stream_ids || []).length;
+  metaEl.textContent = s.id.slice(0, 8) + (streamCount > 1 ? ` · ${streamCount} streams` : '');
+
+  info.appendChild(nameEl);
+  info.appendChild(metaEl);
+  item.appendChild(dot);
+  item.appendChild(info);
+}
+
+function updateSidebarItem(session) {
+  // Update cached list
+  const idx = sessionsList.findIndex(s => s.id === session.id);
+  if (idx >= 0) sessionsList[idx] = { ...sessionsList[idx], status: session.status, name: session.name, stream_ids: session.stream_ids };
+
+  const item = document.querySelector(`.session-item[data-id="${session.id}"]`);
   if (item) {
-    item.innerHTML = '';
-    const dot = document.createElement('div');
-    dot.className = 's-dot';
-    if (status) dot.classList.add(status);
-    const span = document.createElement('span');
-    span.className = 'sid';
-    span.title = id;
-    span.textContent = id.slice(0, 8) + '…';
-    item.appendChild(dot);
-    item.appendChild(span);
-    item.classList.toggle('active', id === selectedId);
+    _renderSessionItem(item, session);
+    item.classList.toggle('active', session.id === selectedId);
   }
 }
 
+// ── Streams Sub-panel ────────────────────────────────────────────────────
+function renderStreamsPanel(session) {
+  const panel = document.getElementById('streams-panel');
+  const list = document.getElementById('stream-list');
+  const streamIds = session.stream_ids || [];
+
+  document.getElementById('streams-count').textContent = streamIds.length;
+
+  if (streamIds.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'flex';
+  list.innerHTML = '';
+
+  // "All streams" option
+  const allItem = document.createElement('div');
+  allItem.className = 'stream-item' + (selectedStreamId === null ? ' active' : '');
+  const allDot = document.createElement('div');
+  allDot.className = 'stream-dot';
+  const allLabel = document.createElement('span');
+  allLabel.className = 'stream-id stream-label';
+  allLabel.textContent = 'All streams';
+  allItem.appendChild(allDot);
+  allItem.appendChild(allLabel);
+  allItem.addEventListener('click', () => selectStream(null));
+  list.appendChild(allItem);
+
+  // Individual streams
+  streamIds.forEach(sid => {
+    const item = document.createElement('div');
+    item.className = 'stream-item' + (selectedStreamId === sid ? ' active' : '');
+
+    const dot = document.createElement('div');
+    dot.className = 'stream-dot';
+
+    const idEl = document.createElement('span');
+    idEl.className = 'stream-id';
+    idEl.title = sid;
+    idEl.textContent = sid.slice(0, 16);
+
+    item.appendChild(dot);
+    item.appendChild(idEl);
+    item.addEventListener('click', () => selectStream(sid));
+    list.appendChild(item);
+  });
+}
+
+function selectStream(streamId) {
+  selectedStreamId = streamId;
+  // Re-render streams panel to update active state
+  if (currentSession) {
+    renderStreamsPanel(currentSession);
+    // Clear and re-render the content views with filtered events
+    evMap.clear(); chatMap.clear();
+    document.getElementById('events-body').innerHTML = '';
+    document.getElementById('chat-body').innerHTML   = '';
+    document.getElementById('history-view').innerHTML = '';
+    renderDetail(currentSession);
+  }
+}
+
+function filterEvents(session) {
+  if (!selectedStreamId) return session.events;
+  return session.events.filter(ev => ev.stream_id === selectedStreamId);
+}
+
+// ── Select session ───────────────────────────────────────────────────────
 async function selectSession(id) {
   if (selectedId === id) return;
   selectedId = id;
+  selectedStreamId = null; // reset stream filter on session switch
   document.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('detail').style.display     = 'flex';
@@ -593,7 +737,7 @@ function buildChatItem(ev) {
 
   // ── AI asking for human input (left side) ──
   if (type === 'HumanInputRequest') {
-    return chatRow('left', 'Agent', `<div class="bubble waiting-msg">⏳ ${esc(d.content || '')}</div>`);
+    return chatRow('left', 'Agent', `<div class="bubble waiting-msg">${esc(d.content || '')}</div>`);
   }
 
   // ── Model response (left side) ──
@@ -619,11 +763,11 @@ function buildChatItem(ev) {
     let inner = '';
     results.forEach(r => {
       if (r.type === 'ToolErrorEvent') {
-        inner += `<div class="tool-block error">✗ <span class="tool-name">${esc(r.name)}</span>: ${esc(r.error && r.error.message || 'error')}</div>`;
+        inner += `<div class="tool-block error"><span class="tool-name">${esc(r.name)}</span>: ${esc(r.error && r.error.message || 'error')}</div>`;
       } else {
         const content = extractContent(r);
         const display = typeof content === 'string' ? content : JSON.stringify(content);
-        inner += `<div class="tool-block result">✓ <span class="tool-name">${esc(r.name)}</span>: ${esc(display)}</div>`;
+        inner += `<div class="tool-block result"><span class="tool-name">${esc(r.name)}</span>: ${esc(display)}</div>`;
       }
     });
     return chatRow('left', 'Tools', inner);
@@ -760,16 +904,31 @@ function renderTokenUsage(session) {
 // ─────────────────────────────────────────────────────────────────────────
 function renderDetail(session) {
   currentSession = session;
-  document.getElementById('dh-id').textContent = session.id;
+
+  // Detail header
+  document.getElementById('dh-name').textContent = session.name || session.id.slice(0, 8);
+  const streamIds = session.stream_ids || [];
+  if (selectedStreamId) {
+    document.getElementById('dh-meta').textContent = 'stream ' + selectedStreamId.slice(0, 12);
+  } else {
+    document.getElementById('dh-meta').textContent = streamIds.length > 1
+      ? `${streamIds.length} streams`
+      : streamIds.length === 1 ? streamIds[0].slice(0, 12) : session.id.slice(0, 12);
+  }
+
   const sb = document.getElementById('dh-status');
   sb.textContent = session.status;
   sb.className = `status-badge ${session.status}`;
 
-  renderTokenUsage(session);
+  // Build a filtered view for rendering
+  const filtered = { ...session, events: filterEvents(session) };
 
-  if (currentMode === 'events')  renderEventsMode(session);
-  if (currentMode === 'chat')    renderChatMode(session);
-  if (currentMode === 'history') renderHistoryMode(session);
+  renderTokenUsage(filtered);
+  renderStreamsPanel(session); // always show all streams in panel
+
+  if (currentMode === 'events')  renderEventsMode(filtered);
+  if (currentMode === 'chat')    renderChatMode(filtered);
+  if (currentMode === 'history') renderHistoryMode(filtered);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -797,7 +956,7 @@ function connectWS() {
     if (msg.type === 'sessions_list') {
       renderSidebar(msg.sessions);
     } else if (msg.type === 'session_update') {
-      updateSidebarItem(msg.session.id, msg.session.status);
+      updateSidebarItem(msg.session);
       if (msg.session.id === selectedId) {
         renderDetail(msg.session);
       }

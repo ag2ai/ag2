@@ -16,15 +16,19 @@ from autogen.beta.middleware.base import ToolExecution
 
 def _make_session(hit_breakpoint_return: dict | None = None) -> DebugSession:  # type: ignore[type-arg]
     """Return a DebugSession whose HTTP client is fully mocked."""
-    stream = MagicMock()
-    stream.send = AsyncMock()
-    context = MagicMock()
-    context.prompt = []
-    context.variables = {}
     client = MagicMock(spec=DebugClient)
     client.send_event = AsyncMock()
-    client.hit_breakpoint = AsyncMock(return_value=hit_breakpoint_return or {})
-    return DebugSession("test", stream=stream, context=context, client=client)  # type: ignore[arg-type]
+    client.register_stream = AsyncMock()
+    client.register_session = AsyncMock()
+    client.end_session = AsyncMock()
+    session = DebugSession(name="test", url="http://test:8765")
+    session._client = client
+    session.stream = MagicMock()
+    session.stream.send = AsyncMock()
+    session.context = MagicMock()
+    session.context.prompt = []
+    session.context.variables = {}
+    return session
 
 
 def _make_middleware(session: DebugSession) -> DebugMiddleware:
