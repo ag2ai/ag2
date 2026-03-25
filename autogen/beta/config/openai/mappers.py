@@ -5,11 +5,82 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.response import ResponseProto
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
+    """Convert a ResponseProto to Chat Completions response_format."""
+    if not response or not response.json_schema:
+        return
+
+    strict_schema = _ensure_additional_properties_false(response.json_schema)
+    schema: dict[str, Any] = {
+        "schema": strict_schema,
+        "name": response.name,
+        "strict": True,
+    }
+    if response.description:
+        schema["description"] = response.description
+
+    return {"type": "json_schema", "json_schema": schema}
+
+
+def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively add additionalProperties: false to all object schemas.
+
+    The OpenAI Responses API requires this on every object node.
+    """
+    schema = dict(schema)
+
+    if schema.get("type") == "object":
+        schema.setdefault("additionalProperties", False)
+
+    if "properties" in schema:
+        schema["properties"] = {
+            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v
+            for k, v in schema["properties"].items()
+        }
+
+    if "$defs" in schema:
+        schema["$defs"] = {
+            k: _ensure_additional_properties_false(v) if isinstance(v, dict) else v for k, v in schema["$defs"].items()
+        }
+
+    for key in ("anyOf", "oneOf", "allOf"):
+        if key in schema:
+            schema[key] = [
+                _ensure_additional_properties_false(item) if isinstance(item, dict) else item for item in schema[key]
+            ]
+
+    if "items" in schema and isinstance(schema["items"], dict):
+        schema["items"] = _ensure_additional_properties_false(schema["items"])
+
+    return schema
+
+
+def response_proto_to_text_config(response: ResponseProto | None) -> dict[str, Any] | None:
+    """Convert a ResponseProto to Responses API text config."""
+    if not response or not response.json_schema:
+        return
+
+    strict_schema = _ensure_additional_properties_false(response.json_schema)
+
+    fmt: dict[str, Any] = {
+        "type": "json_schema",
+        "name": response.name,
+        "schema": strict_schema,
+        "strict": True,
+    }
+    if response.description:
+        fmt["description"] = response.description
+
+    return {"format": fmt}
 
 
 def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
@@ -22,6 +93,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "role": "user",
                 "content": [{"type": "input_text", "text": message.content}],
             })
+
         elif isinstance(message, ModelResponse):
             # Reconstruct assistant message
             content: list[dict[str, Any]] = []
@@ -40,7 +112,8 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                     "name": call.name,
                     "arguments": call.arguments,
                 })
-        elif isinstance(message, ToolResults):
+
+        elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append({
                     "type": "function_call_output",
@@ -53,7 +126,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
 
 def convert_messages(
     system_prompt: Iterable[str],
-    messages: tuple[BaseEvent, ...],
+    messages: Iterable[BaseEvent],
 ) -> list[dict[str, str]]:
     # legacy prompt message format
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
@@ -61,7 +134,7 @@ def convert_messages(
     for message in messages:
         if isinstance(message, (ModelRequest, ModelResponse)):
             result.append(message.to_api())
-        elif isinstance(message, ToolResults):
+        elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append(r.to_api())
 
@@ -79,7 +152,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     """Chat Completions API tool format."""
-    if t.type == "function":
+    if isinstance(t, FunctionToolSchema):
         return {
             "type": "function",
             "function": {
@@ -120,5 +193,9 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
         return result
+
+    elif isinstance(t, CodeExecutionToolSchema):
+        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        return {"type": "code_interpreter", "container": {"type": "auto"}}
 
     raise UnsupportedToolError(t.type, "openai-responses")

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from a2a.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
 from pydantic import Field
 
 from autogen import ConversableAgent
@@ -151,6 +151,31 @@ class A2aAgentServer:
                 **extended_agent_card.model_dump(exclude_none=True),
             })
 
+        # Auto-add A2UI extension to card if wrapping an A2UIAgent.
+        # Declares the extension URI and supportedCatalogIds in the agent card
+        # so clients know what A2UI version and catalogs this agent supports.
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
+
+            if isinstance(agent, A2UIAgent):
+                existing_extensions = list(self.card.capabilities.extensions or [])
+                if not any(e.uri == A2UI_EXTENSION_URI for e in existing_extensions):
+                    # Build params with supportedCatalogIds per A2UI extension spec
+                    params: dict[str, Any] = {
+                        "supportedCatalogIds": [agent.catalog_id],
+                    }
+                    existing_extensions.append(
+                        AgentExtension(
+                            uri=A2UI_EXTENSION_URI,
+                            description="Provides agent-driven UI using the A2UI v0.9 JSON format.",
+                            params=params,
+                        )
+                    )
+                    self.card.capabilities.extensions = existing_extensions
+        except (ImportError, NameError):
+            pass
+
         self.card_modifier = card_modifier
         self.extended_card_modifier = extended_card_modifier
         self.middlewares: list[tuple[BaseHTTPMiddleware, dict[str, Any]]] = []
@@ -161,7 +186,23 @@ class A2aAgentServer:
 
     @property
     def executor(self) -> AutogenAgentExecutor:
-        """Get the A2A agent executor."""
+        """Get the A2A agent executor.
+
+        Auto-detects ``A2UIAgent`` and returns an ``A2UIAgentExecutor`` that
+        preserves A2UI DataParts in responses and handles extension negotiation.
+        """
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
+
+            if isinstance(self.agent, A2UIAgent):
+                return A2UIAgentExecutor(  # type: ignore[return-value]
+                    self.agent,
+                    delimiter=self.agent._response_delimiter,
+                    version_string=self.agent.protocol_version,
+                )
+        except (ImportError, NameError):
+            pass
         return AutogenAgentExecutor(self.agent)
 
     def build_request_handler(

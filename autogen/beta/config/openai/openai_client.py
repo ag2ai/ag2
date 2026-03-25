@@ -5,10 +5,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, Literal, TypedDict
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given
+from openai._types import Omit
+from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from typing_extensions import Required
 
@@ -20,48 +23,48 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
 class CreateOptions(TypedDict, total=False):
-    model: Required[str]
+    model: Required[ChatModel | str]
 
-    temperature: float | None
-    top_p: float | None
-    max_tokens: int | None
-    max_completion_tokens: int | None
-    response_format: dict[str, Any] | None
-    frequency_penalty: float | None
-    presence_penalty: float | None
-    seed: int | None
-    stop: str | list[str] | None
-    n: int | None
-    user: str
-    logprobs: bool | None
-    top_logprobs: int | None
-    tool_choice: str | dict[str, Any]
-    parallel_tool_calls: bool
-    logit_bias: dict[str, int] | None
-    metadata: dict[str, str] | None
-    modalities: list[str] | None
-    prediction: dict[str, Any] | None
-    prompt_cache_key: str
-    prompt_cache_retention: str | None
-    safety_identifier: str
-    service_tier: str | None
-    store: bool | None
-    verbosity: str | None
-    web_search_options: dict[str, Any]
+    temperature: float | None | Omit
+    top_p: float | None | Omit
+    max_tokens: int | None | Omit
+    max_completion_tokens: int | None | Omit
+    frequency_penalty: float | None | Omit
+    presence_penalty: float | None | Omit
+    seed: int | None | Omit
+    stop: str | list[str] | None | Omit
+    n: int | None | Omit
+    user: str | Omit
+    logprobs: bool | None | Omit
+    top_logprobs: int | None | Omit
+    tool_choice: str | dict[str, Any] | Omit
+    parallel_tool_calls: bool | Omit
+    logit_bias: dict[str, int] | None | Omit
+    metadata: dict[str, str] | None | Omit
+    modalities: list[str] | None | Omit
+    prediction: dict[str, Any] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_retention: str | None | Omit
+    safety_identifier: str | Omit
+    service_tier: str | None | Omit
+    store: bool | None | Omit
+    verbosity: str | None | Omit
+    web_search_options: dict[str, Any] | Omit
     stream: bool
-    stream_options: dict[str, Any]
-    reasoning_effort: ReasoningEffort
+    stream_options: dict[str, Any] | Omit
+    reasoning_effort: ReasoningEffort | None | Omit
 
 
 class OpenAIClient(LLMClient):
@@ -101,13 +104,24 @@ class OpenAIClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        openai_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        openai_messages = convert_messages(prompt, messages)
 
         openai_tools = [tool_to_api(t) for t in tools]
 
+        kwargs = {}
+        if r := response_proto_to_schema(response_schema):
+            kwargs["response_format"] = r
+
         response = await self._client.chat.completions.create(
             **self._create_options,
+            **kwargs,
             messages=openai_messages,
             tools=openai_tools,
         )
@@ -136,7 +150,7 @@ class OpenAIClient(LLMClient):
                 await context.send(model_msg)
 
             calls = [
-                ToolCall(
+                ToolCallEvent(
                     id=c.id,
                     name=c.function.name,
                     arguments=c.function.arguments,
@@ -146,8 +160,11 @@ class OpenAIClient(LLMClient):
 
             return ModelResponse(
                 message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
+                tool_calls=ToolCallsEvent(calls=calls),
                 usage=completion.usage.model_dump() if completion.usage else {},
+                model=completion.model,
+                provider="openai",
+                finish_reason=choice.finish_reason,
             )
 
     async def _process_stream(
@@ -157,6 +174,8 @@ class OpenAIClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         # Accumulate tool calls by index (streaming sends partial updates per index)
         full_tool_calls: list[dict[str, str]] = []
@@ -166,7 +185,12 @@ class OpenAIClient(LLMClient):
             if chunk.usage:
                 usage = chunk.usage.model_dump()
 
+            if chunk.model:
+                resolved_model = chunk.model
+
             for choice in chunk.choices:
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
@@ -201,7 +225,7 @@ class OpenAIClient(LLMClient):
             await context.send(message)
 
         calls = [
-            ToolCall(
+            ToolCallEvent(
                 id=acc["id"],
                 name=acc["name"],
                 arguments=acc["arguments"],
@@ -211,6 +235,9 @@ class OpenAIClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=resolved_model,
+            provider="openai",
+            finish_reason=finish_reason,
         )

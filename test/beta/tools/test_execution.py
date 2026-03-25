@@ -21,7 +21,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
         return "tool executed"
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
@@ -40,7 +40,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
         return "tool executed"
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
@@ -59,7 +59,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
         return "tool executed"
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
@@ -80,7 +80,7 @@ async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
         return Result(a=a)
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
         ),
@@ -100,7 +100,7 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
         return a + b
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),
@@ -117,7 +117,7 @@ async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
         return "".join(context.prompt)
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),
@@ -134,7 +134,7 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: Magi
         return "".join(c.prompt)
 
     result = await my_func(
-        events.ToolCall(
+        events.ToolCallEvent(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
         ),

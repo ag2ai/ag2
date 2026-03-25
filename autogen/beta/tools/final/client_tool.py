@@ -8,7 +8,7 @@ from functools import partial
 from typing import Any
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import ClientToolCall, ToolCall
+from autogen.beta.events import ClientToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, ToolExecution
 from autogen.beta.tools.tool import Tool
 
@@ -35,15 +35,15 @@ class ClientTool(Tool):
         for mw in middleware:
             execution = partial(mw.on_tool_execution, execution)
 
-        async def execute(event: "ToolCall", context: "Context") -> None:
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
             result = await execution(event, context)
             await context.send(result)
 
         stack.enter_context(
-            context.stream.where((ToolCall.name == self.schema.function.name) & ClientToolCall.not_()).sub_scope(
-                execute
-            ),
+            context.stream.where(
+                (ToolCallEvent.name == self.schema.function.name) & ClientToolCallEvent.not_()
+            ).sub_scope(execute),
         )
 
-    async def __call__(self, event: "ToolCall", context: "Context") -> "ClientToolCall":
-        return ClientToolCall.from_call(event)
+    async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ClientToolCallEvent":
+        return ClientToolCallEvent.from_call(event)

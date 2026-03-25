@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Context, MemoryStream
-from autogen.beta.events import BaseEvent, ModelMessage, ToolCall
+from autogen.beta.events import BaseEvent, ModelMessage, ToolCallEvent
 
 
 class TestStreamSend:
@@ -27,7 +27,7 @@ class TestStreamSend:
         with stream.join() as events:
             asyncio.create_task(listen_stream(events))
 
-            event = ToolCall(name="func1", arguments='"test"')
+            event = ToolCallEvent(name="func1", arguments='"test"')
             await stream.send(event, context=Context(stream))
 
             await asyncio.wait_for(signal.wait(), timeout=1.0)
@@ -50,7 +50,7 @@ class TestStreamSend:
             for _ in range(5):
                 # publish more messages than expected
                 await stream.send(
-                    ToolCall(name="func1", arguments='"test"'),
+                    ToolCallEvent(name="func1", arguments='"test"'),
                     context=Context(stream),
                 )
 
@@ -68,14 +68,14 @@ class TestStreamSend:
                 signal.set()
                 break
 
-        with stream.where(ToolCall).join() as events:
+        with stream.where(ToolCallEvent).join() as events:
             asyncio.create_task(listen_stream(events))
 
             await stream.send(
                 ModelMessage(content="test"),
                 context=Context(stream),
             )
-            event = ToolCall(name="func1", arguments='"test"')
+            event = ToolCallEvent(name="func1", arguments='"test"')
             await stream.send(event, context=Context(stream))
 
             await asyncio.wait_for(signal.wait(), timeout=1.0)
