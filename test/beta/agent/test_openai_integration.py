@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+from dataclasses import dataclass
 
 import pytest
+from pydantic import BaseModel
 
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
@@ -15,7 +17,7 @@ def openai_config() -> OpenAIConfig:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         pytest.skip("OPENAI_API_KEY not set")
-    return OpenAIConfig(model="gpt-4o-mini", api_key=api_key, temperature=0)
+    return OpenAIConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
 
 
 @pytest.mark.openai
@@ -68,3 +70,133 @@ async def test_tool_use(openai_config: OpenAIConfig) -> None:
 
     assert reply.body is not None
     assert "22" in reply.body or "sunny" in reply.body.lower()
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_structured_output_primitive(openai_config: OpenAIConfig) -> None:
+    agent = Agent(
+        name="math_agent",
+        prompt="You are a math assistant. Return only the numeric answer.",
+        config=openai_config,
+        response_schema=int,
+    )
+
+    reply = await agent.ask("What is 15 * 7?")
+    result = await reply.content()
+
+    assert result == 105
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_structured_output_dataclass(openai_config: OpenAIConfig) -> None:
+    @dataclass
+    class City:
+        name: str
+        country: str
+        population: int
+
+    agent = Agent(
+        name="geo_agent",
+        prompt="You are a geography assistant. Provide city information.",
+        config=openai_config,
+        response_schema=City,
+    )
+
+    reply = await agent.ask("Tell me about Paris, France. Population is approximately 2161000.")
+    result = await reply.content()
+
+    assert isinstance(result, City)
+    assert result.name.lower() == "paris"
+    assert result.country.lower() == "france"
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_structured_output_pydantic(openai_config: OpenAIConfig) -> None:
+    class MathResult(BaseModel):
+        answer: int
+        explanation: str
+
+    agent = Agent(
+        name="math_agent",
+        prompt="You are a math assistant. Solve the given problem.",
+        config=openai_config,
+        response_schema=MathResult,
+    )
+
+    reply = await agent.ask("What is 15 * 7?")
+    result = await reply.content()
+
+    assert isinstance(result, MathResult)
+    assert result.answer == 105
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_structured_output_union(openai_config: OpenAIConfig) -> None:
+    class Success(BaseModel):
+        value: int
+
+    class Error(BaseModel):
+        message: str
+
+    agent = Agent(
+        name="math_agent",
+        prompt="You are a math assistant. If the calculation is valid, return a Success with the value. If invalid, return an Error with a message.",
+        config=openai_config,
+        response_schema=Success | Error,
+    )
+
+    reply = await agent.ask("What is 10 + 5?")
+    result = await reply.content()
+
+    assert isinstance(result, (Success, Error))
+    if isinstance(result, Success):
+        assert result.value == 15
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_multi_turn(openai_config: OpenAIConfig) -> None:
+    agent = Agent(
+        name="memory_agent",
+        prompt="You are a helpful assistant. Be concise.",
+        config=openai_config,
+    )
+
+    reply = await agent.ask("My name is Alice.")
+    assert reply.body is not None
+
+    reply2 = await reply.ask("What is my name?")
+    assert reply2.body is not None
+    assert "Alice" in reply2.body
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio()
+async def test_tool_use_with_structured_output(openai_config: OpenAIConfig) -> None:
+    class WeatherReport(BaseModel):
+        city: str
+        temperature: int
+        condition: str
+
+    def get_weather(city: str) -> str:
+        """Get the current weather for a city."""
+        return f"The weather in {city} is sunny and 22°C."
+
+    agent = Agent(
+        name="weather_agent",
+        prompt="You are a weather assistant. Use the get_weather tool and return structured data.",
+        config=openai_config,
+        tools=[get_weather],
+        response_schema=WeatherReport,
+    )
+
+    reply = await agent.ask("What's the weather in Paris?")
+    result = await reply.content()
+
+    assert isinstance(result, WeatherReport)
+    assert result.city.lower() == "paris"
+    assert result.temperature == 22
