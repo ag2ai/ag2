@@ -23,9 +23,10 @@ import asyncio
 import time
 from collections.abc import Sequence
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from typing_extensions import Self
 
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
@@ -35,10 +36,8 @@ from autogen.beta.network.actor import Actor, _SignalInjectionMiddleware
 from autogen.beta.network.convenience import Network
 from autogen.beta.network.events import (
     DelegationError,
-    DelegationRejected,
     DelegationRequest,
     DelegationResult,
-    ObserverCompleted,
 )
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.observer import BaseObserver
@@ -46,20 +45,15 @@ from autogen.beta.network.primitives.channel import BufferedChannel, PriorityCha
 from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.network.primitives.priority import DefaultPriority, DefaultPriorityScheme
 from autogen.beta.network.primitives.signal import (
-    EmitToStream,
     InjectToPrompt,
     Severity,
     Signal,
-    SignalPolicy,
 )
 from autogen.beta.network.primitives.watch import EventWatch, IntervalWatch
 from autogen.beta.network.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Fanout, Pipeline, RouteDecision
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
-
-from typing_extensions import Self
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -109,10 +103,7 @@ class _RecordingClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         self.calls.append((list(messages), list(context.prompt)))
-        if self._call_count < len(self._responses):
-            resp = self._responses[self._call_count]
-        else:
-            resp = "done"
+        resp = self._responses[self._call_count] if self._call_count < len(self._responses) else "done"
         self._call_count += 1
         if isinstance(resp, str):
             return ModelResponse(message=ModelMessage(content=resp))
@@ -693,7 +684,7 @@ class TestMultipleObserversSignals:
             observers=[obs_a, obs_b],
             tools=[dummy_tool],
         )
-        reply = await actor.ask("go")
+        await actor.ask("go")
 
         # Both observers should have fired (they watch ModelResponse)
         assert obs_a._watch.is_armed is False  # detached

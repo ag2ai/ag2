@@ -8,8 +8,16 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
+from autogen.beta.network.primitives.watch import (
+    AllOf,
+    AnyOf,
+    BatchWatch,
+    DelayWatch,
+    EventWatch,
+    IntervalWatch,
+    Sequence,
+)
 from autogen.beta.stream import MemoryStream
-from autogen.beta.network.primitives.watch import AllOf, AnyOf, BatchWatch, DelayWatch, EventWatch, IntervalWatch, Sequence
 
 
 class TestEventWatch:

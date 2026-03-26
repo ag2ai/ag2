@@ -4,19 +4,15 @@
 
 """Tests for specific bug fixes in the network framework."""
 
-import asyncio
-import logging
 import time
 
 import pytest
 
 from autogen.beta.events import ModelMessage
 from autogen.beta.events.base import BaseEvent
-from autogen.beta.network.primitives.envelope import Envelope, EventRegistry, _import_event_class
-from autogen.beta.network.primitives.priority import DefaultPriority
 from autogen.beta.network.plugins.rate_limiter import RateLimiter
+from autogen.beta.network.primitives.envelope import Envelope, EventRegistry, _import_event_class
 from autogen.beta.network.topology import HubContext
-
 
 # ---------------------------------------------------------------------------
 # Bug 1: _import_event_class can't handle nested class qualnames
@@ -181,7 +177,6 @@ class TestEnvelopePayloadValidation:
     def test_constructor_type_error_wrapped_as_value_error(self) -> None:
         """When event_cls(**payload) raises TypeError, it should be wrapped
         as a ValueError with a clear message including payload keys."""
-        from unittest.mock import MagicMock
 
         # Create a registry with a class whose constructor raises TypeError
         class _BadEvent(BaseEvent):
@@ -307,8 +302,8 @@ class TestHubEmitResilience:
     @pytest.mark.asyncio
     async def test_emit_survives_subscriber_error(self) -> None:
         """A subscriber that raises should not prevent _emit from returning."""
-        from autogen.beta.network.hub import Hub
         from autogen.beta.network.events import DelegationRequest
+        from autogen.beta.network.hub import Hub
 
         hub = Hub()
 
@@ -333,9 +328,9 @@ class TestHubEmitResilience:
     async def test_emit_still_works_for_valid_subscribers(self) -> None:
         """Valid subscribers should still fire even when _emit catches errors."""
         from autogen.beta.annotations import Context
-        from autogen.beta.network.hub import Hub
-        from autogen.beta.network.events import DelegationRequest
         from autogen.beta.events.conditions import TypeCondition
+        from autogen.beta.network.events import DelegationRequest
+        from autogen.beta.network.hub import Hub
 
         hub = Hub()
 
@@ -424,8 +419,11 @@ class TestGeminiUsageNormalization:
         assert usage["candidates_token_count"] == 50
         assert usage["total_token_count"] == 150
 
-    def test_token_monitor_works_with_normalized_keys(self) -> None:
+    @pytest.mark.asyncio
+    async def test_token_monitor_works_with_normalized_keys(self) -> None:
         """TokenMonitor should correctly read total_tokens from normalized usage."""
+        from unittest.mock import MagicMock
+
         from autogen.beta.events import ModelResponse
         from autogen.beta.network.observers.token_monitor import TokenMonitor
 
@@ -443,13 +441,8 @@ class TestGeminiUsageNormalization:
             }
         )
 
-        import asyncio
-        from unittest.mock import MagicMock
-
         ctx = MagicMock()
-        result = asyncio.get_event_loop().run_until_complete(
-            monitor.process([event], ctx)
-        )
+        result = await monitor.process([event], ctx)
 
         assert monitor.total_tokens == 70
         assert result is None  # Under threshold
@@ -754,12 +747,12 @@ class TestSignalPromptCleanupByIndex:
 
     @pytest.mark.asyncio
     async def test_duplicate_prompt_entries_preserved(self) -> None:
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import AsyncMock
 
         from autogen.beta.context import Context
         from autogen.beta.events import ModelMessage, ModelResponse
         from autogen.beta.network.actor import _SignalInjectionMiddleware
-        from autogen.beta.network.primitives.signal import Severity, Signal, SignalPolicy
+        from autogen.beta.network.primitives.signal import Severity, Signal
         from autogen.beta.stream import MemoryStream
 
         stream = MemoryStream()
@@ -934,7 +927,6 @@ class TestActorExecuteResponseSchema:
 
         from autogen.beta.events import ModelMessage
         from autogen.beta.network.actor import Actor
-        from autogen.beta.types import omit
 
         actor = Actor("test-actor")
 

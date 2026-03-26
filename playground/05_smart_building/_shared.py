@@ -40,6 +40,7 @@ BLUE = "\033[94m"
 # HVAC tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def read_temperature(zone: str) -> str:
     """Read current temperature for a building zone.
@@ -49,12 +50,10 @@ async def read_temperature(zone: str) -> str:
     """
     base_temps = {"lobby": 71.0, "office-floor-2": 72.0, "office-floor-3": 70.5, "server-room": 78.0, "parking": 68.0}
     base = base_temps.get(zone, 71.0)
-    if random.random() < 0.3:
-        temp = base + random.choice([-8, -6, 10, 12, 15])
-    else:
-        temp = base + random.uniform(-2.0, 2.0)
+    temp = base + random.choice([-8, -6, 10, 12, 15]) if random.random() < 0.3 else base + random.uniform(-2.0, 2.0)
     status = "NORMAL" if 68.0 <= temp <= 74.0 else "OUT OF RANGE"
     return f"Zone: {zone}\n  Temperature: {temp:.1f}\u00b0F\n  Status: {status}"
+
 
 @tool
 async def adjust_thermostat(zone: str, target_temp: float) -> str:
@@ -65,6 +64,7 @@ async def adjust_thermostat(zone: str, target_temp: float) -> str:
         target_temp: Target temperature in Fahrenheit.
     """
     return f"Thermostat adjusted for {zone}.\n  Target: {target_temp:.0f}\u00b0F\n  ETA: {random.randint(3, 12)} min"
+
 
 @tool
 async def check_air_quality(zone: str) -> str:
@@ -78,6 +78,7 @@ async def check_air_quality(zone: str) -> str:
     humidity = random.uniform(35.0, 60.0)
     return f"Air Quality — {zone}\n  AQI: {aqi}\n  CO2: {co2} ppm\n  Humidity: {humidity:.1f}%"
 
+
 @tool
 async def set_ventilation_mode(zone: str, mode: str) -> str:
     """Set ventilation mode for a building zone.
@@ -89,11 +90,13 @@ async def set_ventilation_mode(zone: str, mode: str) -> str:
     fan = {"normal": "60%", "boost": "100%", "economy": "30%"}
     return f"Ventilation in {zone}: {mode.upper()}, fan speed: {fan.get(mode, '60%')}"
 
+
 hvac_tools = [read_temperature, adjust_thermostat, check_air_quality, set_ventilation_mode]
 
 # ---------------------------------------------------------------------------
 # Security tools
 # ---------------------------------------------------------------------------
+
 
 @tool
 async def check_cameras(zone: str) -> str:
@@ -111,6 +114,7 @@ async def check_cameras(zone: str) -> str:
         detail = "CLEAR — no motion detected"
     return f"Camera Sweep — {zone}\n  {detail}\n  Cameras online: {random.randint(2, 4)}/4"
 
+
 @tool
 async def lock_unlock_door(door_id: str, action: str) -> str:
     """Lock or unlock a building door.
@@ -121,6 +125,7 @@ async def lock_unlock_door(door_id: str, action: str) -> str:
     """
     return f"Door {door_id}: {action.upper()} confirmed. Status: {'SECURED' if action == 'lock' else 'ACCESSIBLE'}"
 
+
 @tool
 async def trigger_alarm(zone: str, alarm_type: str) -> str:
     """Trigger a building alarm.
@@ -130,6 +135,7 @@ async def trigger_alarm(zone: str, alarm_type: str) -> str:
         alarm_type: Type of alarm (fire, intrusion, evacuation).
     """
     return f"ALARM ACTIVATED: {alarm_type.upper()} in {zone}. Security team notified. Strobe/siren: ACTIVE"
+
 
 @tool
 async def log_access_event(person: str, door: str, action: str) -> str:
@@ -142,11 +148,13 @@ async def log_access_event(person: str, door: str, action: str) -> str:
     """
     return f"Access Logged: {person} — {action.upper()} at {door} [{datetime.now().strftime('%H:%M:%S')}]"
 
+
 security_tools = [check_cameras, lock_unlock_door, trigger_alarm, log_access_event]
 
 # ---------------------------------------------------------------------------
 # Energy tools
 # ---------------------------------------------------------------------------
+
 
 @tool
 async def read_power_meters(zone: str) -> str:
@@ -159,6 +167,7 @@ async def read_power_meters(zone: str) -> str:
     draw = random.uniform(1.5, 15.0)
     return f"Power — {zone}\n  Consumption: {kwh:.1f} kWh\n  Current draw: {draw:.1f} kW"
 
+
 @tool
 async def toggle_lighting_zone(zone: str, brightness_pct: int) -> str:
     """Adjust lighting level for a building zone.
@@ -169,12 +178,14 @@ async def toggle_lighting_zone(zone: str, brightness_pct: int) -> str:
     """
     return f"Lighting — {zone}: {brightness_pct}%. Fixtures: {random.randint(8, 24)}"
 
+
 @tool
 async def check_solar_output() -> str:
     """Check rooftop solar panel output and battery status."""
     solar_kw = random.uniform(2.0, 18.0)
     battery_pct = random.randint(20, 95)
     return f"Solar: {solar_kw:.1f} kW output. Battery: {battery_pct}%"
+
 
 @tool
 async def set_power_mode(mode: str) -> str:
@@ -190,11 +201,13 @@ async def set_power_mode(mode: str) -> str:
     }
     return f"Power Mode: {mode.upper()}. {effects.get(mode, 'Standard.')}"
 
+
 energy_tools = [read_power_meters, toggle_lighting_zone, check_solar_output, set_power_mode]
 
 # ---------------------------------------------------------------------------
 # Maintenance tools
 # ---------------------------------------------------------------------------
+
 
 @tool
 async def create_work_order(title: str, priority: str, location: str) -> str:
@@ -207,6 +220,7 @@ async def create_work_order(title: str, priority: str, location: str) -> str:
     """
     wo_id = f"WO-{datetime.now().strftime('%m%d')}-{random.randint(100, 999)}"
     return f"Work Order {wo_id}: {title} [{priority.upper()}] at {location}"
+
 
 @tool
 async def check_equipment_status(equipment: str) -> str:
@@ -226,6 +240,7 @@ async def check_equipment_status(equipment: str) -> str:
     status, detail = statuses.get(equipment, ("UNKNOWN", f"'{equipment}' not in registry"))
     return f"Equipment {equipment}: {status}. {detail}"
 
+
 @tool
 async def schedule_inspection(system: str, date: str) -> str:
     """Schedule an inspection for a building system.
@@ -235,6 +250,7 @@ async def schedule_inspection(system: str, date: str) -> str:
         date: Target date for inspection.
     """
     return f"Inspection scheduled: {system} on {date}. Inspector: {random.choice(['BuildingCert LLC', 'SafetyFirst Inc.'])}"
+
 
 @tool
 async def order_parts(part_name: str, quantity: int) -> str:
@@ -247,11 +263,13 @@ async def order_parts(part_name: str, quantity: int) -> str:
     cost = random.uniform(25.0, 500.0) * quantity
     return f"Ordered {quantity}x {part_name}. Est. cost: ${cost:.2f}. Delivery: {random.randint(1, 5)} days"
 
+
 maintenance_tools = [create_work_order, check_equipment_status, schedule_inspection, order_parts]
 
 # ---------------------------------------------------------------------------
 # Actor factories
 # ---------------------------------------------------------------------------
+
 
 def make_hvac(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
@@ -272,6 +290,7 @@ def make_hvac(model: str = "gemini-3-flash-preview") -> Actor:
         tools=hvac_tools,
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000), LoopDetector(repeat_threshold=3)],
     )
+
 
 def make_security(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
@@ -294,6 +313,7 @@ def make_security(model: str = "gemini-3-flash-preview") -> Actor:
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000), LoopDetector(repeat_threshold=3)],
     )
 
+
 def make_energy(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "energy",
@@ -312,6 +332,7 @@ def make_energy(model: str = "gemini-3-flash-preview") -> Actor:
         tools=energy_tools,
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000), LoopDetector(repeat_threshold=3)],
     )
+
 
 def make_maintenance(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
@@ -336,6 +357,7 @@ def make_maintenance(model: str = "gemini-3-flash-preview") -> Actor:
 # ---------------------------------------------------------------------------
 # Hub stream logger
 # ---------------------------------------------------------------------------
+
 
 def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
     """Subscribe to hub.stream for live event logging."""

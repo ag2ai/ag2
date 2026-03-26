@@ -504,7 +504,7 @@ class CronWatch(_BaseWatch):
         hours = _parse_field(hour_spec, 0, 23)
         doms = _parse_field(dom_spec, 1, 31)
         months = _parse_field(month_spec, 1, 12)
-        dows = {v % 7 for v in _parse_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
+        dow_set = {v % 7 for v in _parse_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
 
         # Search forward from now + 1 minute
         candidate = now.replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)
@@ -514,7 +514,7 @@ class CronWatch(_BaseWatch):
                 and candidate.hour in hours
                 and candidate.day in doms
                 and candidate.month in months
-                and candidate.isoweekday() % 7 in dows
+                and candidate.isoweekday() % 7 in dow_set
             ):
                 return candidate
             candidate += datetime.timedelta(minutes=1)

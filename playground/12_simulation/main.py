@@ -821,7 +821,7 @@ async def main() -> None:
     print(f"    Total completions:  {m.total_completions}")
     print(f"    Total actors:       {total_actors}")
     if m.by_target:
-        print(f"    By target:")
+        print("    By target:")
         for target, count in sorted(m.by_target.items()):
             print(f"      {target}: {count}")
     print()

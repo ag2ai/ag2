@@ -31,7 +31,6 @@ import time
 from datetime import datetime
 
 from autogen.beta.config.gemini import GeminiConfig
-from autogen.beta.events import BaseEvent
 from autogen.beta.network import (
     Actor,
     BasePlugin,
@@ -346,7 +345,7 @@ async def make_offer(
     """
     decision_upper = decision.upper()
     lines = [
-        f"HIRING DECISION",
+        "HIRING DECISION",
         "=" * 40,
         f"  Candidate: {candidate_name}",
         f"  Position: {role}",
@@ -358,17 +357,17 @@ async def make_offer(
     if decision_upper == "HIRE":
         salary = f"${random.randint(150, 250) * 1000:,}"
         lines.extend([
-            f"\n  Offer Details:",
+            "\n  Offer Details:",
             f"    Base Salary: {salary}",
             f"    Equity: {random.randint(5000, 20000):,} RSUs (4-year vest)",
             f"    Sign-on Bonus: ${random.randint(10, 30) * 1000:,}",
-            f"    Benefits: Standard package (health, 401k match, PTO)",
-            f"\n  Next Steps: Send formal offer letter, schedule onboarding",
+            "    Benefits: Standard package (health, 401k match, PTO)",
+            "\n  Next Steps: Send formal offer letter, schedule onboarding",
         ])
     elif decision_upper == "HOLD":
-        lines.append(f"\n  Next Steps: Schedule additional interview round, re-evaluate in 1 week")
+        lines.append("\n  Next Steps: Schedule additional interview round, re-evaluate in 1 week")
     else:
-        lines.append(f"\n  Next Steps: Send personalized rejection with feedback, add to talent pool")
+        lines.append("\n  Next Steps: Send personalized rejection with feedback, add to talent pool")
     return "\n".join(lines)
 
 

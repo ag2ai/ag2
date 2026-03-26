@@ -19,7 +19,6 @@ are exported from this package. For submodule access::
 from .actor import Actor
 
 # Channels
-from .channels.http import HttpChannel
 from .convenience import Network
 
 # Layer 2: Events
@@ -118,6 +117,15 @@ from .topology import (
     Topology,
 )
 
+
+def __getattr__(name: str) -> object:
+    if name == "HttpChannel":
+        from .channels.http import HttpChannel
+
+        return HttpChannel
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = (
     # Building Blocks
     "Actor",
@@ -155,7 +163,7 @@ __all__ = (
     "HaltOnFatal",
     "HarnessMiddleware",
     "HighestPriorityWins",
-    "HttpChannel",
+    "HttpChannel",  # noqa: F822
     "Hub",
     "HubContext",
     "InjectToPrompt",

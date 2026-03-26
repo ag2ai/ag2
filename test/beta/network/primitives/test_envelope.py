@@ -4,9 +4,9 @@
 
 import pytest
 
-from autogen.beta.network.primitives.envelope import Envelope, EventRegistry, register_event
 from autogen.beta.events import ModelMessage
 from autogen.beta.events.base import BaseEvent
+from autogen.beta.network.primitives.envelope import Envelope, EventRegistry, register_event
 from autogen.beta.network.primitives.priority import DefaultPriority
 
 

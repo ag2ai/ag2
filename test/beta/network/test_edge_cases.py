@@ -22,21 +22,14 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage
-from autogen.beta.events.base import BaseEvent
 from autogen.beta.network.convenience import Network
-from autogen.beta.network.events import (
-    DelegationRejected,
-    DelegationRequest,
-    DelegationResult,
-)
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.signal import Severity, Signal
+from autogen.beta.network.primitives.signal import Signal
 from autogen.beta.network.primitives.watch import CronWatch, EventWatch, IntervalWatch
 from autogen.beta.network.scheduler import Scheduler, WatchStatus
-from autogen.beta.network.topology import BasePlugin, HubContext, Pipeline
+from autogen.beta.network.topology import BasePlugin, Pipeline
 from autogen.beta.stream import MemoryStream
-
 
 # ---------------------------------------------------------------------------
 # Mock helpers

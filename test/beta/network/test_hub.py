@@ -209,7 +209,7 @@ class TestHubDelegation:
         # Pass a dummy tool that looks like a FunctionTool
         class _DummyTool:
             class _Schema:
-                class function:
+                class function:  # noqa: N801
                     name = "my_tool"
 
             schema = _Schema()

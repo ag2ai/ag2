@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+
 import pytest
 
 from autogen.beta.network.primitives.infra import (
@@ -147,8 +149,7 @@ class TestLocalRegistry:
         await registry.register("a", info)
         old_hb = info.last_heartbeat
 
-        import time
-        time.sleep(0.01)
+        await asyncio.sleep(0.01)
         await registry.heartbeat("a")
 
         results = await registry.discover()

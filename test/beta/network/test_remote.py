@@ -8,13 +8,11 @@ Tests RemoteAgent, Hub HTTP server endpoints, Hub.connect(), and
 end-to-end cross-hub delegation.
 """
 
-import asyncio
 
 import pytest
 
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.remote import RemoteAgent, RemoteAgentReply
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -104,12 +102,11 @@ class TestHubServer:
         async with hub.serve(host="127.0.0.1", port=_PORT_A):
             from aiohttp import ClientSession
 
-            async with ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{_PORT_A}/health") as resp:
-                    assert resp.status == 200
-                    data = await resp.json()
-                    assert data["status"] == "healthy"
-                    assert data["agents"] == 1
+            async with ClientSession() as session, session.get(f"http://127.0.0.1:{_PORT_A}/health") as resp:
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["status"] == "healthy"
+                assert data["agents"] == 1
 
     @pytest.mark.asyncio
     async def test_serve_without_host_no_server(self) -> None:
@@ -136,14 +133,13 @@ class TestHubServer:
         async with hub.serve(host="127.0.0.1", port=_PORT_A):
             from aiohttp import ClientSession
 
-            async with ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{_PORT_A}/discover") as resp:
-                    assert resp.status == 200
-                    data = await resp.json()
-                    agents = data["agents"]
-                    assert len(agents) == 2
-                    names = {a["name"] for a in agents}
-                    assert names == {"researcher", "writer"}
+            async with ClientSession() as session, session.get(f"http://127.0.0.1:{_PORT_A}/discover") as resp:
+                assert resp.status == 200
+                data = await resp.json()
+                agents = data["agents"]
+                assert len(agents) == 2
+                names = {a["name"] for a in agents}
+                assert names == {"researcher", "writer"}
 
     @pytest.mark.asyncio
     async def test_discover_endpoint_filters_remote_agents(self) -> None:
@@ -156,12 +152,11 @@ class TestHubServer:
         async with hub.serve(host="127.0.0.1", port=_PORT_A):
             from aiohttp import ClientSession
 
-            async with ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{_PORT_A}/discover") as resp:
-                    data = await resp.json()
-                    names = {a["name"] for a in data["agents"]}
-                    assert "local_agent" in names
-                    assert "remote_agent" not in names
+            async with ClientSession() as session, session.get(f"http://127.0.0.1:{_PORT_A}/discover") as resp:
+                data = await resp.json()
+                names = {a["name"] for a in data["agents"]}
+                assert "local_agent" in names
+                assert "remote_agent" not in names
 
     @pytest.mark.asyncio
     async def test_delegate_endpoint(self) -> None:
@@ -212,12 +207,14 @@ class TestHubServer:
         async with hub.serve(host="127.0.0.1", port=_PORT_A):
             from aiohttp import ClientSession
 
-            async with ClientSession() as session:
-                async with session.post(
+            async with (
+                ClientSession() as session,
+                session.post(
                     f"http://127.0.0.1:{_PORT_A}/delegate",
                     json={"agent": "worker"},  # missing 'task'
-                ) as resp:
-                    assert resp.status == 400
+                ) as resp,
+            ):
+                assert resp.status == 400
 
 
 # ---------------------------------------------------------------------------
@@ -340,20 +337,19 @@ class TestCrossHubDelegation:
             capabilities=["writing"],
         )
 
-        async with hub_a.serve(host="127.0.0.1", port=_PORT_A):
-            async with hub_b.serve(host="127.0.0.1", port=_PORT_B):
-                # A connects to B
-                await hub_a.connect(f"http://127.0.0.1:{_PORT_B}")
-                # B connects to A
-                await hub_b.connect(f"http://127.0.0.1:{_PORT_A}")
+        async with hub_a.serve(host="127.0.0.1", port=_PORT_A), hub_b.serve(host="127.0.0.1", port=_PORT_B):
+            # A connects to B
+            await hub_a.connect(f"http://127.0.0.1:{_PORT_B}")
+            # B connects to A
+            await hub_b.connect(f"http://127.0.0.1:{_PORT_A}")
 
-                # A can delegate to writer (on B)
-                result_a = await hub_a.delegate("researcher", "writer", "Write report")
-                assert result_a == "writing done"
+            # A can delegate to writer (on B)
+            result_a = await hub_a.delegate("researcher", "writer", "Write report")
+            assert result_a == "writing done"
 
-                # B can delegate to researcher (on A)
-                result_b = await hub_b.delegate("writer", "researcher", "Research topic")
-                assert result_b == "research done"
+            # B can delegate to researcher (on A)
+            result_b = await hub_b.delegate("writer", "researcher", "Research topic")
+            assert result_b == "research done"
 
     @pytest.mark.asyncio
     async def test_remote_agent_handles_failure_gracefully(self) -> None:
@@ -401,9 +397,8 @@ class TestHubCloseRemote:
         async with hub.serve(host="127.0.0.1", port=_PORT_A):
             from aiohttp import ClientSession
 
-            async with ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{_PORT_A}/health") as resp:
-                    assert resp.status == 200
+            async with ClientSession() as session, session.get(f"http://127.0.0.1:{_PORT_A}/health") as resp:
+                assert resp.status == 200
 
         # Server should be stopped now — connection should fail
         from aiohttp import ClientSession

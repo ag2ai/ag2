@@ -24,7 +24,7 @@ import pytest
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.base import BaseEvent
-from autogen.beta.network.events import DelegationResult, SchedulerTriggerFired
+from autogen.beta.network.events import SchedulerTriggerFired
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.primitives.watch import (
     CronWatch,
@@ -35,7 +35,6 @@ from autogen.beta.network.primitives.watch import (
 )
 from autogen.beta.network.scheduler import Scheduler, WatchStatus
 from autogen.beta.stream import MemoryStream
-
 
 # ---------------------------------------------------------------------------
 # Mock helpers
@@ -226,7 +225,7 @@ class TestSchedulerEdgeCases:
     async def test_add_with_no_callback_and_no_target(self) -> None:
         """add() with neither callback nor target: fires silently do nothing."""
         scheduler = Scheduler()
-        wid = scheduler.add(IntervalWatch(0.05))
+        scheduler.add(IntervalWatch(0.05))
         await scheduler.start()
 
         # Let it fire a few times — should not crash
@@ -459,7 +458,6 @@ class TestCronWatchArmFire:
         watch = CronWatch("* * * * *")  # Every minute
 
         # Monkey-patch to fire almost immediately
-        original = watch._next_fire_time
 
         def _fast_next(now):
             return now + datetime.timedelta(milliseconds=50)

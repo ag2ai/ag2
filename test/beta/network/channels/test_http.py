@@ -129,11 +129,10 @@ class TestHttpChannelCrossProcess:
         await receiver.start_server()
 
         try:
-            async with ClientSession() as session:
-                async with session.get("http://127.0.0.1:18903/health") as resp:
-                    assert resp.status == 200
-                    data = await resp.json()
-                    assert data["status"] == "healthy"
+            async with ClientSession() as session, session.get("http://127.0.0.1:18903/health") as resp:
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["status"] == "healthy"
         finally:
             await receiver.close()
 

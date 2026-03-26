@@ -129,7 +129,6 @@ class TestFanout:
 
         assert result is None
 
-
     @pytest.mark.asyncio
     async def test_rejection_preserves_additional_regardless_of_order(self) -> None:
         """Additional envelopes are preserved even when the rejecting plugin

@@ -21,15 +21,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from autogen.beta.annotations import Context
 from autogen.beta.config.gemini import GeminiConfig
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolResultEvent
+from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network import (
     Actor,
@@ -1060,13 +1059,9 @@ async def analyze_mention(mention_text: str, source: str, author: str, reach: in
         category = "legal"
     elif any(kw in text_lower for kw in ["battery", "drain", "crack", "broken", "defect", "fail", "won't turn on"]):
         category = "defect"
-    elif any(kw in text_lower for kw in ["viral", "worst", "rant", "thread", "fail"]) and reach > 50_000:
+    elif any(kw in text_lower for kw in ["viral", "worst", "rant", "thread", "fail"]) and reach > 50_000 or any(kw in text_lower for kw in ["stock", "shares", "downgrad", "analyst"]):
         category = "pr_risk"
-    elif any(kw in text_lower for kw in ["stock", "shares", "downgrad", "analyst"]):
-        category = "pr_risk"
-    elif any(kw in text_lower for kw in ["compar", "vs", "versus", "apple watch", "fitbit", "samsung", "garmin"]):
-        category = "competitor"
-    elif any(kw in text_lower for kw in ["price", "overpriced", "expensive", "cost", "cheaper"]):
+    elif any(kw in text_lower for kw in ["compar", "vs", "versus", "apple watch", "fitbit", "samsung", "garmin"]) or any(kw in text_lower for kw in ["price", "overpriced", "expensive", "cost", "cheaper"]):
         category = "competitor"
     elif any(kw in text_lower for kw in ["wish", "should add", "feature", "missing", "need"]):
         category = "feature_request"
@@ -1081,15 +1076,10 @@ async def analyze_mention(mention_text: str, source: str, author: str, reach: in
                    "burn", "rash", "melt", "avoid", "useless", "insane", "overpriced"]
     pos_count = sum(1 for kw in positive_kw if kw in text_lower)
     neg_count = sum(1 for kw in negative_kw if kw in text_lower)
-    if pos_count + neg_count > 0:
-        sentiment_score = round((pos_count - neg_count) / (pos_count + neg_count), 2)
-    else:
-        sentiment_score = 0.0
+    sentiment_score = round((pos_count - neg_count) / (pos_count + neg_count), 2) if pos_count + neg_count > 0 else 0.0
 
     # Urgency assessment
-    if category in ("safety", "legal"):
-        urgency = "critical"
-    elif category == "pr_risk" and reach > 100_000:
+    if category in ("safety", "legal") or category == "pr_risk" and reach > 100_000:
         urgency = "critical"
     elif category == "pr_risk" or (category == "defect" and reach > 10_000):
         urgency = "high"
@@ -1310,7 +1300,7 @@ async def analyze_competitor(competitor_name: str, dimension: str = "overall") -
         lines.append(f"  Price gap analysis: {competitor_name} offers better value at current pricing")
     elif price_diff < 0:
         lines.append(f"  vs NovaBand X1: We are ${abs(price_diff)} LESS expensive")
-        lines.append(f"  Price gap analysis: NovaBand X1 positioned as value alternative")
+        lines.append("  Price gap analysis: NovaBand X1 positioned as value alternative")
     else:
         lines.append("  vs NovaBand X1: Price parity")
 
@@ -1376,9 +1366,9 @@ async def compare_features(our_product: str, competitor_product: str, feature_ca
     if losses > wins:
         lines.append(f"  Assessment: {competitor_product} has competitive advantages we need to address")
     elif wins > losses:
-        lines.append(f"  Assessment: NovaBand X1 holds competitive edge in key areas")
+        lines.append("  Assessment: NovaBand X1 holds competitive edge in key areas")
     else:
-        lines.append(f"  Assessment: Products are closely matched — differentiation needed")
+        lines.append("  Assessment: Products are closely matched — differentiation needed")
 
     return "\n".join(lines)
 
@@ -1492,7 +1482,7 @@ async def draft_response(platform: str, issue_summary: str, tone: str = "empathe
         f"  Tone: {tone}\n"
         f"  Issue: {issue_summary[:150]}\n\n"
         f"  Draft:\n"
-        f"  \"{draft}\"\n\n"
+        f'  "{draft}"\n\n'
         f"  Guidelines:\n"
         f"    - Respond on the same platform where the mention appeared\n"
         f"    - Use the author's name if available\n"
@@ -1525,17 +1515,17 @@ async def create_comms_plan(situation_summary: str, severity: str = "high") -> s
         f"  Timeline: {timeline}\n"
         f"  Situation: {situation_summary[:200]}\n\n"
         f"  Channels:\n" +
-        "\n".join(f"    {i+1}. {ch}" for i, ch in enumerate(channels)) +
-        f"\n\n  Key Messages:\n"
-        f"    1. Acknowledge the issue transparently\n"
-        f"    2. Outline concrete steps being taken\n"
-        f"    3. Provide direct support contact\n"
-        f"    4. Commit to follow-up communication with timeline\n\n"
-        f"  Stakeholder Notifications:\n"
-        f"    - Engineering: Immediate briefing on customer-facing issues\n"
-        f"    - Legal: Review all external communications before publishing\n"
-        f"    - Executive team: Situation brief within 1 hour\n"
-        f"    - Customer support: Updated talking points and escalation paths"
+        "\n".join(f"    {i + 1}. {ch}" for i, ch in enumerate(channels)) +
+        "\n\n  Key Messages:\n"
+        "    1. Acknowledge the issue transparently\n"
+        "    2. Outline concrete steps being taken\n"
+        "    3. Provide direct support contact\n"
+        "    4. Commit to follow-up communication with timeline\n\n"
+        "  Stakeholder Notifications:\n"
+        "    - Engineering: Immediate briefing on customer-facing issues\n"
+        "    - Legal: Review all external communications before publishing\n"
+        "    - Executive team: Situation brief within 1 hour\n"
+        "    - Customer support: Updated talking points and escalation paths"
     )
 
 
@@ -1595,7 +1585,7 @@ async def notify_stakeholders(ticket_id: str, stakeholder_groups: str, message: 
         f"Stakeholder Notifications for {ticket_id}:\n"
         + "\n".join(notifications) +
         f"\n\n  Message sent:\n"
-        f"  \"{message[:200]}\"\n\n"
+        f'  "{message[:200]}"\n\n'
         f"  All notifications delivered at {datetime.now().strftime('%H:%M:%S')}"
     )
 
@@ -1623,12 +1613,12 @@ async def assess_legal_risk(issue_description: str, mention_count: int = 1, seve
                    "HIGH" if any(f[1] == "HIGH" for f in factors) else "MEDIUM"
 
     lines = [
-        f"Legal Risk Assessment:",
+        "Legal Risk Assessment:",
         f"  Overall Risk: {overall_risk}",
         f"  Complaint Volume: {mention_count} mentions",
         f"  Severity: {severity}",
-        f"",
-        f"  Risk Factors:",
+        "",
+        "  Risk Factors:",
     ]
     for factor, level in factors:
         lines.append(f"    [{level}] {factor}")
@@ -1640,7 +1630,7 @@ async def assess_legal_risk(issue_description: str, mention_count: int = 1, seve
         "    2. Engage product liability counsel for preliminary assessment",
         "    3. Review product insurance coverage and notification obligations",
         "    4. Prepare regulatory response if CPSC complaint threshold is met",
-        f"    5. Document all corrective actions taken (for litigation defense)",
+        "    5. Document all corrective actions taken (for litigation defense)",
     ])
 
     return "\n".join(lines)
@@ -2024,7 +2014,7 @@ async def main() -> None:
     print(f"  {_CYAN}Scenario:{_RESET}  {scenario_title}")
     print(f"  {_CYAN}Model:{_RESET}     {model}")
     print(f"  {_CYAN}Agents:{_RESET}    collector, analyst (pro), product-inspector,")
-    print(f"             market-intel, pr-responder (pro), escalation (pro)")
+    print("             market-intel, pr-responder (pro), escalation (pro)")
     print()
     print(f"  {_BOLD}VoC Pipeline:{_RESET}")
     print("    collector -> analyst -> product-inspector")
@@ -2161,7 +2151,7 @@ async def main() -> None:
 
     # VolumeTracker (on analyst)
     s = volume_tracker.stats
-    print(f"    VolumeTracker:")
+    print("    VolumeTracker:")
     print(f"      Mentions analyzed: {s['total_analyzed']}")
     print(f"      Spikes detected: {s['spikes_detected']}")
     if s["category_counts"]:
@@ -2169,7 +2159,7 @@ async def main() -> None:
 
     # SentimentMonitor (on analyst)
     s = sentiment_monitor.stats
-    print(f"    SentimentMonitor:")
+    print("    SentimentMonitor:")
     print(f"      Mentions scored: {s['total_scored']}")
     avg = s["average_sentiment"]
     color = _RED if avg < -0.3 else _YELLOW if avg < 0 else _GREEN
@@ -2178,12 +2168,12 @@ async def main() -> None:
 
     # SourceHealthCheck (on collector)
     s = source_health_check.stats
-    print(f"    SourceHealthCheck:")
+    print("    SourceHealthCheck:")
     for src_name, status in s["source_status"].items():
         src_color = _GREEN if status == "healthy" else _YELLOW
         print(f"      {src_name}: {src_color}{status}{_RESET}")
     if not s["source_status"]:
-        print(f"      No sources monitored")
+        print("      No sources monitored")
     print()
 
     print(f"  {_BOLD}Telemetry:{_RESET}")

@@ -4,8 +4,8 @@
 
 import pytest
 
-from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.events import ModelMessage
+from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.network.primitives.priority import (
     DefaultPriority,
     DefaultPriorityScheme,

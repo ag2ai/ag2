@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _shared import BOLD, CYAN, DIM, GREEN, MAGENTA, PORTS, RED, RESET, YELLOW, subscribe_hub_logging
+from _shared import BOLD, CYAN, DIM, GREEN, PORTS, RED, RESET, YELLOW, subscribe_hub_logging
 
 from autogen.beta.network import IntervalWatch, Network, TelemetryPlugin
 
@@ -52,13 +52,17 @@ async def main() -> None:
     i = 0
     while i < len(argv):
         if argv[i] == "--model" and i + 1 < len(argv):
-            model = argv[i + 1]; i += 2
+            model = argv[i + 1]
+            i += 2
         elif argv[i] == "--scenario" and i + 1 < len(argv):
-            scenario_num = int(argv[i + 1]); i += 2
+            scenario_num = int(argv[i + 1])
+            i += 2
         elif argv[i] == "--duration" and i + 1 < len(argv):
-            duration = int(argv[i + 1]); i += 2
+            duration = int(argv[i + 1])
+            i += 2
         elif not argv[i].startswith("-"):
-            custom = argv[i]; i += 1
+            custom = argv[i]
+            i += 1
         else:
             i += 1
 
@@ -205,7 +209,7 @@ def _print_telemetry(telemetry: TelemetryPlugin, elapsed: float) -> None:
     print(f"    Total delegations:  {m.total_delegations}")
     print(f"    Total completions:  {m.total_completions}")
     if m.by_target:
-        print(f"    By target:")
+        print("    By target:")
         for agent, count in sorted(m.by_target.items()):
             print(f"      {agent}: {count}")
     print(f"    Runtime: {elapsed:.1f}s")

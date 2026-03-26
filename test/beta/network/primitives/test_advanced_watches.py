@@ -160,7 +160,8 @@ class TestCronWatch:
         # Both should resolve to the same Sunday
         assert nxt_seven == nxt_zero
 
-    def test_arm_and_disarm(self) -> None:
+    @pytest.mark.asyncio
+    async def test_arm_and_disarm(self) -> None:
         stream = MemoryStream()
 
         async def callback(events, ctx):

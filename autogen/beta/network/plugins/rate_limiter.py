@@ -14,7 +14,7 @@ from ..primitives.envelope import Envelope
 from ..topology import BasePlugin, HubContext
 
 if TYPE_CHECKING:
-    from ..hub import Hub
+    pass
 
 
 class RateLimiter(BasePlugin):

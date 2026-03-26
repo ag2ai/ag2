@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _shared import BOLD, GREEN, PORTS, RESET, DIM, make_ems, make_hospital, subscribe_hub_logging
+from _shared import BOLD, DIM, GREEN, PORTS, RESET, make_ems, make_hospital, subscribe_hub_logging
 
 from autogen.beta.network import Hub
 

@@ -16,9 +16,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from _shared import BOLD, DIM, GREEN, PORTS, RED, RESET, YELLOW, make_dispatch, subscribe_hub_logging
 from aiohttp import web
-
-from _shared import BOLD, DIM, GREEN, MAGENTA, PORTS, RED, RESET, YELLOW, make_dispatch, subscribe_hub_logging
 
 from autogen.beta.network import Hub, TelemetryPlugin
 
@@ -151,9 +150,9 @@ async def main() -> None:
         print(f"    {a.name} [{caps}]")
     print()
     print(f"  {DIM}Endpoints:{RESET}")
-    print(f"    POST /emergency  — send an emergency call")
-    print(f"    POST /connect    — connect a new service")
-    print(f"    GET  /status     — show connected services")
+    print("    POST /emergency  — send an emergency call")
+    print("    POST /connect    — connect a new service")
+    print("    GET  /status     — show connected services")
     print()
     print(f"  {YELLOW}Serving on http://0.0.0.0:{port} — Ctrl+C to stop{RESET}")
     print(f"  {GREEN}Ready — waiting for emergency calls...{RESET}")

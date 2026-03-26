@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from autogen.beta.network.primitives.channel import BufferedChannel, LocalChannel, PriorityChannel
-from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.network.primitives.channel import BufferedChannel, LocalChannel, PriorityChannel
+from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.network.primitives.priority import DefaultPriority
 
 

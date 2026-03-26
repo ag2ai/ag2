@@ -4,7 +4,6 @@
 
 import pytest
 
-from autogen.beta.network.events import DelegationRequest, DelegationResult
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.plugins.telemetry import DelegationMetrics, TelemetryPlugin
 

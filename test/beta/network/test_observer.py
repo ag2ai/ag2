@@ -5,12 +5,12 @@
 import pytest
 
 from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent, ModelMessage, ToolCallEvent
+from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network.observer import BaseObserver
 from autogen.beta.network.primitives.signal import Severity, Signal
-from autogen.beta.stream import MemoryStream
 from autogen.beta.network.primitives.watch import EventWatch
+from autogen.beta.stream import MemoryStream
 
 
 class DummyObserver(BaseObserver):

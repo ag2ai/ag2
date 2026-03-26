@@ -38,6 +38,7 @@ MAGENTA = "\033[95m"
 # Dispatch tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def log_emergency(caller_name: str, location: str, description: str, severity: str = "unknown") -> str:
     """Log an incoming emergency call and create an incident record.
@@ -58,6 +59,7 @@ async def log_emergency(caller_name: str, location: str, description: str, sever
 # EMS tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def dispatch_ambulance(location: str, priority: str = "high") -> str:
     """Dispatch an ambulance unit to the specified location.
@@ -73,6 +75,7 @@ async def dispatch_ambulance(location: str, priority: str = "high") -> str:
         f"  Priority: {priority}, ETA: {eta} min\n"
         f"  Crew: 2 paramedics + 1 EMT, Equipment: ALS"
     )
+
 
 @tool
 async def assess_patient(symptoms: str, mechanism_of_injury: str = "") -> str:
@@ -92,6 +95,7 @@ async def assess_patient(symptoms: str, mechanism_of_injury: str = "") -> str:
         f"  Recommendation: Immediate transport to Level 1 trauma center"
     )
 
+
 @tool
 async def update_patient_status(status: str, vitals: str = "") -> str:
     """Update the patient's current medical status during transport.
@@ -106,6 +110,7 @@ async def update_patient_status(status: str, vitals: str = "") -> str:
 # Police tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def dispatch_patrol_unit(location: str, unit_type: str = "patrol") -> str:
     """Dispatch a police unit to the scene.
@@ -117,6 +122,7 @@ async def dispatch_patrol_unit(location: str, unit_type: str = "patrol") -> str:
     uid = f"UNIT-{random.randint(10, 99)}"
     eta = random.randint(3, 8)
     return f"Police {unit_type} {uid} dispatched to {location}. ETA: {eta} min, Officers: 2"
+
 
 @tool
 async def setup_traffic_control(location: str, action: str, lanes_affected: str = "all") -> str:
@@ -131,6 +137,7 @@ async def setup_traffic_control(location: str, action: str, lanes_affected: str 
         f"Traffic Control at {location}: {action}, lanes: {lanes_affected}. "
         f"Barriers deployed, nav advisory issued."
     )
+
 
 @tool
 async def file_incident_report(incident_type: str, details: str) -> str:
@@ -147,6 +154,7 @@ async def file_incident_report(incident_type: str, details: str) -> str:
 # Hospital tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def check_er_capacity(department: str = "trauma") -> str:
     """Check current ER capacity and bed availability.
@@ -156,6 +164,7 @@ async def check_er_capacity(department: str = "trauma") -> str:
     """
     avail = random.randint(1, 5)
     return f"ER [{department.upper()}]: {avail}/12 beds, {min(avail, 3)} trauma bays open. Status: ACCEPTING"
+
 
 @tool
 async def prepare_trauma_bay(patient_info: str, eta_minutes: int = 10) -> str:
@@ -170,6 +179,7 @@ async def prepare_trauma_bay(patient_info: str, eta_minutes: int = 10) -> str:
         f"{bay} prepared for: {patient_info}\n"
         f"  ETA: {eta_minutes} min. Blood on standby, CT reserved, surgical team notified."
     )
+
 
 @tool
 async def assign_specialist(specialty: str, urgency: str = "stat") -> str:
@@ -187,6 +197,7 @@ async def assign_specialist(specialty: str, urgency: str = "stat") -> str:
 # Fire department tools
 # ---------------------------------------------------------------------------
 
+
 @tool
 async def dispatch_fire_engine(location: str, engine_type: str = "standard") -> str:
     """Dispatch a fire engine to the specified location.
@@ -202,6 +213,7 @@ async def dispatch_fire_engine(location: str, engine_type: str = "standard") -> 
         f"Fire Engine {uid} ({engine_type}) dispatched to {location}.\n"
         f"  ETA: {eta} min, Crew: {crew} firefighters"
     )
+
 
 @tool
 async def assess_fire_hazard(location: str, situation: str) -> str:
@@ -223,6 +235,7 @@ async def assess_fire_hazard(location: str, situation: str) -> str:
         f"  Recommendation: Establish {200 if wind_speed > 15 else 100}ft perimeter"
     )
 
+
 @tool
 async def establish_perimeter(location: str, radius_feet: int = 200) -> str:
     """Establish a safety perimeter around the incident scene.
@@ -241,6 +254,7 @@ async def establish_perimeter(location: str, radius_feet: int = 200) -> str:
 # ---------------------------------------------------------------------------
 # Actor factories
 # ---------------------------------------------------------------------------
+
 
 def make_dispatch(model: str = "gemini-3.1-pro-preview") -> Actor:
     return Actor(
@@ -268,6 +282,7 @@ def make_dispatch(model: str = "gemini-3.1-pro-preview") -> Actor:
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000)],
     )
 
+
 def make_ems(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "ems",
@@ -290,6 +305,7 @@ def make_ems(model: str = "gemini-3-flash-preview") -> Actor:
         observers=[LoopDetector(repeat_threshold=3)],
     )
 
+
 def make_police(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "police",
@@ -305,6 +321,7 @@ def make_police(model: str = "gemini-3-flash-preview") -> Actor:
         tools=[dispatch_patrol_unit, setup_traffic_control, file_incident_report],
         observers=[LoopDetector(repeat_threshold=3)],
     )
+
 
 def make_hospital(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
@@ -328,6 +345,7 @@ def make_hospital(model: str = "gemini-3-flash-preview") -> Actor:
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000)],
     )
 
+
 def make_fire_chief(model: str = "gemini-3-flash-preview") -> Actor:
     return Actor(
         "fire",
@@ -348,6 +366,7 @@ def make_fire_chief(model: str = "gemini-3-flash-preview") -> Actor:
 # ---------------------------------------------------------------------------
 # Hub stream logger — subscribe to hub.stream for colored event output
 # ---------------------------------------------------------------------------
+
 
 def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
     """Subscribe to hub.stream for live delegation/result/signal logging."""

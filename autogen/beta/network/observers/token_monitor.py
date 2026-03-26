@@ -50,10 +50,7 @@ class TokenMonitor(BaseObserver):
         self, events: list[BaseEvent], ctx: Context
     ) -> Signal | None:
         for event in events:
-            if isinstance(event, ModelResponse):
-                usage = event.usage or {}
-                self._total_tokens += int(usage.get("total_tokens", 0))
-            elif isinstance(event, TaskResult):
+            if isinstance(event, (ModelResponse, TaskResult)):
                 usage = event.usage or {}
                 self._total_tokens += int(usage.get("total_tokens", 0))
 

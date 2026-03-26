@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+from typing_extensions import Self
 
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
@@ -45,15 +46,13 @@ from autogen.beta.network.primitives.signal import (
     Severity,
     Signal,
 )
-from autogen.beta.network.primitives.watch import EventWatch, IntervalWatch, Sequence as SequenceWatch
+from autogen.beta.network.primitives.watch import EventWatch, IntervalWatch
+from autogen.beta.network.primitives.watch import Sequence as SequenceWatch
 from autogen.beta.network.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Pipeline
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools.final import tool
-
-from typing_extensions import Self
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -81,10 +80,7 @@ class _RecordingClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         self.calls.append((list(messages), list(context.prompt)))
-        if self._call_count < len(self._responses):
-            resp = self._responses[self._call_count]
-        else:
-            resp = "done"
+        resp = self._responses[self._call_count] if self._call_count < len(self._responses) else "done"
         self._call_count += 1
         if isinstance(resp, str):
             return ModelResponse(message=ModelMessage(content=resp))
@@ -410,7 +406,7 @@ class TestSpawnTask:
         stream.subscribe(lambda e: task_requests.append(e), condition=TypeCondition(TaskRequest))
         stream.subscribe(lambda e: task_results.append(e), condition=TypeCondition(TaskResult))
 
-        reply = await actor.ask("Do research", stream=stream)
+        await actor.ask("Do research", stream=stream)
 
         assert len(task_requests) == 1
         assert task_requests[0].task == "research AI trends"
@@ -662,9 +658,9 @@ class TestHubTopologyTaskPreservation:
         await hub.register(agent_b, capabilities=["work"])
 
         # Delegate to agent-a, but plugin reroutes to agent-b with modified task
-        result = await hub.delegate("caller", "agent-a", "original task")
+        await hub.delegate("caller", "agent-a", "original task")
 
         # agent-b should have received the modified task, not agent-a
         assert len(agent_a.asked) == 0
         assert len(agent_b.asked) == 1
-        assert "MODIFIED: original task" == agent_b.asked[0]
+        assert agent_b.asked[0] == "MODIFIED: original task"
