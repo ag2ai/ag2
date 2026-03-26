@@ -109,3 +109,15 @@ def convert_messages(
             result.append(types.Content(role="user", parts=parts_list))
 
     return result
+
+
+def normalize_usage(metadata: Any) -> dict[str, Any]:
+    """Build usage dict from Gemini UsageMetadata, normalizing to standard keys."""
+    usage: dict[str, Any] = {
+        "prompt_tokens": metadata.prompt_token_count,
+        "completion_tokens": metadata.candidates_token_count,
+        "total_tokens": metadata.total_token_count,
+    }
+    if metadata.cached_content_token_count:
+        usage["cache_read_input_tokens"] = metadata.cached_content_token_count
+    return usage

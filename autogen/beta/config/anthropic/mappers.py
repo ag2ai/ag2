@@ -144,3 +144,16 @@ def convert_messages(
             result.append({"role": "user", "content": tool_results})
 
     return result
+
+
+def normalize_usage(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Anthropic's native usage keys to standard format."""
+    usage: dict[str, Any] = {
+        "prompt_tokens": raw.get("input_tokens", 0),
+        "completion_tokens": raw.get("output_tokens", 0),
+    }
+    if raw.get("cache_creation_input_tokens"):
+        usage["cache_creation_input_tokens"] = raw["cache_creation_input_tokens"]
+    if raw.get("cache_read_input_tokens"):
+        usage["cache_read_input_tokens"] = raw["cache_read_input_tokens"]
+    return usage

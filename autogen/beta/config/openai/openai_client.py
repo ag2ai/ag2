@@ -29,7 +29,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_schema, tool_to_api
+from .mappers import convert_messages, normalize_usage, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -161,7 +161,7 @@ class OpenAIClient(LLMClient):
             return ModelResponse(
                 message=model_msg,
                 tool_calls=ToolCallsEvent(calls=calls),
-                usage=self._normalize_usage(completion.usage.model_dump() if completion.usage else {}),
+                usage=normalize_usage(completion.usage.model_dump() if completion.usage else {}),
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
@@ -236,17 +236,8 @@ class OpenAIClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=self._normalize_usage(usage),
+            usage=normalize_usage(usage),
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
         )
-
-    @staticmethod
-    def _normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
-        """Lift OpenAI's nested cache token counts to top-level keys."""
-        details = usage.get("prompt_tokens_details") or {}
-        cached = details.get("cached_tokens")
-        if cached:
-            usage["cache_read_input_tokens"] = cached
-        return usage

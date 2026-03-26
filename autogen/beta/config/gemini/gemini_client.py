@@ -26,7 +26,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_system_instruction, build_tools, convert_messages, response_proto_to_config
+from .mappers import build_system_instruction, build_tools, convert_messages, normalize_usage, response_proto_to_config
 
 
 class CreateConfig(TypedDict, total=False):
@@ -133,7 +133,7 @@ class GeminiClient(LLMClient):
 
         usage = {}
         if response.usage_metadata:
-            usage = self._normalize_usage(response.usage_metadata)
+            usage = normalize_usage(response.usage_metadata)
 
         finish_reason = None
         if response.candidates:
@@ -184,7 +184,7 @@ class GeminiClient(LLMClient):
                             )
 
             if chunk.usage_metadata:
-                usage = self._normalize_usage(chunk.usage_metadata)
+                usage = normalize_usage(chunk.usage_metadata)
 
             if chunk.candidates:
                 fr = chunk.candidates[0].finish_reason
@@ -204,19 +204,3 @@ class GeminiClient(LLMClient):
             provider="google",
             finish_reason=finish_reason,
         )
-
-    @staticmethod
-    def _normalize_usage(metadata: Any) -> dict[str, Any]:
-        """Build usage dict from Gemini UsageMetadata, normalizing to standard keys."""
-        usage: dict[str, Any] = {
-            "prompt_tokens": metadata.prompt_token_count,
-            "completion_tokens": metadata.candidates_token_count,
-            "total_tokens": metadata.total_token_count,
-            # Keep Gemini-native keys for backward compatibility
-            "prompt_token_count": metadata.prompt_token_count,
-            "candidates_token_count": metadata.candidates_token_count,
-            "total_token_count": metadata.total_token_count,
-        }
-        if metadata.cached_content_token_count:
-            usage["cache_read_input_tokens"] = metadata.cached_content_token_count
-        return usage

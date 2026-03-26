@@ -199,3 +199,25 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": "code_interpreter", "container": {"type": "auto"}}
 
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
+    """Lift OpenAI's nested cache token counts to top-level keys."""
+    details = usage.get("prompt_tokens_details") or {}
+    cached = details.get("cached_tokens")
+    if cached:
+        usage["cache_read_input_tokens"] = cached
+    return usage
+
+
+def normalize_responses_usage(usage: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Responses API usage keys and lift nested cache tokens."""
+    if "input_tokens" in usage and "prompt_tokens" not in usage:
+        usage["prompt_tokens"] = usage["input_tokens"]
+    if "output_tokens" in usage and "completion_tokens" not in usage:
+        usage["completion_tokens"] = usage["output_tokens"]
+    details = usage.get("input_tokens_details") or {}
+    cached = details.get("cached_tokens")
+    if cached:
+        usage["cache_read_input_tokens"] = cached
+    return usage
