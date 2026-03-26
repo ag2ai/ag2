@@ -122,10 +122,9 @@ def _display_results(suite: EvalSuite, results: list[CaseResult]) -> None:
 def test_eval(
     agent_file: Path = typer.Argument(..., help="Python file defining agent(s) to test."),
     eval_file: Path = typer.Option(..., "--eval", "-e", help="Evaluation cases file (YAML)."),
-    models: str | None = typer.Option(None, "--models", help="Comma-separated models to compare."),
+    models: str | None = typer.Option(None, "--models", help="Comma-separated models to compare (coming soon)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running."),
-    baseline: Path | None = typer.Option(None, "--baseline", help="Previous results for regression comparison."),
-    output: str | None = typer.Option(None, "--output", "-o", help="Output format: json, junit."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output format: json."),
 ) -> None:
     """Run evaluation suite against an agent.
 

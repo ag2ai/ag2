@@ -12,25 +12,22 @@ proper descriptions. This is mechanical, repetitive work.
 
 ```bash
 # Wrap CLI tool subcommands as AG2 tools
-ag2 proxy --command git --subcommands "status,log,diff" --output tools/git_tools.py
+ag2 proxy cli git --subcommands "status,log,diff" --output tools/git_tools.py
 
 # Wrap a REST API from its OpenAPI spec
-ag2 proxy --openapi https://api.example.com/openapi.json --output tools/api.py
+ag2 proxy openapi https://api.example.com/openapi.json --output tools/api.py
 
 # Wrap Python module functions
-ag2 proxy --module pandas --functions "read_csv,describe,to_json" --output tools/pandas_tools.py
+ag2 proxy module pandas --functions "read_csv,describe,to_json" --output tools/pandas_tools.py
 
 # Wrap shell scripts in a directory
-ag2 proxy --scripts ./scripts/ --output tools/script_tools.py
-
-# Serve wrapped tools as an MCP server
-ag2 proxy --openapi https://api.example.com/openapi.json --serve-mcp
+ag2 proxy scripts ./scripts/ --output tools/script_tools.py
 ```
 
 ## CLI Wrapping
 
 ```bash
-ag2 proxy --command kubectl --subcommands "get pods,get services,logs,describe" --output tools/k8s.py
+ag2 proxy cli kubectl --subcommands "get pods,get services,logs,describe" --output tools/k8s.py
 ```
 
 Generated:
@@ -55,7 +52,17 @@ def kubectl_get_pods(namespace: str = "default", label: str | None = None) -> st
     return result.stdout
 ```
 
+Options:
+- `--subcommands` / `-s` — comma-separated subcommands to wrap
+- `--output` / `-o` — output Python file (default: `tools_generated.py`)
+- `--preview` — preview generated code without writing to disk
+
 ## OpenAPI Wrapping
+
+```bash
+ag2 proxy openapi https://api.example.com/openapi.json --output tools/api.py
+ag2 proxy openapi ./openapi.yaml --endpoints "listUsers,getUser" --preview
+```
 
 Parses an OpenAPI/Swagger spec and generates one `@tool` function per
 endpoint with:
@@ -64,25 +71,39 @@ endpoint with:
 - Error handling
 - Response formatting
 
+Options:
+- `--endpoints` / `-e` — comma-separated operation IDs to include (default: all)
+- `--output` / `-o` — output Python file (default: `tools_generated.py`)
+- `--preview` — preview generated code without writing to disk
+
 ## Python Module Wrapping
 
 ```bash
-ag2 proxy --module requests --functions "get,post" --output tools/http_tools.py
+ag2 proxy module requests --functions "get,post" --output tools/http_tools.py
+ag2 proxy module json --functions "dumps,loads" --preview
 ```
 
 Introspects the function signatures and docstrings to generate AG2 tools
 with proper schemas.
 
-## --serve-mcp
+Options:
+- `--functions` / `-f` — comma-separated function names to wrap (default: all public)
+- `--output` / `-o` — output Python file (default: `tools_generated.py`)
+- `--preview` — preview generated code without writing to disk
 
-Instead of generating Python files, directly serve the wrapped tools as
-an MCP server. This means any REST API can be instantly available to
-Claude Desktop, Cursor, etc:
+## Shell Script Wrapping
 
 ```bash
-ag2 proxy --openapi https://api.example.com/openapi.json --serve-mcp
-# → MCP server running, add to claude_desktop_config.json
+ag2 proxy scripts ./scripts/ --output tools/script_tools.py
+ag2 proxy scripts ./ops/ --preview
 ```
+
+Wraps all shell scripts (`.sh`, `.bash`, `.zsh`, `.py`) and executable
+files in a directory as AG2 tool functions using `subprocess.run()`.
+
+Options:
+- `--output` / `-o` — output Python file (default: `tools_generated.py`)
+- `--preview` — preview generated code without writing to disk
 
 ## Implementation Notes
 

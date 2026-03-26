@@ -176,7 +176,7 @@ def build_agents_from_yaml(config: dict[str, Any]) -> DiscoveredAgent:
     # Build LLM config
     llm_section = config.get("llm", {})
     model = llm_section.get("model", "gpt-4o")
-    llm_config = LLMConfig(api_type=llm_section.get("api_type", "openai"), model=model)
+    llm_config = LLMConfig({"model": model, **{k: v for k, v in llm_section.items() if k != "model"}})
 
     # Build agents
     agent_defs = config.get("agents", [])
@@ -184,12 +184,11 @@ def build_agents_from_yaml(config: dict[str, Any]) -> DiscoveredAgent:
         raise ValueError("YAML config must have an 'agents' list")
 
     agents = []
-    with llm_config:
-        for agent_def in agent_defs:
-            name = agent_def.get("name", f"agent_{len(agents)}")
-            system_message = agent_def.get("system_message", f"You are {name}.")
-            agent = AssistantAgent(name=name, system_message=system_message)
-            agents.append(agent)
+    for agent_def in agent_defs:
+        name = agent_def.get("name", f"agent_{len(agents)}")
+        system_message = agent_def.get("system_message", f"You are {name}.")
+        agent = AssistantAgent(name=name, system_message=system_message, llm_config=llm_config)
+        agents.append(agent)
 
     if len(agents) == 1:
         return DiscoveredAgent(

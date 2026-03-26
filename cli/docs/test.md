@@ -1,12 +1,12 @@
 # ag2 test
 
-> Evaluate, benchmark, and regression-test agents from the command line.
+> Evaluate and test agents from the command line.
 
 ## Problem
 
 Testing agents is the #1 pain point for production teams. There's no `pytest`
 equivalent for agents — no way to define test cases, run them reproducibly,
-compare across models, or track regressions. CrewAI has a basic `crewai test`.
+or track regressions. CrewAI has a basic `crewai test`.
 AutoGenBench exists but is standalone and decoupled. Nobody does this well.
 
 ## Commands
@@ -20,29 +20,26 @@ ag2 test eval my_agent.py --eval tests/cases.yaml
 # Test against golden transcripts
 ag2 test eval my_team.py --eval tests/transcripts/
 
-# Compare across models
-ag2 test eval my_agent.py --eval tests/ --models gpt-4o,claude-sonnet-4-6,gemini-2.0-flash
-
 # Estimate cost without running
 ag2 test eval my_agent.py --eval tests/ --dry-run
 
-# Regression test against baseline
-ag2 test eval my_agent.py --eval tests/ --baseline results/v1.json
-
-# Output results in different formats
-ag2 test eval my_agent.py --eval tests/ --output results.json
-ag2 test eval my_agent.py --eval tests/ --output results.html
+# Output results as JSON
+ag2 test eval my_agent.py --eval tests/ --output json
 ```
 
-### `ag2 test bench` — Standardized benchmarks
+**Options:**
+- `--eval` / `-e` — evaluation cases file or directory (YAML)
+- `--models` — comma-separated models to compare (coming soon)
+- `--baseline` — previous results for regression comparison (coming soon)
+- `--dry-run` — estimate cost without running
+- `--output` / `-o` — output format: `json`
+
+### `ag2 test bench` — Standardized benchmarks (coming soon)
 
 ```bash
-# Run against standard benchmark suites
 ag2 test bench my_agent.py --suite gaia
 ag2 test bench my_agent.py --suite humaneval
 ag2 test bench my_agent.py --suite swe-bench-lite
-
-# Custom benchmark directory
 ag2 test bench my_agent.py --suite ./my_benchmarks/
 ```
 
@@ -164,44 +161,6 @@ Respond with JSON: {"score": <float>, "reasoning": "<explanation>"}
 ╰─────────────────────────────────────────────────────╯
 ```
 
-### Multi-Model Comparison
-
-```bash
-ag2 test eval my_agent.py --eval tests/ --models gpt-4o,claude-sonnet-4-6,gemini-2.0-flash
-```
-
-```
-╭─ Model Comparison ─────────────────────────────────────────────────╮
-│                  gpt-4o    claude-sonnet    gemini-2.0-flash       │
-│ Pass rate        75%       100%             50%                    │
-│ Avg time         2.4s      3.1s             1.8s                  │
-│ Avg cost/case    $0.06     $0.04            $0.02                 │
-│ Total cost       $0.24     $0.16            $0.08                 │
-╰────────────────────────────────────────────────────────────────────╯
-```
-
-### Regression Testing
-
-```bash
-# Save baseline
-ag2 test eval my_agent.py --eval tests/ --output baseline.json
-
-# Compare against baseline
-ag2 test eval my_agent.py --eval tests/ --baseline baseline.json
-```
-
-```
-╭─ Regression Report ────────────────────────────────╮
-│ ✓ basic_search          PASS → PASS (stable)       │
-│ ✓ tool_usage            PASS → PASS (stable)       │
-│ ⚠ multi_step_reasoning  FAIL → PASS (improved!)    │
-│ ✗ error_handling         PASS → FAIL (REGRESSION)   │
-│                                                     │
-│ Score: 75% → 75% (no change)                        │
-│ Cost:  $0.24 → $0.20 (17% cheaper)                 │
-╰─────────────────────────────────────────────────────╯
-```
-
 ## Implementation Notes
 
 ### Test Runner Architecture
@@ -220,27 +179,8 @@ ag2 test eval
 
 ### Determinism
 Agent tests are inherently non-deterministic (LLM outputs vary). To handle this:
-- `--seed` flag to set LLM seed (when supported)
-- `--runs N` to run each case N times and report pass rates
 - `llm_judge` provides fuzzy evaluation for open-ended outputs
 - `max_cost`/`max_turns`/`max_time` provide deterministic bounds
-
-### Integration with pytest
-Also provide a pytest plugin so users can run agent evals in their existing test suite:
-
-```python
-# test_agents.py
-from ag2_cli.testing import ag2_eval
-
-@ag2_eval("tests/cases.yaml")
-def test_research_agent():
-    from my_agents import researcher
-    return researcher
-```
-
-```bash
-pytest test_agents.py -v
-```
 
 ## Dependencies
 - `ag2` — required for agent execution
