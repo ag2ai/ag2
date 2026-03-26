@@ -16,7 +16,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai"]
+        llm: ["openai", "gemini", "anthropic"]
         python-version: ["3.10"]
         os: [ubuntu-latest]
       fail-fast: false
