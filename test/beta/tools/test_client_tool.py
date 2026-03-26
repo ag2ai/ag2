@@ -9,7 +9,7 @@ import pytest
 
 from autogen.beta import MemoryStream
 from autogen.beta.context import Context
-from autogen.beta.events import ClientToolCall, ToolCall
+from autogen.beta.events import ClientToolCallEvent, ToolCallEvent
 from autogen.beta.tools.final.client_tool import ClientTool
 
 
@@ -20,35 +20,35 @@ def client_tool() -> ClientTool:
 
 @pytest.mark.asyncio
 async def test_client_tool_call_returns_client_tool_call(client_tool: ClientTool, mock: MagicMock) -> None:
-    """ClientTool.__call__ must return a ClientToolCall wrapping the original call."""
-    call = ToolCall(name="my_client_tool", arguments="{}")
+    """ClientTool.__call__ must return a ClientToolCallEvent wrapping the original call."""
+    call = ToolCallEvent(name="my_client_tool", arguments="{}")
     result = await client_tool(call, mock())
 
-    assert isinstance(result, ClientToolCall)
+    assert isinstance(result, ClientToolCallEvent)
     assert result.name == "my_client_tool"
     assert result.parent_id == call.id
 
 
 @pytest.mark.asyncio
 async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientTool) -> None:
-    """The execute closure inside register() must send ClientToolCall to the stream.
+    """The execute closure inside register() must send ClientToolCallEvent to the stream.
 
     Regression: the original code did `return await execution(...)` without
     `await context.send(result)`, so ToolExecutor.execute_tools() would block
-    forever waiting for a ClientToolCall that was never sent to the stream.
+    forever waiting for a ClientToolCallEvent that was never sent to the stream.
     """
     stream = MemoryStream()
     context = Context(stream=stream)
 
     with ExitStack() as stack:
         client_tool.register(stack, context)
-        call = ToolCall(name="my_client_tool", arguments="{}")
+        call = ToolCallEvent(name="my_client_tool", arguments="{}")
         await stream.send(call, context)
 
     events = await stream.history.get_events()
 
     assert len(events) == 2
-    assert isinstance(events[-1], ClientToolCall)
+    assert isinstance(events[-1], ClientToolCallEvent)
     assert events[1].parent_id == call.id
     assert events[1].name == call.name
 
@@ -68,11 +68,11 @@ async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> 
     with ExitStack() as stack:
         client_tool.register(stack, context, middleware=[TagMiddleware()])
 
-        call = ToolCall(name="my_client_tool", arguments="{}")
+        call = ToolCallEvent(name="my_client_tool", arguments="{}")
         await stream.send(call, context)
 
     events = await stream.history.get_events()
 
     assert len(events) == 2
-    assert isinstance(events[-1], ClientToolCall)
+    assert isinstance(events[-1], ClientToolCallEvent)
     assert getattr(events[-1], "_tag", None) == "middleware_ran"

@@ -1,0 +1,162 @@
+---
+title: Telemetry
+sidebarTitle: Telemetry
+---
+
+# Beta Telemetry
+
+AG2 Beta includes a `TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/) spans for agent turns, LLM calls, tool executions, and human-in-the-loop interactions.
+
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/), so traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+
+## Installation
+
+```bash
+pip install "ag2[openai,tracing]"
+```
+
+## Quick Start
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
+
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware.builtin import TelemetryMiddleware
+
+# 1. Configure OpenTelemetry
+resource = Resource.create(attributes={"service.name": "ag2-beta-quickstart"})
+tracer_provider = TracerProvider(resource=resource)
+tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(tracer_provider)
+
+# 2. Create agent with telemetry middleware
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    middleware=[
+        TelemetryMiddleware(
+            tracer_provider=tracer_provider,
+            agent_name="assistant",
+        ),
+    ],
+)
+
+# 3. Run -- spans are emitted automatically
+import asyncio
+reply = asyncio.run(agent.ask("What is the capital of France?"))
+```
+
+## Trace Hierarchy
+
+Each `ask()` call produces a root span with child spans for LLM calls, tool executions, and human input:
+
+```
+invoke_agent assistant
+  |-- chat gpt-4o-mini              # LLM API call
+  |-- execute_tool get_weather      # tool execution
+  |-- chat gpt-4o-mini              # LLM call after tool result
+  +-- await_human_input assistant   # human-in-the-loop
+```
+
+## Span Types
+
+Every span includes an `ag2.span.type` attribute:
+
+| `ag2.span.type` | Operation name | Triggered by |
+|---|---|---|
+| `agent` | `invoke_agent` | `on_turn` -- wraps the full agent turn |
+| `llm` | `chat` | `on_llm_call` -- each LLM API call |
+| `tool` | `execute_tool` | `on_tool_execution` -- each tool invocation |
+| `human_input` | `await_human_input` | `on_human_input` -- human-in-the-loop |
+
+## Semantic Attributes
+
+Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+
+| Attribute | Span types | Description |
+|---|---|---|
+| `gen_ai.operation.name` | All | Operation: `invoke_agent`, `chat`, `execute_tool`, `await_human_input` |
+| `gen_ai.agent.name` | agent, human_input | Agent name |
+| `gen_ai.provider.name` | agent, llm | LLM provider (e.g. `openai`, `anthropic`) -- auto-detected |
+| `gen_ai.request.model` | agent, llm | Model name (e.g. `gpt-4o-mini`) -- auto-detected |
+| `gen_ai.response.model` | llm | Resolved model name from response |
+| `gen_ai.response.finish_reasons` | llm | Finish reasons (e.g. `["stop"]`, `["tool_calls"]`) |
+| `gen_ai.usage.input_tokens` | llm | Prompt token count |
+| `gen_ai.usage.output_tokens` | llm | Completion token count |
+| `gen_ai.tool.name` | tool | Tool function name |
+| `gen_ai.tool.call.id` | tool | Tool call ID |
+| `gen_ai.tool.type` | tool | Tool type (always `function`) |
+
+## Content Capture
+
+By default, message content, tool arguments, and results **are** included in spans. To disable content capture for privacy-sensitive environments:
+
+```python
+TelemetryMiddleware(
+    tracer_provider=tracer_provider,
+    agent_name="assistant",
+    capture_content=False,  # omits messages, tool args, and results
+)
+```
+
+When content capture is enabled (the default), spans include these additional attributes:
+
+| Attribute | Span type | Content |
+|---|---|---|
+| `gen_ai.input.messages` | llm | JSON request messages |
+| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
+| `gen_ai.tool.call.result` | tool | Tool execution result |
+| `ag2.human_input.prompt` | human_input | Prompt shown to human |
+| `ag2.human_input.response` | human_input | Human's response |
+
+!!! warning
+    With `capture_content=True`, message content, tool arguments, and human input will appear in your tracing backend. Ensure your backend has appropriate access controls.
+
+## Configuration
+
+`TelemetryMiddleware` accepts:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `tracer_provider` | `TracerProvider \| None` | Global provider | OpenTelemetry TracerProvider |
+| `capture_content` | `bool` | `True` | Include message/tool content in spans |
+| `agent_name` | `str \| None` | `"unknown"` | Agent name for span attributes |
+| `provider_name` | `str \| None` | `None` | LLM provider name (auto-detected from response if not set) |
+| `model_name` | `str \| None` | `None` | Model name (auto-detected from response if not set) |
+
+## Tool Execution Example
+
+```python
+from autogen.beta import Agent
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware.builtin import TelemetryMiddleware
+from autogen.beta.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get weather information for a city."""
+    return f"Sunny, 72F in {city}"
+
+agent = Agent(
+    "weather_agent",
+    prompt="Use the get_weather tool to answer weather questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[get_weather],
+    middleware=[
+        TelemetryMiddleware(
+            tracer_provider=tracer_provider,
+            agent_name="weather_agent",
+        ),
+    ],
+)
+```
+
+## Backend Integration
+
+Since `TelemetryMiddleware` uses standard OpenTelemetry, any OTLP-compatible backend works. See the [V1 tracing documentation](/docs/user-guide/tracing/opentelemetry) for setup guides for Grafana Tempo, Jaeger, Langfuse, and other backends. The setup is identical -- only the agent instrumentation method differs.

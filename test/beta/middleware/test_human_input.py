@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCall
+from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware
 from autogen.beta.middleware.base import HumanInputHook
 from autogen.beta.testing import TestConfig
@@ -16,7 +16,7 @@ from autogen.beta.testing import TestConfig
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "result",
     )
 

@@ -25,7 +25,7 @@ async def test_remote_tool_with_context() -> None:
     agent = Agent(
         "agent",
         config=testing.TestConfig(
-            events.ToolCall(name="some_tool", arguments="{}"),
+            events.ToolCallEvent(name="some_tool", arguments="{}"),
             "Hi, I am agent one!",
         ),
         tools=[some_tool],

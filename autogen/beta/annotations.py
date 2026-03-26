@@ -33,6 +33,8 @@ class Inject(CustomField):
 
     def use(self, /, **kwargs: Any) -> dict[str, Any]:
         if ctx := kwargs.get(CONTEXT_OPTION_NAME):
+            assert self.param_name
+
             name = self.name or self.param_name
             if opt := ctx.dependencies.get(name):
                 kwargs[self.param_name] = opt
@@ -64,6 +66,8 @@ class Variable(CustomField):
 
     def use(self, /, **kwargs: Any) -> dict[str, Any]:
         if ctx := kwargs.get(CONTEXT_OPTION_NAME):
+            assert self.param_name
+
             name = self.name or self.param_name
             if opt := ctx.variables.get(name):
                 kwargs[self.param_name] = opt
@@ -77,6 +81,8 @@ class Variable(CustomField):
 class ContextField(CustomField):
     def use(self, /, **kwargs: Any) -> dict[str, Any]:
         if ctx := kwargs.get(CONTEXT_OPTION_NAME):
+            assert self.param_name
+
             kwargs[self.param_name] = ctx
         return kwargs
 

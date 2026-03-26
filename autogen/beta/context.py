@@ -3,16 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeAlias, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
 
+from autogen.beta.types import ClassInfo
+
 from .events import BaseEvent, HumanInputRequest, HumanMessage
-from .events.conditions import ClassInfo, Condition
+from .events.conditions import Condition
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
@@ -26,8 +28,11 @@ class Stream(Protocol):
 
     def where(self, condition: ClassInfo | Condition) -> "Stream": ...
 
-    @contextmanager
-    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]: ...
+    def join(
+        self,
+        *,
+        max_events: int | None = None,
+    ) -> AbstractContextManager[AsyncIterator[BaseEvent]]: ...
 
     @overload
     def subscribe(
@@ -60,7 +65,6 @@ class Stream(Protocol):
 
     def unsubscribe(self, sub_id: SubId) -> None: ...
 
-    @contextmanager
     def sub_scope(
         self,
         func: Callable[..., Any],
@@ -68,13 +72,12 @@ class Stream(Protocol):
         interrupt: bool = False,
         sync_to_thread: bool = True,
         condition: Condition | None = None,
-    ) -> Iterator[None]: ...
+    ) -> AbstractContextManager[None]: ...
 
-    @asynccontextmanager
-    async def get(
+    def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncIterator[asyncio.Future[BaseEvent]]: ...
+    ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
 
 
 @dataclass(slots=True)
@@ -91,7 +94,8 @@ class Context:
     async def input(self, message: str, timeout: float | None = None) -> str:
         async with self.stream.get(HumanMessage) as response:
             await self.send(HumanInputRequest(content=message))
-            return (await asyncio.wait_for(response, timeout)).content
+            result: HumanMessage = await asyncio.wait_for(response, timeout)
+            return result.content
 
     async def send(self, event: BaseEvent) -> None:
         await self.stream.send(event, self)
