@@ -12,7 +12,6 @@ from ag2_cli.app import app
 from ag2_cli.commands.create import (
     _detect_generation_model,
     _parse_json_response,
-    _to_var_name,
 )
 from typer.testing import CliRunner
 
@@ -182,9 +181,7 @@ class TestCreateProjectFromDescription:
     def test_generates_project_from_description(self, mock_gen: MagicMock, tmp_path: Path) -> None:
         mock_gen.return_value = json.dumps(self._SAMPLE_SPEC)
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "project", "--from-description", "A Slack bot that monitors channels"]
-        )
+        result = runner.invoke(app, ["create", "project", "--from-description", "A Slack bot that monitors channels"])
         assert result.exit_code == 0
 
         project = tmp_path / "slack-bot"
@@ -200,9 +197,7 @@ class TestCreateProjectFromDescription:
     def test_name_override(self, mock_gen: MagicMock, tmp_path: Path) -> None:
         mock_gen.return_value = json.dumps(self._SAMPLE_SPEC)
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "project", "my-custom-name", "--from-description", "A bot"]
-        )
+        result = runner.invoke(app, ["create", "project", "my-custom-name", "--from-description", "A bot"])
         assert result.exit_code == 0
         assert (tmp_path / "my-custom-name").is_dir()
 
@@ -235,9 +230,7 @@ class TestCreateProjectFromDescription:
         mock_gen.return_value = json.dumps(self._SAMPLE_SPEC)
         os.chdir(tmp_path)
         (tmp_path / "slack-bot").mkdir()
-        result = runner.invoke(
-            app, ["create", "project", "--from-description", "A Slack bot"]
-        )
+        result = runner.invoke(app, ["create", "project", "--from-description", "A Slack bot"])
         assert result.exit_code != 0
         assert "already exists" in result.output
 
@@ -245,9 +238,7 @@ class TestCreateProjectFromDescription:
     def test_fails_on_empty_agents(self, mock_gen: MagicMock, tmp_path: Path) -> None:
         mock_gen.return_value = json.dumps({"name": "empty", "agents": [], "tools": []})
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "project", "--from-description", "An empty project"]
-        )
+        result = runner.invoke(app, ["create", "project", "--from-description", "An empty project"])
         assert result.exit_code != 0
         assert "did not generate" in result.output.lower()
 
@@ -279,9 +270,7 @@ class TestCreateAgentFromDescription:
     def test_generates_agent_and_tools(self, mock_gen: MagicMock, tmp_project: Path) -> None:
         mock_gen.return_value = json.dumps(self._SAMPLE_AGENT)
         os.chdir(tmp_project)
-        result = runner.invoke(
-            app, ["create", "agent", "--from-description", "Monitor HN for AI papers"]
-        )
+        result = runner.invoke(app, ["create", "agent", "--from-description", "Monitor HN for AI papers"])
         assert result.exit_code == 0
         assert (tmp_project / "agents" / "hn_watcher.py").is_file()
         assert (tmp_project / "tools" / "hn_search.py").is_file()
@@ -299,9 +288,7 @@ class TestCreateAgentFromDescription:
     def test_name_override(self, mock_gen: MagicMock, tmp_project: Path) -> None:
         mock_gen.return_value = json.dumps(self._SAMPLE_AGENT)
         os.chdir(tmp_project)
-        result = runner.invoke(
-            app, ["create", "agent", "custom-name", "--from-description", "Monitor HN"]
-        )
+        result = runner.invoke(app, ["create", "agent", "custom-name", "--from-description", "Monitor HN"])
         assert result.exit_code == 0
         assert (tmp_project / "agents" / "custom_name.py").is_file()
 
@@ -338,9 +325,7 @@ class TestCreateAgentFromDescription:
 class TestCreateToolFromModule:
     def test_generates_tools_from_json_module(self, tmp_path: Path) -> None:
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "tool", "--from-module", "json", "--functions", "dumps,loads"]
-        )
+        result = runner.invoke(app, ["create", "tool", "--from-module", "json", "--functions", "dumps,loads"])
         assert result.exit_code == 0
         assert (tmp_path / "json_tools.py").is_file()
         content = (tmp_path / "json_tools.py").read_text()
@@ -349,17 +334,13 @@ class TestCreateToolFromModule:
 
     def test_generates_with_custom_name(self, tmp_project: Path) -> None:
         os.chdir(tmp_project)
-        result = runner.invoke(
-            app, ["create", "tool", "my-json", "--from-module", "json", "--functions", "dumps"]
-        )
+        result = runner.invoke(app, ["create", "tool", "my-json", "--from-module", "json", "--functions", "dumps"])
         assert result.exit_code == 0
         assert (tmp_project / "tools" / "my_json.py").is_file()
 
     def test_fails_on_nonexistent_module(self, tmp_path: Path) -> None:
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "tool", "--from-module", "nonexistent_module_xyz"]
-        )
+        result = runner.invoke(app, ["create", "tool", "--from-module", "nonexistent_module_xyz"])
         assert result.exit_code != 0
 
     def test_requires_name_without_from_flags(self, tmp_path: Path) -> None:
@@ -392,9 +373,7 @@ class TestCreateToolFromOpenAPI:
             ToolSpec(name="get_user", description="Get user", source_type="openapi"),
         ]
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "tool", "--from-openapi", "https://example.com/openapi.json"]
-        )
+        result = runner.invoke(app, ["create", "tool", "--from-openapi", "https://example.com/openapi.json"])
         assert result.exit_code == 0
         assert "2 tools" in result.output
         mock_gen.assert_called_once()
@@ -403,9 +382,7 @@ class TestCreateToolFromOpenAPI:
     def test_fails_on_bad_spec(self, mock_load: MagicMock, tmp_path: Path) -> None:
         mock_load.side_effect = Exception("Invalid spec")
         os.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["create", "tool", "--from-openapi", "bad-url"]
-        )
+        result = runner.invoke(app, ["create", "tool", "--from-openapi", "bad-url"])
         assert result.exit_code != 0
         assert "Failed to load" in result.output
 
@@ -507,26 +484,32 @@ class TestTestCmdChanges:
         """--models should print coming soon warning."""
         import sys
 
-        with patch.dict(sys.modules, {"autogen": MagicMock()}):
-            with patch("ag2_cli.commands.test._run_single_case") as mock_run:
-                from ag2_cli.testing import CaseResult
-                from ag2_cli.testing.assertions import AssertionResult
-                from ag2_cli.testing.cases import EvalAssertion, EvalCase
+        with (
+            patch.dict(sys.modules, {"autogen": MagicMock()}),
+            patch("ag2_cli.commands.test._run_single_case") as mock_run,
+        ):
+            from ag2_cli.testing import CaseResult
+            from ag2_cli.testing.assertions import AssertionResult
+            from ag2_cli.testing.cases import EvalAssertion, EvalCase
 
-                case = EvalCase(name="basic_test", input="hello", assertions=[EvalAssertion(type="contains", value="x")])
-                mock_run.return_value = CaseResult(
-                    case=case,
-                    assertion_results=[AssertionResult(passed=True, assertion_type="contains", message="ok")],
-                    output="x",
-                    turns=1,
-                    elapsed=0.1,
-                )
-                result = runner.invoke(
-                    app,
-                    [
-                        "test", "eval", str(agent_file_with_main),
-                        "--eval", str(eval_yaml_file),
-                        "--models", "gpt-4o,claude-sonnet",
-                    ],
-                )
+            case = EvalCase(name="basic_test", input="hello", assertions=[EvalAssertion(type="contains", value="x")])
+            mock_run.return_value = CaseResult(
+                case=case,
+                assertion_results=[AssertionResult(passed=True, assertion_type="contains", message="ok")],
+                output="x",
+                turns=1,
+                elapsed=0.1,
+            )
+            result = runner.invoke(
+                app,
+                [
+                    "test",
+                    "eval",
+                    str(agent_file_with_main),
+                    "--eval",
+                    str(eval_yaml_file),
+                    "--models",
+                    "gpt-4o,claude-sonnet",
+                ],
+            )
         assert "coming soon" in result.output.lower()

@@ -450,23 +450,23 @@ def create_project(
 
 def _create_project_from_description(description: str, name: str | None) -> None:
     """Generate a full project from a natural language description using an LLM."""
-    console.print(f"\n[heading]Generating project from description...[/heading]\n")
+    console.print("\n[heading]Generating project from description...[/heading]\n")
 
     prompt = (
         f"Generate an AG2 project specification for:\n{description}\n\n"
         "Return a JSON object with:\n"
-        '{\n'
+        "{\n"
         '  "name": "project-name-slug",\n'
         '  "description": "One-line project description",\n'
         '  "agents": [\n'
         '    {"name": "agent_name", "system_message": "Detailed system prompt", "tools": ["tool_name"]}\n'
-        '  ],\n'
+        "  ],\n"
         '  "tools": [\n'
         '    {"name": "tool_name", "description": "What the tool does",\n'
         '     "params": [{"name": "param_name", "type": "str", "description": "..."}]}\n'
-        '  ],\n'
+        "  ],\n"
         '  "pattern": "auto"\n'
-        '}\n\n'
+        "}\n\n"
         "Choose pattern from: auto, round-robin, random.\n"
         "Use auto for most cases. Include 1-4 agents and relevant tools.\n"
         "Write detailed, specific system messages for each agent."
@@ -509,12 +509,8 @@ def _create_project_from_description(description: str, name: str | None) -> None
         agent_tools = agent_def.get("tools", [])
 
         if agent_tools:
-            tool_imports = "\n".join(
-                f"from tools.{_to_var_name(t)} import {_to_var_name(t)}" for t in agent_tools
-            )
-            tool_registers = "\n".join(
-                f"{_to_var_name(t)}.register_tool({avar})" for t in agent_tools
-            )
+            tool_imports = "\n".join(f"from tools.{_to_var_name(t)} import {_to_var_name(t)}" for t in agent_tools)
+            tool_registers = "\n".join(f"{_to_var_name(t)}.register_tool({avar})" for t in agent_tools)
             content = _AGENT_WITH_TOOLS_TEMPLATE.format(
                 name=aname,
                 var_name=avar,
@@ -523,7 +519,9 @@ def _create_project_from_description(description: str, name: str | None) -> None
             )
         else:
             content = _AGENT_TEMPLATE.format(
-                name=aname, var_name=avar, system_message=repr(sys_msg),
+                name=aname,
+                var_name=avar,
+                system_message=repr(sys_msg),
             )
         _write_file(project_dir / "agents" / f"{avar}.py", content)
 
@@ -539,8 +537,12 @@ def _create_project_from_description(description: str, name: str | None) -> None
         args_doc = "\n".join(f"        {p['name']}: {p.get('description', '')}" for p in tparams)
 
         content = _TOOL_TEMPLATE.format(
-            name=tname, func_name=tfunc, description=tdesc,
-            params=params_str, docstring=tdesc, args_doc=args_doc,
+            name=tname,
+            func_name=tfunc,
+            description=tdesc,
+            params=params_str,
+            docstring=tdesc,
+            args_doc=args_doc,
         )
         _write_file(project_dir / "tools" / f"{tfunc}.py", content)
 
@@ -563,9 +565,7 @@ def _create_project_from_description(description: str, name: str | None) -> None
         )
     else:
         pattern_class = PATTERN_MAP.get(pattern, "AutoPattern")
-        imports = "\n".join(
-            f"from agents.{_to_var_name(a['name'])} import {_to_var_name(a['name'])}" for a in agents
-        )
+        imports = "\n".join(f"from agents.{_to_var_name(a['name'])} import {_to_var_name(a['name'])}" for a in agents)
         agent_list = ", ".join(_to_var_name(a["name"]) for a in agents)
         first = _to_var_name(agents[0]["name"])
         main_content = (
@@ -611,7 +611,7 @@ def _create_project_from_description(description: str, name: str | None) -> None
     console.print("  Next steps:")
     console.print(f"    [command]cd {project_name}[/command]")
     console.print("    [command]pip install -e .[/command]")
-    console.print(f'    [command]ag2 run main.py --message "Hello!"[/command]')
+    console.print('    [command]ag2 run main.py --message "Hello!"[/command]')
     console.print()
 
 
@@ -675,19 +675,19 @@ def create_agent(
 
 def _create_agent_from_description(description: str, name: str | None) -> None:
     """Generate an agent and its tools from a natural language description."""
-    console.print(f"\n[heading]Generating agent from description...[/heading]\n")
+    console.print("\n[heading]Generating agent from description...[/heading]\n")
 
     prompt = (
         f"Generate an AG2 agent specification for:\n{description}\n\n"
         "Return a JSON object with:\n"
-        '{\n'
+        "{\n"
         '  "name": "snake_case_name",\n'
         '  "system_message": "Detailed system prompt for the agent",\n'
         '  "tools": [\n'
         '    {"name": "tool_name", "description": "What the tool does",\n'
         '     "params": [{"name": "param_name", "type": "str", "description": "..."}]}\n'
-        '  ]\n'
-        '}\n\n'
+        "  ]\n"
+        "}\n\n"
         "Write a detailed, specific system message. Include 0-4 tools as needed."
     )
 
@@ -715,9 +715,7 @@ def _create_agent_from_description(description: str, name: str | None) -> None:
         tool_imports = "\n".join(
             f"from tools.{_to_var_name(t['name'])} import {_to_var_name(t['name'])}" for t in tool_specs
         )
-        tool_registers = "\n".join(
-            f"{_to_var_name(t['name'])}.register_tool({var})" for t in tool_specs
-        )
+        tool_registers = "\n".join(f"{_to_var_name(t['name'])}.register_tool({var})" for t in tool_specs)
         content = _AGENT_WITH_TOOLS_TEMPLATE.format(
             name=agent_name,
             var_name=var,
@@ -726,7 +724,9 @@ def _create_agent_from_description(description: str, name: str | None) -> None:
         )
     else:
         content = _AGENT_TEMPLATE.format(
-            name=agent_name, var_name=var, system_message=repr(system_msg),
+            name=agent_name,
+            var_name=var,
+            system_message=repr(system_msg),
         )
 
     _write_file(out_path, content)
@@ -744,8 +744,12 @@ def _create_agent_from_description(description: str, name: str | None) -> None:
         args_doc = "\n".join(f"        {p['name']}: {p.get('description', '')}" for p in tparams)
 
         tool_content = _TOOL_TEMPLATE.format(
-            name=tname, func_name=tfunc, description=tdesc,
-            params=params_str, docstring=tdesc, args_doc=args_doc,
+            name=tname,
+            func_name=tfunc,
+            description=tdesc,
+            params=params_str,
+            docstring=tdesc,
+            args_doc=args_doc,
         )
         tool_path = tools_dir / f"{tfunc}.py" if tools_dir.is_dir() else Path.cwd() / f"{tfunc}.py"
         if not tool_path.exists():
