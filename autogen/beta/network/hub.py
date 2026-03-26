@@ -274,27 +274,31 @@ class Hub:
             # Ensure envelope event target is consistent with routed recipient.
             # Topology plugins typically modify envelope.recipient but not the
             # inner event — fix up so channel subscribers see correct target.
+            # Preserve any task modifications made by topology plugins.
             if (
                 isinstance(envelope.event, DelegationRequest)
                 and envelope.event.target != to_agent
             ):
                 envelope.event = DelegationRequest(
-                    source=source, target=to_agent, task=task
+                    source=source, target=to_agent, task=envelope.event.task
                 )
 
         # Dispatch additional delegations from topology (fire-and-forget, parallel)
         if additional:
             self._dispatch_additional(additional)
 
+        # Use the (possibly modified) task from the envelope event
+        effective_task = envelope.event.task if isinstance(envelope.event, DelegationRequest) else task
+
         # Emit on Hub stream and send through Channel
-        await self._emit(DelegationRequest(source=source, target=to_agent, task=task))
+        await self._emit(DelegationRequest(source=source, target=to_agent, task=effective_task))
 
         depth_token = _delegation_depth.set(depth + 1)
         source_token = _delegation_source.set(source)
         try:
             await self._channel.send(envelope)
             network_tools = self._build_network_tools(caller=to_agent)
-            reply = await agent.ask(task, tools=network_tools, **kwargs)
+            reply = await agent.ask(effective_task, tools=network_tools, **kwargs)
             result = reply.body or ""
             result_event = DelegationResult(source=source, target=to_agent, result=result)
             await self._emit(result_event)

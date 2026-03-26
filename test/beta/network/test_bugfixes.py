@@ -786,6 +786,7 @@ class TestSignalPromptCleanupByIndex:
             context=ctx,
             signal_queue=signal_queue,
             policy=policy,
+            delivered_ids=set(),
         )
 
         mock_response = ModelResponse(message=ModelMessage(content="ok"))

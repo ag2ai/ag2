@@ -271,7 +271,7 @@ class TestSchedulerEdgeCases:
         # Cancel mid-flight
         result = scheduler.cancel(wid)
         assert result is True
-        assert len(scheduler.watches) == 0
+        assert scheduler.status(wid) == WatchStatus.CANCELLED
 
         # After cancel, no more fires
         await asyncio.sleep(0.15)

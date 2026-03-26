@@ -153,13 +153,19 @@ class Scheduler:
             self._arm_entry(entry)
 
     def cancel(self, watch_id: str) -> bool:
-        """Remove a watch entirely. Returns True if found."""
-        entry = self._entries.pop(watch_id, None)
+        """Permanently cancel a watch. Returns True if found."""
+        entry = self._entries.get(watch_id)
         if entry:
             if entry.status == WatchStatus.ARMED:
                 entry.watch.disarm()
+            entry.status = WatchStatus.CANCELLED
             return True
         return False
+
+    def status(self, watch_id: str) -> WatchStatus | None:
+        """Get current status of a watch."""
+        entry = self._entries.get(watch_id)
+        return entry.status if entry else None
 
     @property
     def watches(self) -> list[tuple[str, Watch, WatchStatus]]:

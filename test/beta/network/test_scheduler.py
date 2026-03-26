@@ -66,7 +66,7 @@ class TestSchedulerStandalone:
 
         result = scheduler.cancel(wid)
         assert result is True
-        assert len(scheduler.watches) == 0
+        assert scheduler.status(wid) == WatchStatus.CANCELLED
 
     @pytest.mark.asyncio
     async def test_cancel_nonexistent_returns_false(self) -> None:

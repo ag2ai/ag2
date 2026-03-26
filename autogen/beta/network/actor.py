@@ -218,11 +218,15 @@ class Actor(Agent):
     ) -> AgentReply:
         spawn_tools = self._build_spawn_tools()
 
-        # Signal collection queue — observers write, middleware reads
+        # Signal collection queue — observers write, middleware reads.
+        # _delivered_ids tracks signals already delivered by the policy to
+        # prevent re-collection when EmitToStream re-emits them on the stream.
         signal_queue: list[Signal] = []
+        _delivered_ids: set[int] = set()
 
         async def _collect_signal(signal: Signal) -> None:
-            signal_queue.append(signal)
+            if id(signal) not in _delivered_ids:
+                signal_queue.append(signal)
 
         signal_sub = context.stream.where(Signal).subscribe(_collect_signal)
 
@@ -236,7 +240,7 @@ class Actor(Agent):
         # 2. SignalInjectionMiddleware — injects alerts into prompt
         # 3. User-provided middleware (via additional_middleware)
         harness_mw = _HarnessMiddlewareFactory(self._harness)
-        signal_mw = _SignalInjectionFactory(signal_queue, self._signal_policy)
+        signal_mw = _SignalInjectionFactory(signal_queue, self._signal_policy, _delivered_ids)
 
         try:
             return await super()._execute(
@@ -275,10 +279,12 @@ class _SignalInjectionMiddleware(BaseMiddleware):
         context: Context,
         signal_queue: list[Signal],
         policy: SignalPolicy,
+        delivered_ids: set[int],
     ) -> None:
         super().__init__(event, context)
         self._signal_queue = signal_queue
         self._policy = policy
+        self._delivered_ids = delivered_ids
 
     async def on_llm_call(
         self,
@@ -289,6 +295,11 @@ class _SignalInjectionMiddleware(BaseMiddleware):
         if self._signal_queue:
             signals = self._signal_queue[:]
             self._signal_queue.clear()
+
+            # Mark signals as delivered so the stream subscriber won't
+            # re-collect them when EmitToStream re-emits on the stream.
+            for s in signals:
+                self._delivered_ids.add(id(s))
 
             # Check for FATAL — halt without calling the LLM
             has_fatal = any(s.severity == Severity.FATAL for s in signals)
@@ -321,12 +332,13 @@ class _SignalInjectionMiddleware(BaseMiddleware):
 class _SignalInjectionFactory:
     """Factory for _SignalInjectionMiddleware."""
 
-    def __init__(self, signal_queue: list[Signal], policy: SignalPolicy) -> None:
+    def __init__(self, signal_queue: list[Signal], policy: SignalPolicy, delivered_ids: set[int]) -> None:
         self._signal_queue = signal_queue
         self._policy = policy
+        self._delivered_ids = delivered_ids
 
     def __call__(self, event: BaseEvent, context: Context) -> _SignalInjectionMiddleware:
-        return _SignalInjectionMiddleware(event, context, self._signal_queue, self._policy)
+        return _SignalInjectionMiddleware(event, context, self._signal_queue, self._policy, self._delivered_ids)
 
 
 class _HarnessMiddlewareFactory:

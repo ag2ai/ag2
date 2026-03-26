@@ -328,10 +328,14 @@ class Sequence(_BaseWatch):
         self._arm_current()
 
     def _arm_current(self) -> None:
+        if not self._armed or self._stream is None:
+            return
         if self._current_index < len(self._watches):
             self._watches[self._current_index].arm(self._stream, self._step_handler)  # type: ignore[arg-type]
 
     async def _step_handler(self, events: list[BaseEvent], ctx: Context) -> None:
+        if not self._armed:
+            return
         self._all_events.extend(events)
         # Disarm current watch before advancing (guard for auto-disarming watches like DelayWatch)
         if self._watches[self._current_index].is_armed:
@@ -476,7 +480,9 @@ class CronWatch(_BaseWatch):
 
         minute_spec, hour_spec, dom_spec, month_spec, dow_spec = fields
 
-        def _parse_field(spec: str, min_val: int, max_val: int) -> set[int]:
+        _dow_names = {"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
+
+        def _parse_field(spec: str, min_val: int, max_val: int, *, allow_names: bool = False) -> set[int]:
             values: set[int] = set()
             for part in spec.split(","):
                 if part == "*":
@@ -488,20 +494,17 @@ class CronWatch(_BaseWatch):
                 elif "-" in part:
                     lo, hi = part.split("-")
                     values.update(range(int(lo), int(hi) + 1))
+                elif allow_names and part.upper() in _dow_names:
+                    values.add(_dow_names[part.upper()])
                 else:
-                    # Handle day-of-week names (standard cron: SUN=0, MON=1, ..., SAT=6)
-                    _dow_names = {"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
-                    if part.upper() in _dow_names:
-                        values.add(_dow_names[part.upper()])
-                    else:
-                        values.add(int(part))
+                    values.add(int(part))
             return values
 
         minutes = _parse_field(minute_spec, 0, 59)
         hours = _parse_field(hour_spec, 0, 23)
         doms = _parse_field(dom_spec, 1, 31)
         months = _parse_field(month_spec, 1, 12)
-        dows = {v % 7 for v in _parse_field(dow_spec, 0, 7)}  # 0=Sun..6=Sat; 7→0
+        dows = {v % 7 for v in _parse_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
 
         # Search forward from now + 1 minute
         candidate = now.replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)
