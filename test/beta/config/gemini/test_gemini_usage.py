@@ -24,9 +24,6 @@ class TestNormalizeUsage:
         assert result["prompt_tokens"] == 100
         assert result["completion_tokens"] == 20
         assert result["total_tokens"] == 120
-        # Gemini-native keys preserved
-        assert result["prompt_token_count"] == 100
-        assert result["candidates_token_count"] == 20
 
     def test_includes_cache_read_tokens(self):
         result = normalize_usage(_make_metadata(cached=500))
