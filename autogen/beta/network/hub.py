@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import logging
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -75,7 +76,7 @@ class Hub:
         self,
         *,
         topology: Topology | None = None,
-        plugins: list[Plugin] | None = None,
+        plugins: Iterable[Plugin] = (),
         channel: Channel | None = None,
         registry: Registry | None = None,
         state_store: StateStore | None = None,
@@ -93,7 +94,7 @@ class Hub:
         self._agents: dict[str, Agent] = {}
         self._max_depth = max_delegation_depth
         self._topology = topology
-        self._plugins: list[Plugin] = list(plugins or [])
+        self._plugins: list[Plugin] = list(plugins)
         self._hub_context = HubContext(self)
         self._additional_tasks: set[asyncio.Task[None]] = set()
 

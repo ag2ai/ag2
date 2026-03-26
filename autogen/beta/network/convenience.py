@@ -52,7 +52,7 @@ class Network:
     ) -> None:
         self.hub = Hub(
             topology=topology,
-            plugins=list(plugins) if plugins else None,
+            plugins=plugins,
             channel=channel,
             registry=registry,
             state_store=state_store,

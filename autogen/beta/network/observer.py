@@ -57,6 +57,8 @@ class BaseObserver(ABC):
         self._stream: Stream | None = None
 
     def attach(self, stream: Stream, ctx: Context) -> None:
+        if self._watch.is_armed:
+            self._watch.disarm()
         self._stream = stream
         self._watch.arm(stream, self._on_watch)
 

@@ -854,6 +854,250 @@ class TestHubAskToolsMerge:
 # ===========================================================================
 
 
+# ===========================================================================
+# Bug A fix: Fanout order-independent additional preservation
+# ===========================================================================
+
+
+class TestFanoutOrderIndependentAdditional:
+    """Fanout must preserve additional envelopes regardless of plugin order."""
+
+    @pytest.mark.asyncio
+    async def test_exception_before_additional_preserves(self) -> None:
+        """Exception plugin BEFORE additional plugin — additional still preserved."""
+
+        class _AdditionalPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                return RouteDecision(
+                    primary=envelope,
+                    additional=[envelope.child(envelope.event, recipient="extra")],
+                )
+
+        class _RaisingPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                raise ValueError("plugin exploded")
+
+        # Raising plugin is FIRST — was broken before fix
+        fanout = Fanout(_RaisingPlugin(), _AdditionalPlugin())
+
+        env = Envelope(
+            event=DelegationRequest(source="a", target="b", task="test"),
+            sender="a",
+            recipient="b",
+        )
+
+        from autogen.beta.network.topology import HubContext
+
+        result = await fanout.process(env, HubContext(hub=None))  # type: ignore[arg-type]
+
+        assert isinstance(result, RouteDecision)
+        assert result.primary is None
+        assert len(result.additional) == 1
+        assert result.additional[0].recipient == "extra"
+
+    @pytest.mark.asyncio
+    async def test_reject_before_additional_preserves(self) -> None:
+        """Reject plugin BEFORE additional plugin — additional still preserved."""
+
+        class _AdditionalPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                return RouteDecision(
+                    primary=envelope,
+                    additional=[envelope.child(envelope.event, recipient="audit")],
+                )
+
+        class _RejectPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                return None
+
+        # Reject plugin is FIRST — was broken before fix
+        fanout = Fanout(_RejectPlugin(), _AdditionalPlugin())
+
+        env = Envelope(
+            event=DelegationRequest(source="a", target="b", task="test"),
+            sender="a",
+            recipient="b",
+        )
+
+        from autogen.beta.network.topology import HubContext
+
+        result = await fanout.process(env, HubContext(hub=None))  # type: ignore[arg-type]
+
+        assert isinstance(result, RouteDecision)
+        assert result.primary is None
+        assert len(result.additional) == 1
+        assert result.additional[0].recipient == "audit"
+
+    @pytest.mark.asyncio
+    async def test_all_additional_collected_across_mixed_results(self) -> None:
+        """Additional envelopes from ALL successful plugins are collected,
+        even when some plugins reject or raise."""
+
+        class _Additional1(BasePlugin):
+            async def process(self, envelope, ctx):
+                return RouteDecision(
+                    primary=envelope,
+                    additional=[envelope.child(envelope.event, recipient="extra1")],
+                )
+
+        class _Additional2(BasePlugin):
+            async def process(self, envelope, ctx):
+                return RouteDecision(
+                    primary=envelope,
+                    additional=[envelope.child(envelope.event, recipient="extra2")],
+                )
+
+        class _RaisingPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                raise ValueError("boom")
+
+        # Raise in the middle — both additional plugins' envelopes preserved
+        fanout = Fanout(_Additional1(), _RaisingPlugin(), _Additional2())
+
+        env = Envelope(
+            event=DelegationRequest(source="a", target="b", task="test"),
+            sender="a",
+            recipient="b",
+        )
+
+        from autogen.beta.network.topology import HubContext
+
+        result = await fanout.process(env, HubContext(hub=None))  # type: ignore[arg-type]
+
+        assert isinstance(result, RouteDecision)
+        assert result.primary is None
+        assert len(result.additional) == 2
+        recipients = {e.recipient for e in result.additional}
+        assert recipients == {"extra1", "extra2"}
+
+
+# ===========================================================================
+# Gap: Scheduler EventWatch + Hub delegation end-to-end
+# ===========================================================================
+
+
+class TestSchedulerEventWatchHubDelegation:
+    """Scheduler with EventWatch should trigger delegation when matching event fires."""
+
+    @pytest.mark.asyncio
+    async def test_event_watch_triggers_hub_delegation(self) -> None:
+        """An EventWatch on DelegationResult should fire and delegate to target."""
+        worker = _AskableAgent("worker", result="work done")
+        auditor = _AskableAgent("auditor", result="audit done")
+
+        hub = Hub()
+        await hub.register(worker)
+        await hub.register(auditor)
+
+        scheduler = Scheduler(hub=hub)
+        scheduler.add(
+            EventWatch(DelegationResult),
+            target="auditor",
+            task_factory=lambda events: f"Audit: {events[0].result}",
+        )
+        await scheduler.start()
+
+        # Trigger a delegation — this produces a DelegationResult on hub stream
+        await hub.delegate("caller", "worker", "do work")
+
+        # Give the EventWatch callback time to fire and delegate
+        await asyncio.sleep(0.3)
+
+        assert len(auditor.asked) >= 1
+        assert "Audit:" in auditor.asked[0]
+
+        await scheduler.stop()
+        await hub.close()
+
+
+# ===========================================================================
+# Gap: Hub.ask() with unregistered Agent instance
+# ===========================================================================
+
+
+class TestHubAskUnregisteredInstance:
+    """Hub.ask() with an Agent instance not registered in the Hub."""
+
+    @pytest.mark.asyncio
+    async def test_unregistered_agent_gets_network_tools(self) -> None:
+        """An unregistered Agent passed to hub.ask() should still get network
+        tools, but delegate_to calls from it will fail gracefully."""
+
+        class _ToolTrackingAgent:
+            name = "unregistered"
+
+            def __init__(self):
+                self.received_tools: list[Any] = []
+
+            async def ask(self, message, **kwargs):
+                self.received_tools = list(kwargs.get("tools", []))
+                return type("Reply", (), {"body": "ok", "response": None})()
+
+        agent = _ToolTrackingAgent()
+        hub = Hub()
+        # NOT registered — but hub.ask() should still work
+
+        reply = await hub.ask(agent, "go")
+        assert reply.body == "ok"
+
+        # Should have network tools injected
+        tool_names = {
+            getattr(t, "schema", None) and t.schema.function.name
+            for t in agent.received_tools
+        }
+        assert "discover_agents" in tool_names
+        assert "delegate_to" in tool_names
+
+
+# ===========================================================================
+# Gap: Multiple FATAL signals in one batch
+# ===========================================================================
+
+
+class TestMultipleFatalSignals:
+    """Multiple FATAL signals in one batch should halt on the first."""
+
+    @pytest.mark.asyncio
+    async def test_two_fatals_halts_on_first(self) -> None:
+        """When two FATAL signals arrive in the same batch, the middleware
+        should halt and the response should reference the first FATAL."""
+        stream = MemoryStream()
+        ctx = ContextType(stream=stream)
+        ctx.prompt = ["existing"]
+
+        signals: list[Signal] = [
+            Signal(source="obs-a", severity=Severity.FATAL, message="fatal A"),
+            Signal(source="obs-b", severity=Severity.FATAL, message="fatal B"),
+        ]
+
+        policy = InjectToPrompt()
+
+        mw = _SignalInjectionMiddleware(
+            event=ModelMessage(content="test"),
+            context=ctx,
+            signal_queue=signals,
+            policy=policy,
+            delivered_ids=set(),
+        )
+
+        call_next = AsyncMock()
+        result = await mw.on_llm_call(call_next, [], ctx)
+
+        # Should halt without calling LLM
+        call_next.assert_not_called()
+        assert "HALTED" in result.message.content
+        # First FATAL's message should appear
+        assert "fatal A" in result.message.content
+        # Prompt should be cleaned (only original entry remains)
+        assert len(ctx.prompt) == 1
+        assert "existing" in ctx.prompt
+
+
+# ===========================================================================
+# Previous: Signal injection prompt cleanup on FATAL path
+# ===========================================================================
+
+
 class TestSignalInjectionFatalCleanup:
     """_SignalInjectionMiddleware should clean prompt on FATAL path."""
 

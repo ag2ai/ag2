@@ -284,24 +284,24 @@ class Fanout(Topology):
             return_exceptions=True,
         )
         collected: list[Envelope] = []
+        rejected = False
         for r in results:
             if isinstance(r, BaseException):
                 import logging
                 logging.getLogger(__name__).exception(
                     "Fanout plugin raised during process", exc_info=r,
                 )
-                # Reject primary but preserve accumulated additional
-                # (reject-with-side-effects, consistent with Pipeline).
-                if collected:
-                    return RouteDecision(primary=None, additional=collected)
-                return None
+                rejected = True
+                continue
             primary, additional = _normalize(r)
-            if primary is None:
-                # Reject primary but preserve accumulated additional.
-                if collected:
-                    return RouteDecision(primary=None, additional=collected)
-                return None
             collected.extend(additional)
+            if primary is None:
+                rejected = True
+
+        if rejected:
+            if collected:
+                return RouteDecision(primary=None, additional=collected)
+            return None
 
         if collected:
             return RouteDecision(primary=envelope, additional=collected)

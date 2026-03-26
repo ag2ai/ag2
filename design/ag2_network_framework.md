@@ -558,8 +558,8 @@ class ConversationHarness(ContextHarness):
 
     def select(self, events):
         return [e for e in events if isinstance(e,
-            (ModelRequest, ModelResponse, ToolCallEvent,
-             ToolResultEvent, ToolErrorEvent))]
+            (ModelRequest, ModelResponse, ToolCallEvent, ToolCallsEvent,
+             ToolResultEvent, ToolResultsEvent, ToolErrorEvent))]
 
     def format(self, event):
         return None  # Use LLM client's default formatting
@@ -727,6 +727,8 @@ reply = await actor.ask(
 | `StateStore` | Key-value state (actor/observer state) | Crash recovery, distributed state sync |
 
 Together they provide full durability: both the conversation history and the operational state.
+
+> **Note — Future work:** Conversation persistence via `Storage` and `stream_id` resumption is a planned feature, not yet implemented in the network layer. Phase 1 focuses on the primitives and building blocks above. Storage-backed resumption will be added in a subsequent phase.
 
 ---
 
@@ -1341,7 +1343,7 @@ class Conditional(Topology):
     Example::
 
         topology = Conditional(
-            predicate=lambda env: env.priority >= DefaultPriority.URGENT,
+            predicate=lambda env: (env.priority or 0) >= DefaultPriority.URGENT,
             if_true=Pipeline(AlertPlugin(), FastRouter()),
             if_false=Pipeline(QueuePlugin(), BatchRouter()),
         )
@@ -1368,7 +1370,7 @@ hub = Hub(
             MetricsCollector(),
         ),
         Conditional(                      # 5. Priority routing
-            predicate=lambda e: e.priority >= DefaultPriority.URGENT,
+            predicate=lambda e: (e.priority or 0) >= DefaultPriority.URGENT,
             if_true=FastRouter(),
             if_false=BatchRouter(),
         ),

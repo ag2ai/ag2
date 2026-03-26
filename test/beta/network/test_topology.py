@@ -131,6 +131,29 @@ class TestFanout:
 
 
     @pytest.mark.asyncio
+    async def test_rejection_preserves_additional_regardless_of_order(self) -> None:
+        """Additional envelopes are preserved even when the rejecting plugin
+        appears before the plugin that produces them."""
+
+        class AdditionalPlugin(BasePlugin):
+            async def process(self, envelope, ctx):
+                return RouteDecision(
+                    primary=envelope,
+                    additional=[envelope.child(envelope.event, recipient="extra")],
+                )
+
+        # Reject is FIRST in the list — additional should still be preserved
+        fanout = Fanout(RejectPlugin(), AdditionalPlugin())
+
+        ctx = HubContext(hub=None)  # type: ignore
+        result = await fanout.process(_make_envelope(), ctx)
+
+        assert isinstance(result, RouteDecision)
+        assert result.primary is None
+        assert len(result.additional) == 1
+        assert result.additional[0].recipient == "extra"
+
+    @pytest.mark.asyncio
     async def test_mutation_safety(self) -> None:
         """Fanout gives each plugin a copy — mutations don't leak between plugins."""
         recipients_seen: list[str] = []
