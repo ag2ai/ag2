@@ -1,7 +1,6 @@
 name: Core Beta tests with LLMs
 
 on:
-  push: # TODO: remove this trigger once merged to main
   schedule:
     - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
