@@ -309,7 +309,7 @@ class Hub:
             error_event = DelegationError(
                 source=source,
                 target=to_agent,
-                task=task,
+                task=effective_task,
                 error=str(e),
             )
             await self._emit(error_event)

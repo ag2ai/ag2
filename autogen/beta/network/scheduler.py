@@ -195,6 +195,8 @@ class Scheduler:
         """Handle a watch firing."""
         if not self._running:
             return
+        if entry.status == WatchStatus.CANCELLED:
+            return
 
         if entry.callback is not None:
             # Standalone mode: call the callback directly

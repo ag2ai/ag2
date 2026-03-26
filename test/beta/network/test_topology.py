@@ -418,15 +418,20 @@ class TestFanoutWithRouteDecision:
         assert recipients == {"extra_1", "extra_2"}
 
     @pytest.mark.asyncio
-    async def test_rejection_overrides_additional(self) -> None:
-        """If any fanout plugin rejects, entire result is None (no additional)."""
+    async def test_rejection_preserves_additional(self) -> None:
+        """If any fanout plugin rejects, primary is None but accumulated
+        additional envelopes are preserved (reject-with-side-effects)."""
         multicast = MulticastPlugin(["extra"])
         reject = RejectPlugin()
         fanout = Fanout(multicast, reject)
 
         ctx = HubContext(hub=None)  # type: ignore
         result = await fanout.process(_make_envelope(), ctx)
-        assert result is None
+        # Primary rejected, but additional from multicast preserved
+        assert isinstance(result, RouteDecision)
+        assert result.primary is None
+        assert len(result.additional) == 1
+        assert result.additional[0].recipient == "extra"
 
     @pytest.mark.asyncio
     async def test_no_additional_returns_plain_envelope(self) -> None:

@@ -186,22 +186,31 @@ class CallHandler(SignalPolicy):
     def __init__(self, handler: Callable[[list[Signal]], Awaitable[None]]): ...
 ```
 
-**FATAL severity has mechanical consequences.** INFO/WARNING/CRITICAL are advisory — the LLM sees the alert and decides how to respond. FATAL means "stop execution." `InjectToPrompt` enforces this: when a FATAL signal is in the queue, it uses the stream's interrupter mechanism (already in MemoryStream) to force-stop the agent's execution loop and return immediately.
+**FATAL severity has mechanical consequences.** INFO/WARNING/CRITICAL are advisory — the LLM sees the alert and decides how to respond. FATAL means "stop execution." `InjectToPrompt` enforces this: it emits a `HaltEvent` on the stream. The `SignalInjectionMiddleware` in Actor intercepts FATAL signals before the LLM call and returns a synthetic `ModelResponse` to halt the agent's execution loop — no LLM call is made. Any prompt entries appended by the policy (e.g. non-fatal alerts in the same batch) are cleaned up before returning.
 
 ```python
 class InjectToPrompt(SignalPolicy):
     """Default signal policy. Injects signals into LLM system prompt.
 
     - INFO/WARNING/CRITICAL: appended as alert text, removed after LLM call.
-    - FATAL: halts execution immediately via stream interrupter. The agent
-      returns with the FATAL signal message as the response. No LLM call.
+    - FATAL: emits HaltEvent on the stream. The SignalInjectionMiddleware
+      intercepts FATAL signals before the LLM call and returns a synthetic
+      ModelResponse to halt the agent's execution loop — no LLM call is made.
 
-    FATAL signals are emitted as HaltEvent on the stream. The SignalInjectionMiddleware
-    in Actor intercepts FATAL signals before the LLM call and returns a synthetic
-    ModelResponse to halt the agent's execution loop — no LLM call is made.
+    Non-fatal signals in the same batch as a FATAL are still delivered first
+    (appended to prompt) so diagnostic context is not lost, but prompt entries
+    are cleaned up before the halt response is returned.
     """
     async def deliver(self, signals: list[Signal], context: Context) -> None:
         fatal = [s for s in signals if s.severity == Severity.FATAL]
+        non_fatal = [s for s in signals if s.severity != Severity.FATAL]
+
+        # Always deliver non-fatal signals first so diagnostic context
+        # (e.g. warnings explaining why a FATAL occurred) is not lost.
+        alert_text = self._format_alerts(non_fatal)
+        if alert_text:
+            context.prompt.append(alert_text)
+
         if fatal:
             # Emit HaltEvent — SignalInjectionMiddleware handles the actual halt
             await context.send(HaltEvent(
@@ -210,12 +219,7 @@ class InjectToPrompt(SignalPolicy):
                 signals=fatal,
             ))
             return
-
-        # Non-fatal: inject into prompt temporarily
-        alert_text = self._format_alerts(signals)
-        if alert_text:
-            context.prompt.append(alert_text)
-        # (removed after LLM call by the signal injection middleware)
+        # (non-fatal prompt entries removed after LLM call by the signal injection middleware)
 ```
 
 `HaltOnFatal` is also available as a standalone policy that can wrap any other policy — it delivers non-fatal signals first via the inner policy, then halts on FATAL:
@@ -1143,8 +1147,8 @@ class RouteDecision:
 
 **Composition semantics — additional envelopes propagate upward through topology composition. Only the primary flows through the pipeline chain:**
 
-- **Pipeline:** Additional envelopes accumulate across plugins. Only the primary passes to the next plugin. If any plugin rejects the primary, accumulated additional envelopes are still returned.
-- **Fanout:** Additional envelopes from all plugins are collected. The primary is the original envelope (unchanged, as before).
+- **Pipeline:** Additional envelopes accumulate across plugins. Only the primary passes to the next plugin. If any plugin rejects the primary, accumulated additional envelopes are still returned (reject-with-side-effects).
+- **Fanout:** Additional envelopes from all plugins are collected. The primary is the original envelope (unchanged, as before). If any plugin rejects or raises, the primary is rejected but accumulated additional envelopes from plugins that already completed are preserved (consistent with Pipeline).
 - **Conditional:** Transparently passes through whatever the selected branch returns.
 
 **Hub execution:** After the topology pipeline completes, the Hub dispatches additional envelopes as independent fire-and-forget delegations via `asyncio.create_task`. Each goes through the full `Hub._delegate()` path — depth tracking, topology processing, event emission. The delegation depth guard prevents recursive amplification.
@@ -1314,7 +1318,9 @@ class Fanout(Topology):
     Useful for side-effects (logging, metrics) that don't modify the envelope.
     Returns the original envelope unchanged (side-effect only).
     Additional envelopes from any plugin are collected into the result.
-    If any plugin rejects or raises, the envelope is rejected.
+    If any plugin rejects or raises, the primary envelope is rejected but
+    accumulated additional envelopes from plugins that already completed
+    are preserved (reject-with-side-effects, consistent with Pipeline).
 
     Example::
 
@@ -1384,19 +1390,22 @@ A convenience class that wires Hub + Scheduler with sensible defaults. For users
 class Network:
     """Convenience: Hub + Scheduler wired together with sensible defaults.
 
-    Supports async context manager for automatic start/stop::
+    Supports async context manager for automatic start/stop + cleanup::
 
         async with Network() as network:
             await network.register(researcher, capabilities=["research"])
             reply = await network.ask(researcher, "Write a report")
+        # __aexit__ calls stop() then hub.close() — full cleanup
 
-    Or manual lifecycle::
+    Or manual lifecycle (note: stop() only stops the scheduler;
+    call hub.close() separately for full resource cleanup)::
 
         network = Network()
         await network.register(researcher, capabilities=["research"])
         await network.start()
         reply = await network.ask(researcher, "Write a report")
         await network.stop()
+        await network.hub.close()  # Clean up plugins, channel, etc.
     """
 
     def __init__(

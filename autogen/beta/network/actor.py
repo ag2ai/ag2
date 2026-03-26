@@ -301,18 +301,26 @@ class _SignalInjectionMiddleware(BaseMiddleware):
             for s in signals:
                 self._delivered_ids.add(id(s))
 
+                # Track prompt length before delivering any signals so we can
+            # clean up entries appended by the policy in all code paths.
+            prompt_len_before = len(context.prompt) if context.prompt else 0
+
             # Check for FATAL — halt without calling the LLM
             has_fatal = any(s.severity == Severity.FATAL for s in signals)
             if has_fatal:
                 fatal = next(s for s in signals if s.severity == Severity.FATAL)
                 await self._policy.deliver(signals, context)
+                # Clean up any prompt entries appended by the policy (e.g.
+                # non-fatal alerts) before returning the synthetic halt response.
+                num_added = (len(context.prompt) if context.prompt else 0) - prompt_len_before
+                if num_added > 0 and context.prompt:
+                    del context.prompt[-num_added:]
                 # Return a synthetic response to halt the agent loop
                 return ModelResponse(
                     message=ModelMessage(content=f"HALTED: {fatal.message}"),
                 )
 
             # Non-fatal: deliver (policy may append to prompt), call LLM, clean up
-            prompt_len_before = len(context.prompt) if context.prompt else 0
             await self._policy.deliver(signals, context)
             prompt_len_after = len(context.prompt) if context.prompt else 0
             num_added = prompt_len_after - prompt_len_before
