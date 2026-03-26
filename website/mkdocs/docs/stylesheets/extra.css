@@ -695,3 +695,10 @@ height: 100%;
 border: 0;
 }
 /* User Story Page Ends */
+
+/* Reserve sidebar scrollbar space so classic scrollbars don't overlap docs content. */
+@media screen and (min-width: 76.25em) {
+    .md-sidebar__scrollwrap {
+        scrollbar-gutter: stable;
+    }
+}
