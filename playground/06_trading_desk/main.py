@@ -198,37 +198,31 @@ class ComplianceAudit(BasePlugin):
         self._hub = None
 
     async def _on_request(self, event: DelegationRequest) -> None:
-        self._audit_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-                "type": "DELEGATION_REQUEST",
-                "source": event.source,
-                "target": event.target,
-                "task_preview": event.task[:100],
-            }
-        )
+        self._audit_log.append({
+            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            "type": "DELEGATION_REQUEST",
+            "source": event.source,
+            "target": event.target,
+            "task_preview": event.task[:100],
+        })
 
     async def _on_result(self, event: DelegationResult) -> None:
-        self._audit_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-                "type": "DELEGATION_RESULT",
-                "source": event.source,
-                "target": event.target,
-                "result_preview": event.result[:100],
-            }
-        )
+        self._audit_log.append({
+            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            "type": "DELEGATION_RESULT",
+            "source": event.source,
+            "target": event.target,
+            "result_preview": event.result[:100],
+        })
 
     async def _on_rejected(self, event: DelegationRejected) -> None:
-        self._audit_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-                "type": "DELEGATION_REJECTED",
-                "source": event.source,
-                "target": event.target,
-                "reason": event.reason,
-            }
-        )
+        self._audit_log.append({
+            "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            "type": "DELEGATION_REJECTED",
+            "source": event.source,
+            "target": event.target,
+            "reason": event.reason,
+        })
 
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Return the full audit trail."""
@@ -697,10 +691,7 @@ async def main() -> None:
                 f"{_MAGENTA}{event.source.upper()} -> {event.target.upper()}{_RESET}"
             )
             preview = event.task[:120].replace("\n", " ")
-            print(
-                f"  {_DIM}{' ' * 12}{_RESET}         "
-                f"{_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 12}{_RESET}         {_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationResult):
             print(
                 f"  {_DIM}{ts}{_RESET}  "

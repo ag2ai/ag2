@@ -93,14 +93,26 @@ async def main() -> None:
         return
 
     # Schedule watches
-    network.schedule(IntervalWatch(15), target="hvac",
-                     task="Check temperatures in all zones. Adjust any zones outside comfort range 68-74\u00b0F. Report status.")
-    network.schedule(IntervalWatch(20), target="security",
-                     task="Run camera sweep of all zones. Log any motion detected. Report security status.")
-    network.schedule(IntervalWatch(30), target="energy",
-                     task="Building closing: switch to eco mode. Reduce lighting to 20% in unoccupied zones. Report energy savings.")
-    network.schedule(IntervalWatch(45), target="maintenance",
-                     task="Check status of all critical equipment (HVAC units, elevators, fire suppression). Create work orders for anything needing attention.")
+    network.schedule(
+        IntervalWatch(15),
+        target="hvac",
+        task="Check temperatures in all zones. Adjust any zones outside comfort range 68-74\u00b0F. Report status.",
+    )
+    network.schedule(
+        IntervalWatch(20),
+        target="security",
+        task="Run camera sweep of all zones. Log any motion detected. Report security status.",
+    )
+    network.schedule(
+        IntervalWatch(30),
+        target="energy",
+        task="Building closing: switch to eco mode. Reduce lighting to 20% in unoccupied zones. Report energy savings.",
+    )
+    network.schedule(
+        IntervalWatch(45),
+        target="maintenance",
+        task="Check status of all critical equipment (HVAC units, elevators, fire suppression). Create work orders for anything needing attention.",
+    )
 
     subscribe_hub_logging(network.hub, label="CTRL")
 
@@ -113,7 +125,9 @@ async def main() -> None:
     print(f"  {CYAN}Scenario:{RESET}   {title}")
     print(f"  {CYAN}Model:{RESET}      {model}")
     print(f"  {CYAN}Duration:{RESET}   {duration}s")
-    print(f"  {CYAN}Remote:{RESET}     hvac + energy (:{PORTS['climate']}), security + maintenance (:{PORTS['operations']})")
+    print(
+        f"  {CYAN}Remote:{RESET}     hvac + energy (:{PORTS['climate']}), security + maintenance (:{PORTS['operations']})"
+    )
     print()
     print(f"  {BOLD}Scheduled Watches:{RESET}")
     print(f"    {YELLOW}HVAC{RESET}         every 15s  temperature checks")

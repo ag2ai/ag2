@@ -616,9 +616,7 @@ class TestHubTopologyIntegration:
                         primary=None,
                         additional=[
                             envelope.child(
-                                event=DelegationRequest(
-                                    source="system", target="alerter", task="alert!"
-                                ),
+                                event=DelegationRequest(source="system", target="alerter", task="alert!"),
                                 sender="system",
                                 recipient="alerter",
                             ),
@@ -779,9 +777,7 @@ class TestHubAdditionalTaskTracking:
                         primary=envelope,
                         additional=[
                             envelope.child(
-                                event=DelegationRequest(
-                                    source="sys", target="slow", task="background"
-                                ),
+                                event=DelegationRequest(source="sys", target="slow", task="background"),
                                 sender="sys",
                                 recipient="slow",
                             ),
@@ -832,8 +828,9 @@ class TestHubConnectNameCollision:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("autogen.beta.network.hub.ClientSession", return_value=mock_session), caplog.at_level(
-            logging.WARNING
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            caplog.at_level(logging.WARNING),
         ):
             registered = await hub.connect("http://fake:8900")
 

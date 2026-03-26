@@ -301,19 +301,13 @@ def subscribe_event_logging(stream: MemoryStream) -> None:
         if isinstance(event, ToolCallEvent):
             try:
                 args = event.serialized_arguments
-                parts = [
-                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                    for k, v in args.items()
-                ]
+                parts = [f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}" for k, v in args.items()]
                 args_str = ", ".join(parts)
                 if len(args_str) > 120:
                     args_str = args_str[:120] + "..."
             except Exception:
                 args_str = event.arguments[:120]
-            log(
-                f"{_YELLOW}{_BOLD}TOOL{_RESET} {_YELLOW}{event.name}{_RESET}"
-                f"({_DIM}{args_str}{_RESET})"
-            )
+            log(f"{_YELLOW}{_BOLD}TOOL{_RESET} {_YELLOW}{event.name}{_RESET}({_DIM}{args_str}{_RESET})")
 
         elif isinstance(event, ToolResultEvent):
             preview = event.content[:160].replace("\n", " | ")
@@ -322,15 +316,11 @@ def subscribe_event_logging(stream: MemoryStream) -> None:
         elif isinstance(event, ModelResponse) and event.content:
             preview = event.content[:200].replace("\n", " | ")
             log(
-                f"{_GREEN}{_BOLD}RESPONSE:{_RESET} "
-                f"{_GREEN}{preview}{'...' if len(event.content) > 200 else ''}{_RESET}"
+                f"{_GREEN}{_BOLD}RESPONSE:{_RESET} {_GREEN}{preview}{'...' if len(event.content) > 200 else ''}{_RESET}"
             )
 
         elif isinstance(event, Signal):
-            log(
-                f"{_RED}{_BOLD}ALERT [{event.severity.upper()}]{_RESET} "
-                f"{_RED}{event.message}{_RESET}"
-            )
+            log(f"{_RED}{_BOLD}ALERT [{event.severity.upper()}]{_RESET} {_RED}{event.message}{_RESET}")
 
     stream.subscribe(_on_event)
 
@@ -591,15 +581,22 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--scenario", type=int, default=1, choices=[1, 2, 3],
+        "--scenario",
+        type=int,
+        default=1,
+        choices=[1, 2, 3],
         help="Scenario to run (default: 1)",
     )
     parser.add_argument(
-        "--model", type=str, default="gemini-3-flash-preview",
+        "--model",
+        type=str,
+        default="gemini-3-flash-preview",
         help="Model to use (default: gemini-3-flash-preview)",
     )
     parser.add_argument(
-        "--interval", type=int, default=10,
+        "--interval",
+        type=int,
+        default=10,
         help="Seconds between health checks for scenario 1/3 (default: 10)",
     )
     return parser.parse_args()

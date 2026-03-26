@@ -46,9 +46,7 @@ class TokenMonitor(BaseObserver):
     def total_tokens(self) -> int:
         return self._total_tokens
 
-    async def process(
-        self, events: list[BaseEvent], ctx: Context
-    ) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
         for event in events:
             if isinstance(event, (ModelResponse, TaskResult)):
                 usage = event.usage or {}

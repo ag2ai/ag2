@@ -161,9 +161,7 @@ class TestEventRegistry:
             value: str
 
         registry.register(CustomEvent)
-        resolved = registry.resolve(
-            f"{CustomEvent.__module__}.{CustomEvent.__qualname__}"
-        )
+        resolved = registry.resolve(f"{CustomEvent.__module__}.{CustomEvent.__qualname__}")
         assert resolved is CustomEvent
 
     def test_resolve_unknown_returns_none(self) -> None:
@@ -178,7 +176,5 @@ class TestEventRegistry:
         # Should be resolvable from default registry
         from autogen.beta.network.primitives.envelope import _default_registry
 
-        resolved = _default_registry.resolve(
-            f"{DecoratedEvent.__module__}.{DecoratedEvent.__qualname__}"
-        )
+        resolved = _default_registry.resolve(f"{DecoratedEvent.__module__}.{DecoratedEvent.__qualname__}")
         assert resolved is DecoratedEvent

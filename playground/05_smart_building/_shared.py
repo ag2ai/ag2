@@ -231,9 +231,15 @@ async def check_equipment_status(equipment: str) -> str:
     """
     statuses = {
         "hvac-unit-1": ("OPERATIONAL", "Filter life: 62%"),
-        "hvac-unit-2": (random.choice(["OPERATIONAL", "NEEDS SERVICE"]), f"Refrigerant: {random.choice(['OK', 'LOW'])}"),
+        "hvac-unit-2": (
+            random.choice(["OPERATIONAL", "NEEDS SERVICE"]),
+            f"Refrigerant: {random.choice(['OK', 'LOW'])}",
+        ),
         "elevator-1": ("OPERATIONAL", f"Trips today: {random.randint(20, 200)}"),
-        "elevator-2": (random.choice(["OPERATIONAL", "MINOR FAULT"]), f"Door sensor: {random.choice(['OK', 'NEEDS ADJUSTMENT'])}"),
+        "elevator-2": (
+            random.choice(["OPERATIONAL", "MINOR FAULT"]),
+            f"Door sensor: {random.choice(['OK', 'NEEDS ADJUSTMENT'])}",
+        ),
         "fire-suppression": ("OPERATIONAL", f"Pressure: {random.randint(90, 100)}% nominal"),
         "generator": ("STANDBY", f"Fuel: {random.randint(60, 100)}%"),
     }
@@ -354,6 +360,7 @@ def make_maintenance(model: str = "gemini-3-flash-preview") -> Actor:
         observers=[TokenMonitor(warn_threshold=10_000, alert_threshold=30_000), LoopDetector(repeat_threshold=3)],
     )
 
+
 # ---------------------------------------------------------------------------
 # Hub stream logger
 # ---------------------------------------------------------------------------
@@ -365,10 +372,7 @@ def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
     async def _on_event(event: object) -> None:
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         if isinstance(event, SchedulerTriggerFired):
-            print(
-                f"\n  {DIM}{ts}{RESET}  "
-                f"{CYAN}{BOLD}=== SCHEDULER: [{event.target.upper()}] triggered ==={RESET}"
-            )
+            print(f"\n  {DIM}{ts}{RESET}  {CYAN}{BOLD}=== SCHEDULER: [{event.target.upper()}] triggered ==={RESET}")
             preview = event.task[:100].replace("\n", " ")
             print(f"  {DIM}{' ' * 12}       {CYAN}{preview}{RESET}")
         elif isinstance(event, DelegationRequest):
@@ -386,10 +390,6 @@ def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
                 f"{GREEN}{event.target.upper()} done -> {event.source.upper()}{RESET}"
             )
         elif isinstance(event, Signal):
-            print(
-                f"  {DIM}{ts}{RESET}  "
-                f"{RED}{BOLD}ALERT [{event.severity.upper()}]{RESET} "
-                f"{RED}{event.message}{RESET}"
-            )
+            print(f"  {DIM}{ts}{RESET}  {RED}{BOLD}ALERT [{event.severity.upper()}]{RESET} {RED}{event.message}{RESET}")
 
     hub.stream.subscribe(_on_event)

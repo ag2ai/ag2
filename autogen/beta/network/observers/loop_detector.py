@@ -43,9 +43,7 @@ class LoopDetector(BaseObserver):
         self._history: deque[tuple[str, str]] = deque(maxlen=window_size)
         self._flagged: set[tuple[str, str]] = set()
 
-    async def process(
-        self, events: list[BaseEvent], ctx: Context
-    ) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
         for event in events:
             if not isinstance(event, ToolCallEvent):
                 continue
@@ -56,7 +54,7 @@ class LoopDetector(BaseObserver):
             if len(self._history) < self._repeat_threshold:
                 continue
 
-            tail = list(self._history)[-self._repeat_threshold:]
+            tail = list(self._history)[-self._repeat_threshold :]
             if all(k == key for k in tail) and key not in self._flagged:
                 self._flagged.add(key)
                 return Signal(

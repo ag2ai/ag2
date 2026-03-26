@@ -288,8 +288,10 @@ class Fanout(Topology):
         for r in results:
             if isinstance(r, BaseException):
                 import logging
+
                 logging.getLogger(__name__).exception(
-                    "Fanout plugin raised during process", exc_info=r,
+                    "Fanout plugin raised during process",
+                    exc_info=r,
                 )
                 rejected = True
                 continue

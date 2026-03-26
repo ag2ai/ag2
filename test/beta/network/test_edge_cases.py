@@ -247,6 +247,7 @@ class TestObserverExceptionHandling:
             signals.append(event)
 
         from autogen.beta.events.conditions import TypeCondition
+
         stream.subscribe(_capture, condition=TypeCondition(Signal))
 
         observer.attach(stream, ctx)
@@ -486,6 +487,7 @@ class TestHubDiscoverExcludesSelf:
 
         class _DiscoverAgent:
             """Agent that calls discover_agents and returns the result."""
+
             def __init__(self, name, hub):
                 self.name = name
                 self._hub = hub

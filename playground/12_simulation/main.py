@@ -380,9 +380,12 @@ async def synthesize_perspectives(
         key_opportunities: Top 3 opportunities across all perspectives.
     """
     consensus = (
-        "STRONG SUPPORT" if support_count > total_perspectives * 0.7
-        else "MODERATE SUPPORT" if support_count > total_perspectives * 0.5
-        else "DIVIDED" if support_count >= oppose_count
+        "STRONG SUPPORT"
+        if support_count > total_perspectives * 0.7
+        else "MODERATE SUPPORT"
+        if support_count > total_perspectives * 0.5
+        else "DIVIDED"
+        if support_count >= oppose_count
         else "OPPOSITION MAJORITY"
     )
     return (
@@ -741,8 +744,7 @@ async def main() -> None:
             )
             preview = event.task[:100].replace("\n", " ")
             print(
-                f"  {_DIM}{' ' * 12}{_RESET}            "
-                f"{_DIM}{preview}{'...' if len(event.task) > 100 else ''}{_RESET}"
+                f"  {_DIM}{' ' * 12}{_RESET}            {_DIM}{preview}{'...' if len(event.task) > 100 else ''}{_RESET}"
             )
         elif isinstance(event, DelegationResult):
             target = event.target

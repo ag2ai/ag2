@@ -126,7 +126,8 @@ async def cmd_batch() -> None:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
             try:
                 async with session.post(
-                    f"{DISPATCH_URL}/emergency", json={"message": message},
+                    f"{DISPATCH_URL}/emergency",
+                    json={"message": message},
                 ) as resp:
                     data = await resp.json()
                     if data.get("status") == "ok":
@@ -138,9 +139,7 @@ async def cmd_batch() -> None:
             except Exception as e:
                 print(f"  {RED}[{num}] {title}: Failed — {e}{RESET}")
 
-    await asyncio.gather(*[
-        _send(i, title, msg) for i, (title, msg) in enumerate(batch, 1)
-    ])
+    await asyncio.gather(*[_send(i, title, msg) for i, (title, msg) in enumerate(batch, 1)])
 
     print()
     print(f"  {GREEN}{BOLD}All incidents processed.{RESET}")
@@ -154,7 +153,8 @@ async def cmd_connect(endpoint: str) -> None:
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(
-                f"{DISPATCH_URL}/connect", json={"endpoint": endpoint},
+                f"{DISPATCH_URL}/connect",
+                json={"endpoint": endpoint},
             ) as resp:
                 data = await resp.json()
                 if data.get("status") == "ok":

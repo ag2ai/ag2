@@ -695,10 +695,7 @@ class TestMultipleObserversSignals:
         assert config.client is not None
         # At least one call should have had observer alerts
         all_prompts = [call[1] for call in config.client.calls]
-        any_has_alerts = any(
-            any("OBSERVER MONITORING ALERTS" in p for p in prompts)
-            for prompts in all_prompts
-        )
+        any_has_alerts = any(any("OBSERVER MONITORING ALERTS" in p for p in prompts) for prompts in all_prompts)
         assert any_has_alerts
 
 
@@ -1032,10 +1029,7 @@ class TestHubAskUnregisteredInstance:
         assert reply.body == "ok"
 
         # Should have network tools injected
-        tool_names = {
-            getattr(t, "schema", None) and t.schema.function.name
-            for t in agent.received_tools
-        }
+        tool_names = {getattr(t, "schema", None) and t.schema.function.name for t in agent.received_tools}
         assert "discover_agents" in tool_names
         assert "delegate_to" in tool_names
 

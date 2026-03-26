@@ -193,9 +193,7 @@ class TestConditional:
         )
 
         ctx = HubContext(hub=None)  # type: ignore
-        result = await cond.process(
-            _make_envelope(priority=DefaultPriority.URGENT), ctx
-        )
+        result = await cond.process(_make_envelope(priority=DefaultPriority.URGENT), ctx)
 
         assert result is not None
         assert true_plugin.call_count == 1
@@ -212,9 +210,7 @@ class TestConditional:
         )
 
         ctx = HubContext(hub=None)  # type: ignore
-        result = await cond.process(
-            _make_envelope(priority=DefaultPriority.BACKGROUND), ctx
-        )
+        result = await cond.process(_make_envelope(priority=DefaultPriority.BACKGROUND), ctx)
 
         assert result is not None
         assert true_plugin.call_count == 0
@@ -271,9 +267,7 @@ class MulticastPlugin(BasePlugin):
         self._targets = targets
 
     async def process(self, envelope, ctx):
-        additional = [
-            envelope.child(envelope.event, recipient=t) for t in self._targets
-        ]
+        additional = [envelope.child(envelope.event, recipient=t) for t in self._targets]
         return RouteDecision(primary=envelope, additional=additional)
 
 
@@ -341,9 +335,7 @@ class TestPipelineWithRouteDecision:
 
             async def process(self, envelope, ctx):
                 call_log.append(f"{self._name}:{envelope.recipient}")
-                additional = [
-                    envelope.child(envelope.event, recipient=t) for t in self._targets
-                ]
+                additional = [envelope.child(envelope.event, recipient=t) for t in self._targets]
                 return RouteDecision(primary=envelope, additional=additional)
 
         p1 = LoggingMulticast("p1", ["extra_1"])

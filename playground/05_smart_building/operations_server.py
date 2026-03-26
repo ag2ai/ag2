@@ -22,10 +22,16 @@ async def main() -> None:
     port = PORTS["operations"]
 
     hub = Hub(max_delegation_depth=4)
-    await hub.register(make_security(model), capabilities=["access-control", "surveillance", "alarms"],
-                       description="Security manager — cameras, door locks, alarms, access logs")
-    await hub.register(make_maintenance(model), capabilities=["repairs", "inspections", "equipment"],
-                       description="Maintenance manager — work orders, equipment checks, parts")
+    await hub.register(
+        make_security(model),
+        capabilities=["access-control", "surveillance", "alarms"],
+        description="Security manager — cameras, door locks, alarms, access logs",
+    )
+    await hub.register(
+        make_maintenance(model),
+        capabilities=["repairs", "inspections", "equipment"],
+        description="Maintenance manager — work orders, equipment checks, parts",
+    )
 
     subscribe_hub_logging(hub, label="OPS")
 

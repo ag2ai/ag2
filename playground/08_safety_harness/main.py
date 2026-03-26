@@ -235,7 +235,7 @@ class ToolAbuseDetector(BaseObserver):
             return Signal(
                 source=self.name,
                 severity=Severity.CRITICAL,
-                message=(f"Excessive tool usage ({self._total_calls} calls). " f"Simplify your approach and wrap up."),
+                message=(f"Excessive tool usage ({self._total_calls} calls). Simplify your approach and wrap up."),
                 data={"total_calls": self._total_calls, "breakdown": dict(self._tool_counts)},
             )
 
@@ -246,9 +246,7 @@ class ToolAbuseDetector(BaseObserver):
                 return Signal(
                     source=self.name,
                     severity=Severity.WARNING,
-                    message=(
-                        f"Tool '{tool_name}' called {count} times — " f"possible inefficiency. Vary your approach."
-                    ),
+                    message=(f"Tool '{tool_name}' called {count} times — possible inefficiency. Vary your approach."),
                     data={"tool": tool_name, "count": count},
                 )
 
@@ -288,12 +286,10 @@ class ContentPolicyMonitor(BaseObserver):
             content = event.content or ""
             for keyword in self.FLAGGED_KEYWORDS:
                 if keyword.lower() in content.lower():
-                    self._flags.append(
-                        {
-                            "tool": event.name,
-                            "keyword": keyword,
-                        }
-                    )
+                    self._flags.append({
+                        "tool": event.name,
+                        "keyword": keyword,
+                    })
                     return Signal(
                         source=self.name,
                         severity=Severity.WARNING,
@@ -579,22 +575,18 @@ async def generate_report(title: str, sections: str) -> str:
         "",
     ]
     for i, section in enumerate(section_list, 1):
-        report_lines.extend(
-            [
-                f"--- Section {i}: {section} ---",
-                f"  [Content placeholder for '{section}']",
-                "  This section covers key findings and analysis related to",
-                f"  {section.lower()}. Data sourced from internal databases.",
-                "",
-            ]
-        )
-    report_lines.extend(
-        [
-            f"{'=' * 50}",
-            f"END OF REPORT — {len(section_list)} sections",
-            f"{'=' * 50}",
-        ]
-    )
+        report_lines.extend([
+            f"--- Section {i}: {section} ---",
+            f"  [Content placeholder for '{section}']",
+            "  This section covers key findings and analysis related to",
+            f"  {section.lower()}. Data sourced from internal databases.",
+            "",
+        ])
+    report_lines.extend([
+        f"{'=' * 50}",
+        f"END OF REPORT — {len(section_list)} sections",
+        f"{'=' * 50}",
+    ])
     return "\n".join(report_lines)
 
 
@@ -800,7 +792,7 @@ async def main() -> None:
 
     async def _on_tool_call(event: ToolCallEvent) -> None:
         args_str = event.arguments if len(event.arguments) < 80 else event.arguments[:77] + "..."
-        print(f"  {_DIM}[{_ts()}]{_RESET} {_YELLOW}TOOL  " f"{event.name}({args_str}){_RESET}")
+        print(f"  {_DIM}[{_ts()}]{_RESET} {_YELLOW}TOOL  {event.name}({args_str}){_RESET}")
 
     async def _on_tool_result(event: ToolResultEvent) -> None:
         content = (event.content or "").replace("\n", " ")
@@ -906,7 +898,7 @@ async def main() -> None:
         f"{bs['warnings']} warning(s), {bs['criticals']} critical(s)"
         + (f", {_RED}{_BOLD}FATAL — agent halted{_RESET}" if bs["fatal"] else "")
     )
-    print(f"  {_DIM}  Tokens: {bs['input_tokens']:,} input + " f"{bs['output_tokens']:,} output{_RESET}")
+    print(f"  {_DIM}  Tokens: {bs['input_tokens']:,} input + {bs['output_tokens']:,} output{_RESET}")
 
     # ToolAbuseDetector
     tas = tool_abuse_detector.stats
@@ -944,10 +936,10 @@ async def main() -> None:
     )
 
     # LoopDetector (built-in)
-    print(f"  {_GREEN}LoopDetector:{_RESET} " f"{len(loop_detector._flagged)} loop(s) detected")
+    print(f"  {_GREEN}LoopDetector:{_RESET} {len(loop_detector._flagged)} loop(s) detected")
 
     # TokenMonitor (built-in)
-    print(f"  {_GREEN}TokenMonitor:{_RESET} " f"{token_monitor.total_tokens:,} tokens tracked")
+    print(f"  {_GREEN}TokenMonitor:{_RESET} {token_monitor.total_tokens:,} tokens tracked")
 
     print()
     print(f"  {_DIM}{'=' * width}{_RESET}")

@@ -8,7 +8,6 @@ Tests RemoteAgent, Hub HTTP server endpoints, Hub.connect(), and
 end-to-end cross-hub delegation.
 """
 
-
 import pytest
 
 from autogen.beta.network.hub import Hub

@@ -95,7 +95,8 @@ async def main() -> None:
             })
         except Exception as e:
             return web.json_response(
-                {"status": "error", "incident_id": iid, "reason": str(e)}, status=500,
+                {"status": "error", "incident_id": iid, "reason": str(e)},
+                status=500,
             )
 
     async def handle_connect(request: web.Request) -> web.Response:
@@ -121,10 +122,7 @@ async def main() -> None:
         agents = await hub.discover()
         return web.json_response({
             "status": "running",
-            "agents": [
-                {"name": a.name, "capabilities": a.capabilities, "description": a.description}
-                for a in agents
-            ],
+            "agents": [{"name": a.name, "capabilities": a.capabilities, "description": a.description} for a in agents],
             "connections": connections,
             "incident_count": incident_counter,
         })

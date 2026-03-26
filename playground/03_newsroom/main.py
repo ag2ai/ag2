@@ -54,18 +54,15 @@ _WHITE = "\033[97m"
 SCENARIOS = {
     1: (
         "AI Agent Frameworks",
-        "Write an article about the rise of AI agent frameworks and how "
-        "they're changing software development",
+        "Write an article about the rise of AI agent frameworks and how they're changing software development",
     ),
     2: (
         "Crypto Mining Impact",
-        "Write an investigative piece about the environmental impact of "
-        "cryptocurrency mining in 2025",
+        "Write an investigative piece about the environmental impact of cryptocurrency mining in 2025",
     ),
     3: (
         "Quantum Computing",
-        "Write a tech review of the latest advances in quantum computing "
-        "and their practical applications",
+        "Write a tech review of the latest advances in quantum computing and their practical applications",
     ),
 }
 
@@ -154,22 +151,14 @@ def researcher_tools() -> list:
             if key in query_lower:
                 lines = []
                 for i, r in enumerate(entries, 1):
-                    lines.append(
-                        f"[{i}] {r['title']}\n"
-                        f"    {r['snippet']}\n"
-                        f"    Source: {r['url']}"
-                    )
+                    lines.append(f"[{i}] {r['title']}\n    {r['snippet']}\n    Source: {r['url']}")
                 return "\n\n".join(lines)
         # Fallback: return the first set
         first_key = next(iter(results))
         entries = results[first_key]
         lines = []
         for i, r in enumerate(entries, 1):
-            lines.append(
-                f"[{i}] {r['title']}\n"
-                f"    {r['snippet']}\n"
-                f"    Source: {r['url']}"
-            )
+            lines.append(f"[{i}] {r['title']}\n    {r['snippet']}\n    Source: {r['url']}")
         return "\n\n".join(lines)
 
     @tool
@@ -208,9 +197,7 @@ def researcher_tools() -> list:
 
 def writer_tools() -> list:
     @tool
-    async def draft_article(
-        headline: str, key_points: str, tone: str = "informative", word_count: int = 400
-    ) -> str:
+    async def draft_article(headline: str, key_points: str, tone: str = "informative", word_count: int = 400) -> str:
         """Draft an article based on research findings.
 
         Args:
@@ -363,7 +350,7 @@ def publisher_tools() -> list:
             f"  <header>\n"
             f"    <h1>{headline}</h1>\n"
             f'    <p class="byline">By Newsroom AI Staff | '
-            f'{datetime.now().strftime("%B %d, %Y")}</p>\n'
+            f"{datetime.now().strftime('%B %d, %Y')}</p>\n"
             f'    <p class="category">Technology</p>\n'
             f"  </header>\n"
             f'  <div class="article-body">\n'
@@ -557,18 +544,14 @@ def subscribe_agent_logging(stream: MemoryStream, agent_name: str) -> None:
             else:
                 try:
                     args = event.serialized_arguments
-                    parts = [
-                        f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                        for k, v in args.items()
-                    ]
+                    parts = [f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}" for k, v in args.items()]
                     args_str = ", ".join(parts)
                     if len(args_str) > 120:
                         args_str = args_str[:120] + "..."
                 except Exception:
                     args_str = event.arguments[:120]
                 log(
-                    f"{_YELLOW}{_BOLD}TOOL{_RESET} {_YELLOW}{agent_name}.{event.name}"
-                    f"{_RESET}({_DIM}{args_str}{_RESET})"
+                    f"{_YELLOW}{_BOLD}TOOL{_RESET} {_YELLOW}{agent_name}.{event.name}{_RESET}({_DIM}{args_str}{_RESET})"
                 )
 
         elif isinstance(event, ToolResultEvent):
@@ -579,14 +562,9 @@ def subscribe_agent_logging(stream: MemoryStream, agent_name: str) -> None:
                     f"{_DIM}{preview}{'...' if len(event.content) > 140 else ''}{_RESET}"
                 )
             elif event.name == "discover_agents":
-                log(
-                    f"{_CYAN}{_BOLD}DISCOVER RESULT:{_RESET} "
-                    f"{_DIM}{preview}{_RESET}"
-                )
+                log(f"{_CYAN}{_BOLD}DISCOVER RESULT:{_RESET} {_DIM}{preview}{_RESET}")
             else:
-                log(
-                    f"  {_DIM}-> {preview}{'...' if len(event.content) > 140 else ''}{_RESET}"
-                )
+                log(f"  {_DIM}-> {preview}{'...' if len(event.content) > 140 else ''}{_RESET}")
 
         elif isinstance(event, ModelResponse) and event.content:
             preview = event.content[:160].replace("\n", " | ")
@@ -634,8 +612,9 @@ def print_header(scenario_title: str, message: str, model: str) -> None:
     print(f"  {_BOLD}Model:{_RESET}     {model}")
     print()
     print(f"  {_BOLD}Pipeline:{_RESET}")
-    print(f"    {_CYAN}Researcher{_RESET} -> {_YELLOW}Writer{_RESET} -> "
-          f"{_RED}Editor{_RESET} -> {_GREEN}Publisher{_RESET}")
+    print(
+        f"    {_CYAN}Researcher{_RESET} -> {_YELLOW}Writer{_RESET} -> {_RED}Editor{_RESET} -> {_GREEN}Publisher{_RESET}"
+    )
     print()
     print(f"  {_BOLD}Topic:{_RESET}")
     # Word-wrap

@@ -20,9 +20,10 @@ import logging
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from aiohttp import ClientSession, ClientTimeout, web
+if TYPE_CHECKING:
+    from aiohttp import web
 
 from autogen.beta.agent import Agent, AgentReply
 from autogen.beta.context import Context
@@ -276,13 +277,8 @@ class Hub:
             # Topology plugins typically modify envelope.recipient but not the
             # inner event — fix up so channel subscribers see correct target.
             # Preserve any task modifications made by topology plugins.
-            if (
-                isinstance(envelope.event, DelegationRequest)
-                and envelope.event.target != to_agent
-            ):
-                envelope.event = DelegationRequest(
-                    source=source, target=to_agent, task=envelope.event.task
-                )
+            if isinstance(envelope.event, DelegationRequest) and envelope.event.target != to_agent:
+                envelope.event = DelegationRequest(source=source, target=to_agent, task=envelope.event.task)
 
         # Dispatch additional delegations from topology (fire-and-forget, parallel)
         if additional:
@@ -423,6 +419,8 @@ class Hub:
 
     async def _handle_delegate_request(self, request: web.Request) -> web.Response:
         """Handle incoming delegation request from a RemoteAgent."""
+        from aiohttp import web
+
         try:
             data = await request.json()
             agent_name = data.get("agent", "")
@@ -460,6 +458,8 @@ class Hub:
 
     async def _handle_discover_request(self, request: web.Request) -> web.Response:
         """Return registered local agents for remote discovery."""
+        from aiohttp import web
+
         from .remote import RemoteAgent
 
         capability = request.query.get("capability", "")
@@ -471,24 +471,22 @@ class Hub:
             agent = self._agents.get(info.name)
             if isinstance(agent, RemoteAgent):
                 continue
-            result.append(
-                {
-                    "name": info.name,
-                    "capabilities": info.capabilities,
-                    "description": info.description,
-                }
-            )
+            result.append({
+                "name": info.name,
+                "capabilities": info.capabilities,
+                "description": info.description,
+            })
 
         return web.json_response({"agents": result})
 
     async def _handle_health_request(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
-        return web.json_response(
-            {
-                "status": "healthy",
-                "agents": len(self._agents),
-            }
-        )
+        from aiohttp import web
+
+        return web.json_response({
+            "status": "healthy",
+            "agents": len(self._agents),
+        })
 
     @asynccontextmanager
     async def serve(self, *, host: str | None = None, port: int = 8900):
@@ -520,6 +518,8 @@ class Hub:
                 await asyncio.Event().wait()
         """
         if host is not None:
+            from aiohttp import web
+
             app = web.Application()
             app.router.add_post("/delegate", self._handle_delegate_request)
             app.router.add_get("/discover", self._handle_discover_request)
@@ -570,6 +570,8 @@ class Hub:
             await hub.connect("http://server-a:8900")
             # Now hub can delegate to agents on server-a
         """
+        from aiohttp import ClientSession, ClientTimeout
+
         from .remote import RemoteAgent
 
         url = f"{endpoint.rstrip('/')}/discover"

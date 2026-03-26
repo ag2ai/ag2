@@ -901,26 +901,22 @@ class InsightTracker(BasePlugin):
         target = event.target
         self.specialist_activity[target] = self.specialist_activity.get(target, 0) + 1
         self.total_insights += 1
-        self.delegation_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "type": "request",
-                "source": event.source,
-                "target": target,
-                "task_preview": event.task[:140],
-            }
-        )
+        self.delegation_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": "request",
+            "source": event.source,
+            "target": target,
+            "task_preview": event.task[:140],
+        })
 
     async def _on_result(self, event: DelegationResult, ctx: Context) -> None:  # type: ignore[override]
-        self.delegation_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "type": "result",
-                "source": event.source,
-                "target": event.target,
-                "result_preview": event.result[:140],
-            }
-        )
+        self.delegation_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": "result",
+            "source": event.source,
+            "target": event.target,
+            "result_preview": event.result[:140],
+        })
 
 
 # =====================================================================
@@ -945,7 +941,7 @@ async def search_x(query: str, max_results: int = 10) -> str:
     lines = [f"Found {len(matches)} X mentions for '{query}':\n"]
     for m in matches:
         lines.append(f"  [{m['id']}] @{m['author']} ({m['followers']:,} followers)")
-        lines.append(f"  \"{m['text']}\"")
+        lines.append(f'  "{m["text"]}"')
         lines.append(f"  Engagement: {m['likes']:,} likes, {m['retweets']:,} RTs")
         lines.append(f"  Posted: {m['timestamp']}")
         lines.append("")
@@ -973,8 +969,8 @@ async def search_reddit(query: str, subreddits: str = "smartwatches,gadgets,wear
     lines = [f"Found {len(matches)} Reddit posts for '{query}':\n"]
     for p in matches:
         lines.append(f"  [{p['id']}] {p['subreddit']} — u/{p['author']}")
-        lines.append(f"  Title: \"{p['title']}\"")
-        lines.append(f"  \"{p['text'][:200]}{'...' if len(p['text']) > 200 else ''}\"")
+        lines.append(f'  Title: "{p["title"]}"')
+        lines.append(f'  "{p["text"][:200]}{"..." if len(p["text"]) > 200 else ""}"')
         lines.append(f"  Engagement: {p['upvotes']:,} upvotes, {p['comments']:,} comments")
         lines.append(f"  Posted: {p['timestamp']}")
         lines.append("")
@@ -982,9 +978,7 @@ async def search_reddit(query: str, subreddits: str = "smartwatches,gadgets,wear
 
 
 @tool
-async def search_reviews(
-    product_name: str, platform: str = "all", min_rating: int = 1, max_rating: int = 5
-) -> str:
+async def search_reviews(product_name: str, platform: str = "all", min_rating: int = 1, max_rating: int = 5) -> str:
     """Search Google Reviews and App Store reviews for a product."""
     await asyncio.sleep(random.uniform(0.2, 0.5))
     query_terms = [t.lower() for t in product_name.lower().split()]
@@ -1004,8 +998,8 @@ async def search_reviews(
     for r in matches:
         stars = "★" * r["rating"] + "☆" * (5 - r["rating"])
         lines.append(f"  [{r['id']}] {r['platform']} — {r['author']} {stars}")
-        lines.append(f"  \"{r['title']}\"")
-        lines.append(f"  \"{r['text'][:200]}{'...' if len(r['text']) > 200 else ''}\"")
+        lines.append(f'  "{r["title"]}"')
+        lines.append(f'  "{r["text"][:200]}{"..." if len(r["text"]) > 200 else ""}"')
         lines.append(f"  Posted: {r['timestamp']}")
         lines.append("")
     return "\n".join(lines)
@@ -1027,8 +1021,8 @@ async def search_news(query: str, days_back: int = 7) -> str:
     lines = [f"Found {len(matches)} news articles for '{query}':\n"]
     for a in matches:
         lines.append(f"  [{a['id']}] {a['source']}")
-        lines.append(f"  Headline: \"{a['headline']}\"")
-        lines.append(f"  \"{a['snippet'][:250]}{'...' if len(a['snippet']) > 250 else ''}\"")
+        lines.append(f'  Headline: "{a["headline"]}"')
+        lines.append(f'  "{a["snippet"][:250]}{"..." if len(a["snippet"]) > 250 else ""}"')
         lines.append(f"  Published: {a['timestamp']}")
         lines.append("")
     return "\n".join(lines)
@@ -1059,9 +1053,15 @@ async def analyze_mention(mention_text: str, source: str, author: str, reach: in
         category = "legal"
     elif any(kw in text_lower for kw in ["battery", "drain", "crack", "broken", "defect", "fail", "won't turn on"]):
         category = "defect"
-    elif any(kw in text_lower for kw in ["viral", "worst", "rant", "thread", "fail"]) and reach > 50_000 or any(kw in text_lower for kw in ["stock", "shares", "downgrad", "analyst"]):
+    elif (
+        any(kw in text_lower for kw in ["viral", "worst", "rant", "thread", "fail"])
+        and reach > 50_000
+        or any(kw in text_lower for kw in ["stock", "shares", "downgrad", "analyst"])
+    ):
         category = "pr_risk"
-    elif any(kw in text_lower for kw in ["compar", "vs", "versus", "apple watch", "fitbit", "samsung", "garmin"]) or any(kw in text_lower for kw in ["price", "overpriced", "expensive", "cost", "cheaper"]):
+    elif any(
+        kw in text_lower for kw in ["compar", "vs", "versus", "apple watch", "fitbit", "samsung", "garmin"]
+    ) or any(kw in text_lower for kw in ["price", "overpriced", "expensive", "cost", "cheaper"]):
         category = "competitor"
     elif any(kw in text_lower for kw in ["wish", "should add", "feature", "missing", "need"]):
         category = "feature_request"
@@ -1072,8 +1072,23 @@ async def analyze_mention(mention_text: str, source: str, author: str, reach: in
 
     # Sentiment scoring (simulated)
     positive_kw = ["love", "great", "best", "amazing", "excellent", "happy", "good", "accurate", "phenomenal"]
-    negative_kw = ["worst", "terrible", "awful", "broken", "defect", "fail", "disappointed", "unacceptable",
-                   "burn", "rash", "melt", "avoid", "useless", "insane", "overpriced"]
+    negative_kw = [
+        "worst",
+        "terrible",
+        "awful",
+        "broken",
+        "defect",
+        "fail",
+        "disappointed",
+        "unacceptable",
+        "burn",
+        "rash",
+        "melt",
+        "avoid",
+        "useless",
+        "insane",
+        "overpriced",
+    ]
     pos_count = sum(1 for kw in positive_kw if kw in text_lower)
     neg_count = sum(1 for kw in negative_kw if kw in text_lower)
     sentiment_score = round((pos_count - neg_count) / (pos_count + neg_count), 2) if pos_count + neg_count > 0 else 0.0
@@ -1178,9 +1193,7 @@ async def lookup_known_issues(component: str, symptom: str = "") -> str:
     matches = []
     for defect_id, defect in _KNOWN_DEFECTS.items():
         comp_match = component.lower() in defect["component"].lower()
-        symp_match = not symptom or any(
-            kw in defect["title"].lower() for kw in symptom.lower().split()
-        )
+        symp_match = not symptom or any(kw in defect["title"].lower() for kw in symptom.lower().split())
         if comp_match or symp_match:
             matches.append((defect_id, defect))
 
@@ -1207,9 +1220,12 @@ async def create_defect_report(
     await asyncio.sleep(random.uniform(0.2, 0.4))
     report_id = f"DEF-{random.randint(100, 999)}"
     priority = (
-        "P0 — Immediate" if severity == "critical"
-        else "P1 — High" if severity == "high"
-        else "P2 — Medium" if severity == "medium"
+        "P0 — Immediate"
+        if severity == "critical"
+        else "P1 — High"
+        if severity == "high"
+        else "P2 — Medium"
+        if severity == "medium"
         else "P3 — Low"
     )
 
@@ -1259,11 +1275,7 @@ async def recommend_action(defect_id: str, severity: str, affected_units_estimat
             "3. Monitor customer sentiment post-fix",
         ]
 
-    return (
-        f"Recommended Action for {defect_id}:\n"
-        f"  Action: {action}\n"
-        f"  Steps:\n" + "\n".join(f"    {s}" for s in steps)
-    )
+    return f"Recommended Action for {defect_id}:\n  Action: {action}\n  Steps:\n" + "\n".join(f"    {s}" for s in steps)
 
 
 PRODUCT_INSPECTOR_TOOLS = [lookup_known_issues, create_defect_report, recommend_action]
@@ -1498,12 +1510,17 @@ async def create_comms_plan(situation_summary: str, severity: str = "high") -> s
     plan_id = f"COMMS-{random.randint(1000, 9999)}"
 
     if severity == "critical":
-        channels = ["CEO statement", "Press release", "Social media (all)", "Email to customers",
-                     "Retail partner notification", "Investor relations"]
+        channels = [
+            "CEO statement",
+            "Press release",
+            "Social media (all)",
+            "Email to customers",
+            "Retail partner notification",
+            "Investor relations",
+        ]
         timeline = "Immediate (within 2 hours)"
     elif severity == "high":
-        channels = ["VP of Communications statement", "Social media response", "Blog post",
-                     "Customer support briefing"]
+        channels = ["VP of Communications statement", "Social media response", "Blog post", "Customer support briefing"]
         timeline = "Within 4 hours"
     else:
         channels = ["Social media response", "FAQ update", "Support team briefing"]
@@ -1514,9 +1531,7 @@ async def create_comms_plan(situation_summary: str, severity: str = "high") -> s
         f"  Severity: {severity}\n"
         f"  Timeline: {timeline}\n"
         f"  Situation: {situation_summary[:200]}\n\n"
-        f"  Channels:\n" +
-        "\n".join(f"    {i + 1}. {ch}" for i, ch in enumerate(channels)) +
-        "\n\n  Key Messages:\n"
+        f"  Channels:\n" + "\n".join(f"    {i + 1}. {ch}" for i, ch in enumerate(channels)) + "\n\n  Key Messages:\n"
         "    1. Acknowledge the issue transparently\n"
         "    2. Outline concrete steps being taken\n"
         "    3. Provide direct support contact\n"
@@ -1582,9 +1597,7 @@ async def notify_stakeholders(ticket_id: str, stakeholder_groups: str, message: 
         notifications.append(f"  ✓ {group}: notified via {channel}")
 
     return (
-        f"Stakeholder Notifications for {ticket_id}:\n"
-        + "\n".join(notifications) +
-        f"\n\n  Message sent:\n"
+        f"Stakeholder Notifications for {ticket_id}:\n" + "\n".join(notifications) + f"\n\n  Message sent:\n"
         f'  "{message[:200]}"\n\n'
         f"  All notifications delivered at {datetime.now().strftime('%H:%M:%S')}"
     )
@@ -1609,8 +1622,13 @@ async def assess_legal_risk(issue_description: str, mention_count: int = 1, seve
     if any(kw in description_lower for kw in ["warranty", "refund", "fraud"]):
         factors.append(("Consumer protection claims", "MEDIUM"))
 
-    overall_risk = "CRITICAL" if any(f[1] == "CRITICAL" for f in factors) else \
-                   "HIGH" if any(f[1] == "HIGH" for f in factors) else "MEDIUM"
+    overall_risk = (
+        "CRITICAL"
+        if any(f[1] == "CRITICAL" for f in factors)
+        else "HIGH"
+        if any(f[1] == "HIGH" for f in factors)
+        else "MEDIUM"
+    )
 
     lines = [
         "Legal Risk Assessment:",
@@ -1888,16 +1906,22 @@ async def main() -> None:
     source_health_check = SourceHealthCheck()
 
     # -- Create agents ------------------------------------------------
-    collector = create_collector(model, observers=[
-        source_health_check,
-        TokenMonitor(warn_threshold=15_000, alert_threshold=40_000),
-    ])
-    analyst = create_analyst(model, observers=[
-        volume_tracker,
-        sentiment_monitor,
-        TokenMonitor(warn_threshold=20_000, alert_threshold=50_000),
-        LoopDetector(),
-    ])
+    collector = create_collector(
+        model,
+        observers=[
+            source_health_check,
+            TokenMonitor(warn_threshold=15_000, alert_threshold=40_000),
+        ],
+    )
+    analyst = create_analyst(
+        model,
+        observers=[
+            volume_tracker,
+            sentiment_monitor,
+            TokenMonitor(warn_threshold=20_000, alert_threshold=50_000),
+            LoopDetector(),
+        ],
+    )
     product_inspector = create_product_inspector(model)
     market_intel = create_market_intel(model)
     pr_responder = create_pr_responder(model)
@@ -1959,10 +1983,7 @@ async def main() -> None:
     async def _on_hub_event(event: object) -> None:
         if isinstance(event, SchedulerTriggerFired):
             print()
-            print(
-                f"  {_DIM}{_ts()}{_RESET}  "
-                f"{_CYAN}{_BOLD}=== SCHEDULER: {event.target.upper()} triggered ==={_RESET}"
-            )
+            print(f"  {_DIM}{_ts()}{_RESET}  {_CYAN}{_BOLD}=== SCHEDULER: {event.target.upper()} triggered ==={_RESET}")
             task_preview = event.task[:140]
             print(f"  {_DIM}{' ' * 13}{_RESET}  {_CYAN}{task_preview}{_RESET}")
             print()
@@ -1973,10 +1994,7 @@ async def main() -> None:
                 f"{_MAGENTA}{event.source} -> {event.target}{_RESET}"
             )
             task_preview = event.task[:140]
-            print(
-                f"  {_DIM}{' ' * 13}{_RESET}  "
-                f"{_DIM}{task_preview}{'...' if len(event.task) > 140 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 13}{_RESET}  {_DIM}{task_preview}{'...' if len(event.task) > 140 else ''}{_RESET}")
         elif isinstance(event, DelegationResult):
             preview = event.result[:140].replace("\n", " | ")
             print(
@@ -1984,10 +2002,7 @@ async def main() -> None:
                 f"{_GREEN}{_BOLD}RESULT{_RESET}   "
                 f"{_GREEN}{event.target} -> {event.source}{_RESET}"
             )
-            print(
-                f"  {_DIM}{' ' * 13}{_RESET}  "
-                f"{_DIM}{preview}{'...' if len(event.result) > 140 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 13}{_RESET}  {_DIM}{preview}{'...' if len(event.result) > 140 else ''}{_RESET}")
         elif isinstance(event, DelegationRejected):
             print(
                 f"  {_DIM}{_ts()}{_RESET}  "
@@ -2135,15 +2150,9 @@ async def main() -> None:
         for entry in insight_tracker.delegation_log[-8:]:
             etype = entry["type"]
             if etype == "request":
-                print(
-                    f"    {_DIM}{entry['time']}{_RESET} "
-                    f"{_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}"
-                )
+                print(f"    {_DIM}{entry['time']}{_RESET} {_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}")
             else:
-                print(
-                    f"    {_DIM}{entry['time']}{_RESET} "
-                    f"{_GREEN}{entry['target']} completed{_RESET}"
-                )
+                print(f"    {_DIM}{entry['time']}{_RESET} {_GREEN}{entry['target']} completed{_RESET}")
     print()
 
     # Observer summaries

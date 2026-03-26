@@ -155,7 +155,7 @@ class ApprovalGate(BasePlugin):
             return None
 
         self.total_approved += 1
-        print(f"  {_BG_GREEN}{_BLACK}{_BOLD} APPROVED {_RESET}" f"  {_GREEN}Delegation to {target} proceeding{_RESET}")
+        print(f"  {_BG_GREEN}{_BLACK}{_BOLD} APPROVED {_RESET}  {_GREEN}Delegation to {target} proceeding{_RESET}")
         print()
         return envelope
 
@@ -231,7 +231,9 @@ async def calculate_dti(monthly_income: float, monthly_debts: float) -> str:
         else (
             "Good (20-35%)"
             if dti < 36
-            else "Acceptable (36-43%)" if dti < 44 else "High (over 43%) — may affect approval"
+            else "Acceptable (36-43%)"
+            if dti < 44
+            else "High (over 43%) — may affect approval"
         )
     )
     return (
@@ -321,15 +323,13 @@ async def check_fraud_indicators(applicant_name: str) -> str:
     Args:
         applicant_name: Full name of the applicant.
     """
-    flags = random.choice(
-        [
-            [],
-            [],
-            [],
-            ["Address mismatch between application and credit report"],
-            ["Multiple recent applications at different lenders"],
-        ]
-    )
+    flags = random.choice([
+        [],
+        [],
+        [],
+        ["Address mismatch between application and credit report"],
+        ["Multiple recent applications at different lenders"],
+    ])
     lines = [
         f"Fraud Check — {applicant_name}",
         "=" * 40,
@@ -628,9 +628,7 @@ async def main() -> None:
                 f"{_MAGENTA}{event.source} -> {event.target}{_RESET}"
             )
             preview = event.task[:120].replace("\n", " ")
-            print(
-                f"  {_DIM}{' ' * 12}{_RESET}       " f"{_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 12}{_RESET}       {_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationResult):
             preview = event.result[:100].replace("\n", " | ")
             print(
@@ -657,7 +655,7 @@ async def main() -> None:
     print(f"  {_CYAN}Scenario:{_RESET}  {title}")
     print(f"  {_CYAN}Model:{_RESET}     {model}")
     print(f"  {_CYAN}Agents:{_RESET}    intake -> credit-analyst -> underwriter")
-    print(f"  {_CYAN}Gate:{_RESET}      ApprovalGate on [underwriter]" f"{' (auto-approve)' if auto_approve else ''}")
+    print(f"  {_CYAN}Gate:{_RESET}      ApprovalGate on [underwriter]{' (auto-approve)' if auto_approve else ''}")
     print()
     print(f"  {_BOLD}Application:{_RESET}")
     print(_wrap(loan_message, indent=4, width=72))

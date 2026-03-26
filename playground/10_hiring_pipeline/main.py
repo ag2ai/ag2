@@ -109,8 +109,19 @@ class TechnicalScreener(BasePlugin):
         await asyncio.sleep(0.1)
         task_text = str(getattr(envelope.event, "task", ""))
         # Simple heuristic for demo: check for technical keywords
-        tech_keywords = ["python", "engineering", "senior", "architect", "lead", "10 years",
-                         "machine learning", "distributed", "systems", "phd", "masters"]
+        tech_keywords = [
+            "python",
+            "engineering",
+            "senior",
+            "architect",
+            "lead",
+            "10 years",
+            "machine learning",
+            "distributed",
+            "systems",
+            "phd",
+            "masters",
+        ]
         matches = sum(1 for kw in tech_keywords if kw.lower() in task_text.lower())
         if matches >= 5:
             self.last_result = "strong"
@@ -139,8 +150,18 @@ class CultureScreener(BasePlugin):
     async def process(self, envelope: Envelope, ctx: HubContext) -> Envelope | None:
         await asyncio.sleep(0.1)
         task_text = str(getattr(envelope.event, "task", ""))
-        culture_keywords = ["team", "collaborative", "mentor", "open source", "community",
-                            "leadership", "communication", "diverse", "growth", "passion"]
+        culture_keywords = [
+            "team",
+            "collaborative",
+            "mentor",
+            "open source",
+            "community",
+            "leadership",
+            "communication",
+            "diverse",
+            "growth",
+            "passion",
+        ]
         matches = sum(1 for kw in culture_keywords if kw.lower() in task_text.lower())
         if matches >= 2:
             self.last_result = "strong"
@@ -173,11 +194,7 @@ class BackgroundChecker(BasePlugin):
         self.last_result = outcome
 
         color = _GREEN if outcome == "clear" else _RED
-        print(
-            f"  {_DIM}{_ts()}{_RESET}  "
-            f"{_BLUE}{_BOLD}SCREEN{_RESET}  "
-            f"Background: {color}{outcome.upper()}{_RESET}"
-        )
+        print(f"  {_DIM}{_ts()}{_RESET}  {_BLUE}{_BOLD}SCREEN{_RESET}  Background: {color}{outcome.upper()}{_RESET}")
         return envelope
 
 
@@ -224,6 +241,7 @@ class StandardReviewLogger(BasePlugin):
 # Tools — Recruiter
 # =====================================================================
 
+
 @tool
 async def create_candidate_profile(
     name: str,
@@ -265,18 +283,27 @@ async def check_role_requirements(role: str) -> str:
     """
     reqs = {
         "senior engineer": {
-            "min_years": 5, "required": "Python, distributed systems",
-            "preferred": "ML, cloud platforms", "team_size": 8,
+            "min_years": 5,
+            "required": "Python, distributed systems",
+            "preferred": "ML, cloud platforms",
+            "team_size": 8,
         },
         "engineering manager": {
-            "min_years": 8, "required": "People management, technical background",
-            "preferred": "Scaling teams, cross-functional leadership", "team_size": 15,
+            "min_years": 8,
+            "required": "People management, technical background",
+            "preferred": "Scaling teams, cross-functional leadership",
+            "team_size": 15,
         },
     }
-    r = reqs.get(role.lower(), {
-        "min_years": 3, "required": "Relevant domain experience",
-        "preferred": "Strong communication", "team_size": 6,
-    })
+    r = reqs.get(
+        role.lower(),
+        {
+            "min_years": 3,
+            "required": "Relevant domain experience",
+            "preferred": "Strong communication",
+            "team_size": 6,
+        },
+    )
     return (
         f"Role Requirements — {role}\n"
         f"{'=' * 40}\n"
@@ -295,6 +322,7 @@ recruiter_tools = [create_candidate_profile, check_role_requirements]
 # Tools — Hiring Manager
 # =====================================================================
 
+
 @tool
 async def evaluate_candidate(
     candidate_name: str,
@@ -311,9 +339,12 @@ async def evaluate_candidate(
         role_fit_score: Score from 1-10 for role fit.
     """
     recommendation = (
-        "STRONG HIRE" if role_fit_score >= 8
-        else "HIRE" if role_fit_score >= 6
-        else "BORDERLINE" if role_fit_score >= 4
+        "STRONG HIRE"
+        if role_fit_score >= 8
+        else "HIRE"
+        if role_fit_score >= 6
+        else "BORDERLINE"
+        if role_fit_score >= 4
         else "NO HIRE"
     )
     return (
@@ -553,10 +584,7 @@ async def main() -> None:
                 f"{_MAGENTA}{event.source} -> {event.target}{_RESET}"
             )
             preview = event.task[:120].replace("\n", " ")
-            print(
-                f"  {_DIM}{' ' * 12}{_RESET}       "
-                f"{_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 12}{_RESET}       {_DIM}{preview}{'...' if len(event.task) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationResult):
             print(
                 f"  {_DIM}{ts}{_RESET}  "
@@ -591,10 +619,12 @@ async def main() -> None:
     print(_wrap(message, indent=4, width=72))
     print()
     print(f"  {_DIM}{'─' * 60}{_RESET}")
-    print(f"  {_BOLD}Log legend:{_RESET}  "
-          f"{_BLUE}SCREEN{_RESET}=parallel screening  "
-          f"{_MAGENTA}HUB{_RESET}=delegation  "
-          f"{_GREEN}HUB{_RESET}=completed")
+    print(
+        f"  {_BOLD}Log legend:{_RESET}  "
+        f"{_BLUE}SCREEN{_RESET}=parallel screening  "
+        f"{_MAGENTA}HUB{_RESET}=delegation  "
+        f"{_GREEN}HUB{_RESET}=completed"
+    )
     print(f"  {_DIM}{'─' * 60}{_RESET}")
     print()
 

@@ -53,7 +53,8 @@ class HttpChannel:
 
         # Full-duplex node
         channel = HttpChannel(
-            host="0.0.0.0", port=8900,
+            host="0.0.0.0",
+            port=8900,
             peers=["http://peer1:8900", "http://peer2:8900"],
         )
         channel.subscribe(my_handler)
@@ -134,13 +135,11 @@ class HttpChannel:
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
-        return web.json_response(
-            {
-                "status": "healthy",
-                "subscribers": len(self._subscribers),
-                "peers": len(self._peers),
-            }
-        )
+        return web.json_response({
+            "status": "healthy",
+            "subscribers": len(self._subscribers),
+            "peers": len(self._peers),
+        })
 
     # ------------------------------------------------------------------
     # Client mode

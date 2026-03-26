@@ -347,26 +347,22 @@ class DealTracker(BasePlugin):
         self._sub_ids.clear()
 
     async def _on_request(self, event: DelegationRequest, ctx: Context) -> None:  # type: ignore[override]
-        self.delegation_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "type": "request",
-                "source": event.source,
-                "target": event.target,
-                "task_preview": event.task[:120],
-            }
-        )
+        self.delegation_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": "request",
+            "source": event.source,
+            "target": event.target,
+            "task_preview": event.task[:120],
+        })
 
     async def _on_result(self, event: DelegationResult, ctx: Context) -> None:  # type: ignore[override]
-        self.delegation_log.append(
-            {
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "type": "result",
-                "source": event.source,
-                "target": event.target,
-                "result_preview": event.result[:120],
-            }
-        )
+        self.delegation_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": "result",
+            "source": event.source,
+            "target": event.target,
+            "result_preview": event.result[:120],
+        })
 
 
 # =====================================================================
@@ -620,14 +616,12 @@ async def assess_technical_requirements(company_name: str, use_case: str, curren
         current_stack: Customer's current technology stack.
     """
     fit_score = random.randint(70, 98)
-    risks = random.choice(
-        [
-            ["Legacy system integration may require custom connector"],
-            ["Data migration complexity — 6+ data sources"],
-            ["Compliance requirements need security review"],
-            ["No significant technical risks identified"],
-        ]
-    )
+    risks = random.choice([
+        ["Legacy system integration may require custom connector"],
+        ["Data migration complexity — 6+ data sources"],
+        ["Compliance requirements need security review"],
+        ["No significant technical risks identified"],
+    ])
     return (
         f"=== Technical Assessment: {company_name} ===\n"
         f"Use Case: {use_case}\n"
@@ -951,7 +945,7 @@ async def identify_expansion_opportunity(company_name: str) -> str:
     total = sum(int(o["value"]) for o in opportunities)
     lines = [f"=== Expansion Opportunities: {company_name} ===\n"]
     for o in opportunities:
-        lines.append(f"  [{o['type']}] {o['module']} — ${o['value']:,}/yr\n" f"    Signal: {o['signal']}")
+        lines.append(f"  [{o['type']}] {o['module']} — ${o['value']:,}/yr\n    Signal: {o['signal']}")
     lines.append(f"\n{'─' * 40}")
     lines.append(f"Total expansion potential: ${total:,}/yr")
     lines.append(f"Recommendation: Create opportunities and assign to AE for {company_name}")
@@ -1217,10 +1211,7 @@ async def main() -> None:
     async def _on_hub_event(event: object) -> None:
         if isinstance(event, SchedulerTriggerFired):
             print()
-            print(
-                f"  {_DIM}{_ts()}{_RESET}  "
-                f"{_CYAN}{_BOLD}=== SCHEDULER: {event.target.upper()} triggered ==={_RESET}"
-            )
+            print(f"  {_DIM}{_ts()}{_RESET}  {_CYAN}{_BOLD}=== SCHEDULER: {event.target.upper()} triggered ==={_RESET}")
             task_preview = event.task[:120]
             print(f"  {_DIM}{' ' * 13}{_RESET}  {_CYAN}{task_preview}{_RESET}")
             print()
@@ -1231,9 +1222,7 @@ async def main() -> None:
                 f"{_MAGENTA}{event.source} -> {event.target}{_RESET}"
             )
             task_preview = event.task[:120]
-            print(
-                f"  {_DIM}{' ' * 13}{_RESET}  " f"{_DIM}{task_preview}{'...' if len(event.task) > 120 else ''}{_RESET}"
-            )
+            print(f"  {_DIM}{' ' * 13}{_RESET}  {_DIM}{task_preview}{'...' if len(event.task) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationResult):
             preview = event.result[:120].replace("\n", " | ")
             print(
@@ -1241,7 +1230,7 @@ async def main() -> None:
                 f"{_GREEN}{_BOLD}RESULT{_RESET}   "
                 f"{_GREEN}{event.target} -> {event.source}{_RESET}"
             )
-            print(f"  {_DIM}{' ' * 13}{_RESET}  " f"{_DIM}{preview}{'...' if len(event.result) > 120 else ''}{_RESET}")
+            print(f"  {_DIM}{' ' * 13}{_RESET}  {_DIM}{preview}{'...' if len(event.result) > 120 else ''}{_RESET}")
         elif isinstance(event, DelegationRejected):
             print(
                 f"  {_DIM}{_ts()}{_RESET}  "
@@ -1251,7 +1240,7 @@ async def main() -> None:
         elif isinstance(event, Signal):
             sev = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
             color = _RED if "CRITICAL" in sev or "FATAL" in sev else _YELLOW
-            print(f"  {_DIM}{_ts()}{_RESET}  " f"{color}{_BOLD}ALERT [{sev}]{_RESET} {color}{event.message}{_RESET}")
+            print(f"  {_DIM}{_ts()}{_RESET}  {color}{_BOLD}ALERT [{sev}]{_RESET} {color}{event.message}{_RESET}")
 
     network.hub.stream.subscribe(_on_hub_event)
 
@@ -1374,9 +1363,9 @@ async def main() -> None:
     for entry in deal_tracker.delegation_log[-6:]:
         etype = entry["type"]
         if etype == "request":
-            print(f"    {_DIM}{entry['time']}{_RESET} " f"{_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}")
+            print(f"    {_DIM}{entry['time']}{_RESET} {_MAGENTA}{entry['source']} -> {entry['target']}{_RESET}")
         else:
-            print(f"    {_DIM}{entry['time']}{_RESET} " f"{_GREEN}{entry['target']} completed{_RESET}")
+            print(f"    {_DIM}{entry['time']}{_RESET} {_GREEN}{entry['target']} completed{_RESET}")
     print()
     print(f"  {_BOLD}Telemetry:{_RESET}")
     m = telemetry.metrics

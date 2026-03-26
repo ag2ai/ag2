@@ -97,24 +97,48 @@ async def main() -> None:
     # Build network
     telemetry = TelemetryPlugin()
     network = Network(plugins=[telemetry], max_delegation_depth=4)
-    await network.register(hvac, capabilities=["climate", "temperature", "ventilation"],
-                           description="HVAC controller — climate control, temperature, air quality")
-    await network.register(security, capabilities=["access-control", "surveillance", "alarms"],
-                           description="Security manager — cameras, door locks, alarms, access logs")
-    await network.register(energy, capabilities=["power", "lighting", "solar"],
-                           description="Energy manager — power meters, lighting, solar, power modes")
-    await network.register(maintenance, capabilities=["repairs", "inspections", "equipment"],
-                           description="Maintenance manager — work orders, equipment checks, parts")
+    await network.register(
+        hvac,
+        capabilities=["climate", "temperature", "ventilation"],
+        description="HVAC controller — climate control, temperature, air quality",
+    )
+    await network.register(
+        security,
+        capabilities=["access-control", "surveillance", "alarms"],
+        description="Security manager — cameras, door locks, alarms, access logs",
+    )
+    await network.register(
+        energy,
+        capabilities=["power", "lighting", "solar"],
+        description="Energy manager — power meters, lighting, solar, power modes",
+    )
+    await network.register(
+        maintenance,
+        capabilities=["repairs", "inspections", "equipment"],
+        description="Maintenance manager — work orders, equipment checks, parts",
+    )
 
     # Schedule watches
-    network.schedule(IntervalWatch(15), target="hvac",
-                     task="Check temperatures in all zones. Adjust any zones outside comfort range 68-74\u00b0F. Report status.")
-    network.schedule(IntervalWatch(20), target="security",
-                     task="Run camera sweep of all zones. Log any motion detected. Report security status.")
-    network.schedule(IntervalWatch(30), target="energy",
-                     task="Building closing: switch to eco mode. Reduce lighting to 20% in unoccupied zones. Report energy savings.")
-    network.schedule(IntervalWatch(45), target="maintenance",
-                     task="Check status of all critical equipment (HVAC units, elevators, fire suppression). Create work orders for anything needing attention.")
+    network.schedule(
+        IntervalWatch(15),
+        target="hvac",
+        task="Check temperatures in all zones. Adjust any zones outside comfort range 68-74\u00b0F. Report status.",
+    )
+    network.schedule(
+        IntervalWatch(20),
+        target="security",
+        task="Run camera sweep of all zones. Log any motion detected. Report security status.",
+    )
+    network.schedule(
+        IntervalWatch(30),
+        target="energy",
+        task="Building closing: switch to eco mode. Reduce lighting to 20% in unoccupied zones. Report energy savings.",
+    )
+    network.schedule(
+        IntervalWatch(45),
+        target="maintenance",
+        task="Check status of all critical equipment (HVAC units, elevators, fire suppression). Create work orders for anything needing attention.",
+    )
 
     subscribe_hub_logging(network.hub)
 

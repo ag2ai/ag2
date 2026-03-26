@@ -465,9 +465,7 @@ class TestFunctionToolNameAccess:
             return str(x)
 
         # __name__ should NOT work
-        assert not hasattr(my_cool_tool, "__name__") or not isinstance(
-            getattr(my_cool_tool, "__name__", None), str
-        )
+        assert not hasattr(my_cool_tool, "__name__") or not isinstance(getattr(my_cool_tool, "__name__", None), str)
 
         # schema.function.name SHOULD work
         assert my_cool_tool.schema.function.name == "my_cool_tool"
@@ -584,9 +582,7 @@ class TestHttpDelegateUsesPipeline:
 
             async with ClientSession() as session:
                 payload = {"agent": "worker", "task": "do work", "source": "remote-caller"}
-                async with session.post(
-                    f"http://127.0.0.1:{port}/delegate", json=payload
-                ) as resp:
+                async with session.post(f"http://127.0.0.1:{port}/delegate", json=payload) as resp:
                     assert resp.status == 200
                     data = await resp.json()
                     assert data["status"] == "ok"
@@ -627,9 +623,7 @@ class TestHttpDelegateUsesPipeline:
 
             async with ClientSession() as session:
                 payload = {"agent": "looper", "task": "start", "source": "external"}
-                async with session.post(
-                    f"http://127.0.0.1:{port}/delegate", json=payload
-                ) as resp:
+                async with session.post(f"http://127.0.0.1:{port}/delegate", json=payload) as resp:
                     assert resp.status == 200
                     data = await resp.json()
                     # Should eventually hit depth limit, not loop forever
@@ -1043,11 +1037,15 @@ class TestReplyBodyAccess:
 
             async def ask(self, message, **kwargs):
                 # Mimic real AgentReply: .body is a str, .content is a method
-                reply = type("Reply", (), {
-                    "body": "result via body",
-                    "content": lambda self: None,  # method, not str
-                    "response": None,
-                })()
+                reply = type(
+                    "Reply",
+                    (),
+                    {
+                        "body": "result via body",
+                        "content": lambda self: None,  # method, not str
+                        "response": None,
+                    },
+                )()
                 return reply
 
         hub = Hub()

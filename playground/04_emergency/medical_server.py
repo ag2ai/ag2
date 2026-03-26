@@ -22,10 +22,16 @@ async def main() -> None:
     port = PORTS["medical"]
 
     hub = Hub(max_delegation_depth=4)
-    await hub.register(make_ems(model), capabilities=["medical", "ambulance", "patient-care"],
-                       description="EMS coordinator - ambulance dispatch and patient care")
-    await hub.register(make_hospital(model), capabilities=["emergency-room", "trauma", "specialists"],
-                       description="ER coordinator - hospital readiness and specialist assignment")
+    await hub.register(
+        make_ems(model),
+        capabilities=["medical", "ambulance", "patient-care"],
+        description="EMS coordinator - ambulance dispatch and patient care",
+    )
+    await hub.register(
+        make_hospital(model),
+        capabilities=["emergency-room", "trauma", "specialists"],
+        description="ER coordinator - hospital readiness and specialist assignment",
+    )
 
     subscribe_hub_logging(hub, label="MEDICAL")
 

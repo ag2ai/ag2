@@ -22,8 +22,11 @@ async def main() -> None:
     port = PORTS["police"]
 
     hub = Hub(max_delegation_depth=4)
-    await hub.register(make_police(model), capabilities=["traffic", "security", "investigation"],
-                       description="Police commander - traffic control and scene security")
+    await hub.register(
+        make_police(model),
+        capabilities=["traffic", "security", "investigation"],
+        description="Police commander - traffic control and scene security",
+    )
 
     subscribe_hub_logging(hub, label="POLICE")
 

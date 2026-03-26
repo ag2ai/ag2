@@ -97,21 +97,27 @@ class TestPriorityChannelOrdering:
         # To ensure all items are in the heap before drain processes them,
         # we can push them without awaiting in between (drain kicks off on
         # the first send but won't run until we yield control).
-        await channel.send(Envelope(
-            event=ModelMessage(content="low"),
-            sender="a",
-            priority=DefaultPriority.BACKGROUND,
-        ))
-        await channel.send(Envelope(
-            event=ModelMessage(content="high"),
-            sender="a",
-            priority=DefaultPriority.URGENT,
-        ))
-        await channel.send(Envelope(
-            event=ModelMessage(content="normal"),
-            sender="a",
-            priority=DefaultPriority.NORMAL,
-        ))
+        await channel.send(
+            Envelope(
+                event=ModelMessage(content="low"),
+                sender="a",
+                priority=DefaultPriority.BACKGROUND,
+            )
+        )
+        await channel.send(
+            Envelope(
+                event=ModelMessage(content="high"),
+                sender="a",
+                priority=DefaultPriority.URGENT,
+            )
+        )
+        await channel.send(
+            Envelope(
+                event=ModelMessage(content="normal"),
+                sender="a",
+                priority=DefaultPriority.NORMAL,
+            )
+        )
 
         await asyncio.sleep(0.1)
 

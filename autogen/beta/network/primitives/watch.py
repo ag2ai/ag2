@@ -149,6 +149,7 @@ class IntervalWatch(_BaseWatch):
 
     async def _run(self, stream: Stream) -> None:
         import logging
+
         _logger = logging.getLogger(__name__)
         while True:
             await asyncio.sleep(self._seconds)
@@ -187,6 +188,7 @@ class DelayWatch(_BaseWatch):
 
     async def _run(self, stream: Stream, callback: WatchCallback) -> None:
         import logging
+
         _logger = logging.getLogger(__name__)
         try:
             await asyncio.sleep(self._seconds)
@@ -432,8 +434,8 @@ class CronWatch(_BaseWatch):
 
     Example::
 
-        CronWatch("0 9 * * MON")   # Every Monday at 9:00
-        CronWatch("*/5 * * * *")   # Every 5 minutes
+        CronWatch("0 9 * * MON")  # Every Monday at 9:00
+        CronWatch("*/5 * * * *")  # Every 5 minutes
     """
 
     def __init__(self, expression: str) -> None:
@@ -451,6 +453,7 @@ class CronWatch(_BaseWatch):
     async def _run(self, stream: Stream) -> None:
         import datetime
         import logging
+
         _logger = logging.getLogger(__name__)
 
         while True:

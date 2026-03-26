@@ -236,6 +236,7 @@ def _event_to_dict(event: BaseEvent) -> dict[str, Any]:
 def _serialize_value(value: Any) -> Any:
     """Recursively serialize a value for JSON compatibility."""
     from enum import Enum
+
     if isinstance(value, BaseEvent):
         return {"__event__": _qualified_name(value), **_event_to_dict(value)}
     if isinstance(value, Enum):
@@ -246,6 +247,7 @@ def _serialize_value(value: Any) -> Any:
         return [_serialize_value(v) for v in value]
     if isinstance(value, (bytes, bytearray)):
         import base64
+
         return {"__bytes__": base64.b64encode(value).decode("ascii")}
     # Primitives (str, int, float, bool, None) pass through
     return value
@@ -277,6 +279,7 @@ def _deserialize_value(value: Any, event_registry: EventRegistry | None = None) 
                 return event_cls(**nested_data)
         if "__bytes__" in value:
             import base64
+
             return base64.b64decode(value["__bytes__"])
         return {k: _deserialize_value(v, event_registry) for k, v in value.items()}
     if isinstance(value, list):

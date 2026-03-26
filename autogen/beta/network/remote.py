@@ -22,9 +22,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from aiohttp import ClientSession, ClientTimeout
+if TYPE_CHECKING:
+    from aiohttp import ClientSession
 
 logger = logging.getLogger(__name__)
 
@@ -143,9 +144,9 @@ class RemoteAgent:
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         """POST to remote endpoint with retry."""
         if self._session is None:
-            self._session = ClientSession(
-                timeout=ClientTimeout(total=self._timeout)
-            )
+            from aiohttp import ClientSession, ClientTimeout
+
+            self._session = ClientSession(timeout=ClientTimeout(total=self._timeout))
 
         url = f"{self._endpoint}{path}"
         data = json.dumps(payload)
@@ -163,9 +164,7 @@ class RemoteAgent:
                     body = await resp.json()
                     if resp.status == 200:
                         return body
-                    last_error = RuntimeError(
-                        f"HTTP {resp.status}: {body.get('reason', 'unknown')}"
-                    )
+                    last_error = RuntimeError(f"HTTP {resp.status}: {body.get('reason', 'unknown')}")
             except Exception as e:
                 last_error = e
 

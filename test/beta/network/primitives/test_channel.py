@@ -159,16 +159,20 @@ class TestPriorityChannel:
         channel.subscribe(handler)
 
         # Send low then high priority
-        await channel.send(Envelope(
-            event=ModelMessage(content="low"),
-            sender="a",
-            priority=DefaultPriority.BACKGROUND,
-        ))
-        await channel.send(Envelope(
-            event=ModelMessage(content="high"),
-            sender="a",
-            priority=DefaultPriority.URGENT,
-        ))
+        await channel.send(
+            Envelope(
+                event=ModelMessage(content="low"),
+                sender="a",
+                priority=DefaultPriority.BACKGROUND,
+            )
+        )
+        await channel.send(
+            Envelope(
+                event=ModelMessage(content="high"),
+                sender="a",
+                priority=DefaultPriority.URGENT,
+            )
+        )
 
         await asyncio.sleep(0.05)
         # Both should be delivered; high priority should come first if queued

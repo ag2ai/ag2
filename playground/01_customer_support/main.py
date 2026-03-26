@@ -473,10 +473,7 @@ async def main() -> None:
 
     async def _log_event(event: ToolCallEvent | ToolResultEvent | ModelResponse) -> None:
         if isinstance(event, ToolCallEvent):
-            print(
-                f"  {DIM}[{_ts()}]{RESET} {YELLOW}TOOL  "
-                f"{event.name}({event.serialized_arguments}){RESET}"
-            )
+            print(f"  {DIM}[{_ts()}]{RESET} {YELLOW}TOOL  {event.name}({event.serialized_arguments}){RESET}")
         elif isinstance(event, ToolResultEvent):
             content = event.content.replace("\n", " ")
             truncated = content[:120] + "..." if len(content) > 120 else content

@@ -83,7 +83,7 @@ class Actor(Agent):
         harness: ContextHarness | None = None,
         task_config: ModelConfig | None = None,
         task_prompt: str = (
-            "You are a task agent. Complete the assigned task " "thoroughly and concisely. Return only the result."
+            "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
         ),
         signal_policy: SignalPolicy | None = None,
         hitl_hook: HumanHook | None = None,

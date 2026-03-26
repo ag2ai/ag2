@@ -22,10 +22,16 @@ async def main() -> None:
     port = PORTS["climate"]
 
     hub = Hub(max_delegation_depth=4)
-    await hub.register(make_hvac(model), capabilities=["climate", "temperature", "ventilation"],
-                       description="HVAC controller — climate control, temperature, air quality")
-    await hub.register(make_energy(model), capabilities=["power", "lighting", "solar"],
-                       description="Energy manager — power meters, lighting, solar, power modes")
+    await hub.register(
+        make_hvac(model),
+        capabilities=["climate", "temperature", "ventilation"],
+        description="HVAC controller — climate control, temperature, air quality",
+    )
+    await hub.register(
+        make_energy(model),
+        capabilities=["power", "lighting", "solar"],
+        description="Energy manager — power meters, lighting, solar, power modes",
+    )
 
     subscribe_hub_logging(hub, label="CLIMATE")
 

@@ -55,6 +55,7 @@ async def log_emergency(caller_name: str, location: str, description: str, sever
         f"  Description: {description}\n  Severity: {severity}\n  Time: {datetime.now().strftime('%H:%M:%S')}"
     )
 
+
 # ---------------------------------------------------------------------------
 # EMS tools
 # ---------------------------------------------------------------------------
@@ -106,6 +107,7 @@ async def update_patient_status(status: str, vitals: str = "") -> str:
     """
     return f"Patient Update [{datetime.now().strftime('%H:%M:%S')}]: {status}. Vitals: {vitals}"
 
+
 # ---------------------------------------------------------------------------
 # Police tools
 # ---------------------------------------------------------------------------
@@ -133,10 +135,7 @@ async def setup_traffic_control(location: str, action: str, lanes_affected: str 
         action: Action to take (detour/lane-closure/full-closure).
         lanes_affected: Which lanes are affected.
     """
-    return (
-        f"Traffic Control at {location}: {action}, lanes: {lanes_affected}. "
-        f"Barriers deployed, nav advisory issued."
-    )
+    return f"Traffic Control at {location}: {action}, lanes: {lanes_affected}. Barriers deployed, nav advisory issued."
 
 
 @tool
@@ -149,6 +148,7 @@ async def file_incident_report(incident_type: str, details: str) -> str:
     """
     rid = f"RPT-{random.randint(10000, 99999)}"
     return f"Report {rid} filed: {incident_type}. {details}"
+
 
 # ---------------------------------------------------------------------------
 # Hospital tools
@@ -193,6 +193,7 @@ async def assign_specialist(specialty: str, urgency: str = "stat") -> str:
     doctor = f"Dr. {names[random.randint(0, 4)]}"
     return f"{doctor} ({specialty}) assigned, urgency: {urgency}, ETA: {random.randint(2, 8)} min"
 
+
 # ---------------------------------------------------------------------------
 # Fire department tools
 # ---------------------------------------------------------------------------
@@ -209,10 +210,7 @@ async def dispatch_fire_engine(location: str, engine_type: str = "standard") -> 
     uid = f"ENG-{random.randint(100, 999)}"
     eta = random.randint(4, 12)
     crew = random.randint(4, 6)
-    return (
-        f"Fire Engine {uid} ({engine_type}) dispatched to {location}.\n"
-        f"  ETA: {eta} min, Crew: {crew} firefighters"
-    )
+    return f"Fire Engine {uid} ({engine_type}) dispatched to {location}.\n  ETA: {eta} min, Crew: {crew} firefighters"
 
 
 @tool
@@ -250,6 +248,7 @@ async def establish_perimeter(location: str, radius_feet: int = 200) -> str:
         f"  Radius: {radius_feet} ft, Access points: 2 (north, south)\n"
         f"  Evacuation: {civilians} civilians cleared"
     )
+
 
 # ---------------------------------------------------------------------------
 # Actor factories
@@ -363,6 +362,7 @@ def make_fire_chief(model: str = "gemini-3-flash-preview") -> Actor:
         observers=[LoopDetector(repeat_threshold=3)],
     )
 
+
 # ---------------------------------------------------------------------------
 # Hub stream logger — subscribe to hub.stream for colored event output
 # ---------------------------------------------------------------------------
@@ -388,10 +388,6 @@ def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
                 f"{GREEN}{event.target.upper()} done -> {event.source.upper()}{RESET}"
             )
         elif isinstance(event, Signal):
-            print(
-                f"  {DIM}{ts}{RESET}  "
-                f"{RED}{BOLD}ALERT [{event.severity.upper()}]{RESET} "
-                f"{RED}{event.message}{RESET}"
-            )
+            print(f"  {DIM}{ts}{RESET}  {RED}{BOLD}ALERT [{event.severity.upper()}]{RESET} {RED}{event.message}{RESET}")
 
     hub.stream.subscribe(_on_event)

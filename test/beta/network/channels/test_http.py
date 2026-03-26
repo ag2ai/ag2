@@ -7,8 +7,11 @@ import asyncio
 import pytest
 
 from autogen.beta.events import ModelMessage
-from autogen.beta.network.channels.http import HttpChannel
 from autogen.beta.network.primitives.envelope import Envelope
+
+aiohttp = pytest.importorskip("aiohttp")
+
+from autogen.beta.network.channels.http import HttpChannel  # noqa: E402
 
 
 class TestHttpChannelLocalOnly:
