@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -23,9 +23,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# MARK="(not aux_neg_flag) or ($MARK)"
+echo "Running beta tests with mark: $MARK"
 
-echo "Running tests with mark: $MARK"
-
-# Call the test script with the correct mark and any remaining arguments
-bash scripts/test.sh "$@" -m "$MARK" --ignore=test/agentchat/contrib --ignore=test/opentelemetry --ignore=test/beta
+# Call the test script targeting only test/beta
+bash scripts/test.sh test/beta "$@" -m "$MARK"
