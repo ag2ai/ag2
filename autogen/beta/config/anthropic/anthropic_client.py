@@ -164,12 +164,10 @@ class AnthropicClient(LLMClient):
                     )
                 )
 
-        usage = response.usage.model_dump() if response.usage else {}
-
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=self._normalize_usage(response.usage.model_dump() if response.usage else {}),
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
@@ -228,13 +226,25 @@ class AnthropicClient(LLMClient):
             await context.send(message)
 
         final_message = await stream.get_final_message()
-        usage = final_message.usage.model_dump() if final_message.usage else {}
-
+        # Mapped to our usage keys
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=self._normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
         )
+
+    @staticmethod
+    def _normalize_usage(raw: dict[str, Any]) -> dict[str, Any]:
+        """Normalize Anthropic's native usage keys to standard format."""
+        usage: dict[str, Any] = {
+            "prompt_tokens": raw.get("input_tokens", 0),
+            "completion_tokens": raw.get("output_tokens", 0),
+        }
+        if raw.get("cache_creation_input_tokens"):
+            usage["cache_creation_input_tokens"] = raw["cache_creation_input_tokens"]
+        if raw.get("cache_read_input_tokens"):
+            usage["cache_read_input_tokens"] = raw["cache_read_input_tokens"]
+        return usage

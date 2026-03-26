@@ -152,7 +152,7 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-        usage = response.usage.model_dump() if response.usage else {}
+        usage = self._normalize_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
@@ -204,8 +204,22 @@ class OpenAIResponsesClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=self._normalize_usage(usage),
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
         )
+
+    @staticmethod
+    def _normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
+        """Normalize Responses API usage keys and lift nested cache tokens."""
+        # Responses API uses input_tokens/output_tokens; normalize to prompt_tokens/completion_tokens
+        if "input_tokens" in usage and "prompt_tokens" not in usage:
+            usage["prompt_tokens"] = usage["input_tokens"]
+        if "output_tokens" in usage and "completion_tokens" not in usage:
+            usage["completion_tokens"] = usage["output_tokens"]
+        details = usage.get("input_tokens_details") or {}
+        cached = details.get("cached_tokens")
+        if cached:
+            usage["cache_read_input_tokens"] = cached
+        return usage

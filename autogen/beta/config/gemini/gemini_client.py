@@ -47,11 +47,13 @@ class GeminiClient(LLMClient):
         api_key: str | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
+        cached_content: str | None = None,
     ) -> None:
         self._client = genai.Client(api_key=api_key)
         self._model_name = model
         self._streaming = streaming
         self._create_config = create_config or {}
+        self._cached_content = cached_content
 
     async def __call__(
         self,
@@ -71,12 +73,17 @@ class GeminiClient(LLMClient):
         system_instruction = build_system_instruction(prompt)
         gemini_tools = build_tools(list(tools))
 
+        cache_kwargs: dict[str, Any] = {}
+        if self._cached_content:
+            cache_kwargs["cached_content"] = self._cached_content
+
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
             **response_proto_to_config(response_schema),
             **self._create_config,
+            **cache_kwargs,
         )
 
         if self._streaming:
@@ -126,11 +133,7 @@ class GeminiClient(LLMClient):
 
         usage = {}
         if response.usage_metadata:
-            usage = {
-                "prompt_token_count": response.usage_metadata.prompt_token_count,
-                "candidates_token_count": response.usage_metadata.candidates_token_count,
-                "total_token_count": response.usage_metadata.total_token_count,
-            }
+            usage = self._normalize_usage(response.usage_metadata)
 
         finish_reason = None
         if response.candidates:
@@ -181,11 +184,7 @@ class GeminiClient(LLMClient):
                             )
 
             if chunk.usage_metadata:
-                usage = {
-                    "prompt_token_count": chunk.usage_metadata.prompt_token_count,
-                    "candidates_token_count": chunk.usage_metadata.candidates_token_count,
-                    "total_token_count": chunk.usage_metadata.total_token_count,
-                }
+                usage = self._normalize_usage(chunk.usage_metadata)
 
             if chunk.candidates:
                 fr = chunk.candidates[0].finish_reason
@@ -205,3 +204,19 @@ class GeminiClient(LLMClient):
             provider="google",
             finish_reason=finish_reason,
         )
+
+    @staticmethod
+    def _normalize_usage(metadata: Any) -> dict[str, Any]:
+        """Build usage dict from Gemini UsageMetadata, normalizing to standard keys."""
+        usage: dict[str, Any] = {
+            "prompt_tokens": metadata.prompt_token_count,
+            "completion_tokens": metadata.candidates_token_count,
+            "total_tokens": metadata.total_token_count,
+            # Keep Gemini-native keys for backward compatibility
+            "prompt_token_count": metadata.prompt_token_count,
+            "candidates_token_count": metadata.candidates_token_count,
+            "total_token_count": metadata.total_token_count,
+        }
+        if metadata.cached_content_token_count:
+            usage["cache_read_input_tokens"] = metadata.cached_content_token_count
+        return usage

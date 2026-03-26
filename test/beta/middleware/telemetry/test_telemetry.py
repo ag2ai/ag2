@@ -375,3 +375,68 @@ async def test_constructor_params_override_response(otel_setup):
     assert span.attributes["gen_ai.request.model"] == "custom-model"
     # Response model still set
     assert span.attributes["gen_ai.response.model"] == "gpt-4o-mini-resolved"
+
+
+@pytest.mark.asyncio()
+async def test_cache_token_usage_attributes(otel_setup):
+    """Cache creation/read token counts appear in LLM span attributes."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage(content="Hi!"),
+                usage={
+                    "prompt_tokens": 100,
+                    "completion_tokens": 20,
+                    "cache_creation_input_tokens": 80,
+                    "cache_read_input_tokens": 0,
+                },
+                model="claude-sonnet-4-6",
+                provider="anthropic",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["gen_ai.usage.input_tokens"] == 100
+    assert llm_span.attributes["gen_ai.usage.output_tokens"] == 20
+    assert llm_span.attributes["gen_ai.usage.cache_creation_input_tokens"] == 80
+    # cache_read_input_tokens is 0, so it should NOT be set (guarded by `if usage.get(...)`)
+    assert "gen_ai.usage.cache_read_input_tokens" not in llm_span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_cache_read_tokens_when_nonzero(otel_setup):
+    """cache_read_input_tokens appears when non-zero (simulates cache hit)."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage(content="Hi!"),
+                usage={
+                    "prompt_tokens": 100,
+                    "completion_tokens": 20,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 75,
+                },
+                model="claude-sonnet-4-6",
+                provider="anthropic",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["gen_ai.usage.cache_read_input_tokens"] == 75
+    assert "gen_ai.usage.cache_creation_input_tokens" not in llm_span.attributes
