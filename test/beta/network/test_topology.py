@@ -152,6 +152,7 @@ class TestFanout:
         assert len(result.additional) == 1
         assert result.additional[0].recipient == "extra"
 
+
     @pytest.mark.asyncio
     async def test_mutation_safety(self) -> None:
         """Fanout gives each plugin a copy — mutations don't leak between plugins."""

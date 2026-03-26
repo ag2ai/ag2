@@ -12,6 +12,7 @@ from typing import Any
 from autogen.beta.agent import Agent, AgentReply
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent
+from autogen.beta.stream import MemoryStream
 
 from .hub import Hub, RegistrationHandle
 from .primitives.channel import Channel
@@ -41,6 +42,7 @@ class Network:
     def __init__(
         self,
         *,
+        stream: MemoryStream | None = None,
         topology: Topology | None = None,
         plugins: Iterable[Plugin] = (),
         channel: Channel | None = None,
@@ -51,6 +53,7 @@ class Network:
         max_delegation_depth: int = 5,
     ) -> None:
         self.hub = Hub(
+            stream=stream,
             topology=topology,
             plugins=plugins,
             channel=channel,

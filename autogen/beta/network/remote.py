@@ -146,6 +146,7 @@ class RemoteAgent:
         if self._session is None:
             from aiohttp import ClientSession, ClientTimeout
 
+
             self._session = ClientSession(timeout=ClientTimeout(total=self._timeout))
 
         url = f"{self._endpoint}{path}"

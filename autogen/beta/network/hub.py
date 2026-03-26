@@ -76,6 +76,7 @@ class Hub:
     def __init__(
         self,
         *,
+        stream: MemoryStream | None = None,
         topology: Topology | None = None,
         plugins: Iterable[Plugin] = (),
         channel: Channel | None = None,
@@ -90,7 +91,7 @@ class Hub:
         self._state_store = state_store or MemoryStateStore()
         self._priority_scheme = priority_scheme
         self._conflict_resolver = conflict_resolver
-        self._stream = MemoryStream()
+        self._stream = stream or MemoryStream()
         self._context = Context(self._stream)
         self._agents: dict[str, Agent] = {}
         self._max_depth = max_delegation_depth
@@ -482,6 +483,7 @@ class Hub:
     async def _handle_health_request(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
         from aiohttp import web
+
 
         return web.json_response({
             "status": "healthy",
