@@ -215,12 +215,12 @@ def _check_llm_judge(assertion: EvalAssertion, output: str) -> AssertionResult:
     )
 
     try:
-        llm_config = autogen.LLMConfig(api_type="openai", model=model)
-        with llm_config:
-            judge = autogen.AssistantAgent(
-                name="judge",
-                system_message="You are a strict evaluation judge. Always respond with PASS or FAIL followed by a brief explanation.",
-            )
+        llm_config = autogen.LLMConfig({"model": model})
+        judge = autogen.AssistantAgent(
+            name="judge",
+            system_message="You are a strict evaluation judge. Always respond with PASS or FAIL followed by a brief explanation.",
+            llm_config=llm_config,
+        )
         user = autogen.UserProxyAgent(
             name="eval_runner",
             human_input_mode="NEVER",

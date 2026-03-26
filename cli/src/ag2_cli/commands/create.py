@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from pathlib import Path
 
 import typer
@@ -81,7 +83,7 @@ _AGENT_TEMPLATE = """\
 
 from autogen import AssistantAgent, LLMConfig
 
-config = LLMConfig(api_type="openai", model="gpt-4o")
+config = LLMConfig({{"model": "gpt-4o"}})
 
 with config:
     {var_name} = AssistantAgent(
@@ -95,7 +97,7 @@ _AGENT_WITH_TOOLS_TEMPLATE = """\
 
 from autogen import AssistantAgent, LLMConfig
 
-config = LLMConfig(api_type="openai", model="gpt-4o")
+config = LLMConfig({{"model": "gpt-4o"}})
 
 with config:
     {var_name} = AssistantAgent(
@@ -134,7 +136,7 @@ from autogen import AssistantAgent, LLMConfig
 from autogen.agentchat.group import run_group_chat
 from autogen.agentchat.group.patterns.pattern import {pattern_class}
 
-config = LLMConfig(api_type="openai", model="gpt-4o")
+config = LLMConfig({{"model": "gpt-4o"}})
 
 with config:
 {agent_definitions}
@@ -190,6 +192,14 @@ _TEMPLATES = {
         "description": "RAG-enabled chatbot",
         "agents": [("assistant", "You are a helpful assistant that answers questions using retrieved context.")],
     },
+    "fullstack-agentic": {
+        "description": "Full-stack app with agent backend",
+        "agents": [
+            ("planner", "You plan features and break them into implementable tasks."),
+            ("coder", "You write clean, production-ready Python code."),
+            ("reviewer", "You review code for bugs, security issues, and best practices."),
+        ],
+    },
 }
 
 PATTERN_MAP = {
@@ -217,23 +227,167 @@ def _write_file(path: Path, content: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# LLM-powered generation helpers
+# ---------------------------------------------------------------------------
+
+_LLM_YAML = """\
+# LLM configuration — ag2 run / ag2 chat will pick this up via your env vars.
+# Set the API key for your provider in .env or your shell environment.
+model: gpt-4o
+"""
+
+_WEB_SEARCH_TOOL = """\
+\"\"\"Example tool: web search.\"\"\"
+
+from autogen.tools import tool
+
+
+@tool(name="web_search", description="Search the web for information")
+def web_search(query: str) -> str:
+    \"\"\"Search the web and return results.
+
+    Args:
+        query: Search query string.
+
+    Returns:
+        Search results as a formatted string.
+    \"\"\"
+    # TODO: Implement with your preferred search API (e.g., Tavily, SerpAPI, Brave)
+    raise NotImplementedError("Connect to your preferred search API")
+"""
+
+
+def _detect_generation_model() -> str | None:
+    """Auto-detect an available LLM model from environment API keys."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return "gpt-4o"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "claude-sonnet-4-20250514"
+    if os.environ.get("GOOGLE_API_KEY"):
+        return "gemini-2.0-flash"
+    return None
+
+
+def _llm_generate(prompt: str, system_message: str) -> str:
+    """Make a single LLM call and return the response text.
+
+    Uses AG2's own agents to call an LLM — requires ag2 and an API key.
+    """
+    try:
+        import autogen
+    except ImportError:
+        console.print("[error]ag2 is not installed.[/error]")
+        console.print("Install with: [command]pip install ag2[/command]")
+        raise typer.Exit(1)
+
+    model = _detect_generation_model()
+    if not model:
+        console.print("[error]No LLM API key found in environment.[/error]")
+        console.print("Set one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Using {model} for generation...[/dim]")
+
+    llm_config = autogen.LLMConfig({"model": model})
+    generator = autogen.AssistantAgent(
+        name="generator",
+        system_message=system_message,
+        llm_config=llm_config,
+    )
+    user = autogen.UserProxyAgent(
+        name="user",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=0,
+        code_execution_config=False,
+    )
+    result = user.initiate_chat(generator, message=prompt, silent=True)
+
+    # Extract response from chat history
+    for msg in reversed(result.chat_history):
+        if msg.get("name") == "generator" or msg.get("role") == "assistant":
+            return msg.get("content", "")
+    return result.summary or ""
+
+
+def _parse_json_response(text: str) -> dict:
+    """Extract and parse JSON from an LLM response."""
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    # Try to extract from markdown code blocks
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Try to find a JSON object in the text
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+    console.print("[error]Could not parse LLM response as JSON.[/error]")
+    console.print("[dim]Raw response:[/dim]")
+    console.print(text[:500])
+    raise typer.Exit(1)
+
+
+_AGENT_GEN_SYSTEM = """\
+You are an expert AG2 (AutoGen) developer. You generate agent specifications as JSON.
+
+AG2 uses this pattern for agents:
+```python
+from autogen import AssistantAgent, LLMConfig
+config = LLMConfig({{"model": "gpt-4o"}})
+with config:
+    agent = AssistantAgent(name="agent_name", system_message="...")
+```
+
+Tools use:
+```python
+from autogen.tools import tool
+@tool(name="tool_name", description="...")
+def tool_name(param: str) -> str:
+    ...
+```
+
+Always respond with ONLY a valid JSON object. No markdown fences, no explanation."""
+
+
+# ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
 
 @app.command("project")
 def create_project(
-    name: str = typer.Argument(..., help="Project name."),
+    name: str | None = typer.Argument(None, help="Project name (optional with --from-description)."),
     template: str = typer.Option("blank", "--template", "-t", help="Project template to use."),
+    from_description: str | None = typer.Option(
+        None, "--from-description", help="Generate project from natural language description (AI-powered)."
+    ),
 ) -> None:
     """Scaffold a new AG2 project with best-practice structure.
 
     [dim]Examples:[/dim]
       [command]ag2 create project my-research-bot[/command]
       [command]ag2 create project my-app --template research-team[/command]
+      [command]ag2 create project --from-description "A Slack bot that summarizes channels"[/command]
 
-    [dim]Templates: blank, research-team, rag-chatbot[/dim]
+    [dim]Templates: blank, research-team, rag-chatbot, fullstack-agentic[/dim]
     """
+    if from_description:
+        _create_project_from_description(from_description, name)
+        return
+
+    if not name:
+        console.print("[error]Project name is required (or use --from-description).[/error]")
+        raise typer.Exit(1)
+
     tpl = _TEMPLATES.get(template)
     if tpl is None:
         console.print(f"[error]Unknown template: {template}[/error]")
@@ -254,6 +408,9 @@ def create_project(
     _write_file(project_dir / ".env.example", _ENV_EXAMPLE)
     _write_file(project_dir / ".gitignore", _GITIGNORE)
 
+    # Config
+    _write_file(project_dir / "config" / "llm.yaml", _LLM_YAML)
+
     # Agents
     _write_file(project_dir / "agents" / "__init__.py", "")
     for agent_name, system_msg in tpl["agents"]:
@@ -269,6 +426,7 @@ def create_project(
 
     # Tools
     _write_file(project_dir / "tools" / "__init__.py", "")
+    _write_file(project_dir / "tools" / "web_search.py", _WEB_SEARCH_TOOL)
 
     # Tests
     _write_file(project_dir / "tests" / "__init__.py", "")
@@ -290,9 +448,176 @@ def create_project(
     console.print()
 
 
+def _create_project_from_description(description: str, name: str | None) -> None:
+    """Generate a full project from a natural language description using an LLM."""
+    console.print(f"\n[heading]Generating project from description...[/heading]\n")
+
+    prompt = (
+        f"Generate an AG2 project specification for:\n{description}\n\n"
+        "Return a JSON object with:\n"
+        '{\n'
+        '  "name": "project-name-slug",\n'
+        '  "description": "One-line project description",\n'
+        '  "agents": [\n'
+        '    {"name": "agent_name", "system_message": "Detailed system prompt", "tools": ["tool_name"]}\n'
+        '  ],\n'
+        '  "tools": [\n'
+        '    {"name": "tool_name", "description": "What the tool does",\n'
+        '     "params": [{"name": "param_name", "type": "str", "description": "..."}]}\n'
+        '  ],\n'
+        '  "pattern": "auto"\n'
+        '}\n\n'
+        "Choose pattern from: auto, round-robin, random.\n"
+        "Use auto for most cases. Include 1-4 agents and relevant tools.\n"
+        "Write detailed, specific system messages for each agent."
+    )
+
+    response = _llm_generate(prompt, _AGENT_GEN_SYSTEM)
+    spec = _parse_json_response(response)
+
+    project_name = name or spec.get("name", "my-agent-project")
+    project_dir = Path.cwd() / project_name
+    if project_dir.exists():
+        console.print(f"[error]Directory already exists: {project_name}[/error]")
+        raise typer.Exit(1)
+
+    agents = spec.get("agents", [])
+    tools = spec.get("tools", [])
+    pattern = spec.get("pattern", "auto")
+
+    if not agents:
+        console.print("[error]LLM did not generate any agents. Try a more detailed description.[/error]")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Generating project: {project_name}[/dim]")
+    console.print(f"[dim]  Agents: {', '.join(a['name'] for a in agents)}[/dim]")
+    if tools:
+        console.print(f"[dim]  Tools: {', '.join(t['name'] for t in tools)}[/dim]")
+
+    # Core files
+    _write_file(project_dir / "pyproject.toml", _PYPROJECT_TEMPLATE.format(name=project_name))
+    _write_file(project_dir / ".env.example", _ENV_EXAMPLE)
+    _write_file(project_dir / ".gitignore", _GITIGNORE)
+    _write_file(project_dir / "config" / "llm.yaml", _LLM_YAML)
+
+    # Generate agents
+    _write_file(project_dir / "agents" / "__init__.py", "")
+    for agent_def in agents:
+        aname = agent_def["name"]
+        avar = _to_var_name(aname)
+        sys_msg = agent_def.get("system_message", f"You are {aname}.")
+        agent_tools = agent_def.get("tools", [])
+
+        if agent_tools:
+            tool_imports = "\n".join(
+                f"from tools.{_to_var_name(t)} import {_to_var_name(t)}" for t in agent_tools
+            )
+            tool_registers = "\n".join(
+                f"{_to_var_name(t)}.register_tool({avar})" for t in agent_tools
+            )
+            content = _AGENT_WITH_TOOLS_TEMPLATE.format(
+                name=aname,
+                var_name=avar,
+                system_message=repr(sys_msg),
+                tool_imports=f"{tool_imports}\n\n{tool_registers}",
+            )
+        else:
+            content = _AGENT_TEMPLATE.format(
+                name=aname, var_name=avar, system_message=repr(sys_msg),
+            )
+        _write_file(project_dir / "agents" / f"{avar}.py", content)
+
+    # Generate tools
+    _write_file(project_dir / "tools" / "__init__.py", "")
+    for tool_def in tools:
+        tname = tool_def["name"]
+        tfunc = _to_var_name(tname)
+        tdesc = tool_def.get("description", f"Tool: {tname}")
+        tparams = tool_def.get("params", [{"name": "query", "type": "str", "description": "Input query."}])
+
+        params_str = ", ".join(f"{p['name']}: {p.get('type', 'str')}" for p in tparams)
+        args_doc = "\n".join(f"        {p['name']}: {p.get('description', '')}" for p in tparams)
+
+        content = _TOOL_TEMPLATE.format(
+            name=tname, func_name=tfunc, description=tdesc,
+            params=params_str, docstring=tdesc, args_doc=args_doc,
+        )
+        _write_file(project_dir / "tools" / f"{tfunc}.py", content)
+
+    # Generate main.py
+    if len(agents) == 1:
+        avar = _to_var_name(agents[0]["name"])
+        main_content = (
+            f'"""Entry point for ag2 run / ag2 chat."""\n\n'
+            f"import asyncio\n\n"
+            f"from agents.{avar} import {avar}\n\n\n"
+            f'async def main(message: str = "Hello! What can you help me with?"):\n'
+            f"    from autogen import UserProxyAgent\n\n"
+            f'    user = UserProxyAgent(\n        name="user",\n'
+            f'        human_input_mode="NEVER",\n'
+            f"        max_consecutive_auto_reply=0,\n"
+            f"        code_execution_config=False,\n    )\n"
+            f"    result = user.initiate_chat({avar}, message=message)\n"
+            f"    return result\n\n\n"
+            f'if __name__ == "__main__":\n    asyncio.run(main())\n'
+        )
+    else:
+        pattern_class = PATTERN_MAP.get(pattern, "AutoPattern")
+        imports = "\n".join(
+            f"from agents.{_to_var_name(a['name'])} import {_to_var_name(a['name'])}" for a in agents
+        )
+        agent_list = ", ".join(_to_var_name(a["name"]) for a in agents)
+        first = _to_var_name(agents[0]["name"])
+        main_content = (
+            f'"""Entry point for ag2 run / ag2 chat."""\n\n'
+            f"import asyncio\n\n"
+            f"from autogen.agentchat.group import run_group_chat\n"
+            f"from autogen.agentchat.group.patterns.pattern import {pattern_class}\n\n"
+            f"{imports}\n\n"
+            f"agents = [{agent_list}]\n\n\n"
+            f'async def main(message: str = "Hello team!"):\n'
+            f"    pattern = {pattern_class}(\n"
+            f"        initial_agent={first},\n"
+            f"        agents=agents,\n"
+            f"    )\n"
+            f"    result = await run_group_chat(\n"
+            f"        pattern=pattern,\n"
+            f"        messages=message,\n"
+            f"        max_rounds=10,\n"
+            f"    )\n"
+            f"    return result\n\n\n"
+            f'if __name__ == "__main__":\n    asyncio.run(main())\n'
+        )
+    _write_file(project_dir / "main.py", main_content)
+
+    # Tests
+    _write_file(project_dir / "tests" / "__init__.py", "")
+    first_var = _to_var_name(agents[0]["name"])
+    first_name = agents[0]["name"]
+    test_content = (
+        f'"""Basic agent tests."""\n\nimport pytest\n\n\n'
+        f"def test_agent_importable():\n"
+        f'    """Verify agent module can be imported."""\n'
+        f"    from agents.{first_var} import {first_var}\n\n"
+        f"    assert {first_var} is not None\n"
+        f'    assert {first_var}.name == "{first_name}"\n'
+    )
+    _write_file(project_dir / "tests" / "test_agents.py", test_content)
+
+    # Summary
+    file_count = sum(1 for f in project_dir.rglob("*") if f.is_file())
+    console.print(f"\n  [success]✓[/success] Created [path]{project_dir}[/path] ({file_count} files)")
+    console.print()
+    console.print("  Next steps:")
+    console.print(f"    [command]cd {project_name}[/command]")
+    console.print("    [command]pip install -e .[/command]")
+    console.print(f'    [command]ag2 run main.py --message "Hello!"[/command]')
+    console.print()
+
+
 @app.command("agent")
 def create_agent(
-    name: str = typer.Argument(..., help="Agent name."),
+    name: str | None = typer.Argument(None, help="Agent name (optional with --from-description)."),
     tools: str | None = typer.Option(None, "--tools", help="Comma-separated tool names to include."),
     from_description: str | None = typer.Option(
         None, "--from-description", help="Generate agent from natural language description (AI-powered)."
@@ -303,10 +628,15 @@ def create_agent(
     [dim]Examples:[/dim]
       [command]ag2 create agent researcher --tools web-search,arxiv[/command]
       [command]ag2 create agent writer[/command]
+      [command]ag2 create agent --from-description "An agent that monitors HN for AI papers"[/command]
     """
     if from_description:
-        console.print("[warning]--from-description (AI generation) is coming soon.[/warning]")
-        raise typer.Exit(0)
+        _create_agent_from_description(from_description, name)
+        return
+
+    if not name:
+        console.print("[error]Agent name is required (or use --from-description).[/error]")
+        raise typer.Exit(1)
 
     var = _to_var_name(name)
     system_msg = f"You are {name}. You help users by completing tasks thoroughly and accurately."
@@ -343,16 +673,120 @@ def create_agent(
     console.print(f"  [success]✓[/success] Created [path]{out_path}[/path]")
 
 
+def _create_agent_from_description(description: str, name: str | None) -> None:
+    """Generate an agent and its tools from a natural language description."""
+    console.print(f"\n[heading]Generating agent from description...[/heading]\n")
+
+    prompt = (
+        f"Generate an AG2 agent specification for:\n{description}\n\n"
+        "Return a JSON object with:\n"
+        '{\n'
+        '  "name": "snake_case_name",\n'
+        '  "system_message": "Detailed system prompt for the agent",\n'
+        '  "tools": [\n'
+        '    {"name": "tool_name", "description": "What the tool does",\n'
+        '     "params": [{"name": "param_name", "type": "str", "description": "..."}]}\n'
+        '  ]\n'
+        '}\n\n'
+        "Write a detailed, specific system message. Include 0-4 tools as needed."
+    )
+
+    response = _llm_generate(prompt, _AGENT_GEN_SYSTEM)
+    spec = _parse_json_response(response)
+
+    agent_name = name or spec.get("name", "assistant")
+    var = _to_var_name(agent_name)
+    system_msg = spec.get("system_message", f"You are {agent_name}.")
+    tool_specs = spec.get("tools", [])
+
+    console.print(f"[dim]Agent: {agent_name}[/dim]")
+    if tool_specs:
+        console.print(f"[dim]Tools: {', '.join(t['name'] for t in tool_specs)}[/dim]")
+
+    # Write agent file
+    agents_dir = Path.cwd() / "agents"
+    out_path = agents_dir / f"{var}.py" if agents_dir.is_dir() else Path.cwd() / f"{var}.py"
+
+    if out_path.exists():
+        console.print(f"[error]File already exists: {out_path}[/error]")
+        raise typer.Exit(1)
+
+    if tool_specs:
+        tool_imports = "\n".join(
+            f"from tools.{_to_var_name(t['name'])} import {_to_var_name(t['name'])}" for t in tool_specs
+        )
+        tool_registers = "\n".join(
+            f"{_to_var_name(t['name'])}.register_tool({var})" for t in tool_specs
+        )
+        content = _AGENT_WITH_TOOLS_TEMPLATE.format(
+            name=agent_name,
+            var_name=var,
+            system_message=repr(system_msg),
+            tool_imports=f"{tool_imports}\n\n{tool_registers}",
+        )
+    else:
+        content = _AGENT_TEMPLATE.format(
+            name=agent_name, var_name=var, system_message=repr(system_msg),
+        )
+
+    _write_file(out_path, content)
+    console.print(f"  [success]✓[/success] Created [path]{out_path}[/path]")
+
+    # Write tool stubs
+    tools_dir = Path.cwd() / "tools"
+    for tool_def in tool_specs:
+        tname = tool_def["name"]
+        tfunc = _to_var_name(tname)
+        tdesc = tool_def.get("description", f"Tool: {tname}")
+        tparams = tool_def.get("params", [{"name": "query", "type": "str", "description": "Input query."}])
+
+        params_str = ", ".join(f"{p['name']}: {p.get('type', 'str')}" for p in tparams)
+        args_doc = "\n".join(f"        {p['name']}: {p.get('description', '')}" for p in tparams)
+
+        tool_content = _TOOL_TEMPLATE.format(
+            name=tname, func_name=tfunc, description=tdesc,
+            params=params_str, docstring=tdesc, args_doc=args_doc,
+        )
+        tool_path = tools_dir / f"{tfunc}.py" if tools_dir.is_dir() else Path.cwd() / f"{tfunc}.py"
+        if not tool_path.exists():
+            _write_file(tool_path, tool_content)
+            console.print(f"  [success]✓[/success] Created [path]{tool_path}[/path]")
+
+
 @app.command("tool")
 def create_tool(
-    name: str = typer.Argument(..., help="Tool name."),
+    name: str | None = typer.Argument(None, help="Tool name (optional with --from-openapi / --from-module)."),
     description: str | None = typer.Option(None, "--description", "-d", help="Tool description."),
+    from_openapi: str | None = typer.Option(
+        None, "--from-openapi", help="Generate tools from an OpenAPI spec (URL or file path)."
+    ),
+    from_module: str | None = typer.Option(
+        None, "--from-module", help="Generate tools from a Python module (e.g., 'pandas')."
+    ),
+    functions: str | None = typer.Option(
+        None, "--functions", "-f", help="Comma-separated function names (with --from-module)."
+    ),
 ) -> None:
     """Scaffold a new AG2 tool with proper typing and registration.
 
     [dim]Examples:[/dim]
       [command]ag2 create tool stock-price --description "Fetch real-time stock prices"[/command]
+      [command]ag2 create tool --from-openapi https://api.example.com/openapi.json[/command]
+      [command]ag2 create tool --from-module pandas --functions read_csv,describe[/command]
     """
+    if from_openapi:
+        _create_tool_from_openapi(from_openapi, name)
+        return
+
+    if from_module:
+        func_list = [f.strip() for f in functions.split(",") if f.strip()] if functions else None
+        _create_tool_from_module(from_module, func_list, name)
+        return
+
+    if not name:
+        console.print("[error]Tool name is required (or use --from-openapi / --from-module).[/error]")
+        raise typer.Exit(1)
+
     func_name = _to_var_name(name)
     desc = description or f"Tool: {name}"
 
@@ -375,6 +809,48 @@ def create_tool(
 
     _write_file(out_path, content)
     console.print(f"  [success]✓[/success] Created [path]{out_path}[/path]")
+
+
+def _create_tool_from_openapi(source: str, name: str | None) -> None:
+    """Generate tool files from an OpenAPI spec, reusing proxy module logic."""
+    from .proxy import _generate_tool_file, _load_openapi_spec, _parse_openapi_spec
+
+    console.print(f"[dim]Loading OpenAPI spec from {source}...[/dim]")
+    try:
+        spec = _load_openapi_spec(source)
+    except Exception as exc:
+        console.print(f"[error]Failed to load spec: {exc}[/error]")
+        raise typer.Exit(1)
+
+    tools = _parse_openapi_spec(spec)
+    if not tools:
+        console.print("[error]No endpoints found in the spec.[/error]")
+        raise typer.Exit(1)
+
+    output_name = _to_var_name(name) if name else "api_tools"
+    tools_dir = Path.cwd() / "tools"
+    out_path = tools_dir / f"{output_name}.py" if tools_dir.is_dir() else Path.cwd() / f"{output_name}.py"
+
+    _generate_tool_file(tools, out_path)
+    console.print(f"  [success]✓[/success] Generated {len(tools)} tools in [path]{out_path}[/path]")
+
+
+def _create_tool_from_module(module_name: str, func_names: list[str] | None, name: str | None) -> None:
+    """Generate tool files from a Python module, reusing proxy module logic."""
+    from .proxy import _generate_tool_file, _inspect_module_functions
+
+    console.print(f"[dim]Inspecting module {module_name}...[/dim]")
+    tools = _inspect_module_functions(module_name, func_names)
+    if not tools:
+        console.print(f"[error]No public functions found in {module_name}.[/error]")
+        raise typer.Exit(1)
+
+    output_name = _to_var_name(name) if name else f"{_to_var_name(module_name)}_tools"
+    tools_dir = Path.cwd() / "tools"
+    out_path = tools_dir / f"{output_name}.py" if tools_dir.is_dir() else Path.cwd() / f"{output_name}.py"
+
+    _generate_tool_file(tools, out_path)
+    console.print(f"  [success]✓[/success] Generated {len(tools)} tools in [path]{out_path}[/path]")
 
 
 @app.command("team")

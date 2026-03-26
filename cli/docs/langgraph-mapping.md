@@ -1,7 +1,8 @@
 # LangGraph/LangChain to AG2 Conversion Mapping
 
-> Research document for `ag2 convert --from langgraph`. Covers full API surface
-> of LangGraph (v1.1.x) and LangChain (v1.x) as of March 2026.
+> **Design reference only** — `ag2 convert` is not yet implemented.
+> This document maps the full API surface of LangGraph (v1.1.x) and
+> LangChain (v1.x) as of March 2026 for planning purposes.
 
 ---
 

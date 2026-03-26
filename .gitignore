@@ -3,6 +3,7 @@ skills-lock.json
 
 .docusaurus/
 node_modules/
+.vite/
 
 # Project
 .vs/

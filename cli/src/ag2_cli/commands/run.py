@@ -239,10 +239,9 @@ def chat_cmd(
     if agent_file is not None:
         discovered = _discover(agent_file)
     elif model:
-        llm_config = ag2.LLMConfig(api_type="openai", model=model)
+        llm_config = ag2.LLMConfig({"model": model})
         system_msg = system or "You are a helpful assistant."
-        with llm_config:
-            agent = ag2.AssistantAgent(name="assistant", system_message=system_msg)
+        agent = ag2.AssistantAgent(name="assistant", system_message=system_msg, llm_config=llm_config)
         from ..core.discovery import DiscoveredAgent
 
         discovered = DiscoveredAgent(
@@ -322,6 +321,11 @@ def chat_cmd(
                 user_proxy=user_proxy,
                 clear_history=(turn_count == 1),
             )
+            # Surface errors from execute (e.g. LLM API failures)
+            if result.errors:
+                for err in result.errors:
+                    console.print(f"[error]Error: {err}[/error]")
+                continue
             # Show output for main() that doesn't emit live events
             if result.output and discovered.kind == "main":
                 console.print(
