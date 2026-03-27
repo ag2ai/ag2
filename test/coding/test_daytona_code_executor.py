@@ -11,7 +11,7 @@ from autogen.coding import CodeBlock, MarkdownCodeExtractor
 
 try:
     from autogen.coding import DaytonaCodeExecutor, DaytonaCodeResult
-    from autogen.coding.daytona_code_executor import SandboxResources
+    from autogen.coding.daytona_code_executor import DaytonaSandboxResources
 
     _has_daytona = DaytonaCodeExecutor is not None
 except ImportError:
@@ -140,7 +140,7 @@ class TestDaytonaCodeExecutorInit:
         assert executor._env_vars == {"FOO": "bar", "KEY": "secret"}
 
     def test_init_with_resources(self, mock_sandbox):
-        resources = SandboxResources(cpu=2, memory=4, disk=20)
+        resources = DaytonaSandboxResources(cpu=2, memory=4, disk=4)
         executor = self._make_executor(mock_sandbox, resources=resources)
         assert executor._resources is resources
 
@@ -268,9 +268,9 @@ class TestCreateSandbox:
             mock_daytona_cls.return_value.create.return_value = mock_sandbox
             mock_sdk_resources = Mock()
             mock_resources_cls.return_value = mock_sdk_resources
-            resources = SandboxResources(cpu=4, memory=8, disk=50)
+            resources = DaytonaSandboxResources(cpu=2, memory=4, disk=4)
             DaytonaCodeExecutor(api_key="k", image="python:3.12", resources=resources)
-            mock_resources_cls.assert_called_once_with(cpu=4, memory=8, disk=50)
+            mock_resources_cls.assert_called_once_with(cpu=2, memory=4, disk=4)
             call_kwargs = mock_img_params.call_args.kwargs
             assert call_kwargs["resources"] is mock_sdk_resources
 
@@ -284,8 +284,8 @@ class TestCreateSandbox:
             patch("atexit.register"),
         ):
             mock_daytona_cls.return_value.create.return_value = mock_sandbox
-            # SandboxResources with all None fields — should not build SDK Resources
-            DaytonaCodeExecutor(api_key="k", image="python:3.12", resources=SandboxResources())
+            # DaytonaSandboxResources with all None fields — should not build SDK Resources
+            DaytonaCodeExecutor(api_key="k", image="python:3.12", resources=DaytonaSandboxResources())
             mock_resources_cls.assert_not_called()
             assert mock_img_params.call_args.kwargs["resources"] is None
 
@@ -602,7 +602,7 @@ class TestDaytonaCodeResult:
 
 
 # ---------------------------------------------------------------------------
-# SandboxResources
+# DaytonaSandboxResources
 # ---------------------------------------------------------------------------
 
 
@@ -617,21 +617,21 @@ class TestSupportedLanguages:
 
 
 @pytest.mark.skipif(not _has_daytona, reason="Daytona dependencies not installed")
-class TestSandboxResources:
+class TestDaytonaSandboxResources:
     def test_all_fields_default_to_none(self):
-        r = SandboxResources()
+        r = DaytonaSandboxResources()
         assert r.cpu is None
         assert r.memory is None
         assert r.disk is None
 
     def test_fields_can_be_set(self):
-        r = SandboxResources(cpu=4, memory=8, disk=100)
-        assert r.cpu == 4
-        assert r.memory == 8
-        assert r.disk == 100
+        r = DaytonaSandboxResources(cpu=2, memory=4, disk=4)
+        assert r.cpu == 2
+        assert r.memory == 4
+        assert r.disk == 4
 
     def test_partial_fields(self):
-        r = SandboxResources(memory=16)
+        r = DaytonaSandboxResources(memory=4)
         assert r.cpu is None
-        assert r.memory == 16
+        assert r.memory == 4
         assert r.disk is None

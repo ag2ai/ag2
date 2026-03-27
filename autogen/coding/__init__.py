@@ -44,9 +44,9 @@ except ImportError:
 
 # Try to import Daytona executor and add to __all__ if available
 try:
-    from .daytona_code_executor import DaytonaCodeExecutor, DaytonaCodeResult  # noqa: F401
+    from .daytona_code_executor import DaytonaCodeExecutor, DaytonaCodeResult, DaytonaSandboxResources  # noqa: F401
 
-    __all__.extend(["DaytonaCodeExecutor", "DaytonaCodeResult"])
+    __all__.extend(["DaytonaCodeExecutor", "DaytonaCodeResult", "DaytonaSandboxResources"])
 except ImportError:
     logger.debug("DaytonaCodeExecutor not available: missing dependencies. Install with: pip install ag2[daytona]")
     pass

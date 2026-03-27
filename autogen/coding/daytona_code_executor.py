@@ -37,8 +37,9 @@ except ImportError:
     Resources = None  # type: ignore[assignment,misc]
 
 
+@export_module("autogen.coding")
 @dataclass
-class SandboxResources:
+class DaytonaSandboxResources:
     """Resource limits for a Daytona sandbox.
 
     All fields are optional — only set the ones you want to constrain.
@@ -98,12 +99,19 @@ class DaytonaCodeExecutor:
         RuntimeError: If sandbox creation fails.
 
     Example:
+        Basic usage:
+
+        ```python
         executor = DaytonaCodeExecutor(api_key="...", timeout=120)
         agent = ConversableAgent("coder", code_execution_config={"executor": executor})
+        ```
 
-        # Or as a context manager — sandbox is deleted when the with-block exits:
+        As a context manager — sandbox is deleted when the with-block exits:
+
+        ```python
         with DaytonaCodeExecutor(api_key="...") as executor:
             agent = ConversableAgent("coder", code_execution_config={"executor": executor})
+        ```
     """
 
     SUPPORTED_LANGUAGES: ClassVar[list[str]] = [
@@ -157,7 +165,7 @@ class DaytonaCodeExecutor:
         image: "str | Image | None" = None,
         name: str | None = None,
         env_vars: dict[str, str] | None = None,
-        resources: SandboxResources | None = None,
+        resources: DaytonaSandboxResources | None = None,
     ):
         if Daytona is None:
             raise ImportError(
