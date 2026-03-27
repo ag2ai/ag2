@@ -28,6 +28,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     install_requires=["ag2==" + __version__],
     extras_require={
+        "a2ui": ["ag2[a2ui]==" + __version__],
         "a2a": ["ag2[a2a]==" + __version__],
         "ag-ui": ["ag2[ag-ui]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],

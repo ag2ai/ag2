@@ -1,0 +1,55 @@
+---
+title: A2UI - Rich UI
+sidebarTitle: A2UI
+---
+
+[A2UI](https://a2ui.org/){.external-link target="_blank"} is an open protocol for agents to generate rich, interactive user interfaces. Instead of returning plain text, agents produce structured JSON that client-side renderers transform into UI components — cards, forms, buttons, images, and more. A2UI is transport-agnostic and works over both A2A and AG-UI. See the [A2UI documentation](https://a2ui.org/){.external-link target="_blank"} for the full protocol specification.
+
+## A2UIAgent
+
+AG2 supports A2UI through [`A2UIAgent`](/docs/user-guide/reference-agents/a2uiagent), a specialized agent that handles prompt engineering with A2UI schema instructions, response parsing, optional schema validation with automatic retry, and integration with A2A and AG-UI serving.
+
+## A2A Integration
+
+A2UIAgent integrates with the A2A protocol through `A2aAgentServer`. When wrapped in `A2aAgentServer`, the agent is auto-detected and the server automatically:
+
+- Uses `A2UIAgentExecutor` to split responses into text + A2UI DataParts
+- Declares the A2UI version support in the agent card
+- Handles extension negotiation — clients that don't request A2UI get text-only responses
+
+```python title="a2ui_server.py" linenums="1" hl_lines="1-3 8-10"
+from autogen import LLMConfig
+from autogen.agents.experimental import A2UIAgent
+from autogen.a2a import A2aAgentServer, CardSettings
+
+llm_config = LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"})
+
+agent = A2UIAgent(
+    name="ui_agent",
+    llm_config=llm_config,
+    validate_responses=True,
+)
+
+server = A2aAgentServer(
+    agent=agent,
+    url="http://localhost:9000",
+    agent_card=CardSettings(
+        name="My UI Agent",
+        description="An agent that generates rich UI.",
+    ),
+)
+
+app = server.build()
+
+# Run with: uvicorn a2ui_server:app --host 0.0.0.0 --port 9000
+```
+
+Clients connect via A2A JSON-RPC and request the A2UI extension through the A2A protocol's extension negotiation. The response contains standard A2A parts:
+- **TextPart**: The conversational text
+- **DataPart**: A2UI operations with MIME type `application/json+a2ui`
+
+On the client side, Flutter's [`genui_a2a`](https://github.com/flutter/genui){.external-link target="_blank"} package provides a native A2UI renderer that connects to the A2A server and renders surfaces automatically.
+
+## Further Reading
+
+See the full [A2UIAgent reference](/docs/user-guide/reference-agents/a2uiagent) for details on configuration, validation, actions, custom catalogs, and AG-UI integration.
