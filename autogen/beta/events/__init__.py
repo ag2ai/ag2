@@ -4,6 +4,7 @@
 
 from .base import BaseEvent, Field
 from .conditions import Condition
+from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     ClientToolCallEvent,
     ToolCallEvent,
@@ -35,6 +36,9 @@ __all__ = (
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
+    "TaskCompleted",
+    "TaskFailed",
+    "TaskStarted",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",

@@ -585,6 +585,21 @@ class Agent(Generic[TResult]):
                 response_schema=final_schema,
             )
 
+    def as_tool(
+        self,
+        *,
+        description: str,
+        name: str | None = None,
+        max_depth: int | None = None,
+        stream: "Callable[[], Stream] | None" = None,
+    ) -> "Tool":
+        """Use this agent as a tool callable by another agent."""
+        from .task import DEFAULT_MAX_TASK_DEPTH, _make_task_tool
+
+        return _make_task_tool(
+            self, description=description, name=name, max_depth=max_depth or DEFAULT_MAX_TASK_DEPTH, stream=stream
+        )
+
     def as_conversable(self) -> "ConversableAdapter":
         from .conversable import ConversableAdapter
 

@@ -8,6 +8,7 @@ from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .stream import MemoryStream
+from .task import TaskResult
 from .tools import ToolResult, tool
 
 __all__ = (
@@ -19,6 +20,7 @@ __all__ = (
     "MemoryStream",
     "PromptedSchema",
     "ResponseSchema",
+    "TaskResult",
     "ToolResult",
     "Variable",
     "response_schema",
