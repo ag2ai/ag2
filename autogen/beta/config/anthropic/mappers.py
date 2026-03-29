@@ -128,7 +128,7 @@ def convert_messages(
                     "type": "tool_use",
                     "id": call.id,
                     "name": call.name,
-                    "input": json.loads(call.arguments),
+                    "input": json.loads(call.arguments or "{}"),
                 })
             if content:
                 result.append({"role": "assistant", "content": content})

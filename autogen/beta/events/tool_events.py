@@ -73,7 +73,7 @@ class ToolCallEvent(ToolEvent):
     @property
     def serialized_arguments(self) -> dict[str, Any]:
         if self._serialized_arguments is None:
-            self._serialized_arguments = json.loads(self.arguments)
+            self._serialized_arguments = json.loads(self.arguments or "{}")
         return self._serialized_arguments
 
     @serialized_arguments.setter
