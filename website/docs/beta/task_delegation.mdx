@@ -1,0 +1,165 @@
+---
+title: Task Delegation
+sidebarTitle: Task Delegation
+---
+
+Task delegation allows agents to delegate work to other agents, or to themselves, through tool calling. The calling agent's LLM decides when and what to delegate, and each task runs on its own isolated stream with independent history.
+
+## Delegating to Specialist Agents
+
+Use `Agent.as_tool()` to make one agent available as a tool for another. The calling agent's LLM sees a tool with `objective` and `context` parameters and decides when to use it.
+
+```python
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+
+config = AnthropicConfig("claude-sonnet-4-6")
+
+researcher = Agent(
+    "researcher",
+    prompt="You are a thorough researcher. Provide concise factual findings.",
+    config=config,
+    tools=[search_tool],
+)
+
+writer = Agent(
+    "writer",
+    prompt="You are a skilled writer. Turn research into clear prose.",
+    config=config,
+)
+
+coordinator = Agent(
+    "coordinator",
+    prompt="First delegate research, then pass findings to the writer.",
+    config=config,
+    tools=[
+        researcher.as_tool(description="Research a topic and return findings."),
+        writer.as_tool(description="Write an article. Pass research notes in the context parameter."),
+    ],
+)
+
+reply = await coordinator.ask("Write a short article about the history of Python.")
+print(reply.body)
+```
+
+The coordinator's LLM sees two tools — `task_researcher` and `task_writer` — and calls them as needed. Each call spawns the target agent on a fresh stream, runs it to completion, and returns the result.
+
+## Self-Delegation
+
+An agent can delegate to itself to break complex work into independent sub-tasks. Each sub-task runs as a fresh copy of the agent with its own stream and history.
+
+```python linenums="1" hl_lines="12 13 14 15 16"
+analyst = Agent(
+    "analyst",
+    prompt=(
+        "You have search and sub_task tools. "
+        "Only use sub_task when the task has clearly independent parts. "
+        "Otherwise handle it directly with search."
+    ),
+    config=config,
+    tools=[search_tool],
+)
+
+analyst.tools.append(
+    analyst.as_tool(
+        description="Break work into a focused sub-task for independent analysis.",
+        name="sub_task",
+    )
+)
+
+reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX, and ecosystem.")
+```
+
+The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
+
+## Task Lifecycle Events
+
+Every task emits lifecycle events on the **parent** stream, enabling observation, logging, and monitoring without reaching into sub-task streams.
+
+```python linenums="1" hl_lines="5"
+from autogen.beta import MemoryStream
+from autogen.beta.events import TaskStarted, TaskCompleted, TaskFailed
+
+stream = MemoryStream()
+reply = await coordinator.ask("Write a report on AI safety.", stream=stream)
+
+events = await stream.history.get_events()
+for event in events:
+    if isinstance(event, TaskStarted):
+        print(f"Started: {event.agent_name} — {event.objective}")
+    elif isinstance(event, TaskCompleted):
+        print(f"Completed: {event.agent_name} — {event.result[:80]}")
+    elif isinstance(event, TaskFailed):
+        print(f"Failed: {event.agent_name} — {event.error}")
+```
+
+| Event | Meaning |
+|---|---|
+| `TaskStarted` | A sub-task agent has been spawned with an objective |
+| `TaskCompleted` | The agent ran and produced a response |
+| `TaskFailed` | The agent raised an exception |
+
+!!! note
+    `TaskCompleted` means the agent finished — not that it succeeded at the objective. There is no automatic quality judgement. The calling agent's LLM reads the result and decides whether it's satisfactory.
+
+## Inspecting Sub-Task Streams
+
+Each `TaskCompleted` event carries a reference to the sub-task's stream. You can inspect every event that happened during the task — model requests, tool calls, tool results, and the final response.
+
+```python linenums="1"
+for event in events:
+    if isinstance(event, TaskCompleted) and event.task_stream:
+        sub_events = await event.task_stream.history.get_events()
+        print(f"Sub-task '{event.objective}': {len(sub_events)} events")
+        for e in sub_events:
+            print(f"  {type(e).__name__}")
+```
+
+## Recursion Guard
+
+Self-delegation can cause infinite recursion if a sub-task also tries to delegate. The framework prevents this with a depth counter.
+
+By default, `max_depth=1` which means the top-level agent can delegate, but sub-tasks cannot delegate further. The task tool is **hidden from the LLM** at max depth.
+
+```python
+# Default: one level of delegation
+analyst.as_tool(description="Sub-task", name="sub_task")
+
+# Allow deeper chains (e.g., A → B → C)
+researcher.as_tool(description="Research", max_depth=3)
+```
+
+## Custom Streams for Sub-Tasks
+
+By default, sub-tasks create an in-memory stream. If using other stream types, such as to persist the events, pass a `stream` factory:
+
+```python linenums="1"
+from autogen.beta.streams.redis import RedisStream
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=lambda: RedisStream(MY_REDIS_URL, prefix="ag2:sub"),
+)
+```
+
+Each invocation calls the factory to create a fresh stream. This ensures sub-tasks get independent streams while persisting their events externally.
+
+## Context Flow
+
+When a task is delegated, the sub-task agent gets:
+
+| What | Inherited? | Why |
+|---|---|---|
+| **Dependencies** | Yes | Shared infrastructure — DB connections, API clients, injected services |
+| **Variables** | No | Mutable conversation state — each task gets a fresh scope |
+| **History** | No | Clean stream — the LLM passes relevant context via the `context` tool parameter |
+| **Agent prompt, tools, config** | Yes | The sub-agent brings its own capabilities |
+
+The `context` tool parameter is how the calling LLM shares relevant information with the sub-task:
+
+```
+task_writer(
+    objective="Write an article about Python's history",
+    context="Key findings: Created by Guido van Rossum in 1991. Named after Monty Python."
+)
+```
