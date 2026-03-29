@@ -199,3 +199,50 @@ async def test_tool_use_with_structured_output(gemini_config: GeminiConfig) -> N
     assert isinstance(result, WeatherReport)
     assert result.city.lower() == "paris"
     assert result.temperature == 22
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_tool_with_optional_only_params(gemini_config: GeminiConfig) -> None:
+    """Tools with only optional parameters must not crash on multi-turn."""
+
+    def list_items(category: str = "") -> str:
+        """List available items, optionally filtered by category."""
+        if category:
+            return f"Items in {category}: widget, gadget"
+        return "All items: apple, banana, cherry"
+
+    agent = Agent(
+        name="item_agent",
+        prompt="You have a list_items tool. Call it with no arguments to see all items, then summarize the results.",
+        config=gemini_config,
+        tools=[list_items],
+    )
+
+    reply = await agent.ask("What items do we have?")
+
+    assert reply.body is not None
+    assert any(fruit in reply.body.lower() for fruit in ["apple", "banana", "cherry"])
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio()
+async def test_multi_turn_after_empty_args_tool_call(gemini_config: GeminiConfig) -> None:
+    """A follow-up question after an empty-args tool call must not crash."""
+
+    def discover_agents(capability: str = "") -> str:
+        """Discover available agents, optionally filtered by capability."""
+        return "Available agents: researcher, writer, coder"
+
+    agent = Agent(
+        name="hub_agent",
+        prompt="You have a discover_agents tool. Use it when asked about available agents. Be concise.",
+        config=gemini_config,
+        tools=[discover_agents],
+    )
+
+    reply = await agent.ask("What agents are available?")
+    assert reply.body is not None
+
+    reply2 = await reply.ask("Tell me more about the researcher agent.")
+    assert reply2.body is not None
