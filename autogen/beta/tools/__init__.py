@@ -4,7 +4,7 @@
 
 from autogen.beta.events.tool_events import ToolResult
 
-from .builtin import CodeExecutionTool, MemoryTool, UserLocation, WebSearchTool
+from .builtin import CodeExecutionTool, MemoryTool, UserLocation, WebFetchCitations, WebFetchTool, WebSearchTool
 from .final import Toolkit, tool
 
 __all__ = (
@@ -13,6 +13,8 @@ __all__ = (
     "ToolResult",
     "Toolkit",
     "UserLocation",
+    "WebFetchCitations",
+    "WebFetchTool",
     "WebSearchTool",
     "tool",
 )

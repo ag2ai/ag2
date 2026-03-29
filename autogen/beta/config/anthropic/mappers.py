@@ -11,6 +11,7 @@ from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
+from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -72,7 +73,12 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def tool_to_api(t: ToolSchema) -> dict[str, Any]:
+def tool_to_api(
+    t: ToolSchema,
+    *,
+    web_search_version: str = "web_search_20250305",
+    web_fetch_version: str = "web_fetch_20250910",
+) -> dict[str, Any]:
     if isinstance(t, FunctionToolSchema):
         return {
             "name": t.function.name,
@@ -81,7 +87,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         }
 
     elif isinstance(t, WebSearchToolSchema):
-        result: dict[str, Any] = {"type": "web_search_20250305", "name": "web_search"}
+        result: dict[str, Any] = {"type": web_search_version, "name": "web_search"}
         if t.max_uses is not None:
             result["max_uses"] = t.max_uses
         if t.user_location is not None:
@@ -95,11 +101,29 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             if t.user_location.timezone is not None:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
+        if t.allowed_domains is not None:
+            result["allowed_domains"] = t.allowed_domains
+        if t.blocked_domains is not None:
+            result["blocked_domains"] = t.blocked_domains
         return result
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool
         return {"type": "code_execution_20250825", "name": "code_execution"}
+
+    elif isinstance(t, WebFetchToolSchema):
+        result = {"type": web_fetch_version, "name": "web_fetch"}
+        if t.max_uses is not None:
+            result["max_uses"] = t.max_uses
+        if t.allowed_domains is not None:
+            result["allowed_domains"] = t.allowed_domains
+        if t.blocked_domains is not None:
+            result["blocked_domains"] = t.blocked_domains
+        if t.citations is not None:
+            result["citations"] = {"enabled": t.citations.enabled}
+        if t.max_content_tokens is not None:
+            result["max_content_tokens"] = t.max_content_tokens
+        return result
 
     elif isinstance(t, MemoryToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool

@@ -192,6 +192,8 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             if t.user_location.timezone is not None:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
+        if t.allowed_domains is not None:
+            result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
 
     elif isinstance(t, CodeExecutionToolSchema):

@@ -4,6 +4,7 @@
 
 from .code_execution import CodeExecutionTool
 from .memory import MemoryTool
+from .web_fetch import WebFetchCitations, WebFetchTool
 from .web_search import UserLocation, WebSearchTool
 
-__all__ = ("CodeExecutionTool", "MemoryTool", "UserLocation", "WebSearchTool")
+__all__ = ("CodeExecutionTool", "MemoryTool", "UserLocation", "WebFetchCitations", "WebFetchTool", "WebSearchTool")

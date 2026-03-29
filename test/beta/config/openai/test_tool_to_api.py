@@ -122,3 +122,13 @@ def test_tool_to_responses_api_web_search_with_user_location_partial() -> None:
             "timezone": "Europe/Berlin",
         },
     }
+
+
+def test_tool_to_responses_api_web_search_with_allowed_domains() -> None:
+    schema = WebSearchToolSchema(allowed_domains=["example.com", "docs.example.com"])
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "filters": {"allowed_domains": ["example.com", "docs.example.com"]},
+    }
