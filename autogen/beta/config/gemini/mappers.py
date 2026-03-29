@@ -89,7 +89,7 @@ def convert_messages(
             for call in message.tool_calls.calls:
                 fc_part = types.Part.from_function_call(
                     name=call.name,
-                    args=json.loads(call.arguments),
+                    args=json.loads(call.arguments or "{}"),
                 )
                 if "thought_signature" in call.provider_data:
                     fc_part.thought_signature = call.provider_data["thought_signature"]
