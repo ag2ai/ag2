@@ -45,6 +45,7 @@ from .observer import BaseObserver, Observer
 
 # Built-in observers and plugins
 from .observers import LoopDetector, TokenMonitor
+from .plugins import RateLimiter, TelemetryPlugin
 
 # Assembly policies
 from .policies import (
@@ -57,7 +58,6 @@ from .policies import (
     TopicOverflow,
     WorkingMemoryPolicy,
 )
-from .plugins import RateLimiter, TelemetryPlugin
 from .primitives.aggregate import (
     AggregateStrategy,
     AggregateTrigger,
@@ -66,9 +66,9 @@ from .primitives.aggregate import (
 )
 from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
 from .primitives.compact import (
-    CompactionSummary,
     CompactStrategy,
     CompactTrigger,
+    CompactionSummary,
     SummarizeCompact,
     TailWindowCompact,
 )
@@ -178,10 +178,10 @@ __all__ = (
     "Cache",
     "CallHandler",
     "Channel",
-    "CompactionCompleted",
-    "CompactionSummary",
     "CompactStrategy",
     "CompactTrigger",
+    "CompactionCompleted",
+    "CompactionSummary",
     "Conditional",
     "ConflictResolver",
     "ConversationPolicy",
@@ -253,12 +253,12 @@ __all__ = (
     "TelemetryPlugin",
     "TokenBudgetPolicy",
     "TokenMonitor",
-    "Topology",
     "TopicInboxPolicy",
     "TopicMessage",
     "TopicOverflow",
     "TopicSubscription",
     "TopicUnsubscription",
+    "Topology",
     "UnknownEvent",
     "Watch",
     "WatchStatus",
