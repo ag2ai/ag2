@@ -31,7 +31,15 @@ from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
 
-from .events import DelegationError, DelegationRejected, DelegationRequest, DelegationResult
+from .events import (
+    DelegationError,
+    DelegationRejected,
+    DelegationRequest,
+    DelegationResult,
+    TopicMessage,
+    TopicSubscription,
+    TopicUnsubscription,
+)
 from .primitives.channel import Channel, LocalChannel
 from .primitives.envelope import Envelope
 from .primitives.infra import ActorInfo, LocalRegistry, MemoryStateStore, Registry, StateStore
@@ -100,6 +108,14 @@ class Hub:
         self._hub_context = HubContext(self)
         self._additional_tasks: set[asyncio.Task[None]] = set()
 
+        # Topic pub/sub state
+        self._topics: dict[str, list[TopicMessage]] = {}
+        self._subscriptions: dict[str, set[str]] = {}  # topic -> actor names
+        self._cursors: dict[tuple[str, str], int] = {}  # (actor, topic) -> last-read index
+
+        # Cross-actor knowledge exposure
+        self._exposed_paths: dict[str, list[str]] = {}  # actor -> exposed path prefixes
+
         # Server state (populated by serve())
         self._server_runner: web.AppRunner | None = None
         self._server_site: web.TCPSite | None = None
@@ -126,6 +142,7 @@ class Hub:
         agent: Agent,
         capabilities: list[str] | None = None,
         description: str = "",
+        exposed_paths: list[str] | None = None,
     ) -> RegistrationHandle:
         """Register an agent with the network. Returns a handle for unregistering."""
         if agent.name in self._agents:
@@ -142,6 +159,8 @@ class Hub:
         )
         await self._registry.register(agent.name, info)
         self._agents[agent.name] = agent
+        if exposed_paths:
+            self._exposed_paths[agent.name] = list(exposed_paths)
         return RegistrationHandle(name=agent.name, _hub=self)
 
     async def unregister(self, name: str) -> None:
@@ -158,50 +177,91 @@ class Hub:
     # ------------------------------------------------------------------
 
     def _build_network_tools(self, caller: str = "") -> list[Tool]:
-        """Build discovery and delegation tools for a specific caller."""
+        """Build the consolidated network tool for a specific caller."""
         hub = self
 
         @tool
-        async def discover_agents(capability: str = "") -> str:
-            """Discover other agents available in the network.
+        async def network(
+            action: str,
+            target: str = "",
+            topic: str = "",
+            message: str = "",
+        ) -> str:
+            """Communicate over the agent network.
 
-            Args:
-                capability: Optional capability to filter by
-                    (e.g. "research", "writing"). Leave empty to list all.
-
-            Returns:
-                A formatted list of available agents and their capabilities.
+            Actions:
+                discover   - Find agents. target=capability filter (optional).
+                request    - Delegate task to agent. target=agent name, message=task description.
+                publish    - Publish to topic. topic=topic name, message=content.
+                subscribe  - Subscribe to a topic. topic=topic name.
+                topics     - List all active topics.
+                query      - Read from another actor's knowledge. target=agent name, message=path.
+                query_list - List another actor's knowledge entries. target=agent name, message=path (default /).
             """
-            agents = await hub.discover(capability)
-            infos = [a for a in agents if a.name != caller]
-            if not infos:
-                return "No other agents found in the network."
-            lines = []
-            for a in infos:
-                caps = ", ".join(a.capabilities) if a.capabilities else "general"
-                desc = f" - {a.description}" if a.description else ""
-                lines.append(f"- {a.name} [{caps}]{desc}")
-            return "\n".join(lines)
+            if action == "discover":
+                agents = await hub.discover(target)
+                infos = [a for a in agents if a.name != caller]
+                if not infos:
+                    return "No other agents found."
+                lines = []
+                for a in infos:
+                    caps = ", ".join(a.capabilities) if a.capabilities else "general"
+                    desc = f" - {a.description}" if a.description else ""
+                    lines.append(f"- {a.name} [{caps}]{desc}")
+                return "\n".join(lines)
 
-        @tool
-        async def delegate_to(agent_name: str, task: str) -> str:
-            """Delegate a task to another agent in the network.
+            elif action == "request":
+                if not target:
+                    return "Error: target is required for request action."
+                if target == caller:
+                    return "Error: cannot delegate to yourself."
+                if not message:
+                    return "Error: message is required for request action."
+                return await hub._delegate(target, message, source=caller)
 
-            The target agent will process the task independently and return
-            the result. Use discover_agents first to find suitable agents.
+            elif action == "publish":
+                if not topic:
+                    return "Error: topic is required for publish action."
+                if not message:
+                    return "Error: message is required for publish action."
+                await hub.publish(caller, topic, message)
+                return f"Published to topic '{topic}'."
 
-            Args:
-                agent_name: Name of the target agent.
-                task: Description of the task to delegate.
+            elif action == "subscribe":
+                if not topic:
+                    return "Error: topic is required for subscribe action."
+                await hub.subscribe_topic(caller, topic)
+                return f"Subscribed to topic '{topic}'."
 
-            Returns:
-                The result produced by the target agent.
-            """
-            if agent_name == caller:
-                return "Error: cannot delegate to yourself."
-            return await hub._delegate(agent_name, task, source=caller)
+            elif action == "topics":
+                topic_list = await hub.list_topics()
+                if not topic_list:
+                    return "No active topics."
+                return "\n".join(f"- {t}" for t in topic_list)
 
-        return [discover_agents, delegate_to]
+            elif action == "query":
+                if not target or not message:
+                    return "Error: target (agent name) and message (path) required for query."
+                content = await hub.query_knowledge(caller, target, message)
+                if content is None:
+                    return f"Not accessible: {target}:{message} (not found or not exposed)."
+                return content
+
+            elif action == "query_list":
+                if not target:
+                    return "Error: target (agent name) required for query_list."
+                path = message or "/"
+                entries = await hub.list_knowledge(caller, target, path)
+                if entries is None:
+                    return f"Not accessible: {target}:{path} (not found or not exposed)."
+                if not entries:
+                    return f"Empty: {target}:{path}"
+                return "\n".join(entries)
+
+            else:
+                return f"Unknown action: {action}. Available: discover, request, publish, subscribe, topics, query, query_list."
+
+        return [network]
 
     # ------------------------------------------------------------------
     # Delegation
@@ -623,6 +683,98 @@ class Hub:
             ", ".join(registered),
         )
         return registered
+
+    # ------------------------------------------------------------------
+    # Topic pub/sub
+    # ------------------------------------------------------------------
+
+    async def publish(self, sender: str, topic: str, message: str, data: dict | None = None) -> None:
+        """Publish a message to a topic."""
+        msg = TopicMessage(topic=topic, sender=sender, message=message, data=data or {})
+        self._topics.setdefault(topic, []).append(msg)
+        await self._emit(msg)
+
+    async def subscribe_topic(self, actor_name: str, topic: str) -> None:
+        """Subscribe an actor to a topic. Cursor starts at current end (no replay)."""
+        self._subscriptions.setdefault(topic, set()).add(actor_name)
+        self._cursors[(actor_name, topic)] = len(self._topics.get(topic, []))
+        await self._emit(TopicSubscription(actor=actor_name, topic=topic))
+
+    async def unsubscribe_topic(self, actor_name: str, topic: str) -> None:
+        """Unsubscribe an actor from a topic."""
+        self._subscriptions.get(topic, set()).discard(actor_name)
+        self._cursors.pop((actor_name, topic), None)
+        await self._emit(TopicUnsubscription(actor=actor_name, topic=topic))
+
+    async def read_topic(self, actor_name: str, topic: str) -> list[TopicMessage]:
+        """Read new messages from a topic since last read. Advances cursor."""
+        cursor = self._cursors.get((actor_name, topic), 0)
+        messages = self._topics.get(topic, [])
+        new_messages = messages[cursor:]
+        self._cursors[(actor_name, topic)] = len(messages)
+        return new_messages
+
+    async def peek_topic(self, actor_name: str, topic: str) -> list[TopicMessage]:
+        """Read new messages without advancing cursor."""
+        cursor = self._cursors.get((actor_name, topic), 0)
+        return self._topics.get(topic, [])[cursor:]
+
+    async def advance_topic(self, actor_name: str, topic: str, count: int) -> None:
+        """Advance cursor by count messages."""
+        key = (actor_name, topic)
+        current = self._cursors.get(key, 0)
+        max_pos = len(self._topics.get(topic, []))
+        self._cursors[key] = min(current + count, max_pos)
+
+    async def list_topics(self) -> list[str]:
+        """List all active topics."""
+        return list(self._topics.keys())
+
+    def subscriptions_for(self, actor_name: str) -> list[str]:
+        """List topics an actor is subscribed to."""
+        return [topic for topic, actors in self._subscriptions.items() if actor_name in actors]
+
+    # ------------------------------------------------------------------
+    # Cross-actor knowledge queries
+    # ------------------------------------------------------------------
+
+    async def query_knowledge(self, requester: str, target: str, path: str) -> str | None:
+        """Read from another actor's knowledge store.
+
+        Returns content if the path is exposed. Returns None if the target
+        has no store, the path is not exposed, or the path doesn't exist.
+        """
+        store = self._get_exposed_store(target, path)
+        if store is None:
+            return None
+        return await store.read(path)
+
+    async def list_knowledge(self, requester: str, target: str, path: str = "/") -> list[str] | None:
+        """List entries in another actor's knowledge store.
+
+        Same exposure rules as query_knowledge.
+        """
+        store = self._get_exposed_store(target, path)
+        if store is None:
+            return None
+        return await store.list(path)
+
+    def _get_exposed_store(self, target: str, path: str) -> Any:
+        """Return the target's knowledge store if the path is exposed, else None."""
+        agent = self._agents.get(target)
+        if agent is None:
+            return None
+
+        # Access _knowledge_store (Actor private attr, same package)
+        store = getattr(agent, "_knowledge_store", None)
+        if store is None:
+            return None
+
+        exposed = self._exposed_paths.get(target, [])
+        if not any(path.startswith(prefix) for prefix in exposed):
+            return None
+
+        return store
 
     # ------------------------------------------------------------------
     # Properties
