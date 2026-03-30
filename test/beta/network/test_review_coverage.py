@@ -829,12 +829,11 @@ class TestHubAskToolsMerge:
 
         await hub.ask(agent, "go", tools=[user_tool])
 
-        # Should have user_tool + discover_agents + delegate_to = 3 tools
-        assert len(agent.received_tools) == 3
+        # Should have user_tool + network = 2 tools
+        assert len(agent.received_tools) == 2
         tool_names = {getattr(t, "schema", None) and t.schema.function.name for t in agent.received_tools}
         assert "user_tool" in tool_names
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
 
 # ===========================================================================
@@ -1028,10 +1027,9 @@ class TestHubAskUnregisteredInstance:
         reply = await hub.ask(agent, "go")
         assert reply.body == "ok"
 
-        # Should have network tools injected
+        # Should have the consolidated network tool injected
         tool_names = {getattr(t, "schema", None) and t.schema.function.name for t in agent.received_tools}
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
 
 # ===========================================================================

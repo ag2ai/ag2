@@ -182,10 +182,9 @@ class TestHubAskWithExtraTools:
         await hub.ask(agent, "do work", tools=[custom])
 
         tool_names = [_tool_name(t) for t in agent.tools_received]
-        # Agent should have received both custom + network tools
+        # Agent should have received both custom + consolidated network tool
         assert "custom_tool" in tool_names
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
 
 # ---------------------------------------------------------------------------
@@ -435,10 +434,10 @@ class TestHubSelfDelegation:
     @pytest.mark.asyncio
     async def test_self_delegation_via_agent(self) -> None:
         """An agent that tries to delegate to itself gets an error.
-        The delegate_to tool calls hub._delegate internally, but the tool
-        closure checks caller == target before calling _delegate.
-        We test this by having an agent whose ask() calls hub._delegate
-        to itself — this exercises the tool's internal check path."""
+        The network tool's request action calls hub._delegate internally,
+        but the tool closure checks caller == target before calling _delegate.
+        We test this by having an agent whose ask() finds the network tool
+        — this exercises the tool's internal check path."""
 
         class _SelfDelegator:
             def __init__(self, name, hub):
@@ -446,13 +445,12 @@ class TestHubSelfDelegation:
                 self._hub = hub
 
             async def ask(self, message, **kwargs):
-                # Try to use the delegate_to tool (which checks self-delegation)
+                # Try to find the consolidated network tool
                 tools = kwargs.get("tools", [])
                 for t in tools:
-                    if _tool_name(t) == "delegate_to":
-                        # The tool checks caller == agent_name and returns error
-                        # We verify the tool exists with the right name
-                        return type("Reply", (), {"content": "has delegate_to", "body": "has delegate_to"})()
+                    if _tool_name(t) == "network":
+                        # The tool's request action checks caller == agent_name
+                        return type("Reply", (), {"content": "has network", "body": "has network"})()
                 return type("Reply", (), {"content": "no tools", "body": "no tools"})()
 
         hub = Hub()
@@ -460,18 +458,17 @@ class TestHubSelfDelegation:
         await hub.register(agent)
 
         reply = await hub.ask(agent, "test")
-        # Verify the delegate_to tool was injected
-        assert "has delegate_to" in reply.content
+        # Verify the network tool was injected
+        assert "has network" in reply.content
 
         # Also verify the underlying _delegate rejects self-delegation via
-        # the depth check (since the delegate_to tool calls _delegate)
+        # the depth check (since the network tool's request action calls _delegate)
         # Note: _delegate itself doesn't check self-delegation — the tool
         # closure does. But _delegate to the same agent will actually work
         # (it's the tool that rejects it). Let's verify the tool name is correct.
         tools = hub._build_network_tools(caller="self-ref")
         tool_names = [_tool_name(t) for t in tools]
-        assert "delegate_to" in tool_names
-        assert "discover_agents" in tool_names
+        assert "network" in tool_names
 
 
 # ---------------------------------------------------------------------------
@@ -502,14 +499,13 @@ class TestHubDiscoverExcludesSelf:
         await hub.register(_AskableAgent("me"), capabilities=["shared"])
         await hub.register(_AskableAgent("other"), capabilities=["shared"])
 
-        # Verify that discover_agents tool filters caller out.
+        # Verify that the network tool's discover action filters caller out.
         # The tool builds a closure over `caller` that excludes self.
-        # We test the underlying _build_network_tools produces correct tools.
+        # We test the underlying _build_network_tools produces the correct tool.
         tools = hub._build_network_tools(caller="me")
-        assert len(tools) == 2
+        assert len(tools) == 1
         tool_names = [_tool_name(t) for t in tools]
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
         # The actual filtering is done inside the tool's closure.
         # We test this by looking at what hub.discover() returns (which

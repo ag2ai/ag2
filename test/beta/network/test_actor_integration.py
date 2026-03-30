@@ -37,7 +37,8 @@ from autogen.beta.network.events import (
 )
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.harness import ConversationHarness, NetworkHarness
+from autogen.beta.network.policies.conversation import ConversationPolicy
+from autogen.beta.network.policies.network import NetworkPolicy
 from autogen.beta.network.primitives.signal import (
     CallHandler,
     EmitToStream,
@@ -343,17 +344,17 @@ class TestEmitToStreamDedup:
 # ===========================================================================
 
 
-class TestHarnessMiddleware:
-    """ContextHarness integration in Actor middleware chain."""
+class TestAssemblyPolicies:
+    """Assembly policy integration in Actor middleware chain."""
 
     @pytest.mark.asyncio
-    async def test_conversation_harness_filters_events(self) -> None:
-        """ConversationHarness only passes conversation events to LLM."""
+    async def test_conversation_policy_filters_events(self) -> None:
+        """ConversationPolicy only passes conversation events to LLM."""
         config = _RecordingConfig("ok")
         actor = Actor(
             "test-actor",
             config=config,
-            harness=ConversationHarness(),
+            assembly=[ConversationPolicy()],
         )
         reply = await actor.ask("Hi")
 
@@ -362,13 +363,13 @@ class TestHarnessMiddleware:
         assert reply.body == "ok"
 
     @pytest.mark.asyncio
-    async def test_network_harness_includes_network_events(self) -> None:
-        """NetworkHarness passes Signal and delegation events to LLM."""
+    async def test_network_policy_includes_network_events(self) -> None:
+        """NetworkPolicy passes Signal and delegation events to LLM."""
         config = _RecordingConfig("ok")
         actor = Actor(
             "test-actor",
             config=config,
-            harness=NetworkHarness(),
+            assembly=[NetworkPolicy()],
         )
         reply = await actor.ask("Hi")
 
