@@ -98,7 +98,7 @@ class ConversationSummaryAggregate:
             return
         summary = await self._summarize(events)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        stream_id = str(context.stream.id)[:8]
+        stream_id = str(context.stream.id)
         await store.write(f"/memory/conversations/{ts}_{stream_id}.md", summary)
 
     async def _summarize(self, events: list[BaseEvent]) -> str:

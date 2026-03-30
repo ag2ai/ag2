@@ -184,6 +184,8 @@ class TestDefaultBootstrap:
     @pytest.mark.asyncio
     async def test_creates_standard_layout(self) -> None:
         store = MemoryKnowledgeStore()
+        # Actor writes sentinel before calling bootstrap, so simulate that
+        await store.write("/.initialized", "test-actor")
         bootstrap = DefaultBootstrap()
         await bootstrap.bootstrap(store, "test-actor")
 
@@ -199,6 +201,8 @@ class TestDefaultBootstrap:
     @pytest.mark.asyncio
     async def test_sentinel_prevents_rebootstrap(self) -> None:
         store = MemoryKnowledgeStore()
+        # Actor writes sentinel before calling bootstrap
+        await store.write("/.initialized", "actor-1")
         bootstrap = DefaultBootstrap()
         await bootstrap.bootstrap(store, "actor-1")
 

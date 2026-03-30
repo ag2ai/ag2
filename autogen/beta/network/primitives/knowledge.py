@@ -318,7 +318,8 @@ class DefaultBootstrap:
     """Creates the standard knowledge store layout with SKILL.md files."""
 
     async def bootstrap(self, store: KnowledgeStore, actor_name: str) -> None:
-        await store.write("/.initialized", actor_name)
+        # Sentinel is written by Actor._execute() before calling bootstrap,
+        # so we don't write it here to avoid a double-write.
 
         await store.write(
             "/SKILL.md",

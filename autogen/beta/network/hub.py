@@ -167,6 +167,11 @@ class Hub:
         """Remove an agent from the network."""
         await self._registry.unregister(name)
         self._agents.pop(name, None)
+        self._exposed_paths.pop(name, None)
+        # Clean up topic subscriptions and cursors for this agent
+        for topic, subscribers in list(self._subscriptions.items()):
+            subscribers.discard(name)
+        self._cursors = {k: v for k, v in self._cursors.items() if k[0] != name}
 
     async def discover(self, capability: str = "") -> list[ActorInfo]:
         """Find registered agents, optionally filtered by capability."""
