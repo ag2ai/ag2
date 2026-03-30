@@ -37,7 +37,12 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import events_to_responses_input, response_proto_to_text_config, tool_to_responses_api
+from .mappers import (
+    events_to_responses_input,
+    normalize_responses_usage,
+    response_proto_to_text_config,
+    tool_to_responses_api,
+)
 
 
 class CreateOptions(TypedDict, total=False):
@@ -152,7 +157,7 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-        usage = response.usage.model_dump() if response.usage else {}
+        usage = normalize_responses_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
@@ -204,7 +209,7 @@ class OpenAIResponsesClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=normalize_responses_usage(usage),
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,

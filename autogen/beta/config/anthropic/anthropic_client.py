@@ -32,7 +32,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_output_config, tool_to_api
+from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -193,7 +193,7 @@ class AnthropicClient(LLMClient):
             model_msg = ModelMessage(content="\n\n".join(text_parts))
             await context.send(model_msg)
 
-        usage = response.usage.model_dump() if response.usage else {}
+        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
@@ -257,12 +257,11 @@ class AnthropicClient(LLMClient):
             await context.send(message)
 
         final_message = await stream.get_final_message()
-        usage = final_message.usage.model_dump() if final_message.usage else {}
-
+        # Mapped to our usage keys
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,

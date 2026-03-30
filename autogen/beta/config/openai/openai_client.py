@@ -29,7 +29,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_schema, tool_to_api
+from .mappers import convert_messages, normalize_usage, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -161,7 +161,7 @@ class OpenAIClient(LLMClient):
             return ModelResponse(
                 message=model_msg,
                 tool_calls=ToolCallsEvent(calls=calls),
-                usage=completion.usage.model_dump() if completion.usage else {},
+                usage=normalize_usage(completion.usage.model_dump() if completion.usage else {}),
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
@@ -236,7 +236,7 @@ class OpenAIClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=normalize_usage(usage),
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
