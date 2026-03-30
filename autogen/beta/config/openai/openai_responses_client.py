@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
@@ -21,6 +22,7 @@ from openai.types.responses import (
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
@@ -135,6 +137,7 @@ class OpenAIResponsesClient(LLMClient):
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
+        images: list[bytes] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -157,6 +160,9 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
+            elif isinstance(item, ImageGenerationCall) and item.result:
+                images.append(base64.b64decode(item.result))
+
         usage = normalize_responses_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
@@ -166,6 +172,7 @@ class OpenAIResponsesClient(LLMClient):
             model=response.model,
             provider="openai",
             finish_reason=response.status,
+            images=images,
         )
 
     async def _process_stream(
@@ -176,6 +183,7 @@ class OpenAIResponsesClient(LLMClient):
         full_content: str = ""
         usage: dict[str, Any] = {}
         calls: list[ToolCallEvent] = []
+        images: list[bytes] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
 
@@ -200,6 +208,9 @@ class OpenAIResponsesClient(LLMClient):
                     usage = event.response.usage.model_dump()
                 finish_reason = event.response.status
                 resolved_model = event.response.model
+                for item in event.response.output:
+                    if isinstance(item, ImageGenerationCall) and item.result:
+                        images.append(base64.b64decode(item.result))
 
         message: ModelMessage | None = None
         if full_content:
@@ -213,4 +224,5 @@ class OpenAIResponsesClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            images=images,
         )
