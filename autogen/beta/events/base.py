@@ -120,4 +120,29 @@ class EventMeta(type):
 
 
 class BaseEvent(metaclass=EventMeta):
-    pass
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this event to a JSON-compatible dictionary."""
+        from ._serialization import event_to_dict
+
+        return event_to_dict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BaseEvent":
+        """Reconstruct an event from a serialized dictionary.
+
+        Filters input to only fields known by this class (via MRO Field
+        descriptors), then constructs via ``cls(**filtered)``.
+        """
+        from ._serialization import deserialize_payload
+
+        # Collect known field names across the MRO
+        known_fields: set[str] = set()
+        for klass in cls.__mro__:
+            for attr_name, attr_val in vars(klass).items():
+                if isinstance(attr_val, Field):
+                    known_fields.add(attr_name)
+
+        # Deserialize nested events/special types, then filter to known fields
+        deserialized = deserialize_payload(data)
+        filtered = {k: v for k, v in deserialized.items() if k in known_fields}
+        return cls(**filtered)
