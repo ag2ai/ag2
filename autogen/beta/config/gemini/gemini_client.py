@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
@@ -26,7 +24,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_system_instruction, build_tools, convert_messages, response_proto_to_config
+from .mappers import build_system_instruction, build_tools, convert_messages, normalize_usage, response_proto_to_config
 
 
 class CreateConfig(TypedDict, total=False):
@@ -47,11 +45,13 @@ class GeminiClient(LLMClient):
         api_key: str | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
+        cached_content: str | None = None,
     ) -> None:
         self._client = genai.Client(api_key=api_key)
         self._model_name = model
         self._streaming = streaming
         self._create_config = create_config or {}
+        self._cached_content = cached_content
 
     async def __call__(
         self,
@@ -71,12 +71,17 @@ class GeminiClient(LLMClient):
         system_instruction = build_system_instruction(prompt)
         gemini_tools = build_tools(list(tools))
 
+        cache_kwargs: dict[str, Any] = {}
+        if self._cached_content:
+            cache_kwargs["cached_content"] = self._cached_content
+
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
             **response_proto_to_config(response_schema),
             **self._create_config,
+            **cache_kwargs,
         )
 
         if self._streaming:
@@ -127,18 +132,7 @@ class GeminiClient(LLMClient):
 
         usage = {}
         if response.usage_metadata:
-            prompt = response.usage_metadata.prompt_token_count or 0
-            completion = response.usage_metadata.candidates_token_count or 0
-            total = response.usage_metadata.total_token_count or 0
-            usage = {
-                "prompt_tokens": prompt,
-                "completion_tokens": completion,
-                "total_tokens": total,
-                # Keep native keys for backward compatibility
-                "prompt_token_count": prompt,
-                "candidates_token_count": completion,
-                "total_token_count": total,
-            }
+            usage = normalize_usage(response.usage_metadata)
 
         finish_reason = None
         if response.candidates:
@@ -190,18 +184,7 @@ class GeminiClient(LLMClient):
                             )
 
             if chunk.usage_metadata:
-                prompt = chunk.usage_metadata.prompt_token_count or 0
-                completion = chunk.usage_metadata.candidates_token_count or 0
-                total = chunk.usage_metadata.total_token_count or 0
-                usage = {
-                    "prompt_tokens": prompt,
-                    "completion_tokens": completion,
-                    "total_tokens": total,
-                    # Keep native keys for backward compatibility
-                    "prompt_token_count": prompt,
-                    "candidates_token_count": completion,
-                    "total_token_count": total,
-                }
+                usage = normalize_usage(chunk.usage_metadata)
 
             if chunk.candidates:
                 fr = chunk.candidates[0].finish_reason

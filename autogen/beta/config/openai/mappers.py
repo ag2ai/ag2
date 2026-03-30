@@ -9,6 +9,8 @@ from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResu
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, ShellToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -162,6 +164,9 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             },
         }
 
+    if isinstance(t, ImageGenerationToolSchema):
+        raise UnsupportedToolError(t.type, "openai-completions")
+
     raise UnsupportedToolError(t.type, "openai-completions")
 
 
@@ -192,10 +197,69 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             if t.user_location.timezone is not None:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
+        if t.allowed_domains is not None:
+            result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
 
     elif isinstance(t, CodeExecutionToolSchema):
-        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        # https://developers.openai.com/api/docs/guides/tools-code-interpreter
         return {"type": "code_interpreter", "container": {"type": "auto"}}
 
+    elif isinstance(t, ShellToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-shell
+        result_shell: dict[str, Any] = {"type": "shell"}
+        if t.environment is not None:
+            env: dict[str, Any]
+            if isinstance(t.environment, ContainerAutoEnvironment):
+                env = {"type": "container_auto"}
+                if t.environment.network_policy is not None:
+                    env["network_policy"] = {
+                        "type": "allowlist",
+                        "allowed_domains": t.environment.network_policy.allowed_domains,
+                    }
+            elif isinstance(t.environment, ContainerReferenceEnvironment):
+                env = {"type": "container_reference", "container_id": t.environment.container_id}
+            else:
+                env = {"type": "local"}
+            result_shell["environment"] = env
+        return result_shell
+
+    elif isinstance(t, ImageGenerationToolSchema):
+        result: dict[str, Any] = {"type": "image_generation"}
+        if t.quality is not None:
+            result["quality"] = t.quality
+        if t.size is not None:
+            result["size"] = t.size
+        if t.background is not None:
+            result["background"] = t.background
+        if t.output_format is not None:
+            result["output_format"] = t.output_format
+        if t.output_compression is not None:
+            result["output_compression"] = t.output_compression
+        if t.partial_images is not None:
+            result["partial_images"] = t.partial_images
+        return result
+
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
+    """Lift OpenAI's nested cache token counts to top-level keys."""
+    details = usage.get("prompt_tokens_details") or {}
+    cached = details.get("cached_tokens")
+    if cached:
+        usage["cache_read_input_tokens"] = cached
+    return usage
+
+
+def normalize_responses_usage(usage: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Responses API usage keys and lift nested cache tokens."""
+    if "input_tokens" in usage and "prompt_tokens" not in usage:
+        usage["prompt_tokens"] = usage["input_tokens"]
+    if "output_tokens" in usage and "completion_tokens" not in usage:
+        usage["completion_tokens"] = usage["output_tokens"]
+    details = usage.get("input_tokens_details") or {}
+    cached = details.get("cached_tokens")
+    if cached:
+        usage["cache_read_input_tokens"] = cached
+    return usage
