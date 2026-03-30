@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor — an autonomous agent with observers, signals, and task spawning.
+"""Actor — an autonomous agent with observers, signals, task spawning, and agent harness.
 
-Actor extends Agent with three capabilities:
+Actor extends Agent with:
 1. Observer management — attach/detach observers that monitor the event stream
 2. Signal injection — observer signals are delivered via SignalPolicy
 3. Task spawning — spawn_task/spawn_tasks tools for delegating subtasks
+4. Agent Harness — persistent knowledge, context assembly, compaction, aggregation
 
 Works standalone (no Hub required). Optionally registers with a Hub
 for cross-actor discovery and delegation.
@@ -16,7 +17,8 @@ for cross-actor discovery and delegation.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Iterable
+import logging
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -26,7 +28,7 @@ from autogen.beta.annotations import Context
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
 from autogen.beta.hitl import HumanHook
-from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
+from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
@@ -35,18 +37,33 @@ from autogen.beta.types import Omittable, omit
 if TYPE_CHECKING:
     from autogen.beta.response import ResponseProto
 
-from .events import ObserverCompleted, ObserverStarted, TaskProgress, TaskRequest, TaskResult
+from .assembler import AssemblerMiddleware, AssemblyPolicy
+from .events import (
+    AggregationCompleted,
+    CompactionCompleted,
+    ObserverCompleted,
+    ObserverStarted,
+    TaskProgress,
+    TaskRequest,
+    TaskResult,
+)
 from .observer import Observer
-from .primitives.harness import ContextHarness, ConversationHarness, HarnessMiddleware
+from .policies.conversation import ConversationPolicy
+from .primitives.aggregate import AggregateStrategy, AggregateTrigger
+from .primitives.compact import CompactStrategy, CompactTrigger
+from .primitives.knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
 from .primitives.signal import InjectToPrompt, Severity, Signal, SignalPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class Actor(Agent):
-    """An autonomous agent with observers, signals, and task spawning.
+    """An autonomous agent with observers, signals, task spawning, and agent harness.
 
     Actor extends Agent. It delegates to ``super()._execute()`` rather than
-    reimplementing the event loop. Actor concerns (observers, signals, tasks)
-    are injected via additional tools and middleware.
+    reimplementing the event loop. Actor concerns (observers, signals, tasks,
+    knowledge, assembly, compaction, aggregation) are injected via additional
+    tools and middleware.
 
     Parameters
     ----------
@@ -58,15 +75,26 @@ class Actor(Agent):
         LLM configuration for this actor.
     observers:
         Observers that monitor the event stream.
-    harness:
-        ContextHarness controlling what events the LLM sees.
-        Default: ConversationHarness (preserves current Agent behavior).
     task_config:
         LLM config for spawned task sub-agents. Falls back to ``config``.
     task_prompt:
         System prompt for task sub-agents.
     signal_policy:
         How signals are delivered. Default: InjectToPrompt.
+    knowledge_store:
+        Persistent knowledge store for this actor.
+    bootstrap:
+        Store bootstrapping strategy. Default: DefaultBootstrap.
+    assembly:
+        Assembly policies controlling what the LLM sees. Default: [ConversationPolicy()].
+    compact:
+        Compaction strategy for reducing stream history.
+    compact_trigger:
+        When to trigger compaction.
+    aggregate:
+        Aggregation strategy for building long-term knowledge.
+    aggregate_trigger:
+        When to trigger aggregation.
     tools:
         Tools available to this actor.
     middleware:
@@ -80,13 +108,21 @@ class Actor(Agent):
         *,
         config: ModelConfig | None = None,
         observers: Iterable[Observer] = (),
-        harness: ContextHarness | None = None,
         task_config: ModelConfig | None = None,
         task_prompt: str = (
             "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
         ),
         signal_policy: SignalPolicy | None = None,
         hitl_hook: HumanHook | None = None,
+        # Agent Harness
+        knowledge_store: KnowledgeStore | None = None,
+        bootstrap: StoreBootstrap | None = None,
+        assembly: Iterable[AssemblyPolicy] = (),
+        compact: CompactStrategy | None = None,
+        compact_trigger: CompactTrigger | None = None,
+        aggregate: AggregateStrategy | None = None,
+        aggregate_trigger: AggregateTrigger | None = None,
+        # Standard Agent params
         tools: Iterable[Callable[..., Any] | Tool] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         dependencies: dict[Any, Any] | None = None,
@@ -103,10 +139,23 @@ class Actor(Agent):
             variables=variables,
         )
         self._observers: list[Observer] = list(observers)
-        self._harness = harness or ConversationHarness()
         self._task_config: ModelConfig | None = task_config or config
         self._task_prompt = task_prompt
         self._signal_policy = signal_policy or InjectToPrompt()
+
+        # Agent Harness
+        self._knowledge_store = knowledge_store
+        self._bootstrap = bootstrap
+        self._policies: list[AssemblyPolicy] = list(assembly) if assembly else [ConversationPolicy()]
+        self._compact_strategy = compact
+        self._compact_trigger = compact_trigger or CompactTrigger()
+        self._aggregate_strategy = aggregate
+        self._aggregate_trigger = aggregate_trigger or AggregateTrigger()
+
+        # Validate policy ordering
+        warnings = AssemblerMiddleware.validate_order(self._policies)
+        for w in warnings:
+            logger.warning("Assembly policy ordering: %s", w)
 
     # ------------------------------------------------------------------
     # Observer management
@@ -115,6 +164,87 @@ class Actor(Agent):
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling ask())."""
         self._observers.append(observer)
+
+    # ------------------------------------------------------------------
+    # Knowledge and memory tools
+    # ------------------------------------------------------------------
+
+    def _build_knowledge_tool(self) -> list[Tool]:
+        """Build the knowledge tool (typed action group)."""
+        store = self._knowledge_store
+
+        @tool
+        async def knowledge(action: str, path: str = "/", content: str = "") -> str:
+            """Manage your knowledge store.
+
+            Actions:
+                read   - Read file at path.
+                write  - Write content to path.
+                list   - List entries at path.
+                delete - Delete file at path.
+            """
+            if action == "read":
+                result = await store.read(path)  # type: ignore[union-attr]
+                return result if result is not None else f"Not found: {path}"
+
+            elif action == "write":
+                if not content:
+                    return "Error: content is required for write action."
+                await store.write(path, content)  # type: ignore[union-attr]
+                return f"Written to {path}"
+
+            elif action == "list":
+                entries = await store.list(path)  # type: ignore[union-attr]
+                if not entries:
+                    return f"Empty: {path}"
+                # Check for SKILL.md
+                skill_path = f"{path.rstrip('/')}/SKILL.md"
+                skill = await store.read(skill_path)  # type: ignore[union-attr]
+                listing = "\n".join(entries)
+                if skill:
+                    listing = f"{skill}\n---\n{listing}"
+                return listing
+
+            elif action == "delete":
+                await store.delete(path)  # type: ignore[union-attr]
+                return f"Deleted: {path}"
+
+            else:
+                return f"Unknown action: {action}. Available: read, write, list, delete."
+
+        return [knowledge]
+
+    def _build_memory_tool(self) -> list[Tool]:
+        """Build the memory management tool (typed action group)."""
+        actor = self
+
+        @tool
+        async def memory(action: str, ctx: Context) -> str:
+            """Manage your memory and context.
+
+            Actions:
+                compact   - Compact conversation history to free context space.
+                summarize - Aggregate current context into knowledge store.
+            """
+            if action == "compact":
+                if not actor._compact_strategy:
+                    return "Compaction not configured."
+                events = list(await ctx.stream.history.get_events())
+                compacted = await actor._compact_strategy.compact(events, ctx, actor._knowledge_store)
+                await ctx.stream.history.replace(compacted)
+                return f"Compacted: {len(events)} events -> {len(compacted)} events."
+
+            elif action == "summarize":
+                if not actor._aggregate_strategy or not actor._knowledge_store:
+                    return "Aggregation not configured."
+                events = list(await ctx.stream.history.get_events())
+                await actor._aggregate_strategy.aggregate(events, ctx, actor._knowledge_store)
+                return "Knowledge store updated."
+
+            else:
+                return f"Unknown action: {action}. Available: compact, summarize."
+
+        return [memory]
 
     # ------------------------------------------------------------------
     # Task spawning tools
@@ -218,9 +348,25 @@ class Actor(Agent):
     ) -> AgentReply:
         spawn_tools = self._build_spawn_tools()
 
-        # Signal collection queue — observers write, middleware reads.
-        # _delivered_ids tracks signals already delivered by the policy to
-        # prevent re-collection when EmitToStream re-emits them on the stream.
+        # Bootstrap knowledge store on first use (write sentinel first
+        # to prevent duplicate bootstrap from concurrent _execute calls)
+        if self._knowledge_store:
+            if not await self._knowledge_store.exists("/.initialized"):
+                await self._knowledge_store.write("/.initialized", self.name)
+                bootstrap = self._bootstrap or DefaultBootstrap()
+                await bootstrap.bootstrap(self._knowledge_store, self.name)
+
+        # Build harness tools
+        knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
+        memory_tools = (
+            self._build_memory_tool() if (self._compact_strategy or self._aggregate_strategy) else []
+        )
+
+        # Make knowledge store available via DI
+        if self._knowledge_store:
+            context.dependencies[KnowledgeStore] = self._knowledge_store
+
+        # Signal collection queue
         signal_queue: list[Signal] = []
         _delivered_ids: set[int] = set()
 
@@ -236,19 +382,50 @@ class Actor(Agent):
             await context.send(ObserverStarted(name=obs.name))
 
         # Build middleware chain:
-        # 1. HarnessMiddleware (outermost) — filters what events reach the LLM
-        # 2. SignalInjectionMiddleware — injects alerts into prompt
-        # 3. User-provided middleware (via additional_middleware)
-        harness_mw = _HarnessMiddlewareFactory(self._harness)
+        # 1. AssemblerMiddleware (outermost) — assembles context
+        # 2. SignalInjectionMiddleware — injects alerts
+        # 3. CompactionMiddleware — triggers compaction after turns
+        # 4. AggregationMiddleware — triggers aggregation after turns
+        # 5. User-provided middleware
+        # 6. LLM client call (innermost)
+        assembler_mw = _AssemblerMiddlewareFactory(self._policies)
         signal_mw = _SignalInjectionFactory(signal_queue, self._signal_policy, _delivered_ids)
+
+        harness_middleware: list[MiddlewareFactory] = [assembler_mw, signal_mw]
+
+        # Compaction middleware
+        if self._compact_strategy:
+            harness_middleware.append(
+                _CompactionMiddlewareFactory(
+                    self.name,
+                    self._compact_strategy,
+                    self._knowledge_store,
+                    self._compact_trigger,
+                )
+            )
+
+        # Aggregation middleware (for every_n_turns / every_n_events triggers)
+        if self._aggregate_strategy and self._knowledge_store:
+            trigger = self._aggregate_trigger
+            if trigger.every_n_turns > 0 or trigger.every_n_events > 0:
+                harness_middleware.append(
+                    _AggregationMiddlewareFactory(
+                        self.name,
+                        self._aggregate_strategy,
+                        self._knowledge_store,
+                        trigger,
+                    )
+                )
 
         try:
             return await super()._execute(
                 event,
                 context=context,
                 client=client,
-                additional_tools=list(additional_tools) + spawn_tools,
-                additional_middleware=[harness_mw, signal_mw] + list(additional_middleware),
+                additional_tools=(
+                    list(additional_tools) + spawn_tools + knowledge_tools + memory_tools
+                ),
+                additional_middleware=harness_middleware + list(additional_middleware),
                 response_schema=response_schema,
             )
         finally:
@@ -256,13 +433,41 @@ class Actor(Agent):
                 try:
                     obs.detach()
                 except Exception:
-                    import logging
-
-                    logging.getLogger(__name__).exception("Failed to detach observer %s", obs.name)
+                    logger.exception("Failed to detach observer %s", obs.name)
                 finally:
                     with suppress(Exception):
                         await context.send(ObserverCompleted(name=obs.name))
             context.stream.unsubscribe(signal_sub)
+
+            # on_end aggregation
+            if (
+                self._aggregate_strategy
+                and self._knowledge_store
+                and self._aggregate_trigger.on_end
+            ):
+                try:
+                    events = list(await context.stream.history.get_events())
+                    await self._aggregate_strategy.aggregate(events, context, self._knowledge_store)
+                    usage = getattr(self._aggregate_strategy, "last_usage", {})
+                    await context.send(
+                        AggregationCompleted(
+                            actor=self.name,
+                            strategy=type(self._aggregate_strategy).__name__,
+                            event_count=len(events),
+                            llm_calls=1 if usage else 0,
+                            usage=usage,
+                        )
+                    )
+                except Exception:
+                    logger.exception("Aggregation failed for %s", self.name)
+
+            # Persist event log
+            if self._knowledge_store:
+                try:
+                    events = list(await context.stream.history.get_events())
+                    await EventLogWriter(self._knowledge_store).persist(context.stream.id, events)
+                except Exception:
+                    logger.exception("Event log persistence failed for %s", self.name)
 
 
 # ------------------------------------------------------------------
@@ -296,31 +501,22 @@ class _SignalInjectionMiddleware(BaseMiddleware):
             signals = self._signal_queue[:]
             self._signal_queue.clear()
 
-            # Mark signals as delivered so the stream subscriber won't
-            # re-collect them when EmitToStream re-emits on the stream.
             for s in signals:
                 self._delivered_ids.add(id(s))
 
-                # Track prompt length before delivering any signals so we can
-            # clean up entries appended by the policy in all code paths.
             prompt_len_before = len(context.prompt) if context.prompt else 0
 
-            # Check for FATAL — halt without calling the LLM
             has_fatal = any(s.severity == Severity.FATAL for s in signals)
             if has_fatal:
                 fatal = next(s for s in signals if s.severity == Severity.FATAL)
                 await self._policy.deliver(signals, context)
-                # Clean up any prompt entries appended by the policy (e.g.
-                # non-fatal alerts) before returning the synthetic halt response.
                 num_added = (len(context.prompt) if context.prompt else 0) - prompt_len_before
                 if num_added > 0 and context.prompt:
                     del context.prompt[-num_added:]
-                # Return a synthetic response to halt the agent loop
                 return ModelResponse(
                     message=ModelMessage(content=f"HALTED: {fatal.message}"),
                 )
 
-            # Non-fatal: deliver (policy may append to prompt), call LLM, clean up
             await self._policy.deliver(signals, context)
             prompt_len_after = len(context.prompt) if context.prompt else 0
             num_added = prompt_len_after - prompt_len_before
@@ -328,9 +524,6 @@ class _SignalInjectionMiddleware(BaseMiddleware):
             try:
                 return await call_next(events, context)
             finally:
-                # Remove the entries appended by the policy using index-based
-                # slicing so we never accidentally remove a pre-existing entry
-                # that happens to have the same value.
                 if num_added > 0 and context.prompt:
                     del context.prompt[-num_added:]
 
@@ -349,11 +542,184 @@ class _SignalInjectionFactory:
         return _SignalInjectionMiddleware(event, context, self._signal_queue, self._policy, self._delivered_ids)
 
 
-class _HarnessMiddlewareFactory:
-    """Factory for HarnessMiddleware."""
+class _AssemblerMiddlewareFactory:
+    """Factory for AssemblerMiddleware."""
 
-    def __init__(self, harness: ContextHarness) -> None:
-        self._harness = harness
+    def __init__(self, policies: list[AssemblyPolicy]) -> None:
+        self._policies = policies
 
-    def __call__(self, event: BaseEvent, context: Context) -> HarnessMiddleware:
-        return HarnessMiddleware(event, context, harness=self._harness)
+    def __call__(self, event: BaseEvent, context: Context) -> AssemblerMiddleware:
+        return AssemblerMiddleware(event, context, policies=self._policies)
+
+
+class _CompactionMiddleware(BaseMiddleware):
+    """Triggers compaction after agent turns when thresholds are exceeded."""
+
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        *,
+        actor_name: str,
+        strategy: CompactStrategy,
+        store: KnowledgeStore | None,
+        trigger: CompactTrigger,
+    ) -> None:
+        super().__init__(event, context)
+        self._actor_name = actor_name
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
+        self._last_compact_event_count = 0
+
+    async def on_turn(
+        self,
+        call_next: Callable[..., Any],
+        event: BaseEvent,
+        context: Context,
+    ) -> Any:
+        result = await call_next(event, context)
+
+        events = list(await context.stream.history.get_events())
+        event_count = len(events)
+
+        # Prevent double compaction — skip if count hasn't grown since last
+        if event_count <= self._last_compact_event_count:
+            return result
+
+        should_compact = False
+        if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
+            should_compact = True
+        if self._trigger.max_tokens > 0:
+            estimated = sum(len(str(e)) for e in events) // self._trigger.chars_per_token
+            if estimated > self._trigger.max_tokens:
+                should_compact = True
+
+        if should_compact:
+            compacted = await self._strategy.compact(events, context, self._store)
+            await context.stream.history.replace(compacted)
+            self._last_compact_event_count = len(compacted)
+
+            usage = getattr(self._strategy, "last_usage", {})
+            await context.send(
+                CompactionCompleted(
+                    actor=self._actor_name,
+                    strategy=type(self._strategy).__name__,
+                    events_before=event_count,
+                    events_after=len(compacted),
+                    llm_calls=1 if usage else 0,
+                    usage=usage,
+                )
+            )
+
+        return result
+
+
+class _CompactionMiddlewareFactory:
+    """Factory for _CompactionMiddleware."""
+
+    def __init__(
+        self,
+        actor_name: str,
+        strategy: CompactStrategy,
+        store: KnowledgeStore | None,
+        trigger: CompactTrigger,
+    ) -> None:
+        self._actor_name = actor_name
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
+
+    def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
+        return _CompactionMiddleware(
+            event,
+            context,
+            actor_name=self._actor_name,
+            strategy=self._strategy,
+            store=self._store,
+            trigger=self._trigger,
+        )
+
+
+class _AggregationMiddleware(BaseMiddleware):
+    """Triggers aggregation after agent turns when thresholds are exceeded."""
+
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        *,
+        actor_name: str,
+        strategy: AggregateStrategy,
+        store: KnowledgeStore,
+        trigger: AggregateTrigger,
+    ) -> None:
+        super().__init__(event, context)
+        self._actor_name = actor_name
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
+        self._turn_count = 0
+        self._last_aggregate_event_count = 0
+
+    async def on_turn(
+        self,
+        call_next: Callable[..., Any],
+        event: BaseEvent,
+        context: Context,
+    ) -> Any:
+        result = await call_next(event, context)
+        self._turn_count += 1
+
+        events = list(await context.stream.history.get_events())
+
+        should_aggregate = False
+        if self._trigger.every_n_turns > 0 and self._turn_count % self._trigger.every_n_turns == 0:
+            should_aggregate = True
+        if self._trigger.every_n_events > 0:
+            new_events = len(events) - self._last_aggregate_event_count
+            if new_events >= self._trigger.every_n_events:
+                should_aggregate = True
+
+        if should_aggregate:
+            await self._strategy.aggregate(events, context, self._store)
+            self._last_aggregate_event_count = len(events)
+
+            usage = getattr(self._strategy, "last_usage", {})
+            await context.send(
+                AggregationCompleted(
+                    actor=self._actor_name,
+                    strategy=type(self._strategy).__name__,
+                    event_count=len(events),
+                    llm_calls=1 if usage else 0,
+                    usage=usage,
+                )
+            )
+
+        return result
+
+
+class _AggregationMiddlewareFactory:
+    """Factory for _AggregationMiddleware."""
+
+    def __init__(
+        self,
+        actor_name: str,
+        strategy: AggregateStrategy,
+        store: KnowledgeStore,
+        trigger: AggregateTrigger,
+    ) -> None:
+        self._actor_name = actor_name
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
+
+    def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
+        return _AggregationMiddleware(
+            event,
+            context,
+            actor_name=self._actor_name,
+            strategy=self._strategy,
+            store=self._store,
+            trigger=self._trigger,
+        )

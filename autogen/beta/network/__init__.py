@@ -8,21 +8,23 @@ Public API for the network framework. Import everything from here::
 
     from autogen.beta.network import Actor, Hub, Signal, EventWatch
 
-All primitives (infrastructure protocols, priority schemes, harness, channels)
+All primitives (infrastructure protocols, priority schemes, channels)
 are exported from this package. For submodule access::
 
     from autogen.beta.network.primitives.infra import StateStore
 """
 
-# Layer 2: Primitives — Watch
 # Layer 3: Building Blocks
 from .actor import Actor
+from .assembler import AssemblerMiddleware, AssemblyPolicy
 
 # Channels
 from .convenience import Network
 
 # Layer 2: Events
 from .events import (
+    AggregationCompleted,
+    CompactionCompleted,
     DelegationError,
     DelegationRejected,
     DelegationRequest,
@@ -33,26 +35,46 @@ from .events import (
     TaskProgress,
     TaskRequest,
     TaskResult,
+    TopicMessage,
+    TopicSubscription,
+    TopicUnsubscription,
+    UnknownEvent,
 )
 from .hub import Hub, RegistrationHandle
 from .observer import BaseObserver, Observer
 
 # Built-in observers and plugins
 from .observers import LoopDetector, TokenMonitor
+
+# Assembly policies
+from .policies import (
+    ConversationPolicy,
+    EpisodicMemoryPolicy,
+    NetworkPolicy,
+    SlidingWindowPolicy,
+    TokenBudgetPolicy,
+    TopicInboxPolicy,
+    TopicOverflow,
+    WorkingMemoryPolicy,
+)
 from .plugins import RateLimiter, TelemetryPlugin
+from .primitives.aggregate import (
+    AggregateStrategy,
+    AggregateTrigger,
+    ConversationSummaryAggregate,
+    WorkingMemoryAggregate,
+)
 from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
+from .primitives.compact import (
+    CompactionSummary,
+    CompactStrategy,
+    CompactTrigger,
+    SummarizeCompact,
+    TailWindowCompact,
+)
 
 # Layer 2: Primitives — Envelope & Channel
 from .primitives.envelope import Envelope, EventRegistry, register_event
-
-# Layer 2: Primitives — Harness
-from .primitives.harness import (
-    ContextHarness,
-    ConversationHarness,
-    FormattedEvent,
-    HarnessMiddleware,
-    NetworkHarness,
-)
 
 # Layer 2: Primitives — Infrastructure
 from .primitives.infra import (
@@ -65,6 +87,16 @@ from .primitives.infra import (
     MemoryStateStore,
     Registry,
     StateStore,
+)
+
+# Layer 2: Primitives — Knowledge
+from .primitives.knowledge import (
+    DefaultBootstrap,
+    EventLogWriter,
+    KnowledgeStore,
+    LockedKnowledgeStore,
+    MemoryKnowledgeStore,
+    StoreBootstrap,
 )
 
 # Layer 2: Primitives — Priority
@@ -87,6 +119,8 @@ from .primitives.signal import (
     Signal,
     SignalPolicy,
 )
+
+# Layer 2: Primitives — Watch
 from .primitives.watch import (
     AllOf,
     AnyOf,
@@ -130,8 +164,13 @@ __all__ = (
     # Building Blocks
     "Actor",
     "ActorInfo",
+    "AggregateStrategy",
+    "AggregateTrigger",
+    "AggregationCompleted",
     "AllOf",
     "AnyOf",
+    "AssemblerMiddleware",
+    "AssemblyPolicy",
     "BaseObserver",
     "BasePlugin",
     "BatchWatch",
@@ -139,12 +178,16 @@ __all__ = (
     "Cache",
     "CallHandler",
     "Channel",
+    "CompactionCompleted",
+    "CompactionSummary",
+    "CompactStrategy",
+    "CompactTrigger",
     "Conditional",
     "ConflictResolver",
-    # Primitives — Harness
-    "ContextHarness",
-    "ConversationHarness",
+    "ConversationPolicy",
+    "ConversationSummaryAggregate",
     "CronWatch",
+    "DefaultBootstrap",
     "DefaultPriority",
     "DefaultPriorityScheme",
     "DelayWatch",
@@ -153,45 +196,43 @@ __all__ = (
     "DelegationRequest",
     "DelegationResult",
     "EmitToStream",
-    # Primitives — Envelope & Channel
     "Envelope",
+    "EpisodicMemoryPolicy",
+    "EventLogWriter",
     "EventRegistry",
     "EventWatch",
     "Fanout",
-    "FormattedEvent",
     "HaltEvent",
     "HaltOnFatal",
-    "HarnessMiddleware",
     "HighestPriorityWins",
     "HttpChannel",  # noqa: F822
     "Hub",
     "HubContext",
     "InjectToPrompt",
     "IntervalWatch",
+    "KnowledgeStore",
     "LocalChannel",
     "LocalLock",
     "LocalRegistry",
     "Lock",
+    "LockedKnowledgeStore",
     "LoopDetector",
     "MemoryCache",
+    "MemoryKnowledgeStore",
     "MemoryStateStore",
     "Network",
-    "NetworkHarness",
+    "NetworkPolicy",
     "Observer",
     "ObserverCompleted",
-    # Events
     "ObserverStarted",
     "Pipeline",
-    # Composition
     "Plugin",
     "PriorityChannel",
-    # Primitives — Priority
     "PriorityScheme",
     "ProcessResult",
     "RateLimiter",
     "RegistrationHandle",
     "Registry",
-    # Remote
     "RemoteAgent",
     "RemoteAgentReply",
     "RouteDecision",
@@ -199,21 +240,30 @@ __all__ = (
     "SchedulerTriggerFired",
     "Sequence",
     "Severity",
-    # Primitives — Signal
     "Signal",
     "SignalPolicy",
-    # Primitives — Infrastructure
+    "SlidingWindowPolicy",
     "StateStore",
+    "StoreBootstrap",
+    "SummarizeCompact",
+    "TailWindowCompact",
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
     "TelemetryPlugin",
-    # Observers & Plugins
+    "TokenBudgetPolicy",
     "TokenMonitor",
     "Topology",
-    # Primitives — Watch
+    "TopicInboxPolicy",
+    "TopicMessage",
+    "TopicOverflow",
+    "TopicSubscription",
+    "TopicUnsubscription",
+    "UnknownEvent",
     "Watch",
     "WatchStatus",
     "WindowWatch",
+    "WorkingMemoryAggregate",
+    "WorkingMemoryPolicy",
     "register_event",
 )

@@ -101,3 +101,72 @@ class SchedulerTriggerFired(BaseEvent):
     watch_id: str
     target: str
     task: str
+
+
+# ------------------------------------------------------------------
+# Topic events (pub/sub)
+# ------------------------------------------------------------------
+
+
+class TopicMessage(BaseEvent):
+    """A message published to a network topic."""
+
+    topic: str
+    sender: str
+    message: str
+    data: dict = Field(default_factory=dict)
+
+
+class TopicSubscription(BaseEvent):
+    """Emitted when an actor subscribes to a topic."""
+
+    actor: str
+    topic: str
+
+
+class TopicUnsubscription(BaseEvent):
+    """Emitted when an actor unsubscribes from a topic."""
+
+    actor: str
+    topic: str
+
+
+# ------------------------------------------------------------------
+# Harness lifecycle events
+# ------------------------------------------------------------------
+
+
+class CompactionCompleted(BaseEvent):
+    """Emitted on the actor's stream when compaction finishes."""
+
+    actor: str
+    strategy: str
+    events_before: int
+    events_after: int
+    llm_calls: int = 0
+    usage: dict = Field(default_factory=dict)
+
+
+class AggregationCompleted(BaseEvent):
+    """Emitted on the actor's stream when aggregation finishes."""
+
+    actor: str
+    strategy: str
+    event_count: int
+    llm_calls: int = 0
+    usage: dict = Field(default_factory=dict)
+
+
+# ------------------------------------------------------------------
+# Deserialization fallback
+# ------------------------------------------------------------------
+
+
+class UnknownEvent(BaseEvent):
+    """Placeholder for events whose type cannot be resolved during deserialization.
+
+    Preserves the raw data so nothing is lost.
+    """
+
+    type_name: str
+    data: dict = Field(default_factory=dict)

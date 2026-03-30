@@ -532,11 +532,13 @@ class Hub:
             agent = self._agents.get(info.name)
             if isinstance(agent, RemoteAgent):
                 continue
-            result.append({
-                "name": info.name,
-                "capabilities": info.capabilities,
-                "description": info.description,
-            })
+            result.append(
+                {
+                    "name": info.name,
+                    "capabilities": info.capabilities,
+                    "description": info.description,
+                }
+            )
 
         return web.json_response({"agents": result})
 
@@ -544,11 +546,12 @@ class Hub:
         """Health check endpoint."""
         from aiohttp import web
 
-
-        return web.json_response({
-            "status": "healthy",
-            "agents": len(self._agents),
-        })
+        return web.json_response(
+            {
+                "status": "healthy",
+                "agents": len(self._agents),
+            }
+        )
 
     @asynccontextmanager
     async def serve(self, *, host: str | None = None, port: int = 8900):
