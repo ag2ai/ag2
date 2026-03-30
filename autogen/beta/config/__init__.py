@@ -18,10 +18,13 @@ def _missing_optional_dependency_config(config_name: str, extra: str, error: Imp
 
 
 try:
-    from .openai import OpenAIConfig, OpenAIResponsesConfig
+    from .openai import ContainerInfo, ContainerManager, ExpiresAfter, OpenAIConfig, OpenAIResponsesConfig
 except ImportError as e:
     OpenAIConfig = _missing_optional_dependency_config("OpenAIConfig", "openai", e)
     OpenAIResponsesConfig = _missing_optional_dependency_config("OpenAIResponsesConfig", "openai", e)
+    ContainerManager = _missing_optional_dependency_config("ContainerManager", "openai", e)
+    ContainerInfo = _missing_optional_dependency_config("ContainerInfo", "openai", e)
+    ExpiresAfter = _missing_optional_dependency_config("ExpiresAfter", "openai", e)
 
 try:
     from .anthropic import AnthropicConfig
@@ -45,7 +48,10 @@ except ImportError as e:
 
 __all__ = (
     "AnthropicConfig",
+    "ContainerInfo",
+    "ContainerManager",
     "DashScopeConfig",
+    "ExpiresAfter",
     "GeminiConfig",
     "LLMClient",
     "ModelConfig",

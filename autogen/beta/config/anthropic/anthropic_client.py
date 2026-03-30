@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
@@ -32,7 +30,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_output_config, tool_to_api
+from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -58,6 +56,8 @@ class AnthropicClient(LLMClient):
         http_client: httpx.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
+        web_search_version: str = "web_search_20250305",
+        web_fetch_version: str = "web_fetch_20250910",
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -71,6 +71,8 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
+        self._web_search_version = web_search_version
+        self._web_fetch_version = web_fetch_version
 
     async def __call__(
         self,
@@ -96,29 +98,50 @@ class AnthropicClient(LLMClient):
         if self._prompt_caching and anthropic_messages:
             self._inject_cache_control(anthropic_messages)
 
-        tools_list = [tool_to_api(t) for t in tools]
+        tools_list = [
+            tool_to_api(t, web_search_version=self._web_search_version, web_fetch_version=self._web_fetch_version)
+            for t in tools
+        ]
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_output_config(response_schema):
             kwargs["output_config"] = r
 
+        create_kwargs: dict[str, Any] = {
+            **self._create_options,
+            **kwargs,
+            "system": system,
+            "messages": anthropic_messages,
+            "tools": tools_list if tools_list else NOT_GIVEN,
+        }
+
+        max_continuations = 5
+
         if self._streaming:
-            async with self._client.messages.stream(
-                **self._create_options,
-                **kwargs,
-                system=system,
-                messages=anthropic_messages,
-                tools=tools_list if tools_list else NOT_GIVEN,
-            ) as stream:
-                return await self._process_stream(stream, context)
+            async with self._client.messages.stream(**create_kwargs) as stream:
+                result = await self._process_stream(stream, context)
+                final_msg = await stream.get_final_message()
+
+            for _ in range(max_continuations):
+                if result.finish_reason != "pause_turn":
+                    break
+                anthropic_messages.append({"role": "assistant", "content": final_msg.content})
+                create_kwargs["messages"] = anthropic_messages
+                async with self._client.messages.stream(**create_kwargs) as stream:
+                    result = await self._process_stream(stream, context)
+                    final_msg = await stream.get_final_message()
+
+            return result
         else:
-            response = await self._client.messages.create(
-                **self._create_options,
-                **kwargs,
-                system=system,
-                messages=anthropic_messages,
-                tools=tools_list if tools_list else NOT_GIVEN,
-            )
+            response = await self._client.messages.create(**create_kwargs)
+
+            for _ in range(max_continuations):
+                if response.stop_reason != "pause_turn":
+                    break
+                anthropic_messages.append({"role": "assistant", "content": response.content})
+                create_kwargs["messages"] = anthropic_messages
+                response = await self._client.messages.create(**create_kwargs)
+
             return await self._process_response(response, context)
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
@@ -143,7 +166,7 @@ class AnthropicClient(LLMClient):
         response: Message,
         context: Context,
     ) -> ModelResponse:
-        model_msg: ModelMessage | None = None
+        text_parts: list[str] = []
         calls: list[ToolCallEvent] = []
 
         for block in response.content:
@@ -152,8 +175,7 @@ class AnthropicClient(LLMClient):
                     await context.send(ModelReasoning(content=block.thinking))
 
             elif isinstance(block, TextBlock):
-                model_msg = ModelMessage(content=block.text)
-                await context.send(model_msg)
+                text_parts.append(block.text)
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -164,7 +186,12 @@ class AnthropicClient(LLMClient):
                     )
                 )
 
-        usage = response.usage.model_dump() if response.usage else {}
+        model_msg: ModelMessage | None = None
+        if text_parts:
+            model_msg = ModelMessage(content="\n\n".join(text_parts))
+            await context.send(model_msg)
+
+        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
@@ -228,12 +255,11 @@ class AnthropicClient(LLMClient):
             await context.send(message)
 
         final_message = await stream.get_final_message()
-        usage = final_message.usage.model_dump() if final_message.usage else {}
-
+        # Mapped to our usage keys
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage,
+            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
