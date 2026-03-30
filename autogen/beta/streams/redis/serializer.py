@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any
 
 from autogen.beta.events import BaseEvent
-from autogen.beta.events.base import EventMeta
+from autogen.beta.events.base import BaseEvent
 
 
 class Serializer(Enum):
@@ -100,7 +100,7 @@ def _from_json(data: Any) -> Any:
         cls = _resolve_class(type_path)
         fields_data = {k: _from_json(v) for k, v in data.items() if k != "__type__"}
 
-        if isinstance(cls, EventMeta):
+        if isinstance(cls, type) and issubclass(cls, BaseEvent):
             return cls(**fields_data)
 
         if is_dataclass(cls):
