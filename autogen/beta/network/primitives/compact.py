@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from autogen.beta.events import BaseEvent
-from autogen.beta.events.base import Field
 
 if TYPE_CHECKING:
     from autogen.beta.annotations import Context
@@ -116,7 +115,7 @@ class TailWindowCompact:
             return events
 
         dropped = events[: -self._target]
-        retained = events[-self._target:]
+        retained = events[-self._target :]
 
         if store:
             from .knowledge import EventLogWriter
@@ -151,7 +150,7 @@ class SummarizeCompact:
             return events
 
         old = events[: -self._target]
-        recent = events[-self._target:]
+        recent = events[-self._target :]
 
         # Persist full old events before dropping
         if store:
@@ -175,8 +174,7 @@ class SummarizeCompact:
         client = self._config.create()
         prompt_event = ModelRequest(
             content="Summarize the following conversation history concisely, "
-            "preserving key decisions, findings, and context:\n\n"
-            + "\n".join(str(e) for e in events)
+            "preserving key decisions, findings, and context:\n\n" + "\n".join(str(e) for e in events)
         )
         from autogen.beta.context import Context as Ctx
 
