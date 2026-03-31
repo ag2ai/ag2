@@ -7,10 +7,13 @@
 """Daytona code executor implementation."""
 
 import atexit
+import logging
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
+
+logger = logging.getLogger(__name__)
 
 from pydantic import Field
 
@@ -241,8 +244,11 @@ class DaytonaCodeExecutor:
                     name=self._name,
                     auto_stop_interval=0,
                 )
-            return self._client.create(params)
+            sandbox = self._client.create(params)
+            logger.info("Daytona sandbox created (id=%s, name=%s)", sandbox.id, self._name)
+            return sandbox
         except Exception as e:
+            logger.error("Failed to create Daytona sandbox: %s", e)
             raise RuntimeError(f"Failed to create Daytona sandbox: {e}") from e
 
     def _normalize_language(self, language: str) -> str:
@@ -298,6 +304,7 @@ class DaytonaCodeExecutor:
                     sandbox_id=self._sandbox.id,
                 )
 
+            logger.info("Executing %s code block in sandbox %s", lang, self._sandbox.id)
             try:
                 if lang == "python":
                     response = self._sandbox.process.code_run(code_block.code, timeout=self._timeout)
@@ -315,6 +322,7 @@ class DaytonaCodeExecutor:
                         self._sandbox.fs.delete_file(script_path)
 
             except Exception as e:
+                logger.warning("Error executing %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
                 return DaytonaCodeResult(
                     exit_code=1,
                     output=f"Error executing code block: {e}",
@@ -342,6 +350,7 @@ class DaytonaCodeExecutor:
         Called by agent.reset() when starting a new conversation. Clears all
         accumulated state — created files, installed packages, process state.
         """
+        logger.info("Restarting Daytona executor — deleting sandbox %s", self._sandbox.id if self._sandbox else "None")
         with suppress(Exception):
             self._sandbox.delete()
         self._sandbox = self._create_sandbox()
@@ -358,6 +367,7 @@ class DaytonaCodeExecutor:
         """
         atexit.unregister(self.delete)
         if self._sandbox is not None:
+            logger.info("Deleting Daytona sandbox %s", self._sandbox.id)
             with suppress(Exception):
                 self._sandbox.delete()
             self._sandbox = None  # type: ignore[assignment]
