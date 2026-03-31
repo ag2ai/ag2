@@ -37,7 +37,7 @@ def _execute_exa_search(
         query: The search query string.
         exa_api_key: The API key for Exa.
         num_results: The maximum number of results to return. Defaults to 10.
-        search_type: The type of search to perform ('auto', 'neural', or 'keyword'). Defaults to "auto".
+        search_type: The type of search to perform. Defaults to "auto".
         include_text: Whether to include cleaned page text in results. Defaults to True.
         include_domains: A list of domains to restrict search to. Defaults to None.
         exclude_domains: A list of domains to exclude from search. Defaults to None.
@@ -145,8 +145,8 @@ class ExaSearchTool(Tool):
     """ExaSearchTool provides web search and similarity search via the Exa API.
 
     Exa is a search engine designed for AI, providing clean and relevant results
-    with optional full-text content extraction. It supports neural (semantic),
-    keyword, and auto search modes, as well as finding pages similar to a given URL.
+    with optional full-text content extraction. It supports multiple search modes
+    as well as finding pages similar to a given URL.
 
     This tool requires an Exa API key, which can be provided during initialization
     or set as an environment variable ``EXA_API_KEY``.
@@ -174,7 +174,7 @@ class ExaSearchTool(Tool):
             query: Annotated[str, "The search query."],
             exa_api_key: Annotated[str | None, Depends(on(self.exa_api_key))],
             num_results: Annotated[int, "The number of results to return."] = 10,
-            search_type: Annotated[str, "Search type: 'auto', 'neural', or 'keyword'."] = "auto",
+            search_type: Annotated[str, "Search type: 'auto' (default) lets Exa choose the best mode."] = "auto",
             include_text: Annotated[bool, "Include cleaned page text in results."] = True,
             include_domains: Annotated[list[str] | None, "Restrict search to these domains."] = None,
             exclude_domains: Annotated[list[str] | None, "Exclude these domains from search."] = None,
@@ -227,6 +227,6 @@ class ExaSearchTool(Tool):
 
         super().__init__(
             name="exa_search",
-            description="Search the web using Exa's neural search engine. Returns relevant results with optional cleaned page text.",
+            description="Search the web using the Exa search engine. Returns relevant results with optional cleaned page text.",
             func_or_tool=exa_search,
         )
