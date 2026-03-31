@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse
 from autogen.beta.events.tool_events import (
@@ -15,8 +16,6 @@ from autogen.beta.events.tool_events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-
-from ..primitives.compact import CompactionSummary
 
 # Event types that are always part of conversation context
 CONVERSATION_TYPES = (

@@ -42,7 +42,9 @@ from .events import (
 )
 from .primitives.channel import Channel, LocalChannel
 from .primitives.envelope import Envelope
-from .primitives.infra import ActorInfo, LocalRegistry, MemoryStateStore, Registry, StateStore
+from autogen.beta.state import MemoryStateStore, StateStore
+
+from .primitives.infra import ActorInfo, LocalRegistry, Registry
 from .primitives.priority import ConflictResolver, PriorityScheme
 from .topology import HubContext, Plugin, Topology, _normalize
 

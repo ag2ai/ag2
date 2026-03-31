@@ -25,11 +25,11 @@ from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
 
-from .events import SchedulerTriggerFired
-from .primitives.watch import Watch
+from .watch import Watch
 
 if TYPE_CHECKING:
-    from .hub import Hub
+    from .network.events import SchedulerTriggerFired
+    from .network.hub import Hub
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +215,8 @@ class Scheduler:
                 return
 
             # Hub mode: emit event and delegate
+            from .network.events import SchedulerTriggerFired
+
             hub_ctx = ContextType(stream=self._hub.stream)
             await self._hub.stream.send(
                 SchedulerTriggerFired(

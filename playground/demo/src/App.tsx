@@ -4,6 +4,7 @@ import { MarketSolutions } from './components/MarketSolutions'
 import { OurSolution } from './components/OurSolution'
 import { Architecture } from './components/Architecture'
 import { CoreConcepts } from './components/CoreConcepts'
+import { AgentHarness } from './components/AgentHarness'
 import { Replay } from './components/Replay/Replay'
 import { TopologyPlugins } from './components/TopologyPlugins'
 import { Integration } from './components/Integration'
@@ -33,6 +34,8 @@ function App() {
       <Architecture />
       <Divider />
       <CoreConcepts />
+      <Divider />
+      <AgentHarness />
       <Divider />
       <TopologyPlugins />
       <Divider />

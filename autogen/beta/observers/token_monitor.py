@@ -7,9 +7,9 @@
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.network.events import TaskResult
-from autogen.beta.network.observer import BaseObserver
 from autogen.beta.network.primitives.signal import Severity, Signal
-from autogen.beta.network.primitives.watch import EventWatch
+from autogen.beta.observer import BaseObserver
+from autogen.beta.watch import EventWatch
 
 
 class TokenMonitor(BaseObserver):

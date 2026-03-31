@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent
-
-from ..primitives.knowledge import KnowledgeStore
+from autogen.beta.knowledge import KnowledgeStore
 
 
 class WorkingMemoryPolicy:

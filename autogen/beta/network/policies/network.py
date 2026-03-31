@@ -10,10 +10,11 @@ from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.base import Field
 
+from autogen.beta.compact import CompactionSummary
+from autogen.beta.network.primitives.signal import Signal
+from autogen.beta.policies.conversation import CONVERSATION_TYPES
+
 from ..events import DelegationResult, SchedulerTriggerFired, TopicMessage
-from ..primitives.compact import CompactionSummary
-from ..primitives.signal import Signal
-from .conversation import CONVERSATION_TYPES
 
 
 class FormattedEvent(BaseEvent):

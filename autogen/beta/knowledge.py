@@ -29,7 +29,7 @@ from autogen.beta.events._serialization import (
 if TYPE_CHECKING:
     from autogen.beta.events import BaseEvent
 
-    from .envelope import EventRegistry
+    from .network.primitives.envelope import EventRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ class EventLogWriter:
         registry: EventRegistry | None = None,
     ) -> list[BaseEvent]:
 
-        from ..events import UnknownEvent
+        from .network.events import UnknownEvent
 
         content = await self._store.read(path)
         if not content:

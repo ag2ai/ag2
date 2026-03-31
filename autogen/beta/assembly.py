@@ -5,8 +5,7 @@
 """Assembler — composable context assembly for LLM calls.
 
 The assembler composes AssemblyPolicy instances into a middleware that
-transforms (prompts, events) before each LLM call. It replaces the old
-ContextHarness entirely.
+transforms (prompts, events) before each LLM call.
 
 Policies compose left-to-right: each sees the output of the previous.
 """
@@ -64,7 +63,7 @@ class AssemblerMiddleware(BaseMiddleware):
     Middleware ordering in Actor._execute()::
 
         1. AssemblerMiddleware(policies)     -- outermost: assembles context
-        2. SignalInjectionMiddleware(queue)   -- injects alerts
+        2. AlertPolicy (in assembly chain)   -- injects observer alerts
         3. CompactionMiddleware              -- triggers compaction after turns
         4. AggregationMiddleware             -- triggers aggregation after turns
         5. User-provided middleware           -- logging, retry, etc.
@@ -110,7 +109,7 @@ class AssemblerMiddleware(BaseMiddleware):
         # Reduction policies should come AFTER injection policies
         # because injections add context that reduction should then trim.
         reduction = {"sliding_window", "token_budget"}
-        injection = {"episodic_memory", "working_memory", "topic_inbox"}
+        injection = {"episodic_memory", "working_memory", "topic_inbox", "alert"}
 
         for i, name in enumerate(names):
             if name in reduction:

@@ -37,8 +37,11 @@ from autogen.beta.types import Omittable, omit
 if TYPE_CHECKING:
     from autogen.beta.response import ResponseProto
 
-from .assembler import AssemblerMiddleware, AssemblyPolicy
-from .events import (
+from .aggregate import AggregateStrategy, AggregateTrigger
+from .assembly import AssemblerMiddleware, AssemblyPolicy
+from .compact import CompactStrategy, CompactTrigger
+from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
+from .network.events import (
     AggregationCompleted,
     CompactionCompleted,
     ObserverCompleted,
@@ -47,12 +50,9 @@ from .events import (
     TaskRequest,
     TaskResult,
 )
+from .network.primitives.signal import InjectToPrompt, Severity, Signal, SignalPolicy
 from .observer import Observer
 from .policies.conversation import ConversationPolicy
-from .primitives.aggregate import AggregateStrategy, AggregateTrigger
-from .primitives.compact import CompactStrategy, CompactTrigger
-from .primitives.knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
-from .primitives.signal import InjectToPrompt, Severity, Signal, SignalPolicy
 
 logger = logging.getLogger(__name__)
 

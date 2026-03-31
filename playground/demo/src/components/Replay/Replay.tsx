@@ -265,7 +265,7 @@ function ReplayViewer() {
 export function Replay() {
   return (
     <AnimatedSection className="py-32 px-6 max-w-6xl mx-auto" id="demos">
-      <SectionLabel number="07" title="Real-World Demos" />
+      <SectionLabel number="08" title="Real-World Demos" />
 
       <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
         <span className="text-white">Proven across 12 real-world scenarios.</span>{' '}

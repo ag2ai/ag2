@@ -7,10 +7,11 @@ const SECTIONS = [
   { id: 'solution', label: 'Our Answer', number: '03' },
   { id: 'architecture', label: 'Architecture', number: '04' },
   { id: 'concepts', label: 'Deep Dive', number: '05' },
-  { id: 'topology', label: 'Topology', number: '06' },
-  { id: 'demos', label: 'Demos', number: '07' },
-  { id: 'integration', label: 'Integration', number: '08' },
-  { id: 'roadmap', label: 'Roadmap', number: '09' },
+  { id: 'harness', label: 'Agent Harness', number: '06' },
+  { id: 'topology', label: 'Topology', number: '07' },
+  { id: 'demos', label: 'Demos', number: '08' },
+  { id: 'integration', label: 'Integration', number: '09' },
+  { id: 'roadmap', label: 'Roadmap', number: '10' },
 ]
 
 export function SideNav() {

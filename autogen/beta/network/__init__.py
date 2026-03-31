@@ -2,26 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""AG2 Network Framework — autonomous agent network infrastructure.
+"""AG2 Network Module — agent-to-agent communication infrastructure.
 
-Public API for the network framework. Import everything from here::
+Network-specific imports (Hub, delegation, topology, channels, remote).
+Framework-core features (Actor, policies, observers, knowledge, etc.)
+are now in ``autogen.beta`` directly.
 
-    from autogen.beta.network import Actor, Hub, Signal, EventWatch
+Usage::
 
-All primitives (infrastructure protocols, priority schemes, channels)
-are exported from this package. For submodule access::
-
-    from autogen.beta.network.primitives.infra import StateStore
+    from autogen.beta import Actor, ConversationPolicy, TokenMonitor
+    from autogen.beta.network import Hub, Network, Pipeline, RateLimiter
 """
 
-# Layer 3: Building Blocks
-from .actor import Actor
-from .assembler import AssemblerMiddleware, AssemblyPolicy
-
-# Channels
+# Convenience
 from .convenience import Network
 
-# Layer 2: Events
+# Events (network-specific only)
 from .events import (
     AggregationCompleted,
     CompactionCompleted,
@@ -40,66 +36,25 @@ from .events import (
     TopicUnsubscription,
     UnknownEvent,
 )
-from .hub import Hub, RegistrationHandle
-from .observer import BaseObserver, Observer
 
-# Built-in observers and plugins
-from .observers import LoopDetector, TokenMonitor
+# Hub
+from .hub import Hub, RegistrationHandle
+
+# Plugins
 from .plugins import RateLimiter, TelemetryPlugin
 
-# Assembly policies
-from .policies import (
-    ConversationPolicy,
-    EpisodicMemoryPolicy,
-    NetworkPolicy,
-    SlidingWindowPolicy,
-    TokenBudgetPolicy,
-    TopicInboxPolicy,
-    TopicOverflow,
-    WorkingMemoryPolicy,
-)
-from .primitives.aggregate import (
-    AggregateStrategy,
-    AggregateTrigger,
-    ConversationSummaryAggregate,
-    WorkingMemoryAggregate,
-)
-from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
-from .primitives.compact import (
-    CompactStrategy,
-    CompactTrigger,
-    CompactionSummary,
-    SummarizeCompact,
-    TailWindowCompact,
-)
+# Network-specific policies
+from .policies import NetworkPolicy, TopicInboxPolicy, TopicOverflow
+from .policies.network import FormattedEvent
 
-# Layer 2: Primitives — Envelope & Channel
+# Channels & Envelopes
+from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
 from .primitives.envelope import Envelope, EventRegistry, register_event
 
-# Layer 2: Primitives — Infrastructure
-from .primitives.infra import (
-    ActorInfo,
-    Cache,
-    LocalLock,
-    LocalRegistry,
-    Lock,
-    MemoryCache,
-    MemoryStateStore,
-    Registry,
-    StateStore,
-)
+# Infrastructure (network-specific)
+from .primitives.infra import ActorInfo, LocalLock, LocalRegistry, Lock, Registry
 
-# Layer 2: Primitives — Knowledge
-from .primitives.knowledge import (
-    DefaultBootstrap,
-    EventLogWriter,
-    KnowledgeStore,
-    LockedKnowledgeStore,
-    MemoryKnowledgeStore,
-    StoreBootstrap,
-)
-
-# Layer 2: Primitives — Priority
+# Priority (deferred, internal)
 from .primitives.priority import (
     ConflictResolver,
     DefaultPriority,
@@ -108,7 +63,7 @@ from .primitives.priority import (
     PriorityScheme,
 )
 
-# Layer 2: Primitives — Signal
+# Signal (kept until Phase 2 elimination)
 from .primitives.signal import (
     CallHandler,
     EmitToStream,
@@ -120,25 +75,10 @@ from .primitives.signal import (
     SignalPolicy,
 )
 
-# Layer 2: Primitives — Watch
-from .primitives.watch import (
-    AllOf,
-    AnyOf,
-    BatchWatch,
-    CronWatch,
-    DelayWatch,
-    EventWatch,
-    IntervalWatch,
-    Sequence,
-    Watch,
-    WindowWatch,
-)
-
 # Remote
 from .remote import RemoteAgent, RemoteAgentReply
-from .scheduler import Scheduler, WatchStatus
 
-# Layer 4: Composition
+# Topology
 from .topology import (
     BasePlugin,
     Conditional,
@@ -161,109 +101,76 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = (
-    # Building Blocks
-    "Actor",
-    "ActorInfo",
-    "AggregateStrategy",
-    "AggregateTrigger",
+    # Hub & Network
+    "Hub",
+    "RegistrationHandle",
+    "Network",
+    # Events
     "AggregationCompleted",
-    "AllOf",
-    "AnyOf",
-    "AssemblerMiddleware",
-    "AssemblyPolicy",
-    "BaseObserver",
-    "BasePlugin",
-    "BatchWatch",
-    "BufferedChannel",
-    "Cache",
-    "CallHandler",
-    "Channel",
-    "CompactStrategy",
-    "CompactTrigger",
     "CompactionCompleted",
-    "CompactionSummary",
-    "Conditional",
-    "ConflictResolver",
-    "ConversationPolicy",
-    "ConversationSummaryAggregate",
-    "CronWatch",
-    "DefaultBootstrap",
-    "DefaultPriority",
-    "DefaultPriorityScheme",
-    "DelayWatch",
     "DelegationError",
     "DelegationRejected",
     "DelegationRequest",
     "DelegationResult",
-    "EmitToStream",
-    "Envelope",
-    "EpisodicMemoryPolicy",
-    "EventLogWriter",
-    "EventRegistry",
-    "EventWatch",
-    "Fanout",
-    "HaltEvent",
-    "HaltOnFatal",
-    "HighestPriorityWins",
-    "HttpChannel",  # noqa: F822
-    "Hub",
-    "HubContext",
-    "InjectToPrompt",
-    "IntervalWatch",
-    "KnowledgeStore",
-    "LocalChannel",
-    "LocalLock",
-    "LocalRegistry",
-    "Lock",
-    "LockedKnowledgeStore",
-    "LoopDetector",
-    "MemoryCache",
-    "MemoryKnowledgeStore",
-    "MemoryStateStore",
-    "Network",
-    "NetworkPolicy",
-    "Observer",
+    "FormattedEvent",
     "ObserverCompleted",
     "ObserverStarted",
-    "Pipeline",
-    "Plugin",
-    "PriorityChannel",
-    "PriorityScheme",
-    "ProcessResult",
-    "RateLimiter",
-    "RegistrationHandle",
-    "Registry",
-    "RemoteAgent",
-    "RemoteAgentReply",
-    "RouteDecision",
-    "Scheduler",
     "SchedulerTriggerFired",
-    "Sequence",
-    "Severity",
-    "Signal",
-    "SignalPolicy",
-    "SlidingWindowPolicy",
-    "StateStore",
-    "StoreBootstrap",
-    "SummarizeCompact",
-    "TailWindowCompact",
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
-    "TelemetryPlugin",
-    "TokenBudgetPolicy",
-    "TokenMonitor",
-    "TopicInboxPolicy",
     "TopicMessage",
-    "TopicOverflow",
     "TopicSubscription",
     "TopicUnsubscription",
-    "Topology",
     "UnknownEvent",
-    "Watch",
-    "WatchStatus",
-    "WindowWatch",
-    "WorkingMemoryAggregate",
-    "WorkingMemoryPolicy",
+    # Channels & Envelopes
+    "BufferedChannel",
+    "Channel",
+    "Envelope",
+    "EventRegistry",
+    "HttpChannel",  # noqa: F822
+    "LocalChannel",
+    "PriorityChannel",
     "register_event",
+    # Infrastructure
+    "ActorInfo",
+    "LocalLock",
+    "LocalRegistry",
+    "Lock",
+    "Registry",
+    # Priority (internal)
+    "ConflictResolver",
+    "DefaultPriority",
+    "DefaultPriorityScheme",
+    "HighestPriorityWins",
+    "PriorityScheme",
+    # Signal (until Phase 2)
+    "CallHandler",
+    "EmitToStream",
+    "HaltEvent",
+    "HaltOnFatal",
+    "InjectToPrompt",
+    "Severity",
+    "Signal",
+    "SignalPolicy",
+    # Plugins
+    "RateLimiter",
+    "TelemetryPlugin",
+    # Policies (network-specific)
+    "NetworkPolicy",
+    "TopicInboxPolicy",
+    "TopicOverflow",
+    # Remote
+    "RemoteAgent",
+    "RemoteAgentReply",
+    # Topology
+    "BasePlugin",
+    "Conditional",
+    "Fanout",
+    "HubContext",
+    "Pipeline",
+    "Plugin",
+    "ProcessResult",
+    "RouteDecision",
+    "Topology",
 )

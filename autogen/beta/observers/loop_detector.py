@@ -8,9 +8,9 @@ from collections import deque
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent
-from autogen.beta.network.observer import BaseObserver
 from autogen.beta.network.primitives.signal import Severity, Signal
-from autogen.beta.network.primitives.watch import EventWatch
+from autogen.beta.observer import BaseObserver
+from autogen.beta.watch import EventWatch
 
 
 class LoopDetector(BaseObserver):

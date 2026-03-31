@@ -18,11 +18,11 @@ const phases: Phase[] = [
     title: 'Framework Complete',
     status: 'done',
     items: [
-      '12 primitives (Watch, Signal, Priority, Envelope, Channel, Harness, Infra)',
-      '5 building blocks (Actor, Hub, Observer, Scheduler, Network)',
+      '15 primitives (Watch, Signal, Priority, Envelope, Channel, KnowledgeStore, CompactStrategy, AggregateStrategy, Infra)',
+      '7 building blocks (Actor, Hub, Observer, Scheduler, Assembler, AssemblyPolicies, Network)',
       'Composition layer (Pipeline, Fanout, Conditional)',
-      'HttpChannel for cross-process transport',
-      'Built-in observers & plugins',
+      'Agent Harness (persistence, assembly, maintenance)',
+      'HttpChannel, topics pub/sub, built-in observers & plugins',
     ],
     color: 'text-emerald-400',
     borderColor: 'border-emerald-500/30',
@@ -83,7 +83,7 @@ const statusConfig = {
 export function Roadmap() {
   return (
     <AnimatedSection className="py-32 px-6 max-w-6xl mx-auto" id="roadmap">
-      <SectionLabel number="09" title="Roadmap" />
+      <SectionLabel number="10" title="Roadmap" />
 
       <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
         <span className="text-white">Where we're going.</span>
