@@ -5,6 +5,7 @@
 from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
+from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 
 from .._helpers import make_tool
@@ -33,6 +34,24 @@ def test_build_tools_web_search() -> None:
 
     assert tools == [
         types.Tool(google_search=types.GoogleSearch()),
+    ]
+
+
+def test_build_tools_web_search_with_blocked_domains() -> None:
+    schema = WebSearchToolSchema(blocked_domains=["spam.com", "ads.com"])
+    tools = build_tools([schema])
+
+    assert tools == [
+        types.Tool(google_search=types.GoogleSearch(exclude_domains=["spam.com", "ads.com"])),
+    ]
+
+
+def test_build_tools_web_fetch() -> None:
+    schema = WebFetchToolSchema()
+    tools = build_tools([schema])
+
+    assert tools == [
+        types.Tool(url_context=types.UrlContext()),
     ]
 
 

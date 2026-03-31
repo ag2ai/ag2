@@ -24,6 +24,7 @@ class GeminiConfigOverrides(TypedDict, total=False):
     presence_penalty: float | None
     frequency_penalty: float | None
     seed: int | None
+    cached_content: str | None
 
 
 @dataclass(slots=True)
@@ -39,6 +40,7 @@ class GeminiConfig(ModelConfig):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     seed: int | None = None
+    cached_content: str | None = None
 
     def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
         return replace(self, **overrides)
@@ -68,4 +70,5 @@ class GeminiConfig(ModelConfig):
             api_key=self.api_key,
             streaming=self.streaming,
             create_config=config,
+            cached_content=self.cached_content,
         )

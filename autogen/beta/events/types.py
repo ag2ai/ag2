@@ -61,6 +61,7 @@ class ModelResponse(ModelEvent):
     model: str | None = None
     provider: str | None = None
     finish_reason: str | None = None
+    images: list[bytes] = Field(default_factory=list)
 
     @property
     def content(self) -> str | None:
@@ -72,6 +73,8 @@ class ModelResponse(ModelEvent):
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
             text += f", usage={self.usage}"
+        if self.images:
+            text += f", images={len(self.images)}"
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
@@ -91,6 +94,7 @@ class ModelResponse(ModelEvent):
             and self.tool_calls == other.tool_calls
             and self.usage == other.usage
             and self.response_force == other.response_force
+            and self.images == other.images
         )
 
 

@@ -3,10 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .config import OpenAIConfig, OpenAIResponsesConfig
+from .containers import ContainerInfo, ContainerManager, ExpiresAfter
 from .openai_client import OpenAIClient
 from .openai_responses_client import OpenAIResponsesClient
 
 __all__ = (
+    "ContainerInfo",
+    "ContainerManager",
+    "ExpiresAfter",
     "OpenAIClient",
     "OpenAIConfig",
     "OpenAIResponsesClient",

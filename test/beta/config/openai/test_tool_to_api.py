@@ -6,6 +6,14 @@ import pytest
 
 from autogen.beta.config.openai.mappers import tool_to_api, tool_to_responses_api
 from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.tools.builtin.memory import MemoryToolSchema
+from autogen.beta.tools.builtin.shell import (
+    ContainerAutoEnvironment,
+    ContainerReferenceEnvironment,
+    LocalEnvironment,
+    NetworkPolicy,
+    ShellToolSchema,
+)
 from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 
 from .._helpers import make_parameterless_tool, make_tool
@@ -121,4 +129,72 @@ def test_tool_to_responses_api_web_search_with_user_location_partial() -> None:
             "country": "DE",
             "timezone": "Europe/Berlin",
         },
+    }
+
+
+def test_tool_to_responses_api_memory_raises() -> None:
+    schema = MemoryToolSchema()
+
+    with pytest.raises(UnsupportedToolError):
+        tool_to_responses_api(schema)
+
+
+def test_tool_to_responses_api_shell_no_environment() -> None:
+    schema = ShellToolSchema()
+
+    result = tool_to_responses_api(schema)
+
+    assert result == {"type": "shell"}
+
+
+def test_tool_to_responses_api_shell_container_auto() -> None:
+    schema = ShellToolSchema(environment=ContainerAutoEnvironment())
+
+    result = tool_to_responses_api(schema)
+
+    assert result == {"type": "shell", "environment": {"type": "container_auto"}}
+
+
+def test_tool_to_responses_api_shell_container_auto_with_network_policy() -> None:
+    schema = ShellToolSchema(
+        environment=ContainerAutoEnvironment(network_policy=NetworkPolicy(allowed_domains=["example.com"]))
+    )
+
+    result = tool_to_responses_api(schema)
+
+    assert result == {
+        "type": "shell",
+        "environment": {
+            "type": "container_auto",
+            "network_policy": {"type": "allowlist", "allowed_domains": ["example.com"]},
+        },
+    }
+
+
+def test_tool_to_responses_api_shell_container_reference() -> None:
+    schema = ShellToolSchema(environment=ContainerReferenceEnvironment(container_id="cntr_xyz"))
+
+    result = tool_to_responses_api(schema)
+
+    assert result == {
+        "type": "shell",
+        "environment": {"type": "container_reference", "container_id": "cntr_xyz"},
+    }
+
+
+def test_tool_to_responses_api_shell_local() -> None:
+    schema = ShellToolSchema(environment=LocalEnvironment())
+
+    result = tool_to_responses_api(schema)
+
+    assert result == {"type": "shell", "environment": {"type": "local"}}
+
+
+def test_tool_to_responses_api_web_search_with_allowed_domains() -> None:
+    schema = WebSearchToolSchema(allowed_domains=["example.com", "docs.example.com"])
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "filters": {"allowed_domains": ["example.com", "docs.example.com"]},
     }
