@@ -4,6 +4,7 @@
 
 from unittest.mock import Mock
 
+from .budget import BudgetConfig, BudgetMiddleware
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
@@ -26,6 +27,8 @@ except ImportError as e:
     TelemetryMiddleware = _missing_optional_dependency("TelemetryMiddleware", "tracing", e)
 
 __all__ = (
+    "BudgetConfig",
+    "BudgetMiddleware",
     "HistoryLimiter",
     "LoggingMiddleware",
     "RetryMiddleware",
