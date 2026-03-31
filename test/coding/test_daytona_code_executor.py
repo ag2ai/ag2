@@ -554,6 +554,24 @@ class TestLifecycle:
         mock_sandbox.delete.side_effect = Exception("already deleted")
         executor.delete()  # should not raise
 
+    def test_delete_unregisters_atexit(self, executor):
+        with patch("atexit.unregister") as mock_unregister:
+            executor.delete()
+            mock_unregister.assert_called_once_with(executor.delete)
+
+    def test_delete_unregisters_atexit_on_context_manager_exit(self, mock_sandbox):
+        with (
+            patch("autogen.coding.daytona_code_executor.Daytona") as mock_daytona_cls,
+            patch("autogen.coding.daytona_code_executor.DaytonaConfig"),
+            patch("autogen.coding.daytona_code_executor.CreateSandboxFromSnapshotParams"),
+            patch("atexit.register"),
+            patch("atexit.unregister") as mock_unregister,
+        ):
+            mock_daytona_cls.return_value.create.return_value = mock_sandbox
+            with DaytonaCodeExecutor(api_key="k") as executor:
+                pass
+            mock_unregister.assert_called_with(executor.delete)
+
     def test_context_manager_enter_returns_executor(self, executor):
         result = executor.__enter__()
         assert result is executor

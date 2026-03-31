@@ -354,7 +354,9 @@ class DaytonaCodeExecutor:
         """Delete the sandbox and release all associated resources.
 
         Safe to call multiple times. Called automatically on process exit via atexit.
+        Unregisters the atexit handler to prevent double-execution and handler accumulation.
         """
+        atexit.unregister(self.delete)
         if self._sandbox is not None:
             with suppress(Exception):
                 self._sandbox.delete()
