@@ -9,7 +9,6 @@
 import atexit
 import logging
 import uuid
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
@@ -30,6 +29,10 @@ try:
         CreateSandboxFromSnapshotParams,
         Daytona,
         DaytonaConfig,
+        DaytonaError,
+        DaytonaNotFoundError,
+        DaytonaRateLimitError,
+        DaytonaTimeoutError,
         Resources,
     )
 except ImportError:
@@ -38,6 +41,10 @@ except ImportError:
     CreateSandboxFromSnapshotParams = None  # type: ignore[assignment,misc]
     CreateSandboxFromImageParams = None  # type: ignore[assignment,misc]
     Resources = None  # type: ignore[assignment,misc]
+    DaytonaError = None  # type: ignore[assignment,misc]
+    DaytonaNotFoundError = None  # type: ignore[assignment,misc]
+    DaytonaRateLimitError = None  # type: ignore[assignment,misc]
+    DaytonaTimeoutError = None  # type: ignore[assignment,misc]
 
 
 @export_module("autogen.coding")
@@ -247,8 +254,17 @@ class DaytonaCodeExecutor:
             sandbox = self._client.create(params)
             logger.info("Daytona sandbox created (id=%s, name=%s)", sandbox.id, self._name)
             return sandbox
+        except DaytonaTimeoutError as e:
+            logger.error("Timed out waiting for Daytona sandbox to start: %s", e)
+            raise RuntimeError(f"Daytona sandbox creation timed out: {e}") from e
+        except DaytonaRateLimitError as e:
+            logger.error("Daytona rate limit hit during sandbox creation: %s", e)
+            raise RuntimeError(f"Daytona rate limit exceeded during sandbox creation: {e}") from e
+        except DaytonaError as e:
+            logger.error("Daytona error during sandbox creation: %s", e)
+            raise RuntimeError(f"Failed to create Daytona sandbox: {e}") from e
         except Exception as e:
-            logger.error("Failed to create Daytona sandbox: %s", e)
+            logger.error("Unexpected error during sandbox creation: %s", e)
             raise RuntimeError(f"Failed to create Daytona sandbox: {e}") from e
 
     def _normalize_language(self, language: str) -> str:
@@ -318,17 +334,41 @@ class DaytonaCodeExecutor:
                     response = self._sandbox.process.exec(cmd, timeout=self._timeout)
 
                     # Best-effort cleanup — don't let a stale file mask the real result.
-                    with suppress(Exception):
+                    try:
                         self._sandbox.fs.delete_file(script_path)
+                    except DaytonaNotFoundError:
+                        pass  # File already gone — expected
+                    except Exception as e:
+                        logger.debug("Failed to delete temp script %s: %s", script_path, e)
 
+            except DaytonaTimeoutError as e:
+                logger.warning("Execution timed out for %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
+                return DaytonaCodeResult(
+                    exit_code=1,
+                    output=f"Execution timed out: {e}",
+                    sandbox_id=self._sandbox.id,
+                )
+            except DaytonaRateLimitError as e:
+                logger.warning("Rate limit hit executing %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
+                return DaytonaCodeResult(
+                    exit_code=1,
+                    output=f"Daytona rate limit exceeded: {e}",
+                    sandbox_id=self._sandbox.id,
+                )
+            except DaytonaError as e:
+                logger.warning("Daytona error executing %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
+                return DaytonaCodeResult(
+                    exit_code=1,
+                    output=f"Daytona error: {e}",
+                    sandbox_id=self._sandbox.id,
+                )
             except Exception as e:
-                logger.warning("Error executing %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
+                logger.warning("Unexpected error executing %s code block in sandbox %s: %s", lang, self._sandbox.id, e)
                 return DaytonaCodeResult(
                     exit_code=1,
                     output=f"Error executing code block: {e}",
                     sandbox_id=self._sandbox.id,
                 )
-
             if response.exit_code != 0:
                 return DaytonaCodeResult(
                     exit_code=response.exit_code,
@@ -351,8 +391,12 @@ class DaytonaCodeExecutor:
         accumulated state — created files, installed packages, process state.
         """
         logger.info("Restarting Daytona executor — deleting sandbox %s", self._sandbox.id if self._sandbox else "None")
-        with suppress(Exception):
+        try:
             self._sandbox.delete()
+        except DaytonaNotFoundError:
+            pass  # Already deleted — expected
+        except Exception as e:
+            logger.debug("Suppressed exception during sandbox deletion on restart: %s", e)
         self._sandbox = self._create_sandbox()
 
     # ------------------------------------------------------------------
@@ -368,8 +412,12 @@ class DaytonaCodeExecutor:
         atexit.unregister(self.delete)
         if self._sandbox is not None:
             logger.info("Deleting Daytona sandbox %s", self._sandbox.id)
-            with suppress(Exception):
+            try:
                 self._sandbox.delete()
+            except DaytonaNotFoundError:
+                pass  # Already deleted — expected
+            except Exception as e:
+                logger.debug("Suppressed exception during sandbox deletion: %s", e)
             self._sandbox = None  # type: ignore[assignment]
 
     def __enter__(self) -> "DaytonaCodeExecutor":

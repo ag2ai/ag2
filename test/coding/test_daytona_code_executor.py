@@ -10,6 +10,8 @@ import pytest
 from autogen.coding import CodeBlock, MarkdownCodeExtractor
 
 try:
+    from daytona import DaytonaError, DaytonaRateLimitError, DaytonaTimeoutError
+
     from autogen.coding import DaytonaCodeExecutor, DaytonaCodeResult
     from autogen.coding.daytona_code_executor import DaytonaSandboxResources
 
@@ -168,6 +170,39 @@ class TestDaytonaCodeExecutorInit:
             patch("atexit.register"),
         ):
             mock_daytona_cls.return_value.create.side_effect = Exception("network error")
+            with pytest.raises(RuntimeError, match="Failed to create Daytona sandbox"):
+                DaytonaCodeExecutor(api_key="test-key")
+
+    def test_sandbox_creation_timeout_raises_runtime_error(self):
+        with (
+            patch("autogen.coding.daytona_code_executor.Daytona") as mock_daytona_cls,
+            patch("autogen.coding.daytona_code_executor.DaytonaConfig"),
+            patch("autogen.coding.daytona_code_executor.CreateSandboxFromSnapshotParams"),
+            patch("atexit.register"),
+        ):
+            mock_daytona_cls.return_value.create.side_effect = DaytonaTimeoutError("sandbox start timed out")
+            with pytest.raises(RuntimeError, match="timed out"):
+                DaytonaCodeExecutor(api_key="test-key")
+
+    def test_sandbox_creation_rate_limit_raises_runtime_error(self):
+        with (
+            patch("autogen.coding.daytona_code_executor.Daytona") as mock_daytona_cls,
+            patch("autogen.coding.daytona_code_executor.DaytonaConfig"),
+            patch("autogen.coding.daytona_code_executor.CreateSandboxFromSnapshotParams"),
+            patch("atexit.register"),
+        ):
+            mock_daytona_cls.return_value.create.side_effect = DaytonaRateLimitError("quota exceeded")
+            with pytest.raises(RuntimeError, match="rate limit"):
+                DaytonaCodeExecutor(api_key="test-key")
+
+    def test_sandbox_creation_daytona_error_raises_runtime_error(self):
+        with (
+            patch("autogen.coding.daytona_code_executor.Daytona") as mock_daytona_cls,
+            patch("autogen.coding.daytona_code_executor.DaytonaConfig"),
+            patch("autogen.coding.daytona_code_executor.CreateSandboxFromSnapshotParams"),
+            patch("atexit.register"),
+        ):
+            mock_daytona_cls.return_value.create.side_effect = DaytonaError("api error")
             with pytest.raises(RuntimeError, match="Failed to create Daytona sandbox"):
                 DaytonaCodeExecutor(api_key="test-key")
 
@@ -430,11 +465,29 @@ class TestExecuteCodeBlocks:
         assert result.exit_code == 1
         assert result.output == "NameError: x"
 
-    def test_exception_during_exec_returns_error(self, executor, mock_sandbox):
-        mock_sandbox.process.code_run.side_effect = Exception("timeout")
+    def test_daytona_error_during_exec_returns_error(self, executor, mock_sandbox):
+        mock_sandbox.process.code_run.side_effect = DaytonaError("sandbox unreachable")
+        result = executor.execute_code_blocks([CodeBlock(code="print('hi')", language="python")])
+        assert result.exit_code == 1
+        assert "sandbox unreachable" in result.output
+
+    def test_timeout_error_during_exec_returns_error(self, executor, mock_sandbox):
+        mock_sandbox.process.code_run.side_effect = DaytonaTimeoutError("execution timed out")
         result = executor.execute_code_blocks([CodeBlock(code="import time; time.sleep(999)", language="python")])
         assert result.exit_code == 1
-        assert "timeout" in result.output
+        assert "timed out" in result.output
+
+    def test_rate_limit_error_during_exec_returns_error(self, executor, mock_sandbox):
+        mock_sandbox.process.code_run.side_effect = DaytonaRateLimitError("rate limit exceeded")
+        result = executor.execute_code_blocks([CodeBlock(code="print('hi')", language="python")])
+        assert result.exit_code == 1
+        assert "rate limit" in result.output.lower()
+
+    def test_unexpected_error_during_exec_returns_error(self, executor, mock_sandbox):
+        mock_sandbox.process.code_run.side_effect = RuntimeError("unexpected failure")
+        result = executor.execute_code_blocks([CodeBlock(code="print('hi')", language="python")])
+        assert result.exit_code == 1
+        assert "unexpected failure" in result.output
 
     def test_multiple_blocks_all_success_joins_output(self, executor, mock_sandbox):
         mock_sandbox.process.code_run.side_effect = [
@@ -501,7 +554,9 @@ class TestExecuteCodeBlocks:
         ):
             mock_daytona_cls.return_value.create.return_value = mock_sandbox
             mock_sandbox.process.exec.return_value = Mock(exit_code=0, result="")
-            DaytonaCodeExecutor(api_key="k", timeout=45).execute_code_blocks([CodeBlock(code="echo hi", language="bash")])
+            DaytonaCodeExecutor(api_key="k", timeout=45).execute_code_blocks([
+                CodeBlock(code="echo hi", language="bash")
+            ])
             _, kwargs = mock_sandbox.process.exec.call_args
             assert kwargs.get("timeout") == 45
 
