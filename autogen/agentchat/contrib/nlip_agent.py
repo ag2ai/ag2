@@ -258,79 +258,6 @@ class AG2NlipApplication(NLIP_Application):
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-class NlipAgentServer:
-    """Wraps a ConversableAgent as a NLIP server endpoint.
-
-    This class provides functionality to expose an AG2 ConversableAgent
-    as a NLIP server that can be accessed via HTTP.
-
-    Example:
-        >>> from autogen import ConversableAgent
-        >>> agent = ConversableAgent("my_agent", llm_config={"model": "gpt-4"})
-        >>> server = NlipAgentServer(agent, port=8000)
-        >>> server.run()
-    """
-
-    def __init__(
-        self,
-        agent: ConversableAgent,
-        *,
-        url: str = "http://localhost:8000",
-        host: str = "0.0.0.0",
-        port: int = 8000,
-    ):
-        """Initialize NlipAgentServer.
-
-        Args:
-            agent: The AG2 ConversableAgent to serve
-            url: The base URL for the NLIP server
-            host: Host to bind the server to
-            port: Port to bind the server to
-        """
-        self.agent = agent
-        self.url = url
-        self.host = host
-        self.port = port
-        self._app = None
-
-    def build_app(self):
-        """Build (and cache) the NLIP FastAPI application.
-
-        Returns:
-            FastAPI application instance
-        """
-        if self._app is None:
-            app_instance = AG2NlipApplication(self.agent)
-            self._app = setup_server(app_instance)
-        return self._app
-
-    async def __call__(self, scope, receive, send):
-        """Make NlipAgentServer itself an ASGI callable.
-
-        This allows passing the server object directly to uvicorn::
-
-            uvicorn.run(server, host="0.0.0.0", port=8000)
-
-        or using it with ``uvicorn server:server`` on the command line.
-        """
-        app = self.build_app()
-        await app(scope, receive, send)
-
-    def run(self, **uvicorn_kwargs):
-        """Run the NLIP server with uvicorn (blocking).
-
-        Args:
-            **uvicorn_kwargs: Additional keyword arguments forwarded to
-                ``uvicorn.run()``.
-        """
-        import uvicorn
-
-        config = {"host": self.host, "port": self.port, **uvicorn_kwargs}
-        logger.info(f"Starting NLIP server for agent '{self.agent.name}' on {self.host}:{self.port}")
-        uvicorn.run(self, **config)
-
-
-@require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
 class NlipRemoteAgent(ConversableAgent):
     """Remote agent client for NLIP endpoints.
 
@@ -472,13 +399,13 @@ class NlipRemoteAgent(ConversableAgent):
                 if attempt == self._max_retries - 1:
                     raise NlipTimeoutError(f"Request to {self.url} timed out after {self._max_retries} attempts") from e
                 logger.warning(f"Request timeout (attempt {attempt + 1}/{self._max_retries}), retrying...")
-                await asyncio.sleep(1.0 * (attempt + 1))  # Exponential backoff
+                await asyncio.sleep(1.0)
 
             except httpx.ConnectError as e:
                 if attempt == self._max_retries - 1:
                     raise NlipConnectionError(f"Failed to connect to {self.url}") from e
                 logger.warning(f"Connection failed (attempt {attempt + 1}/{self._max_retries}), retrying...")
-                await asyncio.sleep(1.0 * (attempt + 1))
+                await asyncio.sleep(1.0)
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
