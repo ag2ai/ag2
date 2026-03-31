@@ -127,14 +127,19 @@ class BaseEvent(metaclass=_ConditionMeta):
         _process_fields(cls)
 
     def __init__(self, **kwargs: Any) -> None:
-        # Apply defaults from all classes in the MRO
+        # Apply defaults first, then user-provided kwargs so that
+        # property setters (e.g. content -> _content) aren't overwritten
+        # by a field default applied afterwards.
+        defaults: dict[str, Any] = {}
         for klass in reversed(type(self).__mro__):
             for name, f in getattr(klass, "_event_fields_", {}).items():
                 if name not in kwargs:
                     default = f.get_default()
                     if default is not Ellipsis:
-                        kwargs[name] = default
+                        defaults[name] = default
 
+        for key, value in defaults.items():
+            setattr(self, key, value)
         for key, value in kwargs.items():
             setattr(self, key, value)
 

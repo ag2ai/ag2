@@ -10,7 +10,6 @@ from enum import Enum
 from typing import Any
 
 from autogen.beta.events import BaseEvent
-from autogen.beta.events.base import BaseEvent
 
 
 class Serializer(Enum):

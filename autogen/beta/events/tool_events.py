@@ -68,7 +68,7 @@ class ToolCallEvent(ToolEvent):
     arguments: str = "{}"
     provider_data: dict[str, Any] = Field(default_factory=dict)
 
-    _serialized_arguments: dict[str, Any] | None = Field(default=None)
+    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False)
 
     @property
     def serialized_arguments(self) -> dict[str, Any]:
@@ -116,7 +116,7 @@ class ToolResultEvent(ToolEvent):
     name: str
 
     result: "ToolResult"
-    _content: str = Field(default_factory=str)
+    _content: str = Field(default_factory=str, init=False)
 
     @property
     def content(self) -> str:
