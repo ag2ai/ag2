@@ -7,6 +7,7 @@ from .code_execution import PythonCodeExecutionTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
 from .duckduckgo import DuckDuckGoSearchTool
+from .exa import ExaSearchTool
 from .firecrawl import FirecrawlTool
 from .google_search import GoogleSearchTool, YoutubeSearchTool
 from .messageplatform import (
@@ -34,6 +35,7 @@ __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "DuckDuckGoSearchTool",
+    "ExaSearchTool",
     "FirecrawlTool",
     "GoogleSearchTool",
     "PerplexitySearchTool",
