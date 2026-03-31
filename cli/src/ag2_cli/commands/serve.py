@@ -113,7 +113,7 @@ def _build_mcp_server(discovered: Any, host: str = "0.0.0.0", port: int = 8000) 
     @mcp.tool()
     def chat(message: str) -> str:
         """Send a message to the AG2 agent and get a response."""
-        result = execute(d, message)
+        result = execute(d, message, max_turns=1)
         if result.errors:
             return f"Error: {result.errors[0]}"
         return result.output

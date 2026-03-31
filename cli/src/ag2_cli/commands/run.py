@@ -158,7 +158,7 @@ def run_cmd(
     message: str | None = typer.Option(None, "--message", "-m", help="Input message to send."),
     verbose: bool = typer.Option(False, "--verbose", "-V", help="Show detailed agent activity."),
     output_json: bool = typer.Option(False, "--json", help="Output result as JSON (suppresses live rendering)."),
-    max_turns: int = typer.Option(10, "--max-turns", help="Maximum conversation turns."),
+    max_turns: int = typer.Option(5, "--max-turns", help="Maximum conversation turns."),
 ) -> None:
     """Run an agent or team from a Python file or YAML config.
 
@@ -272,17 +272,6 @@ def chat_cmd(
     )
     console.print()
 
-    # Create persistent UserProxyAgent for multi-turn conversation continuity.
-    # Reusing the same proxy preserves chat history across turns.
-    user_proxy = None
-    if discovered.kind == "agent":
-        user_proxy = ag2.UserProxyAgent(
-            name="user",
-            human_input_mode="NEVER",
-            max_consecutive_auto_reply=0,
-            code_execution_config=False,
-        )
-
     total_cost: Any = None
     turn_count = 0
     chat_history: list[dict[str, Any]] = []
@@ -315,10 +304,9 @@ def chat_cmd(
             result = execute(
                 discovered,
                 user_input,
-                max_turns=max_turns,
+                max_turns=1,
                 on_print=_on_print,
                 on_event=_on_event,
-                user_proxy=user_proxy,
                 clear_history=(turn_count == 1),
             )
             # Surface errors from execute (e.g. LLM API failures)

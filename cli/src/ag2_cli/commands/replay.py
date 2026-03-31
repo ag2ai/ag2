@@ -409,10 +409,8 @@ def replay_branch(
     )
 
     # Re-run: replay prior turns to rebuild context, then send new message
-    import autogen
-
     from ..core.discovery import discover
-    from ..core.runner import _create_user_proxy, execute
+    from ..core.runner import execute
 
     agent_path = Path(session.meta.agent_file)
     if not agent_path.exists():
@@ -426,15 +424,12 @@ def replay_branch(
     prior_user_msgs = [e.content for e in prefix_events if e.role == "user" and e.content]
 
     if discovered.kind == "agent" and prior_user_msgs:
-        user_proxy = _create_user_proxy(autogen)
-
         # Replay each prior user message so the agent accumulates context
         for i, prior_msg in enumerate(prior_user_msgs):
             console.print(f"  [dim]Replaying turn {i + 1}...[/dim]")
             execute(
                 discovered,
                 prior_msg,
-                user_proxy=user_proxy,
                 clear_history=(i == 0),
             )
 
@@ -442,7 +437,6 @@ def replay_branch(
         result = execute(
             discovered,
             branch_msg,
-            user_proxy=user_proxy,
             clear_history=False,
         )
     else:

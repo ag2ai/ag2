@@ -1,11 +1,9 @@
 """Detailed agent — gives thorough answers. For arena comparisons."""
 
-import os
-
 from autogen import AssistantAgent, LLMConfig
 
 config = LLMConfig(
-    {"model": "gemini-3-flash-preview", "api_type": "google", "api_key": os.environ["GEMINI_API_KEY"]},
+    {"model": "gemini-3.1-flash-lite-preview", "api_type": "google"},
 )
 
 agent = AssistantAgent(

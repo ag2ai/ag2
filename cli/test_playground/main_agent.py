@@ -1,13 +1,11 @@
 """Agent with main() entry point for testing ag2 run."""
 
-import os
-
-from autogen import AssistantAgent, LLMConfig, UserProxyAgent
+from autogen import AssistantAgent, LLMConfig
 
 
 async def main(message="Hello!"):
     config = LLMConfig(
-        {"model": "gemini-3-flash-preview", "api_type": "google", "api_key": os.environ["GEMINI_API_KEY"]},
+        {"model": "gemini-3.1-flash-lite-preview", "api_type": "google"},
     )
 
     assistant = AssistantAgent(
@@ -16,12 +14,13 @@ async def main(message="Hello!"):
         llm_config=config,
     )
 
-    user = UserProxyAgent(
+    user = AssistantAgent(
         name="user",
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
+        llm_config=config,
     )
 
-    result = user.initiate_chat(assistant, message=message)
-    return result
+    run_process = user.run(assistant, message=message, max_turns=1)
+
+    run_process.process()
+
+    return run_process.summary

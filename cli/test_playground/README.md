@@ -1,6 +1,6 @@
 # AG2 CLI Test Playground
 
-Demo agents for testing CLI commands. Requires `GEMINI_API_KEY` in environment.
+Demo agents for testing CLI commands. Requires `GOOGLE_GEMINI_API_KEY` in environment.
 
 Load env first: `source /path/to/ag2/.env`
 

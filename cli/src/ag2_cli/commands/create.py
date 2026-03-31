@@ -85,11 +85,11 @@ from autogen import AssistantAgent, LLMConfig
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
-with config:
-    {var_name} = AssistantAgent(
-        name="{name}",
-        system_message={system_message},
-    )
+{var_name} = AssistantAgent(
+    name="{name}",
+    system_message={system_message},
+    llm_config=config,
+)
 """
 
 _AGENT_WITH_TOOLS_TEMPLATE = """\
@@ -99,11 +99,11 @@ from autogen import AssistantAgent, LLMConfig
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
-with config:
-    {var_name} = AssistantAgent(
-        name="{name}",
-        system_message={system_message},
-    )
+{var_name} = AssistantAgent(
+    name="{name}",
+    system_message={system_message},
+    llm_config=config,
+)
 
 # Tool registration
 {tool_imports}
@@ -133,33 +133,28 @@ _TEAM_TEMPLATE = """\
 \"\"\"Team: {name}\"\"\"
 
 from autogen import AssistantAgent, LLMConfig
-from autogen.agentchat.group import run_group_chat
+from autogen.agentchat import run_group_chat
 from autogen.agentchat.group.patterns.pattern import {pattern_class}
 
 config = LLMConfig({{"model": "gpt-4o"}})
 
-with config:
 {agent_definitions}
 
 agents = [{agent_list}]
 
 
-async def main(message: str = "Hello team!"):
+def main(message: str = "Hello team!"):
     pattern = {pattern_class}(
         initial_agent={first_agent},
         agents=agents,
     )
-    result = await run_group_chat(
+    response = run_group_chat(
         pattern=pattern,
         messages=message,
         max_rounds=10,
     )
-    return result
-
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    response.process()
+    return response.summary
 """
 
 _TEST_TEMPLATE = """\
@@ -343,8 +338,7 @@ AG2 uses this pattern for agents:
 ```python
 from autogen import AssistantAgent, LLMConfig
 config = LLMConfig({{"model": "gpt-4o"}})
-with config:
-    agent = AssistantAgent(name="agent_name", system_message="...")
+agent = AssistantAgent(name="agent_name", system_message="...", llm_config=config)
 ```
 
 Tools use:
@@ -891,7 +885,7 @@ def create_team(
     for aname in agent_names:
         avar = _to_var_name(aname)
         agent_defs.append(
-            f'    {avar} = AssistantAgent(\n        name="{aname}",\n        system_message="You are {aname}.",\n    )'
+            f'{avar} = AssistantAgent(\n    name="{aname}",\n    system_message="You are {aname}.",\n    llm_config=config,\n)'
         )
 
     agent_list = ", ".join(_to_var_name(a) for a in agent_names)

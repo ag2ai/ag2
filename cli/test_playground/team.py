@@ -1,11 +1,9 @@
 """Two-agent team for testing ag2 run with agents list."""
 
-import os
-
 from autogen import AssistantAgent, LLMConfig
 
 config = LLMConfig(
-    {"model": "gemini-3-flash-preview", "api_type": "google", "api_key": os.environ["GEMINI_API_KEY"]},
+    {"model": "gemini-3.1-flash-lite-preview", "api_type": "google"},
 )
 
 researcher = AssistantAgent(
