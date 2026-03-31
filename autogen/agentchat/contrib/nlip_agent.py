@@ -62,6 +62,9 @@ def request_message_to_nlip(request: RequestMessage) -> NLIP_Message:
     attached as a JSON submessage labeled ``ag2_chat_history`` so the
     receiving agent can optionally use it for context.
 
+    The ``context`` and ``client_tools`` fields are also attached as JSON
+    submessages labeled ``ag2_context`` and ``ag2_client_tools`` respectively.
+
     Args:
         request: AG2 RequestMessage containing messages
 
@@ -98,6 +101,12 @@ def request_message_to_nlip(request: RequestMessage) -> NLIP_Message:
         if sanitized:
             nlip_msg.add_json({"messages": sanitized}, label="ag2_chat_history")
 
+    if request.context:
+        nlip_msg.add_json(request.context, label="ag2_context")
+
+    if request.client_tools:
+        nlip_msg.add_json(request.client_tools, label="ag2_client_tools")
+
     return nlip_msg
 
 
@@ -109,6 +118,7 @@ def response_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
 
     * **Structured** – a JSON submessage labeled ``ag2_chat_history``
       containing the full chat history (sent by :class:`NlipRemoteAgent`).
+      ``ag2_context`` and ``ag2_client_tools`` are also packed.
     * **Plain text** – a bare natural-language query (sent by curl or any
       non-AG2 NLIP client).
 
@@ -120,11 +130,27 @@ def response_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
     """
     # Prefer structured history from ag2_chat_history submessage
     if nlip_msg.submessages:
-        submsg = nlip_msg.find_labeled_submessage("ag2_chat_history")
-        if submsg is not None and isinstance(submsg.content, dict):
-            history = submsg.content.get("messages", [])
-            if history:
-                return RequestMessage(messages=history)
+        history_submsg = nlip_msg.find_labeled_submessage("ag2_chat_history")
+        context_submsg = nlip_msg.find_labeled_submessage("ag2_context")
+        client_tools_submsg = nlip_msg.find_labeled_submessage("ag2_client_tools")
+
+        history = []
+        if history_submsg is not None and isinstance(history_submsg.content, dict):
+            history = history_submsg.content.get("messages", [])
+        
+        context = {}
+        if context_submsg is not None and isinstance(context_submsg.content, dict):
+            context = context_submsg.content
+        
+        client_tools = {}
+        if client_tools_submsg is not None and isinstance(client_tools_submsg.content, dict):
+            client_tools = client_tools_submsg.content
+
+        return RequestMessage(
+            messages=history,
+            context=context,
+            client_tools=client_tools
+        )
 
     # Fallback: treat top-level text as a single user message
     text = nlip_msg.extract_text() or ""
