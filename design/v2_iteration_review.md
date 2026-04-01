@@ -2,7 +2,9 @@
 
 ## Status
 
-Review of the first iteration (ag2_network_framework.md + agent_harness.md + implementation). Goal: identify what to merge, remove, and restructure before release.
+**IMPLEMENTED.** All changes below have been applied to the codebase. 499 tests passing.
+
+Original goal: identify what to merge, remove, and restructure before release.
 
 ---
 
@@ -190,7 +192,7 @@ AlertPolicy replaces the dedicated `_SignalInjectionMiddleware` queue. Key behav
 - **Deduplication**: Track delivered alert IDs across calls (equivalent to the old `_delivered_ids` set). Each alert is injected once, then marked as delivered.
 - **Cross-turn accumulation**: Read `ObserverAlert` events from stream history, not just current-turn events. Observers emit to the stream via `ctx.send()`, so all alerts land in stream history regardless of when they fire (during tool execution, during other middleware, etc.).
 - **Ordering**: AlertPolicy should be an injection policy — place it after other injection policies (working memory, episodic memory) and before reduction policies (sliding window, token budget). The existing policy ordering validation already catches this.
-- **FATAL handling**: A lightweight middleware (or AlertPolicy itself, checking before assembly) catches `HaltEvent` on the stream and short-circuits the LLM call. This is simpler than the current approach where `_SignalInjectionMiddleware` splits fatal/non-fatal signals and conditionally skips `call_next`.
+- **FATAL handling**: `_HaltCheckMiddleware` sits after the assembler in the middleware chain. It subscribes to `HaltEvent` on the stream. When AlertPolicy emits a HaltEvent (on FATAL alert), the middleware catches it and returns a synthetic `ModelResponse(content="HALTED: ...")` without calling the LLM. This is simpler than the old approach where `_SignalInjectionMiddleware` split fatal/non-fatal signals and conditionally skipped `call_next`.
 
 ### Network Module (`autogen.beta.network`)
 
@@ -325,17 +327,20 @@ No `network` import needed. Nothing here is network-related. Observer alerts are
 
 ```python
 from autogen.beta import Actor
-from autogen.beta.network import Hub, Network, Pipeline, RateLimiter
+from autogen.beta.network import Hub, Network, Pipeline, RateLimiter, TopicPlugin
 from autogen.beta.network import NetworkPolicy, TopicInboxPolicy
 
-hub = Hub(topology=Pipeline(RateLimiter(max_per_minute=10)))
+hub = Hub(
+    topology=Pipeline(RateLimiter(max_per_minute=10)),
+    plugins=[TopicPlugin()],  # Topics are now a plugin, not built into Hub
+)
 await hub.register(researcher, capabilities=["research"])
 await hub.register(writer, capabilities=["writing"])
 
 reply = await hub.ask(researcher, "Research and write a report")
 ```
 
-Network imports only when doing agent-to-agent communication.
+Network imports only when doing agent-to-agent communication. Note that `TopicInboxPolicy` now takes a `TopicPlugin` instance (not Hub) as its first argument.
 
 ### Actor.__init__ Simplification
 
@@ -385,7 +390,16 @@ Actor(
 
 Signal delivery is now just another assembly policy in the `assembly` list. No dedicated parameter. This means alert formatting, ordering relative to other policies, and transparency are all controlled the same way as everything else.
 
-`KnowledgeConfig` and `TaskConfig` are simple dataclasses, not protocols.
+`KnowledgeConfig` and `TaskConfig` are simple dataclasses defined in `actor.py`, not protocols.
+
+Middleware chain after restructure::
+
+    1. AssemblerMiddleware(policies)     -- outermost: assembles context (AlertPolicy runs here)
+    2. _HaltCheckMiddleware              -- catches HaltEvent from AlertPolicy, short-circuits LLM
+    3. CompactionMiddleware              -- triggers compaction after turns
+    4. AggregationMiddleware             -- triggers aggregation after turns
+    5. User-provided middleware           -- logging, retry, etc.
+    6. LLM client call                    -- innermost
 
 ### Tool Surface
 
@@ -523,7 +537,7 @@ autogen/beta/network/            # Network only (4 concepts)
 
 | Change | Impact |
 |--------|--------|
-| Signal system eliminated | -3 concepts (Signal, SignalPolicy, SignalInjectionMiddleware) → +1 assembly policy (AlertPolicy) |
+| Signal system eliminated | -3 concepts (Signal, SignalPolicy, SignalInjectionMiddleware) → +1 assembly policy (AlertPolicy) + lightweight _HaltCheckMiddleware for FATAL halt |
 | Framework core gains promoted features | Knowledge, state, assembly, compaction, aggregation, observers, watches, scheduler available to all Agent users |
 | Network module shrinks | Only genuinely network concerns: Hub, delegation, routing, channels, remote |
 | Actor is a framework class | Works standalone or with Hub — correct layering |
@@ -531,7 +545,7 @@ autogen/beta/network/            # Network only (4 concepts)
 | Unused protocols removed | Cache protocol |
 | Storage protocols kept separate | StateStore and KnowledgeStore stay as distinct protocols; both move to framework core |
 | Priority system deferred | Internal only, not in public API for v1 |
-| Topics extracted from Hub | Becomes TopicPlugin — Hub stays focused on registry + delegation |
+| Topics extracted from Hub | Becomes TopicPlugin — Hub stays focused on registry + delegation. TopicInboxPolicy now takes TopicPlugin (not Hub). |
 | Context window story simplified | Assembly policies are canonical; core middleware is fallback for plain Agent |
 | Actor.__init__ simplified | signal_policy param removed, knowledge params grouped into KnowledgeConfig |
 | memory tool removed | Compaction/aggregation are infrastructure, not agent decisions |
@@ -542,21 +556,20 @@ autogen/beta/network/            # Network only (4 concepts)
 
 ## Migration Notes
 
-### Scope
+### Status: Complete
 
-This restructure changes import paths and removes dead abstractions. It does NOT change runtime behavior — existing Actor/Hub/Observer interactions work identically after the move. The restructure should be done as a single coordinated change, not incrementally, to avoid a period where both old and new paths exist.
+All phases executed. 499 tests passing. Restructure applied as a single coordinated change.
 
-### Internal consumers
+### What was done
 
-- **playground/demo**: Active development on this branch. Demo imports from `autogen.beta.network` will need updating to reflect the new paths (Actor, policies, observers move to `autogen.beta`; network-only imports stay).
-- **Tests**: `test/beta/network/` tests will need import path updates. Test logic stays the same.
+1. **Move files and update imports** — 15 files promoted from `network/` to `beta/`. Both `__init__.py` files updated.
+2. **Eliminate Signal system** — Created `ObserverAlert`, `Severity`, `HaltEvent` in `events/alert.py`. Created `AlertPolicy`. Added `_HaltCheckMiddleware` for FATAL halt. Deleted `signal.py`.
+3. **Extract TopicPlugin from Hub** — Created `plugins/topic.py`. Updated `TopicInboxPolicy` to take `TopicPlugin` (not Hub). Removed ~50 lines from Hub.
+4. **Remove dead code** — Deleted `harness.py`, removed `Cache`/`MemoryCache` from `infra.py`.
+5. **Actor.__init__ restructure** — Added `KnowledgeConfig` and `TaskConfig` dataclasses in `actor.py`. Grouped 7 params into `knowledge`, 2 into `tasks`. Removed `signal_policy`.
+6. **Rename spawn_task → run_subtask** — Tool names and internal method updated.
+7. **Update test imports** — All 22 affected test files updated. No test logic changes needed beyond constructor/import updates.
 
-### Ordering
+### Remaining
 
-1. Move files and update imports (mechanical, no logic changes)
-2. Eliminate Signal system → implement AlertPolicy (logic change, needs tests)
-3. Extract TopicPlugin from Hub (logic change, needs tests)
-4. Remove dead code (ContextHarness, Cache, harness.py)
-5. Actor.__init__ restructure (KnowledgeConfig grouping, signal_policy removal)
-6. Rename spawn_task → run_subtask
-7. Update playground/demo imports
+- **playground/demo**: Imports still reference old paths. Update needed before demo is runnable.

@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from autogen.beta.network.primitives.watch import DelayWatch, IntervalWatch
-from autogen.beta.network.scheduler import Scheduler, WatchStatus
+from autogen.beta.scheduler import Scheduler, WatchStatus
+from autogen.beta.watch import DelayWatch, IntervalWatch
 
 
 class TestSchedulerStandalone:

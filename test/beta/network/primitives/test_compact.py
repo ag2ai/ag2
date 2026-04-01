@@ -8,8 +8,8 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelRequest
-from autogen.beta.network.primitives.compact import CompactTrigger, CompactionSummary, TailWindowCompact
-from autogen.beta.network.primitives.knowledge import MemoryKnowledgeStore
+from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
+from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 
 

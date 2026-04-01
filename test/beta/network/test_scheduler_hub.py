@@ -11,8 +11,8 @@ import pytest
 
 from autogen.beta.network.events import SchedulerTriggerFired
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.primitives.watch import IntervalWatch
-from autogen.beta.network.scheduler import Scheduler, WatchStatus
+from autogen.beta.scheduler import Scheduler, WatchStatus
+from autogen.beta.watch import IntervalWatch
 
 # ---------------------------------------------------------------------------
 # Mock helpers

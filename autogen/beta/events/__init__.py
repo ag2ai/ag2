@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field
 from .conditions import Condition
 from .tool_events import (
@@ -28,13 +29,16 @@ __all__ = (
     "ClientToolCallEvent",
     "Condition",
     "Field",
+    "HaltEvent",
     "HumanInputRequest",
+    "ObserverAlert",
     "HumanMessage",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
+    "Severity",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",

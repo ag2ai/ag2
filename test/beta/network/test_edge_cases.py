@@ -22,13 +22,13 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage
+from autogen.beta import BaseObserver
+from autogen.beta.events.alert import ObserverAlert
 from autogen.beta.network.convenience import Network
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.signal import Signal
-from autogen.beta.network.primitives.watch import CronWatch, EventWatch, IntervalWatch
-from autogen.beta.network.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Pipeline
+from autogen.beta.scheduler import Scheduler, WatchStatus
+from autogen.beta.watch import CronWatch, EventWatch, IntervalWatch
 from autogen.beta.stream import MemoryStream
 
 # ---------------------------------------------------------------------------
@@ -240,14 +240,14 @@ class TestObserverExceptionHandling:
         stream = MemoryStream()
         ctx = Context(stream=stream)
 
-        signals: list[Signal] = []
+        signals: list[ObserverAlert] = []
 
-        async def _capture(event: Signal, _ctx: AnnContext) -> None:
+        async def _capture(event: ObserverAlert, _ctx: AnnContext) -> None:
             signals.append(event)
 
         from autogen.beta.events.conditions import TypeCondition
 
-        stream.subscribe(_capture, condition=TypeCondition(Signal))
+        stream.subscribe(_capture, condition=TypeCondition(ObserverAlert))
 
         observer.attach(stream, ctx)
         await stream.send(ModelMessage(content="test"), ctx)

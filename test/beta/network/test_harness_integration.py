@@ -18,24 +18,24 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
-from autogen.beta.network.actor import (
+from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta.actor import (
     _AggregationMiddleware,
     _AggregationMiddlewareFactory,
     _CompactionMiddleware,
     _CompactionMiddlewareFactory,
 )
-from autogen.beta.network.events import AggregationCompleted, CompactionCompleted
-from autogen.beta.network.hub import Hub
-from autogen.beta.network.policies.sliding_window import SlidingWindowPolicy
-from autogen.beta.network.policies.token_budget import TokenBudgetPolicy
-from autogen.beta.network.primitives.aggregate import AggregateTrigger
-from autogen.beta.network.primitives.compact import CompactTrigger, TailWindowCompact
-from autogen.beta.network.primitives.knowledge import (
+from autogen.beta.aggregate import AggregateTrigger
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.knowledge import (
     DefaultBootstrap,
     EventLogWriter,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
 )
+from autogen.beta.network.events import AggregationCompleted, CompactionCompleted
+from autogen.beta.network.hub import Hub
+from autogen.beta.policies import SlidingWindowPolicy, TokenBudgetPolicy
 from autogen.beta.stream import MemoryStream
 
 
@@ -464,35 +464,41 @@ class TestHubUnregisterCleanup:
 
     @pytest.mark.asyncio
     async def test_cleans_up_subscriptions(self) -> None:
-        hub = Hub()
+        from autogen.beta.network.plugins.topic import TopicPlugin
+
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
 
         class _FakeAgent:
             name = "agent-1"
 
         await hub.register(_FakeAgent())
-        await hub.subscribe_topic("agent-1", "news")
+        await tp.subscribe_topic("agent-1", "news")
 
-        assert "agent-1" in hub._subscriptions.get("news", set())
+        assert "agent-1" in tp._subscriptions.get("news", set())
 
         await hub.unregister("agent-1")
-        assert "agent-1" not in hub._subscriptions.get("news", set())
+        assert "agent-1" not in tp._subscriptions.get("news", set())
 
     @pytest.mark.asyncio
     async def test_cleans_up_cursors(self) -> None:
-        hub = Hub()
+        from autogen.beta.network.plugins.topic import TopicPlugin
+
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
 
         class _FakeAgent:
             name = "agent-1"
 
         await hub.register(_FakeAgent())
-        await hub.subscribe_topic("agent-1", "news")
-        await hub.publish("someone", "news", "hello")
-        await hub.read_topic("agent-1", "news")
+        await tp.subscribe_topic("agent-1", "news")
+        await tp.publish("someone", "news", "hello")
+        await tp.read_topic("agent-1", "news")
 
-        assert ("agent-1", "news") in hub._cursors
+        assert ("agent-1", "news") in tp._cursors
 
         await hub.unregister("agent-1")
-        assert ("agent-1", "news") not in hub._cursors
+        assert ("agent-1", "news") not in tp._cursors
 
 
 # ---------------------------------------------------------------------------
@@ -508,31 +514,27 @@ def _get_raw_fn(tool_list, index=0):
 class TestKnowledgeTool:
     @pytest.mark.asyncio
     async def test_read_action(self) -> None:
-        from autogen.beta.network.actor import Actor
-
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello world")
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="read", path="/test.txt")
         assert result == "hello world"
 
     @pytest.mark.asyncio
     async def test_read_nonexistent(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="read", path="/missing.txt")
         assert "Not found" in result
 
     @pytest.mark.asyncio
     async def test_write_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="write", path="/note.txt", content="my note")
         assert "Written" in result
@@ -540,23 +542,21 @@ class TestKnowledgeTool:
 
     @pytest.mark.asyncio
     async def test_write_requires_content(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="write", path="/note.txt")
         assert "Error" in result
 
     @pytest.mark.asyncio
     async def test_list_action_with_skill_md(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
         await store.write("/dir/SKILL.md", "This directory stores artifacts.")
         await store.write("/dir/file1.txt", "data")
         await store.write("/dir/file2.txt", "data")
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="list", path="/dir/")
         assert "This directory stores artifacts." in result
@@ -565,21 +565,19 @@ class TestKnowledgeTool:
 
     @pytest.mark.asyncio
     async def test_list_empty_directory(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="list", path="/empty/")
         assert "Empty" in result
 
     @pytest.mark.asyncio
     async def test_delete_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "data")
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="delete", path="/test.txt")
         assert "Deleted" in result
@@ -587,10 +585,9 @@ class TestKnowledgeTool:
 
     @pytest.mark.asyncio
     async def test_unknown_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge_store=store)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
         fn = _get_raw_fn(actor._build_knowledge_tool())
         result = await fn(action="bogus")
         assert "Unknown action" in result
@@ -604,11 +601,10 @@ class TestKnowledgeTool:
 class TestMemoryTool:
     @pytest.mark.asyncio
     async def test_compact_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
         strategy = TailWindowCompact(target=2)
-        actor = Actor("test", knowledge_store=store, compact=strategy)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store, compact=strategy))
         fn = _get_raw_fn(actor._build_memory_tool())
 
         stream = MemoryStream()
@@ -624,7 +620,6 @@ class TestMemoryTool:
 
     @pytest.mark.asyncio
     async def test_compact_not_configured(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         actor = Actor("test")
         fn = _get_raw_fn(actor._build_memory_tool())
@@ -636,11 +631,10 @@ class TestMemoryTool:
 
     @pytest.mark.asyncio
     async def test_summarize_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
         strategy = _FakeAggregate()
-        actor = Actor("test", knowledge_store=store, aggregate=strategy)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store, aggregate=strategy))
         fn = _get_raw_fn(actor._build_memory_tool())
 
         stream = MemoryStream()
@@ -654,7 +648,6 @@ class TestMemoryTool:
 
     @pytest.mark.asyncio
     async def test_summarize_not_configured(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         actor = Actor("test")
         fn = _get_raw_fn(actor._build_memory_tool())
@@ -666,11 +659,10 @@ class TestMemoryTool:
 
     @pytest.mark.asyncio
     async def test_unknown_action(self) -> None:
-        from autogen.beta.network.actor import Actor
 
         store = MemoryKnowledgeStore()
         strategy = TailWindowCompact(target=2)
-        actor = Actor("test", knowledge_store=store, compact=strategy)
+        actor = Actor("test", knowledge=KnowledgeConfig(store=store, compact=strategy))
         fn = _get_raw_fn(actor._build_memory_tool())
 
         stream = MemoryStream()
@@ -728,7 +720,7 @@ class TestConversationSummaryAggregateStreamId:
 
         # Use a fake aggregate that writes to the same path pattern
         # to verify the filename contains the full ID
-        from autogen.beta.network.primitives.aggregate import ConversationSummaryAggregate
+        from autogen.beta.aggregate import ConversationSummaryAggregate
         from unittest.mock import AsyncMock, MagicMock
 
         config = MagicMock()

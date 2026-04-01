@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from autogen.beta.config import ModelConfig
 
     from ..events import TopicMessage
-    from ..hub import Hub
+    from ..plugins.topic import TopicPlugin
 
 
 class TopicOverflow(str, Enum):
@@ -30,7 +30,7 @@ class TopicOverflow(str, Enum):
 class TopicInboxPolicy:
     """Injects unread topic messages into the actor's context.
 
-    Reads new messages from all subscribed topics via the Hub.
+    Reads new messages from all subscribed topics via the TopicPlugin.
     Injects them as system prompt context. Advances the read cursor
     so messages are not re-injected.
     """
@@ -39,13 +39,13 @@ class TopicInboxPolicy:
 
     def __init__(
         self,
-        hub: Hub,
+        topic_plugin: TopicPlugin,
         actor_name: str,
         max_messages: int = 50,
         overflow: TopicOverflow = TopicOverflow.NEWEST,
         summary_config: ModelConfig | None = None,
     ) -> None:
-        self._hub = hub
+        self._tp = topic_plugin
         self._actor = actor_name
         self._max = max_messages
         self._overflow = overflow
@@ -57,14 +57,14 @@ class TopicInboxPolicy:
         events: list[BaseEvent],
         context: Context,
     ) -> tuple[list[str], list[BaseEvent]]:
-        subscriptions = self._hub.subscriptions_for(self._actor)
+        subscriptions = self._tp.subscriptions_for(self._actor)
 
         # Peek without advancing cursors so overflow strategies
         # can decide which messages to consume.
         per_topic: list[tuple[str, list[TopicMessage]]] = []
         all_messages: list[TopicMessage] = []
         for topic in subscriptions:
-            messages = await self._hub.peek_topic(self._actor, topic)
+            messages = await self._tp.peek_topic(self._actor, topic)
             per_topic.append((topic, messages))
             all_messages.extend(messages)
 
@@ -81,7 +81,7 @@ class TopicInboxPolicy:
                 overflow_note = f"({dropped} older messages omitted)"
                 # Advance all cursors — older messages are intentionally skipped
                 for topic, messages in per_topic:
-                    await self._hub.advance_topic(self._actor, topic, len(messages))
+                    await self._tp.advance_topic(self._actor, topic, len(messages))
             elif self._overflow == TopicOverflow.OLDEST:
                 kept = all_messages[:self._max]
                 dropped = len(all_messages) - self._max
@@ -92,7 +92,7 @@ class TopicInboxPolicy:
                 for topic, messages in per_topic:
                     take = min(len(messages), consumed)
                     if take > 0:
-                        await self._hub.advance_topic(self._actor, topic, take)
+                        await self._tp.advance_topic(self._actor, topic, take)
                     consumed -= take
                     if consumed <= 0:
                         break
@@ -100,13 +100,13 @@ class TopicInboxPolicy:
                 summary = await self._summarize(all_messages)
                 # Advance all cursors — everything was summarized
                 for topic, messages in per_topic:
-                    await self._hub.advance_topic(self._actor, topic, len(messages))
+                    await self._tp.advance_topic(self._actor, topic, len(messages))
                 prompts = prompts + [f"## Network Messages (summarized)\n\n{summary}"]
                 return prompts, events
         else:
             # No overflow — advance all cursors
             for topic, messages in per_topic:
-                await self._hub.advance_topic(self._actor, topic, len(messages))
+                await self._tp.advance_topic(self._actor, topic, len(messages))
 
         lines = ["## Network Messages\n"]
         if overflow_note:

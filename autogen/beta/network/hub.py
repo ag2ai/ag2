@@ -36,9 +36,6 @@ from .events import (
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
-    TopicMessage,
-    TopicSubscription,
-    TopicUnsubscription,
 )
 from .primitives.channel import Channel, LocalChannel
 from .primitives.envelope import Envelope
@@ -110,11 +107,6 @@ class Hub:
         self._hub_context = HubContext(self)
         self._additional_tasks: set[asyncio.Task[None]] = set()
 
-        # Topic pub/sub state
-        self._topics: dict[str, list[TopicMessage]] = {}
-        self._subscriptions: dict[str, set[str]] = {}  # topic -> actor names
-        self._cursors: dict[tuple[str, str], int] = {}  # (actor, topic) -> last-read index
-
         # Cross-actor knowledge exposure
         self._exposed_paths: dict[str, list[str]] = {}  # actor -> exposed path prefixes
 
@@ -170,10 +162,10 @@ class Hub:
         await self._registry.unregister(name)
         self._agents.pop(name, None)
         self._exposed_paths.pop(name, None)
-        # Clean up topic subscriptions and cursors for this agent
-        for topic, subscribers in list(self._subscriptions.items()):
-            subscribers.discard(name)
-        self._cursors = {k: v for k, v in self._cursors.items() if k[0] != name}
+        # Clean up topic subscriptions via TopicPlugin
+        tp = self._topic_plugin
+        if tp is not None:
+            tp.cleanup_actor(name)
 
     async def discover(self, capability: str = "") -> list[ActorInfo]:
         """Find registered agents, optionally filtered by capability."""
@@ -227,21 +219,30 @@ class Hub:
                 return await hub._delegate(target, message, source=caller)
 
             elif action == "publish":
+                tp = hub._topic_plugin
+                if tp is None:
+                    return "Topics not configured. Install TopicPlugin on the Hub."
                 if not topic:
                     return "Error: topic is required for publish action."
                 if not message:
                     return "Error: message is required for publish action."
-                await hub.publish(caller, topic, message)
+                await tp.publish(caller, topic, message)
                 return f"Published to topic '{topic}'."
 
             elif action == "subscribe":
+                tp = hub._topic_plugin
+                if tp is None:
+                    return "Topics not configured. Install TopicPlugin on the Hub."
                 if not topic:
                     return "Error: topic is required for subscribe action."
-                await hub.subscribe_topic(caller, topic)
+                await tp.subscribe_topic(caller, topic)
                 return f"Subscribed to topic '{topic}'."
 
             elif action == "topics":
-                topic_list = await hub.list_topics()
+                tp = hub._topic_plugin
+                if tp is None:
+                    return "Topics not configured. Install TopicPlugin on the Hub."
+                topic_list = await tp.list_topics()
                 if not topic_list:
                     return "No active topics."
                 return "\n".join(f"- {t}" for t in topic_list)
@@ -695,56 +696,6 @@ class Hub:
         return registered
 
     # ------------------------------------------------------------------
-    # Topic pub/sub
-    # ------------------------------------------------------------------
-
-    async def publish(self, sender: str, topic: str, message: str, data: dict | None = None) -> None:
-        """Publish a message to a topic."""
-        msg = TopicMessage(topic=topic, sender=sender, message=message, data=data or {})
-        self._topics.setdefault(topic, []).append(msg)
-        await self._emit(msg)
-
-    async def subscribe_topic(self, actor_name: str, topic: str) -> None:
-        """Subscribe an actor to a topic. Cursor starts at current end (no replay)."""
-        self._subscriptions.setdefault(topic, set()).add(actor_name)
-        self._cursors[(actor_name, topic)] = len(self._topics.get(topic, []))
-        await self._emit(TopicSubscription(actor=actor_name, topic=topic))
-
-    async def unsubscribe_topic(self, actor_name: str, topic: str) -> None:
-        """Unsubscribe an actor from a topic."""
-        self._subscriptions.get(topic, set()).discard(actor_name)
-        self._cursors.pop((actor_name, topic), None)
-        await self._emit(TopicUnsubscription(actor=actor_name, topic=topic))
-
-    async def read_topic(self, actor_name: str, topic: str) -> list[TopicMessage]:
-        """Read new messages from a topic since last read. Advances cursor."""
-        cursor = self._cursors.get((actor_name, topic), 0)
-        messages = self._topics.get(topic, [])
-        new_messages = messages[cursor:]
-        self._cursors[(actor_name, topic)] = len(messages)
-        return new_messages
-
-    async def peek_topic(self, actor_name: str, topic: str) -> list[TopicMessage]:
-        """Read new messages without advancing cursor."""
-        cursor = self._cursors.get((actor_name, topic), 0)
-        return self._topics.get(topic, [])[cursor:]
-
-    async def advance_topic(self, actor_name: str, topic: str, count: int) -> None:
-        """Advance cursor by count messages."""
-        key = (actor_name, topic)
-        current = self._cursors.get(key, 0)
-        max_pos = len(self._topics.get(topic, []))
-        self._cursors[key] = min(current + count, max_pos)
-
-    async def list_topics(self) -> list[str]:
-        """List all active topics."""
-        return list(self._topics.keys())
-
-    def subscriptions_for(self, actor_name: str) -> list[str]:
-        """List topics an actor is subscribed to."""
-        return [topic for topic, actors in self._subscriptions.items() if actor_name in actors]
-
-    # ------------------------------------------------------------------
     # Cross-actor knowledge queries
     # ------------------------------------------------------------------
 
@@ -789,6 +740,16 @@ class Hub:
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
+
+    @property
+    def _topic_plugin(self):
+        """Find the installed TopicPlugin, if any."""
+        from .plugins.topic import TopicPlugin
+
+        for plugin in self._plugins:
+            if isinstance(plugin, TopicPlugin):
+                return plugin
+        return None
 
     @property
     def stream(self) -> MemoryStream:

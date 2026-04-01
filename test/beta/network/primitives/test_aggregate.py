@@ -12,12 +12,12 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelRequest
-from autogen.beta.network.primitives.aggregate import (
+from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
-from autogen.beta.network.primitives.knowledge import MemoryKnowledgeStore
+from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 
 
@@ -109,14 +109,14 @@ class TestConversationSummaryAggregate:
         # Write two summaries with different streams
         stream1 = MemoryStream()
         ctx1 = Context(stream=stream1)
-        with patch("autogen.beta.network.primitives.aggregate.datetime") as mock_dt:
+        with patch("autogen.beta.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260101T120000"
             mock_dt.side_effect = None
             await strategy.aggregate([ModelRequest(content="first")], ctx1, store)
 
         stream2 = MemoryStream()
         ctx2 = Context(stream=stream2)
-        with patch("autogen.beta.network.primitives.aggregate.datetime") as mock_dt:
+        with patch("autogen.beta.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260201T120000"
             mock_dt.side_effect = None
             await strategy.aggregate([ModelRequest(content="second")], ctx2, store)

@@ -4,5 +4,6 @@
 
 from .rate_limiter import RateLimiter
 from .telemetry import TelemetryPlugin
+from .topic import TopicPlugin
 
-__all__ = ("RateLimiter", "TelemetryPlugin")
+__all__ = ("RateLimiter", "TelemetryPlugin", "TopicPlugin")

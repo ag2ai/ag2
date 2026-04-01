@@ -25,8 +25,8 @@ from autogen.beta.network.events import (
     TopicUnsubscription,
     UnknownEvent,
 )
-from autogen.beta.network.primitives.compact import CompactionSummary
-from autogen.beta.network.primitives.signal import Severity, Signal
+from autogen.beta.compact import CompactionSummary
+from autogen.beta.events.alert import ObserverAlert, Severity
 
 
 @pytest.mark.parametrize(
@@ -37,7 +37,7 @@ from autogen.beta.network.primitives.signal import Severity, Signal
         DelegationResult(source="a", target="b", result="done"),
         DelegationRejected(source="a", target="b", task="t", reason="rejected"),
         DelegationError(source="a", target="b", task="t", error="boom"),
-        Signal(source="obs", severity=Severity.WARNING, message="warn"),
+        ObserverAlert(source="obs", severity=Severity.WARNING, message="warn"),
         ObserverStarted(name="obs1"),
         ObserverCompleted(name="obs1"),
         TaskRequest(task="research", task_name="task-1"),

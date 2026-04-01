@@ -6,9 +6,10 @@
 
 import pytest
 
+from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network.events import TopicMessage, TopicSubscription
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.primitives.knowledge import MemoryKnowledgeStore
+from autogen.beta.network.plugins.topic import TopicPlugin
 
 
 class _FakeAgent:
@@ -25,11 +26,12 @@ class _FakeAgent:
 class TestHubTopics:
     @pytest.mark.asyncio
     async def test_publish_and_read(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
-        await hub.publish("writer", "news", "Breaking news!")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
+        await tp.publish("writer", "news", "Breaking news!")
 
-        messages = await hub.read_topic("reader", "news")
+        messages = await tp.read_topic("reader", "news")
         assert len(messages) == 1
         assert messages[0].message == "Breaking news!"
         assert messages[0].sender == "writer"
@@ -37,70 +39,76 @@ class TestHubTopics:
 
     @pytest.mark.asyncio
     async def test_cursor_advances(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
 
-        await hub.publish("w", "news", "msg-1")
-        await hub.publish("w", "news", "msg-2")
+        await tp.publish("w", "news", "msg-1")
+        await tp.publish("w", "news", "msg-2")
 
-        first_read = await hub.read_topic("reader", "news")
+        first_read = await tp.read_topic("reader", "news")
         assert len(first_read) == 2
 
         # Second read should return empty (cursor advanced)
-        second_read = await hub.read_topic("reader", "news")
+        second_read = await tp.read_topic("reader", "news")
         assert len(second_read) == 0
 
         # New message after cursor
-        await hub.publish("w", "news", "msg-3")
-        third_read = await hub.read_topic("reader", "news")
+        await tp.publish("w", "news", "msg-3")
+        third_read = await tp.read_topic("reader", "news")
         assert len(third_read) == 1
         assert third_read[0].message == "msg-3"
 
     @pytest.mark.asyncio
     async def test_subscribe_starts_at_end(self) -> None:
-        hub = Hub()
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
         # Publish before subscribing
-        await hub.publish("w", "news", "old-msg")
-        await hub.subscribe_topic("late-reader", "news")
+        await tp.publish("w", "news", "old-msg")
+        await tp.subscribe_topic("late-reader", "news")
 
         # Late subscriber should not see old messages
-        messages = await hub.read_topic("late-reader", "news")
+        messages = await tp.read_topic("late-reader", "news")
         assert len(messages) == 0
 
     @pytest.mark.asyncio
     async def test_unsubscribe(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
-        await hub.unsubscribe_topic("reader", "news")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
+        await tp.unsubscribe_topic("reader", "news")
 
-        subs = hub.subscriptions_for("reader")
+        subs = tp.subscriptions_for("reader")
         assert "news" not in subs
 
     @pytest.mark.asyncio
     async def test_list_topics(self) -> None:
-        hub = Hub()
-        await hub.publish("w", "topic-a", "msg")
-        await hub.publish("w", "topic-b", "msg")
-        topics = await hub.list_topics()
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.publish("w", "topic-a", "msg")
+        await tp.publish("w", "topic-b", "msg")
+        topics = await tp.list_topics()
         assert set(topics) == {"topic-a", "topic-b"}
 
     @pytest.mark.asyncio
     async def test_subscriptions_for(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
-        await hub.subscribe_topic("actor", "alerts")
-        subs = hub.subscriptions_for("actor")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
+        await tp.subscribe_topic("actor", "alerts")
+        subs = tp.subscriptions_for("actor")
         assert set(subs) == {"news", "alerts"}
 
     @pytest.mark.asyncio
     async def test_emits_topic_events(self) -> None:
-        hub = Hub()
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
         events = []
         hub.stream.where(TopicSubscription).subscribe(lambda e: events.append(e))
         hub.stream.where(TopicMessage).subscribe(lambda e: events.append(e))
 
-        await hub.subscribe_topic("reader", "news")
-        await hub.publish("writer", "news", "hello")
+        await tp.subscribe_topic("reader", "news")
+        await tp.publish("writer", "news", "hello")
 
         # Allow events to propagate
         sub_events = [e for e in events if isinstance(e, TopicSubscription)]
@@ -112,47 +120,50 @@ class TestHubTopics:
 class TestHubPeekAdvance:
     @pytest.mark.asyncio
     async def test_peek_does_not_advance_cursor(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
-        await hub.publish("w", "news", "msg-1")
-        await hub.publish("w", "news", "msg-2")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
+        await tp.publish("w", "news", "msg-1")
+        await tp.publish("w", "news", "msg-2")
 
-        peeked = await hub.peek_topic("reader", "news")
+        peeked = await tp.peek_topic("reader", "news")
         assert len(peeked) == 2
 
         # Peek again — same messages (cursor not advanced)
-        peeked2 = await hub.peek_topic("reader", "news")
+        peeked2 = await tp.peek_topic("reader", "news")
         assert len(peeked2) == 2
 
         # read_topic still returns same messages
-        read = await hub.read_topic("reader", "news")
+        read = await tp.read_topic("reader", "news")
         assert len(read) == 2
 
     @pytest.mark.asyncio
     async def test_advance_moves_cursor(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
-        await hub.publish("w", "news", "msg-1")
-        await hub.publish("w", "news", "msg-2")
-        await hub.publish("w", "news", "msg-3")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
+        await tp.publish("w", "news", "msg-1")
+        await tp.publish("w", "news", "msg-2")
+        await tp.publish("w", "news", "msg-3")
 
-        await hub.advance_topic("reader", "news", 2)
+        await tp.advance_topic("reader", "news", 2)
 
         # Only the third message should be unread
-        remaining = await hub.read_topic("reader", "news")
+        remaining = await tp.read_topic("reader", "news")
         assert len(remaining) == 1
         assert remaining[0].message == "msg-3"
 
     @pytest.mark.asyncio
     async def test_advance_clamped_to_max(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("reader", "news")
-        await hub.publish("w", "news", "msg-1")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("reader", "news")
+        await tp.publish("w", "news", "msg-1")
 
         # Advance by more than available — should clamp
-        await hub.advance_topic("reader", "news", 100)
+        await tp.advance_topic("reader", "news", 100)
 
-        remaining = await hub.peek_topic("reader", "news")
+        remaining = await tp.peek_topic("reader", "news")
         assert len(remaining) == 0
 
 

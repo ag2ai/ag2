@@ -10,7 +10,7 @@ import pytest
 
 from autogen.beta.events import ModelRequest
 from autogen.beta.network.events import DelegationResult, TopicMessage, UnknownEvent
-from autogen.beta.network.primitives.knowledge import (
+from autogen.beta.knowledge import (
     DefaultBootstrap,
     EventLogWriter,
     MemoryKnowledgeStore,

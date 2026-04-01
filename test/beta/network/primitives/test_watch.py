@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
-from autogen.beta.network.primitives.watch import (
+from autogen.beta.watch import (
     AllOf,
     AnyOf,
     BatchWatch,

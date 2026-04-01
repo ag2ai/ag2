@@ -10,9 +10,8 @@ from autogen.beta.network.primitives.infra import (
     ActorInfo,
     LocalLock,
     LocalRegistry,
-    MemoryCache,
-    MemoryStateStore,
 )
+from autogen.beta.state import MemoryStateStore
 
 
 class TestMemoryStateStore:
@@ -49,35 +48,7 @@ class TestMemoryStateStore:
         assert await store.get("key1") == "v2"
 
 
-class TestMemoryCache:
-    @pytest.mark.asyncio
-    async def test_set_and_get(self) -> None:
-        cache = MemoryCache()
-        await cache.set("key1", "value1")
-        assert await cache.get("key1") == "value1"
-
-    @pytest.mark.asyncio
-    async def test_get_nonexistent(self) -> None:
-        cache = MemoryCache()
-        assert await cache.get("missing") is None
-
-    @pytest.mark.asyncio
-    async def test_invalidate_exact(self) -> None:
-        cache = MemoryCache()
-        await cache.set("key1", "v1")
-        await cache.invalidate("key1")
-        assert await cache.get("key1") is None
-
-    @pytest.mark.asyncio
-    async def test_invalidate_pattern(self) -> None:
-        cache = MemoryCache()
-        await cache.set("user:1", "a")
-        await cache.set("user:2", "b")
-        await cache.set("other:1", "c")
-        await cache.invalidate("user:*")
-        assert await cache.get("user:1") is None
-        assert await cache.get("user:2") is None
-        assert await cache.get("other:1") == "c"
+# TestMemoryCache removed — MemoryCache is dead code (removed from infra).
 
 
 class TestLocalLock:

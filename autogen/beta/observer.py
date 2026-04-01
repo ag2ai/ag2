@@ -11,16 +11,14 @@ and produces ObserverAlert events when those conditions are met.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from autogen.beta.annotations import Context
 from autogen.beta.context import Stream
 from autogen.beta.events import BaseEvent
+from autogen.beta.events.alert import ObserverAlert
 
 from .watch import Watch
-
-if TYPE_CHECKING:
-    from .network.primitives.signal import Signal
 
 
 @runtime_checkable
@@ -43,7 +41,7 @@ class BaseObserver(ABC):
 
     The Watch handles stream subscription and event buffering.
     When the Watch fires, process() is called with the collected events.
-    If process() returns a Signal/ObserverAlert, it is emitted on the stream.
+    If process() returns an ObserverAlert, it is emitted on the stream.
 
     Parameters
     ----------
@@ -70,15 +68,15 @@ class BaseObserver(ABC):
 
     async def _on_watch(self, events: list[BaseEvent], ctx: Context) -> None:
         try:
-            signal = await self.process(events, ctx)
-            if signal is not None:
-                await ctx.send(signal)
+            alert = await self.process(events, ctx)
+            if alert is not None:
+                await ctx.send(alert)
         except Exception:
             import logging
 
             logging.getLogger(__name__).exception("Observer '%s' process() failed", self.name)
 
     @abstractmethod
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
-        """Analyze events and optionally return a signal/alert."""
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
+        """Analyze events and optionally return an alert."""
         ...

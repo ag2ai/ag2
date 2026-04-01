@@ -9,19 +9,21 @@ import pytest
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
-from autogen.beta.network.assembler import AssemblerMiddleware
+from autogen.beta import AssemblerMiddleware
+from autogen.beta.compact import CompactionSummary
+from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network.events import DelegationResult, SchedulerTriggerFired, TopicMessage
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.policies.conversation import ConversationPolicy
-from autogen.beta.network.policies.episodic_memory import EpisodicMemoryPolicy
 from autogen.beta.network.policies.network import FormattedEvent, NetworkPolicy
-from autogen.beta.network.policies.sliding_window import SlidingWindowPolicy
-from autogen.beta.network.policies.token_budget import TokenBudgetPolicy
 from autogen.beta.network.policies.topic_inbox import TopicInboxPolicy, TopicOverflow
-from autogen.beta.network.policies.working_memory import WorkingMemoryPolicy
-from autogen.beta.network.primitives.compact import CompactionSummary
-from autogen.beta.network.primitives.knowledge import KnowledgeStore, MemoryKnowledgeStore
-from autogen.beta.network.primitives.signal import Severity, Signal
+from autogen.beta.policies import (
+    ConversationPolicy,
+    EpisodicMemoryPolicy,
+    SlidingWindowPolicy,
+    TokenBudgetPolicy,
+    WorkingMemoryPolicy,
+)
 from autogen.beta.stream import MemoryStream
 
 
@@ -34,12 +36,12 @@ class TestConversationPolicy:
             ModelResponse(message=ModelMessage(content="hi")),
             ToolCallEvent(name="search", arguments="{}"),
             ToolResultEvent(id="1", name="search", content="result"),
-            Signal(source="mon", severity=Severity.WARNING, message="warn"),
+            ObserverAlert(source="mon", severity=Severity.WARNING, message="warn"),
         ]
         ctx = Context(stream=MemoryStream())
         prompts, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 4
-        assert all(not isinstance(e, Signal) for e in filtered)
+        assert all(not isinstance(e, ObserverAlert) for e in filtered)
 
     @pytest.mark.asyncio
     async def test_includes_compaction_summary(self) -> None:
@@ -55,14 +57,14 @@ class TestNetworkPolicy:
     @pytest.mark.asyncio
     async def test_includes_signals(self) -> None:
         policy = NetworkPolicy()
-        signal = Signal(source="mon", severity=Severity.CRITICAL, message="alert")
+        signal = ObserverAlert(source="mon", severity=Severity.CRITICAL, message="alert")
         events = [ModelRequest(content="hello"), signal]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         # Signal should be formatted as FormattedEvent
         formatted = [e for e in filtered if isinstance(e, FormattedEvent)]
         assert len(formatted) == 1
-        assert "[SIGNAL/CRITICAL]" in formatted[0].content
+        assert "[ALERT/CRITICAL]" in formatted[0].content
 
     @pytest.mark.asyncio
     async def test_formats_delegation_result(self) -> None:
@@ -170,7 +172,7 @@ class TestAssemblerMiddleware:
         all_events = [
             ModelRequest(content="hello"),
             ModelResponse(message=ModelMessage(content="hi")),
-            Signal(source="mon", severity=Severity.WARNING, message="warn"),
+            ObserverAlert(source="mon", severity=Severity.WARNING, message="warn"),
         ]
 
         received_events = None
@@ -184,7 +186,7 @@ class TestAssemblerMiddleware:
 
         assert received_events is not None
         assert len(received_events) == 2
-        assert all(not isinstance(e, Signal) for e in received_events)
+        assert all(not isinstance(e, ObserverAlert) for e in received_events)
 
     @pytest.mark.asyncio
     async def test_restores_prompts_after_call(self) -> None:
@@ -337,32 +339,41 @@ class TestWorkingMemoryPolicy:
 class TestTopicInboxPolicy:
     @pytest.mark.asyncio
     async def test_injects_topic_messages(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
-        await hub.publish("writer", "news", "Breaking news!")
+        from autogen.beta.network.plugins.topic import TopicPlugin
 
-        policy = TopicInboxPolicy(hub, "actor")
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
+        await tp.publish("writer", "news", "Breaking news!")
+
+        policy = TopicInboxPolicy(tp, "actor")
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], [], ctx)
         assert any("Breaking news!" in p for p in prompts)
 
     @pytest.mark.asyncio
     async def test_no_op_without_messages(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
-        policy = TopicInboxPolicy(hub, "actor")
+        from autogen.beta.network.plugins.topic import TopicPlugin
+
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
+        policy = TopicInboxPolicy(tp, "actor")
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply(["existing"], [], ctx)
         assert prompts == ["existing"]
 
     @pytest.mark.asyncio
     async def test_newest_overflow_drops_oldest(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
-        for i in range(10):
-            await hub.publish("w", "news", f"msg-{i}")
+        from autogen.beta.network.plugins.topic import TopicPlugin
 
-        policy = TopicInboxPolicy(hub, "actor", max_messages=3, overflow=TopicOverflow.NEWEST)
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
+        for i in range(10):
+            await tp.publish("w", "news", f"msg-{i}")
+
+        policy = TopicInboxPolicy(tp, "actor", max_messages=3, overflow=TopicOverflow.NEWEST)
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], [], ctx)
 
@@ -373,7 +384,7 @@ class TestTopicInboxPolicy:
         assert "msg-0" not in combined
 
         # All messages consumed (cursor fully advanced)
-        remaining = await hub.peek_topic("actor", "news")
+        remaining = await tp.peek_topic("actor", "news")
         assert len(remaining) == 0
 
     @pytest.mark.asyncio
@@ -383,12 +394,15 @@ class TestTopicInboxPolicy:
         This is the fix for Bug C: previously the cursor advanced past all
         messages, permanently losing the deferred ones.
         """
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
-        for i in range(10):
-            await hub.publish("w", "news", f"msg-{i}")
+        from autogen.beta.network.plugins.topic import TopicPlugin
 
-        policy = TopicInboxPolicy(hub, "actor", max_messages=3, overflow=TopicOverflow.OLDEST)
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
+        for i in range(10):
+            await tp.publish("w", "news", f"msg-{i}")
+
+        policy = TopicInboxPolicy(tp, "actor", max_messages=3, overflow=TopicOverflow.OLDEST)
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], [], ctx)
 
@@ -400,23 +414,26 @@ class TestTopicInboxPolicy:
         assert "msg-9" not in combined
 
         # Newer messages should still be available (cursor only advanced by 3)
-        remaining = await hub.peek_topic("actor", "news")
+        remaining = await tp.peek_topic("actor", "news")
         assert len(remaining) == 7
         assert remaining[0].message == "msg-3"
 
     @pytest.mark.asyncio
     async def test_summary_overflow_advances_all(self) -> None:
-        hub = Hub()
-        await hub.subscribe_topic("actor", "news")
+        from autogen.beta.network.plugins.topic import TopicPlugin
+
+        hub = Hub(plugins=[TopicPlugin()])
+        tp = hub._topic_plugin
+        await tp.subscribe_topic("actor", "news")
         for i in range(10):
-            await hub.publish("w", "news", f"msg-{i}")
+            await tp.publish("w", "news", f"msg-{i}")
 
         # No summary_config — falls back to truncated list
-        policy = TopicInboxPolicy(hub, "actor", max_messages=3, overflow=TopicOverflow.SUMMARY)
+        policy = TopicInboxPolicy(tp, "actor", max_messages=3, overflow=TopicOverflow.SUMMARY)
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], [], ctx)
 
         assert any("summarized" in p.lower() for p in prompts)
         # All messages consumed
-        remaining = await hub.peek_topic("actor", "news")
+        remaining = await tp.peek_topic("actor", "news")
         assert len(remaining) == 0

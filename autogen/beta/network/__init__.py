@@ -41,7 +41,7 @@ from .events import (
 from .hub import Hub, RegistrationHandle
 
 # Plugins
-from .plugins import RateLimiter, TelemetryPlugin
+from .plugins import RateLimiter, TelemetryPlugin, TopicPlugin
 
 # Network-specific policies
 from .policies import NetworkPolicy, TopicInboxPolicy, TopicOverflow
@@ -61,18 +61,6 @@ from .primitives.priority import (
     DefaultPriorityScheme,
     HighestPriorityWins,
     PriorityScheme,
-)
-
-# Signal (kept until Phase 2 elimination)
-from .primitives.signal import (
-    CallHandler,
-    EmitToStream,
-    HaltEvent,
-    HaltOnFatal,
-    InjectToPrompt,
-    Severity,
-    Signal,
-    SignalPolicy,
 )
 
 # Remote
@@ -144,18 +132,10 @@ __all__ = (
     "DefaultPriorityScheme",
     "HighestPriorityWins",
     "PriorityScheme",
-    # Signal (until Phase 2)
-    "CallHandler",
-    "EmitToStream",
-    "HaltEvent",
-    "HaltOnFatal",
-    "InjectToPrompt",
-    "Severity",
-    "Signal",
-    "SignalPolicy",
     # Plugins
     "RateLimiter",
     "TelemetryPlugin",
+    "TopicPlugin",
     # Policies (network-specific)
     "NetworkPolicy",
     "TopicInboxPolicy",

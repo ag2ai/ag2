@@ -11,7 +11,7 @@ from autogen.beta.events import BaseEvent
 from autogen.beta.events.base import Field
 
 from autogen.beta.compact import CompactionSummary
-from autogen.beta.network.primitives.signal import Signal
+from autogen.beta.events.alert import ObserverAlert
 from autogen.beta.policies.conversation import CONVERSATION_TYPES
 
 from ..events import DelegationResult, SchedulerTriggerFired, TopicMessage
@@ -31,7 +31,7 @@ class FormattedEvent(BaseEvent):
 
 _NETWORK_TYPES = CONVERSATION_TYPES + (
     DelegationResult,
-    Signal,
+    ObserverAlert,
     SchedulerTriggerFired,
     TopicMessage,
     FormattedEvent,
@@ -67,9 +67,9 @@ class NetworkPolicy:
         return prompts, formatted
 
     def _format(self, event: BaseEvent) -> str | None:
-        if isinstance(event, Signal):
+        if isinstance(event, ObserverAlert):
             level = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
-            return f"[SIGNAL/{level}] ({event.source}): {event.message}"
+            return f"[ALERT/{level}] ({event.source}): {event.message}"
         if isinstance(event, DelegationResult):
             return f"[DELEGATION RESULT] {event.source} \u2192 {event.target}: {event.result}"
         if isinstance(event, SchedulerTriggerFired):

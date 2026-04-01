@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .actor import Actor
+from .actor import Actor, KnowledgeConfig, TaskConfig
 from .agent import Agent, AgentReply
 from .aggregate import (
     AggregateStrategy,
@@ -29,9 +29,11 @@ from .knowledge import (
     MemoryKnowledgeStore,
     StoreBootstrap,
 )
+from .events.alert import HaltEvent, ObserverAlert, Severity
 from .observer import BaseObserver, Observer
 from .observers import LoopDetector, TokenMonitor
 from .policies import (
+    AlertPolicy,
     ConversationPolicy,
     EpisodicMemoryPolicy,
     SlidingWindowPolicy,
@@ -72,9 +74,16 @@ __all__ = (
     "tool",
     # Actor (promoted from network)
     "Actor",
+    "KnowledgeConfig",
+    "TaskConfig",
     # Assembly
     "AssemblerMiddleware",
     "AssemblyPolicy",
+    # Alert system
+    "ObserverAlert",
+    "Severity",
+    "HaltEvent",
+    "AlertPolicy",
     # Policies
     "ConversationPolicy",
     "EpisodicMemoryPolicy",

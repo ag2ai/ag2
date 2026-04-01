@@ -10,7 +10,7 @@ import pytest
 from autogen.beta.network.events import DelegationError, DelegationRejected, DelegationRequest, DelegationResult
 from autogen.beta.network.hub import Hub, RegistrationHandle
 from autogen.beta.network.primitives.envelope import Envelope
-from autogen.beta.network.primitives.infra import MemoryStateStore
+from autogen.beta.state import MemoryStateStore
 from autogen.beta.network.primitives.priority import DefaultPriorityScheme, HighestPriorityWins
 from autogen.beta.network.topology import BasePlugin, Pipeline, RouteDecision
 

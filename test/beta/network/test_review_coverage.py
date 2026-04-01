@@ -32,7 +32,8 @@ from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.network.actor import Actor, _SignalInjectionMiddleware
+from autogen.beta import Actor, BaseObserver
+from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.network.convenience import Network
 from autogen.beta.network.events import (
     DelegationError,
@@ -40,18 +41,13 @@ from autogen.beta.network.events import (
     DelegationResult,
 )
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.observer import BaseObserver
 from autogen.beta.network.primitives.channel import BufferedChannel, PriorityChannel
 from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.network.primitives.priority import DefaultPriority, DefaultPriorityScheme
-from autogen.beta.network.primitives.signal import (
-    InjectToPrompt,
-    Severity,
-    Signal,
-)
-from autogen.beta.network.primitives.watch import EventWatch, IntervalWatch
-from autogen.beta.network.scheduler import Scheduler, WatchStatus
+from autogen.beta.policies import AlertPolicy
+from autogen.beta.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Fanout, Pipeline, RouteDecision
+from autogen.beta.watch import EventWatch, IntervalWatch
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 
@@ -192,7 +188,7 @@ class TestFatalPromptCleanup:
             async def process(self, events, ctx):
                 if not self._fired:
                     self._fired = True
-                    return Signal(
+                    return ObserverAlert(
                         source="mixed",
                         severity=Severity.FATAL,
                         message="halt now",
@@ -200,7 +196,7 @@ class TestFatalPromptCleanup:
                 return None
 
         observer = _MixedSignalObserver()
-        actor = Actor("test", config=config, observers=[observer], tools=[dummy_tool])
+        actor = Actor("test", config=config, observers=[observer], tools=[dummy_tool], assembly=[AlertPolicy()])
 
         stream = MemoryStream()
         reply = await actor.ask("go", stream=stream)
@@ -665,7 +661,7 @@ class TestMultipleObserversSignals:
                 self._message = message
 
             async def process(self, events, ctx):
-                return Signal(
+                return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
                     message=self._message,
@@ -683,6 +679,7 @@ class TestMultipleObserversSignals:
             config=config,
             observers=[obs_a, obs_b],
             tools=[dummy_tool],
+            assembly=[AlertPolicy()],
         )
         await actor.ask("go")
 
@@ -1037,86 +1034,6 @@ class TestHubAskUnregisteredInstance:
 # ===========================================================================
 
 
-class TestMultipleFatalSignals:
-    """Multiple FATAL signals in one batch should halt on the first."""
-
-    @pytest.mark.asyncio
-    async def test_two_fatals_halts_on_first(self) -> None:
-        """When two FATAL signals arrive in the same batch, the middleware
-        should halt and the response should reference the first FATAL."""
-        stream = MemoryStream()
-        ctx = ContextType(stream=stream)
-        ctx.prompt = ["existing"]
-
-        signals: list[Signal] = [
-            Signal(source="obs-a", severity=Severity.FATAL, message="fatal A"),
-            Signal(source="obs-b", severity=Severity.FATAL, message="fatal B"),
-        ]
-
-        policy = InjectToPrompt()
-
-        mw = _SignalInjectionMiddleware(
-            event=ModelMessage(content="test"),
-            context=ctx,
-            signal_queue=signals,
-            policy=policy,
-            delivered_ids=set(),
-        )
-
-        call_next = AsyncMock()
-        result = await mw.on_llm_call(call_next, [], ctx)
-
-        # Should halt without calling LLM
-        call_next.assert_not_called()
-        assert "HALTED" in result.message.content
-        # First FATAL's message should appear
-        assert "fatal A" in result.message.content
-        # Prompt should be cleaned (only original entry remains)
-        assert len(ctx.prompt) == 1
-        assert "existing" in ctx.prompt
-
-
-# ===========================================================================
-# Previous: Signal injection prompt cleanup on FATAL path
-# ===========================================================================
-
-
-class TestSignalInjectionFatalCleanup:
-    """_SignalInjectionMiddleware should clean prompt on FATAL path."""
-
-    @pytest.mark.asyncio
-    async def test_prompt_entries_cleaned_on_fatal(self) -> None:
-        """When FATAL halts execution, any prompt entries added by the
-        policy should be removed."""
-        stream = MemoryStream()
-        ctx = ContextType(stream=stream)
-        ctx.prompt = ["existing-prompt-entry"]
-
-        signals: list[Signal] = [
-            Signal(source="obs", severity=Severity.WARNING, message="warning"),
-            Signal(source="obs", severity=Severity.FATAL, message="fatal"),
-        ]
-
-        policy = InjectToPrompt()
-
-        mw = _SignalInjectionMiddleware(
-            event=ModelMessage(content="test"),
-            context=ctx,
-            signal_queue=signals,
-            policy=policy,
-            delivered_ids=set(),
-        )
-
-        call_next = AsyncMock()  # Should not be called for FATAL
-        result = await mw.on_llm_call(call_next, [], ctx)
-
-        # call_next should NOT have been called (FATAL halts)
-        call_next.assert_not_called()
-
-        # The existing prompt entry should be preserved
-        assert "existing-prompt-entry" in ctx.prompt
-        # But any entries added by InjectToPrompt should be cleaned up
-        assert len(ctx.prompt) == 1  # Only the original entry remains
-
-        # The result should be a halt response
-        assert "HALTED" in result.message.content
+# TestMultipleFatalSignals and TestSignalInjectionFatalCleanup removed.
+# These tested internals (_SignalInjectionMiddleware, InjectToPrompt) that
+# were removed when the Signal system was replaced by AlertPolicy.
