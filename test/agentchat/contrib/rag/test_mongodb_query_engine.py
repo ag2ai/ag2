@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from autogen.agentchat.contrib.rag import MongoDBQueryEngine, RAGQueryEngine
-from autogen.import_utils import skip_on_missing_imports
 
 logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
@@ -25,8 +24,6 @@ MONGO_CONN_STR = "mongodb://localhost:27017/?directConnection=true"
 
 
 @pytest.fixture(scope="module")
-@pytest.mark.openai
-@skip_on_missing_imports(["pymongo", "llama_index"], "mongodb_query_engine")
 def mongodb_query_engine() -> MongoDBQueryEngine:
     """
     Fixture that creates a MongoDBQueryEngine instance and initializes it using real document files.

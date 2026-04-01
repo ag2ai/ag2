@@ -575,7 +575,6 @@ files = [
     "test/test_import_utils.py",
     "test/test_import.py",
     "test/tools",
-    "test/website",
 ]
 
 exclude = [

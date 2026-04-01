@@ -13,10 +13,9 @@ from typing import Annotated
 
 import mkdocs.commands.serve
 import typer
+from _website.generate_mkdocs import main as generate_files_for_mkdocs
 from create_api_docs import create_api_docs
 from mkdocs.config import load_config
-
-from _website.generate_mkdocs import main as generate_files_for_mkdocs
 
 IGNORE_DIRS = ("assets", "stylesheets", "javascripts")
 
