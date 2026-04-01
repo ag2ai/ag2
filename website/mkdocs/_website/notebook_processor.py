@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypeVar
 
-from ..import_utils import optional_import_block, require_optional_import
+from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import nbformat

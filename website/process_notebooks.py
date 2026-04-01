@@ -8,7 +8,12 @@
 
 from __future__ import annotations
 
-from autogen._website.process_notebooks import main
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "mkdocs"))
+
+from _website.process_notebooks import main
 
 if __name__ == "__main__":
     main()
