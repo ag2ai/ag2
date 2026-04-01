@@ -8,7 +8,6 @@ from google.genai import types
 from autogen.beta.config.gemini.mappers import build_tools
 from autogen.beta.context import Context
 from autogen.beta.tools.builtin.web_search import WebSearchTool
-
 from test.beta.config._helpers import make_tool
 
 
