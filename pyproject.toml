@@ -364,7 +364,7 @@ lint = [
 dev = [
     "toml==0.10.2",
     "ag2[lint,test,types,docs]",
-    "pre-commit==4.3.0",
+    "pre-commit==4.5.1",
     "detect-secrets==1.5.0",
     "uv==0.8.15",
 ]

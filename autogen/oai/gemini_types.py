@@ -69,7 +69,7 @@ class CommonBaseModel(BaseModel):
         extra="forbid",
         # This allows us to use arbitrary types in the model. E.g. PIL.Image.
         arbitrary_types_allowed=True,
-        set_json_bytes="base64",
+        ser_json_bytes="base64",
         val_json_bytes="base64",
         ignored_types=(TypeVar,),
     )

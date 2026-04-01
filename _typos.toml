@@ -4,3 +4,9 @@ extend-exclude = ["notebook/", "website/"]
 [default.extend-words]
 # VertexAI import aliases in autogen/oai/gemini.py
 vai = "vai"
+
+# Rajan Chari's name
+chari = "chari"
+
+# Pydantic config attributes
+ser = "ser"
