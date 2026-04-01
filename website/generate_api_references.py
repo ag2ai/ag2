@@ -4,12 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from mkdocs._website.generate_api_references import main
+
 if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parent / "mkdocs"))
-
-    from _website.generate_api_references import main
-
     main()
