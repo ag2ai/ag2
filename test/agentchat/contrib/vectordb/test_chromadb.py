@@ -15,7 +15,6 @@ from autogen.import_utils import optional_import_block, run_for_optional_imports
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 with optional_import_block() as result:
-    import chromadb
     import chromadb.errors
     import sentence_transformers  # noqa: F401
 

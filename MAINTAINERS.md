@@ -31,7 +31,7 @@
 | Name            | GitHub Handle                                              | Organization           | Features                                |
 |-----------------|------------------------------------------------------------|------------------------|-----------------------------------------|
 | Olaoluwa Ademola Salami * | [olaoluwasalami](https://github.com/olaoluwasalami)  | DevOps Engineer        |                                          |
-| Rajan Chari *    | [rajan-chari](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
+| Rajan Chair *    | [rajan-chair](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
 
 **Past Maintainers list**
 | Name            | GitHub Handle                                              | Organization           | Features                                |

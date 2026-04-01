@@ -1670,7 +1670,7 @@ def test_speaker_selection_auto_process_result():
     # Invalid result messages, will return the next agent
     chat_result.chat_history[3]["content"] = "This text should not be here."
 
-    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Maanger)
+    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Manager)
     assert groupchat._process_speaker_selection_result(chat_result, pm, agent_list) == cmo
 
 

@@ -23,10 +23,12 @@ repos:
         )$
     - id: check-byte-order-marker
       exclude: .gitignore
+    - id: trailing-whitespace
+    - id: mixed-line-ending
+    - id: end-of-file-fixer
+    - id: check-case-conflict
     - id: check-merge-conflict
     - id: detect-private-key
-    - id: trailing-whitespace
-    - id: end-of-file-fixer
     - id: no-commit-to-branch
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.1
@@ -51,14 +53,16 @@ repos:
         types: [python]
         require_serial: true
         verbose: true
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.30.3
+    hooks:
+      - id: typos
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
       - id: codespell
         additional_dependencies:
         - tomli
-        # args: ["-L", "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,Regio"]
-        # ./notebook,./website/node_modules,./website/notebooks
         exclude: |
             (?x)^(
               # notebook/.* |
@@ -99,15 +103,13 @@ repos:
           website/.*
         )$
 
-  # - repo: https://github.com/Yelp/detect-secrets
-  #   rev: v1.5.0
-  #   hooks:
-  #     - id: detect-secrets
-  #       args: ["--baseline", ".secrets.baseline"]
-  #       exclude: |
-  #         (?x)^(
-  #             package.lock.json
-  #         )$
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+    - id: detect-secrets
+      args: [
+          '--exclude-files', 'notebook/.*',
+      ]
 
   - repo: local
     hooks:

@@ -96,8 +96,9 @@ class DeepResearchTool(Tool):
                 "First you need to split the question into subquestions by calling the 'split_question_and_answer_subquestions' method."
                 "Then you need to sintesize the answers the original question by combining the answers to the subquestions."
             ),
-            is_termination_msg=lambda x: x.get("content", "")
-            and x.get("content", "").startswith(self.ANSWER_CONFIRMED_PREFIX),
+            is_termination_msg=lambda x: (
+                x.get("content", "") and x.get("content", "").startswith(self.ANSWER_CONFIRMED_PREFIX)
+            ),
             llm_config=llm_config,
             human_input_mode="NEVER",
         )
@@ -110,8 +111,9 @@ class DeepResearchTool(Tool):
                 "Provide constructive feedback on how the answer can be improved.\n"
                 "If the answer is satisfactory, call the 'confirm_answer' method to end the task.\n"
             ),
-            is_termination_msg=lambda x: x.get("content", "")
-            and x.get("content", "").startswith(self.ANSWER_CONFIRMED_PREFIX),
+            is_termination_msg=lambda x: (
+                x.get("content", "") and x.get("content", "").startswith(self.ANSWER_CONFIRMED_PREFIX)
+            ),
             llm_config=llm_config,
             human_input_mode="NEVER",
         )
@@ -186,8 +188,10 @@ class DeepResearchTool(Tool):
                     "Some rule of thumb is to have only one subquestion for easy questions, 3 for medium questions, and 5 for hard questions.\n"
                 ),
                 llm_config=llm_config,
-                is_termination_msg=lambda x: x.get("content", "")
-                and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX),
+                is_termination_msg=lambda x: (
+                    x.get("content", "")
+                    and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX)
+                ),
                 human_input_mode="NEVER",
             )
 
@@ -210,8 +214,10 @@ class DeepResearchTool(Tool):
                     "Some rule of thumb is to have only one subquestion for easy questions, 3 for medium questions, and 5 for hard questions.\n"
                 ),
                 llm_config=llm_config,
-                is_termination_msg=lambda x: x.get("content", "")
-                and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX),
+                is_termination_msg=lambda x: (
+                    x.get("content", "")
+                    and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX)
+                ),
                 human_input_mode="NEVER",
             )
 

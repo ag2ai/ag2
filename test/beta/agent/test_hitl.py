@@ -110,7 +110,7 @@ async def test_hitl_decorator_override(
     )
 
     @agent.hitl_hook
-    def overrided_hook(event: HumanInputRequest) -> HumanMessage:
+    def overridden_hook(event: HumanInputRequest) -> HumanMessage:
         return HumanMessage(content="wrong")
 
     with pytest.warns(RuntimeWarning):

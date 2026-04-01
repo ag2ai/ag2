@@ -20,11 +20,11 @@ class Secrets:
     @staticmethod
     def add_secret(secret: str) -> None:
         Secrets._secrets.add(secret)
-        Secrets.get_secrets_patten.cache_clear()
+        Secrets.get_secrets_pattern.cache_clear()
 
     @staticmethod
     @functools.lru_cache(None)
-    def get_secrets_patten(x: int = 5) -> re.Pattern[str]:
+    def get_secrets_pattern(x: int = 5) -> re.Pattern[str]:
         """
         Builds a regex pattern to match substrings of length `x` or greater derived from any secret in the list.
 
@@ -57,7 +57,7 @@ class Secrets:
         if len(Secrets._secrets) == 0:
             return data
 
-        pattern = Secrets.get_secrets_patten(x)
+        pattern = Secrets.get_secrets_pattern(x)
 
         return re.sub(pattern, "*****", data)
 

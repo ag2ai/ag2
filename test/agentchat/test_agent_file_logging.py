@@ -15,7 +15,6 @@ from typing import Any
 import pytest
 
 import autogen
-import autogen.runtime_logging
 from autogen.logger.file_logger import FileLogger
 
 is_windows = sys.platform.startswith("win")

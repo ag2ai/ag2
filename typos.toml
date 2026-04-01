@@ -1,0 +1,6 @@
+[files]
+extend-exclude = ["notebook/", "website/"]
+
+[default.extend-words]
+# VertexAI import aliases in autogen/oai/gemini.py
+vai = "vai"

@@ -26,7 +26,7 @@ class TestExtractedContent:
             ("about:blank", None),
         ],
     )
-    def test_url_is_proprely_set(self, url: str, expected_url: str) -> None:
+    def test_url_is_properly_set(self, url: str, expected_url: str) -> None:
         extracted_content = ExtractedContent(content="content", url=url)
         assert extracted_content.url == expected_url
 

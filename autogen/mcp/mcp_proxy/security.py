@@ -56,7 +56,7 @@ class BaseSecurity(BaseModel):
                 return sub_class
 
         logger.error(f"Unsupported type '{type}' and schema_parameters '{schema_parameters}' combination")
-        return UnsuportedSecurityStub
+        return UnsupportedSecurityStub
 
     @classmethod
     def get_security_parameters(cls, schema_parameters: dict[str, Any]) -> str:
@@ -101,7 +101,7 @@ class BaseSecurityParameters(BaseModel):
         }
 
 
-class UnsuportedSecurityStub(BaseSecurity):
+class UnsupportedSecurityStub(BaseSecurity):
     """Unsupported security stub class."""
 
     type: ClassVar[Literal["unsupported"]] = "unsupported"
@@ -113,7 +113,7 @@ class UnsuportedSecurityStub(BaseSecurity):
 
     def accept(self, security_params: "BaseSecurityParameters") -> bool:
         if isinstance(self, security_params.get_security_class()):
-            raise RuntimeError("Trying to set UnsuportedSecurityStub params")
+            raise RuntimeError("Trying to set UnsupportedSecurityStub params")
         return False
 
     class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
@@ -128,7 +128,7 @@ class UnsuportedSecurityStub(BaseSecurity):
             pass
 
         def get_security_class(self) -> type[BaseSecurity]:
-            return UnsuportedSecurityStub
+            return UnsupportedSecurityStub
 
         def dump(self) -> dict[str, Any]:
             return {
