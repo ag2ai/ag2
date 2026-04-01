@@ -22,11 +22,15 @@
 ### Public API (`autogen.beta`)
 
 Top-level modules:
-- `autogen.beta`
-- `autogen.beta.testing`
-- `autogen.beta.middleware`
-- `autogen.beta.tools`
-- `autogen.beta.config`
+- `autogen.beta` - top-level module with most basic functionality
+- `autogen.beta.config` - LLM provider clients (see [below](#llm-provider-clients))
+- `autogen.beta.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
+- `autogen.beta.testing` - Testing utilities
+- `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
+
+Advanced modules:
+- `autogen.beta.events` - Event types for the agent loop
+- `autogen.beta.streams` - Persistent stream backends (e.g. Redis)
 
 ### Re-export rules
 

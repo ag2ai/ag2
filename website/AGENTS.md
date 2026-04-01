@@ -2,7 +2,7 @@
 
 ## Beta Documentation
 
-Beta docs live in `website/docs/beta/`. Each page is an MDX file.
+Beta docs sources live in `website/docs/beta/*.mdx`. Each page is an MDX file.
 
 ### Frontmatter
 
@@ -99,6 +99,8 @@ To add a new page:
 2. Add its path to the `"Beta"` group's `"pages"` array in `mint-json-template.json.jinja`. Paths are relative to the `website/` root and omit the `.mdx` extension (e.g., `"docs/beta/my_new_page"`).
 3. For nested groups, wrap pages in a `{"group": "Group Name", "pages": [...]}` object.
 
+**Subfolder rule**: navigation groups with subpages must be backed by a matching subfolder in the source tree. Place pages for a group inside `docs/beta/{group_name}/`. Do **not** use `index.mdx` — subfolders do not support index files. Instead, name the main page explicitly (e.g., `docs/beta/tools/tools.mdx`). For example, the "Tools" group maps to `docs/beta/tools/tools.mdx`, `docs/beta/tools/toolkits.mdx`, etc.
+
 Example — adding a standalone page:
 
 ```json
@@ -116,11 +118,11 @@ Example — adding a page inside a nested group:
 
 ```json
 {
-  "group": "Context Features",
+  "group": "Tools",
   "pages": [
-    "docs/beta/context/variables",
-    "docs/beta/context/inject",
-    "docs/beta/context/my_new_context_page"
+    "docs/beta/tools/tools",
+    "docs/beta/tools/toolkits",
+    "docs/beta/tools/builtin_tools"
   ]
 }
 ```
