@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -175,14 +176,13 @@ def convert_messages(
     return result
 
 
-def normalize_usage(raw: dict[str, Any]) -> dict[str, Any]:
+def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format."""
-    usage: dict[str, Any] = {
-        "prompt_tokens": raw.get("input_tokens", 0),
-        "completion_tokens": raw.get("output_tokens", 0),
-    }
-    if raw.get("cache_creation_input_tokens"):
-        usage["cache_creation_input_tokens"] = raw["cache_creation_input_tokens"]
-    if raw.get("cache_read_input_tokens"):
-        usage["cache_read_input_tokens"] = raw["cache_read_input_tokens"]
-    return usage
+    cc = raw.get("cache_creation_input_tokens")
+    cr = raw.get("cache_read_input_tokens")
+    return Usage(
+        prompt_tokens=float(raw.get("input_tokens", 0)),
+        completion_tokens=float(raw.get("output_tokens", 0)),
+        cache_creation_input_tokens=float(cc) if cc else None,
+        cache_read_input_tokens=float(cr) if cr else None,
+    )
