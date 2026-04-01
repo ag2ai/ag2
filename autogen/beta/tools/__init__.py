@@ -14,7 +14,6 @@ from .builtin import (
     NetworkPolicy,
     ShellTool,
     UserLocation,
-    WebFetchCitations,
     WebFetchTool,
     WebSearchTool,
 )
@@ -32,7 +31,6 @@ __all__ = (
     "ToolResult",
     "Toolkit",
     "UserLocation",
-    "WebFetchCitations",
     "WebFetchTool",
     "WebSearchTool",
     "tool",

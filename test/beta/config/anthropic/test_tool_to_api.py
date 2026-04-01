@@ -5,7 +5,7 @@
 from autogen.beta.config.anthropic.mappers import tool_to_api
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
 from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellToolSchema
-from autogen.beta.tools.builtin.web_fetch import WebFetchCitations, WebFetchToolSchema
+from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 
 from .._helpers import make_parameterless_tool, make_tool
@@ -129,9 +129,9 @@ def test_tool_to_api_web_search_with_blocked_domains() -> None:
 
 
 def test_tool_to_api_web_search_dynamic_filtering() -> None:
-    schema = WebSearchToolSchema()
+    schema = WebSearchToolSchema(web_search_version="web_search_20260209")
 
-    api_tool = tool_to_api(schema, web_search_version="web_search_20260209")
+    api_tool = tool_to_api(schema)
 
     assert api_tool == {
         "type": "web_search_20260209",
@@ -144,9 +144,10 @@ def test_tool_to_api_web_search_dynamic_filtering_with_domains() -> None:
         max_uses=5,
         allowed_domains=["docs.example.com"],
         blocked_domains=["spam.example.com"],
+        web_search_version="web_search_20260209",
     )
 
-    api_tool = tool_to_api(schema, web_search_version="web_search_20260209")
+    api_tool = tool_to_api(schema)
 
     assert api_tool == {
         "type": "web_search_20260209",
@@ -173,7 +174,7 @@ def test_tool_to_api_web_fetch_full() -> None:
         max_uses=5,
         allowed_domains=["docs.example.com"],
         blocked_domains=["private.example.com"],
-        citations=WebFetchCitations(enabled=True),
+        citations=True,
         max_content_tokens=50000,
     )
 
@@ -191,9 +192,9 @@ def test_tool_to_api_web_fetch_full() -> None:
 
 
 def test_tool_to_api_web_fetch_dynamic_filtering() -> None:
-    schema = WebFetchToolSchema()
+    schema = WebFetchToolSchema(web_fetch_version="web_fetch_20260209")
 
-    api_tool = tool_to_api(schema, web_fetch_version="web_fetch_20260209")
+    api_tool = tool_to_api(schema)
 
     assert api_tool == {
         "type": "web_fetch_20260209",
