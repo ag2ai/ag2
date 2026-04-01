@@ -398,7 +398,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
+addopts = '-m "not conda"'
 timeout = 30
 testpaths = ["test"]
 
