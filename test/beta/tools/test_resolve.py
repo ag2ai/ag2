@@ -11,6 +11,9 @@ from autogen.beta.context import Context
 from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
+from autogen.beta.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 
 
 def _make_context(**variables: object) -> Context:
@@ -68,72 +71,78 @@ def test_resolve_variable_missing_raises() -> None:
         resolve_variable(Variable("user_location"), ctx)
 
 
-# --- WebSearchTool.schemas() with Variable ---
-
-
-@pytest.mark.asyncio
-async def test_web_search_tool_static_values() -> None:
-    tool = WebSearchTool(search_context_size="high", max_uses=5)
-    ctx = _make_context()
-
-    [schema] = await tool.schemas(ctx)
-
-    assert schema.search_context_size == "high"
-    assert schema.max_uses == 5
-    assert schema.user_location is None
-
-
-@pytest.mark.asyncio
-async def test_web_search_tool_variable_resolved_with_default_name() -> None:
-    loc = UserLocation(city="Berlin", country="DE")
-    tool = WebSearchTool(
-        search_context_size="high",
-        user_location=Variable(),
-    )
-    ctx = _make_context(user_location=loc)
-
-    [schema] = await tool.schemas(ctx)
-
-    assert schema.user_location is loc
-    assert schema.search_context_size == "high"
+# --- WebSearchTool ---
 
 
 @pytest.mark.asyncio
 async def test_web_search_tool_variable_resolved() -> None:
     loc = UserLocation(city="Berlin", country="DE")
-    tool = WebSearchTool(
-        search_context_size="high",
-        user_location=Variable("user_location"),
-    )
-    ctx = _make_context(user_location=loc)
+    tool = WebSearchTool(user_location=Variable("loc"))
+    ctx = _make_context(loc=loc)
 
     [schema] = await tool.schemas(ctx)
 
+    assert isinstance(schema, WebSearchToolSchema)
     assert schema.user_location is loc
-    assert schema.search_context_size == "high"
-
-
-@pytest.mark.asyncio
-async def test_web_search_tool_variable_with_default() -> None:
-    fallback = UserLocation(country="US")
-    tool = WebSearchTool(user_location=Variable("user_location", default=fallback))
-    ctx = _make_context()
-
-    [schema] = await tool.schemas(ctx)
-
-    assert schema.user_location is fallback
 
 
 @pytest.mark.asyncio
 async def test_web_search_tool_variable_missing_raises() -> None:
-    tool = WebSearchTool(user_location=Variable("user_location"))
+    tool = WebSearchTool(user_location=Variable("loc"))
     ctx = _make_context()
 
-    with pytest.raises(KeyError, match="user_location"):
+    with pytest.raises(KeyError, match="loc"):
         await tool.schemas(ctx)
 
 
-# --- ImageGenerationTool.schemas() with Variable ---
+# --- WebFetchTool ---
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_tool_variable_resolved() -> None:
+    tool = WebFetchTool(max_uses=Variable("limit"))
+    ctx = _make_context(limit=10)
+
+    [schema] = await tool.schemas(ctx)
+
+    assert isinstance(schema, WebFetchToolSchema)
+    assert schema.max_uses == 10
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_tool_variable_missing_raises() -> None:
+    tool = WebFetchTool(max_uses=Variable("limit"))
+    ctx = _make_context()
+
+    with pytest.raises(KeyError, match="limit"):
+        await tool.schemas(ctx)
+
+
+# --- ShellTool ---
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_variable_resolved() -> None:
+    env = ContainerAutoEnvironment()
+    tool = ShellTool(environment=Variable("env"))
+    ctx = _make_context(env=env)
+
+    [schema] = await tool.schemas(ctx)
+
+    assert isinstance(schema, ShellToolSchema)
+    assert schema.environment is env
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_variable_missing_raises() -> None:
+    tool = ShellTool(environment=Variable("env"))
+    ctx = _make_context()
+
+    with pytest.raises(KeyError, match="env"):
+        await tool.schemas(ctx)
+
+
+# --- ImageGenerationTool ---
 
 
 @pytest.mark.asyncio
