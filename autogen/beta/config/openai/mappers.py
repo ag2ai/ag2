@@ -11,6 +11,7 @@ from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
 from autogen.beta.tools.builtin.shell import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
@@ -171,9 +172,6 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             },
         }
 
-    if isinstance(t, ImageGenerationToolSchema):
-        raise UnsupportedToolError(t.type, "openai-completions")
-
     raise UnsupportedToolError(t.type, "openai-completions")
 
 
@@ -248,6 +246,24 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             result["output_compression"] = t.output_compression
         if t.partial_images is not None:
             result["partial_images"] = t.partial_images
+        return result
+
+    elif isinstance(t, MCPServerToolSchema):
+        # https://platform.openai.com/docs/guides/tools-remote-mcp
+        result = {
+            "type": "mcp",
+            "server_label": t.server_label,
+            "server_url": t.server_url,
+            "require_approval": "never",
+        }
+        if t.description is not None:
+            result["server_description"] = t.description
+        if t.allowed_tools is not None:
+            result["allowed_tools"] = t.allowed_tools
+        if t.headers is not None:
+            result["headers"] = t.headers
+        elif t.authorization_token is not None:
+            result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
         return result
 
     raise UnsupportedToolError(t.type, "openai-responses")

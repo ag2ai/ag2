@@ -4,6 +4,7 @@
 
 from .code_execution import CodeExecutionTool
 from .image_generation import ImageGenerationTool
+from .mcp_server import MCPServerTool
 from .memory import MemoryTool
 from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, LocalEnvironment, NetworkPolicy, ShellTool
 from .web_fetch import WebFetchTool
@@ -15,6 +16,7 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "ImageGenerationTool",
     "LocalEnvironment",
+    "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
     "ShellTool",

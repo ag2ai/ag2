@@ -11,6 +11,7 @@ from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
 from autogen.beta.tools.builtin.shell import ShellToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
@@ -130,7 +131,38 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
         return {"type": t.version, "name": "bash"}
 
+    elif isinstance(t, MCPServerToolSchema):
+        # https://platform.claude.com/docs/en/docs/agents-and-tools/mcp-connector
+        result = {
+            "type": "mcp_toolset",
+            "mcp_server_name": t.server_label,
+        }
+        if t.allowed_tools is not None:
+            result["default_config"] = {"enabled": False}
+            result["configs"] = {name: {"enabled": True} for name in t.allowed_tools}
+        if t.blocked_tools is not None:
+            configs: dict[str, Any] = result.get("configs", {})
+            configs.update({name: {"enabled": False} for name in t.blocked_tools})
+            result["configs"] = configs
+        return result
+
     raise UnsupportedToolError(t.type, "anthropic")
+
+
+def extract_mcp_servers(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
+    """Extract Anthropic mcp_servers definitions from MCPServerToolSchema instances."""
+    servers: list[dict[str, Any]] = []
+    for t in tools:
+        if isinstance(t, MCPServerToolSchema):
+            server: dict[str, Any] = {
+                "type": "url",
+                "url": t.server_url,
+                "name": t.server_label,
+            }
+            if t.authorization_token is not None:
+                server["authorization_token"] = t.authorization_token
+            servers.append(server)
+    return servers
 
 
 def convert_messages(

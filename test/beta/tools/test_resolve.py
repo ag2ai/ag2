@@ -11,6 +11,7 @@ from autogen.beta.context import Context
 from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
 from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
@@ -163,4 +164,27 @@ async def test_image_generation_tool_variable_missing_raises() -> None:
     ctx = _make_context()
 
     with pytest.raises(KeyError, match="partial_images"):
+        await tool.schemas(ctx)
+
+
+# --- MCPServerTool ---
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_tool_variable_resolved() -> None:
+    tool = MCPServerTool(server_url=Variable("url"), server_label="test-mcp")
+    ctx = _make_context(url="https://mcp.example.com/sse")
+
+    [schema] = await tool.schemas(ctx)
+
+    assert isinstance(schema, MCPServerToolSchema)
+    assert schema.server_url == "https://mcp.example.com/sse"
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_tool_variable_missing_raises() -> None:
+    tool = MCPServerTool(server_url=Variable("url"), server_label="test-mcp")
+    ctx = _make_context()
+
+    with pytest.raises(KeyError, match="url"):
         await tool.schemas(ctx)
