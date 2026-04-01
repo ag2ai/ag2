@@ -109,6 +109,10 @@ class ArtifactClient:
         Cache structure: ~/.ag2/cache/artifacts/{type}/{owner}/{name}/{version}/
         Once cached (marked by .fetched sentinel), subsequent calls return instantly.
         """
+        # Parse "owner/name" format
+        if "/" in name:
+            owner, name = name.split("/", 1)
+
         type_dir = self._type_dir(artifact_type)
         dest = self.cache_dir / type_dir / owner / name / version
         marker = dest / ".fetched"
