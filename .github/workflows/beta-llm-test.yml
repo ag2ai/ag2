@@ -1,0 +1,75 @@
+name: Core Beta tests with LLMs
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions:
+  {}
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        llm: ["openai", "gemini", "anthropic"]
+        python-version: ["3.10"]
+        os: [ubuntu-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages for ${{ matrix.llm }}
+        run: |
+          uv pip install --system -e ".[test,${{ matrix.llm }}]"
+      - name: Beta LLM tests using ${{ matrix.llm }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+        run: |
+          llm_fixed="${{ matrix.llm }}"
+          llm_fixed="${llm_fixed//-/_}"
+          bash scripts/test-beta-llm.sh -m "$llm_fixed"
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: beta-llm, ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

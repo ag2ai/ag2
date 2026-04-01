@@ -5,7 +5,6 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware
@@ -16,50 +15,47 @@ from ._resolve import resolve_variable
 
 
 @dataclass(slots=True)
-class UserLocation:
-    city: str | None = None
-    region: str | None = None
-    country: str | None = None
-    timezone: str | None = None
+class WebFetchCitations:
+    enabled: bool = True
 
 
 @dataclass(slots=True)
-class WebSearchToolSchema(ToolSchema):
-    type: str = field(default="web_search", init=False)
-    search_context_size: Literal["low", "medium", "high"] | None = None
+class WebFetchToolSchema(ToolSchema):
+    type: str = field(default="web_fetch", init=False)
     max_uses: int | None = None
-    user_location: UserLocation | None = None
     allowed_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
+    citations: WebFetchCitations | None = None
+    max_content_tokens: int | None = None
 
 
-class WebSearchTool(Tool):
+class WebFetchTool(Tool):
     __slots__ = ("_params",)
 
     def __init__(
         self,
         *,
-        search_context_size: Literal["low", "medium", "high"] | Variable | None = None,
         max_uses: int | Variable | None = None,
-        user_location: UserLocation | Variable | None = None,
         allowed_domains: list[str] | Variable | None = None,
         blocked_domains: list[str] | Variable | None = None,
+        citations: WebFetchCitations | Variable | None = None,
+        max_content_tokens: int | Variable | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
-        if search_context_size is not None:
-            self._params["search_context_size"] = search_context_size
         if max_uses is not None:
             self._params["max_uses"] = max_uses
-        if user_location is not None:
-            self._params["user_location"] = user_location
         if allowed_domains is not None:
             self._params["allowed_domains"] = allowed_domains
         if blocked_domains is not None:
             self._params["blocked_domains"] = blocked_domains
+        if citations is not None:
+            self._params["citations"] = citations
+        if max_content_tokens is not None:
+            self._params["max_content_tokens"] = max_content_tokens
 
-    async def schemas(self, context: "Context") -> list[WebSearchToolSchema]:
+    async def schemas(self, context: "Context") -> list[WebFetchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
-        return [WebSearchToolSchema(**resolved)]
+        return [WebFetchToolSchema(**resolved)]
 
     def register(
         self,

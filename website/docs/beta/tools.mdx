@@ -340,3 +340,98 @@ async def my_tool(context: Context) -> str:
 ```
 
 For more detailed information on specific context features, see [Dependency Injection](../context/inject), [Context Variables](../context/variables), [Depends](../depends), [Human-in-the-loop](../context/human_in_the_loop).
+
+## Built-in Provider Tools
+
+AG2 includes built-in tools that map to server-side capabilities offered by LLM providers. These tools are executed by the provider's API — not locally — and require no function implementation on your side.
+
+| Tool | Anthropic | OpenAI | Gemini |
+| :--- | :---: | :---: | :---: |
+| `WebSearchTool` | ✓ | ✓ | ✓ |
+| `WebFetchTool` | ✓ | ✗ | ✓ |
+| `CodeExecutionTool` | ✓ | ✓ | ✓ |
+| `MemoryTool` | ✓ | ✗ | ✗ |
+
+### Web Search
+
+Gives the model access to real-time web search results.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import WebSearchTool, UserLocation
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        WebSearchTool(
+            max_uses=5,
+            user_location=UserLocation(country="US"),
+            allowed_domains=["github.com", "pypi.org"],
+            blocked_domains=["pinterest.com"],
+        ),
+    ],
+)
+```
+
+Not all parameters are supported by every provider. Unsupported parameters are silently ignored.
+
+| Parameter | Anthropic | OpenAI | Gemini |
+| :--- | :---: | :---: | :---: |
+| `max_uses` | ✓ | ✓ | ✗ |
+| `user_location` | ✓ | ✓ | ✗ |
+| `search_context_size` | ✗ | ✓ | ✗ |
+| `allowed_domains` | ✓ | ✓ | ✗ |
+| `blocked_domains` | ✓ | ✗ | ✓ |
+
+### Web Fetch
+
+Fetches full content from specific URLs. Useful for reading documentation, articles, or PDFs.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import WebFetchTool, WebFetchCitations
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[
+        WebFetchTool(
+            max_uses=3,
+            max_content_tokens=50000,
+            citations=WebFetchCitations(enabled=True),
+        ),
+    ],
+)
+```
+
+| Parameter | Anthropic | Gemini |
+| :--- | :---: | :---: |
+| `max_uses` | ✓ | ✗ |
+| `allowed_domains` | ✓ | ✗ |
+| `blocked_domains` | ✓ | ✗ |
+| `citations` | ✓ | ✗ |
+| `max_content_tokens` | ✓ | ✗ |
+
+!!! note
+    OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
+
+### Anthropic Tool Versions
+
+Anthropic versions their server-side tools. Newer versions support dynamic filtering (Claude writes code to filter results before loading into context), but require Opus 4.6 or Sonnet 4.6.
+
+Set the version via `AnthropicConfig`:
+
+```python linenums="1"
+from autogen.beta.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-sonnet-4-6",
+    web_search_version="web_search_20260209",  # default: web_search_20250305
+    web_fetch_version="web_fetch_20260209",    # default: web_fetch_20250910
+)
+```
+
+The default versions are compatible with all Claude models including Haiku.

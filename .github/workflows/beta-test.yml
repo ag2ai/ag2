@@ -59,7 +59,7 @@ jobs:
           uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama,tracing,redis]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
       - name: Show coverage report
         run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
@@ -89,7 +89,7 @@ jobs:
           uv pip install --system -e .[test-core]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
       - name: Show coverage report
         run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
@@ -119,7 +119,7 @@ jobs:
           uv pip install --system -e .[test-core]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml test/beta/
+          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
       - name: Show coverage report
         run: coverage report -m --include="autogen/beta/*"
       - name: Upload coverage to Codecov
