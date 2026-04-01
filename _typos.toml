@@ -8,5 +8,11 @@ vai = "vai"
 # Rajan Chari's name
 chari = "chari"
 
+# Chia-Tung Ho's name
+tung = "tung"
+
+# ThinGenious company name
+genious = "genious"
+
 # Pydantic config attributes
 ser = "ser"

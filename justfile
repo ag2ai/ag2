@@ -32,17 +32,17 @@ _beta_llm_default_mark := "openai or gemini or anthropic or ollama or dashscope"
 
 [doc("Run beta tests with LLM (e.g. just test-beta-llm openai)")]
 [group("tests")]
-test-beta-llm *params:
+test-beta-llm mark=_beta_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
-    -m "{{ _beta_llm_default_mark }}" \
+    -m "{{ mark }}" \
     test/beta/ {{ params }}
 
-[doc("Run beta tests with LLM and coverage")]
+[doc("Run beta tests with LLM and coverage (e.g. just test-beta-llm-cov openai)")]
 [group("tests")]
-test-beta-llm-cov *params:
+test-beta-llm-cov mark=_beta_llm_default_mark *params:
   pytest --ff -vv --durations=10 --durations-min=1.0 \
     --cov=autogen/beta/config --cov-branch --cov-report=xml \
-    -m "{{ _beta_llm_default_mark }}" \
+    -m "{{ mark }}" \
     test/beta/ {{ params }}
   coverage report -m --include="autogen/beta/config/*"
 
