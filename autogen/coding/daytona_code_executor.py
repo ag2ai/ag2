@@ -10,7 +10,7 @@ import atexit
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +172,7 @@ class DaytonaCodeExecutor:
         target: str | None = None,
         timeout: int = 60,
         snapshot: str | None = None,
-        image: "str | Image | None" = None,
+        image: "str | Image | None" = None,  # type: ignore[no-any-unimported]
         name: str | None = None,
         env_vars: dict[str, str] | None = None,
         resources: DaytonaSandboxResources | None = None,
@@ -202,7 +202,7 @@ class DaytonaCodeExecutor:
         # Build config only from explicitly provided values; the SDK reads
         # DAYTONA_API_KEY / DAYTONA_API_URL / DAYTONA_TARGET from the environment
         # for any field that is not explicitly set.
-        config_kwargs: dict = {}
+        config_kwargs: dict[str, str] = {}
         if api_key is not None:
             config_kwargs["api_key"] = api_key
         if api_url is not None:
@@ -220,7 +220,7 @@ class DaytonaCodeExecutor:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _create_sandbox(self):  # type: ignore[return]
+    def _create_sandbox(self) -> Any:
         """Create and return a new Daytona sandbox with auto-stop disabled."""
         try:
             if self._snapshot is not None:
