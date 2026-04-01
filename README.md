@@ -406,19 +406,19 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## Code style and linting
 
-This project uses pre-commit hooks to maintain code quality. Before contributing:
+This project uses [prek](https://github.com/j178/prek) hooks to maintain code quality. Before contributing:
 
-1. Install pre-commit:
+1. Install prek:
 
 ```bash
-pip install pre-commit
-pre-commit install
+pip install prek
+prek install
 ```
 
 2. The hooks will run automatically on commit, or you can run them manually:
 
 ```bash
-pre-commit run --all-files
+prek run --all-files
 ```
 
 ## Related papers

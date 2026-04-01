@@ -315,7 +315,7 @@ test = [
 
 docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
-    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
+    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     # Beta optional dependencies
     "ag2[openai]",                  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
@@ -323,6 +323,7 @@ docs = [
     "ag2[gemini]",                  # Gemini is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[ollama]",                  # Ollama is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[dashscope]",               # DashScope is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[redis]",                   # Redis is exposed in the public API by the optional `autogen.beta.streams` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
@@ -353,6 +354,7 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
+    "types-aiofiles",
     "ag2[test, openai, a2a, ag-ui]",
 ]
 
@@ -364,7 +366,7 @@ lint = [
 dev = [
     "toml==0.10.2",
     "ag2[lint,test,types,docs]",
-    "pre-commit==4.5.1",
+    "prek==0.3.8",
     "detect-secrets==1.5.0",
     "uv==0.8.15",
 ]
@@ -393,7 +395,7 @@ dev = [
     {include-group = "optionals"},
     {include-group = "lint"},
     {include-group = "testing"},
-    "pre-commit==4.5.1",
+    "prek==0.3.8",
     "detect-secrets==1.5.0",
 ]
 

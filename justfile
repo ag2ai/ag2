@@ -73,16 +73,16 @@ ruff-check *params:
 ruff-format *params:
   ruff format {{ params }}
 
-[doc("Check typos (codespell + pre-commit typos)")]
+[doc("Check typos (codespell + prek typos)")]
 [group("linter")]
 typos:
-  pre-commit run --all-files codespell
-  pre-commit run --all-files typos
+  prek run --all-files codespell
+  prek run --all-files typos
 
 [doc("Run ruff check + format")]
 [group("linter")]
 lint: ruff-check ruff-format typos
-  pre-commit run --all-files check-license-headers
+  prek run --all-files check-license-headers
 
 # Static analysis
 
@@ -92,22 +92,22 @@ mypy *params:
   mypy {{ params }}
 
 
-# Pre-commit
+# Prek
 
-[doc("Install pre-commit hooks")]
-[group("pre-commit")]
+[doc("Install prek hooks")]
+[group("prek")]
 pre-commit-install:
-  pre-commit install
+  prek install
 
-[doc("Run pre-commit on modified files")]
-[group("pre-commit")]
+[doc("Run prek on modified files")]
+[group("prek")]
 pre-commit:
-  pre-commit run
+  prek run
 
-[doc("Run pre-commit on all files")]
-[group("pre-commit")]
+[doc("Run prek on all files")]
+[group("prek")]
 pre-commit-all:
-  pre-commit run --all-files
+  prek run --all-files
 
 
 # Docs
