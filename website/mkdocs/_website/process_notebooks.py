@@ -257,7 +257,7 @@ def post_process_mdx(
     content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
 
     # Each intermediate path needs to be resolved for this to work reliably
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
     front_matter["source_notebook"] = f"/{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
@@ -618,7 +618,7 @@ def copy_images_from_notebooks_dir_to_target_dir(notebook_directory: Path, targe
 
 
 def main() -> None:
-    root_dir = Path(__file__).resolve().parents[2]
+    root_dir = Path(__file__).resolve().parents[3]
     website_dir = root_dir / "website"
     website_build_dir = website_dir / "build"
     parser = create_base_argument_parser()

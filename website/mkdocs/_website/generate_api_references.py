@@ -368,7 +368,7 @@ title: Overview
 
 
 def main() -> None:
-    root_dir = Path(__file__).resolve().parents[2]
+    root_dir = Path(__file__).resolve().parents[3]
     website_dir = root_dir / "website"
     website_build_dir = website_dir / "build"
 

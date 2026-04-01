@@ -31,7 +31,7 @@ with optional_import_block():
     from jinja2 import Template
 
 
-root_dir = Path(__file__).resolve().parents[2]
+root_dir = Path(__file__).resolve().parents[3]
 website_dir = root_dir / "website"
 
 mint_docs_dir = website_dir / "docs"
@@ -1095,7 +1095,7 @@ def post_process_func(
     content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
 
     # Each intermediate path needs to be resolved for this to work reliably
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
     front_matter["source_notebook"] = f"/{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
