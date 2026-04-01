@@ -4,11 +4,11 @@
 
 from collections.abc import Iterable
 
+import redis.asyncio as aioredis
+
 from autogen.beta.annotations import Context
 from autogen.beta.context import StreamId
 from autogen.beta.events import BaseEvent
-
-import redis.asyncio as aioredis
 
 from .serializer import Serializer, deserialize, serialize
 

@@ -6,11 +6,11 @@ import asyncio
 import contextlib
 from uuid import uuid4
 
+import redis.asyncio as aioredis
+
 from autogen.beta.context import Context, StreamId
 from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
-
-import redis.asyncio as aioredis
 
 from .serializer import Serializer, deserialize, serialize
 from .storage import RedisStorage

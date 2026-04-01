@@ -14,8 +14,8 @@ from .base import (
 from .builtin import (
     HistoryLimiter,
     LoggingMiddleware,
-    TelemetryMiddleware,
     RetryMiddleware,
+    TelemetryMiddleware,
     TokenLimiter,
 )
 
