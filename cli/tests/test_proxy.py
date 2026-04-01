@@ -220,12 +220,7 @@ class TestParseCLIHelpText:
         assert spec.description == "A great CLI tool"
 
     def test_description_skips_man_header(self) -> None:
-        help_text = (
-            "TOOL-NAME(1)     Manual     TOOL-NAME(1)\n"
-            "\n"
-            "DESCRIPTION\n"
-            "       This tool does things.\n"
-        )
+        help_text = "TOOL-NAME(1)     Manual     TOOL-NAME(1)\n\nDESCRIPTION\n       This tool does things.\n"
         spec = self._parse(help_text)
         # Should not use the "TOOL-NAME(1) ..." header as description
         assert "TOOL-NAME(1)" not in spec.description
@@ -253,11 +248,7 @@ class TestParseCLIHelpText:
     def test_skips_params_starting_with_digit(self) -> None:
         # e.g. git log shows "--1----2----4----7" type patterns
         help_text = (
-            "NAME\n"
-            "       tool - A tool\n"
-            "\n"
-            "       --1pass           Some flag\n"
-            "       --valid           A valid flag\n"
+            "NAME\n       tool - A tool\n\n       --1pass           Some flag\n       --valid           A valid flag\n"
         )
         spec = self._parse(help_text)
         param_names = [p.name for p in spec.params]
@@ -339,11 +330,7 @@ class TestParseCLIHelpText:
 
     def test_string_params_generated_correctly(self) -> None:
         help_text = (
-            "NAME\n"
-            "       tool - A tool\n"
-            "\n"
-            "       --output PATH     Output path\n"
-            "       --verbose         Be verbose\n"
+            "NAME\n       tool - A tool\n\n       --output PATH     Output path\n       --verbose         Be verbose\n"
         )
         spec = self._parse(help_text)
         output_param = next(p for p in spec.params if p.name == "output")

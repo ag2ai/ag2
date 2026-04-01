@@ -98,10 +98,7 @@ def _parse_cli_help(command: str, subcommand: str | None = None) -> ToolSpec:
             continue
         if in_name_section and stripped:
             # NAME section line like "git-status - Show the working tree status"
-            if " - " in stripped:
-                description = stripped.split(" - ", 1)[1].strip()
-            else:
-                description = stripped
+            description = stripped.split(" - ", 1)[1].strip() if " - " in stripped else stripped
             break
         if (
             stripped
