@@ -7,8 +7,8 @@ import pytest
 from autogen.beta.context import Context
 from autogen.beta.events import ModelResponse, ToolCallEvent
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.network.observers import LoopDetector, TokenMonitor
-from autogen.beta.network.primitives.signal import Severity, Signal
+from autogen.beta import LoopDetector, TokenMonitor
+from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.stream import MemoryStream
 
 
@@ -22,7 +22,7 @@ class TestTokenMonitor:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         monitor.attach(stream, ctx)
@@ -43,7 +43,7 @@ class TestTokenMonitor:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         monitor.attach(stream, ctx)
@@ -63,7 +63,7 @@ class TestTokenMonitor:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         monitor.attach(stream, ctx)
@@ -95,7 +95,7 @@ class TestLoopDetector:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         detector.attach(stream, ctx)
@@ -115,7 +115,7 @@ class TestLoopDetector:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         detector.attach(stream, ctx)
@@ -137,7 +137,7 @@ class TestLoopDetector:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         detector.attach(stream, ctx)

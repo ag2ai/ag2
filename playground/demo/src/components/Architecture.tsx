@@ -31,7 +31,7 @@ const layers = [
     borderColor: 'border-blue-500/30',
     bgColor: 'bg-blue-500/5',
     textColor: 'text-blue-400',
-    items: ['Actor', 'Hub', 'Observer', 'Scheduler'],
+    items: ['Actor', 'Hub', 'Observer', 'Scheduler', 'Assembler', 'AssemblyPolicies'],
   },
   {
     number: 2,
@@ -41,7 +41,7 @@ const layers = [
     borderColor: 'border-emerald-500/30',
     bgColor: 'bg-emerald-500/5',
     textColor: 'text-emerald-400',
-    items: ['Watch', 'Signal', 'Priority', 'Channel', 'Envelope', 'Harness'],
+    items: ['Watch', 'Signal', 'Priority', 'Channel', 'Envelope', 'KnowledgeStore', 'CompactStrategy', 'AggregateStrategy'],
   },
   {
     number: 1,

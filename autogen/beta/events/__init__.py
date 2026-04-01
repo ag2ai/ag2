@@ -2,8 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field
 from .conditions import Condition
+from .lifecycle import (
+    AggregationCompleted,
+    CompactionCompleted,
+    ObserverCompleted,
+    ObserverStarted,
+    TaskProgress,
+    TaskRequest,
+    TaskResult,
+    UnknownEvent,
+)
 from .tool_events import (
     ClientToolCallEvent,
     ToolCallEvent,
@@ -24,21 +35,32 @@ from .types import (
 )
 
 __all__ = (
+    "AggregationCompleted",
     "BaseEvent",
     "ClientToolCallEvent",
+    "CompactionCompleted",
     "Condition",
     "Field",
+    "HaltEvent",
     "HumanInputRequest",
+    "ObserverAlert",
+    "ObserverCompleted",
+    "ObserverStarted",
     "HumanMessage",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
+    "Severity",
+    "TaskProgress",
+    "TaskRequest",
+    "TaskResult",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",
     "ToolNotFoundEvent",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "UnknownEvent",
 )

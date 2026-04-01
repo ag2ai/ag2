@@ -2,18 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""TokenMonitor — tracks cumulative token usage and signals when thresholds are exceeded."""
+"""TokenMonitor — tracks cumulative token usage and alerts when thresholds are exceeded."""
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.network.events import TaskResult
-from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.signal import Severity, Signal
-from autogen.beta.network.primitives.watch import EventWatch
+from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events.lifecycle import TaskResult
+from autogen.beta.observer import BaseObserver
+from autogen.beta.watch import EventWatch
 
 
 class TokenMonitor(BaseObserver):
-    """Tracks cumulative token usage and signals when thresholds are exceeded.
+    """Tracks cumulative token usage and alerts when thresholds are exceeded.
 
     Observes ModelResponse and TaskResult events to aggregate usage
     across the actor and all task sub-agents.
@@ -21,9 +21,9 @@ class TokenMonitor(BaseObserver):
     Parameters
     ----------
     warn_threshold:
-        Total tokens at which a WARNING signal is emitted.
+        Total tokens at which a WARNING alert is emitted.
     alert_threshold:
-        Total tokens at which a CRITICAL signal is emitted.
+        Total tokens at which a CRITICAL alert is emitted.
     name:
         Observer display name.
     """
@@ -46,7 +46,7 @@ class TokenMonitor(BaseObserver):
     def total_tokens(self) -> int:
         return self._total_tokens
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if isinstance(event, (ModelResponse, TaskResult)):
                 usage = event.usage or {}
@@ -54,7 +54,7 @@ class TokenMonitor(BaseObserver):
 
         if not self._alerted and self._total_tokens >= self._alert_threshold:
             self._alerted = True
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.CRITICAL,
                 message=(
@@ -66,7 +66,7 @@ class TokenMonitor(BaseObserver):
 
         if not self._warned and self._total_tokens >= self._warn_threshold:
             self._warned = True
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.WARNING,
                 message=(

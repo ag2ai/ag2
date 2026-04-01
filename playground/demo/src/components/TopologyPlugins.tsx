@@ -225,7 +225,7 @@ function TopologyDiagram() {
 export function TopologyPlugins() {
   return (
     <AnimatedSection className="py-32 px-6 max-w-6xl mx-auto" id="topology">
-      <SectionLabel number="06" title="Topology & Plugins" />
+      <SectionLabel number="07" title="Topology & Plugins" />
 
       <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
         <span className="text-white">Full routing layer.</span>{' '}

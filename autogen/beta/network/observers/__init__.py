@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .loop_detector import LoopDetector
-from .token_monitor import TokenMonitor
+"""Re-export observers from their promoted location in autogen.beta.observers."""
+
+from autogen.beta.observers import LoopDetector, TokenMonitor
 
 __all__ = ["LoopDetector", "TokenMonitor"]

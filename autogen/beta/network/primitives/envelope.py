@@ -18,6 +18,15 @@ from typing import Any
 from uuid import uuid4
 
 from autogen.beta.events import BaseEvent
+from autogen.beta.events._serialization import (
+    deserialize_payload,
+    deserialize_value,
+    event_to_dict,
+    import_event_class,
+    qualified_name,
+    qualified_name_from_class,
+    serialize_value,
+)
 
 
 def _uuid4_hex() -> str:
@@ -61,8 +70,8 @@ class Envelope:
         return {
             "v": 1,
             "event": {
-                "type": _qualified_name(self.event),
-                "data": _event_to_dict(self.event),
+                "type": qualified_name(self.event),
+                "data": event_to_dict(self.event),
             },
             "sender": self.sender,
             "recipient": self.recipient,
@@ -98,12 +107,12 @@ class Envelope:
         registry = event_registry or _default_registry
         event_cls = registry.resolve(event_type_name)
         if event_cls is None:
-            event_cls = _import_event_class(event_type_name)
+            event_cls = import_event_class(event_type_name)
         if event_cls is None:
             raise ValueError(f"Cannot resolve event type: {event_type_name}")
 
         # Reconstruct nested events marked with __event__ key
-        event_payload = _deserialize_payload(event_payload, event_registry)
+        event_payload = deserialize_payload(event_payload, event_registry)
         try:
             event = event_cls(**event_payload)
         except TypeError as exc:
@@ -177,7 +186,7 @@ class EventRegistry:
 
     def register(self, event_cls: type[BaseEvent]) -> None:
         """Register a custom event type for wire format deserialization."""
-        name = _qualified_name_from_class(event_cls)
+        name = qualified_name_from_class(event_cls)
         self._types[name] = event_cls
 
     def resolve(self, type_name: str) -> type[BaseEvent] | None:
@@ -202,113 +211,14 @@ def register_event(event_cls: type[BaseEvent]) -> type[BaseEvent]:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Backward-compatible aliases for private helpers.
+# New code should import from autogen.beta.events._serialization directly.
 # ---------------------------------------------------------------------------
 
-
-def _qualified_name(event: BaseEvent) -> str:
-    """Get the fully qualified name of an event instance's class."""
-    cls = type(event)
-    return _qualified_name_from_class(cls)
-
-
-def _qualified_name_from_class(cls: type) -> str:
-    """Get the fully qualified name of an event class."""
-    module = cls.__module__
-    qualname = cls.__qualname__
-    return f"{module}.{qualname}"
-
-
-def _event_to_dict(event: BaseEvent) -> dict[str, Any]:
-    """Serialize an event to a dictionary.
-
-    Uses the event's __dict__ which contains all field values set by
-    the EventMeta-generated __init__.
-    """
-    result: dict[str, Any] = {}
-    for key, value in event.__dict__.items():
-        if key.startswith("_"):
-            continue
-        result[key] = _serialize_value(value)
-    return result
-
-
-def _serialize_value(value: Any) -> Any:
-    """Recursively serialize a value for JSON compatibility."""
-    from enum import Enum
-
-    if isinstance(value, BaseEvent):
-        return {"__event__": _qualified_name(value), **_event_to_dict(value)}
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, dict):
-        return {k: _serialize_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_serialize_value(v) for v in value]
-    if isinstance(value, (bytes, bytearray)):
-        import base64
-
-        return {"__bytes__": base64.b64encode(value).decode("ascii")}
-    # Primitives (str, int, float, bool, None) pass through
-    return value
-
-
-def _deserialize_payload(
-    payload: dict[str, Any],
-    event_registry: EventRegistry | None = None,
-) -> dict[str, Any]:
-    """Recursively reconstruct nested events and special types in a payload."""
-    result: dict[str, Any] = {}
-    for key, value in payload.items():
-        result[key] = _deserialize_value(value, event_registry)
-    return result
-
-
-def _deserialize_value(value: Any, event_registry: EventRegistry | None = None) -> Any:
-    """Recursively deserialize a value from wire format."""
-    if isinstance(value, dict):
-        if "__event__" in value:
-            # Nested event
-            event_type_name = value["__event__"]
-            registry = event_registry or _default_registry
-            event_cls = registry.resolve(event_type_name)
-            if event_cls is None:
-                event_cls = _import_event_class(event_type_name)
-            if event_cls is not None:
-                nested_data = {k: _deserialize_value(v, event_registry) for k, v in value.items() if k != "__event__"}
-                return event_cls(**nested_data)
-        if "__bytes__" in value:
-            import base64
-
-            return base64.b64decode(value["__bytes__"])
-        return {k: _deserialize_value(v, event_registry) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_deserialize_value(v, event_registry) for v in value]
-    return value
-
-
-def _import_event_class(type_name: str) -> type[BaseEvent] | None:
-    """Import an event class by its fully qualified name.
-
-    Handles nested qualnames (e.g. ``module.path.Outer.Inner``) by walking
-    attribute chains after importing the module.
-    """
-    import importlib
-
-    # Try progressively shorter module paths to handle nested qualnames.
-    # For "a.b.C.D" we try: import "a.b.C" getattr "D",
-    # then import "a.b" getattr "C.D", then import "a" getattr "b.C.D".
-    parts = type_name.split(".")
-    for i in range(len(parts) - 1, 0, -1):
-        module_path = ".".join(parts[:i])
-        attr_chain = parts[i:]
-        try:
-            module = importlib.import_module(module_path)
-            obj: Any = module
-            for attr in attr_chain:
-                obj = getattr(obj, attr)
-            if isinstance(obj, type) and issubclass(obj, BaseEvent):
-                return obj
-        except (ImportError, AttributeError):
-            continue
-    return None
+_qualified_name = qualified_name
+_qualified_name_from_class = qualified_name_from_class
+_event_to_dict = event_to_dict
+_serialize_value = serialize_value
+_deserialize_payload = deserialize_payload
+_deserialize_value = deserialize_value
+_import_event_class = import_event_class

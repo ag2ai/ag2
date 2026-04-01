@@ -425,7 +425,7 @@ class TestGeminiUsageNormalization:
         from unittest.mock import MagicMock
 
         from autogen.beta.events import ModelResponse
-        from autogen.beta.network.observers.token_monitor import TokenMonitor
+        from autogen.beta.observers.token_monitor import TokenMonitor
 
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
@@ -476,17 +476,17 @@ class TestFunctionToolNameAccess:
 # ---------------------------------------------------------------------------
 
 
-class TestSpawnTasksSequentialExceptionHandling:
-    """Sequential spawn_tasks should handle task failures gracefully,
+class TestRunSubtasksSequentialExceptionHandling:
+    """Sequential run_subtasks should handle task failures gracefully,
     just like parallel mode does with return_exceptions=True."""
 
     @pytest.mark.asyncio
-    async def test_sequential_spawn_tasks_catches_exception(self) -> None:
+    async def test_sequential_run_subtasks_catches_exception(self) -> None:
         """When a task fails in sequential mode, remaining tasks should still run
         and the failed task should produce an error string, not crash."""
         from unittest.mock import MagicMock
 
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
 
         actor = Actor("test-actor")
 
@@ -529,9 +529,9 @@ class TestSpawnTasksSequentialExceptionHandling:
         task in try/except by inspecting the source code."""
         import inspect
 
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
 
-        source = inspect.getsource(Actor._build_spawn_tools)
+        source = inspect.getsource(Actor._build_subtask_tools)
         # The fix adds try/except around sequential _run_task calls
         assert "except Exception as e:" in source
         # And converts to error string matching the parallel pattern
@@ -631,160 +631,10 @@ class TestHttpDelegateUsesPipeline:
 
 
 # ---------------------------------------------------------------------------
-# Bug 11: InjectToPrompt drops non-fatal signals when FATAL is present
+# Bug 11 and 12: InjectToPrompt and _SignalInjectionMiddleware were removed.
+# These tests covered internals of the old Signal system which has been
+# replaced by AlertPolicy. The behaviour is now covered by AlertPolicy tests.
 # ---------------------------------------------------------------------------
-
-
-class TestInjectToPromptFatalPreservesNonFatal:
-    """When a batch contains both FATAL and non-fatal signals,
-    non-fatal signals should be delivered before halting."""
-
-    @pytest.mark.asyncio
-    async def test_non_fatal_delivered_before_halt(self) -> None:
-        """Non-fatal signals should be injected into prompt even when FATAL is present."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from autogen.beta.network.primitives.signal import (
-            InjectToPrompt,
-            Severity,
-            Signal,
-        )
-
-        # Use a mock context so we can inspect prompt and capture send() calls
-        ctx = MagicMock()
-        ctx.prompt = []
-        ctx.send = AsyncMock()
-
-        policy = InjectToPrompt()
-
-        signals = [
-            Signal(source="monitor", severity=Severity.WARNING, message="High latency detected"),
-            Signal(source="guard", severity=Severity.FATAL, message="Token budget exceeded"),
-        ]
-
-        await policy.deliver(signals, ctx)
-
-        # Non-fatal WARNING should have been injected into prompt
-        assert len(ctx.prompt) == 1
-        assert "High latency detected" in ctx.prompt[0]
-        assert "WARNING" in ctx.prompt[0]
-
-        # FATAL should have triggered ctx.send() with a HaltEvent
-        ctx.send.assert_called_once()
-        halt_event = ctx.send.call_args[0][0]
-        assert "Token budget exceeded" in halt_event.reason
-
-    @pytest.mark.asyncio
-    async def test_only_non_fatal_no_halt(self) -> None:
-        """When no FATAL signal is present, no HaltEvent should be emitted."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from autogen.beta.network.primitives.signal import (
-            InjectToPrompt,
-            Severity,
-            Signal,
-        )
-
-        ctx = MagicMock()
-        ctx.prompt = []
-        ctx.send = AsyncMock()
-
-        policy = InjectToPrompt()
-        signals = [
-            Signal(source="monitor", severity=Severity.INFO, message="All good"),
-        ]
-
-        await policy.deliver(signals, ctx)
-
-        # No HaltEvent — send() should not have been called
-        ctx.send.assert_not_called()
-        # But prompt should have the alert
-        assert len(ctx.prompt) == 1
-        assert "All good" in ctx.prompt[0]
-
-    @pytest.mark.asyncio
-    async def test_only_fatal_no_prompt_injection(self) -> None:
-        """When ALL signals are FATAL, prompt should be empty (no non-fatal to inject)."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from autogen.beta.network.primitives.signal import (
-            InjectToPrompt,
-            Severity,
-            Signal,
-        )
-
-        ctx = MagicMock()
-        ctx.prompt = []
-        ctx.send = AsyncMock()
-
-        policy = InjectToPrompt()
-        signals = [
-            Signal(source="guard", severity=Severity.FATAL, message="Budget exceeded"),
-        ]
-
-        await policy.deliver(signals, ctx)
-
-        # No non-fatal signals → nothing added to prompt
-        assert len(ctx.prompt) == 0
-        # But HaltEvent should still be emitted
-        ctx.send.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Bug 12: Signal injection prompt cleanup uses value equality
-# ---------------------------------------------------------------------------
-
-
-class TestSignalPromptCleanupByIndex:
-    """The _SignalInjectionMiddleware should remove policy-appended entries
-    by index, not by value, so duplicates in the prompt are preserved."""
-
-    @pytest.mark.asyncio
-    async def test_duplicate_prompt_entries_preserved(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from autogen.beta.context import Context
-        from autogen.beta.events import ModelMessage, ModelResponse
-        from autogen.beta.network.actor import _SignalInjectionMiddleware
-        from autogen.beta.network.primitives.signal import Severity, Signal
-        from autogen.beta.stream import MemoryStream
-
-        stream = MemoryStream()
-        ctx = Context(stream=stream)
-        # Pre-populate the prompt with an entry that matches what the policy will add
-        ctx.prompt = ["[OBSERVER MONITORING ALERTS]\n- [INFO] (monitor): Check passed"]
-
-        signal_queue: list[Signal] = [
-            Signal(source="monitor", severity=Severity.INFO, message="Check passed"),
-        ]
-
-        class _AppendPolicy:
-            """Policy that appends a known string to the prompt."""
-
-            async def deliver(self, signals, context):
-                # This will produce the same text as the pre-existing entry
-                text = "[OBSERVER MONITORING ALERTS]\n- [INFO] (monitor): Check passed"
-                context.prompt.append(text)
-
-        policy = _AppendPolicy()
-
-        mw = _SignalInjectionMiddleware(
-            event=ModelMessage(content="test"),
-            context=ctx,
-            signal_queue=signal_queue,
-            policy=policy,
-            delivered_ids=set(),
-        )
-
-        mock_response = ModelResponse(message=ModelMessage(content="ok"))
-        call_next = AsyncMock(return_value=mock_response)
-
-        await mw.on_llm_call(call_next, [], ctx)
-
-        # After cleanup, only the original pre-existing entry should remain.
-        # The old value-based removal would have removed the ORIGINAL entry instead.
-        assert len(ctx.prompt) == 1
-        assert ctx.prompt[0] == "[OBSERVER MONITORING ALERTS]\n- [INFO] (monitor): Check passed"
 
 
 # ---------------------------------------------------------------------------
@@ -801,7 +651,7 @@ class TestObserverDetachFailureStillEmitsCompleted:
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from autogen.beta.events import ModelMessage
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
         from autogen.beta.network.events import ObserverCompleted
 
         class _FailingDetachObserver:
@@ -858,7 +708,7 @@ class TestObserverDetachFailureStillEmitsCompleted:
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from autogen.beta.events import ModelMessage
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
         from autogen.beta.network.events import ObserverCompleted
 
         class _GoodObserver:
@@ -920,7 +770,7 @@ class TestActorExecuteResponseSchema:
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from autogen.beta.events import ModelMessage
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
 
         actor = Actor("test-actor")
 
@@ -961,7 +811,7 @@ class TestActorExecuteResponseSchema:
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from autogen.beta.events import ModelMessage
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
         from autogen.beta.types import omit
 
         actor = Actor("test-actor")
@@ -1002,7 +852,7 @@ class TestActorExecuteResponseSchema:
         about unexpected 'response_schema' kwarg."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from autogen.beta.network.actor import Actor
+        from autogen.beta import Actor
         from autogen.beta.network.hub import Hub
 
         hub = Hub()

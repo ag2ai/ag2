@@ -194,7 +194,7 @@ function IntegrationCard({ name, role, howItIntegrates, icon, color, bgColor, bo
 export function Integration() {
   return (
     <AnimatedSection className="py-32 px-6 max-w-6xl mx-auto" id="integration">
-      <SectionLabel number="08" title="Integration" />
+      <SectionLabel number="09" title="Integration" />
 
       <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
         <span className="text-white">The hub that connects</span>{' '}

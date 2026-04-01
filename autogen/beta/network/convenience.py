@@ -16,10 +16,12 @@ from autogen.beta.stream import MemoryStream
 
 from .hub import Hub, RegistrationHandle
 from .primitives.channel import Channel
-from .primitives.infra import Registry, StateStore
+from autogen.beta.scheduler import Scheduler
+from autogen.beta.state import StateStore
+from autogen.beta.watch import Watch
+
+from .primitives.infra import Registry
 from .primitives.priority import ConflictResolver, PriorityScheme
-from .primitives.watch import Watch
-from .scheduler import Scheduler
 from .topology import Plugin, Topology
 
 

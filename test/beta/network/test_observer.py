@@ -7,9 +7,9 @@ import pytest
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.signal import Severity, Signal
-from autogen.beta.network.primitives.watch import EventWatch
+from autogen.beta import BaseObserver
+from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.watch import EventWatch
 from autogen.beta.stream import MemoryStream
 
 
@@ -20,9 +20,9 @@ class DummyObserver(BaseObserver):
         super().__init__(name, watch=EventWatch(ToolCallEvent))
         self.process_count = 0
 
-    async def process(self, events, ctx) -> Signal | None:
+    async def process(self, events, ctx) -> ObserverAlert | None:
         self.process_count += 1
-        return Signal(
+        return ObserverAlert(
             source=self.name,
             severity=Severity.WARNING,
             message=f"Saw {len(events)} event(s)",
@@ -35,7 +35,7 @@ class NullObserver(BaseObserver):
     def __init__(self):
         super().__init__("null-observer", watch=EventWatch(ToolCallEvent))
 
-    async def process(self, events, ctx) -> Signal | None:
+    async def process(self, events, ctx) -> ObserverAlert | None:
         return None
 
 
@@ -49,7 +49,7 @@ class TestBaseObserver:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         obs.attach(stream, ctx)
@@ -81,7 +81,7 @@ class TestBaseObserver:
         signals: list = []
         stream.subscribe(
             lambda e: signals.append(e),
-            condition=TypeCondition(Signal),
+            condition=TypeCondition(ObserverAlert),
         )
 
         obs.attach(stream, ctx)

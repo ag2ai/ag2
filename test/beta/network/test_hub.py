@@ -10,7 +10,7 @@ import pytest
 from autogen.beta.network.events import DelegationError, DelegationRejected, DelegationRequest, DelegationResult
 from autogen.beta.network.hub import Hub, RegistrationHandle
 from autogen.beta.network.primitives.envelope import Envelope
-from autogen.beta.network.primitives.infra import MemoryStateStore
+from autogen.beta.state import MemoryStateStore
 from autogen.beta.network.primitives.priority import DefaultPriorityScheme, HighestPriorityWins
 from autogen.beta.network.topology import BasePlugin, Pipeline, RouteDecision
 
@@ -174,17 +174,16 @@ class TestHubDelegation:
 
     @pytest.mark.asyncio
     async def test_ask_with_agent_object_injects_network_tools(self) -> None:
-        """hub.ask() with Agent object injects discover_agents and delegate_to tools."""
+        """hub.ask() with Agent object injects the consolidated network tool."""
         agent = _AskableAgent("researcher", result="research done")
         hub = Hub()
         await hub.register(agent, capabilities=["research"])
 
         reply = await hub.ask(agent, "do research")
         assert reply.content == "research done"
-        # Agent should have received network tools
+        # Agent should have received the consolidated network tool
         tool_names = [_tool_name(t) for t in agent.received_tools]
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
     @pytest.mark.asyncio
     async def test_ask_with_string_name(self) -> None:
@@ -196,8 +195,7 @@ class TestHubDelegation:
         reply = await hub.ask("writer", "write something")
         assert reply.content == "written"
         tool_names = [_tool_name(t) for t in agent.received_tools]
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
     @pytest.mark.asyncio
     async def test_ask_merges_user_tools_with_network_tools(self) -> None:
@@ -217,7 +215,7 @@ class TestHubDelegation:
         await hub.ask(agent, "work", tools=[_DummyTool()])
         tool_names = [_tool_name(t) for t in agent.received_tools]
         assert "my_tool" in tool_names
-        assert "discover_agents" in tool_names
+        assert "network" in tool_names
 
     @pytest.mark.asyncio
     async def test_delegation_returns_empty_string_on_none_content(self) -> None:
@@ -636,21 +634,20 @@ class TestHubTopologyIntegration:
 
 
 class TestHubNetworkTools:
-    """Test the discover_agents and delegate_to tools built by the Hub.
+    """Test the consolidated network tool built by the Hub.
 
-    These tools are FunctionTool wrappers with DI. We test their behavior
+    The network tool is a FunctionTool wrapper with DI. We test its behavior
     by using a mock agent that captures tools, then invoking the underlying
     closures indirectly through the Hub API.
     """
 
     @pytest.mark.asyncio
     async def test_tools_are_built_with_correct_names(self) -> None:
-        """_build_network_tools returns discover_agents and delegate_to."""
+        """_build_network_tools returns the consolidated network tool."""
         hub = Hub()
         tools = hub._build_network_tools(caller="test")
         names = [_tool_name(t) for t in tools]
-        assert "discover_agents" in names
-        assert "delegate_to" in names
+        assert "network" in names
 
     @pytest.mark.asyncio
     async def test_discover_agents_excludes_caller(self) -> None:
@@ -715,8 +712,7 @@ class TestHubNetworkTools:
         await hub.delegate("src", "worker", "task")
 
         tool_names = [_tool_name(t) for t in target.received_tools]
-        assert "discover_agents" in tool_names
-        assert "delegate_to" in tool_names
+        assert "network" in tool_names
 
 
 class TestHubPluginLifecycle:

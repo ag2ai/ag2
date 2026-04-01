@@ -8,9 +8,8 @@ import pytest
 
 from autogen.beta.network.primitives.infra import (
     LocalLock,
-    MemoryCache,
-    MemoryStateStore,
 )
+from autogen.beta.state import MemoryStateStore
 
 
 class TestMemoryStateStoreTTL:
@@ -53,26 +52,7 @@ class TestMemoryStateStoreTTL:
         assert await store.exists("key") is False
 
 
-class TestMemoryCacheTTL:
-    """MemoryCache TTL behavior — cached values expire after the TTL elapses."""
-
-    @pytest.mark.asyncio
-    async def test_get_before_expiry_succeeds(self) -> None:
-        cache = MemoryCache()
-        await cache.set("key", "value", ttl=1.0)
-
-        result = await cache.get("key")
-        assert result == "value"
-
-    @pytest.mark.asyncio
-    async def test_get_after_expiry_returns_none(self) -> None:
-        cache = MemoryCache()
-        await cache.set("key", "value", ttl=0.1)
-
-        await asyncio.sleep(0.2)
-
-        result = await cache.get("key")
-        assert result is None
+# TestMemoryCacheTTL removed — MemoryCache is dead code (removed from infra).
 
 
 class TestLocalLockTTLAutoRelease:

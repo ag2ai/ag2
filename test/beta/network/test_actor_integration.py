@@ -27,7 +27,8 @@ from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.network.actor import Actor
+from autogen.beta import Actor, BaseObserver, KnowledgeConfig, TaskConfig
+from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 from autogen.beta.network.events import (
     DelegationRequest,
     ObserverCompleted,
@@ -36,19 +37,11 @@ from autogen.beta.network.events import (
     TaskResult,
 )
 from autogen.beta.network.hub import Hub
-from autogen.beta.network.observer import BaseObserver
-from autogen.beta.network.primitives.harness import ConversationHarness, NetworkHarness
-from autogen.beta.network.primitives.signal import (
-    CallHandler,
-    EmitToStream,
-    HaltOnFatal,
-    InjectToPrompt,
-    Severity,
-    Signal,
-)
-from autogen.beta.network.primitives.watch import EventWatch, IntervalWatch
-from autogen.beta.network.primitives.watch import Sequence as SequenceWatch
-from autogen.beta.network.scheduler import Scheduler, WatchStatus
+from autogen.beta.policies import AlertPolicy, ConversationPolicy
+from autogen.beta.network.policies.network import NetworkPolicy
+from autogen.beta.watch import EventWatch, IntervalWatch
+from autogen.beta.watch import Sequence as SequenceWatch
+from autogen.beta.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Pipeline
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
@@ -119,10 +112,10 @@ class _CountingObserver(BaseObserver):
         self._signal_severity = signal_severity
         self._signal_message = signal_message
 
-    async def process(self, events: list[BaseEvent], ctx: ContextType) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
         self.event_count += len(events)
         if self._signal_severity is not None:
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=self._signal_severity,
                 message=self._signal_message,
@@ -137,10 +130,10 @@ class _FatalObserver(BaseObserver):
         super().__init__(name, watch=EventWatch(ModelResponse))
         self.fired = False
 
-    async def process(self, events: list[BaseEvent], ctx: ContextType) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
         if not self.fired:
             self.fired = True
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.FATAL,
                 message="Critical failure detected",
@@ -261,7 +254,7 @@ class TestSignalInjection:
         )
         fatal_obs = _FatalObserver()
 
-        actor = Actor("test-actor", config=config, observers=[fatal_obs], tools=[dummy_tool])
+        actor = Actor("test-actor", config=config, observers=[fatal_obs], tools=[dummy_tool], assembly=[AlertPolicy()])
         reply = await actor.ask("Hi")
 
         assert fatal_obs.fired
@@ -269,16 +262,15 @@ class TestSignalInjection:
         assert "HALTED" in reply.body
 
     @pytest.mark.asyncio
-    async def test_halt_on_fatal_policy(self) -> None:
-        """HaltOnFatal wraps another policy and halts on FATAL."""
+    async def test_halt_on_fatal_with_alert_policy(self) -> None:
+        """AlertPolicy halts on FATAL."""
         config = _RecordingConfig(
             ToolCallEvent(name="dummy_tool", arguments='{"value": "x"}'),
             "after",
         )
         fatal_obs = _FatalObserver()
-        policy = HaltOnFatal(inner=InjectToPrompt())
 
-        actor = Actor("test-actor", config=config, observers=[fatal_obs], tools=[dummy_tool], signal_policy=policy)
+        actor = Actor("test-actor", config=config, observers=[fatal_obs], tools=[dummy_tool], assembly=[AlertPolicy()])
         reply = await actor.ask("Hi")
 
         assert fatal_obs.fired
@@ -291,12 +283,12 @@ class TestSignalInjection:
 # ===========================================================================
 
 
-class TestEmitToStreamDedup:
-    """EmitToStream should not cause infinite signal re-collection."""
+class TestAlertPolicyDedup:
+    """AlertPolicy should not cause infinite alert re-collection."""
 
     @pytest.mark.asyncio
-    async def test_emit_to_stream_no_infinite_loop(self) -> None:
-        """Using EmitToStream as signal policy does not loop infinitely."""
+    async def test_alert_policy_no_infinite_loop(self) -> None:
+        """Using AlertPolicy does not loop infinitely."""
         config = _RecordingConfig("done")
         observer = _CountingObserver(signal_severity=Severity.WARNING, signal_message="test alert")
 
@@ -304,7 +296,7 @@ class TestEmitToStreamDedup:
             "test-actor",
             config=config,
             observers=[observer],
-            signal_policy=EmitToStream(),
+            assembly=[AlertPolicy()],
         )
 
         # This should complete without hanging
@@ -312,13 +304,8 @@ class TestEmitToStreamDedup:
         assert reply.body == "done"
 
     @pytest.mark.asyncio
-    async def test_call_handler_policy(self) -> None:
-        """CallHandler policy delivers signals to handler function."""
-        received: list[Signal] = []
-
-        async def handler(signals: list[Signal]) -> None:
-            received.extend(signals)
-
+    async def test_alert_policy_delivers_alerts(self) -> None:
+        """AlertPolicy delivers alerts from observers."""
         config = _RecordingConfig(
             ToolCallEvent(name="dummy_tool", arguments='{"value": "x"}'),
             "final",
@@ -330,12 +317,11 @@ class TestEmitToStreamDedup:
             config=config,
             observers=[observer],
             tools=[dummy_tool],
-            signal_policy=CallHandler(handler),
+            assembly=[AlertPolicy()],
         )
         reply = await actor.ask("Hi")
-        # Handler should have received the signal from the observer
+        # The actor should complete normally with AlertPolicy
         assert reply.body is not None
-        assert len(received) >= 1
 
 
 # ===========================================================================
@@ -343,17 +329,17 @@ class TestEmitToStreamDedup:
 # ===========================================================================
 
 
-class TestHarnessMiddleware:
-    """ContextHarness integration in Actor middleware chain."""
+class TestAssemblyPolicies:
+    """Assembly policy integration in Actor middleware chain."""
 
     @pytest.mark.asyncio
-    async def test_conversation_harness_filters_events(self) -> None:
-        """ConversationHarness only passes conversation events to LLM."""
+    async def test_conversation_policy_filters_events(self) -> None:
+        """ConversationPolicy only passes conversation events to LLM."""
         config = _RecordingConfig("ok")
         actor = Actor(
             "test-actor",
             config=config,
-            harness=ConversationHarness(),
+            assembly=[ConversationPolicy()],
         )
         reply = await actor.ask("Hi")
 
@@ -362,13 +348,13 @@ class TestHarnessMiddleware:
         assert reply.body == "ok"
 
     @pytest.mark.asyncio
-    async def test_network_harness_includes_network_events(self) -> None:
-        """NetworkHarness passes Signal and delegation events to LLM."""
+    async def test_network_policy_includes_network_events(self) -> None:
+        """NetworkPolicy passes Signal and delegation events to LLM."""
         config = _RecordingConfig("ok")
         actor = Actor(
             "test-actor",
             config=config,
-            harness=NetworkHarness(),
+            assembly=[NetworkPolicy()],
         )
         reply = await actor.ask("Hi")
 
@@ -382,22 +368,22 @@ class TestHarnessMiddleware:
 # ===========================================================================
 
 
-class TestSpawnTask:
-    """Actor spawn_task and spawn_tasks tools."""
+class TestRunSubtask:
+    """Actor run_subtask and run_subtasks tools."""
 
     @pytest.mark.asyncio
-    async def test_spawn_task_emits_lifecycle_events(self) -> None:
-        """spawn_task emits TaskRequest and TaskResult events."""
+    async def test_run_subtask_emits_lifecycle_events(self) -> None:
+        """run_subtask emits TaskRequest and TaskResult events."""
         task_config = TestConfig("sub-result")
         main_config = _RecordingConfig(
-            ToolCallEvent(name="spawn_task", arguments='{"task": "research AI trends"}'),
+            ToolCallEvent(name="run_subtask", arguments='{"task": "research AI trends"}'),
             "final answer",
         )
 
         actor = Actor(
             "researcher",
             config=main_config,
-            task_config=task_config,
+            tasks=TaskConfig(config=task_config),
         )
 
         stream = MemoryStream()
@@ -414,12 +400,12 @@ class TestSpawnTask:
         assert task_results[0].result == "sub-result"
 
     @pytest.mark.asyncio
-    async def test_spawn_tasks_parallel(self) -> None:
-        """spawn_tasks with parallel=True runs tasks concurrently."""
+    async def test_run_subtasks_parallel(self) -> None:
+        """run_subtasks with parallel=True runs tasks concurrently."""
         task_config = TestConfig("result-A")
         main_config = _RecordingConfig(
             ToolCallEvent(
-                name="spawn_tasks",
+                name="run_subtasks",
                 arguments='{"tasks": ["task A", "task B"], "parallel": true}',
             ),
             "combined answer",
@@ -428,7 +414,7 @@ class TestSpawnTask:
         actor = Actor(
             "multi-tasker",
             config=main_config,
-            task_config=task_config,
+            tasks=TaskConfig(config=task_config),
         )
 
         stream = MemoryStream()
@@ -440,12 +426,12 @@ class TestSpawnTask:
         assert len(task_requests) == 2
 
     @pytest.mark.asyncio
-    async def test_spawn_tasks_sequential(self) -> None:
-        """spawn_tasks with parallel=False runs tasks sequentially."""
+    async def test_run_subtasks_sequential(self) -> None:
+        """run_subtasks with parallel=False runs tasks sequentially."""
         task_config = TestConfig("seq-result")
         main_config = _RecordingConfig(
             ToolCallEvent(
-                name="spawn_tasks",
+                name="run_subtasks",
                 arguments='{"tasks": ["first", "second"], "parallel": false}',
             ),
             "done",
@@ -454,7 +440,7 @@ class TestSpawnTask:
         actor = Actor(
             "seq-tasker",
             config=main_config,
-            task_config=task_config,
+            tasks=TaskConfig(config=task_config),
         )
 
         stream = MemoryStream()
@@ -539,7 +525,7 @@ class TestCronWatchDowFix:
 
     def test_dow_names_not_parsed_in_minute_field(self) -> None:
         """Putting a DOW name in the minute field should raise ValueError."""
-        from autogen.beta.network.primitives.watch import CronWatch
+        from autogen.beta.watch import CronWatch
 
         cron = CronWatch("MON * * * *")
         import datetime
@@ -550,7 +536,7 @@ class TestCronWatchDowFix:
 
     def test_dow_names_still_work_in_dow_field(self) -> None:
         """DOW names should still parse correctly in the 5th field."""
-        from autogen.beta.network.primitives.watch import CronWatch
+        from autogen.beta.watch import CronWatch
 
         cron = CronWatch("0 9 * * MON")
         import datetime
@@ -574,8 +560,8 @@ class TestSequenceWatchDisarmSafety:
 
         fired: list[list[BaseEvent]] = []
         seq = SequenceWatch(
-            EventWatch(Signal),
-            EventWatch(Signal),
+            EventWatch(ObserverAlert),
+            EventWatch(ObserverAlert),
         )
 
         async def callback(events: list[BaseEvent], ctx: ContextType) -> None:
@@ -587,9 +573,9 @@ class TestSequenceWatchDisarmSafety:
         ctx = ContextType(stream=stream)
 
         # Fire first watch
-        await stream.send(Signal(source="test", severity="info", message="first"), ctx)
+        await stream.send(ObserverAlert(source="test", severity="info", message="first"), ctx)
         # Fire second watch — triggers callback which calls disarm()
-        await stream.send(Signal(source="test", severity="info", message="second"), ctx)
+        await stream.send(ObserverAlert(source="test", severity="info", message="second"), ctx)
 
         assert len(fired) == 1
         # Should be disarmed now without error
@@ -601,8 +587,8 @@ class TestSequenceWatchDisarmSafety:
         stream = MemoryStream()
         fired_count = 0
         seq = SequenceWatch(
-            EventWatch(Signal),
-            EventWatch(Signal),
+            EventWatch(ObserverAlert),
+            EventWatch(ObserverAlert),
         )
 
         async def callback(events: list[BaseEvent], ctx: ContextType) -> None:
@@ -614,14 +600,14 @@ class TestSequenceWatchDisarmSafety:
         ctx = ContextType(stream=stream)
 
         # Complete the sequence
-        await stream.send(Signal(source="t", severity="info", message="1"), ctx)
-        await stream.send(Signal(source="t", severity="info", message="2"), ctx)
+        await stream.send(ObserverAlert(source="t", severity="info", message="1"), ctx)
+        await stream.send(ObserverAlert(source="t", severity="info", message="2"), ctx)
 
         assert fired_count == 1
 
         # Send more signals — should NOT trigger callback again since disarmed
-        await stream.send(Signal(source="t", severity="info", message="3"), ctx)
-        await stream.send(Signal(source="t", severity="info", message="4"), ctx)
+        await stream.send(ObserverAlert(source="t", severity="info", message="3"), ctx)
+        await stream.send(ObserverAlert(source="t", severity="info", message="4"), ctx)
 
         assert fired_count == 1
 

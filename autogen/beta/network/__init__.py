@@ -2,72 +2,63 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""AG2 Network Framework — autonomous agent network infrastructure.
+"""AG2 Network Module — agent-to-agent communication infrastructure.
 
-Public API for the network framework. Import everything from here::
+Network-specific imports (Hub, delegation, topology, channels, remote).
+Framework-core features (Actor, policies, observers, knowledge, etc.)
+are now in ``autogen.beta`` directly.
 
-    from autogen.beta.network import Actor, Hub, Signal, EventWatch
+Usage::
 
-All primitives (infrastructure protocols, priority schemes, harness, channels)
-are exported from this package. For submodule access::
-
-    from autogen.beta.network.primitives.infra import StateStore
+    from autogen.beta import Actor, ConversationPolicy, TokenMonitor
+    from autogen.beta.network import Hub, Network, Pipeline, RateLimiter
 """
 
-# Layer 2: Primitives — Watch
-# Layer 3: Building Blocks
-from .actor import Actor
-
-# Channels
+# Convenience
 from .convenience import Network
 
-# Layer 2: Events
+# Events — network-specific
 from .events import (
     DelegationError,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
+    SchedulerTriggerFired,
+    TopicMessage,
+    TopicSubscription,
+    TopicUnsubscription,
+)
+
+# Events — re-exported from framework core for backward compatibility
+from autogen.beta.events.lifecycle import (
+    AggregationCompleted,
+    CompactionCompleted,
     ObserverCompleted,
     ObserverStarted,
-    SchedulerTriggerFired,
     TaskProgress,
     TaskRequest,
     TaskResult,
+    UnknownEvent,
 )
+
+# Hub
 from .hub import Hub, RegistrationHandle
-from .observer import BaseObserver, Observer
 
-# Built-in observers and plugins
-from .observers import LoopDetector, TokenMonitor
-from .plugins import RateLimiter, TelemetryPlugin
+# Plugins
+from .plugins import RateLimiter, TelemetryPlugin, TopicPlugin
+
+# Network-specific policies
+from .policies import NetworkPolicy, TopicInboxPolicy, TopicOverflow
+from .policies.network import FormattedEvent
+
+# Channels & Envelopes
 from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
-
-# Layer 2: Primitives — Envelope & Channel
 from .primitives.envelope import Envelope, EventRegistry, register_event
 
-# Layer 2: Primitives — Harness
-from .primitives.harness import (
-    ContextHarness,
-    ConversationHarness,
-    FormattedEvent,
-    HarnessMiddleware,
-    NetworkHarness,
-)
+# Infrastructure (network-specific)
+from .primitives.infra import ActorInfo, LocalLock, LocalRegistry, Lock, Registry
 
-# Layer 2: Primitives — Infrastructure
-from .primitives.infra import (
-    ActorInfo,
-    Cache,
-    LocalLock,
-    LocalRegistry,
-    Lock,
-    MemoryCache,
-    MemoryStateStore,
-    Registry,
-    StateStore,
-)
-
-# Layer 2: Primitives — Priority
+# Priority (deferred, internal)
 from .primitives.priority import (
     ConflictResolver,
     DefaultPriority,
@@ -76,35 +67,10 @@ from .primitives.priority import (
     PriorityScheme,
 )
 
-# Layer 2: Primitives — Signal
-from .primitives.signal import (
-    CallHandler,
-    EmitToStream,
-    HaltEvent,
-    HaltOnFatal,
-    InjectToPrompt,
-    Severity,
-    Signal,
-    SignalPolicy,
-)
-from .primitives.watch import (
-    AllOf,
-    AnyOf,
-    BatchWatch,
-    CronWatch,
-    DelayWatch,
-    EventWatch,
-    IntervalWatch,
-    Sequence,
-    Watch,
-    WindowWatch,
-)
-
 # Remote
 from .remote import RemoteAgent, RemoteAgentReply
-from .scheduler import Scheduler, WatchStatus
 
-# Layer 4: Composition
+# Topology
 from .topology import (
     BasePlugin,
     Conditional,
@@ -127,93 +93,68 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = (
-    # Building Blocks
-    "Actor",
-    "ActorInfo",
-    "AllOf",
-    "AnyOf",
-    "BaseObserver",
-    "BasePlugin",
-    "BatchWatch",
-    "BufferedChannel",
-    "Cache",
-    "CallHandler",
-    "Channel",
-    "Conditional",
-    "ConflictResolver",
-    # Primitives — Harness
-    "ContextHarness",
-    "ConversationHarness",
-    "CronWatch",
-    "DefaultPriority",
-    "DefaultPriorityScheme",
-    "DelayWatch",
+    # Hub & Network
+    "Hub",
+    "RegistrationHandle",
+    "Network",
+    # Events
+    "AggregationCompleted",
+    "CompactionCompleted",
     "DelegationError",
     "DelegationRejected",
     "DelegationRequest",
     "DelegationResult",
-    "EmitToStream",
-    # Primitives — Envelope & Channel
-    "Envelope",
-    "EventRegistry",
-    "EventWatch",
-    "Fanout",
     "FormattedEvent",
-    "HaltEvent",
-    "HaltOnFatal",
-    "HarnessMiddleware",
-    "HighestPriorityWins",
-    "HttpChannel",  # noqa: F822
-    "Hub",
-    "HubContext",
-    "InjectToPrompt",
-    "IntervalWatch",
-    "LocalChannel",
-    "LocalLock",
-    "LocalRegistry",
-    "Lock",
-    "LoopDetector",
-    "MemoryCache",
-    "MemoryStateStore",
-    "Network",
-    "NetworkHarness",
-    "Observer",
     "ObserverCompleted",
-    # Events
     "ObserverStarted",
-    "Pipeline",
-    # Composition
-    "Plugin",
-    "PriorityChannel",
-    # Primitives — Priority
-    "PriorityScheme",
-    "ProcessResult",
-    "RateLimiter",
-    "RegistrationHandle",
-    "Registry",
-    # Remote
-    "RemoteAgent",
-    "RemoteAgentReply",
-    "RouteDecision",
-    "Scheduler",
     "SchedulerTriggerFired",
-    "Sequence",
-    "Severity",
-    # Primitives — Signal
-    "Signal",
-    "SignalPolicy",
-    # Primitives — Infrastructure
-    "StateStore",
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
-    "TelemetryPlugin",
-    # Observers & Plugins
-    "TokenMonitor",
-    "Topology",
-    # Primitives — Watch
-    "Watch",
-    "WatchStatus",
-    "WindowWatch",
+    "TopicMessage",
+    "TopicSubscription",
+    "TopicUnsubscription",
+    "UnknownEvent",
+    # Channels & Envelopes
+    "BufferedChannel",
+    "Channel",
+    "Envelope",
+    "EventRegistry",
+    "HttpChannel",  # noqa: F822
+    "LocalChannel",
+    "PriorityChannel",
     "register_event",
+    # Infrastructure
+    "ActorInfo",
+    "LocalLock",
+    "LocalRegistry",
+    "Lock",
+    "Registry",
+    # Priority (internal)
+    "ConflictResolver",
+    "DefaultPriority",
+    "DefaultPriorityScheme",
+    "HighestPriorityWins",
+    "PriorityScheme",
+    # Plugins
+    "RateLimiter",
+    "TelemetryPlugin",
+    "TopicPlugin",
+    # Policies (network-specific)
+    "NetworkPolicy",
+    "TopicInboxPolicy",
+    "TopicOverflow",
+    # Remote
+    "RemoteAgent",
+    "RemoteAgentReply",
+    # Topology
+    "BasePlugin",
+    "Conditional",
+    "Fanout",
+    "HubContext",
+    "Pipeline",
+    "Plugin",
+    "ProcessResult",
+    "RouteDecision",
+    "Topology",
 )
