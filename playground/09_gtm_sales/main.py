@@ -23,26 +23,28 @@ import random
 import time
 from datetime import datetime, timedelta
 
+from autogen.beta import (
+    Actor,
+    IntervalWatch,
+    LoopDetector,
+    ObserverAlert,
+    TokenMonitor,
+    tool,
+)
 from autogen.beta.annotations import Context
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.network import (
-    Actor,
     BasePlugin,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
     Envelope,
     HubContext,
-    IntervalWatch,
-    LoopDetector,
     Network,
     Pipeline,
     SchedulerTriggerFired,
-    Signal,
     TelemetryPlugin,
-    TokenMonitor,
 )
-from autogen.beta.tools.final import tool
 
 # =====================================================================
 # ANSI helpers
@@ -1237,7 +1239,7 @@ async def main() -> None:
                 f"{_RED}{_BOLD}REJECTED{_RESET} "
                 f"{_RED}{event.source} -> {event.target}: {event.reason}{_RESET}"
             )
-        elif isinstance(event, Signal):
+        elif isinstance(event, ObserverAlert):
             sev = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
             color = _RED if "CRITICAL" in sev or "FATAL" in sev else _YELLOW
             print(f"  {_DIM}{_ts()}{_RESET}  {color}{_BOLD}ALERT [{sev}]{_RESET} {color}{event.message}{_RESET}")

@@ -3,17 +3,13 @@
 import random
 from datetime import datetime
 
+from autogen.beta import Actor, LoopDetector, ObserverAlert, TokenMonitor, tool
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.network import (
-    Actor,
     DelegationRequest,
     DelegationResult,
     Hub,
-    LoopDetector,
-    Signal,
-    TokenMonitor,
 )
-from autogen.beta.tools.final import tool
 
 # ---------------------------------------------------------------------------
 # Ports
@@ -387,7 +383,8 @@ def subscribe_hub_logging(hub: Hub, label: str = "HUB") -> None:
                 f"{GREEN}{BOLD}{label}{RESET}  "
                 f"{GREEN}{event.target.upper()} done -> {event.source.upper()}{RESET}"
             )
-        elif isinstance(event, Signal):
-            print(f"  {DIM}{ts}{RESET}  {RED}{BOLD}ALERT [{event.severity.upper()}]{RESET} {RED}{event.message}{RESET}")
+        elif isinstance(event, ObserverAlert):
+            sev = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
+            print(f"  {DIM}{ts}{RESET}  {RED}{BOLD}ALERT [{sev}]{RESET} {RED}{event.message}{RESET}")
 
     hub.stream.subscribe(_on_event)

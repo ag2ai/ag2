@@ -28,22 +28,22 @@ import random
 import time
 from datetime import datetime
 
+from autogen.beta import (
+    Actor,
+    IntervalWatch,
+    LoopDetector,
+    MemoryStream,
+    ObserverAlert,
+    TokenMonitor,
+    tool,
+)
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolResultEvent,
 )
-from autogen.beta.network import (
-    Actor,
-    IntervalWatch,
-    LoopDetector,
-    Network,
-    Signal,
-    TokenMonitor,
-)
-from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final import tool
+from autogen.beta.network import Network
 
 # ======================================================================
 # ANSI colors
@@ -319,8 +319,8 @@ def subscribe_event_logging(stream: MemoryStream) -> None:
                 f"{_GREEN}{_BOLD}RESPONSE:{_RESET} {_GREEN}{preview}{'...' if len(event.content) > 200 else ''}{_RESET}"
             )
 
-        elif isinstance(event, Signal):
-            log(f"{_RED}{_BOLD}ALERT [{event.severity.upper()}]{_RESET} {_RED}{event.message}{_RESET}")
+        elif isinstance(event, ObserverAlert):
+            log(f"{_RED}{_BOLD}ALERT [{event.severity.value.upper()}]{_RESET} {_RED}{event.message}{_RESET}")
 
     stream.subscribe(_on_event)
 

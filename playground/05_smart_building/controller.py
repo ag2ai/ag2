@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _shared import BOLD, CYAN, DIM, GREEN, PORTS, RED, RESET, YELLOW, subscribe_hub_logging
 
-from autogen.beta.network import IntervalWatch, Network, TelemetryPlugin
+from autogen.beta import IntervalWatch
+from autogen.beta.network import Network, TelemetryPlugin
 
 SCENARIOS = {
     1: ("Autonomous Building", None),

@@ -26,32 +26,34 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from autogen.beta import (
+    Actor,
+    BaseObserver,
+    BatchWatch,
+    EventWatch,
+    IntervalWatch,
+    LoopDetector,
+    ObserverAlert,
+    Severity,
+    TokenMonitor,
+    tool,
+)
 from autogen.beta.annotations import Context
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network import (
-    Actor,
-    BaseObserver,
     BasePlugin,
-    BatchWatch,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
     Envelope,
-    EventWatch,
     HubContext,
-    IntervalWatch,
-    LoopDetector,
     Network,
     Pipeline,
     SchedulerTriggerFired,
-    Severity,
-    Signal,
     TelemetryPlugin,
-    TokenMonitor,
 )
-from autogen.beta.tools.final import tool
 
 if TYPE_CHECKING:
     from autogen.beta.network.hub import Hub
@@ -551,7 +553,7 @@ class VolumeTracker(BaseObserver):
             "warnings": self._warnings,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         batch_categories: dict[str, int] = {}
 
         for event in events:
@@ -587,7 +589,7 @@ class VolumeTracker(BaseObserver):
         if safety_count >= self.SAFETY_THRESHOLD:
             self._spikes_detected += 1
             self._warnings += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.CRITICAL,
                 message=(
@@ -607,7 +609,7 @@ class VolumeTracker(BaseObserver):
             if count >= self.SPIKE_THRESHOLD:
                 self._spikes_detected += 1
                 self._warnings += 1
-                return Signal(
+                return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
                     message=(
@@ -652,7 +654,7 @@ class SentimentMonitor(BaseObserver):
             "warnings": self._warnings,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ToolResultEvent):
                 continue
@@ -682,7 +684,7 @@ class SentimentMonitor(BaseObserver):
         if avg <= self.CRITICAL_THRESHOLD and not self._warned_severe:
             self._warned_severe = True
             self._warnings += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.CRITICAL,
                 message=(
@@ -698,7 +700,7 @@ class SentimentMonitor(BaseObserver):
         if avg <= self.WARNING_THRESHOLD and not self._warned_moderate:
             self._warned_moderate = True
             self._warnings += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.WARNING,
                 message=(
@@ -738,7 +740,7 @@ class SourceHealthCheck(BaseObserver):
             "warnings": self._warnings,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ToolResultEvent):
                 continue
@@ -753,7 +755,7 @@ class SourceHealthCheck(BaseObserver):
                 self._source_status[source_name] = "empty/error"
                 self._empty_sources += 1
                 self._warnings += 1
-                return Signal(
+                return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
                     message=(
@@ -2009,7 +2011,7 @@ async def main() -> None:
                 f"{_RED}{_BOLD}REJECTED{_RESET} "
                 f"{_RED}{event.source} -> {event.target}: {event.reason}{_RESET}"
             )
-        elif isinstance(event, Signal):
+        elif isinstance(event, ObserverAlert):
             sev = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
             color = _severity_color(sev)
             print(

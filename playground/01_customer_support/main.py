@@ -19,11 +19,9 @@ import random
 import string
 from datetime import datetime, timedelta
 
+from autogen.beta import Actor, MemoryStream, tool
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolResultEvent
-from autogen.beta.network import Actor
-from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final import tool
 
 # ---------------------------------------------------------------------------
 # ANSI helpers

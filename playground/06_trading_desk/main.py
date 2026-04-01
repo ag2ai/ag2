@@ -25,27 +25,24 @@ from datetime import datetime
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
+from autogen.beta import Actor, ObserverAlert, tool
 from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network import (
-    Actor,
-    ConversationHarness,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
+    Envelope,
     HighestPriorityWins,
+    HubContext,
     Network,
-    NetworkHarness,
     Pipeline,
     RateLimiter,
-    Signal,
     TelemetryPlugin,
     register_event,
+    BasePlugin,
 )
-from autogen.beta.network.primitives.envelope import Envelope
-from autogen.beta.network.topology import BasePlugin, HubContext
-from autogen.beta.tools.final import tool
 
 if TYPE_CHECKING:
     from autogen.beta.network.hub import Hub
@@ -588,7 +585,6 @@ async def main() -> None:
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=analyst_tools,
-        harness=NetworkHarness(),
     )
 
     trader = Actor(
@@ -606,7 +602,6 @@ async def main() -> None:
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=trader_tools,
-        harness=NetworkHarness(),
     )
 
     risk_manager = Actor(
@@ -625,7 +620,6 @@ async def main() -> None:
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=risk_tools,
-        harness=ConversationHarness(),
     )
 
     compliance_officer = Actor(
@@ -643,7 +637,6 @@ async def main() -> None:
         ),
         config=GeminiConfig(model=model, temperature=0.3),
         tools=compliance_tools,
-        harness=ConversationHarness(),
     )
 
     # -- Create network with full customization -----------------------
@@ -704,11 +697,11 @@ async def main() -> None:
                 f"{_RED}{_BOLD}VETO {_RESET}  "
                 f"{_RED}{event.source.upper()} -> {event.target.upper()}: {event.reason}{_RESET}"
             )
-        elif isinstance(event, Signal):
+        elif isinstance(event, ObserverAlert):
             print(
                 f"  {_DIM}{ts}{_RESET}  "
                 f"{_YELLOW}{_BOLD}ALERT{_RESET}  "
-                f"{_YELLOW}[{event.severity}] {event.message}{_RESET}"
+                f"{_YELLOW}[{event.severity.value}] {event.message}{_RESET}"
             )
 
     network.hub.stream.subscribe(_on_hub_event)
@@ -729,7 +722,6 @@ async def main() -> None:
     print("    Events:     PriceSignal, TradeExecution (custom @register_event)")
     print("    Topology:   Pipeline(RiskGate, RateLimiter)")
     print("    Plugins:    ComplianceAudit (system), TelemetryPlugin (system)")
-    print("    Harness:    NetworkHarness (analyst, trader), ConversationHarness (others)")
     print("    Conflict:   HighestPriorityWins")
     print()
     print(f"  {_BOLD}Task:{_RESET}")
@@ -825,7 +817,6 @@ async def main() -> None:
 
     print(f"  {_DIM}{'─' * 64}{_RESET}")
     print(f"  {_DIM}Priority scheme: TradePriorityScheme | Conflict: HighestPriorityWins{_RESET}")
-    print(f"  {_DIM}Harness: NetworkHarness (analyst, trader) | ConversationHarness (risk, compliance){_RESET}")
     print()
 
     await network.hub.close()

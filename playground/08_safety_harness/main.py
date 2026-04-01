@@ -24,23 +24,22 @@ import random
 import time
 from datetime import datetime
 
-from autogen.beta.annotations import Context
-from autogen.beta.config.gemini import GeminiConfig
-from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolResultEvent
-from autogen.beta.network import (
+from autogen.beta import (
     Actor,
+    AlertPolicy,
     BaseObserver,
     BatchWatch,
     EventWatch,
-    HaltOnFatal,
-    InjectToPrompt,
     LoopDetector,
+    MemoryStream,
+    ObserverAlert,
     Severity,
-    Signal,
     TokenMonitor,
+    tool,
 )
-from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final import tool
+from autogen.beta.annotations import Context
+from autogen.beta.config.gemini import GeminiConfig
+from autogen.beta.events import BaseEvent, ModelResponse, ToolCallEvent, ToolResultEvent
 
 # =====================================================================
 # ANSI helpers
@@ -73,9 +72,9 @@ def _severity_color(sev: str) -> str:
     return _CYAN
 
 
-def _signal_banner(signal: Signal) -> None:
-    """Print a prominent signal alert with ANSI styling."""
-    sev = signal.severity.upper() if isinstance(signal.severity, str) else str(signal.severity).upper()
+def _alert_banner(alert: ObserverAlert) -> None:
+    """Print a prominent alert with ANSI styling."""
+    sev = alert.severity.upper() if isinstance(alert.severity, str) else str(alert.severity).upper()
     color = _severity_color(sev)
     bar = "!" if "FATAL" in sev else "*"
     width = 60
@@ -84,22 +83,22 @@ def _signal_banner(signal: Signal) -> None:
         # Extra-prominent FATAL display
         print()
         print(f"  {_RED}{_BOLD}{_BG_RED}{'!' * width}{_RESET}")
-        print(f"  {_RED}{_BOLD}{_BG_RED}  FATAL SIGNAL — AGENT HALTED{' ' * (width - 31)}{_RESET}")
+        print(f"  {_RED}{_BOLD}{_BG_RED}  FATAL ALERT — AGENT HALTED{' ' * (width - 30)}{_RESET}")
         print(f"  {_RED}{_BOLD}{_BG_RED}{'!' * width}{_RESET}")
-        print(f"  {_RED}{_BOLD}  Source:  {signal.source}{_RESET}")
-        print(f"  {_RED}{_BOLD}  Message: {signal.message}{_RESET}")
-        if signal.data:
-            print(f"  {_RED}{_BOLD}  Data:    {signal.data}{_RESET}")
+        print(f"  {_RED}{_BOLD}  Source:  {alert.source}{_RESET}")
+        print(f"  {_RED}{_BOLD}  Message: {alert.message}{_RESET}")
+        if alert.data:
+            print(f"  {_RED}{_BOLD}  Data:    {alert.data}{_RESET}")
         print(f"  {_RED}{_BOLD}{_BG_RED}{'!' * width}{_RESET}")
         print()
     else:
         print(f"  {color}{bar * width}{_RESET}")
-        print(f"  {color}  [{sev}] ({signal.source}){_RESET}")
-        print(f"  {color}  {signal.message}{_RESET}")
-        if signal.data:
-            print(f"  {color}  Data: {signal.data}{_RESET}")
+        print(f"  {color}  [{sev}] ({alert.source}){_RESET}")
+        print(f"  {color}  {alert.message}{_RESET}")
+        if alert.data:
+            print(f"  {color}  Data: {alert.data}{_RESET}")
         if "FATAL" not in sev:
-            print(f"  {_DIM}  -> Signal injected into agent prompt (InjectToPrompt){_RESET}")
+            print(f"  {_DIM}  -> Alert injected into agent prompt (AlertPolicy){_RESET}")
         print(f"  {color}{bar * width}{_RESET}")
 
 
@@ -144,7 +143,7 @@ class BudgetGuard(BaseObserver):
             "fatal": self._fatal,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ModelResponse):
                 continue
@@ -158,7 +157,7 @@ class BudgetGuard(BaseObserver):
         # FATAL at 100%
         if self._cost >= self._budget and not self._fatal:
             self._fatal = True
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.FATAL,
                 message=f"Budget exceeded! ${self._cost:.4f} / ${self._budget:.2f}. Halting execution.",
@@ -169,7 +168,7 @@ class BudgetGuard(BaseObserver):
         if self._cost >= self._budget * 0.8 and not self._warned_80:
             self._warned_80 = True
             self._criticals += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.CRITICAL,
                 message=(
@@ -183,7 +182,7 @@ class BudgetGuard(BaseObserver):
         if self._cost >= self._budget * 0.5 and not self._warned_50:
             self._warned_50 = True
             self._warnings += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.WARNING,
                 message=(
@@ -222,7 +221,7 @@ class ToolAbuseDetector(BaseObserver):
             "criticals": self._criticals,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ToolCallEvent):
                 continue
@@ -232,7 +231,7 @@ class ToolAbuseDetector(BaseObserver):
         # Check for excessive total tool calls
         if self._total_calls > 15:
             self._criticals += 1
-            return Signal(
+            return ObserverAlert(
                 source=self.name,
                 severity=Severity.CRITICAL,
                 message=(f"Excessive tool usage ({self._total_calls} calls). Simplify your approach and wrap up."),
@@ -243,7 +242,7 @@ class ToolAbuseDetector(BaseObserver):
         for tool_name, count in self._tool_counts.items():
             if count > 5:
                 self._warnings += 1
-                return Signal(
+                return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
                     message=(f"Tool '{tool_name}' called {count} times — possible inefficiency. Vary your approach."),
@@ -278,7 +277,7 @@ class ContentPolicyMonitor(BaseObserver):
             "flag_count": len(self._flags),
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ToolResultEvent):
                 continue
@@ -290,7 +289,7 @@ class ContentPolicyMonitor(BaseObserver):
                         "tool": event.name,
                         "keyword": keyword,
                     })
-                    return Signal(
+                    return ObserverAlert(
                         source=self.name,
                         severity=Severity.WARNING,
                         message=(
@@ -325,10 +324,10 @@ class ProgressTracker(BaseObserver):
             "total_calls": self._total_calls,
         }
 
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         self._total_calls += len([e for e in events if isinstance(e, ToolCallEvent)])
         self._checkpoints += 1
-        return Signal(
+        return ObserverAlert(
             source=self.name,
             severity=Severity.INFO,
             message=(
@@ -784,7 +783,7 @@ async def main() -> None:
             send_notification,
         ],
         observers=all_observers,
-        signal_policy=HaltOnFatal(inner=InjectToPrompt()),
+        assembly=[AlertPolicy()],
     )
 
     # ---- Set up stream with event logging ----
@@ -804,13 +803,13 @@ async def main() -> None:
             preview = event.content[:120].replace("\n", " ")
             print(f"  {_DIM}[{_ts()}]{_RESET} {_GREEN}MODEL {preview}...{_RESET}")
 
-    async def _on_signal(signal: Signal) -> None:
-        _signal_banner(signal)
+    async def _on_alert(alert: ObserverAlert) -> None:
+        _alert_banner(alert)
 
     stream.where(ToolCallEvent).subscribe(_on_tool_call)
     stream.where(ToolResultEvent).subscribe(_on_tool_result)
     stream.where(ModelResponse).subscribe(_on_model_response)
-    stream.where(Signal).subscribe(_on_signal)
+    stream.where(ObserverAlert).subscribe(_on_alert)
 
     # ---- Print header ----
     width = 60
@@ -838,9 +837,9 @@ async def main() -> None:
         print(f"  {_DIM}  {name}: {desc}{_RESET}")
     print()
 
-    print(f"  {_CYAN}Signal policy:{_RESET} HaltOnFatal(InjectToPrompt())")
+    print(f"  {_CYAN}Alert policy:{_RESET} AlertPolicy()")
     print(f"  {_DIM}  - INFO/WARNING/CRITICAL: injected into LLM prompt{_RESET}")
-    print(f"  {_DIM}  - FATAL: halts agent immediately (mechanical){_RESET}")
+    print(f"  {_DIM}  - FATAL: halts agent immediately{_RESET}")
     print()
 
     print(f"  {_BOLD}Task:{_RESET}")

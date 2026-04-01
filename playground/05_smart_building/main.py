@@ -37,7 +37,8 @@ from _shared import (
     subscribe_hub_logging,
 )
 
-from autogen.beta.network import IntervalWatch, Network, TelemetryPlugin
+from autogen.beta import IntervalWatch
+from autogen.beta.network import Network, TelemetryPlugin
 
 SCENARIOS = {
     1: ("Autonomous Building", None),
