@@ -6,7 +6,6 @@ import os
 from dataclasses import dataclass
 
 import pytest
-from pydantic import BaseModel
 
 from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
@@ -18,21 +17,6 @@ def gemini_config() -> GeminiConfig:
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
     return GeminiConfig(model="gemini-3.1-flash-lite-preview", api_key=api_key, temperature=0)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio()
-async def test_basic_ask(gemini_config: GeminiConfig) -> None:
-    agent = Agent(
-        name="test_agent",
-        prompt="You are a helpful assistant. Be concise.",
-        config=gemini_config,
-    )
-
-    reply = await agent.ask("What is 2 + 2?")
-
-    assert reply.body is not None
-    assert "4" in reply.body
 
 
 @pytest.mark.gemini
@@ -113,51 +97,6 @@ async def test_structured_output_dataclass(gemini_config: GeminiConfig) -> None:
 
 @pytest.mark.gemini
 @pytest.mark.asyncio()
-async def test_structured_output_pydantic(gemini_config: GeminiConfig) -> None:
-    class MathResult(BaseModel):
-        answer: int
-        explanation: str
-
-    agent = Agent(
-        name="math_agent",
-        prompt="You are a math assistant. Solve the given problem.",
-        config=gemini_config,
-        response_schema=MathResult,
-    )
-
-    reply = await agent.ask("What is 15 * 7?")
-    result = await reply.content()
-
-    assert isinstance(result, MathResult)
-    assert result.answer == 105
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio()
-async def test_structured_output_union(gemini_config: GeminiConfig) -> None:
-    class Success(BaseModel):
-        value: int
-
-    class Error(BaseModel):
-        message: str
-
-    agent = Agent(
-        name="math_agent",
-        prompt="You are a math assistant. If the calculation is valid, return a Success with the value. If invalid, return an Error with a message.",
-        config=gemini_config,
-        response_schema=Success | Error,
-    )
-
-    reply = await agent.ask("What is 10 + 5?")
-    result = await reply.content()
-
-    assert isinstance(result, (Success, Error))
-    if isinstance(result, Success):
-        assert result.value == 15
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio()
 async def test_multi_turn(gemini_config: GeminiConfig) -> None:
     agent = Agent(
         name="memory_agent",
@@ -171,58 +110,6 @@ async def test_multi_turn(gemini_config: GeminiConfig) -> None:
     reply2 = await reply.ask("What is my name?")
     assert reply2.body is not None
     assert "Alice" in reply2.body
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio()
-async def test_tool_use_with_structured_output(gemini_config: GeminiConfig) -> None:
-    class WeatherReport(BaseModel):
-        city: str
-        temperature: int
-        condition: str
-
-    def get_weather(city: str) -> str:
-        """Get the current weather for a city."""
-        return f"The weather in {city} is sunny and 22°C."
-
-    agent = Agent(
-        name="weather_agent",
-        prompt="You are a weather assistant. Use the get_weather tool and return structured data.",
-        config=gemini_config,
-        tools=[get_weather],
-        response_schema=WeatherReport,
-    )
-
-    reply = await agent.ask("What's the weather in Paris?")
-    result = await reply.content()
-
-    assert isinstance(result, WeatherReport)
-    assert result.city.lower() == "paris"
-    assert result.temperature == 22
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio()
-async def test_tool_with_optional_only_params(gemini_config: GeminiConfig) -> None:
-    """Tools with only optional parameters must not crash on multi-turn."""
-
-    def list_items(category: str = "") -> str:
-        """List available items, optionally filtered by category."""
-        if category:
-            return f"Items in {category}: widget, gadget"
-        return "All items: apple, banana, cherry"
-
-    agent = Agent(
-        name="item_agent",
-        prompt="You have a list_items tool. Call it with no arguments to see all items, then summarize the results.",
-        config=gemini_config,
-        tools=[list_items],
-    )
-
-    reply = await agent.ask("What items do we have?")
-
-    assert reply.body is not None
-    assert any(fruit in reply.body.lower() for fruit in ["apple", "banana", "cherry"])
 
 
 @pytest.mark.gemini

@@ -14,17 +14,9 @@ from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ModelRequest, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 
-try:
-    import redis  # noqa: F401
-
-    _redis_installed = True
-except ImportError:
-    _redis_installed = False
-
 pytestmark = [
     pytest.mark.redis,
     pytest.mark.asyncio,
-    pytest.mark.skipif(not _redis_installed, reason="redis package not installed"),
 ]
 
 REDIS_URL = "redis://mocked"
