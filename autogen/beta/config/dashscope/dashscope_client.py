@@ -20,6 +20,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -128,17 +129,17 @@ class DashScopeClient(LLMClient):
                 )
             )
 
-        usage = response.usage or {}
-        usage_dict = {
-            "prompt_tokens": usage.get("input_tokens", 0),
-            "completion_tokens": usage.get("output_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-        }
+        u = response.usage or {}
+        usage = Usage(
+            prompt_tokens=float(u.get("input_tokens", 0)),
+            completion_tokens=float(u.get("output_tokens", 0)),
+            total_tokens=float(u.get("total_tokens", 0)),
+        )
 
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            usage=usage,
             model=self._model,
             provider="dashscope",
             finish_reason=choice.get("finish_reason")
@@ -162,7 +163,7 @@ class DashScopeClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
+        usage = Usage()
         calls: list[ToolCallEvent] = []
         finish_reason: str | None = None
 
@@ -171,12 +172,12 @@ class DashScopeClient(LLMClient):
                 raise RuntimeError(f"DashScope error: {chunk.code} - {chunk.message}")
 
             if chunk.usage:
-                usage = chunk.usage
-                usage_dict = {
-                    "prompt_tokens": usage.get("input_tokens", 0),
-                    "completion_tokens": usage.get("output_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                }
+                u = chunk.usage
+                usage = Usage(
+                    prompt_tokens=float(u.get("input_tokens", 0)),
+                    completion_tokens=float(u.get("output_tokens", 0)),
+                    total_tokens=float(u.get("total_tokens", 0)),
+                )
 
             for choice in chunk.output.choices:
                 fr = choice.get("finish_reason") if hasattr(choice, "get") else getattr(choice, "finish_reason", None)
@@ -212,7 +213,7 @@ class DashScopeClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            usage=usage,
             model=self._model,
             provider="dashscope",
             finish_reason=finish_reason,

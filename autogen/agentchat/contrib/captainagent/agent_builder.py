@@ -297,7 +297,8 @@ Match roles in the role set to each expert in expert set.
         if len(model_tags) > 0:
             filter_dict.update({"tags": model_tags})
         config_list = (
-            LLMConfig.from_json(env=self.config_file_or_env, file_location=self.config_file_location)
+            LLMConfig
+            .from_json(env=self.config_file_or_env, file_location=self.config_file_location)
             .where(**filter_dict)
             .config_list
             if self.llm_config is None
@@ -428,7 +429,8 @@ Match roles in the role set to each expert in expert set.
 
         print(colored("==> Generating agents...", "green"), flush=True)
         resp_agent_name = (
-            self.builder_model.create(
+            self.builder_model
+            .create(
                 messages=[
                     {
                         "role": "user",
@@ -447,7 +449,8 @@ Match roles in the role set to each expert in expert set.
         for name in agent_name_list:
             print(f"Preparing system message for {name}", flush=True)
             resp_agent_sys_msg = (
-                self.builder_model.create(
+                self.builder_model
+                .create(
                     messages=[
                         {
                             "role": "user",
@@ -469,7 +472,8 @@ Match roles in the role set to each expert in expert set.
         for name, sys_msg in list(zip(agent_name_list, agent_sys_msg_list)):
             print(f"Preparing description for {name}", flush=True)
             resp_agent_description = (
-                self.builder_model.create(
+                self.builder_model
+                .create(
                     messages=[
                         {
                             "role": "user",
@@ -493,9 +497,8 @@ Match roles in the role set to each expert in expert set.
 
         if coding is None:
             resp = (
-                self.builder_model.create(
-                    messages=[{"role": "user", "content": self.CODING_PROMPT.format(task=building_task)}]
-                )
+                self.builder_model
+                .create(messages=[{"role": "user", "content": self.CODING_PROMPT.format(task=building_task)}])
                 .choices[0]
                 .message.content
             )
@@ -597,7 +600,8 @@ Match roles in the role set to each expert in expert set.
         expert_pool = [f"{agent['name']}: {agent['description']}" for agent in agent_config_list]
         while True:
             skill_agent_pair_json = (
-                self.builder_model.create(
+                self.builder_model
+                .create(
                     messages=[
                         {
                             "role": "user",
@@ -648,9 +652,8 @@ Match roles in the role set to each expert in expert set.
 
         if coding is None:
             resp = (
-                self.builder_model.create(
-                    messages=[{"role": "user", "content": self.CODING_PROMPT.format(task=building_task)}]
-                )
+                self.builder_model
+                .create(messages=[{"role": "user", "content": self.CODING_PROMPT.format(task=building_task)}])
                 .choices[0]
                 .message.content
             )

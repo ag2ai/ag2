@@ -188,14 +188,14 @@ For example, you can use all the text splitters in langchain.
 ```python
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-recur_spliter = RecursiveCharacterTextSplitter(separators=["\n", "\r", "\t"])
+recur_splitter = RecursiveCharacterTextSplitter(separators=["\n", "\r", "\t"])
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",
     retrieve_config={
         "task": "qa",
         "docs_path": "https://raw.githubusercontent.com/microsoft/autogen/main/README.md",
-        "custom_text_split_function": recur_spliter.split_text,
+        "custom_text_split_function": recur_splitter.split_text,
     },
 )
 ```

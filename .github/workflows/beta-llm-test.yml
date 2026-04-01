@@ -44,6 +44,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
+      - uses: extractions/setup-just@v2
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
@@ -62,9 +63,7 @@ jobs:
         run: |
           llm_fixed="${{ matrix.llm }}"
           llm_fixed="${llm_fixed//-/_}"
-          bash scripts/test-beta-llm.sh -m "$llm_fixed"
-      - name: Show coverage report
-        run: bash scripts/show-coverage-report.sh
+          just test-beta-llm-cov "$llm_fixed"
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autogen.beta.config.anthropic import AnthropicClient
-from autogen.beta.events import ModelResponse
+from autogen.beta.events import ModelResponse, Usage
 
 
 def _make_usage(
@@ -65,8 +65,7 @@ async def test_process_response_normalizes_usage():
     result = await client._process_response(response, _make_context())
 
     assert isinstance(result, ModelResponse)
-    assert result.usage["prompt_tokens"] == 100
-    assert result.usage["completion_tokens"] == 25
+    assert result.usage == Usage(prompt_tokens=100, completion_tokens=25)
 
 
 @pytest.mark.asyncio()
@@ -77,10 +76,12 @@ async def test_process_response_includes_cache_creation_tokens():
 
     result = await client._process_response(response, _make_context())
 
-    assert result.usage["prompt_tokens"] == 3
-    assert result.usage["completion_tokens"] == 10
-    assert result.usage["cache_creation_input_tokens"] == 5058
-    assert "cache_read_input_tokens" not in result.usage
+    assert result.usage == Usage(
+        prompt_tokens=3,
+        completion_tokens=10,
+        cache_creation_input_tokens=5058,
+    )
+    assert result.usage.cache_read_input_tokens is None
 
 
 @pytest.mark.asyncio()
@@ -91,8 +92,12 @@ async def test_process_response_includes_cache_read_tokens():
 
     result = await client._process_response(response, _make_context())
 
-    assert result.usage["cache_read_input_tokens"] == 5043
-    assert "cache_creation_input_tokens" not in result.usage
+    assert result.usage == Usage(
+        prompt_tokens=3,
+        completion_tokens=14,
+        cache_read_input_tokens=5043,
+    )
+    assert result.usage.cache_creation_input_tokens is None
 
 
 @pytest.mark.asyncio()
@@ -103,10 +108,7 @@ async def test_process_response_no_usage():
 
     result = await client._process_response(response, _make_context())
 
-    assert result.usage == {
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-    }
+    assert result.usage == Usage(prompt_tokens=0, completion_tokens=0)
 
 
 @pytest.mark.asyncio()
@@ -133,10 +135,12 @@ async def test_process_stream_normalizes_usage():
     result = await client._process_stream(stream, _make_context())
 
     assert isinstance(result, ModelResponse)
-    assert result.usage["prompt_tokens"] == 50
-    assert result.usage["completion_tokens"] == 12
-    assert result.usage["cache_read_input_tokens"] == 4000
-    assert "cache_creation_input_tokens" not in result.usage
+    assert result.usage == Usage(
+        prompt_tokens=50,
+        completion_tokens=12,
+        cache_read_input_tokens=4000,
+    )
+    assert result.usage.cache_creation_input_tokens is None
 
 
 async def _async_iter(items):

@@ -8,7 +8,6 @@ import sys
 import pytest
 
 from autogen.agentchat.contrib.rag import ChromaDBQueryEngine, RAGQueryEngine
-from autogen.import_utils import skip_on_missing_imports
 from test.const import reason
 
 """
@@ -25,8 +24,6 @@ docs_to_add = [input_dir + "Toast_financial_report.md"]
 
 
 @pytest.fixture(scope="module")
-@pytest.mark.openai
-@skip_on_missing_imports(["chromadb", "llama_index"], "rag")
 def chroma_query_engine() -> ChromaDBQueryEngine:
     # For testing purposes, use a host and port that point to your running ChromaDB.
     # Adjust these if necessary.

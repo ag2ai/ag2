@@ -4354,10 +4354,13 @@ class ConversableAgent(LLMAgent):
         if executor_kwargs is None:
             executor_kwargs = {}
         if "is_termination_msg" not in executor_kwargs:
-            executor_kwargs["is_termination_msg"] = lambda x: "TERMINATE" in (
-                content_str(x.get("content"))
-                if isinstance(x.get("content"), (str, list)) or x.get("content") is None
-                else str(x.get("content"))
+            executor_kwargs["is_termination_msg"] = lambda x: (
+                "TERMINATE"
+                in (
+                    content_str(x.get("content"))
+                    if isinstance(x.get("content"), (str, list)) or x.get("content") is None
+                    else str(x.get("content"))
+                )
             )
 
         try:

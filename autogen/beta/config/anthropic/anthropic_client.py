@@ -30,7 +30,13 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
+from .mappers import (
+    convert_messages,
+    extract_mcp_servers,
+    normalize_usage,
+    response_proto_to_output_config,
+    tool_to_api,
+)
 
 
 class CreateOptions(TypedDict, total=False):
@@ -56,8 +62,6 @@ class AnthropicClient(LLMClient):
         http_client: httpx.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
-        web_search_version: str = "web_search_20250305",
-        web_fetch_version: str = "web_fetch_20250910",
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -71,8 +75,6 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
-        self._web_search_version = web_search_version
-        self._web_fetch_version = web_fetch_version
 
     async def __call__(
         self,
@@ -98,10 +100,9 @@ class AnthropicClient(LLMClient):
         if self._prompt_caching and anthropic_messages:
             self._inject_cache_control(anthropic_messages)
 
-        tools_list = [
-            tool_to_api(t, web_search_version=self._web_search_version, web_fetch_version=self._web_fetch_version)
-            for t in tools
-        ]
+        tools_schemas = list(tools)
+        tools_list = [tool_to_api(t) for t in tools_schemas]
+        mcp_servers = extract_mcp_servers(tools_schemas)
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_output_config(response_schema):
@@ -114,6 +115,10 @@ class AnthropicClient(LLMClient):
             "messages": anthropic_messages,
             "tools": tools_list if tools_list else NOT_GIVEN,
         }
+
+        if mcp_servers:
+            create_kwargs["extra_headers"] = {"anthropic-beta": "mcp-client-2025-11-20"}
+            create_kwargs["extra_body"] = {"mcp_servers": mcp_servers}
 
         max_continuations = 5
 

@@ -497,7 +497,8 @@ Collect information from the general task, follow the suggestions from manager t
         # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
-            summary_model.create(
+            summary_model
+            .create(
                 messages=[
                     {
                         "role": "user",

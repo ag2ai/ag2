@@ -9,6 +9,7 @@ from typing import Any
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -118,13 +119,14 @@ def convert_messages(
     return result
 
 
-def normalize_usage(metadata: Any) -> dict[str, Any]:
-    """Build usage dict from Gemini UsageMetadata, normalizing to standard keys."""
-    usage: dict[str, Any] = {
-        "prompt_tokens": metadata.prompt_token_count,
-        "completion_tokens": metadata.candidates_token_count,
-        "total_tokens": metadata.total_token_count,
-    }
+def normalize_usage(metadata: Any) -> Usage:
+    """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
+    cache_read: float | None = None
     if metadata.cached_content_token_count:
-        usage["cache_read_input_tokens"] = metadata.cached_content_token_count
-    return usage
+        cache_read = float(metadata.cached_content_token_count)
+    return Usage(
+        prompt_tokens=float(metadata.prompt_token_count),
+        completion_tokens=float(metadata.candidates_token_count),
+        total_tokens=float(metadata.total_token_count),
+        cache_read_input_tokens=cache_read,
+    )

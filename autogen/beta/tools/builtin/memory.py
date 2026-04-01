@@ -5,6 +5,7 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from typing import Literal
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
@@ -17,6 +18,7 @@ class MemoryToolSchema(ToolSchema):
     """Provider-neutral capability flag for the memory tool."""
 
     type: str = field(default="memory", init=False)
+    version: Literal["memory_20250818"] = "memory_20250818"
 
 
 class MemoryTool(Tool):
@@ -31,8 +33,15 @@ class MemoryTool(Tool):
     See: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
     """
 
+    def __init__(
+        self,
+        *,
+        version: Literal["memory_20250818"] = "memory_20250818",
+    ) -> None:
+        self._schema = MemoryToolSchema(version=version)
+
     async def schemas(self, context: "Context") -> list[ToolSchema]:
-        return [MemoryToolSchema()]
+        return [self._schema]
 
     def register(
         self,

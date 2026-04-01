@@ -11,7 +11,7 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
 from autogen.beta import Agent
-from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
+from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import tool
@@ -76,7 +76,7 @@ async def test_llm_span_with_usage(otel_setup):
         config=TestConfig(
             ModelResponse(
                 message=ModelMessage(content="Hi!"),
-                usage={"prompt_tokens": 10, "completion_tokens": 5},
+                usage=Usage(prompt_tokens=10, completion_tokens=5),
             ),
         ),
         middleware=[
@@ -211,7 +211,7 @@ async def test_span_parent_child_hierarchy(otel_setup):
     agent = Agent(
         "assistant",
         config=TestConfig(
-            ModelResponse(message=ModelMessage(content="Hi!"), usage={"prompt_tokens": 5, "completion_tokens": 3}),
+            ModelResponse(message=ModelMessage(content="Hi!"), usage=Usage(prompt_tokens=5, completion_tokens=3)),
         ),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
     )
@@ -282,7 +282,7 @@ async def test_auto_detect_model_provider_from_response(otel_setup):
                 model="gpt-4o-mini-2024-07-18",
                 provider="openai",
                 finish_reason="stop",
-                usage={"prompt_tokens": 10, "completion_tokens": 5},
+                usage=Usage(prompt_tokens=10, completion_tokens=5),
             ),
         ),
         middleware=[
@@ -387,12 +387,12 @@ async def test_cache_token_usage_attributes(otel_setup):
         config=TestConfig(
             ModelResponse(
                 message=ModelMessage(content="Hi!"),
-                usage={
-                    "prompt_tokens": 100,
-                    "completion_tokens": 20,
-                    "cache_creation_input_tokens": 80,
-                    "cache_read_input_tokens": 0,
-                },
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    cache_creation_input_tokens=80,
+                    cache_read_input_tokens=0,
+                ),
                 model="claude-sonnet-4-6",
                 provider="anthropic",
             ),
@@ -421,12 +421,12 @@ async def test_cache_read_tokens_when_nonzero(otel_setup):
         config=TestConfig(
             ModelResponse(
                 message=ModelMessage(content="Hi!"),
-                usage={
-                    "prompt_tokens": 100,
-                    "completion_tokens": 20,
-                    "cache_creation_input_tokens": 0,
-                    "cache_read_input_tokens": 75,
-                },
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    cache_creation_input_tokens=0,
+                    cache_read_input_tokens=75,
+                ),
                 model="claude-sonnet-4-6",
                 provider="anthropic",
             ),

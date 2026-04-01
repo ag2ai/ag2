@@ -32,7 +32,7 @@ SAMPLE_CHAT_REQUEST = json.loads(
 {
     "messages": [
         {
-            "content": "You are roleplaying a high school student strugling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
+            "content": "You are roleplaying a high school student struggling with linear algebra. Regardless how well the teacher explains things to you, you just don't quite get it. Keep your questions short.",
             "role": "system"
         },
         {
