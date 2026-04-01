@@ -264,7 +264,7 @@ class EventLogWriter:
         registry: EventRegistry | None = None,
     ) -> list[BaseEvent]:
 
-        from .network.events import UnknownEvent
+        from .events.lifecycle import UnknownEvent
 
         content = await self._store.read(path)
         if not content:

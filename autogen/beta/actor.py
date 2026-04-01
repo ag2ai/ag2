@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor — an autonomous agent with observers, signals, task spawning, and agent harness.
+"""Actor — an autonomous agent with observers, alerts, subtask spawning, and knowledge management.
 
 Actor extends Agent with:
 1. Observer management — attach/detach observers that monitor the event stream
-2. Signal injection — observer signals are delivered via SignalPolicy
-3. Task spawning — spawn_task/spawn_tasks tools for delegating subtasks
-4. Agent Harness — persistent knowledge, context assembly, compaction, aggregation
+2. Alert injection — observer alerts are delivered via AlertPolicy in the assembly chain
+3. Subtask spawning — run_subtask/run_subtasks tools for delegating isolated compute work
+4. Knowledge management — persistent knowledge, context assembly, compaction, aggregation
 
 Works standalone (no Hub required). Optionally registers with a Hub
 for cross-actor discovery and delegation.
@@ -43,7 +43,7 @@ from .aggregate import AggregateStrategy, AggregateTrigger
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .compact import CompactStrategy, CompactTrigger
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
-from .network.events import (
+from .events.lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
     ObserverCompleted,
@@ -79,10 +79,10 @@ class TaskConfig:
 
 
 class Actor(Agent):
-    """An autonomous agent with observers, signals, task spawning, and agent harness.
+    """An autonomous agent with observers, alerts, subtask spawning, and knowledge management.
 
     Actor extends Agent. It delegates to ``super()._execute()`` rather than
-    reimplementing the event loop. Actor concerns (observers, signals, tasks,
+    reimplementing the event loop. Actor concerns (observers, alerts, subtasks,
     knowledge, assembly, compaction, aggregation) are injected via additional
     tools and middleware.
 

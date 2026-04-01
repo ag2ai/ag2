@@ -17,23 +17,27 @@ Usage::
 # Convenience
 from .convenience import Network
 
-# Events (network-specific only)
+# Events — network-specific
 from .events import (
-    AggregationCompleted,
-    CompactionCompleted,
     DelegationError,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
-    ObserverCompleted,
-    ObserverStarted,
     SchedulerTriggerFired,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
     TopicMessage,
     TopicSubscription,
     TopicUnsubscription,
+)
+
+# Events — re-exported from framework core for backward compatibility
+from autogen.beta.events.lifecycle import (
+    AggregationCompleted,
+    CompactionCompleted,
+    ObserverCompleted,
+    ObserverStarted,
+    TaskProgress,
+    TaskRequest,
+    TaskResult,
     UnknownEvent,
 )
 

@@ -7,7 +7,7 @@
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.network.events import TaskResult
+from autogen.beta.events.lifecycle import TaskResult
 from autogen.beta.observer import BaseObserver
 from autogen.beta.watch import EventWatch
 

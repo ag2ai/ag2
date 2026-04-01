@@ -30,6 +30,16 @@ from .knowledge import (
     StoreBootstrap,
 )
 from .events.alert import HaltEvent, ObserverAlert, Severity
+from .events.lifecycle import (
+    AggregationCompleted,
+    CompactionCompleted,
+    ObserverCompleted,
+    ObserverStarted,
+    TaskProgress,
+    TaskRequest,
+    TaskResult,
+    UnknownEvent,
+)
 from .observer import BaseObserver, Observer
 from .observers import LoopDetector, TokenMonitor
 from .policies import (
@@ -84,6 +94,15 @@ __all__ = (
     "Severity",
     "HaltEvent",
     "AlertPolicy",
+    # Lifecycle events (promoted from network)
+    "AggregationCompleted",
+    "CompactionCompleted",
+    "ObserverCompleted",
+    "ObserverStarted",
+    "TaskProgress",
+    "TaskRequest",
+    "TaskResult",
+    "UnknownEvent",
     # Policies
     "ConversationPolicy",
     "EpisodicMemoryPolicy",
