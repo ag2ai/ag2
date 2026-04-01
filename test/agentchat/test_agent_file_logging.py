@@ -24,7 +24,6 @@ def dummy_function(param1: str, param2: int) -> Any:
     return param1 * param2
 
 
-@pytest.mark.skipif(is_windows, reason="Skipping file logging tests on Windows")
 @pytest.fixture
 def logger() -> FileLogger:
     current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -31,7 +31,7 @@ def neo4j_query_engine_with_json() -> Neo4jGraphQueryEngine:
     # Create Neo4jGraphQueryEngine
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
-        password="password",  # Change if you reset password
+        password="password",  # Change if you reset password  # pragma: allowlist secret
         host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
@@ -80,7 +80,7 @@ def neo4j_query_engine() -> Neo4jGraphQueryEngine:
     # Create Neo4jGraphQueryEngine
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
-        password="password",  # Change if you reset password
+        password="password",  # Change if you reset password  # pragma: allowlist secret
         host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database

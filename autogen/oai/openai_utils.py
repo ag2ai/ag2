@@ -425,8 +425,8 @@ def config_list_from_models(
     key_file_path = "/path/to/key/files"
 
     # Define the file names for the OpenAI and Azure OpenAI API keys and bases
-    openai_api_key_file = "key_openai.txt"
-    aoai_api_key_file = "key_aoai.txt"
+    openai_api_key_file = "key_openai.txt"  # pragma: allowlist secret
+    aoai_api_key_file = "key_aoai.txt"  # pragma: allowlist secret
     aoai_api_base_file = "base_aoai.txt"
 
     # Define the list of models for which to create configurations
@@ -503,7 +503,7 @@ def get_config(
     config = get_config(api_key="sk-abcdef1234567890", base_url="https://api.openai.com", api_version="v1")
     # The 'config' variable will now contain:
     # {
-    #     "api_key": "sk-abcdef1234567890",
+    #     "api_key": "sk-abcdef1234567890",  # pragma: allowlist secret
     #     "base_url": "https://api.openai.com",
     #     "api_version": "v1"
     # }

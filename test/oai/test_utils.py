@@ -600,9 +600,7 @@ def test_is_valid_api_key():
     assert not is_valid_api_key("sk-asajsdjsd2")
     assert not is_valid_api_key("FooBar")
     assert not is_valid_api_key("sk-asajsdjsd22372%23kjdfdfdf2329ffUUDSDS")
-    assert is_valid_api_key(
-        "sk-FAKE_TESTKEYabcdefghijklmnopqrstuvwxyz0123456789XYZEND"
-    )  # correct format, not real
+    assert is_valid_api_key("sk-FAKE_TESTKEYabcdefghijklmnopqrstuvwxyz0123456789XYZEND")  # correct format, not real
     assert is_valid_api_key(
         "sk-proj-FAKE_TESTKEYabcdefghijklmnopqrstuvwxyz0123456789XYZEND0123456789abcdef"
     )  # correct format, not real

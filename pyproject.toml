@@ -498,9 +498,10 @@ ignore = [
     "C901",
     "E402",
     "E721",
-    "ASYNC109",
     "E501",     # line too long, handled by formatter later
     "C901",     # too complex
+    "ASYNC109",
+    "ASYNC240",
 ]
 
 [tool.ruff.lint.per-file-ignores]

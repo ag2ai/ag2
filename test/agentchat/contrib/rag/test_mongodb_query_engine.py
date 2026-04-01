@@ -5,7 +5,7 @@
 # !/usr/bin/env python3 -m pytest
 
 import logging
-import os
+from pathlib import Path
 
 import pytest
 
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
 
 # Real file paths provided for testing.
-input_dir = "test/agents/experimental/document_agent/pdf_parsed/"
-input_docs = [os.path.join(input_dir, "Toast_financial_report.md")]
-docs_to_add = [os.path.join(input_dir, "nvidia_10k_2024.md")]
+input_dir = Path("test/agents/experimental/document_agent/pdf_parsed/").resolve()
+input_docs = [input_dir / "Toast_financial_report.md"]
+docs_to_add = [input_dir / "nvidia_10k_2024.md"]
 
 # Use the connection string from an environment variable or fallback to the given connection string.
 MONGO_CONN_STR = "mongodb://localhost:27017/?directConnection=true"

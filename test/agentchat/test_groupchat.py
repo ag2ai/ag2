@@ -1577,7 +1577,7 @@ def test_speaker_selection_agent_name_match():
 
 
 def test_role_for_reflection_summary():
-    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}
+    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}  # pragma: allowlist secret
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=10,

@@ -82,7 +82,7 @@ typos:
 [doc("Run ruff check + format")]
 [group("linter")]
 lint: ruff-check ruff-format typos
-
+  pre-commit run --all-files check-license-headers
 
 # Static analysis
 

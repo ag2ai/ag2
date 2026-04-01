@@ -21,10 +21,7 @@ repos:
           .devcontainer/.*devcontainer\.json |
           ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
         )$
-    - id: check-byte-order-marker
-      exclude: .gitignore
     - id: trailing-whitespace
-    - id: mixed-line-ending
     - id: end-of-file-fixer
     - id: check-case-conflict
     - id: check-merge-conflict
@@ -65,7 +62,7 @@ repos:
         - tomli
         exclude: |
             (?x)^(
-              # notebook/.* |
+              _typos.toml |
               notebook/agentchat_lmm_gpt-4v.ipynb |
               notebook/agentchat_graph_rag_neo4j.ipynb |
               notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb |
@@ -109,6 +106,8 @@ repos:
     - id: detect-secrets
       args: [
           '--exclude-files', 'notebook/.*',
+          '--exclude-files', 'website/.*',
+          '--exclude-files', 'test/.*',
       ]
 
   - repo: local
