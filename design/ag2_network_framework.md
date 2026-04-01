@@ -49,13 +49,15 @@ Five layers, each building on the previous. Each layer can be used independently
 │  Pipeline · Fanout · Conditional · RouteDecision · Network│
 ├──────────────────────────────────────────────────────────┤
 │  Layer 3: BUILDING BLOCKS                                 │
-│  Actor · Hub · Observer · Scheduler                       │
+│  Hub · Topology · Plugin · Network                        │
 ├──────────────────────────────────────────────────────────┤
-│  Layer 2: PRIMITIVES                                      │
-│  Watch · Signal · Priority · Channel · Envelope · Harness │
+│  Layer 2: PRIMITIVES & POLICIES                           │
+│  Watch · Channel · Envelope · Priority · AssemblyPolicy   │
+│  KnowledgeStore · CompactStrategy · AggregateStrategy     │
 ├──────────────────────────────────────────────────────────┤
 │  Layer 1: FRAMEWORK CORE (AG2 Beta)                       │
-│  Agent · Stream · Events · Tools · Middleware             │
+│  Agent · Actor · Stream · Events · Tools · Middleware      │
+│  Observer · Scheduler · AlertPolicy                       │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -132,7 +134,7 @@ class Watch(Protocol):
 **Example:**
 
 ```python
-from autogen.beta.network import EventWatch, IntervalWatch, AllOf
+from autogen.beta import EventWatch, IntervalWatch, AllOf
 
 # Fire on a specific event
 watch = EventWatch(DelegationResult)
@@ -147,88 +149,40 @@ watch = AllOf(
 )
 ```
 
-### Signal
+### ObserverAlert
 
-A Signal is a structured notification produced by an Observer and consumed by an Actor. It carries severity, source identification, and a human/LLM-readable message.
+An ObserverAlert is a structured notification produced by an Observer and consumed by an Actor. It carries severity, source identification, and a human/LLM-readable message. It replaces the former Signal system.
 
 ```python
 class Severity(str, Enum):
-    """Severity levels for signals. Extensible via string values."""
+    """Severity levels for alerts."""
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
     FATAL = "fatal"
 
 
-class Signal(BaseEvent):
+class ObserverAlert(BaseEvent):
     """Structured notification from an observer."""
-    source: str          # Observer name that produced this signal
-    severity: str        # Severity level (uses Severity enum values, but accepts any string)
+    source: str          # Observer name that produced this alert
+    severity: str        # Severity level (uses Severity enum values)
     message: str         # Human/LLM-readable description
     data: dict = Field(default_factory=dict)  # Optional structured payload
 ```
 
-**Signal delivery policy** — how Signals reach the Actor — is configurable:
+**Alert delivery** is handled by `AlertPolicy`, an assembly policy in the standard assembly chain. There is no dedicated delivery channel — alerts are events on the stream, consumed by the same policy mechanism as everything else.
+
+- **INFO/WARNING/CRITICAL** are advisory — AlertPolicy injects them into the LLM prompt so the LLM can decide how to respond.
+- **FATAL** means "stop execution." AlertPolicy emits a `HaltEvent` on the stream. `_HaltCheckMiddleware` catches it and returns a synthetic `ModelResponse` to halt the agent — no LLM call is made.
 
 ```python
-class SignalPolicy(Protocol):
-    """Defines how signals are delivered to the actor."""
-    async def deliver(self, signals: list[Signal], context: Context) -> None: ...
-
-# Default: inject into LLM system prompt (temporary, removed after call)
-class InjectToPrompt(SignalPolicy): ...
-
-# Alternative: emit as event on stream (observer pattern)
-class EmitToStream(SignalPolicy): ...
-
-# Alternative: call a handler function
-class CallHandler(SignalPolicy):
-    def __init__(self, handler: Callable[[list[Signal]], Awaitable[None]]): ...
+class HaltEvent(BaseEvent):
+    """Emitted when a FATAL alert triggers execution halt."""
+    reason: str
+    source: str
 ```
 
-**FATAL severity has mechanical consequences.** INFO/WARNING/CRITICAL are advisory — the LLM sees the alert and decides how to respond. FATAL means "stop execution." `InjectToPrompt` enforces this: it emits a `HaltEvent` on the stream. The `SignalInjectionMiddleware` in Actor intercepts FATAL signals before the LLM call and returns a synthetic `ModelResponse` to halt the agent's execution loop — no LLM call is made. Any prompt entries appended by the policy (e.g. non-fatal alerts in the same batch) are cleaned up before returning.
-
-```python
-class InjectToPrompt(SignalPolicy):
-    """Default signal policy. Injects signals into LLM system prompt.
-
-    - INFO/WARNING/CRITICAL: appended as alert text, removed after LLM call.
-    - FATAL: emits HaltEvent on the stream. The SignalInjectionMiddleware
-      intercepts FATAL signals before the LLM call and returns a synthetic
-      ModelResponse to halt the agent's execution loop — no LLM call is made.
-
-    Non-fatal signals in the same batch as a FATAL are still delivered first
-    (appended to prompt) so diagnostic context is not lost, but prompt entries
-    are cleaned up before the halt response is returned.
-    """
-    async def deliver(self, signals: list[Signal], context: Context) -> None:
-        fatal = [s for s in signals if s.severity == Severity.FATAL]
-        non_fatal = [s for s in signals if s.severity != Severity.FATAL]
-
-        # Always deliver non-fatal signals first so diagnostic context
-        # (e.g. warnings explaining why a FATAL occurred) is not lost.
-        alert_text = self._format_alerts(non_fatal)
-        if alert_text:
-            context.prompt.append(alert_text)
-
-        if fatal:
-            # Emit HaltEvent — SignalInjectionMiddleware handles the actual halt
-            await context.send(HaltEvent(
-                reason=f"FATAL: {fatal[0].message}",
-                source=fatal[0].source,
-                signals=fatal,
-            ))
-            return
-        # (non-fatal prompt entries removed after LLM call by the signal injection middleware)
-```
-
-`HaltOnFatal` is also available as a standalone policy that can wrap any other policy — it delivers non-fatal signals first via the inner policy, then halts on FATAL:
-
-```python
-class HaltOnFatal(SignalPolicy):
-    """Wraps another policy. Delivers non-fatal via inner, then halts on FATAL."""
-    def __init__(self, inner: SignalPolicy = InjectToPrompt()): ...
-```
+See the AlertPolicy in the Assembly Policies section for implementation details.
 
 ### Priority
 
@@ -459,14 +413,6 @@ class StateStore(Protocol):
 
 
 @runtime_checkable
-class Cache(Protocol):
-    """Result caching for reducing LLM calls and tool invocations."""
-    async def get(self, key: str) -> Any | None: ...
-    async def set(self, key: str, value: Any, ttl: float | None = None) -> None: ...
-    async def invalidate(self, pattern: str) -> None: ...
-
-
-@runtime_checkable
 class Lock(Protocol):
     """Distributed coordination for exclusive access."""
     async def acquire(self, key: str, ttl: float = 30.0) -> bool: ...
@@ -489,7 +435,6 @@ class Registry(Protocol):
 | Protocol | Default | Cloud Backend |
 |----------|---------|--------------|
 | `StateStore` | `MemoryStateStore` (dict) | `RedisStateStore`, `PostgresStateStore` |
-| `Cache` | `MemoryCache` (dict + TTL) | `RedisCache` |
 | `Lock` | `LocalLock` (asyncio.Lock) | `RedisLock`, `EtcdLock` |
 | `Registry` | `LocalRegistry` (dict, used by Hub) | `EtcdRegistry`, `ConsulRegistry` |
 | `Storage` | `MemoryStorage` (existing, for event history) | `RedisStorage`, `PostgresStorage` |
@@ -512,160 +457,17 @@ hub = Hub(
 
 The `Storage` protocol already exists in AG2 Beta core (for event history). The new protocols extend this pattern to cover all infrastructure concerns needed for production deployment.
 
-### Context Harness
+### Context Assembly (Replaced ContextHarness)
 
-The Context Harness defines **what events the LLM sees and how they're formatted**. It is the bridge between the event stream (which contains ALL events — conversation, tool, network, system, domain) and the LLM context window.
+The original `ContextHarness` protocol and `HarnessMiddleware` have been replaced by the `AssemblyPolicy` system. Assembly policies are composable `(prompts, events) → (prompts, events)` transforms that run inside `AssemblerMiddleware`. See `agent_harness.md` for the full AssemblyPolicy design.
 
-This is a critical primitive because it makes the Actor truly general-purpose. Without a customizable harness, Actors are limited to conversation events. With it, the same Actor infrastructure supports chat agents, network coordinators, system monitors, and domain-specific workflows.
+Key assembly policies that replace the old harness:
+- `ConversationPolicy` — replaces `ConversationHarness` (filters to conversation + tool events)
+- `NetworkPolicy` — replaces `NetworkHarness` (includes network events with formatting)
+- `AlertPolicy` — replaces `SignalInjectionMiddleware` (injects ObserverAlerts into prompts)
+- Custom domain policies replace custom harnesses
 
-**Protocol:**
-
-```python
-@runtime_checkable
-class ContextHarness(Protocol):
-    """Defines how stream events are assembled into LLM context.
-
-    The harness controls what the LLM sees. Different actors need different
-    context — a conversation agent sees chat history, a coordinator sees
-    delegation results, a monitor sees system events.
-    """
-
-    def select(self, events: list[BaseEvent]) -> list[BaseEvent]:
-        """Select which events from the stream history are relevant for the LLM.
-
-        Called before each LLM invocation. Receives the full stream history.
-        Returns the subset of events that should form the LLM context.
-        """
-        ...
-
-    def format(self, event: BaseEvent) -> str | None:
-        """Format an event into an LLM-readable message.
-
-        Return None to skip events this harness doesn't know how to format.
-        Unknown events fall through to the LLM client's default formatting.
-        """
-        ...
-```
-
-**Implementations:**
-
-```python
-class ConversationHarness(ContextHarness):
-    """Standard chat harness. Only conversation and tool events reach the LLM.
-
-    This is the default — preserves current Agent behavior exactly.
-    """
-
-    def select(self, events):
-        return [e for e in events if isinstance(e,
-            (ModelRequest, ModelResponse, ToolCallEvent, ToolCallsEvent,
-             ToolResultEvent, ToolResultsEvent, ToolErrorEvent))]
-
-    def format(self, event):
-        return None  # Use LLM client's default formatting
-
-
-class NetworkHarness(ContextHarness):
-    """Includes network events in the LLM context.
-
-    The actor sees delegation results, signals, scheduler events, and
-    formatted events alongside normal conversation — enabling
-    network-aware reasoning.
-    """
-
-    def select(self, events):
-        return [e for e in events if isinstance(e,
-            (ModelRequest, ModelResponse, ToolCallEvent, ToolResultEvent,
-             ToolErrorEvent, DelegationResult, Signal, SchedulerTriggerFired,
-             FormattedEvent))]
-
-    def format(self, event):
-        if isinstance(event, DelegationResult):
-            return f"[DELEGATION RESULT] {event.source} → {event.target}: {event.result}"
-        if isinstance(event, Signal):
-            return f"[SIGNAL/{event.severity.upper()}] ({event.source}): {event.message}"
-        if isinstance(event, SchedulerTriggerFired):
-            return f"[SCHEDULED] Trigger '{event.watch_id}' fired for {event.target}"
-        if isinstance(event, FormattedEvent):
-            return event.content
-        return None  # Fall through to default
-```
-
-**Custom domain harness — your events, your rules:**
-
-```python
-class MedicalTriageHarness(ContextHarness):
-    """Includes patient vitals in the LLM context."""
-
-    def select(self, events):
-        return [e for e in events if isinstance(e,
-            (ModelRequest, ModelResponse, ToolCallEvent, ToolResultEvent,
-             VitalsUpdate, LabResult, NurseNote))]  # Custom domain events
-
-    def format(self, event):
-        if isinstance(event, VitalsUpdate):
-            return f"[VITALS] HR:{event.heart_rate} BP:{event.blood_pressure} SpO2:{event.spo2}"
-        if isinstance(event, LabResult):
-            return f"[LAB] {event.test}: {event.value} ({'ABNORMAL' if event.abnormal else 'normal'})"
-        return None
-```
-
-**The harness is the key to making Actors general-purpose.** The same stream infrastructure, same observer system, same middleware chain — but a different harness transforms a chat agent into a network coordinator or a domain-specific processor. The Actor is not a "conversation agent with extras" — it's an event-processing entity whose behavior is shaped by its harness.
-
-### Harness-Middleware Integration
-
-The Harness is implemented as a **middleware** — specifically, a middleware that wraps `on_llm_call`. This is the critical design decision that connects the primitive layer to the core framework.
-
-```python
-class HarnessMiddleware(BaseMiddleware):
-    """Bridges ContextHarness into the middleware chain.
-
-    Sits in the middleware chain like any other middleware. Intercepts
-    on_llm_call to filter and format events before they reach the LLM client.
-    This means the harness composes naturally with all other middleware —
-    logging, token limiting, retry, signal injection — without special hooks.
-    """
-
-    def __init__(self, harness: ContextHarness):
-        self._harness = harness
-
-    async def on_llm_call(self, call_next, events, context):
-        # 1. Select: filter stream history to relevant events
-        selected = self._harness.select(events)
-
-        # 2. Format: transform events the harness knows about
-        formatted = []
-        for event in selected:
-            custom_format = self._harness.format(event)
-            if custom_format is not None:
-                # Wrap formatted string as a synthetic event
-                formatted.append(FormattedEvent(content=custom_format, original=event))
-            else:
-                # Pass through — LLM client's default formatting
-                formatted.append(event)
-
-        # 3. Delegate to next middleware / LLM client with filtered events
-        return await call_next(formatted, context)
-```
-
-**Why middleware, not a separate hook?**
-
-1. **Composability.** The harness participates in the same chain as signal injection, token limiting, and logging. No special integration code needed.
-2. **Ordering control.** The Actor controls where in the middleware chain the harness sits. Default: harness runs first (outermost), so signal injection and other middleware see the already-filtered event list.
-3. **Core stays untouched.** Agent._execute() already supports additional_middleware. The harness plugs in via this existing extension point — zero changes to Layer 1.
-4. **Testable in isolation.** A ContextHarness can be unit-tested with a list of events. The middleware wrapper is a thin bridge.
-
-**Middleware ordering in Actor._execute():**
-
-```
-Actor._execute() builds middleware chain:
-  1. HarnessMiddleware(harness)         ← outermost: filters what events reach the LLM
-  2. SignalInjectionMiddleware(queue)    ← injects alerts into the (already filtered) prompt
-  3. User-provided middleware            ← logging, token limiting, retry, etc.
-  4. LLM client call                     ← innermost: sends to model
-```
-
-The ConversationHarness (default) passes through only conversation and tool events — reproducing current Agent behavior exactly. No behavioral change for users who don't use a harness. NetworkHarness and custom domain harnesses expand what the LLM perceives.
+Assembly policies live in framework core (`autogen/beta/policies/`), not in the network module.
 
 ---
 
@@ -677,7 +479,7 @@ Two stream scopes exist in the framework:
 
 ```
 PERSISTENT (lives across conversations):
-├── Actor instance              — config, observers, harness
+├── Actor instance              — config, observers, assembly policies
 ├── Observer instances          — carry state across conversations
 ├── Hub + Hub.stream            — cross-actor events, delegation traffic
 ├── Channel                     — transport endpoint (HTTP, Redis, etc.)
@@ -693,7 +495,7 @@ PER-CONVERSATION (created per .ask(), accumulated via reply.ask()):
 
 **The stream belongs to the conversation, not the Actor.** Each `.ask()` creates a new stream. Conversation continues via `reply.ask()` (same stream, events accumulate). The LLM sees full history within a conversation. Observers attach per conversation but carry state across conversations (e.g., TokenMonitor accumulates totals).
 
-**The Hub's stream is persistent.** It lives for the Hub's lifetime. System plugins subscribe here for cross-actor monitoring. This is where delegation events, scheduling events, and system-wide signals flow.
+**The Hub's stream is persistent.** It lives for the Hub's lifetime. System plugins subscribe here for cross-actor monitoring. This is where delegation events, scheduling events, and system-wide alerts flow.
 
 ### Conversation Persistence
 
@@ -738,18 +540,18 @@ Building blocks compose primitives into reusable, independently useful component
 
 ### Actor
 
-An Actor is an Agent enhanced with observer management, signal injection, and task spawning. It is the primary agent type for network-aware applications.
+An Actor is an Agent enhanced with observer management, alert delivery, knowledge management, and task spawning. It is the primary agent type for production applications.
 
-**Relationship to Agent:** Actor extends Agent. It delegates to `super()._execute()` rather than reimplementing the event loop. Actor concerns (observers, signals, tasks) are injected via additional tools and middleware.
+**Relationship to Agent:** Actor extends Agent. It delegates to `super()._execute()` rather than reimplementing the event loop. Actor concerns (observers, assembly, knowledge, tasks) are injected via additional tools and middleware.
 
 ```python
 class Actor(Agent):
-    """An autonomous agent with observers, signals, and task spawning.
+    """An autonomous agent with observers, knowledge, assembly, compaction, and aggregation.
 
-    Actor extends Agent with three capabilities:
+    Actor extends Agent with capabilities that make it production-ready:
     1. Observer management — attach/detach observers that monitor the event stream
-    2. Signal injection — observer signals are injected into the LLM prompt
-    3. Task spawning — spawn_task/spawn_tasks tools for delegating subtasks
+    2. Alert delivery — observer alerts are injected via AlertPolicy in the assembly chain
+    3. Subtask spawning — run_subtask/run_subtasks tools for isolated compute
 
     Works standalone (no Hub required). Optionally registers with a Hub
     for cross-actor discovery and delegation.
@@ -758,10 +560,15 @@ class Actor(Agent):
 
         actor = Actor(
             "researcher",
-            prompt="You are a research agent. Use spawn_task for subtasks.",
+            prompt="You are a research agent.",
             config=OpenAIConfig(model="gpt-4o"),
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                compact=TailWindowCompact(100),
+                compact_trigger=CompactTrigger(max_events=200),
+            ),
+            assembly=[ConversationPolicy(), AlertPolicy()],
             observers=[TokenMonitor(warn_threshold=50_000)],
-            task_config=OpenAIConfig(model="gpt-4o-mini"),
         )
         reply = await actor.ask("Research the latest AI trends")
     """
@@ -773,10 +580,9 @@ class Actor(Agent):
         *,
         config: ModelConfig | None = None,
         observers: Iterable[Observer] = (),
-        harness: ContextHarness | None = None,     # Default: ConversationHarness
-        task_config: ModelConfig | None = None,
-        task_prompt: str = "You are a task agent...",
-        signal_policy: SignalPolicy | None = None,  # Default: InjectToPrompt
+        knowledge: KnowledgeConfig | None = None,
+        assembly: Iterable[AssemblyPolicy] = (),
+        tasks: TaskConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable | Tool] = (),
         middleware: Iterable[MiddlewareFactory] = (),
@@ -790,51 +596,56 @@ class Actor(Agent):
 ```
 Actor._execute()
 │
-├── 1. Create signal queue
-├── 2. Subscribe to Signal events → signal queue
-├── 3. Attach observers to stream (observer.attach)
-├── 4. Build spawn_task / spawn_tasks tools
-├── 5. Create signal injection middleware
+├── 1. Bootstrap knowledge store (if configured, first use)
+├── 2. Attach observers to stream (observer.attach)
+├── 3. Build run_subtask / run_subtasks tools
+├── 4. Build knowledge tool (if knowledge store configured)
+├── 5. Build middleware chain:
+│      1. AssemblerMiddleware(policies)     — outermost: assembles context (AlertPolicy runs here)
+│      2. _HaltCheckMiddleware              — catches HaltEvent, short-circuits LLM
+│      3. CompactionMiddleware              — triggers compaction after turns
+│      4. AggregationMiddleware             — triggers aggregation after turns
+│      5. User-provided middleware           — logging, retry, etc.
+│      6. LLM client call                    — innermost
 ├── 6. Call super()._execute() with:
-│      additional_tools = [spawn_task, spawn_tasks]
-│      additional_middleware = [signal_injection]
+│      additional_tools = [run_subtask, run_subtasks, knowledge]
+│      additional_middleware = [assembler, halt_check, compaction, aggregation]
 │
 │   ┌── Agent._execute() runs normally ────────────┐
 │   │   Full middleware chain preserved              │
-│   │   Signal injection intercepts on_llm_call:    │
-│   │     - Drains signal queue                     │
-│   │     - Delivers via SignalPolicy               │
-│   │     - (default: append to prompt, call LLM,   │
-│   │       remove from prompt)                     │
-│   │   Tools execute (including spawn_task)         │
+│   │   AlertPolicy in assembler handles alerts     │
+│   │   _HaltCheckMiddleware catches FATAL halts    │
+│   │   Tools execute (including run_subtask)        │
 │   └───────────────────────────────────────────────┘
 │
-├── 7. Detach observers (individually try/except — one failure doesn't block others)
-└── 8. Return AgentReply
+├── 7. Detach observers (individually try/except)
+├── 8. Run on_end aggregation (if configured)
+├── 9. Persist event log to knowledge store
+└── 10. Return AgentReply
 ```
 
 **Task spawning:**
 
-`spawn_task(task)` creates an isolated sub-agent:
+`run_subtask(task)` creates an isolated sub-agent:
 1. Create isolated `MemoryStream`
 2. Bridge `ModelMessageChunk` → `TaskProgress` events to parent stream
-3. Create Agent with `task_config`
+3. Create Agent with task config
 4. `await agent.ask(task, stream=isolated_stream)`
 5. Emit `TaskResult` with usage metrics
 6. Return result text
 
-`spawn_tasks(tasks, parallel=True)` runs multiple tasks, optionally in parallel via `asyncio.gather(return_exceptions=True)`. Partial failures return error strings for failed tasks while preserving successful results.
+`run_subtasks(tasks, parallel=True)` runs multiple tasks, optionally in parallel via `asyncio.gather(return_exceptions=True)`. Partial failures return error strings for failed tasks while preserving successful results.
 
 ### Observer
 
-An Observer attaches to a stream, uses a Watch to monitor for conditions, and produces Signals when those conditions are met.
+An Observer attaches to a stream, uses a Watch to monitor for conditions, and produces ObserverAlerts when those conditions are met.
 
 **Protocol:**
 
 ```python
 @runtime_checkable
 class Observer(Protocol):
-    """Monitors an event stream and produces signals."""
+    """Monitors an event stream and produces alerts."""
 
     name: str
 
@@ -860,8 +671,8 @@ class BaseObserver(ABC):
     def __init__(self, name: str, watch: Watch) -> None: ...
 
     @abstractmethod
-    async def process(self, events: list[BaseEvent], ctx: Context) -> Signal | None:
-        """Analyze events and optionally return a signal."""
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
+        """Analyze events and optionally return an alert."""
         ...
 ```
 
@@ -875,7 +686,7 @@ class BaseObserver(ABC):
 **Custom observer:**
 
 ```python
-from autogen.beta.network import BaseObserver, EventWatch, Signal, Severity
+from autogen.beta import BaseObserver, EventWatch, ObserverAlert, Severity
 
 class SafetyMonitor(BaseObserver):
     """Flags responses containing sensitive terms."""
@@ -889,7 +700,7 @@ class SafetyMonitor(BaseObserver):
             if isinstance(event, ModelResponse) and event.content:
                 for term in self._terms:
                     if term in event.content.lower():
-                        return Signal(
+                        return ObserverAlert(
                             source=self.name,
                             severity=Severity.CRITICAL,
                             message=f"Response contains sensitive term: '{term}'",
@@ -1446,7 +1257,7 @@ Actor LLM call → ModelRequest → Stream → [subscribers]
                                            ├── LLM client (produces ModelResponse)
                                            ├── Tool executor (on ToolCallsEvent)
                                            └── Observers (via Watch)
-                                                └── Signal → signal queue → prompt injection
+                                                └── ObserverAlert → AlertPolicy → prompt injection
 ```
 
 **What:** BaseEvent subclasses (ModelRequest, ModelResponse, ToolCallEvent, etc.)
@@ -1535,7 +1346,7 @@ Observers observe streams. This pattern works for Actors (local observers), Hub 
 
 ### 3. Protocol-Based Extensibility
 
-Watch, Observer, Plugin, Channel, PriorityScheme, ConflictResolver, SignalPolicy — all are protocols. Custom implementations plug in without subclassing. `@runtime_checkable` enables structural typing.
+Watch, Observer, Plugin, Channel, PriorityScheme, ConflictResolver, AssemblyPolicy — all are protocols. Custom implementations plug in without subclassing. `@runtime_checkable` enables structural typing.
 
 ### 4. Independence and Composability
 
@@ -1569,73 +1380,122 @@ The framework is designed for both human developers and coding agents:
 ## File Structure (Current)
 
 ```
-autogen/beta/
+autogen/beta/                    # Framework core (10 concepts)
 ├── (core: agent.py, stream.py, context.py, events/, middleware/, tools/, config/)
 │
-└── network/                    # AG2 Network Framework package
-    ├── __init__.py             # Public API — all symbols, one import
+├── actor.py                     # Actor = Agent + observers + knowledge + assembly
+├── knowledge.py                 # KnowledgeStore + MemoryKnowledgeStore
+├── state.py                     # StateStore + MemoryStateStore
+├── assembly.py                  # AssemblyPolicy + AssemblerMiddleware
+├── compact.py                   # CompactStrategy
+├── aggregate.py                 # AggregateStrategy
+├── observer.py                  # Observer + BaseObserver
+├── watch.py                     # Watch (all types)
+├── scheduler.py                 # Scheduler (optional hub param)
+│
+├── events/
+│   ├── alert.py                 # ObserverAlert, Severity, HaltEvent
+│   └── lifecycle.py             # ObserverStarted, CompactionCompleted, etc.
+│
+├── policies/                    # Assembly policies
+│   ├── conversation.py          # ConversationPolicy
+│   ├── sliding_window.py        # SlidingWindowPolicy
+│   ├── token_budget.py          # TokenBudgetPolicy
+│   ├── episodic_memory.py       # EpisodicMemoryPolicy
+│   ├── working_memory.py        # WorkingMemoryPolicy
+│   └── alert.py                 # AlertPolicy
+│
+├── observers/                   # Built-in observers
+│   ├── token_monitor.py         # TokenMonitor
+│   └── loop_detector.py         # LoopDetector
+│
+└── network/                     # Network only (4 concepts)
+    ├── hub.py                   # Hub: registry + delegation
+    ├── topology.py              # Pipeline, Fanout, Conditional
+    ├── envelope.py              # Envelope
+    ├── channel.py               # Channel + LocalChannel, BufferedChannel
+    ├── remote.py                # RemoteAgent
+    ├── events.py                # Network events
+    ├── convenience.py           # Network (Hub + Scheduler)
     │
-    ├── primitives/             # Layer 2: Primitives
-    │   ├── watch.py            # Watch protocol + EventWatch, BatchWatch, WindowWatch,
-    │   │                       #   IntervalWatch, DelayWatch, CronWatch, AllOf, AnyOf, Sequence
-    │   ├── signal.py           # Signal + Severity + InjectToPrompt, EmitToStream, HaltOnFatal
-    │   ├── priority.py         # PriorityScheme + ConflictResolver + DefaultPriority
-    │   ├── envelope.py         # Envelope dataclass + wire format (to_dict/from_dict)
-    │   ├── channel.py          # Channel protocol + LocalChannel, BufferedChannel, PriorityChannel
-    │   ├── harness.py          # ContextHarness + HarnessMiddleware + ConversationHarness, NetworkHarness
-    │   └── infra.py            # StateStore, Cache, Lock, Registry protocols + in-memory defaults
+    ├── primitives/
+    │   ├── infra.py             # Lock, Registry, ActorInfo
+    │   └── priority.py          # PriorityScheme (deferred, internal)
     │
-    ├── actor.py                # Layer 3: Actor (extends Agent) + signal injection + task spawning
-    ├── observer.py             # Observer protocol + BaseObserver
-    ├── hub.py                  # Hub + Registry + Router + topology pipeline + headless mode
-    ├── scheduler.py            # Scheduler (watch lifecycle manager)
-    ├── convenience.py          # Network convenience class (Hub + Scheduler)
-    ├── events.py               # All network events: observer, task, delegation, scheduler
-    ├── topology.py             # Layer 4: Plugin protocol, RouteDecision + Pipeline, Fanout, Conditional
+    ├── channels/
+    │   └── http.py              # HttpChannel
     │
-    ├── remote.py               # RemoteAgent + RemoteAgentReply — cross-server agent proxy
+    ├── plugins/
+    │   ├── rate_limiter.py      # RateLimiter
+    │   ├── telemetry.py         # TelemetryPlugin
+    │   └── topic.py             # TopicPlugin (extracted from Hub)
     │
-    ├── channels/               # Transport implementations
-    │   └── http.py             # HttpChannel — cross-process HTTP transport, at-least-once with retry
-    │
-    ├── observers/              # Built-in observers
-    │   ├── token_monitor.py    # TokenMonitor — tracks cumulative token usage
-    │   └── loop_detector.py    # LoopDetector — detects repetitive tool-call patterns
-    │
-    └── plugins/                # Built-in plugins
-        ├── rate_limiter.py     # RateLimiter — per-sender rate limiting (routing plugin)
-        └── telemetry.py        # TelemetryPlugin — delegation metrics (system plugin)
+    └── policies/
+        ├── network.py           # NetworkPolicy
+        └── topic_inbox.py       # TopicInboxPolicy
 ```
 
 ### Public API
 
 ```python
-from autogen.beta.network import (
-    # Layer 2: Primitives
+# Framework core (autogen.beta)
+from autogen.beta import (
+    # Agent & Actor
+    Agent, Actor, KnowledgeConfig, TaskConfig,
+
+    # Primitives
     Watch, EventWatch, BatchWatch, WindowWatch, IntervalWatch, DelayWatch, CronWatch,
     AllOf, AnyOf, Sequence,
-    Signal, Severity, SignalPolicy, InjectToPrompt, EmitToStream, HaltOnFatal, HaltEvent,
-    PriorityScheme, ConflictResolver, DefaultPriority, DefaultPriorityScheme, HighestPriorityWins,
-    Envelope, EventRegistry,
-    Channel, LocalChannel, BufferedChannel, PriorityChannel, HttpChannel,
-    ContextHarness, ConversationHarness, NetworkHarness, HarnessMiddleware, FormattedEvent,
-    StateStore, MemoryStateStore, Cache, MemoryCache, Lock, LocalLock, Registry, LocalRegistry, ActorInfo,
+    ObserverAlert, Severity, HaltEvent,
+    KnowledgeStore, MemoryKnowledgeStore,
+    StateStore, MemoryStateStore,
+    CompactStrategy, CompactTrigger, TailWindowCompact, SummarizeCompact,
+    AggregateStrategy, AggregateTrigger,
+    ConversationSummaryAggregate, WorkingMemoryAggregate,
+
+    # Assembly
+    AssemblyPolicy, AssemblerMiddleware,
+
+    # Policies
+    ConversationPolicy, SlidingWindowPolicy, TokenBudgetPolicy,
+    EpisodicMemoryPolicy, WorkingMemoryPolicy, AlertPolicy,
+
+    # Observers
+    Observer, BaseObserver, TokenMonitor, LoopDetector,
+
+    # Scheduler
+    Scheduler,
 
     # Events
-    ObserverStarted, ObserverCompleted, TaskRequest, TaskProgress, TaskResult,
-    DelegationRequest, DelegationResult, DelegationRejected, DelegationError, SchedulerTriggerFired,
+    ObserverStarted, ObserverCompleted, CompactionCompleted, AggregationCompleted,
+)
 
-    # Layer 3: Building Blocks
-    Actor, Observer, BaseObserver, Hub, RegistrationHandle, Scheduler, WatchStatus, Network,
+# Network (autogen.beta.network)
+from autogen.beta.network import (
+    # Network core
+    Hub, Network, RegistrationHandle,
+    Envelope, EventRegistry,
+    Channel, LocalChannel, BufferedChannel, PriorityChannel, HttpChannel,
 
-    # Layer 4: Composition
-    Plugin, BasePlugin, Topology, Pipeline, Fanout, Conditional, HubContext,
+    # Topology
+    Plugin, BasePlugin, Topology, Pipeline, Fanout, Conditional, HubContext, RouteDecision,
 
-    # Distributed
+    # Network events
+    DelegationRequest, DelegationResult, DelegationRejected, DelegationError,
+    SchedulerTriggerFired, TopicMessage,
+
+    # Plugins
+    RateLimiter, TelemetryPlugin, TopicPlugin,
+
+    # Policies
+    NetworkPolicy, TopicInboxPolicy,
+
+    # Infrastructure
+    PriorityScheme, ConflictResolver, DefaultPriority,
+    Lock, LocalLock, Registry, LocalRegistry, ActorInfo,
+
+    # Remote
     RemoteAgent, RemoteAgentReply,
-
-    # Built-in Observers & Plugins
-    TokenMonitor, LoopDetector, RateLimiter, TelemetryPlugin,
 )
 ```
 
@@ -1646,18 +1506,17 @@ from autogen.beta.network import (
 ### Standalone Actor with Observers
 
 ```python
-from autogen.beta.network import Actor, TokenMonitor, LoopDetector
+from autogen.beta import Actor, TokenMonitor, LoopDetector
 from autogen.beta.config.openai import OpenAIConfig
 
 actor = Actor(
     "researcher",
-    prompt="You are a research agent. Use spawn_task for subtasks.",
+    prompt="You are a research agent. Use run_subtask for subtasks.",
     config=OpenAIConfig(model="gpt-4o"),
     observers=[
         TokenMonitor(warn_threshold=50_000),
         LoopDetector(repeat_threshold=3),
     ],
-    task_config=OpenAIConfig(model="gpt-4o-mini"),
 )
 
 reply = await actor.ask("Research the latest AI trends and compile a report")
@@ -1667,7 +1526,8 @@ print(reply.content)
 ### Multi-Actor Network with Hub
 
 ```python
-from autogen.beta.network import Actor, Hub, Pipeline
+from autogen.beta import Actor
+from autogen.beta.network import Hub, Pipeline
 from autogen.beta.config.openai import OpenAIConfig
 
 config = OpenAIConfig(model="gpt-4o")
@@ -1713,7 +1573,8 @@ hub = Hub(
 ### Scheduler with Watches
 
 ```python
-from autogen.beta.network import Hub, Scheduler, IntervalWatch, EventWatch, CronWatch
+from autogen.beta import Scheduler, IntervalWatch, EventWatch, CronWatch
+from autogen.beta.network import Hub
 
 hub = Hub()
 await hub.register(monitor, capabilities=["monitoring"])
@@ -1744,7 +1605,8 @@ await scheduler.start()
 ### Full Network (Convenience)
 
 ```python
-from autogen.beta.network import Network, IntervalWatch, EventWatch, Pipeline
+from autogen.beta import IntervalWatch, EventWatch
+from autogen.beta.network import Network, Pipeline
 
 network = Network(
     topology=Pipeline(AuthPlugin(), TelemetryPlugin()),
@@ -1755,7 +1617,7 @@ await network.register(alerter, capabilities=["alerting"])
 
 network.schedule(IntervalWatch(300), target="monitor", task="Check all systems.")
 network.schedule(
-    EventWatch(Signal.severity == "critical"),
+    EventWatch(ObserverAlert.severity == "critical"),
     target="alerter",
     task_factory=lambda e: f"Alert team: {e.message}",
 )
@@ -1768,26 +1630,26 @@ async with network:
 ### Custom Watch (Composite)
 
 ```python
-from autogen.beta.network import AllOf, EventWatch, IntervalWatch
+from autogen.beta import AllOf, EventWatch, IntervalWatch, ObserverAlert
 
 # Fire only when BOTH conditions are met:
-# 1. A critical signal was emitted, AND
+# 1. A critical alert was emitted, AND
 # 2. At least 60 seconds since last trigger (debounce)
 debounced_critical = AllOf(
-    EventWatch(Signal.severity == "critical"),
+    EventWatch(ObserverAlert.severity == "critical"),
     IntervalWatch(60),
 )
 
-scheduler.add(debounced_critical, target="alerter", task="Investigate critical signal")
+scheduler.add(debounced_critical, target="alerter", task="Investigate critical alert")
 ```
 
 ---
 
 ## Implementation Status
 
-### Completed: Phases 1–3 + HttpChannel + Distributed Delegation
+### Completed: All Phases + Restructure
 
-All layers of the framework are implemented and tested (260 tests, 0 failures, 0 changes to Layer 1 core).
+All layers implemented and tested (575 tests passing). The framework restructuring (v2_iteration_review.md) has been applied — framework core features promoted from network/ to beta/, Signal system eliminated, ContextHarness replaced by AssemblyPolicy.
 
 | Phase | What | Status |
 |-------|------|--------|
@@ -1797,8 +1659,9 @@ All layers of the framework are implemented and tested (260 tests, 0 failures, 0
 | **HttpChannel** | Cross-process HTTP transport with at-least-once delivery, retry, health endpoint | **Done** |
 | **Network** | Convenience class (Hub + Scheduler) with async context manager support | **Done** |
 | **Distributed Delegation** | RemoteAgent, Hub.serve(), Hub.connect() — cross-server agent communication over HTTP | **Done** |
+| **Restructure** | Signal elimination, framework/network layering, Actor simplification, TopicPlugin extraction | **Done** |
 
-The old `satellites/` directory has been fully removed. All code lives in `autogen/beta/network/`.
+The old `satellites/` directory has been fully removed. Framework core lives in `autogen/beta/`, network concerns in `autogen/beta/network/`.
 
 ---
 
@@ -1913,7 +1776,7 @@ AG2 uses its own protocol for distributed AG2-to-AG2 communication. This is inte
 |---------|-------------|-----|
 | **State** | Stateful by default — Envelope traces full causation chain | Ambiguous — `contextId` is optional, agents can be stateless |
 | **Topology** | Envelopes flow through plugin pipeline on the calling side | Opaque — no plugin/routing layer |
-| **Observability** | Full event stream, observers, signals built in | Nothing built in |
+| **Observability** | Full event stream, observers, alerts built in | Nothing built in |
 | **Latency** | Direct HTTP POST, minimal overhead | JSON-RPC 2.0 with Agent Card negotiation |
 
 A2A support will be added later as an adapter — `A2ARemoteAgent` that wraps the A2A protocol (Agent Cards, Tasks, Messages) behind the same `RemoteAgent` interface. This means A2A agents plug into the same Hub topology, get the same observability, and work alongside native AG2 agents without special handling.
@@ -1976,7 +1839,7 @@ These items are deferred until AG2 Cloud infrastructure is ready. The protocol c
 |------|------|------------|
 | `channels/redis.py` | RedisChannel — persistent at-least-once transport via Redis Streams | AG2 Cloud infrastructure |
 | `channels/nats.py` | NatsChannel — high-throughput NATS JetStream transport | AG2 Cloud infrastructure |
-| `infra/redis.py` | RedisStateStore, RedisCache, RedisLock | AG2 Cloud infrastructure |
+| `infra/redis.py` | RedisStateStore, RedisLock | AG2 Cloud infrastructure |
 | `infra/etcd.py` | EtcdRegistry — distributed service registry | AG2 Cloud infrastructure |
 | Durable Scheduler | Temporal/Celery backend for scheduler watches | AG2 Cloud infrastructure |
 | Hub replication | Replicated Hub with leader election | AG2 Cloud infrastructure |
@@ -2012,7 +1875,6 @@ The framework already defines the complete programming model. Every deferred ite
 | `Channel` | `LocalChannel` | `HttpChannel`, `RedisChannel`, `NatsChannel` |
 | `Registry` | `LocalRegistry` (dict) | `EtcdRegistry`, `ConsulRegistry` |
 | `StateStore` | `MemoryStateStore` (dict) | `RedisStateStore`, `PostgresStateStore` |
-| `Cache` | `MemoryCache` (dict + TTL) | `RedisCache` |
 | `Lock` | `LocalLock` (asyncio.Lock) | `RedisLock`, `EtcdLock` |
 | `Storage` | `MemoryStorage` (existing) | `RedisStorage`, `PostgresStorage` |
 | `RemoteAgent` | HTTP (built-in) | gRPC, WebSocket, A2A |

@@ -1,8 +1,12 @@
 # Agent Harness
 
+## Status
+
+**IMPLEMENTED.** All components below have been built, tested, and restructured into the framework core (`autogen/beta/`). The features described here are no longer in the network module — they are framework-level capabilities available to any Agent user. See `v2_iteration_review.md` for the restructuring rationale.
+
 ## Context
 
-The AG2 Network Framework (see `ag2_network_framework.md`) provides the infrastructure for distributed autonomous agent networks. All layers are implemented: primitives (Watch, Signal, Channel, Envelope, Priority, Harness, Infra), building blocks (Actor, Hub, Observer, Scheduler), and composition (Topology, Plugins, Network).
+The AG2 Network Framework (see `ag2_network_framework.md`) provides the infrastructure for distributed autonomous agent networks. All layers are implemented. The agent harness features — knowledge, assembly, compaction, aggregation — have been promoted from the network module to framework core (`autogen/beta/`), as they are general-purpose agent capabilities, not networking concerns.
 
 The final missing piece is the **Agent Harness** — the system that enables genuine stateful operations at production grade. The current harness (`ContextHarness`) is a stateless filter that runs before each LLM call. It controls what events the LLM sees, but nothing more. A production agent needs:
 
@@ -50,7 +54,7 @@ The Agent Harness covers components 1, 2, and 4. Component 3 is the existing exe
 │  │ list / delete /  │  │   reduced events │  │   store writes   │ │
 │  │ exists           │  │                  │  │                  │ │
 │  └──────────────────┘  └──────────────────┘  └──────────────────┘ │
-│  Layer 2: PRIMITIVES (independent, zero cross-dependencies)        │
+│  Framework Core: PRIMITIVES (independent, zero cross-dependencies) │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │ Assembler                                                    │  │
@@ -59,7 +63,7 @@ The Agent Harness covers components 1, 2, and 4. Component 3 is the existing exe
 │  │                                                              │  │
 │  │ (prompts, events) → transform → transform → ... → LLM call  │  │
 │  └──────────────────────────────────────────────────────────────┘  │
-│  Layer 3: BUILDING BLOCKS (composes primitives)                    │
+│  Framework Core: BUILDING BLOCKS (composes primitives)             │
 │                                                                     │
 │  Network: Topics (pub/sub) on Hub, delivered via assembly policy   │
 │                                                                     │
@@ -71,12 +75,12 @@ The Agent Harness covers components 1, 2, and 4. Component 3 is the existing exe
 
 | Component | Layer | Rationale |
 |-----------|-------|-----------|
-| `KnowledgeStore` | 2 (Primitive) | Standalone storage protocol. Zero dependencies. |
-| `CompactStrategy` | 2 (Primitive) | Standalone transform: events → events. Zero dependencies. |
-| `AggregateStrategy` | 2 (Primitive) | Standalone transform: events → store writes. Depends only on KnowledgeStore. |
-| `AssemblyPolicy` | 3 (Building Block) | Composes KnowledgeStore reads, event filtering, prompt injection. Depends on Context, events, middleware. |
-| `AssemblerMiddleware` | 3 (Building Block) | Bridges AssemblyPolicy into the middleware chain. |
-| Topic system | 3 (Building Block) | Extension to Hub. |
+| `KnowledgeStore` | Framework Core | Standalone storage protocol. Zero dependencies. |
+| `CompactStrategy` | Framework Core | Standalone transform: events → events. Zero dependencies. |
+| `AggregateStrategy` | Framework Core | Standalone transform: events → store writes. Depends only on KnowledgeStore. |
+| `AssemblyPolicy` | Framework Core | Composes KnowledgeStore reads, event filtering, prompt injection. Depends on Context, events, middleware. |
+| `AssemblerMiddleware` | Framework Core | Bridges AssemblyPolicy into the middleware chain. |
+| Topic system | Network | Extension to Hub, implemented as TopicPlugin. |
 
 Design invariants:
 
@@ -698,8 +702,8 @@ class AssemblerMiddleware(BaseMiddleware):
     reach the LLM client.
 
     Middleware ordering in Actor._execute():
-        1. AssemblerMiddleware(policies)     — outermost: assembles context
-        2. SignalInjectionMiddleware(queue)   — injects alerts
+        1. AssemblerMiddleware(policies)     — outermost: assembles context (AlertPolicy runs here)
+        2. _HaltCheckMiddleware              — catches HaltEvent from AlertPolicy, short-circuits LLM
         3. CompactionMiddleware              — triggers compaction after turns
         4. AggregationMiddleware             — triggers aggregation after turns
         5. User-provided middleware           — logging, retry, etc.
@@ -725,7 +729,7 @@ class AssemblerMiddleware(BaseMiddleware):
             context.prompt = original_prompt
 ```
 
-The prompt swap is temporary — restored in `finally`. This composes correctly with `SignalInjectionMiddleware` (which also temporarily modifies prompts) because middleware nesting handles cleanup in reverse order.
+The prompt swap is temporary — restored in `finally`. This composes correctly with `_HaltCheckMiddleware` because middleware nesting handles cleanup in reverse order.
 
 **Policy ordering.** Policies compose left-to-right. A `SlidingWindowPolicy` before `EpisodicMemoryPolicy` means episodic memory operates on already-trimmed events. The assembler enforces ordering awareness via a `validate_order()` class method that warns at construction time when known-problematic orderings are detected:
 
@@ -802,7 +806,7 @@ Replaces `NetworkHarness`. Includes network events in LLM context with formattin
 class NetworkPolicy:
     """Includes network events in the LLM context.
 
-    The actor sees delegation results, signals, scheduler events,
+    The actor sees delegation results, observer alerts, scheduler events,
     and topic messages alongside conversation — enabling
     network-aware reasoning.
     """
@@ -812,7 +816,7 @@ class NetworkPolicy:
     async def apply(self, prompts, events, context):
         network_types = ConversationPolicy._TYPES + (
             DelegationResult,
-            Signal,
+            ObserverAlert,
             SchedulerTriggerFired,
             TopicMessage,
         )
@@ -829,9 +833,9 @@ class NetworkPolicy:
         return prompts, formatted
 
     def _format(self, event):
-        if isinstance(event, Signal):
+        if isinstance(event, ObserverAlert):
             level = event.severity.upper() if isinstance(event.severity, str) else str(event.severity)
-            return f"[SIGNAL/{level}] ({event.source}): {event.message}"
+            return f"[ALERT/{level}] ({event.source}): {event.message}"
         if isinstance(event, DelegationResult):
             return f"[DELEGATION RESULT] {event.source} → {event.target}: {event.result}"
         if isinstance(event, SchedulerTriggerFired):
@@ -983,25 +987,25 @@ class WorkingMemoryPolicy:
 class TopicInboxPolicy:
     """Injects unread topic messages into the actor's context.
 
-    Reads new messages from all subscribed topics via the Hub.
+    Reads new messages from all subscribed topics via the TopicPlugin.
     Injects them as system prompt context. Advances the read cursor
     so messages are not re-injected.
     """
 
     name = "topic_inbox"
 
-    def __init__(self, hub: Hub, actor_name: str, max_messages: int = 50):
-        self._hub = hub
+    def __init__(self, topic_plugin: TopicPlugin, actor_name: str, max_messages: int = 50):
+        self._plugin = topic_plugin
         self._actor = actor_name
         self._max = max_messages
 
     async def apply(self, prompts, events, context):
         # Collect new messages from all subscribed topics
         all_messages: list[TopicMessage] = []
-        subscriptions = self._hub.subscriptions_for(self._actor)
+        subscriptions = self._plugin.subscriptions_for(self._actor)
 
         for topic in subscriptions:
-            messages = await self._hub.read_topic(self._actor, topic)
+            messages = await self._plugin.peek_topic(self._actor, topic)
             all_messages.extend(messages)
 
         if not all_messages:
@@ -1023,6 +1027,8 @@ class TopicInboxPolicy:
 ---
 
 ### Hub Extensions
+
+> **Note:** Topics have been extracted from Hub into `TopicPlugin` (see `network/plugins/topic.py`). The Hub no longer manages topic state directly. TopicPlugin implements the Plugin protocol and manages topic subscriptions, cursors, and message storage. The API below now lives on TopicPlugin, not Hub.
 
 The Hub gains topic management for pub/sub communication.
 
@@ -1192,39 +1198,31 @@ class Actor(Agent):
 
         # Existing
         observers: Iterable[Observer] = (),
-        signal_policy: SignalPolicy | None = None,
         hitl_hook: HumanHook | None = None,
-        task_config: ModelConfig | None = None,
-        task_prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result.",
         tools: Iterable[Callable[..., Any] | Tool] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
 
-        # NEW: Agent Harness
-        knowledge_store: KnowledgeStore | None = None,
-        bootstrap: StoreBootstrap | None = None,
-        assembly: Iterable[AssemblyPolicy] = (),
-        compact: CompactStrategy | None = None,
-        compact_trigger: CompactTrigger | None = None,
-        aggregate: AggregateStrategy | None = None,
-        aggregate_trigger: AggregateTrigger | None = None,
+        # Agent Harness (grouped)
+        knowledge: KnowledgeConfig | None = None,      # Groups store, compact, aggregate, triggers, bootstrap
+        assembly: Iterable[AssemblyPolicy] = (),        # Assembly policies (AlertPolicy replaces signal_policy)
+        tasks: TaskConfig | None = None,                # Groups task_config, task_prompt
     ) -> None:
         super().__init__(...)
         # Existing
         self._observers = list(observers)
-        self._signal_policy = signal_policy or InjectToPrompt()
-        self._task_config = task_config or config
-        self._task_prompt = task_prompt
+        self._task_config = (tasks.config if tasks else None) or config
+        self._task_prompt = tasks.prompt if tasks else "You are a task agent..."
 
-        # NEW
-        self._knowledge_store = knowledge_store
-        self._bootstrap = bootstrap
+        # Harness
+        self._knowledge_store = knowledge.store if knowledge else None
+        self._bootstrap = knowledge.bootstrap if knowledge else None
         self._policies = list(assembly) if assembly else [ConversationPolicy()]
-        self._compact_strategy = compact
-        self._compact_trigger = compact_trigger or CompactTrigger()
-        self._aggregate_strategy = aggregate
-        self._aggregate_trigger = aggregate_trigger or AggregateTrigger()
+        self._compact_strategy = knowledge.compact if knowledge else None
+        self._compact_trigger = (knowledge.compact_trigger if knowledge else None) or CompactTrigger()
+        self._aggregate_strategy = knowledge.aggregate if knowledge else None
+        self._aggregate_trigger = (knowledge.aggregate_trigger if knowledge else None) or AggregateTrigger()
 
         # Validate policy ordering
         warnings = AssemblerMiddleware.validate_order(self._policies)
@@ -1235,7 +1233,7 @@ class Actor(Agent):
                 logger.warning("Assembly policy ordering: %s", w)
 ```
 
-No `harness` parameter.
+No `harness` parameter. No `signal_policy` parameter.
 
 **Tools:**
 
@@ -1285,83 +1283,43 @@ def _build_knowledge_tool(self) -> list[Tool]:
     return [knowledge]
 
 
-def _build_memory_tool(self) -> list[Tool]:
-    """Build the memory management tool (typed action group)."""
-    actor = self
-
-    @tool
-    async def memory(action: str, ctx: Context) -> str:
-        """Manage your memory and context.
-
-        Actions:
-            compact   - Compact conversation history to free context space.
-            summarize - Aggregate current context into knowledge store.
-        """
-        if action == "compact":
-            if not actor._compact_strategy:
-                return "Compaction not configured."
-            events = list(await ctx.stream.history.get_events())
-            compacted = await actor._compact_strategy.compact(
-                events, ctx, actor._knowledge_store
-            )
-            await ctx.stream.history.replace(compacted)
-            return f"Compacted: {len(events)} events → {len(compacted)} events."
-
-        elif action == "summarize":
-            if not actor._aggregate_strategy or not actor._knowledge_store:
-                return "Aggregation not configured."
-            events = list(await ctx.stream.history.get_events())
-            await actor._aggregate_strategy.aggregate(
-                events, ctx, actor._knowledge_store
-            )
-            return "Knowledge store updated."
-
-        else:
-            return f"Unknown action: {action}. Available: compact, summarize."
-
-    return [memory]
+# memory tool REMOVED — compaction and aggregation are infrastructure
+# concerns, not agent decisions. They fire automatically via triggers.
+# For manual control, use actor.compact() or actor.aggregate() from
+# application code.
 ```
 
 **_execute() flow:**
 
 ```python
 async def _execute(self, event, *, context, client, additional_tools=(), additional_middleware=(), response_schema=omit):
-    spawn_tools = self._build_spawn_tools()
+    subtask_tools = self._build_subtask_tools()
 
-    # NEW: bootstrap knowledge store on first use
+    # Bootstrap knowledge store on first use
     if self._knowledge_store:
         if not await self._knowledge_store.exists("/.initialized"):
             bootstrap = self._bootstrap or DefaultBootstrap()
             await bootstrap.bootstrap(self._knowledge_store, self.name)
 
-    # NEW: harness tools
+    # Knowledge tools
     knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
-    memory_tools = self._build_memory_tool() if (self._compact_strategy or self._aggregate_strategy) else []
 
-    # NEW: make knowledge store available via DI
+    # Make knowledge store available via DI
     if self._knowledge_store:
         context.dependencies[KnowledgeStore] = self._knowledge_store
 
-    # Signal collection (existing, unchanged)
-    signal_queue: list[Signal] = []
-    _delivered_ids: set[int] = set()
-    async def _collect_signal(signal: Signal) -> None:
-        if id(signal) not in _delivered_ids:
-            signal_queue.append(signal)
-    signal_sub = context.stream.where(Signal).subscribe(_collect_signal)
-
-    # Attach observers (existing, unchanged)
+    # Attach observers
     for obs in self._observers:
         obs.attach(context.stream, context)
         await context.send(ObserverStarted(name=obs.name))
 
     # Build middleware chain
-    assembler_mw = _AssemblerMiddlewareFactory(self._policies)      # CHANGED: replaces harness
-    signal_mw = _SignalInjectionFactory(signal_queue, self._signal_policy, _delivered_ids)
+    assembler_mw = _AssemblerMiddlewareFactory(self._policies)
+    halt_check_mw = _HaltCheckMiddlewareFactory()
 
-    harness_middleware: list[MiddlewareFactory] = [assembler_mw, signal_mw]
+    harness_middleware: list[MiddlewareFactory] = [assembler_mw, halt_check_mw]
 
-    # NEW: compaction middleware
+    # Compaction middleware
     if self._compact_strategy:
         harness_middleware.append(
             _CompactionMiddlewareFactory(
@@ -1371,7 +1329,7 @@ async def _execute(self, event, *, context, client, additional_tools=(), additio
             )
         )
 
-    # NEW: aggregation middleware (for every_n_turns / every_n_events triggers)
+    # Aggregation middleware (for every_n_turns / every_n_events triggers)
     if self._aggregate_strategy and self._knowledge_store:
         trigger = self._aggregate_trigger
         if trigger.every_n_turns > 0 or trigger.every_n_events > 0:
@@ -1389,13 +1347,13 @@ async def _execute(self, event, *, context, client, additional_tools=(), additio
             context=context,
             client=client,
             additional_tools=(
-                list(additional_tools) + spawn_tools + knowledge_tools + memory_tools
+                list(additional_tools) + subtask_tools + knowledge_tools
             ),
             additional_middleware=harness_middleware + list(additional_middleware),
             response_schema=response_schema,
         )
     finally:
-        # Detach observers (existing, unchanged)
+        # Detach observers
         for obs in self._observers:
             try:
                 obs.detach()
@@ -1404,9 +1362,8 @@ async def _execute(self, event, *, context, client, additional_tools=(), additio
             finally:
                 with suppress(Exception):
                     await context.send(ObserverCompleted(name=obs.name))
-        context.stream.unsubscribe(signal_sub)
 
-        # NEW: on_end aggregation
+        # on_end aggregation
         if (
             self._aggregate_strategy
             and self._knowledge_store
@@ -1420,7 +1377,7 @@ async def _execute(self, event, *, context, client, additional_tools=(), additio
             except Exception:
                 logger.exception("Aggregation failed for %s", self.name)
 
-        # NEW: persist event log
+        # Persist event log
         if self._knowledge_store:
             try:
                 events = list(await context.stream.history.get_events())
@@ -1435,22 +1392,21 @@ async def _execute(self, event, *, context, client, additional_tools=(), additio
 
 ## Built-in Tools Summary
 
-3 tools, each a typed action group:
-
 | Tool | Actions | Available When |
 |------|---------|----------------|
-| `knowledge` | `read`, `write`, `list`, `delete` | Actor has `knowledge_store` |
+| `knowledge` | `read`, `write`, `list`, `delete` | Actor has knowledge store configured |
 | `network` | `discover`, `request`, `publish`, `subscribe`, `topics`, `query`, `query_list` | Actor invoked via `hub.ask()` |
-| `memory` | `compact`, `summarize` | Actor has compact or aggregate strategy |
 
 Plus existing tools (unchanged):
 
 | Tool | Actions | Available When |
 |------|---------|----------------|
-| `spawn_task` | (single function) | Always |
-| `spawn_tasks` | (single function) | Always |
+| `run_subtask` | (single function) | Always |
+| `run_subtasks` | (single function) | Always |
 
-Total: 5 tools maximum. 3 of them are typed action groups.
+Total: 4 tools maximum. 2 of them are typed action groups.
+
+Note: The `memory` tool has been removed. Compaction and aggregation are infrastructure concerns triggered automatically, not agent decisions.
 
 ---
 
@@ -1463,25 +1419,26 @@ actor = Actor(
     "researcher",
     prompt="You are a research agent. Use your knowledge store to save findings.",
     config=config,
-    knowledge_store=MemoryKnowledgeStore(),
+    knowledge=KnowledgeConfig(
+        store=MemoryKnowledgeStore(),
+        compact=TailWindowCompact(target=100),
+        compact_trigger=CompactTrigger(max_events=150),
+    ),
     assembly=[
         ConversationPolicy(),
         WorkingMemoryPolicy(),
     ],
-    compact=TailWindowCompact(target=100),
-    compact_trigger=CompactTrigger(max_events=150),
 )
 
 reply = await actor.ask("Research quantum computing trends for the next hour")
 ```
 
 **What happens:**
-1. Actor starts. Gets `knowledge` and `memory` tools. Assembly policies: conversation filter + working memory injection.
+1. Actor starts. Gets `knowledge` tool. Assembly policies: conversation filter + working memory injection.
 2. Each LLM call: `ConversationPolicy` filters to conversation events. `WorkingMemoryPolicy` injects `/memory/working.md` (empty on first run).
 3. Actor uses `knowledge(action="write", path="/findings/qc-trends.md", content="...")` to save findings.
 4. After 150 events: `CompactionMiddleware` fires `TailWindowCompact` → keeps last 100 events.
-5. Actor uses `memory(action="compact")` explicitly if it notices context getting long before threshold.
-6. Actor reads past findings via `knowledge(action="read", path="/findings/qc-trends.md")`.
+5. Actor reads past findings via `knowledge(action="read", path="/findings/qc-trends.md")`.
 
 ### Scenario 2: Single Actor, Multiple Streams (Episodic Memory)
 
@@ -1492,14 +1449,16 @@ actor = Actor(
     "assistant",
     prompt="You are a helpful assistant with memory across conversations.",
     config=config,
-    knowledge_store=store,
+    knowledge=KnowledgeConfig(
+        store=store,
+        aggregate=ConversationSummaryAggregate(config=config),
+        aggregate_trigger=AggregateTrigger(on_end=True),
+    ),
     assembly=[
         ConversationPolicy(),
         WorkingMemoryPolicy(),
         EpisodicMemoryPolicy(max_episodes=3),
     ],
-    aggregate=ConversationSummaryAggregate(config=config),
-    aggregate_trigger=AggregateTrigger(on_end=True),
 )
 
 # Conversation 1
@@ -1526,14 +1485,14 @@ hub = Hub()
 researcher = Actor(
     "researcher",
     config=config,
-    knowledge_store=MemoryKnowledgeStore(),
+    knowledge=KnowledgeConfig(store=MemoryKnowledgeStore()),
     assembly=[ConversationPolicy(), NetworkPolicy()],
 )
 analyst = Actor(
     "analyst",
     config=config,
-    knowledge_store=MemoryKnowledgeStore(),
-    assembly=[ConversationPolicy(), NetworkPolicy(), TopicInboxPolicy(hub, "analyst")],
+    knowledge=KnowledgeConfig(store=MemoryKnowledgeStore()),
+    assembly=[ConversationPolicy(), NetworkPolicy(), TopicInboxPolicy(topic_plugin, "analyst")],
 )
 
 await hub.register(researcher, capabilities=["research"], exposed_paths=["/memory/", "/artifacts/"])
@@ -1570,57 +1529,41 @@ reply = await hub.ask(analyst, "Analyze the latest research findings")
 ## File Structure
 
 ```
-autogen/beta/network/
-├── primitives/
-│   ├── __init__.py
-│   ├── watch.py               # Existing
-│   ├── signal.py              # Existing
-│   ├── priority.py            # Existing
-│   ├── envelope.py            # Existing
-│   ├── channel.py             # Existing
-│   ├── infra.py               # Existing
-│   ├── harness.py             # REMOVED (replaced by assembler)
-│   ├── knowledge.py           # NEW: KnowledgeStore, MemoryKnowledgeStore,
-│   │                          #      StoreBootstrap, DefaultBootstrap,
-│   │                          #      EventLogWriter, LockedKnowledgeStore
-│   ├── compact.py             # NEW: CompactStrategy, CompactTrigger, CompactionSummary,
-│   │                          #      TailWindowCompact, SummarizeCompact
-│   └── aggregate.py           # NEW: AggregateStrategy, AggregateTrigger,
-│                              #      ConversationSummaryAggregate, WorkingMemoryAggregate
+autogen/beta/                    # Framework core
+├── actor.py                     # Actor + KnowledgeConfig + TaskConfig
+├── knowledge.py                 # KnowledgeStore, MemoryKnowledgeStore, EventLogWriter
+├── assembly.py                  # AssemblyPolicy, AssemblerMiddleware
+├── compact.py                   # CompactStrategy, CompactTrigger, TailWindowCompact, SummarizeCompact
+├── aggregate.py                 # AggregateStrategy, AggregateTrigger, implementations
+├── observer.py                  # Observer, BaseObserver
+├── watch.py                     # Watch types
+├── state.py                     # StateStore, MemoryStateStore
+├── scheduler.py                 # Scheduler
 │
-├── assembler.py               # NEW (Layer 3): AssemblyPolicy, AssemblerMiddleware
+├── events/
+│   ├── alert.py                 # ObserverAlert, Severity, HaltEvent
+│   └── lifecycle.py             # CompactionCompleted, AggregationCompleted, etc.
 │
-├── policies/                  # NEW: Built-in assembly policies
-│   ├── __init__.py
-│   ├── conversation.py        # ConversationPolicy
-│   ├── network.py             # NetworkPolicy
-│   ├── sliding_window.py      # SlidingWindowPolicy
-│   ├── token_budget.py        # TokenBudgetPolicy
-│   ├── episodic_memory.py     # EpisodicMemoryPolicy
-│   ├── working_memory.py      # WorkingMemoryPolicy
-│   └── topic_inbox.py         # TopicInboxPolicy, TopicOverflow
+├── policies/                    # Assembly policies
+│   ├── conversation.py          # ConversationPolicy
+│   ├── sliding_window.py        # SlidingWindowPolicy
+│   ├── token_budget.py          # TokenBudgetPolicy
+│   ├── episodic_memory.py       # EpisodicMemoryPolicy
+│   ├── working_memory.py        # WorkingMemoryPolicy
+│   └── alert.py                 # AlertPolicy (replaces Signal delivery)
 │
-├── actor.py                   # MODIFIED: harness integration, knowledge/memory tools
-├── hub.py                     # MODIFIED: topic pub/sub, knowledge queries, exposed_paths
-├── events.py                  # MODIFIED: + TopicMessage, TopicSubscription, TopicUnsubscription,
-│                              #            CompactionSummary, CompactionCompleted,
-│                              #            AggregationCompleted, UnknownEvent
-├── observer.py                # Existing, unchanged
-├── scheduler.py               # Existing, unchanged
-├── topology.py                # Existing, unchanged
-├── convenience.py             # Existing, unchanged
-├── remote.py                  # Existing, unchanged
+├── observers/                   # Built-in observers
+│   ├── token_monitor.py
+│   └── loop_detector.py
 │
-├── channels/                  # Existing, unchanged
-├── observers/                 # Existing, unchanged
-└── plugins/                   # Existing, unchanged
+autogen/beta/network/            # Network-specific only
+├── hub.py                       # Hub (topics extracted to TopicPlugin)
+├── policies/
+│   ├── network.py               # NetworkPolicy
+│   └── topic_inbox.py           # TopicInboxPolicy (takes TopicPlugin, not Hub)
+├── plugins/
+│   └── topic.py                 # TopicPlugin (extracted from Hub)
 ```
-
-**Removed:** `primitives/harness.py`
-
-**New files:** `primitives/knowledge.py`, `primitives/compact.py`, `primitives/aggregate.py`, `assembler.py`, `policies/*.py`
-
-**Modified files:** `actor.py`, `hub.py`, `events.py`, `__init__.py`
 
 ### Changes to BaseEvent
 
@@ -1631,10 +1574,9 @@ The existing `BaseEvent` gains `from_dict()` and improved `to_dict()` for round-
 ## Public API Additions
 
 ```python
-from autogen.beta.network import (
-    # Existing exports (unchanged)...
-
-    # NEW: Agent Harness — Primitives
+# Framework core (autogen.beta)
+from autogen.beta import (
+    # Agent Harness — Primitives
     KnowledgeStore, MemoryKnowledgeStore, LockedKnowledgeStore,
     StoreBootstrap, DefaultBootstrap, EventLogWriter,
     CompactStrategy, CompactTrigger, CompactionSummary,
@@ -1642,24 +1584,31 @@ from autogen.beta.network import (
     AggregateStrategy, AggregateTrigger,
     ConversationSummaryAggregate, WorkingMemoryAggregate,
 
-    # NEW: Agent Harness — Assembler
+    # Agent Harness — Assembler
     AssemblyPolicy, AssemblerMiddleware,
 
-    # NEW: Agent Harness — Policies
-    ConversationPolicy, NetworkPolicy,
-    SlidingWindowPolicy, TokenBudgetPolicy,
-    EpisodicMemoryPolicy, WorkingMemoryPolicy,
-    TopicInboxPolicy, TopicOverflow,
+    # Agent Harness — Policies
+    ConversationPolicy, SlidingWindowPolicy, TokenBudgetPolicy,
+    EpisodicMemoryPolicy, WorkingMemoryPolicy, AlertPolicy,
 
-    # NEW: Events
+    # Agent Harness — Config
+    KnowledgeConfig, TaskConfig,
+
+    # Alert system (replaces Signal)
+    ObserverAlert, Severity, HaltEvent,
+
+    # Events
+    CompactionCompleted, AggregationCompleted,
+)
+
+# Network-specific (autogen.beta.network)
+from autogen.beta.network import (
+    NetworkPolicy, TopicInboxPolicy, TopicOverflow, TopicPlugin,
     TopicMessage, TopicSubscription, TopicUnsubscription,
-    CompactionCompleted, AggregationCompleted, UnknownEvent,
 )
 ```
 
-**Removed exports:** `ContextHarness`, `ConversationHarness`, `NetworkHarness`, `HarnessMiddleware`, `FormattedEvent`.
-
-Note: `FormattedEvent` is still used internally by `NetworkPolicy` for formatting network events. It moves from a public export to an internal utility in the policies module.
+Removed exports: `ContextHarness`, `ConversationHarness`, `NetworkHarness`, `HarnessMiddleware`, `FormattedEvent`, `Signal`, `SignalPolicy`.
 
 ---
 
@@ -1813,13 +1762,12 @@ class Actor(Agent):
     def __init__(
         self,
         ...
-        knowledge_store: KnowledgeStore | None = None,
-        bootstrap: StoreBootstrap | None = None,        # NEW
+        knowledge: KnowledgeConfig | None = None,  # bootstrap is a field on KnowledgeConfig
         ...
     ):
 ```
 
-Users can pass a custom bootstrap to create domain-specific store layouts. Or `None` for the default.
+Users can pass a custom bootstrap via `KnowledgeConfig(store=..., bootstrap=...)` to create domain-specific store layouts. Or `None` for the default.
 
 ---
 
@@ -1844,24 +1792,24 @@ class TopicInboxPolicy:
 
     def __init__(
         self,
-        hub: Hub,
+        topic_plugin: TopicPlugin,
         actor_name: str,
         max_messages: int = 50,
         overflow: TopicOverflow = TopicOverflow.NEWEST,
         summary_config: ModelConfig | None = None,  # Required if overflow=SUMMARY
     ):
-        self._hub = hub
+        self._plugin = topic_plugin
         self._actor = actor_name
         self._max = max_messages
         self._overflow = overflow
         self._summary_config = summary_config
 
     async def apply(self, prompts, events, context):
-        subscriptions = self._hub.subscriptions_for(self._actor)
+        subscriptions = self._plugin.subscriptions_for(self._actor)
         all_messages: list[TopicMessage] = []
 
         for topic in subscriptions:
-            messages = await self._hub.read_topic(self._actor, topic)
+            messages = await self._plugin.peek_topic(self._actor, topic)
             all_messages.extend(messages)
 
         if not all_messages:
@@ -2102,7 +2050,7 @@ store = MemoryKnowledgeStore()
 lock = LocalLock()
 safe_store = LockedKnowledgeStore(store, lock)
 
-actor = Actor("researcher", knowledge_store=safe_store, ...)
+actor = Actor("researcher", knowledge=KnowledgeConfig(store=safe_store), ...)
 ```
 
 The framework doesn't force locking — it's opt-in. Single-actor-single-conversation use doesn't need it. Multi-conversation or multi-process use wraps with `LockedKnowledgeStore`.
@@ -2240,7 +2188,7 @@ class BaseEvent:
     ModelResponse(message=ModelMessage(content="world")),
     ToolCallEvent(call_id="1", name="fn", arguments={"x": 1}),
     DelegationRequest(source="a", target="b", task="t"),
-    Signal(source="obs", severity="info", message="m"),
+    ObserverAlert(source="obs", severity="info", message="m"),
     TopicMessage(topic="t", sender="s", message="m"),
     CompactionSummary(summary="s", event_count=10),
     # ... all event types
