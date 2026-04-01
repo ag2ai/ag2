@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import keyword
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -78,15 +79,37 @@ def _parse_cli_help(command: str, subcommand: str | None = None) -> ToolSpec:
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         raise typer.Exit(1) from exc
 
+    # Strip man-page overstrike formatting (X\bX for bold, _\bX for underline)
+    help_text = re.sub(r".\x08", "", help_text)
+
     tool_name = "_".join(cmd_parts).replace("-", "_")
     description = ""
     params: list[ToolParam] = []
 
-    # Extract description from first non-empty line
-    for line in help_text.split("\n"):
-        line = line.strip()
-        if line and not line.startswith("Usage") and not line.startswith("-"):
-            description = line
+    # Extract description — skip man page headers like "GIT-STATUS(1) ... GIT-STATUS(1)"
+    # and look for the NAME section description or first meaningful line
+    man_header_re = re.compile(r"^[A-Z\-]+\(\d+\)")
+    lines_iter = help_text.split("\n")
+    in_name_section = False
+    for line in lines_iter:
+        stripped = line.strip()
+        if stripped == "NAME":
+            in_name_section = True
+            continue
+        if in_name_section and stripped:
+            # NAME section line like "git-status - Show the working tree status"
+            if " - " in stripped:
+                description = stripped.split(" - ", 1)[1].strip()
+            else:
+                description = stripped
+            break
+        if (
+            stripped
+            and not stripped.startswith("Usage")
+            and not stripped.startswith("-")
+            and not man_header_re.match(stripped)
+        ):
+            description = stripped
             break
 
     if not description:
@@ -94,15 +117,26 @@ def _parse_cli_help(command: str, subcommand: str | None = None) -> ToolSpec:
 
     # Parse flags/options from help text
     flag_pattern = re.compile(
-        r"^\s+(-\w,?\s+)?(--[\w-]+)(?:\s+(\w+))?\s{2,}(.+)",
+        r"^\s+(-\w,?\s+)?(--[a-zA-Z][\w-]*)(?:\s+(\w+))?\s{2,}(.+)",
         re.MULTILINE,
     )
+    seen_params: set[str] = set()
     for match in flag_pattern.finditer(help_text):
         long_flag = match.group(2)
         arg_name = match.group(3)
         flag_desc = match.group(4).strip()
 
         param_name = long_flag.lstrip("-").replace("-", "_")
+
+        # Skip invalid Python identifiers and keywords
+        if not param_name.isidentifier() or keyword.iskeyword(param_name):
+            continue
+
+        # Skip duplicates
+        if param_name in seen_params:
+            continue
+        seen_params.add(param_name)
+
         param_type = "str" if arg_name else "bool"
         params.append(
             ToolParam(
