@@ -7,15 +7,12 @@ from collections.abc import Iterable
 from autogen.beta.annotations import Context
 from autogen.beta.context import StreamId
 from autogen.beta.events import BaseEvent
-from autogen.import_utils import optional_import_block, require_optional_import
+
+import redis.asyncio as aioredis
 
 from .serializer import Serializer, deserialize, serialize
 
-with optional_import_block():
-    import redis.asyncio as aioredis
 
-
-@require_optional_import("redis", "redis")
 class RedisStorage:
     """Redis-backed storage implementing the Storage protocol from autogen.beta.history."""
 

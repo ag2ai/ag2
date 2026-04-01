@@ -9,13 +9,11 @@ from uuid import uuid4
 from autogen.beta.context import Context, StreamId
 from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
-from autogen.import_utils import optional_import_block
+
+import redis.asyncio as aioredis
 
 from .serializer import Serializer, deserialize, serialize
 from .storage import RedisStorage
-
-with optional_import_block():
-    import redis.asyncio as aioredis
 
 
 class RedisStream(MemoryStream):

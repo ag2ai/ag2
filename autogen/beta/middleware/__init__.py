@@ -14,6 +14,7 @@ from .base import (
 from .builtin import (
     HistoryLimiter,
     LoggingMiddleware,
+    TelemetryMiddleware,
     RetryMiddleware,
     TokenLimiter,
 )
@@ -27,6 +28,7 @@ __all__ = (
     "LoggingMiddleware",
     "Middleware",
     "RetryMiddleware",
+    "TelemetryMiddleware",
     "TokenLimiter",
     "ToolExecution",
     "ToolResultType",
