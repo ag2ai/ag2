@@ -8,8 +8,9 @@ import pytest
 
 from autogen.beta.annotations import Variable
 from autogen.beta.context import Context
+from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
-from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchTool
+from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
 
 
 def _make_context(**variables: object) -> Context:
@@ -129,4 +130,28 @@ async def test_web_search_tool_variable_missing_raises() -> None:
     ctx = _make_context()
 
     with pytest.raises(KeyError, match="user_location"):
+        await tool.schemas(ctx)
+
+
+# --- ImageGenerationTool.schemas() with Variable ---
+
+
+@pytest.mark.asyncio
+async def test_image_generation_tool_variable_resolved() -> None:
+    tool = ImageGenerationTool(quality="high", size=Variable("image_size"))
+    ctx = _make_context(image_size="1536x1024")
+
+    [schema] = await tool.schemas(ctx)
+
+    assert isinstance(schema, ImageGenerationToolSchema)
+    assert schema.quality == "high"
+    assert schema.size == "1536x1024"
+
+
+@pytest.mark.asyncio
+async def test_image_generation_tool_variable_missing_raises() -> None:
+    tool = ImageGenerationTool(partial_images=Variable("partial_images"))
+    ctx = _make_context()
+
+    with pytest.raises(KeyError, match="partial_images"):
         await tool.schemas(ctx)

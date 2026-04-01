@@ -7,10 +7,12 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import Literal
 
-from autogen.beta.annotations import Context
+from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
+
+from ._resolve import resolve_variable
 
 
 @dataclass(slots=True)
@@ -49,12 +51,12 @@ class ImageGenerationTool(Tool):
     def __init__(
         self,
         *,
-        quality: Literal["low", "medium", "high", "auto"] | None = None,
-        size: str | None = None,
-        background: Literal["transparent", "opaque", "auto"] | None = None,
-        output_format: Literal["png", "jpeg", "webp"] | None = None,
-        output_compression: int | None = None,
-        partial_images: int | None = None,
+        quality: Literal["low", "medium", "high", "auto"] | Variable | None = None,
+        size: str | Variable | None = None,
+        background: Literal["transparent", "opaque", "auto"] | Variable | None = None,
+        output_format: Literal["png", "jpeg", "webp"] | Variable | None = None,
+        output_compression: int | Variable | None = None,
+        partial_images: int | Variable | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if quality is not None:
@@ -71,7 +73,8 @@ class ImageGenerationTool(Tool):
             self._params["partial_images"] = partial_images
 
     async def schemas(self, context: "Context") -> list[ImageGenerationToolSchema]:
-        return [ImageGenerationToolSchema(**self._params)]
+        resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
+        return [ImageGenerationToolSchema(**resolved)]
 
     def register(
         self,
