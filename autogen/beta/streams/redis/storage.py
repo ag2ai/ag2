@@ -9,11 +9,12 @@ import redis.asyncio as aioredis
 from autogen.beta.annotations import Context
 from autogen.beta.context import StreamId
 from autogen.beta.events import BaseEvent
+from autogen.beta.history import Storage
 
 from .serializer import Serializer, deserialize, serialize
 
 
-class RedisStorage:
+class RedisStorage(Storage):
     """Redis-backed storage implementing the Storage protocol from autogen.beta.history."""
 
     def __init__(
