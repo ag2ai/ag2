@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.beta.config.openai.mappers import tool_to_api, tool_to_responses_api
-
-from .._helpers import make_parameterless_tool, make_tool
+from test.beta.config._helpers import make_parameterless_tool, make_tool
 
 
 def test_tool_to_api() -> None:

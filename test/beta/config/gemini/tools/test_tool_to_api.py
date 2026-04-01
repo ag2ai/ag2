@@ -5,8 +5,7 @@
 from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
-
-from .._helpers import make_tool
+from test.beta.config._helpers import make_tool
 
 
 def test_tool_to_api() -> None:
