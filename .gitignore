@@ -205,6 +205,8 @@ notebook/mcp/arxiv_papers/
 
 remote-examples
 
+playground/demo/
+
 *CLAUDE.md:
 .cursor/
 .claude/worktrees/
