@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from ag2_cli.app import app
@@ -171,6 +174,184 @@ class TestParseCLI:
         assert "git" in spec.name
         assert "status" in spec.name
         assert spec.source_type == "cli"
+
+
+def _make_help_result(stdout: str) -> subprocess.CompletedProcess[str]:
+    """Helper to build a fake subprocess result for mocking _parse_cli_help."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+
+
+class TestParseCLIHelpText:
+    """Tests for _parse_cli_help edge cases using mocked help text."""
+
+    def _parse(self, help_text: str) -> ToolSpec:
+        with patch("ag2_cli.commands.proxy.subprocess.run", return_value=_make_help_result(help_text)):
+            return _parse_cli_help("fakecmd")
+
+    # -- overstrike / man-page formatting ---------------------------------
+
+    def test_strips_man_page_overstrike(self) -> None:
+        help_text = (
+            "FAKECMD(1)       Manual       FAKECMD(1)\n"
+            "\n"
+            "N\x08NA\x08AM\x08ME\x08E\n"
+            "       fakecmd - Do something useful\n"
+            "\n"
+            "O\x08OP\x08PT\x08TI\x08IO\x08ON\x08NS\x08S\n"
+            "       --verbose          Enable verbose output\n"
+        )
+        spec = self._parse(help_text)
+        assert spec.description == "Do something useful"
+        assert any(p.name == "verbose" for p in spec.params)
+
+    # -- description extraction -------------------------------------------
+
+    def test_description_from_name_section(self) -> None:
+        help_text = (
+            "MYCLI(1)         Manual         MYCLI(1)\n"
+            "\n"
+            "NAME\n"
+            "       mycli - A great CLI tool\n"
+            "\n"
+            "OPTIONS\n"
+            "       --flag          A flag\n"
+        )
+        spec = self._parse(help_text)
+        assert spec.description == "A great CLI tool"
+
+    def test_description_skips_man_header(self) -> None:
+        help_text = (
+            "TOOL-NAME(1)     Manual     TOOL-NAME(1)\n"
+            "\n"
+            "DESCRIPTION\n"
+            "       This tool does things.\n"
+        )
+        spec = self._parse(help_text)
+        # Should not use the "TOOL-NAME(1) ..." header as description
+        assert "TOOL-NAME(1)" not in spec.description
+
+    def test_description_fallback(self) -> None:
+        help_text = "Usage: fakecmd [options]\n"
+        spec = self._parse(help_text)
+        assert spec.description == "Run fakecmd"
+
+    # -- invalid param names ----------------------------------------------
+
+    def test_skips_empty_param_from_decorative_dashes(self) -> None:
+        help_text = (
+            "NAME\n"
+            "       fakecmd - A tool\n"
+            "\n"
+            "       --verbose          Be verbose\n"
+            "       ---                Decorative line\n"
+        )
+        spec = self._parse(help_text)
+        param_names = [p.name for p in spec.params]
+        assert "verbose" in param_names
+        assert "" not in param_names
+
+    def test_skips_params_starting_with_digit(self) -> None:
+        # e.g. git log shows "--1----2----4----7" type patterns
+        help_text = (
+            "NAME\n"
+            "       tool - A tool\n"
+            "\n"
+            "       --1pass           Some flag\n"
+            "       --valid           A valid flag\n"
+        )
+        spec = self._parse(help_text)
+        param_names = [p.name for p in spec.params]
+        assert "valid" in param_names
+        # "1pass" is not a valid Python identifier
+        assert not any(p[0].isdigit() for p in param_names)
+
+    def test_skips_python_keywords(self) -> None:
+        help_text = (
+            "NAME\n"
+            "       tool - A tool\n"
+            "\n"
+            "       --not             Negate\n"
+            "       --class           Set class\n"
+            "       --return          Return value\n"
+            "       --verbose         Be verbose\n"
+        )
+        spec = self._parse(help_text)
+        param_names = [p.name for p in spec.params]
+        assert "verbose" in param_names
+        assert "not" not in param_names
+        assert "return" not in param_names
+        # "class" is a keyword too (mapped from --class)
+        assert not any(p == "class" for p in param_names)
+
+    # -- duplicate params -------------------------------------------------
+
+    def test_deduplicates_params(self) -> None:
+        help_text = (
+            "NAME\n"
+            "       tool - A tool\n"
+            "\n"
+            "DISPLAY OPTIONS\n"
+            "       --verbose         Enable verbose\n"
+            "       --quiet           Be quiet\n"
+            "\n"
+            "MORE OPTIONS\n"
+            "       --verbose         Enable verbose (again)\n"
+            "       --debug           Debug mode\n"
+        )
+        spec = self._parse(help_text)
+        param_names = [p.name for p in spec.params]
+        assert param_names.count("verbose") == 1
+        assert "quiet" in param_names
+        assert "debug" in param_names
+
+    # -- generated code validity ------------------------------------------
+
+    def test_generated_code_is_valid_python(self, tmp_path: Path) -> None:
+        """End-to-end: parse help with tricky content and verify output is valid Python."""
+        help_text = (
+            "CMD(1)           Manual           CMD(1)\n"
+            "\n"
+            "N\x08NA\x08AM\x08ME\x08E\n"
+            "       cmd - Do things\n"
+            "\n"
+            "O\x08OP\x08PT\x08TI\x08IO\x08ON\x08NS\x08S\n"
+            "       -v, --verbose          Be verbose\n"
+            "       --not                  Negate (keyword)\n"
+            "       --all                  Select all\n"
+            "       --format FORMAT        Output format\n"
+            "       --1bad                 Invalid ident\n"
+            "       --verbose              Duplicate\n"
+            "       ---                    Decorative\n"
+        )
+        with patch("ag2_cli.commands.proxy.subprocess.run", return_value=_make_help_result(help_text)):
+            spec = _parse_cli_help("cmd")
+        output = tmp_path / "tools.py"
+        content = _generate_tool_file([spec], output)
+        # Must be syntactically valid Python
+        ast.parse(content)
+        # Sanity checks on content
+        assert "def cmd(" in content
+        assert "verbose" in content
+        assert "format" in content
+        # Keywords and invalid idents must not appear as params
+        assert "not:" not in content
+        assert "1bad" not in content
+
+    def test_string_params_generated_correctly(self) -> None:
+        help_text = (
+            "NAME\n"
+            "       tool - A tool\n"
+            "\n"
+            "       --output PATH     Output path\n"
+            "       --verbose         Be verbose\n"
+        )
+        spec = self._parse(help_text)
+        output_param = next(p for p in spec.params if p.name == "output")
+        assert output_param.type == "str"
+        assert output_param.default is None
+        verbose_param = next(p for p in spec.params if p.name == "verbose")
+        assert verbose_param.type == "bool"
+        assert verbose_param.default is False
 
 
 # ---------------------------------------------------------------------------
