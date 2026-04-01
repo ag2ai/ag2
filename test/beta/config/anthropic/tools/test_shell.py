@@ -2,22 +2,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.config.anthropic.mappers import tool_to_api
-from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellToolSchema
+from autogen.beta.context import Context
+from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ShellTool
 
 
-def test_tool_to_api_shell() -> None:
-    schema = ShellToolSchema()
+@pytest.mark.asyncio
+async def test_defaults(context: Context) -> None:
+    tool = ShellTool()
 
-    result = tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {"type": "bash_20250124", "name": "bash"}
+    assert tool_to_api(schema) == {"type": "bash_20250124", "name": "bash"}
 
 
-def test_tool_to_api_shell_ignores_environment() -> None:
+@pytest.mark.asyncio
+async def test_ignores_environment(context: Context) -> None:
     # Anthropic maps to bash regardless of the environment field
-    schema = ShellToolSchema(environment=ContainerAutoEnvironment())
+    tool = ShellTool(environment=ContainerAutoEnvironment())
 
-    result = tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {"type": "bash_20250124", "name": "bash"}
+    assert tool_to_api(schema) == {"type": "bash_20250124", "name": "bash"}

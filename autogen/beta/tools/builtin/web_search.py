@@ -45,7 +45,7 @@ class WebSearchTool(Tool):
         user_location: UserLocation | Variable | None = None,
         allowed_domains: list[str] | Variable | None = None,
         blocked_domains: list[str] | Variable | None = None,
-        web_search_version: Literal["web_search_20250305", "web_search_20260209"] | Variable | None = None,
+        version: Literal["web_search_20250305", "web_search_20260209"] | Variable | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if search_context_size is not None:
@@ -58,8 +58,8 @@ class WebSearchTool(Tool):
             self._params["allowed_domains"] = allowed_domains
         if blocked_domains is not None:
             self._params["blocked_domains"] = blocked_domains
-        if web_search_version is not None:
-            self._params["web_search_version"] = web_search_version
+        if version is not None:
+            self._params["web_search_version"] = version
 
     async def schemas(self, context: "Context") -> list[WebSearchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}

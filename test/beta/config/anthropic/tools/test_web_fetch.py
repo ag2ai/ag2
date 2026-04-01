@@ -2,23 +2,28 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.config.anthropic.mappers import tool_to_api
-from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
+from autogen.beta.context import Context
+from autogen.beta.tools.builtin.web_fetch import WebFetchTool
 
 
-def test_tool_to_api_web_fetch_defaults() -> None:
-    schema = WebFetchToolSchema()
+@pytest.mark.asyncio
+async def test_defaults(context: Context) -> None:
+    tool = WebFetchTool()
 
-    api_tool = tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert api_tool == {
+    assert tool_to_api(schema) == {
         "type": "web_fetch_20250910",
         "name": "web_fetch",
     }
 
 
-def test_tool_to_api_web_fetch_full() -> None:
-    schema = WebFetchToolSchema(
+@pytest.mark.asyncio
+async def test_full(context: Context) -> None:
+    tool = WebFetchTool(
         max_uses=5,
         allowed_domains=["docs.example.com"],
         blocked_domains=["private.example.com"],
@@ -26,9 +31,9 @@ def test_tool_to_api_web_fetch_full() -> None:
         max_content_tokens=50000,
     )
 
-    api_tool = tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert api_tool == {
+    assert tool_to_api(schema) == {
         "type": "web_fetch_20250910",
         "name": "web_fetch",
         "max_uses": 5,
@@ -39,12 +44,13 @@ def test_tool_to_api_web_fetch_full() -> None:
     }
 
 
-def test_tool_to_api_web_fetch_dynamic_filtering() -> None:
-    schema = WebFetchToolSchema(web_fetch_version="web_fetch_20260209")
+@pytest.mark.asyncio
+async def test_dynamic_version(context: Context) -> None:
+    tool = WebFetchTool(version="web_fetch_20260209")
 
-    api_tool = tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert api_tool == {
+    assert tool_to_api(schema) == {
         "type": "web_fetch_20260209",
         "name": "web_fetch",
     }

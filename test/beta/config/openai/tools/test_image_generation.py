@@ -4,81 +4,91 @@
 
 import pytest
 
-from autogen.beta.config.openai.mappers import tool_to_api, tool_to_responses_api
-from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.config.openai.mappers import tool_to_responses_api
+from autogen.beta.context import Context
+from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 
 
-def test_tool_to_api_image_generation_raises() -> None:
-    schema = ImageGenerationToolSchema()
+@pytest.mark.asyncio
+async def test_responses_api_defaults(context: Context) -> None:
+    tool = ImageGenerationTool()
 
-    with pytest.raises(UnsupportedToolError) as exc_info:
-        tool_to_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert "image_generation" in str(exc_info.value)
-    assert "openai-completions" in str(exc_info.value)
-
-
-def test_tool_to_responses_api_image_generation_defaults() -> None:
-    schema = ImageGenerationToolSchema()
-    result = tool_to_responses_api(schema)
-
-    assert result == {"type": "image_generation"}
+    assert tool_to_responses_api(schema) == {"type": "image_generation"}
 
 
-def test_tool_to_responses_api_image_generation_quality() -> None:
-    schema = ImageGenerationToolSchema(quality="high")
-    result = tool_to_responses_api(schema)
+@pytest.mark.asyncio
+async def test_responses_api_quality(context: Context) -> None:
+    tool = ImageGenerationTool(quality="high")
 
-    assert result == {"type": "image_generation", "quality": "high"}
+    [schema] = await tool.schemas(context)
 
-
-def test_tool_to_responses_api_image_generation_size() -> None:
-    schema = ImageGenerationToolSchema(size="1536x1024")
-    result = tool_to_responses_api(schema)
-
-    assert result == {"type": "image_generation", "size": "1536x1024"}
+    assert tool_to_responses_api(schema) == {"type": "image_generation", "quality": "high"}
 
 
-def test_tool_to_responses_api_image_generation_background() -> None:
-    schema = ImageGenerationToolSchema(background="transparent")
-    result = tool_to_responses_api(schema)
+@pytest.mark.asyncio
+async def test_responses_api_size(context: Context) -> None:
+    tool = ImageGenerationTool(size="1536x1024")
 
-    assert result == {"type": "image_generation", "background": "transparent"}
+    [schema] = await tool.schemas(context)
 
-
-def test_tool_to_responses_api_image_generation_output_format() -> None:
-    schema = ImageGenerationToolSchema(output_format="webp")
-    result = tool_to_responses_api(schema)
-
-    assert result == {"type": "image_generation", "output_format": "webp"}
+    assert tool_to_responses_api(schema) == {"type": "image_generation", "size": "1536x1024"}
 
 
-def test_tool_to_responses_api_image_generation_output_compression() -> None:
-    schema = ImageGenerationToolSchema(output_format="jpeg", output_compression=75)
-    result = tool_to_responses_api(schema)
+@pytest.mark.asyncio
+async def test_responses_api_background(context: Context) -> None:
+    tool = ImageGenerationTool(background="transparent")
 
-    assert result == {"type": "image_generation", "output_format": "jpeg", "output_compression": 75}
+    [schema] = await tool.schemas(context)
 
-
-def test_tool_to_responses_api_image_generation_partial_images() -> None:
-    schema = ImageGenerationToolSchema(partial_images=2)
-    result = tool_to_responses_api(schema)
-
-    assert result == {"type": "image_generation", "partial_images": 2}
+    assert tool_to_responses_api(schema) == {"type": "image_generation", "background": "transparent"}
 
 
-def test_tool_to_responses_api_image_generation_all_params() -> None:
-    schema = ImageGenerationToolSchema(
+@pytest.mark.asyncio
+async def test_responses_api_output_format(context: Context) -> None:
+    tool = ImageGenerationTool(output_format="webp")
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_responses_api(schema) == {"type": "image_generation", "output_format": "webp"}
+
+
+@pytest.mark.asyncio
+async def test_responses_api_output_compression(context: Context) -> None:
+    tool = ImageGenerationTool(output_format="jpeg", output_compression=75)
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_responses_api(schema) == {
+        "type": "image_generation",
+        "output_format": "jpeg",
+        "output_compression": 75,
+    }
+
+
+@pytest.mark.asyncio
+async def test_responses_api_partial_images(context: Context) -> None:
+    tool = ImageGenerationTool(partial_images=2)
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_responses_api(schema) == {"type": "image_generation", "partial_images": 2}
+
+
+@pytest.mark.asyncio
+async def test_responses_api_all_params(context: Context) -> None:
+    tool = ImageGenerationTool(
         quality="medium",
         size="1024x1024",
         background="opaque",
         output_format="png",
         partial_images=1,
     )
-    result = tool_to_responses_api(schema)
 
-    assert result == {
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_responses_api(schema) == {
         "type": "image_generation",
         "quality": "medium",
         "size": "1024x1024",

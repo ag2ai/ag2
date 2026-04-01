@@ -2,16 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
-from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
+from autogen.beta.context import Context
+from autogen.beta.tools.builtin.web_fetch import WebFetchTool
 
 
-def test_build_tools_web_fetch() -> None:
-    schema = WebFetchToolSchema()
-    tools = build_tools([schema])
+@pytest.mark.asyncio
+async def test_defaults(context: Context) -> None:
+    tool = WebFetchTool()
 
-    assert tools == [
+    [schema] = await tool.schemas(context)
+
+    assert build_tools([schema]) == [
         types.Tool(url_context=types.UrlContext()),
     ]

@@ -2,40 +2,46 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.config.openai.mappers import tool_to_responses_api
+from autogen.beta.context import Context
 from autogen.beta.tools.builtin.shell import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
     LocalEnvironment,
     NetworkPolicy,
-    ShellToolSchema,
+    ShellTool,
 )
 
 
-def test_tool_to_responses_api_shell_no_environment() -> None:
-    schema = ShellToolSchema()
+@pytest.mark.asyncio
+async def test_no_environment(context: Context) -> None:
+    tool = ShellTool()
 
-    result = tool_to_responses_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {"type": "shell"}
-
-
-def test_tool_to_responses_api_shell_container_auto() -> None:
-    schema = ShellToolSchema(environment=ContainerAutoEnvironment())
-
-    result = tool_to_responses_api(schema)
-
-    assert result == {"type": "shell", "environment": {"type": "container_auto"}}
+    assert tool_to_responses_api(schema) == {"type": "shell"}
 
 
-def test_tool_to_responses_api_shell_container_auto_with_network_policy() -> None:
-    schema = ShellToolSchema(
+@pytest.mark.asyncio
+async def test_container_auto(context: Context) -> None:
+    tool = ShellTool(environment=ContainerAutoEnvironment())
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_responses_api(schema) == {"type": "shell", "environment": {"type": "container_auto"}}
+
+
+@pytest.mark.asyncio
+async def test_container_auto_with_network_policy(context: Context) -> None:
+    tool = ShellTool(
         environment=ContainerAutoEnvironment(network_policy=NetworkPolicy(allowed_domains=["example.com"]))
     )
 
-    result = tool_to_responses_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {
+    assert tool_to_responses_api(schema) == {
         "type": "shell",
         "environment": {
             "type": "container_auto",
@@ -44,20 +50,22 @@ def test_tool_to_responses_api_shell_container_auto_with_network_policy() -> Non
     }
 
 
-def test_tool_to_responses_api_shell_container_reference() -> None:
-    schema = ShellToolSchema(environment=ContainerReferenceEnvironment(container_id="cntr_xyz"))
+@pytest.mark.asyncio
+async def test_container_reference(context: Context) -> None:
+    tool = ShellTool(environment=ContainerReferenceEnvironment(container_id="cntr_xyz"))
 
-    result = tool_to_responses_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {
+    assert tool_to_responses_api(schema) == {
         "type": "shell",
         "environment": {"type": "container_reference", "container_id": "cntr_xyz"},
     }
 
 
-def test_tool_to_responses_api_shell_local() -> None:
-    schema = ShellToolSchema(environment=LocalEnvironment())
+@pytest.mark.asyncio
+async def test_local(context: Context) -> None:
+    tool = ShellTool(environment=LocalEnvironment())
 
-    result = tool_to_responses_api(schema)
+    [schema] = await tool.schemas(context)
 
-    assert result == {"type": "shell", "environment": {"type": "local"}}
+    assert tool_to_responses_api(schema) == {"type": "shell", "environment": {"type": "local"}}

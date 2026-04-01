@@ -2,37 +2,46 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
-from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.context import Context
+from autogen.beta.tools.builtin.web_search import WebSearchTool
+
 from test.beta.config._helpers import make_tool
 
 
-def test_build_tools_web_search() -> None:
-    schema = WebSearchToolSchema()
-    tools = build_tools([schema])
+@pytest.mark.asyncio
+async def test_defaults(context: Context) -> None:
+    tool = WebSearchTool()
 
-    assert tools == [
+    [schema] = await tool.schemas(context)
+
+    assert build_tools([schema]) == [
         types.Tool(google_search=types.GoogleSearch()),
     ]
 
 
-def test_build_tools_web_search_with_blocked_domains() -> None:
-    schema = WebSearchToolSchema(blocked_domains=["spam.com", "ads.com"])
-    tools = build_tools([schema])
+@pytest.mark.asyncio
+async def test_with_blocked_domains(context: Context) -> None:
+    tool = WebSearchTool(blocked_domains=["spam.com", "ads.com"])
 
-    assert tools == [
+    [schema] = await tool.schemas(context)
+
+    assert build_tools([schema]) == [
         types.Tool(google_search=types.GoogleSearch(exclude_domains=["spam.com", "ads.com"])),
     ]
 
 
-def test_build_tools_mixed() -> None:
+@pytest.mark.asyncio
+async def test_mixed_with_function_tool(context: Context) -> None:
+    web_tool = WebSearchTool()
     func_schema = make_tool().schema
-    web_schema = WebSearchToolSchema()
-    tools = build_tools([func_schema, web_schema])
 
-    assert tools == [
+    [web_schema] = await web_tool.schemas(context)
+
+    assert build_tools([func_schema, web_schema]) == [
         types.Tool(
             function_declarations=[
                 types.FunctionDeclaration(

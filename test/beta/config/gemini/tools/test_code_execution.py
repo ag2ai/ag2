@@ -3,16 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from google.genai import types
 
-from autogen.beta.config.anthropic.mappers import tool_to_api
+from autogen.beta.config.gemini.mappers import build_tools
 from autogen.beta.context import Context
-from autogen.beta.tools.builtin.memory import MemoryTool
+from autogen.beta.tools.builtin.code_execution import CodeExecutionTool
 
 
 @pytest.mark.asyncio
 async def test_defaults(context: Context) -> None:
-    tool = MemoryTool()
+    tool = CodeExecutionTool()
 
     [schema] = await tool.schemas(context)
 
-    assert tool_to_api(schema) == {"type": "memory_20250818", "name": "memory"}
+    assert build_tools([schema]) == [
+        types.Tool(code_execution=types.ToolCodeExecution()),
+    ]

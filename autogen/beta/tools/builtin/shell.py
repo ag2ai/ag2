@@ -5,6 +5,7 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware
@@ -58,6 +59,7 @@ class ShellToolSchema(ToolSchema):
     """
 
     type: str = field(default="shell", init=False)
+    version: Literal["bash_20250124"] = "bash_20250124"
     environment: ShellEnvironment | None = None
 
 
@@ -87,14 +89,16 @@ class ShellTool(Tool):
         self,
         *,
         environment: ShellEnvironment | Variable | None = None,
+        version: Literal["bash_20250124"] = "bash_20250124",
     ) -> None:
         self._params: dict[str, object] = {}
         if environment is not None:
             self._params["environment"] = environment
+        self._version = version
 
     async def schemas(self, context: "Context") -> list[ShellToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
-        return [ShellToolSchema(**resolved)]
+        return [ShellToolSchema(version=self._version, **resolved)]
 
     def register(
         self,

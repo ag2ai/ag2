@@ -106,7 +106,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool
-        return {"type": "code_execution_20250825", "name": "code_execution"}
+        return {"type": t.version, "name": "code_execution"}
 
     elif isinstance(t, WebFetchToolSchema):
         result = {"type": t.web_fetch_version, "name": "web_fetch"}
@@ -124,11 +124,11 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, MemoryToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
-        return {"type": "memory_20250818", "name": "memory"}
+        return {"type": t.version, "name": "memory"}
 
     elif isinstance(t, ShellToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
-        return {"type": "bash_20250124", "name": "bash"}
+        return {"type": t.version, "name": "bash"}
 
     raise UnsupportedToolError(t.type, "anthropic")
 
