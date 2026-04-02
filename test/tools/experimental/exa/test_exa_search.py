@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.exa import ExaSearchTool
 
 
@@ -214,6 +215,7 @@ class TestExaSearchTool:
             tool(query=None, exa_api_key="test_key")  # type: ignore[arg-type]
         assert "Input should be a valid string" in str(exc_info.value)
 
+    @run_for_optional_imports("exa_py", "exa")
     @patch("autogen.tools.experimental.exa.exa_search.Exa")
     def test_execute_exa_search_sets_integration_header(self, mock_exa_class: MagicMock) -> None:
         """Test that the x-exa-integration header is set to 'ag2'."""
@@ -229,6 +231,7 @@ class TestExaSearchTool:
         assert mock_client.headers["x-exa-integration"] == "ag2"
         mock_client.search_and_contents.assert_called_once()
 
+    @run_for_optional_imports("exa_py", "exa")
     @patch("autogen.tools.experimental.exa.exa_search.Exa")
     def test_execute_exa_search_formats_results(self, mock_exa_class: MagicMock) -> None:
         """Test that raw API results are formatted correctly."""
@@ -266,6 +269,7 @@ class TestExaSearchTool:
         assert results[1]["title"] == "Another"
         assert "text" not in results[1]
 
+    @run_for_optional_imports("exa_py", "exa")
     @patch("autogen.tools.experimental.exa.exa_search.Exa")
     def test_execute_exa_find_similar(self, mock_exa_class: MagicMock) -> None:
         """Test the find_similar helper function."""
