@@ -1,0 +1,90 @@
+# AutoGen Multi-Agent Debate — OSOP Portable Workflow
+#
+# A structured debate between AI agents: a moderator poses a question,
+# pro and con agents argue in parallel, the moderator synthesizes both
+# sides, and a human judge delivers the final verdict.
+#
+# Run with AutoGen or validate: osop validate autogen-debate.osop.yaml
+
+osop_version: "1.0"
+id: "autogen-debate"
+name: "Multi-Agent Debate"
+description: "Structured debate with pro/con agents, moderator synthesis, and human judgment."
+version: "1.0.0"
+tags: [autogen, multi-agent, debate, reasoning]
+
+nodes:
+  - id: "pose_question"
+    type: "human"
+    name: "Pose Debate Question"
+    description: "User provides the debate topic and any constraints."
+
+  - id: "moderator_open"
+    type: "agent"
+    subtype: "llm"
+    name: "Moderator — Opening"
+    description: "Frames the question, defines scope, and sets debate rules."
+    config:
+      role: "Neutral Moderator"
+      model: "gpt-4o"
+
+  - id: "pro_agent"
+    type: "agent"
+    subtype: "llm"
+    name: "Pro Agent"
+    description: "Argues in favor of the proposition with evidence and reasoning."
+    config:
+      role: "Proponent"
+      tools: [web_search, cite_source]
+
+  - id: "con_agent"
+    type: "agent"
+    subtype: "llm"
+    name: "Con Agent"
+    description: "Argues against the proposition with counterevidence."
+    config:
+      role: "Opponent"
+      tools: [web_search, cite_source]
+
+  - id: "rebuttal_round"
+    type: "agent"
+    subtype: "llm"
+    name: "Rebuttal Round"
+    description: "Both agents respond to the other's arguments (2 iterations)."
+    config:
+      max_iterations: 2
+
+  - id: "moderator_synthesize"
+    type: "agent"
+    subtype: "llm"
+    name: "Moderator — Synthesis"
+    description: "Summarizes both sides, highlights strongest arguments and gaps."
+
+  - id: "human_judge"
+    type: "human"
+    subtype: "review"
+    name: "Human Judge"
+    description: "Reviews the debate transcript and declares a winner or draw."
+
+edges:
+  - from: "pose_question"
+    to: "moderator_open"
+    mode: "sequential"
+  - from: "moderator_open"
+    to: "pro_agent"
+    mode: "parallel"
+  - from: "moderator_open"
+    to: "con_agent"
+    mode: "parallel"
+  - from: "pro_agent"
+    to: "rebuttal_round"
+    mode: "sequential"
+  - from: "con_agent"
+    to: "rebuttal_round"
+    mode: "sequential"
+  - from: "rebuttal_round"
+    to: "moderator_synthesize"
+    mode: "sequential"
+  - from: "moderator_synthesize"
+    to: "human_judge"
+    mode: "sequential"
