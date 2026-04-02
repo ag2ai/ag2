@@ -5,15 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-
-import os
-import subprocess
+from textwrap import dedent
 
 import pytest
 
 from test.credentials import Credentials, Secrets
 from test.marks import credentials_all_llms
 from test.utils import suppress_gemini_resource_exhausted
+
+pytest_plugins = ["pytester"]
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
@@ -47,29 +47,32 @@ class TestSecrets:
         sanitized = Secrets.sanitize_secrets(data)
         assert sanitized == "This contains ***** and ***** and some*****and should be sanitized."
 
-    @pytest.mark.skipif(
-        not os.getenv("RUN_SANITIZATION_TEST"),
-        reason="Skipping sensitive tests. Set RUN_SANITIZATION_TEST=1 to run.",
-    )
-    def test_raise_exception_with_secret(self):
-        Secrets.add_secret("mysecret")
-        raise Exception("This is a test exception. mysecret exposed!!!")
-
-    def test_sensitive_output_is_sanitized(self):
-        # Run pytest for the sensitive tests and capture the output
-        result = subprocess.run(
-            [
-                "pytest",
-                "-s",
-                "test/test_conftest.py::TestSecrets::test_raise_exception_with_secret",
-            ],
-            env={**os.environ, "RUN_SANITIZATION_TEST": "1"},
-            capture_output=True,
-            text=True,
+    def test_sensitive_output_is_sanitized(self, pytester: pytest.Pytester):
+        # Write a conftest that reuses the real TerminalWriter patch
+        pytester.makeconftest(
+            dedent(
+                """
+            from test.conftest import patch_pytest_terminal_writer
+            patch_pytest_terminal_writer()
+            """
+            )
         )
 
-        # Combine stdout and stderr to search for secrets
-        output = result.stdout + result.stderr
+        # Write a test that registers a secret and raises an exception exposing it
+        pytester.makepyfile(
+            dedent(
+                """
+            from test.credentials import Secrets
+
+            def test_raise_exception_with_secret():
+                Secrets.add_secret("mysecret")
+                raise Exception("This is a test exception. mysecret exposed!!!")
+            """
+            )
+        )
+
+        result = pytester.runpytest("-s")
+        output = result.stdout.str() + result.stderr.str()
 
         assert "mysecret" not in output, "Secret exposed in test output!"
         assert "*****" in output, "Sanitization is not working as expected!"

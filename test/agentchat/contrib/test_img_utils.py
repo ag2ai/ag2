@@ -109,7 +109,7 @@ class TestGetImageData:
 
 
 @run_for_optional_imports(["PIL"], "unknown")
-class TestLlavaFormater:
+class TestLlavaFormatter:
     def test_no_images(self):
         """Test the llava_formatter function with a prompt containing no images."""
         prompt = "This is a test."

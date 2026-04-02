@@ -24,14 +24,13 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 
 # Test fixture for creating and initializing a query engine with a JSON input file
 @pytest.fixture(scope="module")
-@run_for_optional_imports(["llama_index"], "neo4j")
 def neo4j_query_engine_with_json() -> Neo4jGraphQueryEngine:
     input_path = "./test/agentchat/contrib/graph_rag/layout_parser_paper_parsed_elements.json"
     input_documents = [Document(doctype=DocumentType.JSON, path_or_url=input_path)]
     # Create Neo4jGraphQueryEngine
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
-        password="password",  # Change if you reset password
+        password="password",  # Change if you reset password  # pragma: allowlist secret
         host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
@@ -80,7 +79,7 @@ def neo4j_query_engine() -> Neo4jGraphQueryEngine:
     # Create Neo4jGraphQueryEngine
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
-        password="password",  # Change if you reset password
+        password="password",  # Change if you reset password  # pragma: allowlist secret
         host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database

@@ -1,0 +1,75 @@
+---
+title: Toolkits
+---
+
+# Toolkits
+
+A `Toolkit` groups related tools into a single, reusable unit. Instead of passing individual tools one by one, you can bundle them into a toolkit and pass the whole collection to an agent. This is useful for organizing domain-specific capabilities (e.g., all database tools, all file-system tools) and sharing them across multiple agents.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import Toolkit
+
+def search_orders(query: str) -> str:
+    """Searches the order database."""
+    return "Order #123"
+
+def cancel_order(order_id: str) -> str:
+    """Cancels an order by its ID."""
+    return f"Order {order_id} cancelled."
+
+support_tools = Toolkit(search_orders, cancel_order)
+
+agent = Agent(name="SupportBot", tools=[support_tools])
+```
+
+A toolkit accepts both plain functions and `@tool`-decorated functions in its `tools` list. Plain functions are automatically converted, just like when passing them directly to an agent.
+
+## Registering Tools via a Decorator
+
+You can also add tools to a toolkit using the `@toolkit.tool` decorator, following the same pattern as `@agent.tool`:
+
+```python linenums="1"
+from autogen.beta.tools import Toolkit
+
+inventory = Toolkit()
+
+@inventory.tool
+def check_stock(item_id: str) -> int:
+    """Returns the current stock count for an item."""
+    return 42
+
+@inventory.tool(
+    name="reorder_item",
+    description="Places a reorder for a low-stock item.",
+)
+def reorder(item_id: str, quantity: int) -> str:
+    return f"Reordered {quantity} of {item_id}."
+```
+
+The toolkit can then be passed to any number of agents:
+
+```python linenums="1"
+from autogen.beta import Agent
+
+warehouse_agent = Agent(name="WarehouseBot", tools=[inventory])
+sales_agent = Agent(name="SalesBot", tools=[inventory])
+```
+
+## Combining Toolkits with Standalone Tools
+
+You can freely mix toolkits and individual tools in an agent's `tools` list:
+
+```python linenums="1"
+from autogen.beta import tool
+
+@tool
+def escalate(reason: str) -> str:
+    """Escalates the conversation to a human agent."""
+    return "Escalated."
+
+agent = Agent(
+    name="SupportBot",
+    tools=[support_tools, inventory, escalate],
+)
+```

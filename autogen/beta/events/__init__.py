@@ -21,6 +21,7 @@ from .types import (
     ModelReasoning,
     ModelRequest,
     ModelResponse,
+    Usage,
 )
 
 __all__ = (
@@ -41,4 +42,5 @@ __all__ = (
     "ToolNotFoundEvent",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "Usage",
 )

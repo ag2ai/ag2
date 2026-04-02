@@ -145,7 +145,7 @@ def test__update_tool_calls_from_chunk() -> None:
         ),
         ChoiceDeltaToolCall(
             index=1,
-            id="call_22HgJep4nwoKU3UOr96xaLmd",
+            id="call_22HgJep4nowKU3UOr96xaLmd",
             function=ChoiceDeltaToolCallFunction(arguments="", name="get_current_weather"),
             type="function",
         ),

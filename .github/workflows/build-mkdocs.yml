@@ -28,12 +28,13 @@ jobs:
       - name: Install quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      - uses: extractions/setup-just@v2
       - name: Build MkDocs documentation
         run: |
           uv venv
           . .venv/bin/activate
           uv pip install -e ".[docs]"
-          ./scripts/docs_build_mkdocs.sh --force
+          just docs-build --force
         working-directory: .
 
       - name: Verify the build
