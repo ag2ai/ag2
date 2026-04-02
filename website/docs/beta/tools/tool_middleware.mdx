@@ -31,7 +31,7 @@ Use agent **`middleware=[...]`** when the policy is global or shared across most
 
 ## API
 
-The public type alias is **`ToolMiddlewareHook`** in `autogen.beta.middleware`.
+The public type alias is **`ToolMiddleware`** in `autogen.beta.middleware`.
 A hook is an **async** callable with the same parameters as `BaseMiddleware.on_tool_execution`, except the first argument is the inner **`ToolExecution`** (the next step in the chain), not `self`.
 
 - Pass **`middleware=[hook, ...]`** to **`@tool`**, **`Agent.tool`**, or **`Toolkit.tool`**.

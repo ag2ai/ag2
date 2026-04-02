@@ -48,7 +48,7 @@ HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable
 
 ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 # call_next + ToolExecution type. BaseMiddleware.on_tool_execution() hook signature.
-ToolMiddlewareHook: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
+ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 
 
 class BaseMiddleware:

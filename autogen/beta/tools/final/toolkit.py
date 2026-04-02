@@ -7,7 +7,7 @@ from contextlib import ExitStack
 from typing import Any, overload
 
 from autogen.beta.annotations import Context
-from autogen.beta.middleware import BaseMiddleware, ToolMiddlewareHook
+from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
@@ -27,7 +27,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool: ...
 
     @overload
@@ -39,7 +39,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
     def tool(
@@ -50,7 +50,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
             t = FunctionTool.ensure_tool(

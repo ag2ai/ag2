@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
-from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddlewareHook
+from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import ToolResult, Toolkit, tool
 
@@ -191,7 +191,7 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
 
 @pytest.mark.asyncio()
 async def test_tool_local_then_agent_middleware_order(mock: MagicMock) -> None:
-    def hook_factory(pos: int) -> ToolMiddlewareHook:
+    def hook_factory(pos: int) -> ToolMiddleware:
         async def _hook(
             call_next: ToolExecution,
             event: ToolCallEvent,

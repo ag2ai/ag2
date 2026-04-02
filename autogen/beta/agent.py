@@ -27,7 +27,7 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddlewareHook
+from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddleware
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
@@ -357,7 +357,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool: ...
 
     @overload
@@ -369,7 +369,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
     def tool(
@@ -380,7 +380,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
-        middleware: Iterable[ToolMiddlewareHook] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
             t = tool(

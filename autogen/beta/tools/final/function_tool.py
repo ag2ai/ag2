@@ -14,7 +14,7 @@ from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
 from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResult, ToolResultEvent
-from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddlewareHook, ToolResultType
+from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
@@ -51,10 +51,10 @@ class FunctionTool(Tool):
         name: str,
         description: str,
         schema: FunctionParameters,
-        tool_middleware: Iterable[ToolMiddlewareHook] = (),
+        tool_middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self.model = model
-        self._tool_middleware: tuple[ToolMiddlewareHook, ...] = tuple(tool_middleware)
+        self._tool_middleware: tuple[ToolMiddleware, ...] = tuple(tool_middleware)
 
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
@@ -130,7 +130,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
-    middleware: Iterable[ToolMiddlewareHook] = (),
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool: ...
 
 
@@ -142,7 +142,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
-    middleware: Iterable[ToolMiddlewareHook] = (),
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
 
@@ -153,7 +153,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
-    middleware: Iterable[ToolMiddlewareHook] = (),
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
         call_model = build_model(f, sync_to_thread=sync_to_thread)
@@ -175,7 +175,7 @@ def tool(
     return make_tool
 
 
-def _wrap_tool_middleware(hook: "ToolMiddlewareHook", inner: "ToolExecution") -> "ToolExecution":
+def _wrap_tool_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
     async def call(event: "ToolCallEvent", context: "Context") -> "ToolResultType":
         return await hook(inner, event, context)
 
