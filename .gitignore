@@ -4,6 +4,7 @@ skills-lock.json
 
 .docusaurus/
 node_modules/
+.vite/
 
 # Project
 .vs/
@@ -208,3 +209,5 @@ remote-examples
 
 *CLAUDE.md:
 .cursor/
+.claude/
+.vercel/
