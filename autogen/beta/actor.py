@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -28,7 +28,7 @@ from autogen.beta.annotations import Context
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import BaseEvent, ModelMessageChunk, ModelResponse
 from autogen.beta.hitl import HumanHook
-from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
@@ -362,11 +362,10 @@ class Actor(Agent):
 
         # Bootstrap knowledge store on first use (write sentinel first
         # to prevent duplicate bootstrap from concurrent _execute calls)
-        if self._knowledge_store:
-            if not await self._knowledge_store.exists("/.initialized"):
-                await self._knowledge_store.write("/.initialized", self.name)
-                bootstrap = self._bootstrap or DefaultBootstrap()
-                await bootstrap.bootstrap(self._knowledge_store, self.name)
+        if self._knowledge_store and not await self._knowledge_store.exists("/.initialized"):
+            await self._knowledge_store.write("/.initialized", self.name)
+            bootstrap = self._bootstrap or DefaultBootstrap()
+            await bootstrap.bootstrap(self._knowledge_store, self.name)
 
         # Build harness tools
         knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
