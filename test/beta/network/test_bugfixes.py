@@ -8,6 +8,15 @@ import time
 
 import pytest
 
+try:
+    import aiohttp  # noqa: F401
+
+    _has_aiohttp = True
+except ImportError:
+    _has_aiohttp = False
+
+_skip_no_aiohttp = pytest.mark.skipif(not _has_aiohttp, reason="aiohttp not installed")
+
 from autogen.beta.events import ModelMessage
 from autogen.beta.events.base import BaseEvent
 from autogen.beta.network.plugins.rate_limiter import RateLimiter
@@ -543,6 +552,7 @@ class TestRunSubtasksSequentialExceptionHandling:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_aiohttp
 class TestHttpDelegateUsesPipeline:
     """POST /delegate should route through _delegate() so events are emitted,
     topology is applied, and delegation depth is tracked."""

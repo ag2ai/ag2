@@ -7,6 +7,15 @@ import logging
 
 import pytest
 
+try:
+    import aiohttp  # noqa: F401
+
+    _has_aiohttp = True
+except ImportError:
+    _has_aiohttp = False
+
+_skip_no_aiohttp = pytest.mark.skipif(not _has_aiohttp, reason="aiohttp not installed")
+
 from autogen.beta.network.events import DelegationError, DelegationRejected, DelegationRequest, DelegationResult
 from autogen.beta.network.hub import Hub, RegistrationHandle
 from autogen.beta.network.primitives.envelope import Envelope
@@ -793,6 +802,7 @@ class TestHubAdditionalTaskTracking:
         assert len(hub._additional_tasks) == 0
 
 
+@_skip_no_aiohttp
 class TestHubConnectNameCollision:
     """Verify that connect() skips remote agents that conflict with local names."""
 

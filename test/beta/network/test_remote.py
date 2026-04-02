@@ -13,6 +13,15 @@ import pytest
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.remote import RemoteAgent, RemoteAgentReply
 
+try:
+    import aiohttp  # noqa: F401
+
+    _has_aiohttp = True
+except ImportError:
+    _has_aiohttp = False
+
+_skip_no_aiohttp = pytest.mark.skipif(not _has_aiohttp, reason="aiohttp not installed")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -91,6 +100,7 @@ class TestRemoteAgentReply:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_aiohttp
 class TestHubServer:
     @pytest.mark.asyncio
     async def test_serve_starts_server(self) -> None:
@@ -221,6 +231,7 @@ class TestHubServer:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_aiohttp
 class TestHubConnect:
     @pytest.mark.asyncio
     async def test_connect_discovers_remote_agents(self) -> None:
@@ -268,6 +279,7 @@ class TestHubConnect:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_aiohttp
 class TestCrossHubDelegation:
     @pytest.mark.asyncio
     async def test_cross_hub_delegation(self) -> None:
@@ -373,6 +385,7 @@ class TestCrossHubDelegation:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_aiohttp
 class TestHubCloseRemote:
     @pytest.mark.asyncio
     async def test_close_cleans_up_remote_sessions(self) -> None:
