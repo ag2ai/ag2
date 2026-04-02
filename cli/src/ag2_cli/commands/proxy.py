@@ -289,7 +289,8 @@ def _parse_openapi_spec(spec: dict[str, Any]) -> list[ToolSpec]:
                     for p in query_params
                     if p.name
                     in list(
-                        request_body.get("content", {})
+                        request_body
+                        .get("content", {})
                         .get("application/json", {})
                         .get("schema", {})
                         .get("properties", {})

@@ -35,19 +35,19 @@ def _mock_llm_generate(response_json: dict) -> MagicMock:
 
 class TestDetectGenerationModel:
     def test_detects_openai(self) -> None:
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}, clear=False):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}, clear=False):  # pragma: allowlist secret
             model = _detect_generation_model()
         assert model == "gpt-4o"
 
     def test_detects_anthropic(self) -> None:
-        env = {"ANTHROPIC_API_KEY": "sk-ant-test"}
+        env = {"ANTHROPIC_API_KEY": "sk-ant-test"}  # pragma: allowlist secret
         with patch.dict(os.environ, env, clear=True):
             model = _detect_generation_model()
         assert model is not None
         assert "claude" in model
 
     def test_detects_google(self) -> None:
-        env = {"GOOGLE_API_KEY": "AIza-test"}
+        env = {"GOOGLE_API_KEY": "AIza-test"}  # pragma: allowlist secret
         with patch.dict(os.environ, env, clear=True):
             model = _detect_generation_model()
         assert model is not None
@@ -85,7 +85,7 @@ class TestParseJsonResponse:
         result = _parse_json_response(text)
         assert result == {"name": "extracted"}
 
-    def test_exits_on_unparseable_response(self) -> None:
+    def test_exits_on_unparsable_response(self) -> None:
         with pytest.raises((SystemExit, Exception)):
             _parse_json_response("This is not JSON at all")
 

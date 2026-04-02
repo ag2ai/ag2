@@ -55,7 +55,7 @@ Each config dict supports:
 ```python
 {
     "model": "gpt-4o-mini",          # Required
-    "api_key": "sk-...",             # Required (or via env)
+    "api_key": "sk-...",             # Required (or via env)  # pragma: allowlist secret
     "base_url": "https://...",       # Optional, for custom endpoints
     "api_type": "openai",            # Optional, inferred from model
     "tags": ["gpt4", "production"],  # Optional, for filtering
