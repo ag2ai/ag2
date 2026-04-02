@@ -253,3 +253,41 @@ async def test_human_input_hook_returns_raw_string_async(mock: MagicMock, test_c
     await agent.ask("Hi!")
 
     mock.assert_called_once_with("async raw answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_passed_at_ask(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+    )
+
+    await agent.ask("Hi!", hitl_hook=lambda event: "ask-level answer")
+
+    mock.assert_called_once_with("ask-level answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_at_ask_overrides_agent(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    def agent_hook(event: HumanInputRequest) -> str:
+        return "agent-level"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=agent_hook,
+    )
+
+    await agent.ask("Hi!", hitl_hook=lambda event: "ask-level")
+
+    mock.assert_called_once_with("ask-level")

@@ -149,6 +149,12 @@ class HumanMessage(BaseEvent):
 
     content: str
 
+    @classmethod
+    def ensure_message(cls, content: "str | HumanMessage") -> "HumanMessage":
+        if isinstance(content, HumanMessage):
+            return content
+        return cls(content=content)
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, HumanMessage):
             return NotImplemented

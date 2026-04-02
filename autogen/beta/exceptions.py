@@ -29,7 +29,13 @@ class HumanInputNotProvidedError(AG2Error):
     """Raised when human-in-the-loop input was requested but not provided."""
 
     def __init__(self, message: str | None = None) -> None:
-        super().__init__(message or "Human input was requested but not provided.")
+        super().__init__(
+            message
+            or (
+                "Human input was requested but not provided. "
+                "Please set it for agent using `Agent(..., hitl_hook=func)` or `@agent.hitl_hook`."
+            )
+        )
 
 
 class ConfigNotProvidedError(AG2Error):
