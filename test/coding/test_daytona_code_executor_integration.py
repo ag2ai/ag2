@@ -53,16 +53,12 @@ def executor():
 @pytest.mark.skipif(not _has_daytona, reason="Daytona dependencies not installed")
 class TestDaytonaPythonIntegration:
     def test_basic_print(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="print('hello from daytona')", language="python")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="print('hello from daytona')", language="python")])
         assert result.exit_code == 0, result.output
         assert "hello from daytona" in result.output
 
     def test_math_computation(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="import math\nprint(math.sqrt(144))", language="python")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="import math\nprint(math.sqrt(144))", language="python")])
         assert result.exit_code == 0, result.output
         assert "12.0" in result.output
 
@@ -78,22 +74,16 @@ class TestDaytonaPythonIntegration:
         assert "15" in result.output
 
     def test_runtime_error_returns_nonzero_exit(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="print(undefined_variable)", language="python")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="print(undefined_variable)", language="python")])
         assert result.exit_code != 0
         assert "NameError" in result.output or "undefined_variable" in result.output
 
     def test_syntax_error_returns_nonzero_exit(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="def broken(:\n    pass", language="python")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="def broken(:\n    pass", language="python")])
         assert result.exit_code != 0
 
     def test_py_alias_works(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="print('alias ok')", language="py")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="print('alias ok')", language="py")])
         assert result.exit_code == 0, result.output
         assert "alias ok" in result.output
 
@@ -107,9 +97,7 @@ class TestDaytonaPythonIntegration:
 @pytest.mark.skipif(not _has_daytona, reason="Daytona dependencies not installed")
 class TestDaytonaBashIntegration:
     def test_basic_echo(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="echo 'bash works'", language="bash")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="echo 'bash works'", language="bash")])
         assert result.exit_code == 0, result.output
         assert "bash works" in result.output
 
@@ -121,16 +109,12 @@ class TestDaytonaBashIntegration:
         assert "3" in result.output
 
     def test_sh_alias(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="echo 'sh works'", language="sh")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="echo 'sh works'", language="sh")])
         assert result.exit_code == 0, result.output
         assert "sh works" in result.output
 
     def test_bash_exit_code_propagated(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="exit 42", language="bash")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="exit 42", language="bash")])
         assert result.exit_code == 42
 
 
@@ -143,23 +127,17 @@ class TestDaytonaBashIntegration:
 @pytest.mark.skipif(not _has_daytona, reason="Daytona dependencies not installed")
 class TestDaytonaJavaScriptIntegration:
     def test_basic_console_log(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="console.log('js works')", language="javascript")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="console.log('js works')", language="javascript")])
         assert result.exit_code == 0, result.output
         assert "js works" in result.output
 
     def test_js_alias(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="console.log('alias ok')", language="js")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="console.log('alias ok')", language="js")])
         assert result.exit_code == 0, result.output
         assert "alias ok" in result.output
 
     def test_js_arithmetic(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="console.log(6 * 7)", language="javascript")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="console.log(6 * 7)", language="javascript")])
         assert result.exit_code == 0, result.output
         assert "42" in result.output
 
@@ -179,9 +157,7 @@ class TestDaytonaTypeScriptIntegration:
         assert "ts works" in result.output
 
     def test_ts_alias(self, executor):
-        result = executor.execute_code_blocks([
-            CodeBlock(code="const x: number = 42;\nconsole.log(x);", language="ts")
-        ])
+        result = executor.execute_code_blocks([CodeBlock(code="const x: number = 42;\nconsole.log(x);", language="ts")])
         assert result.exit_code == 0, result.output
         assert "42" in result.output
 
@@ -270,9 +246,7 @@ class TestDaytonaCustomImageIntegration:
         if not os.getenv("DAYTONA_API_KEY"):
             pytest.skip("DAYTONA_API_KEY not set")
         with DaytonaCodeExecutor(timeout=60, image="python:3.12-slim") as executor:
-            result = executor.execute_code_blocks([
-                CodeBlock(code="print('image string ok')", language="python")
-            ])
+            result = executor.execute_code_blocks([CodeBlock(code="print('image string ok')", language="python")])
         assert result.exit_code == 0, result.output
         assert "image string ok" in result.output
 
@@ -284,9 +258,7 @@ class TestDaytonaCustomImageIntegration:
 
         declarative_image = Image.base("python:3.12-slim")
         with DaytonaCodeExecutor(timeout=60, image=declarative_image) as executor:
-            result = executor.execute_code_blocks([
-                CodeBlock(code="print('image object ok')", language="python")
-            ])
+            result = executor.execute_code_blocks([CodeBlock(code="print('image object ok')", language="python")])
         assert result.exit_code == 0, result.output
         assert "image object ok" in result.output
 

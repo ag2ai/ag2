@@ -112,7 +112,7 @@ async def test_inject_alias(
 
 
 @pytest.mark.asyncio()
-async def test_inject_by_custon_name(
+async def test_inject_by_custom_name(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:

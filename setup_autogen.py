@@ -11,7 +11,7 @@ import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-with open("README.md", encoding="UTF-8") as fh:
+with open("README.md", "r", encoding="UTF-8") as fh:
     long_description = fh.read()
 
 # Get the code version
@@ -31,9 +31,20 @@ setuptools.setup(
         "a2ui": ["ag2[a2ui]==" + __version__],
         "a2a": ["ag2[a2a]==" + __version__],
         "ag-ui": ["ag2[ag-ui]==" + __version__],
-        "flaml": ["ag2[flaml]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
         "openai-realtime": ["ag2[openai-realtime]==" + __version__],
+        "deepseek": ["ag2[deepseek]==" + __version__],
+        "anthropic": ["ag2[anthropic]==" + __version__],
+        "gemini": ["ag2[gemini]==" + __version__],
+        "gemini-realtime": ["ag2[gemini-realtime]==" + __version__],
+        "groq": ["ag2[groq]==" + __version__],
+        "ollama": ["ag2[ollama]==" + __version__],
+        "bedrock": ["ag2[bedrock]==" + __version__],
+        "mistral": ["ag2[mistral]==" + __version__],
+        "dashscope": ["ag2[dashscope]==" + __version__],
+        "redis": ["ag2[redis]==" + __version__],
+        "tracing": ["ag2[tracing]==" + __version__],
+        "flaml": ["ag2[flaml]==" + __version__],
         "jupyter-executor": ["ag2[jupyter-executor]==" + __version__],
         "retrievechat": ["ag2[retrievechat]==" + __version__],
         "retrievechat-pgvector": ["ag2[retrievechat-pgvector]==" + __version__],
@@ -65,26 +76,16 @@ setuptools.setup(
         "teachable": ["ag2[teachable]==" + __version__],
         "lmm": ["ag2[lmm]==" + __version__],
         "graph": ["ag2[graph]==" + __version__],
-        "gemini": ["ag2[gemini]==" + __version__],
-        "gemini-realtime": ["ag2[gemini-realtime]==" + __version__],
         "together": ["ag2[together]==" + __version__],
         "websurfer": ["ag2[websurfer]==" + __version__],
-        "redis": ["ag2[redis]==" + __version__],
         "cosmosdb": ["ag2[cosmosdb]==" + __version__],
         "websockets": ["ag2[websockets]==" + __version__],
         "long-context": ["ag2[long-context]==" + __version__],
-        "anthropic": ["ag2[anthropic]==" + __version__],
         "cerebras": ["ag2[cerebras]==" + __version__],
         "yepcode": ["ag2[yepcode]==" + __version__],
         "remyx": ["ag2[remyx]==" + __version__],
-        "mistral": ["ag2[mistral]==" + __version__],
-        "groq": ["ag2[groq]==" + __version__],
+        "daytona": ["ag2[daytona]==" + __version__],
         "cohere": ["ag2[cohere]==" + __version__],
-        "ollama": ["ag2[ollama]==" + __version__],
-        "bedrock": ["ag2[bedrock]==" + __version__],
-        "dashscope": ["ag2[dashscope]==" + __version__],
-        "deepseek": ["ag2[deepseek]==" + __version__],
-        "tracing": ["ag2[tracing]==" + __version__],
         "commsagent-discord": ["ag2[commsagent-discord]==" + __version__],
         "commsagent-slack": ["ag2[commsagent-slack]==" + __version__],
         "commsagent-telegram": ["ag2[commsagent-telegram]==" + __version__],
@@ -96,7 +97,7 @@ setuptools.setup(
         "types": ["ag2[types]==" + __version__],
         "lint": ["ag2[lint]==" + __version__],
         "dev": ["ag2[dev]==" + __version__],
-
+        
     },
     url="https://github.com/ag2ai/ag2",
     author="Chi Wang & Qingyun Wu",

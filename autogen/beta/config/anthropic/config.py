@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 import httpx
 from anthropic.types import ModelParam
@@ -31,8 +31,6 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     metadata: dict[str, str] | None
     service_tier: str | None
     prompt_caching: bool
-    web_search_version: Literal["web_search_20250305", "web_search_20260209"]
-    web_fetch_version: Literal["web_fetch_20250910", "web_fetch_20260209"]
 
 
 @dataclass(slots=True)
@@ -53,8 +51,6 @@ class AnthropicConfig(ModelConfig):
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
     prompt_caching: bool = True
-    web_search_version: Literal["web_search_20250305", "web_search_20260209"] = "web_search_20250305"
-    web_fetch_version: Literal["web_fetch_20250910", "web_fetch_20260209"] = "web_fetch_20250910"
 
     def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig":
         return replace(self, **overrides)
@@ -88,6 +84,4 @@ class AnthropicConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
             prompt_caching=self.prompt_caching,
-            web_search_version=self.web_search_version,
-            web_fetch_version=self.web_fetch_version,
         )

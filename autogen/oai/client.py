@@ -316,7 +316,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+class DeepSeekEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["deepseek"]
 
     base_url: HttpUrl

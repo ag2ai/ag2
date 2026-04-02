@@ -41,10 +41,10 @@ def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> 
         # Create a very long chat history that is bound to cause a crash
         # for gpt 3.5
         for i in range(1000):
-            assitant_msg = {"role": "assistant", "content": "test " * 1000}
+            assistant_msg = {"role": "assistant", "content": "test " * 1000}
             user_msg = {"role": "user", "content": ""}
 
-            assistant.send(assitant_msg, user, request_reply=False)
+            assistant.send(assistant_msg, user, request_reply=False)
             user.send(user_msg, assistant, request_reply=False)
 
         try:

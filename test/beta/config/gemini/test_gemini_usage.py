@@ -7,6 +7,7 @@
 from unittest.mock import MagicMock
 
 from autogen.beta.config.gemini.mappers import normalize_usage
+from autogen.beta.events import Usage
 
 
 def _make_metadata(prompt=100, candidates=20, total=120, cached=None):
@@ -21,18 +22,21 @@ def _make_metadata(prompt=100, candidates=20, total=120, cached=None):
 class TestNormalizeUsage:
     def test_normalizes_to_standard_keys(self):
         result = normalize_usage(_make_metadata())
-        assert result["prompt_tokens"] == 100
-        assert result["completion_tokens"] == 20
-        assert result["total_tokens"] == 120
+        assert result == Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120)
 
     def test_includes_cache_read_tokens(self):
         result = normalize_usage(_make_metadata(cached=500))
-        assert result["cache_read_input_tokens"] == 500
+        assert result == Usage(
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            cache_read_input_tokens=500,
+        )
 
     def test_no_cache_key_when_none(self):
         result = normalize_usage(_make_metadata(cached=None))
-        assert "cache_read_input_tokens" not in result
+        assert result.cache_read_input_tokens is None
 
     def test_no_cache_key_when_zero(self):
         result = normalize_usage(_make_metadata(cached=0))
-        assert "cache_read_input_tokens" not in result
+        assert result.cache_read_input_tokens is None

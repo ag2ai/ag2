@@ -137,7 +137,7 @@ Here are {best_conversations_num} conversation histories of solving {best_conver
 History:
 {best_conversations_history}
 
-{statistic_informations}
+{statistic_information}
 
 According to the information I provide, please take one of four actions to manipulate list B using the functions you know.
 Instead of returning TERMINATE directly or taking no action, you should try your best to optimize the function list. Only take no action if you really think the current list is optimal, as more actions will harm performance in future tasks.
@@ -277,7 +277,7 @@ class AgentOptimizer:
                 best_functions=best_functions,
                 incumbent_functions=incumbent_functions,
                 accumulated_experience=failure_experience_prompt,
-                statistic_informations=statistic_prompt,
+                statistic_information=statistic_prompt,
             )
             messages = [{"role": "user", "content": prompt}]
             for _ in range(self._max_trials):
@@ -296,10 +296,10 @@ class AgentOptimizer:
         )
 
         register_for_llm = []
-        register_for_exector = {}
+        register_for_executor = {}
         for name in remove_functions:
             register_for_llm.append({"func_sig": {"name": name}, "is_remove": True})
-            register_for_exector.update({name: None})
+            register_for_executor.update({name: None})
         for func in incumbent_functions:
             register_for_llm.append({
                 "func_sig": {
@@ -309,14 +309,14 @@ class AgentOptimizer:
                 },
                 "is_remove": False,
             })
-            register_for_exector.update({
+            register_for_executor.update({
                 func.get("name"): lambda **args: execute_func(
                     func.get("name"), func.get("packages"), func.get("code"), **args
                 )
             })
 
         self._trial_functions = incumbent_functions
-        return register_for_llm, register_for_exector
+        return register_for_llm, register_for_executor
 
     def reset_optimizer(self):
         """Reset the optimizer."""

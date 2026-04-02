@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: MIT
 """Daytona code executor implementation."""
 
+from __future__ import annotations
+
 import atexit
 import logging
 import uuid
@@ -165,22 +167,21 @@ class DaytonaCodeExecutor:
         "shell": "bash",
     }
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         api_key: str | None = None,
         api_url: str | None = None,
         target: str | None = None,
         timeout: int = 60,
         snapshot: str | None = None,
-        image: "str | Image | None" = None,  # type: ignore[no-any-unimported]
+        image: str | Image | None = None,
         name: str | None = None,
         env_vars: dict[str, str] | None = None,
         resources: DaytonaSandboxResources | None = None,
     ):
         if Daytona is None:
             raise ImportError(
-                "Missing dependencies for DaytonaCodeExecutor. "
-                "Please install with: pip install ag2[daytona]"
+                "Missing dependencies for DaytonaCodeExecutor. Please install with: pip install ag2[daytona]"
             )
 
         if timeout < 1:
@@ -223,6 +224,7 @@ class DaytonaCodeExecutor:
     def _create_sandbox(self) -> Any:
         """Create and return a new Daytona sandbox with auto-stop disabled."""
         try:
+            params: CreateSandboxFromSnapshotParams | CreateSandboxFromImageParams  # type: ignore[no-any-unimported]
             if self._snapshot is not None:
                 # Explicit snapshot always wins — resources don't apply here.
                 params = CreateSandboxFromSnapshotParams(
@@ -420,7 +422,7 @@ class DaytonaCodeExecutor:
                 logger.debug("Suppressed exception during sandbox deletion: %s", e)
             self._sandbox = None  # type: ignore[assignment]
 
-    def __enter__(self) -> "DaytonaCodeExecutor":
+    def __enter__(self) -> DaytonaCodeExecutor:
         return self
 
     def __exit__(self, *args: object) -> None:

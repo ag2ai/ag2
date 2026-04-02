@@ -55,6 +55,7 @@ class SlackSendTool(Tool):
                         message[i : i + (MAX_MESSAGE_LENGTH - 1)]
                         for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
                     ]
+                    sent_message_id = None
                     for i, chunk in enumerate(chunks):
                         response = web_client.chat_postMessage(channel=channel_id, text=chunk)
 

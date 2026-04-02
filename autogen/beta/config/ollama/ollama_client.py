@@ -19,6 +19,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -113,16 +114,18 @@ class OllamaClient(LLMClient):
             for i, tc in enumerate(msg.tool_calls or [])
         ]
 
-        usage_dict = {
-            "prompt_tokens": response.prompt_eval_count or 0,
-            "completion_tokens": response.eval_count or 0,
-            "total_tokens": (response.prompt_eval_count or 0) + (response.eval_count or 0),
-        }
+        prompt_n = float(response.prompt_eval_count or 0)
+        completion_n = float(response.eval_count or 0)
+        usage = Usage(
+            prompt_tokens=prompt_n,
+            completion_tokens=completion_n,
+            total_tokens=prompt_n + completion_n,
+        )
 
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            usage=usage,
             model=response.model,
             provider="ollama",
             finish_reason=getattr(response, "done_reason", None),
@@ -142,7 +145,7 @@ class OllamaClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
+        usage = Usage()
         calls: list[ToolCallEvent] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
@@ -167,11 +170,9 @@ class OllamaClient(LLMClient):
                 )
 
             if chunk.done:
-                usage_dict = {
-                    "prompt_tokens": chunk.prompt_eval_count or 0,
-                    "completion_tokens": chunk.eval_count or 0,
-                    "total_tokens": (chunk.prompt_eval_count or 0) + (chunk.eval_count or 0),
-                }
+                p_n = float(chunk.prompt_eval_count or 0)
+                c_n = float(chunk.eval_count or 0)
+                usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
                 finish_reason = getattr(chunk, "done_reason", None)
                 resolved_model = chunk.model
 
@@ -183,7 +184,7 @@ class OllamaClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            usage=usage,
             model=resolved_model,
             provider="ollama",
             finish_reason=finish_reason,

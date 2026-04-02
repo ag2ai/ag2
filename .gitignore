@@ -1,8 +1,10 @@
 .agents
+.claude
 skills-lock.json
 
 .docusaurus/
 node_modules/
+.vite/
 
 # Project
 .vs/
@@ -177,7 +179,7 @@ test/my_tmp/
 # Storage for the AgentEval output
 test/test_files/agenteval-in-out/out/
 
-# local cache or coding foler
+# local cache or coding folder
 local_cache/
 # coding/
 
@@ -207,3 +209,5 @@ remote-examples
 
 *CLAUDE.md:
 .cursor/
+.claude/
+.vercel/

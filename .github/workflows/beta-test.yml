@@ -50,6 +50,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
+      - uses: extractions/setup-just@v2
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
@@ -59,9 +60,7 @@ jobs:
           uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama,tracing,redis]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
-      - name: Show coverage report
-        run: coverage report -m --include="autogen/beta/*"
+          just test-beta-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
@@ -80,6 +79,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
+      - uses: extractions/setup-just@v2
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
@@ -89,9 +89,7 @@ jobs:
           uv pip install --system -e .[test-core]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
-      - name: Show coverage report
-        run: coverage report -m --include="autogen/beta/*"
+          just test-beta-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
@@ -110,6 +108,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
+      - uses: extractions/setup-just@v2
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
@@ -119,9 +118,7 @@ jobs:
           uv pip install --system -e .[test-core]
       - name: Test with pytest
         run: |
-          pytest -vv --durations=10 --durations-min=1.0 --cov=autogen/beta --cov-branch --cov-report=xml -m "not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)" test/beta/
-      - name: Show coverage report
-        run: coverage report -m --include="autogen/beta/*"
+          just test-beta-cov
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
