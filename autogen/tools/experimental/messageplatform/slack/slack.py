@@ -110,10 +110,10 @@ class SlackRetrieveTool(Tool):
                 int | None, "Maximum number of messages to retrieve. If None, retrieves all messages since date."
             ] = None,
         ) -> Any:
-            """Retrieves messages from a Discord channel.
+            """Retrieves messages from a Slack channel.
 
             Args:
-                bot_token: The bot token to use for Discord. (uses dependency injection)
+                bot_token: The bot token to use for Slack. (uses dependency injection)
                 channel_id: The ID of the channel. (uses dependency injection)
                 messages_since: ISO format date string OR Slack message ID, to retrieve messages from. If None, retrieves latest messages.
                 maximum_messages: Maximum number of messages to retrieve. If None, retrieves all messages since date.
@@ -166,7 +166,7 @@ class SlackRetrieveTool(Tool):
                         if not response["has_more"]:
                             break
 
-                        cursor = response["response_metadata"]["next_cursor"]
+                        cursor = response.get("response_metadata", {}).get("next_cursor")
 
                     except SlackApiError as e:
                         return f"Message retrieval failed on pagination, Slack API error: {e.response['error']}"
