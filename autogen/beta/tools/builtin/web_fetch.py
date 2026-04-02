@@ -5,6 +5,7 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware
@@ -15,18 +16,14 @@ from ._resolve import resolve_variable
 
 
 @dataclass(slots=True)
-class WebFetchCitations:
-    enabled: bool = True
-
-
-@dataclass(slots=True)
 class WebFetchToolSchema(ToolSchema):
     type: str = field(default="web_fetch", init=False)
     max_uses: int | None = None
     allowed_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
-    citations: WebFetchCitations | None = None
+    citations: bool | None = None
     max_content_tokens: int | None = None
+    web_fetch_version: Literal["web_fetch_20250910", "web_fetch_20260209"] = "web_fetch_20250910"
 
 
 class WebFetchTool(Tool):
@@ -38,8 +35,9 @@ class WebFetchTool(Tool):
         max_uses: int | Variable | None = None,
         allowed_domains: list[str] | Variable | None = None,
         blocked_domains: list[str] | Variable | None = None,
-        citations: WebFetchCitations | Variable | None = None,
+        citations: bool | Variable | None = None,
         max_content_tokens: int | Variable | None = None,
+        version: Literal["web_fetch_20250910", "web_fetch_20260209"] | Variable | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if max_uses is not None:
@@ -52,6 +50,8 @@ class WebFetchTool(Tool):
             self._params["citations"] = citations
         if max_content_tokens is not None:
             self._params["max_content_tokens"] = max_content_tokens
+        if version is not None:
+            self._params["web_fetch_version"] = version
 
     async def schemas(self, context: "Context") -> list[WebFetchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}

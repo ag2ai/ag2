@@ -32,6 +32,7 @@ from .types import (
     ModelReasoning,
     ModelRequest,
     ModelResponse,
+    Usage,
 )
 
 __all__ = (
@@ -63,4 +64,5 @@ __all__ = (
     "ToolResultEvent",
     "ToolResultsEvent",
     "UnknownEvent",
+    "Usage",
 )

@@ -1,0 +1,32 @@
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from autogen.beta.config.anthropic.mappers import tool_to_api
+from test.beta.config._helpers import make_parameterless_tool, make_tool
+
+
+def test_tool_to_api() -> None:
+    api_tool = tool_to_api(make_tool().schema)
+
+    assert api_tool == {
+        "name": "search_docs",
+        "description": "Search documentation by query.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1},
+            },
+            "required": ["query"],
+        },
+    }
+
+
+def test_tool_to_api_parameterless() -> None:
+    api_tool = tool_to_api(make_parameterless_tool().schema)
+
+    assert api_tool["input_schema"] == {
+        "type": "object",
+        "properties": {},
+    }

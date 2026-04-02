@@ -47,7 +47,7 @@ async def test_round_robin_pattern() -> None:
 async def test_handoffs() -> None:
     # arrange agents
     agent1 = Agent(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
-    agent2 = Agent(name="agent2", config=testing.TestConfig("I shouldn't speack...")).as_conversable()
+    agent2 = Agent(name="agent2", config=testing.TestConfig("I shouldn't speak...")).as_conversable()
     original_agent = ConversableAgent("local")
 
     pattern = DefaultPattern(

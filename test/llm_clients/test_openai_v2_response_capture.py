@@ -276,7 +276,7 @@ def test_capture_multiple_images_response(credentials_gpt_4o_mini: Credentials) 
     api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
     client = OpenAI(api_key=api_key)
 
-    # Two simple Base64 encoded images (1x1 pixel red and blue PNGs)
+    # Two simple Base64 encoded images (1x1 pixel red and blue PNG)
     # Red 1x1 pixel PNG
     base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
     # Blue 1x1 pixel PNG

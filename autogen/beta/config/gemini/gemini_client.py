@@ -20,6 +20,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -130,7 +131,7 @@ class GeminiClient(LLMClient):
                             )
                         )
 
-        usage = {}
+        usage = Usage()
         if response.usage_metadata:
             usage = normalize_usage(response.usage_metadata)
 
@@ -156,7 +157,7 @@ class GeminiClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
-        usage: dict[str, Any] = {}
+        usage = Usage()
         finish_reason: str | None = None
 
         async for chunk in stream:

@@ -439,7 +439,7 @@ def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Cred
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Two simple Base64 encoded images (1x1 pixel red and blue PNGs)
+    # Two simple Base64 encoded images (1x1 pixel red and blue PNG)
     # Red 1x1 pixel PNG
     base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
     # Blue 1x1 pixel PNG

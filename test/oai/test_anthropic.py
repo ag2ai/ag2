@@ -112,12 +112,12 @@ def anthropic_client_with_vertexai_credentials():
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_intialization(anthropic_client):
+def test_initialization(anthropic_client):
     assert anthropic_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_intialization_with_aws_credentials(anthropic_client_with_aws_credentials):
+def test_initialization_with_aws_credentials(anthropic_client_with_aws_credentials):
     assert anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key", (
         "`aws_access_key` should be correctly set in the config"
     )

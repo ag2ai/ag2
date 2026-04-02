@@ -82,7 +82,7 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
 
     @classmethod
     def recommended_scopes(cls) -> list[str]:
-        """Return the recommended scopes manatory for using tools from this tool map."""
+        """Return the recommended scopes mandatory for using tools from this tool map."""
         return [
             "https://www.googleapis.com/auth/drive.readonly",
         ]

@@ -28,7 +28,7 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
     assert config.model == "claude-sonnet-4-6"
     assert config.temperature == 0.2
     assert config.streaming is False
-    assert config.api_key == "key"
+    assert config.api_key == "key"  # pragma: allowlist secret
 
 
 def test_create_returns_anthropic_client() -> None:

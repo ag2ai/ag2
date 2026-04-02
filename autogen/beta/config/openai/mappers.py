@@ -6,11 +6,17 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
-from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, ShellToolSchema
+from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
+from autogen.beta.tools.builtin.shell import (
+    ContainerAutoEnvironment,
+    ContainerReferenceEnvironment,
+    ShellToolSchema,
+)
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -66,7 +72,9 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
     return schema
 
 
-def response_proto_to_text_config(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_text_config(
+    response: ResponseProto | None,
+) -> dict[str, Any] | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:
         return
@@ -164,9 +172,6 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             },
         }
 
-    if isinstance(t, ImageGenerationToolSchema):
-        raise UnsupportedToolError(t.type, "openai-completions")
-
     raise UnsupportedToolError(t.type, "openai-completions")
 
 
@@ -218,7 +223,10 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
                         "allowed_domains": t.environment.network_policy.allowed_domains,
                     }
             elif isinstance(t.environment, ContainerReferenceEnvironment):
-                env = {"type": "container_reference", "container_id": t.environment.container_id}
+                env = {
+                    "type": "container_reference",
+                    "container_id": t.environment.container_id,
+                }
             else:
                 env = {"type": "local"}
             result_shell["environment"] = env
@@ -240,26 +248,50 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             result["partial_images"] = t.partial_images
         return result
 
+    elif isinstance(t, MCPServerToolSchema):
+        # https://platform.openai.com/docs/guides/tools-remote-mcp
+        result = {
+            "type": "mcp",
+            "server_label": t.server_label,
+            "server_url": t.server_url,
+            "require_approval": "never",
+        }
+        if t.description is not None:
+            result["server_description"] = t.description
+        if t.allowed_tools is not None:
+            result["allowed_tools"] = t.allowed_tools
+        if t.headers is not None:
+            result["headers"] = t.headers
+        elif t.authorization_token is not None:
+            result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
+        return result
+
     raise UnsupportedToolError(t.type, "openai-responses")
 
 
-def normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
+def normalize_usage(usage: dict[str, Any]) -> Usage:
     """Lift OpenAI's nested cache token counts to top-level keys."""
-    details = usage.get("prompt_tokens_details") or {}
-    cached = details.get("cached_tokens")
-    if cached:
-        usage["cache_read_input_tokens"] = cached
-    return usage
+    return Usage(
+        prompt_tokens=_usage_float(usage.get("prompt_tokens")),
+        completion_tokens=_usage_float(usage.get("completion_tokens")),
+        total_tokens=_usage_float(usage.get("total_tokens")),
+        cache_read_input_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens") or None,
+        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+    )
 
 
-def normalize_responses_usage(usage: dict[str, Any]) -> dict[str, Any]:
+def normalize_responses_usage(usage: dict[str, Any]) -> Usage:
     """Normalize Responses API usage keys and lift nested cache tokens."""
-    if "input_tokens" in usage and "prompt_tokens" not in usage:
-        usage["prompt_tokens"] = usage["input_tokens"]
-    if "output_tokens" in usage and "completion_tokens" not in usage:
-        usage["completion_tokens"] = usage["output_tokens"]
-    details = usage.get("input_tokens_details") or {}
-    cached = details.get("cached_tokens")
-    if cached:
-        usage["cache_read_input_tokens"] = cached
-    return usage
+    return Usage(
+        prompt_tokens=_usage_float(usage.get("prompt_tokens") or usage.get("input_tokens")),
+        completion_tokens=_usage_float(usage.get("completion_tokens") or usage.get("output_tokens")),
+        total_tokens=_usage_float(usage.get("total_tokens")),
+        cache_read_input_tokens=(usage.get("input_tokens_details") or {}).get("cached_tokens") or None,
+        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+    )
+
+
+def _usage_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)

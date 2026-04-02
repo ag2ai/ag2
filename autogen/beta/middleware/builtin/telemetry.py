@@ -168,16 +168,14 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.response.finish_reasons", [response.finish_reason])
 
             usage = response.usage
-            if usage.get("prompt_tokens"):
-                span.set_attribute("gen_ai.usage.input_tokens", int(usage["prompt_tokens"]))
-            if usage.get("completion_tokens"):
-                span.set_attribute("gen_ai.usage.output_tokens", int(usage["completion_tokens"]))
-            if usage.get("cache_creation_input_tokens"):
-                span.set_attribute(
-                    "gen_ai.usage.cache_creation_input_tokens", int(usage["cache_creation_input_tokens"])
-                )
-            if usage.get("cache_read_input_tokens"):
-                span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage["cache_read_input_tokens"]))
+            if usage.prompt_tokens:
+                span.set_attribute("gen_ai.usage.input_tokens", int(usage.prompt_tokens))
+            if usage.completion_tokens:
+                span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
+            if usage.cache_creation_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_read_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
 
             if self._capture_content and response.message:
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
