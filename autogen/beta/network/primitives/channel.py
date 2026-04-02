@@ -25,7 +25,7 @@ from autogen.beta.events.conditions import Condition
 from autogen.beta.stream import MemoryStream
 
 from .envelope import Envelope
-from .priority import DefaultPriorityScheme, PriorityScheme
+from .priority import DefaultPriority, DefaultPriorityScheme, PriorityScheme
 
 ChannelCallback = Callable[[Envelope, Context], Awaitable[None]]
 
@@ -188,15 +188,27 @@ class PriorityChannel:
     """In-process channel with priority-ordered delivery.
 
     Uses a heap to deliver higher-priority envelopes first. Envelopes
-    without priority are treated as NORMAL.
+    without an explicit priority use ``default_priority`` (defaults to
+    ``DefaultPriority.NORMAL``).  Pass a different value when using a
+    custom priority scheme so that un-tagged envelopes sort correctly.
 
     Example::
 
         channel = PriorityChannel(scheme=DefaultPriorityScheme())
+
+        # With a custom scheme whose "normal" baseline is 10:
+        channel = PriorityChannel(scheme=my_scheme, default_priority=10)
     """
 
-    def __init__(self, scheme: PriorityScheme | None = None) -> None:
+    def __init__(
+        self,
+        scheme: PriorityScheme | None = None,
+        default_priority: Any = None,
+    ) -> None:
         self._scheme = scheme or DefaultPriorityScheme()
+        self._default_priority = (
+            default_priority if default_priority is not None else DefaultPriority.NORMAL
+        )
         self._heap: list[tuple[int, int, Envelope]] = []  # (neg_priority, sequence, envelope)
         self._seq = 0
         self._subscribers: dict[SubId, tuple[Condition | None, ChannelCallback]] = {}
@@ -209,7 +221,7 @@ class PriorityChannel:
         if self._closed:
             raise RuntimeError("Channel is closed")
 
-        priority = envelope.priority if envelope.priority is not None else 1  # NORMAL
+        priority = envelope.priority if envelope.priority is not None else self._default_priority
         # Use scheme.compare for ordering: negate so higher priorities come first
         score = self._scheme.compare(priority, 0)  # compare against zero baseline
         heapq.heappush(self._heap, (-score, self._seq, envelope))

@@ -37,7 +37,7 @@ from .events import (
     DelegationRequest,
     DelegationResult,
 )
-from .primitives.channel import Channel, LocalChannel
+from .primitives.channel import Channel, LocalChannel, PriorityChannel
 from .primitives.envelope import Envelope
 from autogen.beta.state import MemoryStateStore, StateStore
 
@@ -94,7 +94,15 @@ class Hub:
         max_delegation_depth: int = 5,
     ) -> None:
         self._registry = registry or LocalRegistry()
-        self._channel = channel or LocalChannel()
+        # Auto-wire PriorityChannel when a priority_scheme is provided but
+        # no explicit channel was given.  This ensures that envelopes with
+        # priority metadata are actually delivered in priority order.
+        if channel is not None:
+            self._channel = channel
+        elif priority_scheme is not None:
+            self._channel = PriorityChannel(scheme=priority_scheme)
+        else:
+            self._channel = LocalChannel()
         self._state_store = state_store or MemoryStateStore()
         self._priority_scheme = priority_scheme
         self._conflict_resolver = conflict_resolver
@@ -275,7 +283,7 @@ class Hub:
     # Delegation
     # ------------------------------------------------------------------
 
-    async def _delegate(self, to_agent: str, task: str, *, source: str = "", **kwargs: Any) -> str:
+    async def _delegate(self, to_agent: str, task: str, *, source: str = "", priority: Any = None, **kwargs: Any) -> str:
         """Internal: route a task to a registered agent."""
         agent = self._agents.get(to_agent)
         if not agent:
@@ -302,6 +310,7 @@ class Hub:
             event=DelegationRequest(source=source, target=to_agent, task=task),
             sender=source,
             recipient=to_agent,
+            priority=priority,
         )
 
         # Run through topology pipeline if configured
@@ -412,13 +421,13 @@ class Hub:
         except Exception:
             logger.exception("Additional delegation to '%s' failed", target)
 
-    async def delegate(self, source: str, target: str, task: str) -> str:
+    async def delegate(self, source: str, target: str, task: str, *, priority: Any = None) -> str:
         """Headless mode: route a task directly without an initiating LLM call.
 
         Use for infrastructure Hubs that only route traffic, run plugins,
         and manage registry — zero LLM cost for the Hub itself.
         """
-        return await self._delegate(target, task, source=source)
+        return await self._delegate(target, task, source=source, priority=priority)
 
     # ------------------------------------------------------------------
     # Public API

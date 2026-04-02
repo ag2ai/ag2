@@ -42,7 +42,6 @@ from dataclasses import dataclass
 from .aggregate import AggregateStrategy, AggregateTrigger
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .compact import CompactStrategy, CompactTrigger
-from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
 from .events.lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
@@ -52,6 +51,7 @@ from .events.lifecycle import (
     TaskRequest,
     TaskResult,
 )
+from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
 from .observer import Observer
 from .policies.conversation import ConversationPolicy
 
@@ -160,9 +160,9 @@ class Actor(Agent):
         self._bootstrap = kc.bootstrap if kc else None
         self._policies: list[AssemblyPolicy] = list(assembly) if assembly else [ConversationPolicy()]
         self._compact_strategy = kc.compact if kc else None
-        self._compact_trigger = (kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger())
+        self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
-        self._aggregate_trigger = (kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger())
+        self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
 
         # Validate policy ordering
         warnings = AssemblerMiddleware.validate_order(self._policies)
@@ -370,9 +370,7 @@ class Actor(Agent):
 
         # Build harness tools
         knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
-        memory_tools = (
-            self._build_memory_tool() if (self._compact_strategy or self._aggregate_strategy) else []
-        )
+        memory_tools = self._build_memory_tool() if (self._compact_strategy or self._aggregate_strategy) else []
 
         # Make knowledge store available via DI
         if self._knowledge_store:
@@ -425,9 +423,7 @@ class Actor(Agent):
                 event,
                 context=context,
                 client=client,
-                additional_tools=(
-                    list(additional_tools) + subtask_tools + knowledge_tools + memory_tools
-                ),
+                additional_tools=(list(additional_tools) + subtask_tools + knowledge_tools + memory_tools),
                 additional_middleware=harness_middleware + list(additional_middleware),
                 response_schema=response_schema,
             )
@@ -442,11 +438,7 @@ class Actor(Agent):
                         await context.send(ObserverCompleted(name=obs.name))
 
             # on_end aggregation
-            if (
-                self._aggregate_strategy
-                and self._knowledge_store
-                and self._aggregate_trigger.on_end
-            ):
+            if self._aggregate_strategy and self._knowledge_store and self._aggregate_trigger.on_end:
                 try:
                     events = list(await context.stream.history.get_events())
                     await self._aggregate_strategy.aggregate(events, context, self._knowledge_store)

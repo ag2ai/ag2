@@ -227,7 +227,7 @@ class Scheduler:
                 hub_ctx,
             )
             try:
-                await self._hub._delegate(entry.target, task, source="scheduler")
+                await self._hub._delegate(entry.target, task, source="scheduler", priority=entry.priority)
             except Exception:
                 logger.exception(
                     "Scheduler trigger %s failed for agent '%s'",

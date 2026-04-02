@@ -68,11 +68,23 @@ class DefaultPriorityScheme:
 
 
 class HighestPriorityWins:
-    """Default conflict resolver: higher priority envelope wins."""
+    """Default conflict resolver: higher priority envelope wins.
+
+    When a ``PriorityScheme`` is provided, comparison uses
+    ``scheme.compare()`` so that custom ordering logic is respected.
+    Without a scheme, falls back to the ``>`` operator (works for any
+    numeric / ``IntEnum`` priority).
+    """
+
+    def __init__(self, scheme: PriorityScheme | None = None) -> None:
+        self._scheme = scheme
 
     async def resolve(self, existing: Envelope, incoming: Envelope) -> Envelope:
-        if (incoming.priority is not None and existing.priority is not None) and (
-            incoming.priority > existing.priority
-        ):
+        if incoming.priority is None or existing.priority is None:
+            return existing
+        if self._scheme is not None:
+            if self._scheme.compare(incoming.priority, existing.priority) > 0:
+                return incoming
+        elif incoming.priority > existing.priority:
             return incoming
         return existing

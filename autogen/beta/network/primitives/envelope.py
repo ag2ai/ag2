@@ -142,15 +142,19 @@ class Envelope:
         *,
         sender: str | None = None,
         recipient: Any = _UNSET,
-        priority: Any = None,
+        priority: Any = _UNSET,
     ) -> Envelope:
         """Create a child envelope inheriting trace lineage.
 
         Pass ``recipient=None`` explicitly to create a broadcast child.
         Omit ``recipient`` to inherit from parent.
+
+        Pass ``priority=None`` explicitly to clear the priority on the child.
+        Omit ``priority`` to inherit from parent.
         """
         resolved_recipient = self.recipient if recipient is Envelope._UNSET else recipient
         resolved_sender = sender if sender is not None else self.sender
+        resolved_priority = self.priority if priority is Envelope._UNSET else priority
         return Envelope(
             event=event,
             sender=resolved_sender,
@@ -158,7 +162,7 @@ class Envelope:
             trace_id=self.trace_id,  # Same workflow
             correlation_id=_uuid4_hex(),  # New request-response group
             causation_id=self.correlation_id,  # Points to parent
-            priority=priority if priority is not None else self.priority,
+            priority=resolved_priority,
         )
 
     @property
