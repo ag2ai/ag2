@@ -13,7 +13,12 @@ from .exceptions import HumanInputNotProvidedError
 from .middleware.base import BaseMiddleware, HumanInputHook
 from .utils import CONTEXT_OPTION_NAME, build_model
 
-HumanHook: TypeAlias = Callable[..., HumanMessage] | Callable[..., Awaitable[HumanMessage]]
+HumanHook: TypeAlias = (
+    Callable[..., HumanMessage]
+    | Callable[..., Awaitable[HumanMessage]]
+    | Callable[..., str]
+    | Callable[..., Awaitable[str]]
+)
 
 HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None]]
 
@@ -25,14 +30,14 @@ def wrap_hitl(
 
     async def _call_model(event: HumanInputRequest, context: Context) -> HumanMessage:
         async with AsyncExitStack() as stack:
-            event = await call_model.asolve(
+            result = await call_model.asolve(
                 event,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
                 **{CONTEXT_OPTION_NAME: context},
             )
-        return event
+        return HumanMessage.ensure_message(result)
 
     def make_hook(middlewares: Iterable["BaseMiddleware"]) -> HitlExecution:
         ask_user: HumanInputHook = _call_model

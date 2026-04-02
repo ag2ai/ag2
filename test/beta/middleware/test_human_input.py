@@ -211,3 +211,45 @@ async def test_human_input_middleware_short_circuits(mock: MagicMock, test_confi
     mock.intercepted.assert_called_once_with("Say smth")
     mock.hitl.assert_not_called()
     mock.assert_called_once_with("intercepted")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_returns_raw_string(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    def hitl_hook(event: HumanInputRequest) -> str:
+        return "raw answer"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=hitl_hook,
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with("raw answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_returns_raw_string_async(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    async def hitl_hook(event: HumanInputRequest) -> str:
+        return "async raw answer"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=hitl_hook,
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with("async raw answer")
