@@ -54,6 +54,10 @@ class Envelope:
     ttl: float | None = None  # Time-to-live in seconds
     requires_ack: bool = False  # Whether delivery must be acknowledged
 
+    # Extensible context — arbitrary key-value headers for plugin-to-plugin
+    # communication (auth tokens, feature flags, request-scoped tags, etc.)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     # -----------------------------------------------------------------------
     # Wire format
     # -----------------------------------------------------------------------
@@ -82,6 +86,7 @@ class Envelope:
             "timestamp": self.timestamp,
             "ttl": self.ttl,
             "requires_ack": self.requires_ack,
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -132,6 +137,7 @@ class Envelope:
             timestamp=data.get("timestamp", 0.0),
             ttl=data.get("ttl"),
             requires_ack=data.get("requires_ack", False),
+            metadata=data.get("metadata", {}),
         )
 
     _UNSET = object()  # Sentinel for distinguishing None from "not provided"
@@ -143,6 +149,7 @@ class Envelope:
         sender: str | None = None,
         recipient: Any = _UNSET,
         priority: Any = _UNSET,
+        metadata: dict[str, Any] | None = None,
     ) -> Envelope:
         """Create a child envelope inheriting trace lineage.
 
@@ -151,10 +158,13 @@ class Envelope:
 
         Pass ``priority=None`` explicitly to clear the priority on the child.
         Omit ``priority`` to inherit from parent.
+
+        Metadata is inherited from parent and merged with any overrides.
         """
         resolved_recipient = self.recipient if recipient is Envelope._UNSET else recipient
         resolved_sender = sender if sender is not None else self.sender
         resolved_priority = self.priority if priority is Envelope._UNSET else priority
+        resolved_metadata = {**self.metadata, **(metadata or {})}
         return Envelope(
             event=event,
             sender=resolved_sender,
@@ -163,6 +173,7 @@ class Envelope:
             correlation_id=_uuid4_hex(),  # New request-response group
             causation_id=self.correlation_id,  # Points to parent
             priority=resolved_priority,
+            metadata=resolved_metadata,
         )
 
     @property

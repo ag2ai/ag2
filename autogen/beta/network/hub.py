@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from aiohttp import web
 
 from autogen.beta.agent import Agent, AgentReply
-from autogen.beta.context import Context
+from autogen.beta.context import Context, Stream
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
@@ -83,7 +83,7 @@ class Hub:
     def __init__(
         self,
         *,
-        stream: MemoryStream | None = None,
+        stream: Stream | None = None,
         topology: Topology | None = None,
         plugins: Iterable[Plugin] = (),
         channel: Channel | None = None,
@@ -482,6 +482,10 @@ class Hub:
         if self._topology:
             self._topology.uninstall_plugins()
         await self._channel.close()
+
+        # Close the stream if it supports it (e.g. RedisStream holds connections)
+        if hasattr(self._stream, "close"):
+            await self._stream.close()
 
         # Stop HTTP server if running
         if self._server_site:
