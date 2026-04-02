@@ -9,6 +9,7 @@ from .base import (
     LLMCall,
     Middleware,
     ToolExecution,
+    ToolMiddlewareHook,
     ToolResultType,
 )
 from .builtin import (
@@ -31,5 +32,6 @@ __all__ = (
     "TelemetryMiddleware",
     "TokenLimiter",
     "ToolExecution",
+    "ToolMiddlewareHook",
     "ToolResultType",
 )

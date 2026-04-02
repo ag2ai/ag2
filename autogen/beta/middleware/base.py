@@ -43,9 +43,12 @@ class Middleware(MiddlewareFactory):
 
 ToolResultType: TypeAlias = "ToolResultEvent | ToolErrorEvent | ClientToolCallEvent"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
-ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable["HumanMessage"]]
+
+ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
+# call_next + ToolExecution type. BaseMiddleware.on_tool_execution() hook signature.
+ToolMiddlewareHook: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 
 
 class BaseMiddleware:

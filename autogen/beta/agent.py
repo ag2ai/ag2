@@ -27,7 +27,7 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddlewareHook
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
@@ -357,6 +357,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddlewareHook] = (),
     ) -> Tool: ...
 
     @overload
@@ -368,6 +369,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddlewareHook] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
     def tool(
@@ -378,6 +380,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddlewareHook] = (),
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
             t = tool(
@@ -386,6 +389,7 @@ class Agent(Generic[TResult]):
                 description=description,
                 schema=schema,
                 sync_to_thread=sync_to_thread,
+                middleware=middleware,
             )
             t = FunctionTool.ensure_tool(t, provider=self.dependency_provider)
             self.tools.append(t)
