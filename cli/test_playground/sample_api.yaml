@@ -1,0 +1,118 @@
+openapi: "3.0.0"
+info:
+  title: "Task Manager API"
+  description: "A simple task management API for proxy demo"
+  version: "1.0.0"
+servers:
+  - url: "https://api.example.com/v1"
+
+paths:
+  /tasks:
+    get:
+      operationId: list_tasks
+      summary: "List all tasks"
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: "Filter by status (open, done, in_progress)"
+          required: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          description: "Max number of tasks to return"
+          required: false
+    post:
+      operationId: create_task
+      summary: "Create a new task"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: "Task title"
+                description:
+                  type: string
+                  description: "Task description"
+                priority:
+                  type: string
+                  description: "Priority level (low, medium, high)"
+              required:
+                - title
+
+  /tasks/{task_id}:
+    get:
+      operationId: get_task
+      summary: "Get a task by ID"
+      parameters:
+        - name: task_id
+          in: path
+          schema:
+            type: integer
+          required: true
+    put:
+      operationId: update_task
+      summary: "Update a task"
+      parameters:
+        - name: task_id
+          in: path
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                status:
+                  type: string
+                priority:
+                  type: string
+    delete:
+      operationId: delete_task
+      summary: "Delete a task"
+      parameters:
+        - name: task_id
+          in: path
+          schema:
+            type: integer
+          required: true
+
+  /tasks/{task_id}/comments:
+    get:
+      operationId: list_comments
+      summary: "List comments on a task"
+      parameters:
+        - name: task_id
+          in: path
+          schema:
+            type: integer
+          required: true
+    post:
+      operationId: add_comment
+      summary: "Add a comment to a task"
+      parameters:
+        - name: task_id
+          in: path
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: "Comment text"
+              required:
+                - text

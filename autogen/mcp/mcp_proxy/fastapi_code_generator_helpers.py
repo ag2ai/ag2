@@ -15,9 +15,9 @@ with optional_import_block() as result:
         ReferenceObject,
     )
 
-SUCCESFUL_IMPORT = result.is_successful
+SUCCESSFUL_IMPORT = result.is_successful
 
-__all__ = ["SUCCESFUL_IMPORT", "patch_get_parameter_type"]
+__all__ = ["SUCCESSFUL_IMPORT", "patch_get_parameter_type"]
 
 
 @contextmanager

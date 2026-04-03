@@ -21,12 +21,11 @@ repos:
           .devcontainer/.*devcontainer\.json |
           ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
         )$
-    - id: check-byte-order-marker
-      exclude: .gitignore
-    - id: check-merge-conflict
-    - id: detect-private-key
     - id: trailing-whitespace
     - id: end-of-file-fixer
+    - id: check-case-conflict
+    - id: check-merge-conflict
+    - id: detect-private-key
     - id: no-commit-to-branch
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.1
@@ -51,17 +50,19 @@ repos:
         types: [python]
         require_serial: true
         verbose: true
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.30.3
+    hooks:
+      - id: typos
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
       - id: codespell
         additional_dependencies:
         - tomli
-        # args: ["-L", "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,Regio"]
-        # ./notebook,./website/node_modules,./website/notebooks
         exclude: |
             (?x)^(
-              # notebook/.* |
+              _typos.toml |
               notebook/agentchat_lmm_gpt-4v.ipynb |
               notebook/agentchat_graph_rag_neo4j.ipynb |
               notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb |
@@ -99,15 +100,15 @@ repos:
           website/.*
         )$
 
-  # - repo: https://github.com/Yelp/detect-secrets
-  #   rev: v1.5.0
-  #   hooks:
-  #     - id: detect-secrets
-  #       args: ["--baseline", ".secrets.baseline"]
-  #       exclude: |
-  #         (?x)^(
-  #             package.lock.json
-  #         )$
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+    - id: detect-secrets
+      args: [
+          '--exclude-files', 'notebook/.*',
+          '--exclude-files', 'website/.*',
+          '--exclude-files', 'test/.*',
+      ]
 
   - repo: local
     hooks:

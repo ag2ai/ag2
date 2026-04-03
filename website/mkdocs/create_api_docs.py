@@ -7,7 +7,8 @@ import shutil
 from importlib import import_module
 from pathlib import Path
 
-from autogen._website.generate_api_references import import_submodules
+from _website.generate_api_references import import_submodules
+
 from autogen.doc_utils import get_target_module
 
 API_META = "# 0.5 - API\n# 2 - Release\n# 3 - Contributing\n# 5 - Template Page\n# 10 - Default\nsearch:\n  boost: 0.5"

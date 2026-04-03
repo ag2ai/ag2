@@ -140,7 +140,7 @@ def test_web_surfer_bing() -> None:
             "config_list": [
                 {
                     "model": "gpt-4o",
-                    "api_key": "sk-PLACEHOLDER_KEY",
+                    "api_key": "sk-PLACEHOLDER_KEY",  # pragma: allowlist secret
                 }
             ]
         },
