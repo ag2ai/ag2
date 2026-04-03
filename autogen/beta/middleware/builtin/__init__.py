@@ -8,6 +8,7 @@ from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
 from .token_limiter import TokenLimiter
+from .tools import approval_required
 
 
 def _missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
@@ -30,4 +31,5 @@ __all__ = (
     "RetryMiddleware",
     "TelemetryMiddleware",
     "TokenLimiter",
+    "approval_required",
 )

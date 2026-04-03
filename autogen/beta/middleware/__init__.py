@@ -18,6 +18,7 @@ from .builtin import (
     RetryMiddleware,
     TelemetryMiddleware,
     TokenLimiter,
+    approval_required,
 )
 
 __all__ = (
@@ -34,4 +35,5 @@ __all__ = (
     "ToolExecution",
     "ToolMiddleware",
     "ToolResultType",
+    "approval_required",
 )
