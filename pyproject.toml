@@ -75,7 +75,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "diskcache",
     "termcolor",
     "python-dotenv",
     "tiktoken",
@@ -100,6 +99,9 @@ a2a = [
 ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]
+
+# cache backends
+diskcache = ["diskcache"]
 
 # providers
 openai = ["openai>=1.99.3,<2"]
