@@ -97,7 +97,7 @@ setuptools.setup(
         "types": ["ag2[types]==" + __version__],
         "lint": ["ag2[lint]==" + __version__],
         "dev": ["ag2[dev]==" + __version__],
-        
+
     },
     url="https://github.com/ag2ai/ag2",
     author="Chi Wang & Qingyun Wu",
