@@ -48,9 +48,14 @@ class TokenMonitor(BaseObserver):
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
-            if isinstance(event, (ModelResponse, TaskResult)):
-                usage = event.usage or {}
-                self._total_tokens += int(usage.get("total_tokens", 0))
+            if isinstance(event, ModelResponse):
+                usage = event.usage
+                if usage:
+                    self._total_tokens += int(usage.total_tokens or 0)
+            elif isinstance(event, TaskResult):
+                usage = event.usage
+                if usage:
+                    self._total_tokens += int(usage.get("total_tokens", 0))
 
         if not self._alerted and self._total_tokens >= self._alert_threshold:
             self._alerted = True
