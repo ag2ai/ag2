@@ -8,7 +8,7 @@ from autogen.beta.middleware.base import ToolExecution, ToolMiddleware, ToolResu
 
 
 def approval_required(
-    message: str = "Agent tries to call tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N?\n",
+    message: str = "Agent wants to call the tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N?\n",
     denied_message: str = "User denied the tool call request",
     timeout: int = 30,
 ) -> ToolMiddleware:

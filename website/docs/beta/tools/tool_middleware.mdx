@@ -5,7 +5,7 @@ sidebarTitle: Tool middleware
 
 # Tool middleware
 
-Tool middleware lets you wrap **one** function tool with async hooks that run immediately around its execution—same idea as agent `on_tool_execution()` in [Middleware](/docs/beta/middleware), but attached at **tool definition** time with plain callables (no `BaseMiddleware` subclass).
+Tool middleware lets you wrap **one** function tool with async hooks that run immediately around its execution—the same idea as an agent's `on_tool_execution()` [Middleware](/docs/beta/middleware), but attached at **tool definition** time with plain callables (no `BaseMiddleware` subclass).
 
 Use this pattern when behavior is specific to a single tool. For policies that apply to **every** tool on an agent, register [`BaseMiddleware`](/docs/beta/middleware) with `on_tool_execution()` instead.
 
