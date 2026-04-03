@@ -8,7 +8,6 @@ import pytest
 
 from autogen.beta.events import ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware import approval_required
-from autogen.beta.tools import ToolResult
 
 
 @pytest.fixture
@@ -23,7 +22,7 @@ async def test_accepts_various_affirmative_inputs(tool_call: ToolCallEvent, resp
     context = AsyncMock()
     context.input = AsyncMock(return_value=response)
 
-    expected = ToolResultEvent(result=ToolResult(content="3"), parent_id=tool_call.id, name=tool_call.name)
+    expected = ToolResultEvent.from_call(tool_call, result="3")
 
     async def call_next(event: ToolCallEvent, ctx: object) -> ToolResultEvent:
         return expected
@@ -45,11 +44,7 @@ async def test_denies_on_no(tool_call: ToolCallEvent) -> None:
     result = await hook(call_next, tool_call, context)
 
     call_next.assert_not_awaited()
-    assert result == ToolResultEvent(
-        result=ToolResult(content="User denied the tool call request"),
-        parent_id=tool_call.id,
-        name=tool_call.name,
-    )
+    assert result == ToolResultEvent.from_call(tool_call, result="User denied the tool call request")
 
 
 @pytest.mark.asyncio()
@@ -59,9 +54,7 @@ async def test_custom_message(tool_call: ToolCallEvent) -> None:
     context = AsyncMock()
     context.input = AsyncMock(return_value="y")
 
-    call_next = AsyncMock(
-        return_value=ToolResultEvent(result=ToolResult(content="ok"), parent_id=tool_call.id, name=tool_call.name)
-    )
+    call_next = AsyncMock(return_value=ToolResultEvent.from_call(tool_call, result="ok"))
 
     await hook(call_next, tool_call, context)
 
@@ -77,9 +70,7 @@ async def test_custom_timeout(tool_call: ToolCallEvent) -> None:
     context = AsyncMock()
     context.input = AsyncMock(return_value="y")
 
-    call_next = AsyncMock(
-        return_value=ToolResultEvent(result=ToolResult(content="ok"), parent_id=tool_call.id, name=tool_call.name)
-    )
+    call_next = AsyncMock(return_value=ToolResultEvent.from_call(tool_call, result="ok"))
 
     await hook(call_next, tool_call, context)
 
@@ -93,9 +84,8 @@ async def test_custom_denied_message(tool_call: ToolCallEvent) -> None:
     context = AsyncMock()
     context.input = AsyncMock(return_value="no")
 
-    call_next = AsyncMock()
+    call_next = AsyncMock(return_value=ToolResultEvent.from_call(tool_call, result="ok"))
 
     result = await hook(call_next, tool_call, context)
 
-    assert isinstance(result, ToolResultEvent)
-    assert result.result == ToolResult(content="Rejected by user")
+    assert result == ToolResultEvent.from_call(tool_call, result="Rejected by user")

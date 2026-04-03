@@ -5,7 +5,6 @@
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware.base import ToolExecution, ToolMiddleware, ToolResultType
-from autogen.beta.tools import ToolResult
 
 
 def approval_required(
@@ -39,10 +38,6 @@ def approval_required(
         if user_result.lower() in ("y", "yes", "1"):
             return await call_next(event, context)
 
-        return ToolResultEvent(
-            parent_id=event.id,
-            name=event.name,
-            result=ToolResult(content=denied_message),
-        )
+        return ToolResultEvent.from_call(event, result=denied_message)
 
     return hitl_hook

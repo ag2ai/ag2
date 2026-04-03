@@ -18,7 +18,6 @@ from autogen.beta.events import (
     ToolResultsEvent,
 )
 from autogen.beta.middleware import HistoryLimiter
-from autogen.beta.tools import ToolResult
 
 
 @pytest.mark.asyncio()
@@ -120,9 +119,7 @@ async def test_history_limiter_drops_incomplete_tool_interaction(mock: MagicMock
     events = [
         ModelRequest(content="turn 1"),
         ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
-        ToolResultsEvent(
-            results=[ToolResultEvent(parent_id=tool_call.id, name=tool_call.name, result=ToolResult("ok"))]
-        ),
+        ToolResultsEvent(results=[ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(message=ModelMessage(content="answer 1")),
         ModelRequest(content="turn 2"),
     ]

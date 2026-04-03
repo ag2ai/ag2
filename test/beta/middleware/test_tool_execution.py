@@ -10,7 +10,7 @@ from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools import ToolResult, Toolkit, tool
+from autogen.beta.tools import Toolkit, tool
 
 
 @pytest.mark.asyncio()
@@ -121,7 +121,7 @@ async def test_capture_tool_execution_error(mock: MagicMock) -> None:
             r = await call_next(event, ctx)
             self.mock.exit(repr(r.error))
             # suppress the error
-            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("tool executed"))
+            return ToolResultEvent.from_call(event, result="tool executed")
 
     def my_tool() -> str:
         raise ValueError("tool execution error")
