@@ -552,7 +552,10 @@ class _CompactionMiddleware(BaseMiddleware):
         result = await call_next(event, context)
 
         events = list(await context.stream.history.get_events())
-        event_count = len(events)
+        # Count only non-transient events — transient events (chunks, lifecycle)
+        # should not influence compaction decisions even if persist_all=True.
+        conversation_events = [e for e in events if not getattr(type(e), "__transient__", False)]
+        event_count = len(conversation_events)
 
         # Prevent double compaction — skip if count hasn't grown since last
         if event_count <= self._last_compact_event_count:
@@ -562,21 +565,21 @@ class _CompactionMiddleware(BaseMiddleware):
         if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
             should_compact = True
         if self._trigger.max_tokens > 0:
-            estimated = sum(len(str(e)) for e in events) // self._trigger.chars_per_token
+            estimated = sum(len(str(e)) for e in conversation_events) // self._trigger.chars_per_token
             if estimated > self._trigger.max_tokens:
                 should_compact = True
 
         if should_compact:
             compacted = await self._strategy.compact(events, context, self._store)
             await context.stream.history.replace(compacted)
-            self._last_compact_event_count = len(compacted)
+            self._last_compact_event_count = len([e for e in compacted if not getattr(type(e), "__transient__", False)])
 
             usage = getattr(self._strategy, "last_usage", {})
             await context.send(
                 CompactionCompleted(
                     actor=self._actor_name,
                     strategy=type(self._strategy).__name__,
-                    events_before=event_count,
+                    events_before=len(events),
                     events_after=len(compacted),
                     llm_calls=1 if usage else 0,
                     usage=usage,

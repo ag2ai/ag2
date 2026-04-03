@@ -29,6 +29,7 @@ from .knowledge import (
     MemoryKnowledgeStore,
     StoreBootstrap,
 )
+from .events import BaseEvent
 from .events.alert import HaltEvent, ObserverAlert, Severity
 from .events.lifecycle import (
     AggregationCompleted,
@@ -72,6 +73,7 @@ __all__ = (
     # Core agent
     "Agent",
     "AgentReply",
+    "BaseEvent",
     "Context",
     "Depends",
     "Inject",

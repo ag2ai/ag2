@@ -18,11 +18,15 @@ from .base import BaseEvent, Field
 class ObserverStarted(BaseEvent):
     """Emitted when an observer attaches to the actor's stream."""
 
+    __transient__ = True
+
     name: str
 
 
 class ObserverCompleted(BaseEvent):
     """Emitted when an observer detaches from the actor's stream."""
+
+    __transient__ = True
 
     name: str
 
@@ -40,7 +44,12 @@ class TaskRequest(BaseEvent):
 
 
 class TaskProgress(BaseEvent):
-    """Streamed progress from a running task sub-agent."""
+    """Streamed progress from a running task sub-agent.
+
+    Transient: superseded by ``TaskResult``.
+    """
+
+    __transient__ = True
 
     task_name: str
     content: str
@@ -63,6 +72,8 @@ class TaskResult(BaseEvent):
 class CompactionCompleted(BaseEvent):
     """Emitted on the actor's stream when compaction finishes."""
 
+    __transient__ = True
+
     actor: str
     strategy: str
     events_before: int
@@ -73,6 +84,8 @@ class CompactionCompleted(BaseEvent):
 
 class AggregationCompleted(BaseEvent):
     """Emitted on the actor's stream when aggregation finishes."""
+
+    __transient__ = True
 
     actor: str
     strategy: str
