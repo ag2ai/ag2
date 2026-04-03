@@ -170,3 +170,6 @@ class ToolConfig(CommonBaseModel):
         default=None, description="""Optional. Function calling config."""
     )
     retrieval_config: RetrievalConfig | None = Field(default=None, description="""Optional. Retrieval config.""")
+    include_server_side_tool_invocations: bool | None = Field(
+        default=None, description="""Optional. If true, the server will include tool invocations."""
+    )
