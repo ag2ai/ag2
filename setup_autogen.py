@@ -31,6 +31,7 @@ setuptools.setup(
         "a2ui": ["ag2[a2ui]==" + __version__],
         "a2a": ["ag2[a2a]==" + __version__],
         "ag-ui": ["ag2[ag-ui]==" + __version__],
+        "diskcache": ["ag2[diskcache]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
         "openai-realtime": ["ag2[openai-realtime]==" + __version__],
         "deepseek": ["ag2[deepseek]==" + __version__],
@@ -109,3 +110,4 @@ setuptools.setup(
     license="Apache Software License 2.0",
     python_requires=">=3.10,<3.14",
 )
+
