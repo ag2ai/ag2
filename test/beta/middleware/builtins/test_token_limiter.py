@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 from collections.abc import Sequence
@@ -18,7 +18,6 @@ from autogen.beta.events import (
     ToolResultsEvent,
 )
 from autogen.beta.middleware import TokenLimiter
-from autogen.beta.tools import ToolResult
 
 
 @pytest.mark.asyncio()
@@ -84,9 +83,7 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
     events = [
         ModelRequest(content="turn 1"),
         ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
-        ToolResultsEvent(
-            results=[ToolResultEvent(parent_id=tool_call.id, name=tool_call.name, result=ToolResult("ok"))]
-        ),
+        ToolResultsEvent(results=[ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(message=ModelMessage(content="answer 1")),
         ModelRequest(content="turn 2"),
     ]
@@ -113,9 +110,7 @@ async def test_token_limiter_drops_tool_results_without_parent_message_and_no_in
     tool_call = ToolCallEvent(id="tool-call-1", name="lookup", arguments="{}")
     events = [
         ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
-        ToolResultsEvent(
-            results=[ToolResultEvent(parent_id=tool_call.id, name=tool_call.name, result=ToolResult("ok"))]
-        ),
+        ToolResultsEvent(results=[ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(message=ModelMessage(content="answer 1")),
     ]
     budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[1], events[2]])
