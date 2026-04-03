@@ -1,12 +1,19 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
 
+from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
-from autogen.beta.events import ModelRequest, ModelResponse, ToolResultsEvent
-from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
+from autogen.beta.events import (
+    ModelRequest,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
+)
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -55,7 +62,13 @@ class TestConvertMessagesRoundTrip:
             ModelRequest(content="What items do we have?"),
             _model_response_with_tool_call(""),
             ToolResultsEvent(
-                results=[ToolResultEvent(parent_id="tc_1", name="list_items", content="apple, banana")],
+                results=[
+                    ToolResultEvent(
+                        parent_id="tc_1",
+                        name="list_items",
+                        result=ToolResult(content="apple, banana"),
+                    )
+                ],
             ),
         ]
         result = convert_messages(events)

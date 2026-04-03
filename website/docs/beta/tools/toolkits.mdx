@@ -73,3 +73,7 @@ agent = Agent(
     tools=[support_tools, inventory, escalate],
 )
 ```
+
+## Tool middleware
+
+`@toolkit.tool` accepts the same `middleware=[...]` option as `@tool` and `@agent.tool`. See [Tool middleware](/docs/beta/tools/tool_middleware).
