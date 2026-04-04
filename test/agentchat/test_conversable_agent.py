@@ -1721,7 +1721,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
 
     # Get the parameter name request node
     current_llm = request.node.callspec.id
-    if "gpt_4" in current_llm:
+    if "gpt_4" in current_llm or "openai" in current_llm:
         with pytest.raises(
             ValueError,
             match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
