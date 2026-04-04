@@ -14,13 +14,13 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> None:
+def test_transform_messages_capability(credentials_openai_mini: Credentials) -> None:
     """Test the TransformMessages capability to handle long contexts.
 
     This test is a replica of test_transform_chat_history_with_agents in test_context_handling.py
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        llm_config = credentials_gpt_4o_mini.llm_config
+        llm_config = credentials_openai_mini.llm_config
         assistant = autogen.AssistantAgent("assistant", llm_config=llm_config, max_consecutive_auto_reply=1)
 
         context_handling = TransformMessages(

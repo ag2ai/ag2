@@ -25,9 +25,9 @@ from test.credentials import Credentials
 
 
 @pytest.fixture
-def openai_completions_client(credentials_gpt_4o_mini: Credentials) -> OpenAICompletionsClient:
+def openai_completions_client(credentials_openai_mini: Credentials) -> OpenAICompletionsClient:
     """Create OpenAICompletionsClient with credentials from AG2 test framework."""
-    return OpenAICompletionsClient(api_key=credentials_gpt_4o_mini.api_key)
+    return OpenAICompletionsClient(api_key=credentials_openai_mini.api_key)
 
 
 class TestOpenAICompletionsClientBasicChat:

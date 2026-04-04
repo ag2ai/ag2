@@ -1118,8 +1118,8 @@ def test_register_functions(mock_credentials: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_function_registration_e2e_sync(credentials_openai_mini: Credentials) -> None:
+    llm_config = credentials_openai_mini.llm_config
 
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -1253,12 +1253,12 @@ async def test_function_registration_e2e_async(
 
 
 @run_for_optional_imports("openai", "openai")
-def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
+def test_max_turn(credentials_openai_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
@@ -1273,7 +1273,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @run_for_optional_imports("openai", "openai")
-def test_message_func(credentials_gpt_4o_mini: Credentials):
+def test_message_func(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1304,7 +1304,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -1324,7 +1324,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_summary(credentials_gpt_4o_mini: Credentials):
+def test_summary(credentials_openai_mini: Credentials):
     import random
 
     class Function:
@@ -1359,7 +1359,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
         name="Player",
         system_message="You will use function `get_random_number` to get a random number. Stop only when you get at least 1 even number and 1 odd number. Reply TERMINATE to stop.",
         description="A player that makes function_calls.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
 
@@ -2111,13 +2111,13 @@ def test_validate_llm_config(
 
 
 @run_for_optional_imports("openai", "openai")
-def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
+def test_cache_context(credentials_openai_mini: Credentials) -> None:
     message = "Hello, make a joke about AI."
 
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=10,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)

@@ -78,8 +78,8 @@ class TestCrawl4AITool:
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
-    async def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
-        tool_with_llm = Crawl4AITool(llm_config=credentials_gpt_4o_mini.llm_config)
+    async def test_with_llm(self, credentials_openai_mini: Credentials) -> None:
+        tool_with_llm = Crawl4AITool(llm_config=credentials_openai_mini.llm_config)
         assert isinstance(tool_with_llm, Crawl4AITool)
 
         result = await tool_with_llm(
@@ -89,13 +89,13 @@ class TestCrawl4AITool:
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
-    async def test_with_llm_and_extraction_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
+    async def test_with_llm_and_extraction_schema(self, credentials_openai_mini: Credentials) -> None:
         class Product(BaseModel):
             name: str
             price: str
 
         tool_with_llm = Crawl4AITool(
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
             extraction_model=Product,
         )
         assert isinstance(tool_with_llm, Crawl4AITool)
