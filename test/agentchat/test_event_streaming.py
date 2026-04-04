@@ -426,6 +426,7 @@ def test_sequential_sync(credentials_openai_mini: Credentials):
         assert isinstance(response.cost, Cost)
 
 
+@pytest.mark.timeout(60)
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_sequential_async(credentials_openai_mini: Credentials):
