@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -148,6 +148,12 @@ class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
     content: str
+
+    @classmethod
+    def ensure_message(cls, content: "str | HumanMessage") -> "HumanMessage":
+        if isinstance(content, HumanMessage):
+            return content
+        return cls(content=content)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, HumanMessage):

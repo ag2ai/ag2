@@ -46,17 +46,6 @@ Tool usage in AG2 follows a simple but powerful two-step process:
 - **Selection**: An agent (driven by its LLM) decides which tool is appropriate based on the given task
 - **Execution**: A separate executor agent invokes the tool and returns the results
 
-```mermaid
-flowchart TB
-    Task[Task] --> Selector[Selector Agent]
-    Selector -- "Suggests tool" --> Executor[Executor Agent]
-    Executor -- "Executes tool & returns result" --> Selector
-
-    style Task fill:#fcf4e8,stroke:#f08a24
-    style Selector fill:#e3f2fd,stroke:#1976d2
-    style Executor fill:#e8f5e9,stroke:#4caf50
-```
-
 ![How Tool Usage Works in AG2](assets/tool-usage.png)
 
 !!! note
@@ -290,36 +279,6 @@ result, _, _ = initiate_group_chat(
 ### Understanding the Enhanced Workflow
 
 When we run this enhanced financial compliance system, here's what happens:
-
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| Finance[Finance Bot]
-
-    Finance --> |"For each transaction"| Extract[Extract Details]
-    Extract --> |"Using tool"| Check[Check for Duplicates]
-
-    Check --> |"Duplicate?"| Duplicate[Yes: Auto-Reject]
-    Check --> |"Not Duplicate"| Suspicious[Check if Suspicious]
-
-    Suspicious --> |"Suspicious?"| Human[Yes: Ask Human]
-    Suspicious --> |"Not Suspicious"| AutoApprove[Auto-Approve]
-
-    Human --> |"Approves/Rejects"| NextTx[Next Transaction]
-    Duplicate --> NextTx
-    AutoApprove --> NextTx
-
-    NextTx --> |"All transactions processed"| Summary[Summary Bot]
-    Summary --> |"Generates report with termination marker"| End([End])
-
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Extract fill:#e8f5e9,stroke:#4caf50
-    style Check fill:#fff0f5,stroke:#ff69b4
-    style Duplicate fill:#ffebee,stroke:#f44336
-    style Suspicious fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style AutoApprove fill:#e8f5e9,stroke:#4caf50
-    style Summary fill:#e8f5e9,stroke:#4caf50
-```
 
 ![Understanding the Enhanced Workflow](assets/enhanced-tool-workflow.png)
 
