@@ -66,6 +66,7 @@ def test_ai_user_proxy_agent(
     _test_ai_user_proxy_agent(credentials_from_test_param)
 
 
+@pytest.mark.timeout(60)
 @run_for_optional_imports("openai", "openai")
 def test_gpt4omini(credentials_openai_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
     config_list = credentials_openai_mini.config_list

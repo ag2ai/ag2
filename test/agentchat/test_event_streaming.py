@@ -348,6 +348,7 @@ async def test_swarm_async(credentials_openai_mini: Credentials):
     assert isinstance(await response.cost, Cost)
 
 
+@pytest.mark.timeout(60)
 @run_for_optional_imports("openai", "openai")
 def test_sequential_sync(credentials_openai_mini: Credentials):
     llm_config = credentials_openai_mini.llm_config
