@@ -1,0 +1,41 @@
+# Builds and uploads ag2-cli to PyPI when a release tagged cli-v* is published
+# Manual dispatch also supported for testing
+
+name: cli-package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: null
+
+permissions: {}
+
+jobs:
+  deploy:
+    # Only run for CLI releases (tag starts with cli-v) or manual dispatch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.release.tag_name, 'cli-v')
+    runs-on: ubuntu-latest
+    environment: package
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build ag2-cli
+        working-directory: cli
+        run: |
+          uv pip install --system twine
+          uv build
+      - name: Publish ag2-cli to PyPI
+        working-directory: cli
+        env:
+          TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
+        run: twine upload dist/*
