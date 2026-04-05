@@ -69,11 +69,11 @@ class TestCrewAIInteroperability:
 
     @run_for_optional_imports("openai", "openai")
     def test_with_llm(
-        self, tool: Tool, credentials_gpt_4o_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
+        self, tool: Tool, credentials_openai_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
     ) -> None:
         chatbot = AssistantAgent(
             name="chatbot",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
 
         tool.register_for_execution(user_proxy)

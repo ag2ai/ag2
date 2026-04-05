@@ -149,13 +149,13 @@ class TestWikipediaQueryRunTool:
             assert result.startswith("wikipedia search failed: ")
 
     @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         # Integration test for verifying the registration of the WikipediaQueryRunTool with an AssistantAgent.
         search_tool = WikipediaPageLoadTool()
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the wikipedia page load tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
         assert isinstance(assistant.tools[0], WikipediaQueryRunTool)
@@ -223,13 +223,13 @@ class TestWikipediaPageLoadTool:
             assert result.startswith("wikipedia search failed: ")
 
     @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         # Integration test for verifying the registration of the WikipediaPageLoadTool with an AssistantAgent.
         search_tool = WikipediaPageLoadTool()
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the wikipedia page load tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
         assert isinstance(assistant.tools[0], WikipediaPageLoadTool)
