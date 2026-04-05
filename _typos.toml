@@ -16,3 +16,19 @@ genious = "genious"
 
 # Pydantic config attributes
 ser = "ser"
+
+# Medical term (Advanced Life Support)
+ALS = "ALS"
+
+# Chief Marketing Officer
+CMO = "CMO"
+cmo = "cmo"
+
+# Counter variable name
+criticals = "criticals"
+
+# Electronic Health Record
+EHR = "EHR"
+
+# Hyphenated word break in parsed academic text (segmen-tation)
+segmen = "segmen"
