@@ -7,10 +7,13 @@ Usage:
 """
 
 import asyncio
+import logging
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+logger = logging.getLogger(__name__)
 
 from _shared import BOLD, DIM, GREEN, PORTS, RESET, make_ems, make_hospital, subscribe_hub_logging
 
@@ -39,12 +42,12 @@ async def main() -> None:
     print(f"  {GREEN}{BOLD}{'=' * 52}{RESET}")
     print(f"  {GREEN}{BOLD}  MEDICAL SERVER{RESET}  {DIM}EMS + Hospital{RESET}")
     print(f"  {GREEN}{BOLD}{'=' * 52}{RESET}")
-    print(f"  {DIM}Port: {port}  |  Model: {model}{RESET}")
-    print(f"  {DIM}Agents: ems, hospital{RESET}")
+    logger.info("Port: %s  |  Model: %s", port, model)
+    logger.info("Agents: ems, hospital")
     print()
 
     async with hub.serve(host="0.0.0.0", port=port):
-        print(f"  {GREEN}Serving on http://0.0.0.0:{port} — Ctrl+C to stop{RESET}")
+        logger.info("Serving on http://0.0.0.0:%s — Ctrl+C to stop", port)
         print()
         await asyncio.Event().wait()
 

@@ -10,11 +10,14 @@ Usage:
 """
 
 import asyncio
+import logging
 import os
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+logger = logging.getLogger(__name__)
 
 from _shared import BOLD, DIM, GREEN, PORTS, RED, RESET, YELLOW, make_dispatch, subscribe_hub_logging
 from aiohttp import web
@@ -39,7 +42,7 @@ async def main() -> None:
     print(f"  {YELLOW}{BOLD}{'=' * 60}{RESET}")
     print(f"  {YELLOW}{BOLD}  911 DISPATCH CENTER{RESET}")
     print(f"  {YELLOW}{BOLD}{'=' * 60}{RESET}")
-    print(f"  {DIM}Port: {port}  |  Model: {model}{RESET}")
+    logger.info("Port: %s  |  Model: %s", port, model)
     print()
 
     # Auto-connect to medical + police
@@ -49,10 +52,10 @@ async def main() -> None:
         try:
             agents = await hub.connect(endpoint)
             connections[name] = endpoint
-            print(f"  {GREEN}Connected to {name} ({srv_port}): {', '.join(agents)}{RESET}")
-        except Exception as e:
-            print(f"  {YELLOW}Warning: {name} server not available — {e}{RESET}")
-            print(f"  {DIM}  Start it: python playground/04_emergency/{name}_server.py{RESET}")
+            logger.info("Connected to %s (%s): %s", name, srv_port, ", ".join(agents))
+        except Exception:
+            logger.warning("%s server not available", name)
+            logger.info("  Start it: python playground/04_emergency/%s_server.py", name)
 
     # Track incidents
     incident_counter = 0
