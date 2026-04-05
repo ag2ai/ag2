@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
+import time
 from collections.abc import Callable
 from types import EllipsisType
 from typing import Any
@@ -130,6 +131,11 @@ class BaseEvent(metaclass=_ConditionMeta):
     # NOTE: no type annotation — must NOT be processed as an event Field.
     __transient__ = False
 
+    # Auto-populated Unix timestamp (seconds since epoch) for every event.
+    # compare=False: timestamps don't affect equality checks.
+    # repr=False: keeps repr() output clean.
+    created_at: float = Field(default_factory=time.time, compare=False, repr=False)
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         _process_fields(cls)
@@ -197,3 +203,8 @@ class BaseEvent(metaclass=_ConditionMeta):
         deserialized = deserialize_payload(data)
         filtered = {k: v for k, v in deserialized.items() if k in known_fields}
         return cls(**filtered)
+
+
+# BaseEvent's own fields (e.g. created_at) are not processed by
+# __init_subclass__ since that only fires for *sub*classes.
+_process_fields(BaseEvent)
