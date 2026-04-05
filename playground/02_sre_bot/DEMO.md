@@ -24,7 +24,7 @@ arise, all on a timer-based schedule.
 
 1. Set your Gemini API key:
    ```bash
-   export GOOGLE_API_KEY="your-key-here"
+   export GOOGLE_API_KEY="your-key-here"  # pragma: allowlist secret
    ```
 
 2. Activate the beta virtual environment:

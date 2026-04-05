@@ -39,7 +39,7 @@ class EpisodicMemoryPolicy:
             return prompts, events
 
         # Read most recent summaries
-        recent = entries[-self._max:]
+        recent = entries[-self._max :]
         summaries: list[str] = []
         for entry in recent:
             content = await store.read(f"/memory/conversations/{entry}")
@@ -50,8 +50,6 @@ class EpisodicMemoryPolicy:
             block = "## Past Conversations\n\n" + "\n\n---\n\n".join(summaries)
             prompts = prompts + [block]
             if self._transparent:
-                prompts = prompts + [
-                    f"[{self.name}] Injected {len(summaries)} past conversation summaries."
-                ]
+                prompts = prompts + [f"[{self.name}] Injected {len(summaries)} past conversation summaries."]
 
         return prompts, events

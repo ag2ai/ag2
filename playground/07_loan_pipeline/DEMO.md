@@ -58,7 +58,7 @@ This is different from a system plugin (in `plugins=[...]`), which only observes
 
 ```bash
 source .venv-beta/bin/activate
-export GOOGLE_API_KEY="your-key-here"
+export GOOGLE_API_KEY="your-key-here"  # pragma: allowlist secret
 ```
 
 ## Running

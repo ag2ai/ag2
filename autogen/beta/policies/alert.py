@@ -76,9 +76,7 @@ class AlertPolicy:
                 )
             )
             # Add halt note to prompt so LLM sees it if the call isn't short-circuited
-            prompts = prompts + [
-                f"[FATAL ALERT] ({fatal[0].source}): {fatal[0].message}. Execution halting."
-            ]
+            prompts = prompts + [f"[FATAL ALERT] ({fatal[0].source}): {fatal[0].message}. Execution halting."]
 
         return prompts, events
 

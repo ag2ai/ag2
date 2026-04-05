@@ -26,7 +26,6 @@ from autogen.beta.events.lifecycle import (
 from autogen.beta.events.tool_events import ToolCallEvent
 from autogen.beta.events.types import ModelReasoning
 
-
 # ---------------------------------------------------------------------------
 # Transient flag on event types
 # ---------------------------------------------------------------------------
@@ -125,8 +124,8 @@ class TestTransientNotPersisted:
         ctx = Context(stream)
 
         await stream.send(ModelRequest(content="hi"), ctx)
-        await stream.send(ModelMessageChunk(content="hel"), ctx)
-        await stream.send(ModelMessageChunk(content="lo"), ctx)
+        await stream.send(ModelMessageChunk(content="hell"), ctx)
+        await stream.send(ModelMessageChunk(content="o"), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)
 
         events = list(await stream.history.get_events())
@@ -211,8 +210,8 @@ class TestPersistAll:
         ctx = Context(stream)
 
         await stream.send(ModelRequest(content="hi"), ctx)
-        await stream.send(ModelMessageChunk(content="hel"), ctx)
-        await stream.send(ModelMessageChunk(content="lo"), ctx)
+        await stream.send(ModelMessageChunk(content="hell"), ctx)
+        await stream.send(ModelMessageChunk(content="o"), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)
 
         events = list(await stream.history.get_events())

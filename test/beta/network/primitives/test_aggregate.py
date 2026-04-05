@@ -10,13 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autogen.beta.context import Context
-from autogen.beta.events import ModelRequest
 from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
+from autogen.beta.context import Context
+from autogen.beta.events import ModelRequest
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 

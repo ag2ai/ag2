@@ -6,7 +6,9 @@
 
 import pytest
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import ModelRequest
+from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.network.events import (
     AggregationCompleted,
     CompactionCompleted,
@@ -25,8 +27,6 @@ from autogen.beta.network.events import (
     TopicUnsubscription,
     UnknownEvent,
 )
-from autogen.beta.compact import CompactionSummary
-from autogen.beta.events.alert import ObserverAlert, Severity
 
 
 @pytest.mark.parametrize(
@@ -48,12 +48,8 @@ from autogen.beta.events.alert import ObserverAlert, Severity
         TopicSubscription(actor="reader", topic="news"),
         TopicUnsubscription(actor="reader", topic="news"),
         CompactionSummary(summary="Earlier context...", event_count=50),
-        CompactionCompleted(
-            actor="agent", strategy="TailWindowCompact", events_before=100, events_after=50
-        ),
-        AggregationCompleted(
-            actor="agent", strategy="ConversationSummaryAggregate", event_count=75, llm_calls=1
-        ),
+        CompactionCompleted(actor="agent", strategy="TailWindowCompact", events_before=100, events_after=50),
+        AggregationCompleted(actor="agent", strategy="ConversationSummaryAggregate", event_count=75, llm_calls=1),
         UnknownEvent(type_name="some.module.Foo", data={"x": 1}),
     ],
     ids=lambda e: type(e).__name__,

@@ -18,7 +18,7 @@ One actor with five domain tools, no network, no scheduling, no observers. This 
 source .venv-beta/bin/activate
 
 # Set your Gemini API key
-export GOOGLE_API_KEY="your-key-here"
+export GOOGLE_API_KEY="your-key-here"  # pragma: allowlist secret
 ```
 
 ## Running the demo

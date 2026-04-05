@@ -28,7 +28,6 @@ from autogen.beta.stream import MemoryStream
 from .watch import Watch
 
 if TYPE_CHECKING:
-    from .network.events import SchedulerTriggerFired
     from .network.hub import Hub
 
 logger = logging.getLogger(__name__)

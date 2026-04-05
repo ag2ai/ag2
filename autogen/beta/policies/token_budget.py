@@ -44,7 +44,5 @@ class TokenBudgetPolicy:
         retained.reverse()
 
         if self._transparent:
-            prompts = prompts + [
-                f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."
-            ]
+            prompts = prompts + [f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."]
         return prompts, retained

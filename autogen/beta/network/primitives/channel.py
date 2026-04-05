@@ -206,9 +206,7 @@ class PriorityChannel:
         default_priority: Any = None,
     ) -> None:
         self._scheme = scheme or DefaultPriorityScheme()
-        self._default_priority = (
-            default_priority if default_priority is not None else DefaultPriority.NORMAL
-        )
+        self._default_priority = default_priority if default_priority is not None else DefaultPriority.NORMAL
         self._heap: list[tuple[int, int, Envelope]] = []  # (neg_priority, sequence, envelope)
         self._seq = 0
         self._subscribers: dict[SubId, tuple[Condition | None, ChannelCallback]] = {}

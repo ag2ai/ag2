@@ -20,16 +20,16 @@ import logging
 
 import pytest
 
+from autogen.beta import BaseObserver
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage
-from autogen.beta import BaseObserver
 from autogen.beta.events.alert import ObserverAlert
 from autogen.beta.network.convenience import Network
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.topology import BasePlugin, Pipeline
 from autogen.beta.scheduler import Scheduler, WatchStatus
-from autogen.beta.watch import CronWatch, EventWatch, IntervalWatch
 from autogen.beta.stream import MemoryStream
+from autogen.beta.watch import CronWatch, EventWatch, IntervalWatch
 
 # ---------------------------------------------------------------------------
 # Mock helpers

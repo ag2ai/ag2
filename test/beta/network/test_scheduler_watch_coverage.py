@@ -27,6 +27,7 @@ from autogen.beta.events.base import BaseEvent
 from autogen.beta.network.events import SchedulerTriggerFired
 from autogen.beta.network.hub import Hub
 from autogen.beta.scheduler import Scheduler, WatchStatus
+from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import (
     CronWatch,
     EventWatch,
@@ -34,7 +35,6 @@ from autogen.beta.watch import (
     Sequence,
     WindowWatch,
 )
-from autogen.beta.stream import MemoryStream
 
 # ---------------------------------------------------------------------------
 # Mock helpers

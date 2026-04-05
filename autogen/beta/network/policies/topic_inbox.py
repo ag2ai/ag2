@@ -77,13 +77,13 @@ class TopicInboxPolicy:
         if len(all_messages) > self._max:
             if self._overflow == TopicOverflow.NEWEST:
                 dropped = len(all_messages) - self._max
-                all_messages = all_messages[-self._max:]
+                all_messages = all_messages[-self._max :]
                 overflow_note = f"({dropped} older messages omitted)"
                 # Advance all cursors — older messages are intentionally skipped
                 for topic, messages in per_topic:
                     await self._tp.advance_topic(self._actor, topic, len(messages))
             elif self._overflow == TopicOverflow.OLDEST:
-                kept = all_messages[:self._max]
+                kept = all_messages[: self._max]
                 dropped = len(all_messages) - self._max
                 all_messages = kept
                 overflow_note = f"({dropped} newer messages deferred)"
@@ -121,7 +121,7 @@ class TopicInboxPolicy:
         """Summarize a backlog of topic messages via LLM."""
         if not self._summary_config:
             # Fallback: just list recent messages
-            return "\n".join(f"[{m.topic}] {m.sender}: {m.message}" for m in messages[-self._max:])
+            return "\n".join(f"[{m.topic}] {m.sender}: {m.message}" for m in messages[-self._max :])
 
         from autogen.beta.context import Context as Ctx
         from autogen.beta.events import ModelRequest

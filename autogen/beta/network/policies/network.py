@@ -6,12 +6,11 @@
 
 from __future__ import annotations
 
+from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent
-from autogen.beta.events.base import Field
-
-from autogen.beta.compact import CompactionSummary
 from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events.base import Field
 from autogen.beta.policies.conversation import CONVERSATION_TYPES
 
 from ..events import DelegationResult, SchedulerTriggerFired, TopicMessage

@@ -23,12 +23,12 @@ from typing import Any
 import pytest
 from typing_extensions import Self
 
+from autogen.beta import Actor, BaseObserver, TaskConfig
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
+from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta import Actor, BaseObserver, KnowledgeConfig, TaskConfig
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 from autogen.beta.network.events import (
     DelegationRequest,
     ObserverCompleted,
@@ -37,15 +37,15 @@ from autogen.beta.network.events import (
     TaskResult,
 )
 from autogen.beta.network.hub import Hub
-from autogen.beta.policies import AlertPolicy, ConversationPolicy
 from autogen.beta.network.policies.network import NetworkPolicy
-from autogen.beta.watch import EventWatch, IntervalWatch
-from autogen.beta.watch import Sequence as SequenceWatch
-from autogen.beta.scheduler import Scheduler, WatchStatus
 from autogen.beta.network.topology import BasePlugin, Pipeline
+from autogen.beta.policies import AlertPolicy, ConversationPolicy
+from autogen.beta.scheduler import Scheduler, WatchStatus
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools.final import tool
+from autogen.beta.watch import EventWatch, IntervalWatch
+from autogen.beta.watch import Sequence as SequenceWatch
 
 # ---------------------------------------------------------------------------
 # Test helpers

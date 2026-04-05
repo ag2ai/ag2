@@ -9,12 +9,12 @@ from uuid import uuid4
 import pytest
 
 from autogen.beta.events import ModelRequest
-from autogen.beta.network.events import DelegationResult, TopicMessage, UnknownEvent
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     EventLogWriter,
     MemoryKnowledgeStore,
 )
+from autogen.beta.network.events import DelegationResult, UnknownEvent
 
 
 class TestMemoryKnowledgeStore:
@@ -169,6 +169,7 @@ class TestEventLogWriter:
         store = MemoryKnowledgeStore()
         # Write a record with a non-existent event type
         import json
+
         stream_id = uuid4()
         record = json.dumps({"type": "nonexistent.module.FakeEvent", "data": {"key": "val"}})
         await store.write(f"/log/{stream_id}.jsonl", record)

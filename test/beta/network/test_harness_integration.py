@@ -10,34 +10,26 @@ Covers gaps identified in the design review.
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable
-from typing import Any
-
 import pytest
 
-from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
 from autogen.beta import Actor, KnowledgeConfig
 from autogen.beta.actor import (
     _AggregationMiddleware,
-    _AggregationMiddlewareFactory,
     _CompactionMiddleware,
-    _CompactionMiddlewareFactory,
 )
 from autogen.beta.aggregate import AggregateTrigger
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.context import Context
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
 from autogen.beta.knowledge import (
     DefaultBootstrap,
-    EventLogWriter,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
 )
 from autogen.beta.network.events import AggregationCompleted, CompactionCompleted
 from autogen.beta.network.hub import Hub
-from autogen.beta.policies import SlidingWindowPolicy, TokenBudgetPolicy
+from autogen.beta.policies import TokenBudgetPolicy
 from autogen.beta.stream import MemoryStream
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -720,8 +712,9 @@ class TestConversationSummaryAggregateStreamId:
 
         # Use a fake aggregate that writes to the same path pattern
         # to verify the filename contains the full ID
-        from autogen.beta.aggregate import ConversationSummaryAggregate
         from unittest.mock import AsyncMock, MagicMock
+
+        from autogen.beta.aggregate import ConversationSummaryAggregate
 
         config = MagicMock()
         mock_client = AsyncMock()

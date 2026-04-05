@@ -4,13 +4,13 @@
 
 import pytest
 
+from autogen.beta import BaseObserver
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
-from autogen.beta.events.conditions import TypeCondition
-from autogen.beta import BaseObserver
 from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.watch import EventWatch
+from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.stream import MemoryStream
+from autogen.beta.watch import EventWatch
 
 
 class DummyObserver(BaseObserver):

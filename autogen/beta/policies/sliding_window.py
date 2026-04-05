@@ -31,9 +31,7 @@ class SlidingWindowPolicy:
         total = len(events)
         if total <= self._max:
             return prompts, events
-        trimmed = events[-self._max:]
+        trimmed = events[-self._max :]
         if self._transparent:
-            prompts = prompts + [
-                f"[{self.name}] Showing last {len(trimmed)} of {total} events."
-            ]
+            prompts = prompts + [f"[{self.name}] Showing last {len(trimmed)} of {total} events."]
         return prompts, trimmed

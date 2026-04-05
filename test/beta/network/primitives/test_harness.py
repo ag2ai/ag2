@@ -6,12 +6,12 @@
 
 import pytest
 
-from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse
-from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
 from autogen.beta import AssemblerMiddleware
 from autogen.beta.compact import CompactionSummary
+from autogen.beta.context import Context
+from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse
 from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
 from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network.events import DelegationResult, SchedulerTriggerFired, TopicMessage
 from autogen.beta.network.hub import Hub
@@ -196,6 +196,7 @@ class TestAssemblerMiddleware:
 
         class _PromptAdder:
             name = "adder"
+
             async def apply(self, prompts, events, context):
                 return prompts + ["injected"], events
 
@@ -212,6 +213,7 @@ class TestAssemblerMiddleware:
         class _FakePolicy:
             def __init__(self, n):
                 self.name = n
+
             async def apply(self, p, e, c):
                 return p, e
 
@@ -224,6 +226,7 @@ class TestAssemblerMiddleware:
         class _FakePolicy:
             def __init__(self, n):
                 self.name = n
+
             async def apply(self, p, e, c):
                 return p, e
 
@@ -239,6 +242,7 @@ class TestAssemblerMiddleware:
 
         class _PromptAdder:
             name = "adder"
+
             async def apply(self, prompts, events, context):
                 return prompts + ["injected"], events
 

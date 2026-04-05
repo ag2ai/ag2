@@ -30,6 +30,7 @@ from autogen.beta.config.gemini import GeminiConfig
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network import (
+    BasePlugin,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
@@ -41,7 +42,6 @@ from autogen.beta.network import (
     RateLimiter,
     TelemetryPlugin,
     register_event,
-    BasePlugin,
 )
 
 if TYPE_CHECKING:

@@ -433,21 +433,18 @@ class TestGeminiUsageNormalization:
         """TokenMonitor should correctly read total_tokens from normalized usage."""
         from unittest.mock import MagicMock
 
-        from autogen.beta.events import ModelResponse
+        from autogen.beta.events import ModelResponse, Usage
         from autogen.beta.observers.token_monitor import TokenMonitor
 
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
         # Simulated Gemini usage with normalized keys
         event = ModelResponse(
-            usage={
-                "prompt_tokens": 40,
-                "completion_tokens": 30,
-                "total_tokens": 70,
-                "prompt_token_count": 40,
-                "candidates_token_count": 30,
-                "total_token_count": 70,
-            }
+            usage=Usage(
+                prompt_tokens=40,
+                completion_tokens=30,
+                total_tokens=70,
+            )
         )
 
         ctx = MagicMock()
@@ -660,8 +657,8 @@ class TestObserverDetachFailureStillEmitsCompleted:
     async def test_completed_emitted_despite_detach_error(self) -> None:
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from autogen.beta.events import ModelMessage
         from autogen.beta import Actor
+        from autogen.beta.events import ModelMessage
         from autogen.beta.network.events import ObserverCompleted
 
         class _FailingDetachObserver:
@@ -717,8 +714,8 @@ class TestObserverDetachFailureStillEmitsCompleted:
         """Sanity check: normal detach should also emit ObserverCompleted."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from autogen.beta.events import ModelMessage
         from autogen.beta import Actor
+        from autogen.beta.events import ModelMessage
         from autogen.beta.network.events import ObserverCompleted
 
         class _GoodObserver:
@@ -779,8 +776,8 @@ class TestActorExecuteResponseSchema:
         """Actor._execute() should forward response_schema to Agent._execute()."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from autogen.beta.events import ModelMessage
         from autogen.beta import Actor
+        from autogen.beta.events import ModelMessage
 
         actor = Actor("test-actor")
 
@@ -820,8 +817,8 @@ class TestActorExecuteResponseSchema:
         """When response_schema is not passed, it should default to omit."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from autogen.beta.events import ModelMessage
         from autogen.beta import Actor
+        from autogen.beta.events import ModelMessage
         from autogen.beta.types import omit
 
         actor = Actor("test-actor")

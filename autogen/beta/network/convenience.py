@@ -12,14 +12,13 @@ from typing import Any
 from autogen.beta.agent import Agent, AgentReply
 from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent
+from autogen.beta.scheduler import Scheduler
+from autogen.beta.state import StateStore
 from autogen.beta.stream import MemoryStream
+from autogen.beta.watch import Watch
 
 from .hub import Hub, RegistrationHandle
 from .primitives.channel import Channel
-from autogen.beta.scheduler import Scheduler
-from autogen.beta.state import StateStore
-from autogen.beta.watch import Watch
-
 from .primitives.infra import Registry
 from .primitives.priority import ConflictResolver, PriorityScheme
 from .topology import Plugin, Topology

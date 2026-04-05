@@ -20,7 +20,7 @@ Researcher  -->  Writer  -->  Editor  -->  Publisher
 - AG2 installed with beta dependencies (the `.venv-beta` environment)
 
 ```bash
-export GOOGLE_API_KEY="your-key-here"
+export GOOGLE_API_KEY="your-key-here"  # pragma: allowlist secret
 ```
 
 ## Running

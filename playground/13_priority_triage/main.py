@@ -36,8 +36,8 @@ from autogen.beta.network import (
     Network,
     Pipeline,
 )
-from autogen.beta.network.topology import BasePlugin, HubContext
 from autogen.beta.network.primitives.envelope import Envelope
+from autogen.beta.network.topology import BasePlugin, HubContext
 
 # ======================================================================
 # ANSI formatting
@@ -260,10 +260,10 @@ async def main() -> None:
     print(f"  {_BOLD}{'=' * 60}{_RESET}")
     print()
     print(f"  {_BOLD}What this demonstrates:{_RESET}")
-    print(f"    1. PriorityChannel delivers CRITICAL tasks before NORMAL/LOW")
-    print(f"    2. PriorityRouter topology reroutes by severity")
-    print(f"    3. Custom PriorityScheme plugs in seamlessly")
-    print(f"    4. HighestPriorityWins conflict resolution")
+    print("    1. PriorityChannel delivers CRITICAL tasks before NORMAL/LOW")
+    print("    2. PriorityRouter topology reroutes by severity")
+    print("    3. Custom PriorityScheme plugs in seamlessly")
+    print("    4. HighestPriorityWins conflict resolution")
     print()
     print(f"  {_BOLD}Agents:{_RESET}")
     print(f"    {_RED}senior-responder{_RESET}  handles CRITICAL incidents")
@@ -361,10 +361,7 @@ async def main() -> None:
     results: list[tuple[str, str, float]] = []
 
     for inc in incidents:
-        log(
-            f"{_YELLOW}QUEUE{_RESET}  "
-            f"[{inc['label']}] {inc['task'][:60]}..."
-        )
+        log(f"{_YELLOW}QUEUE{_RESET}  [{inc['label']}] {inc['task'][:60]}...")
 
     print()
     log(f"{_BOLD}Processing in priority order...{_RESET}")

@@ -23,17 +23,16 @@ import asyncio
 import time
 from collections.abc import Sequence
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 from typing_extensions import Self
 
+from autogen.beta import Actor, BaseObserver
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
-from autogen.beta.events.conditions import TypeCondition
-from autogen.beta import Actor, BaseObserver
 from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.network.convenience import Network
 from autogen.beta.network.events import (
     DelegationError,
@@ -44,12 +43,12 @@ from autogen.beta.network.hub import Hub
 from autogen.beta.network.primitives.channel import BufferedChannel, PriorityChannel
 from autogen.beta.network.primitives.envelope import Envelope
 from autogen.beta.network.primitives.priority import DefaultPriority, DefaultPriorityScheme
+from autogen.beta.network.topology import BasePlugin, Fanout, Pipeline, RouteDecision
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.scheduler import Scheduler, WatchStatus
-from autogen.beta.network.topology import BasePlugin, Fanout, Pipeline, RouteDecision
-from autogen.beta.watch import EventWatch, IntervalWatch
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
+from autogen.beta.watch import EventWatch, IntervalWatch
 
 # ---------------------------------------------------------------------------
 # Test helpers

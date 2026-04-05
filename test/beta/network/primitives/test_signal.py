@@ -2,12 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 
-from autogen.beta.context import Context
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
-from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.stream import MemoryStream
 
 
 class TestObserverAlertCreation:

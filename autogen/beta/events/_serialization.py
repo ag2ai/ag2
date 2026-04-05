@@ -84,9 +84,7 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
             event_type_name = value["__event__"]
             event_cls = _resolve_event_type(event_type_name, event_registry)
             if event_cls is not None:
-                nested_data = {
-                    k: deserialize_value(v, event_registry) for k, v in value.items() if k != "__event__"
-                }
+                nested_data = {k: deserialize_value(v, event_registry) for k, v in value.items() if k != "__event__"}
                 return event_cls(**nested_data)
         if "__bytes__" in value:
             import base64

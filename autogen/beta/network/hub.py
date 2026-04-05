@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 from autogen.beta.agent import Agent, AgentReply
 from autogen.beta.context import Context, Stream
+from autogen.beta.state import MemoryStateStore, StateStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.tool import Tool
@@ -39,8 +40,6 @@ from .events import (
 )
 from .primitives.channel import Channel, LocalChannel, PriorityChannel
 from .primitives.envelope import Envelope
-from autogen.beta.state import MemoryStateStore, StateStore
-
 from .primitives.infra import ActorInfo, LocalRegistry, Registry
 from .primitives.priority import ConflictResolver, PriorityScheme
 from .topology import HubContext, Plugin, Topology, _normalize
@@ -283,7 +282,9 @@ class Hub:
     # Delegation
     # ------------------------------------------------------------------
 
-    async def _delegate(self, to_agent: str, task: str, *, source: str = "", priority: Any = None, **kwargs: Any) -> str:
+    async def _delegate(
+        self, to_agent: str, task: str, *, source: str = "", priority: Any = None, **kwargs: Any
+    ) -> str:
         """Internal: route a task to a registered agent."""
         agent = self._agents.get(to_agent)
         if not agent:
@@ -553,13 +554,11 @@ class Hub:
             agent = self._agents.get(info.name)
             if isinstance(agent, RemoteAgent):
                 continue
-            result.append(
-                {
-                    "name": info.name,
-                    "capabilities": info.capabilities,
-                    "description": info.description,
-                }
-            )
+            result.append({
+                "name": info.name,
+                "capabilities": info.capabilities,
+                "description": info.description,
+            })
 
         return web.json_response({"agents": result})
 
@@ -567,12 +566,10 @@ class Hub:
         """Health check endpoint."""
         from aiohttp import web
 
-        return web.json_response(
-            {
-                "status": "healthy",
-                "agents": len(self._agents),
-            }
-        )
+        return web.json_response({
+            "status": "healthy",
+            "agents": len(self._agents),
+        })
 
     @asynccontextmanager
     async def serve(self, *, host: str | None = None, port: int = 8900):

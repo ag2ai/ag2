@@ -23,7 +23,7 @@ from uuid import uuid4
 
 import pytest
 
-from autogen.beta.events import BaseEvent, ModelMessage
+from autogen.beta.events import ModelMessage
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.primitives.channel import LocalChannel, PriorityChannel
 from autogen.beta.network.primitives.envelope import Envelope
@@ -35,7 +35,6 @@ from autogen.beta.network.primitives.priority import (
     PriorityScheme,
 )
 from autogen.beta.network.topology import BasePlugin, Pipeline
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -319,8 +318,12 @@ class TestPriorityChannelWithInvertedScheme:
         )
         channel.subscribe(handler)
 
-        await channel.send(Envelope(event=ModelMessage(content="p3-low"), sender="a", priority=_InvertedPriority.P3_LOW))
-        await channel.send(Envelope(event=ModelMessage(content="p0-crit"), sender="a", priority=_InvertedPriority.P0_CRITICAL))
+        await channel.send(
+            Envelope(event=ModelMessage(content="p3-low"), sender="a", priority=_InvertedPriority.P3_LOW)
+        )
+        await channel.send(
+            Envelope(event=ModelMessage(content="p0-crit"), sender="a", priority=_InvertedPriority.P0_CRITICAL)
+        )
 
         await asyncio.sleep(0.1)
         assert len(received) == 2
@@ -344,12 +347,16 @@ class TestPriorityChannelExpiredEnvelopes:
 
         # Expired envelope (timestamp=0, ttl=0)
         await channel.send(
-            Envelope(event=ModelMessage(content="expired"), sender="a", priority=DefaultPriority.URGENT, ttl=0.0, timestamp=0.0)
+            Envelope(
+                event=ModelMessage(content="expired"),
+                sender="a",
+                priority=DefaultPriority.URGENT,
+                ttl=0.0,
+                timestamp=0.0,
+            )
         )
         # Valid envelope
-        await channel.send(
-            Envelope(event=ModelMessage(content="valid"), sender="a", priority=DefaultPriority.NORMAL)
-        )
+        await channel.send(Envelope(event=ModelMessage(content="valid"), sender="a", priority=DefaultPriority.NORMAL))
 
         await asyncio.sleep(0.1)
         assert "valid" in received
@@ -411,9 +418,7 @@ class TestEnvelopeChildPriority:
 
     def test_child_recipient_and_priority_independent(self) -> None:
         """Clearing priority and recipient independently should work."""
-        parent = Envelope(
-            event=ModelMessage(content="p"), sender="a", recipient="bob", priority=DefaultPriority.URGENT
-        )
+        parent = Envelope(event=ModelMessage(content="p"), sender="a", recipient="bob", priority=DefaultPriority.URGENT)
         child = parent.child(event=ModelMessage(content="c"), recipient=None, priority=None)
         assert child.recipient is None
         assert child.priority is None
@@ -686,9 +691,7 @@ class TestSchedulerPriorityForwarding:
             ctx = Context(stream=hub.stream)
             await scheduler._handle_fire(entry, [], ctx)
 
-            mock_delegate.assert_called_once_with(
-                "worker", "task", source="scheduler", priority=None
-            )
+            mock_delegate.assert_called_once_with("worker", "task", source="scheduler", priority=None)
 
     @pytest.mark.asyncio
     async def test_scheduler_add_stores_priority(self) -> None:

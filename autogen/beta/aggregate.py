@@ -109,8 +109,7 @@ class ConversationSummaryAggregate:
         client = self._config.create()
         prompt_event = ModelRequest(
             content="Summarize this conversation. Include key decisions, "
-            "findings, outcomes, and any unfinished work:\n\n"
-            + "\n".join(str(e) for e in events)
+            "findings, outcomes, and any unfinished work:\n\n" + "\n".join(str(e) for e in events)
         )
         response = await client(
             [prompt_event],
@@ -159,8 +158,7 @@ class WorkingMemoryAggregate:
             "the new conversation below. Preserve important existing context. "
             "Remove outdated information. Keep it concise and actionable.\n\n"
             f"## Current Working Memory\n{existing or '(empty)'}\n\n"
-            "## New Conversation\n"
-            + "\n".join(str(e) for e in events)
+            "## New Conversation\n" + "\n".join(str(e) for e in events)
         )
         response = await client(
             [ModelRequest(content=prompt)],

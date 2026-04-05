@@ -11,7 +11,6 @@ These tests isolate both components from the full Actor stack to verify
 edge cases not covered by Actor integration tests.
 """
 
-import asyncio
 from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock
@@ -19,16 +18,15 @@ from unittest.mock import MagicMock
 import pytest
 from typing_extensions import Self
 
+from autogen.beta import Actor, BaseObserver
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import Context as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
-from autogen.beta import Actor, BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
-from autogen.beta.watch import EventWatch
 from autogen.beta.tools.final import tool
-
+from autogen.beta.watch import EventWatch
 
 # ---------------------------------------------------------------------------
 # Test helpers

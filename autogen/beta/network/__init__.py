@@ -15,6 +15,18 @@ Usage::
 """
 
 # Convenience
+# Events — re-exported from framework core for backward compatibility
+from autogen.beta.events.lifecycle import (
+    AggregationCompleted,
+    CompactionCompleted,
+    ObserverCompleted,
+    ObserverStarted,
+    TaskProgress,
+    TaskRequest,
+    TaskResult,
+    UnknownEvent,
+)
+
 from .convenience import Network
 
 # Events — network-specific
@@ -27,18 +39,6 @@ from .events import (
     TopicMessage,
     TopicSubscription,
     TopicUnsubscription,
-)
-
-# Events — re-exported from framework core for backward compatibility
-from autogen.beta.events.lifecycle import (
-    AggregationCompleted,
-    CompactionCompleted,
-    ObserverCompleted,
-    ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
-    UnknownEvent,
 )
 
 # Hub
@@ -93,68 +93,59 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = (
-    # Hub & Network
-    "Hub",
-    "RegistrationHandle",
-    "Network",
-    # Events
+    "ActorInfo",
     "AggregationCompleted",
+    "BasePlugin",
+    "BufferedChannel",
+    "Channel",
     "CompactionCompleted",
+    "Conditional",
+    "ConflictResolver",
+    "DefaultPriority",
+    "DefaultPriorityScheme",
     "DelegationError",
     "DelegationRejected",
     "DelegationRequest",
     "DelegationResult",
+    "Envelope",
+    "EventRegistry",
+    "Fanout",
     "FormattedEvent",
+    "HighestPriorityWins",
+    "HttpChannel",  # noqa: F822
+    "Hub",
+    "HubContext",
+    "LocalChannel",
+    "LocalLock",
+    "LocalRegistry",
+    "Lock",
+    "Network",
+    "NetworkPolicy",
     "ObserverCompleted",
     "ObserverStarted",
+    "Pipeline",
+    "Plugin",
+    "PriorityChannel",
+    "PriorityScheme",
+    "ProcessResult",
+    "RateLimiter",
+    "RegistrationHandle",
+    "Registry",
+    "RemoteAgent",
+    "RemoteAgentReply",
+    "RouteDecision",
     "SchedulerTriggerFired",
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
+    "TelemetryPlugin",
+    "TopicInboxPolicy",
     "TopicMessage",
+    "TopicOverflow",
+    "TopicPlugin",
     "TopicSubscription",
     "TopicUnsubscription",
-    "UnknownEvent",
-    # Channels & Envelopes
-    "BufferedChannel",
-    "Channel",
-    "Envelope",
-    "EventRegistry",
-    "HttpChannel",  # noqa: F822
-    "LocalChannel",
-    "PriorityChannel",
-    "register_event",
-    # Infrastructure
-    "ActorInfo",
-    "LocalLock",
-    "LocalRegistry",
-    "Lock",
-    "Registry",
-    # Priority (internal)
-    "ConflictResolver",
-    "DefaultPriority",
-    "DefaultPriorityScheme",
-    "HighestPriorityWins",
-    "PriorityScheme",
-    # Plugins
-    "RateLimiter",
-    "TelemetryPlugin",
-    "TopicPlugin",
-    # Policies (network-specific)
-    "NetworkPolicy",
-    "TopicInboxPolicy",
-    "TopicOverflow",
-    # Remote
-    "RemoteAgent",
-    "RemoteAgentReply",
-    # Topology
-    "BasePlugin",
-    "Conditional",
-    "Fanout",
-    "HubContext",
-    "Pipeline",
-    "Plugin",
-    "ProcessResult",
-    "RouteDecision",
     "Topology",
+    "UnknownEvent",
+    "register_event",
 )
