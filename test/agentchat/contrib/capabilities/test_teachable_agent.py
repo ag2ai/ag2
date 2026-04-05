@@ -123,17 +123,17 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb"], "teachable")
 @run_for_optional_imports(["openai"], "openai")
-def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
+def test_teachability_code_paths(credentials_openai_mini: Credentials):
     """Runs this file's unit tests."""
     total_num_errors, total_num_tests = 0, 0
 
     num_trials = 1  # Set to a higher number to get a more accurate error rate.
     for trial in range(num_trials):
-        num_errors, num_tests = use_question_answer_phrasing(credentials_gpt_4o_mini)
+        num_errors, num_tests = use_question_answer_phrasing(credentials_openai_mini)
         total_num_errors += num_errors
         total_num_tests += num_tests
 
-        num_errors, num_tests = use_task_advice_pair_phrasing(credentials_gpt_4o_mini)
+        num_errors, num_tests = use_task_advice_pair_phrasing(credentials_openai_mini)
         total_num_errors += num_errors
         total_num_tests += num_tests
 
@@ -153,14 +153,14 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb"], "teachable")
 @run_for_optional_imports(["openai"], "openai")
-def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):
+def test_teachability_accuracy(credentials_openai_mini: Credentials):
     """A very cheap and fast test of teachability accuracy."""
     print(colored("\nTEST TEACHABILITY ACCURACY", "light_cyan"))
 
     num_trials = 10  # The expected probability of failure is about 0.3 on each trial.
     for trial in range(num_trials):
         teachable_agent, teachability = create_teachable_agent(
-            credentials_gpt_4o_mini, reset_db=True, verbosity=0
+            credentials_openai_mini, reset_db=True, verbosity=0
         )  # For a clean test, clear the agent's memory.
         user = ConversableAgent("user", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 

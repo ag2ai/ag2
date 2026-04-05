@@ -275,9 +275,9 @@ def credentials_all() -> Credentials:
 
 
 @pytest.fixture
-def credentials_gpt_4o_mini() -> Credentials:
+def credentials_openai_mini() -> Credentials:
     return get_credentials(
-        "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
+        "OPENAI_API_KEY", model="gpt-4.1-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
     )
 
 

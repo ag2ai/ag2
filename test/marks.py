@@ -9,7 +9,7 @@ import pytest
 
 credentials_all_llms = [
     pytest.param(
-        "credentials_gpt_4o_mini",
+        "credentials_openai_mini",
         marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
@@ -24,7 +24,7 @@ credentials_all_llms = [
 
 credentials_browser_use = [
     pytest.param(
-        "credentials_gpt_4o_mini",
+        "credentials_openai_mini",
         marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(

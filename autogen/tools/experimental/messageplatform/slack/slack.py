@@ -166,7 +166,8 @@ class SlackRetrieveTool(Tool):
                         if not response["has_more"]:
                             break
 
-                        cursor = response.get("response_metadata", {}).get("next_cursor")
+                        metadata = response.get("response_metadata") or {}
+                        cursor = metadata.get("next_cursor")  # type: ignore[union-attr]
 
                     except SlackApiError as e:
                         return f"Message retrieval failed on pagination, Slack API error: {e.response['error']}"
