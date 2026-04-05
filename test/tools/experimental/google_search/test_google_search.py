@@ -86,12 +86,12 @@ class TestGoogleSearchTool:
 
     @run_for_optional_imports("openai", "openai")
     def test_end_to_end_openai(
-        self, credentials_gpt_4o_mini: Credentials, expected_search_result: dict[str, Any]
+        self, credentials_openai_mini: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
         google_search_tool = GoogleSearchTool(search_api_key="api_key", search_engine_id="engine_id")
         self._test_end_to_end(
             google_search_tool=google_search_tool,
-            credentials=credentials_gpt_4o_mini,
+            credentials=credentials_openai_mini,
             expected_search_result=expected_search_result,
             execute_query_called=True,
         )

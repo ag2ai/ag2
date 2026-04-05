@@ -86,9 +86,9 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.parametrize("web_tool", ["crawl4ai"])
     def test_end2end(
-        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+        self, credentials_openai_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
     ) -> None:
-        super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
+        super().test_end2end(credentials_openai_mini, "crawl4ai")
 
 
 @run_for_optional_imports(["langchain_openai", "browser_use"], "browser-use")
@@ -120,9 +120,9 @@ class TestBrowserUseWebSurfer(WebSurferTestHelper):
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.parametrize("web_tool", ["browser_use"])
     def test_end2end(
-        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+        self, credentials_openai_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
     ) -> None:
-        super().test_end2end(credentials_gpt_4o_mini, "browser_use")
+        super().test_end2end(credentials_openai_mini, "browser_use")
 
 
 @run_for_optional_imports(["firecrawl-py"], "firecrawl")
@@ -193,12 +193,12 @@ class TestFirecrawlWebSurfer(WebSurferTestHelper):
     @pytest.mark.parametrize("web_tool", ["firecrawl"])
     @pytest.mark.skip(reason="This test requires API credentials")
     def test_end2end(
-        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+        self, credentials_openai_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
     ) -> None:
         # Note: This test would require a valid Firecrawl API key
         websurfer = WebSurferAgent(
             name="WebSurfer",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
             web_tool="firecrawl",
             web_tool_kwargs={"firecrawl_api_key": "test_key"},
         )

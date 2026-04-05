@@ -403,7 +403,7 @@ dev = [
 
 [tool.pytest.ini_options]
 addopts = '-m "not conda"'
-timeout = 30
+timeout = 45
 testpaths = ["test"]
 
 markers = [

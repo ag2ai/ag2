@@ -26,10 +26,10 @@ with optional_import_block() as result:
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 @run_for_optional_imports(["openai"], "openai")
 def test_gpt_assistant_chat_openai(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
+    provider: str, credentials_openai_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
-        _test_gpt_assistant_chat(credentials_gpt_4o_mini)
+        _test_gpt_assistant_chat(credentials_openai_mini)
     elif provider == "azure":
         _test_gpt_assistant_chat(credentials_azure)
     else:
@@ -104,10 +104,10 @@ def _test_gpt_assistant_chat(credentials: Credentials) -> None:
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 @run_for_optional_imports(["openai"], "openai")
 def test_get_assistant_instructions(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
+    provider: str, credentials_openai_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
-        _test_get_assistant_instructions(credentials_gpt_4o_mini)
+        _test_get_assistant_instructions(credentials_openai_mini)
     elif provider == "azure":
         _test_get_assistant_instructions(credentials_azure)
     else:
@@ -137,10 +137,10 @@ def _test_get_assistant_instructions(credentials: Credentials) -> None:
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 @run_for_optional_imports(["openai"], "openai")
 def test_gpt_assistant_instructions_overwrite(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
+    provider: str, credentials_openai_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
-        _test_gpt_assistant_instructions_overwrite(credentials_gpt_4o_mini)
+        _test_gpt_assistant_instructions_overwrite(credentials_openai_mini)
     elif provider == "azure":
         _test_gpt_assistant_instructions_overwrite(credentials_azure)
     else:
@@ -192,7 +192,7 @@ def _test_gpt_assistant_instructions_overwrite(credentials: Credentials) -> None
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credentials) -> None:
+def test_gpt_assistant_existing_no_instructions(credentials_openai_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can retrieve instructions for an existing assistant
     even if the assistant was created with no instructions initially.
     """
@@ -203,7 +203,7 @@ def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credent
         name,
         instructions=instructions,
         llm_config={
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         },
     )
 
@@ -214,7 +214,7 @@ def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credent
         assistant = GPTAssistantAgent(
             name,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
             assistant_config={"assistant_id": assistant_id},
         )
@@ -229,12 +229,12 @@ def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credent
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
+def test_get_assistant_files(credentials_openai_mini: Credentials) -> None:
     """Test function to create a new GPTAssistantAgent, set its instructions, retrieve the instructions,
     and assert that the retrieved instructions match the set instructions.
     """
     current_file_path = os.path.abspath(__file__)
-    openai_client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)._clients[0]._oai_client
+    openai_client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)._clients[0]._oai_client
     file = openai_client.files.create(file=open(current_file_path, "rb"), purpose="assistants")  # noqa: SIM115
     name = f"For_test_get_assistant_files_{uuid.uuid4()}"
     gpt_assistant_api_version = detect_gpt_assistant_api_version()
@@ -244,7 +244,7 @@ def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
         name,
         instructions="This is a test",
         llm_config={
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
             "tools": [{"type": "retrieval"}],
             "file_ids": [file.id],
         },
@@ -271,7 +271,7 @@ def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
+def test_assistant_retrieval(credentials_openai_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can retrieve the same assistant"""
     name = f"For_test_assistant_retrieval_{uuid.uuid4()}"
 
@@ -286,7 +286,7 @@ def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
         "description": "This is a test function 2",
     }
 
-    openai_client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)._clients[0]._oai_client
+    openai_client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)._clients[0]._oai_client
     current_file_path = os.path.abspath(__file__)
 
     file_1 = openai_client.files.create(file=open(current_file_path, "rb"), purpose="assistants")  # noqa: SIM115
@@ -294,7 +294,7 @@ def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
 
     try:
         all_llm_config = {
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         }
         assistant_config = {
             "tools": [
@@ -343,7 +343,7 @@ def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
+def test_assistant_mismatch_retrieval(credentials_openai_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can filter out the mismatch assistant"""
     name = f"For_test_assistant_retrieval_{uuid.uuid4()}"
 
@@ -363,7 +363,7 @@ def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> N
         "description": "This is a test function 3",
     }
 
-    openai_client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)._clients[0]._oai_client
+    openai_client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)._clients[0]._oai_client
     current_file_path = os.path.abspath(__file__)
     file_1 = openai_client.files.create(file=open(current_file_path, "rb"), purpose="assistants")  # noqa: SIM115
     file_2 = openai_client.files.create(file=open(current_file_path, "rb"), purpose="assistants")  # noqa: SIM115
@@ -378,7 +378,7 @@ def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> N
                 {"type": "code_interpreter"},
             ],
             "file_ids": [file_1.id, file_2.id],
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         }
 
         name = f"For_test_assistant_retrieval_{uuid.uuid4()}"
@@ -412,7 +412,7 @@ def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> N
                     {"type": "function", "function": function_3_schema},
                 ],
                 "file_ids": [file_2.id, file_1.id],
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             }
             assistant_tools_mistaching = GPTAssistantAgent(
                 name,
@@ -440,7 +440,7 @@ def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> N
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> None:
+def test_gpt_assistant_tools_overwrite(credentials_openai_mini: Credentials) -> None:
     """Test that the tools of a GPTAssistantAgent can be overwritten or not depending on the value of the
     `overwrite_tools` parameter when creating a new assistant with the same ID.
 
@@ -524,7 +524,7 @@ def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> 
     assistant_org = GPTAssistantAgent(
         name,
         llm_config={
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         },
         assistant_config={
             "tools": original_tools,
@@ -538,7 +538,7 @@ def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> 
         assistant = GPTAssistantAgent(
             name,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
             assistant_config={
                 "assistant_id": assistant_id,
@@ -558,9 +558,9 @@ def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> 
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
+def test_gpt_reflection_with_llm(credentials_openai_mini: Credentials) -> None:
     gpt_assistant = GPTAssistantAgent(
-        name="assistant", llm_config={"config_list": credentials_gpt_4o_mini.config_list, "assistant_id": None}
+        name="assistant", llm_config={"config_list": credentials_openai_mini.config_list, "assistant_id": None}
     )
 
     user_proxy = UserProxyAgent(
@@ -576,7 +576,7 @@ def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
     # use the assistant configuration
     agent_using_assistant_config = GPTAssistantAgent(
         name="assistant",
-        llm_config={"config_list": credentials_gpt_4o_mini.config_list},
+        llm_config={"config_list": credentials_openai_mini.config_list},
         assistant_config={"assistant_id": gpt_assistant.assistant_id},
     )
     result = user_proxy.initiate_chat(
@@ -587,7 +587,7 @@ def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_assistant_tool_and_function_role_messages(credentials_gpt_4o_mini: Credentials) -> None:
+def test_assistant_tool_and_function_role_messages(credentials_openai_mini: Credentials) -> None:
     """Tests that internally generated roles ('tool', 'function') are correctly mapped to
     OpenAI Assistant API-compatible role ('assistant') before sending to the OpenAI API
     to prevent BadRequestError when using GPTAssistantAgent with other tool-calling agents.
@@ -598,7 +598,7 @@ def test_assistant_tool_and_function_role_messages(credentials_gpt_4o_mini: Cred
     assistant = GPTAssistantAgent(
         name,
         llm_config={
-            "config_list": credentials_gpt_4o_mini.config_list,
+            "config_list": credentials_openai_mini.config_list,
         },
     )
 

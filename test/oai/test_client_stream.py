@@ -38,8 +38,8 @@ def test_completion_stream(credentials_azure_gpt_4_1_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+def test_chat_completion_stream(credentials_openai_mini: Credentials) -> None:
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
     print(response)
     print(client.extract_text_or_completion_object(response))
@@ -224,7 +224,7 @@ def test__update_tool_calls_from_chunk_repeated_type() -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
+def test_chat_functions_stream(credentials_openai_mini: Credentials) -> None:
     functions = [
         {
             "name": "get_current_weather",
@@ -241,7 +241,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
             },
         },
     ]
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[{"role": "user", "content": "What's the weather like today in San Francisco?"}],
         functions=functions,
@@ -256,7 +256,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
+def test_chat_tools_stream(credentials_openai_mini: Credentials) -> None:
     tools = [
         {
             "type": "function",
@@ -276,7 +276,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
             },
         },
     ]
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[{"role": "user", "content": "What's the weather like today in San Francisco?"}],
         tools=tools,
