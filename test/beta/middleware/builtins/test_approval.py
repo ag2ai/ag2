@@ -9,6 +9,7 @@ import pytest
 
 from autogen.beta.events import ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware import approval_required
+from autogen.beta.middleware.builtin.tools.approval import BYPASS_KEY
 
 
 def make_context(
@@ -108,7 +109,7 @@ async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
     # first execution should prompt
     await hook(call_next, tool_call, context)
     context.input.assert_awaited_once()
-    assert context.variables["approval_required:always"]["calculator"] is True
+    assert context.variables[BYPASS_KEY]["calculator"] is True
 
     # second execution should not prompt
     await hook(call_next, tool_call, context)
@@ -118,7 +119,7 @@ async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
 @pytest.mark.asyncio()
 async def test_always_is_per_tool(tool_call: ToolCallEvent) -> None:
     hook = approval_required(allow_always=True)
-    context = make_context("y", variables={"approval_required:always": {"other_tool": True}})
+    context = make_context("y", variables={BYPASS_KEY: {"other_tool": True}})
 
     expected = ToolResultEvent.from_call(tool_call, result="ok")
     call_next = AsyncMock(return_value=expected)

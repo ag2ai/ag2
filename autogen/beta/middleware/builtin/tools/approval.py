@@ -10,6 +10,7 @@ _DEFAULT_MESSAGE = (
     "Agent wants to call the tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N?\n"
 )
 _DEFAULT_MESSAGE_ALWAYS = "Agent wants to call the tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N/Always?\n"
+BYPASS_KEY = "approval_required:always"
 
 
 def approval_required(
@@ -37,7 +38,6 @@ def approval_required(
     """
 
     prompt = message if message is not None else (_DEFAULT_MESSAGE_ALWAYS if allow_always else _DEFAULT_MESSAGE)
-    bypass_key = "approval_required:always"
 
     async def hitl_hook(
         call_next: ToolExecution,
@@ -45,7 +45,7 @@ def approval_required(
         context: Context,
     ) -> ToolResultType:
         if allow_always:
-            bypass_dict = context.variables.get(bypass_key, {})
+            bypass_dict = context.variables.get(BYPASS_KEY, {})
             if bypass_dict.get(event.name):
                 return await call_next(event, context)
 
@@ -57,9 +57,9 @@ def approval_required(
         ).lower()
 
         if allow_always and user_result == "always":
-            bypass_dict = context.variables.get(bypass_key, {})
+            bypass_dict = context.variables.get(BYPASS_KEY, {})
             bypass_dict[event.name] = True
-            context.variables[bypass_key] = bypass_dict
+            context.variables[BYPASS_KEY] = bypass_dict
             return await call_next(event, context)
 
         elif user_result in ("y", "yes", "1"):
