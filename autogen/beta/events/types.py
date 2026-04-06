@@ -1,11 +1,32 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import dataclass
 from typing import Any
 
 from .base import BaseEvent, Field
 from .tool_events import ToolCallsEvent
+
+
+@dataclass(frozen=True, slots=True)
+class Usage:
+    """Token usage normalized across beta LLM providers."""
+
+    prompt_tokens: float | None = None
+    completion_tokens: float | None = None
+    total_tokens: float | None = None
+    cache_read_input_tokens: float | None = None
+    cache_creation_input_tokens: float | None = None
+
+    def __bool__(self) -> bool:
+        return any((
+            self.prompt_tokens,
+            self.completion_tokens,
+            self.total_tokens,
+            self.cache_read_input_tokens,
+            self.cache_creation_input_tokens,
+        ))
 
 
 class ModelRequest(BaseEvent):
@@ -56,8 +77,12 @@ class ModelResponse(ModelEvent):
 
     message: ModelMessage | None = None
     tool_calls: ToolCallsEvent = Field(default_factory=ToolCallsEvent)
-    usage: dict[str, float] = Field(default_factory=dict)
+    usage: Usage = Field(default_factory=Usage)
     response_force: bool = False
+
+    images: list[bytes] = Field(default_factory=list)
+
+    # Tracing information
     model: str | None = None
     provider: str | None = None
     finish_reason: str | None = None
@@ -72,6 +97,8 @@ class ModelResponse(ModelEvent):
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
             text += f", usage={self.usage}"
+        if self.images:
+            text += f", images={len(self.images)}"
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
@@ -91,6 +118,7 @@ class ModelResponse(ModelEvent):
             and self.tool_calls == other.tool_calls
             and self.usage == other.usage
             and self.response_force == other.response_force
+            and self.images == other.images
         )
 
 
@@ -120,6 +148,12 @@ class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
     content: str
+
+    @classmethod
+    def ensure_message(cls, content: "str | HumanMessage") -> "HumanMessage":
+        if isinstance(content, HumanMessage):
+            return content
+        return cls(content=content)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, HumanMessage):

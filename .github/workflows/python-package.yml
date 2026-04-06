@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install from source
-        # This is required for the pre-commit tests
+        # This is required for the prek tests
         shell: pwsh
         run: uv pip install --system -e . wheel "setuptools==58.1.0"
       # - name: Conda list

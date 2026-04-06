@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,7 +7,7 @@ from contextlib import ExitStack
 from typing import Any, overload
 
 from autogen.beta.annotations import Context
-from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
@@ -27,6 +27,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool: ...
 
     @overload
@@ -38,6 +39,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
     def tool(
@@ -48,10 +50,18 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
             t = FunctionTool.ensure_tool(
-                tool(f, name=name, description=description, schema=schema, sync_to_thread=sync_to_thread)
+                tool(
+                    f,
+                    name=name,
+                    description=description,
+                    schema=schema,
+                    sync_to_thread=sync_to_thread,
+                    middleware=middleware,
+                )
             )
             self.tools.append(t)
             return t

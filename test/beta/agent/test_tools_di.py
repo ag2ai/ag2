@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -112,7 +112,7 @@ async def test_inject_alias(
 
 
 @pytest.mark.asyncio()
-async def test_inject_by_custon_name(
+async def test_inject_by_custom_name(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:

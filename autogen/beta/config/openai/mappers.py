@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,9 +6,17 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
+from autogen.beta.tools.builtin.shell import (
+    ContainerAutoEnvironment,
+    ContainerReferenceEnvironment,
+    ShellToolSchema,
+)
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -64,7 +72,9 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
     return schema
 
 
-def response_proto_to_text_config(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_text_config(
+    response: ResponseProto | None,
+) -> dict[str, Any] | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:
         return
@@ -192,10 +202,96 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
             if t.user_location.timezone is not None:
                 loc["timezone"] = t.user_location.timezone
             result["user_location"] = loc
+        if t.allowed_domains is not None:
+            result["filters"] = {"allowed_domains": t.allowed_domains}
         return result
 
     elif isinstance(t, CodeExecutionToolSchema):
-        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        # https://developers.openai.com/api/docs/guides/tools-code-interpreter
         return {"type": "code_interpreter", "container": {"type": "auto"}}
 
+    elif isinstance(t, ShellToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-shell
+        result_shell: dict[str, Any] = {"type": "shell"}
+        if t.environment is not None:
+            env: dict[str, Any]
+            if isinstance(t.environment, ContainerAutoEnvironment):
+                env = {"type": "container_auto"}
+                if t.environment.network_policy is not None:
+                    env["network_policy"] = {
+                        "type": "allowlist",
+                        "allowed_domains": t.environment.network_policy.allowed_domains,
+                    }
+            elif isinstance(t.environment, ContainerReferenceEnvironment):
+                env = {
+                    "type": "container_reference",
+                    "container_id": t.environment.container_id,
+                }
+            else:
+                env = {"type": "local"}
+            result_shell["environment"] = env
+        return result_shell
+
+    elif isinstance(t, ImageGenerationToolSchema):
+        result: dict[str, Any] = {"type": "image_generation"}
+        if t.quality is not None:
+            result["quality"] = t.quality
+        if t.size is not None:
+            result["size"] = t.size
+        if t.background is not None:
+            result["background"] = t.background
+        if t.output_format is not None:
+            result["output_format"] = t.output_format
+        if t.output_compression is not None:
+            result["output_compression"] = t.output_compression
+        if t.partial_images is not None:
+            result["partial_images"] = t.partial_images
+        return result
+
+    elif isinstance(t, MCPServerToolSchema):
+        # https://platform.openai.com/docs/guides/tools-remote-mcp
+        result = {
+            "type": "mcp",
+            "server_label": t.server_label,
+            "server_url": t.server_url,
+            "require_approval": "never",
+        }
+        if t.description is not None:
+            result["server_description"] = t.description
+        if t.allowed_tools is not None:
+            result["allowed_tools"] = t.allowed_tools
+        if t.headers is not None:
+            result["headers"] = t.headers
+        elif t.authorization_token is not None:
+            result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
+        return result
+
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def normalize_usage(usage: dict[str, Any]) -> Usage:
+    """Lift OpenAI's nested cache token counts to top-level keys."""
+    return Usage(
+        prompt_tokens=_usage_float(usage.get("prompt_tokens")),
+        completion_tokens=_usage_float(usage.get("completion_tokens")),
+        total_tokens=_usage_float(usage.get("total_tokens")),
+        cache_read_input_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens") or None,
+        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+    )
+
+
+def normalize_responses_usage(usage: dict[str, Any]) -> Usage:
+    """Normalize Responses API usage keys and lift nested cache tokens."""
+    return Usage(
+        prompt_tokens=_usage_float(usage.get("prompt_tokens") or usage.get("input_tokens")),
+        completion_tokens=_usage_float(usage.get("completion_tokens") or usage.get("output_tokens")),
+        total_tokens=_usage_float(usage.get("total_tokens")),
+        cache_read_input_tokens=(usage.get("input_tokens_details") or {}).get("cached_tokens") or None,
+        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+    )
+
+
+def _usage_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)

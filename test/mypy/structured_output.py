@@ -77,7 +77,7 @@ async def check_response_schema_object() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_sync_callable_reponse() -> None:
+async def check_sync_callable_response() -> None:
     @response_schema
     def func(content: str) -> int:
         return int(content)
@@ -93,7 +93,7 @@ async def check_sync_callable_reponse() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_async_callable_reponse() -> None:
+async def check_async_callable_response() -> None:
     @response_schema
     async def func(content: str) -> int:
         return int(content)
@@ -109,7 +109,7 @@ async def check_async_callable_reponse() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_converstation_save_type() -> None:
+async def check_conversation_save_type() -> None:
     agent = Agent(
         "test",
         config=TestConfig(),

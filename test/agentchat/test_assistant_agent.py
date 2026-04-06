@@ -66,9 +66,10 @@ def test_ai_user_proxy_agent(
     _test_ai_user_proxy_agent(credentials_from_test_param)
 
 
+@pytest.mark.timeout(60)
 @run_for_optional_imports("openai", "openai")
-def test_gpt4omini(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
-    config_list = credentials_gpt_4o_mini.config_list
+def test_gpt4omini(credentials_openai_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
+    config_list = credentials_openai_mini.config_list
     llm_config = {
         "cache_seed": 42,
         "config_list": config_list,
@@ -108,9 +109,9 @@ If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMI
 
 @run_for_optional_imports("openai", "openai")
 def test_create_execute_script(
-    credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=3
+    credentials_openai_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=3
 ):
-    config_list = credentials_gpt_4o_mini.config_list
+    config_list = credentials_openai_mini.config_list
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
     llm_config = {
@@ -158,8 +159,8 @@ print('Hello world!')
 
 
 @run_for_optional_imports("openai", "openai")
-def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=2):
-    config_list = credentials_gpt_4o_mini.config_list
+def test_tsp(credentials_openai_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=2):
+    config_list = credentials_openai_mini.config_list
     hard_questions = [
         "What if we must go from node 1 to node 2?",
         "Can we double all distances?",
@@ -193,8 +194,8 @@ def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max
 
 
 @run_for_optional_imports("openai", "openai")
-def test_standalone(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+def test_standalone(credentials_openai_mini: Credentials):
+    config_list = credentials_openai_mini.config_list
 
     x_assistant = AssistantAgent(name="x_assistant", llm_config={"temperature": 0, "config_list": config_list})
 
@@ -216,8 +217,8 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.asyncio
-async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+async def test_standalone_async(credentials_openai_mini: Credentials):
+    config_list = credentials_openai_mini.config_list
 
     x_assistant = AssistantAgent(name="x_assistant", llm_config={"temperature": 0, "config_list": config_list})
 

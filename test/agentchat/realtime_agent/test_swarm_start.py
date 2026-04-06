@@ -25,13 +25,13 @@ logger = getLogger(__name__)
 
 
 class TestSwarmE2E:
-    async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
+    async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_openai_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and Realtime API.
 
         """
-        openai_api_key = credentials_gpt_4o_mini.api_key
+        openai_api_key = credentials_openai_mini.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -62,7 +62,7 @@ class TestSwarmE2E:
             weatherman = ConversableAgent(
                 name="Weatherman",
                 system_message="You are a weatherman. You can answer questions about the weather.",
-                llm_config=credentials_gpt_4o_mini.llm_config,
+                llm_config=credentials_openai_mini.llm_config,
                 functions=[get_weather],
             )
 
@@ -117,7 +117,7 @@ class TestSwarmE2E:
         ],
     )
     async def test_e2e(
-        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+        self, credentials_llm_realtime: str, credentials_openai_mini: Credentials, request: FixtureRequest
     ) -> None:
         """End-to-end test for the RealtimeAgent.
 
@@ -130,7 +130,7 @@ class TestSwarmE2E:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
                 await self._test_e2e(
                     credentials_llm_realtime=credentials,
-                    credentials_gpt_4o_mini=credentials_gpt_4o_mini,
+                    credentials_openai_mini=credentials_openai_mini,
                 )
                 return  # Exit the function if the test passes
             except Exception as e:

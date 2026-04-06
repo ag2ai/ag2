@@ -123,6 +123,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
                             for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
                         ]
                         first_message: Message | None = None  # type: ignore[no-any-unimported]
+                        sent_message_id = None
 
                         for i, chunk in enumerate(chunks):
                             sent = await client.send_message(
