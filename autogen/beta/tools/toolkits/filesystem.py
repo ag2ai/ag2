@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from pathlib import Path
 from typing import Annotated
 
@@ -56,11 +57,19 @@ class FilesystemToolset(Toolkit):
 
 
 def _make_read_file(base: Path) -> FunctionTool:
-    @tool(description="Read the contents of a file and return them as a string.")
+    @tool(
+        description="Read the contents of a file. Returns text by default. Set raw=true to read binary content as base64."
+    )
     def read_file(
         path: Annotated[str, Field(description="Relative path to the file to read.")],
+        raw: bool = Field(
+            default=False, description="If true, read the file as binary and return base64-encoded content."
+        ),
     ) -> str:
-        return _resolve_path(base, path).read_text()
+        target = _resolve_path(base, path)
+        if raw:
+            return base64.b64encode(target.read_bytes()).decode("ascii")
+        return target.read_text()
 
     return read_file
 

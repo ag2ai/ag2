@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -61,6 +62,30 @@ async def test_read_file(tmp_path: Path) -> None:
     # Second call receives the tool result; verify the file content was read
     tool_result_msg = tracking.mock.call_args_list[1][0][0]
     assert "hello world" in tool_result_msg.results[0].content
+
+
+@pytest.mark.asyncio
+async def test_read_file_raw(tmp_path: Path) -> None:
+    binary_content = bytes(range(256))
+    (tmp_path / "binary.bin").write_bytes(binary_content)
+
+    toolset = FilesystemToolset(base_path=tmp_path)
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(
+                name="read_file",
+                arguments=json.dumps({"path": "binary.bin", "raw": True}),
+            ),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[toolset])
+    await agent.ask("read binary")
+
+    tool_result_msg = tracking.mock.call_args_list[1][0][0]
+    result = tool_result_msg.results[0].content
+    assert base64.b64decode(result) == binary_content
 
 
 @pytest.mark.asyncio
