@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ToolResultsEvent
 
 
 class TokenBudgetPolicy:
@@ -42,6 +42,9 @@ class TokenBudgetPolicy:
             retained.append(event)
             budget -= cost
         retained.reverse()
+        # Skip leading ToolResultsEvents whose matching tool_use was trimmed away.
+        while retained and isinstance(retained[0], ToolResultsEvent):
+            retained = retained[1:]
 
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."]

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ToolResultsEvent
 
 
 class SlidingWindowPolicy:
@@ -32,6 +32,9 @@ class SlidingWindowPolicy:
         if total <= self._max:
             return prompts, events
         trimmed = events[-self._max :]
+        # Skip leading ToolResultsEvents whose matching tool_use was trimmed away.
+        while trimmed and isinstance(trimmed[0], ToolResultsEvent):
+            trimmed = trimmed[1:]
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing last {len(trimmed)} of {total} events."]
         return prompts, trimmed
