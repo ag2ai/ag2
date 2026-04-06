@@ -1,0 +1,5 @@
+rules:
+  dangerous-triggers:
+    ignore:
+      - mkdocs-check-broken-links.yml
+      - pr_labeler.yaml

@@ -100,6 +100,15 @@ repos:
           website/.*
         )$
 
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: zizmor
+        entry: "just zizmor"
+        language: system
+        files: '^\.github/workflows/'
+        pass_filenames: false
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
