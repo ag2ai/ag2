@@ -5,7 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
+import warnings
 from typing import Any, Literal, Optional, Protocol
+
+from typing_extensions import deprecated
 
 from .... import Agent, ConversableAgent, code_utils
 from ....cache import AbstractCache
@@ -119,9 +122,17 @@ class DalleImageGenerator:
         return ",".join([str(k) for k in keys])
 
 
+@deprecated(
+    "ImageGeneration capability is deprecated and will be removed in v0.14. "
+    "It depends on the deprecated TextAnalyzerAgent."
+)
 @require_optional_import("PIL", "unknown")
 class ImageGeneration(AgentCapability):
-    """This capability allows a ConversableAgent to generate images based on the message received from other Agents.
+    """(Deprecated) This capability allows a ConversableAgent to generate images based on the message received from other Agents.
+
+    .. deprecated::
+        ImageGeneration capability is deprecated and will be removed in v0.14.
+        It depends on the deprecated TextAnalyzerAgent.
 
     1. Utilizes a TextAnalyzerAgent to analyze incoming messages to identify requests for image generation and
         extract relevant details.
@@ -176,6 +187,12 @@ class ImageGeneration(AgentCapability):
             This capability registers a new reply function to handle messages with image generation requests.
             Defaults to 2 to place it after the check termination and human reply for a ConversableAgent.
         """
+        warnings.warn(
+            "ImageGeneration capability is deprecated and will be removed in v0.14. "
+            "It depends on the deprecated TextAnalyzerAgent.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._image_generator = image_generator
         self._cache = cache
         self._text_analyzer_llm_config = text_analyzer_llm_config
