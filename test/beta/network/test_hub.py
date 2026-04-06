@@ -850,3 +850,228 @@ class TestHubConnectNameCollision:
 
         assert not isinstance(hub.agents["writer"], RemoteAgent)
         assert isinstance(hub.agents["researcher"], RemoteAgent)
+
+
+# ---------------------------------------------------------------------------
+# ask_stream() tests
+# ---------------------------------------------------------------------------
+
+from autogen.beta.context import Context
+from autogen.beta.events.types import ModelMessage, ModelMessageChunk, ModelResponse
+from autogen.beta.stream import MemoryStream
+
+
+class _StreamingAgent:
+    """Mock agent that emits ModelMessageChunk events on the stream.
+
+    Simulates what a real LLM client does during streaming generation.
+    """
+
+    def __init__(self, name: str, chunks: list[str]):
+        self.name = name
+        self._chunks = chunks
+        self.received_tools: list = []
+
+    async def ask(self, message: str, **kwargs):
+        self.received_tools = list(kwargs.get("tools", []))
+        stream = kwargs.get("stream")
+
+        if stream:
+            ctx = Context(stream)
+            # Emit chunks like a real LLM client
+            for chunk in self._chunks:
+                await ctx.send(ModelMessageChunk(content=chunk))
+            # Emit final response
+            full_text = "".join(self._chunks)
+            msg = ModelMessage(content=full_text)
+            await ctx.send(msg)
+            await ctx.send(ModelResponse(message=msg, finish_reason="stop"))
+
+        full_text = "".join(self._chunks)
+        return type("Reply", (), {"content": full_text, "body": full_text})()
+
+
+class _StreamingAgentWithToolUse:
+    """Mock agent that emits chunks for an intermediate tool_use response,
+    then emits chunks for the final answer — simulating a tool call cycle.
+    """
+
+    def __init__(self, name: str, intermediate_chunks: list[str], final_chunks: list[str]):
+        self.name = name
+        self._intermediate = intermediate_chunks
+        self._final = final_chunks
+
+    async def ask(self, message: str, **kwargs):
+        stream = kwargs.get("stream")
+        if stream:
+            ctx = Context(stream)
+            # Intermediate: tool_use response (chunks shouldn't be in final output)
+            for chunk in self._intermediate:
+                await ctx.send(ModelMessageChunk(content=chunk))
+            await ctx.send(ModelResponse(
+                message=ModelMessage(content="".join(self._intermediate)),
+                finish_reason="tool_use",
+            ))
+
+            # Final answer
+            for chunk in self._final:
+                await ctx.send(ModelMessageChunk(content=chunk))
+            full = "".join(self._final)
+            await ctx.send(ModelResponse(
+                message=ModelMessage(content=full),
+                finish_reason="stop",
+            ))
+
+        full = "".join(self._final)
+        return type("Reply", (), {"content": full, "body": full})()
+
+
+class TestHubAskStream:
+    """Tests for Hub.ask_stream() — streaming text chunks from agent."""
+
+    @pytest.mark.asyncio
+    async def test_basic_streaming(self) -> None:
+        """ask_stream() yields each ModelMessageChunk content."""
+        hub = Hub()
+        agent = _StreamingAgent("writer", ["Hello", " world", "!"])
+        await hub.register(agent, capabilities=["write"])
+
+        chunks = []
+        async for chunk in hub.ask_stream(agent, "say hello"):
+            chunks.append(chunk)
+
+        assert chunks == ["Hello", " world", "!"]
+
+    @pytest.mark.asyncio
+    async def test_stream_by_name(self) -> None:
+        """ask_stream() resolves agent by string name."""
+        hub = Hub()
+        await hub.register(
+            _StreamingAgent("bot", ["Hi", " there"]),
+            capabilities=["chat"],
+        )
+
+        chunks = []
+        async for chunk in hub.ask_stream("bot", "greet me"):
+            chunks.append(chunk)
+
+        assert chunks == ["Hi", " there"]
+
+    @pytest.mark.asyncio
+    async def test_stream_unknown_agent_raises(self) -> None:
+        """ask_stream() with unknown agent name raises KeyError."""
+        hub = Hub()
+        with pytest.raises(KeyError, match="not registered"):
+            async for _ in hub.ask_stream("ghost", "hello"):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_stream_injects_network_tools(self) -> None:
+        """ask_stream() injects network tools like ask()."""
+        agent = _StreamingAgent("worker", ["ok"])
+        hub = Hub()
+        await hub.register(agent, capabilities=["work"])
+
+        chunks = []
+        async for chunk in hub.ask_stream(agent, "do work"):
+            chunks.append(chunk)
+
+        assert chunks == ["ok"]
+        tool_names = [_tool_name(t) for t in agent.received_tools]
+        assert "network" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_stream_includes_tool_use_intermediate_chunks(self) -> None:
+        """ask_stream() yields ALL chunks including intermediate tool_use rounds.
+
+        The voice pipeline needs every chunk for progressive TTS, even if
+        some come from intermediate reasoning before tool execution.
+        """
+        agent = _StreamingAgentWithToolUse(
+            "analyst",
+            intermediate_chunks=["Let me ", "search..."],
+            final_chunks=["The answer", " is 42"],
+        )
+        hub = Hub()
+        await hub.register(agent, capabilities=["analyze"])
+
+        chunks = []
+        async for chunk in hub.ask_stream(agent, "what is the answer?"):
+            chunks.append(chunk)
+
+        # All chunks from both phases should be yielded
+        assert chunks == ["Let me ", "search...", "The answer", " is 42"]
+
+    @pytest.mark.asyncio
+    async def test_stream_empty_response(self) -> None:
+        """ask_stream() handles agent that generates no chunks."""
+        agent = _StreamingAgent("quiet", [])
+        hub = Hub()
+        await hub.register(agent, capabilities=["silence"])
+
+        chunks = []
+        async for chunk in hub.ask_stream(agent, "say nothing"):
+            chunks.append(chunk)
+
+        assert chunks == []
+
+    @pytest.mark.asyncio
+    async def test_stream_single_large_chunk(self) -> None:
+        """ask_stream() handles single-chunk response."""
+        text = "A" * 5000
+        agent = _StreamingAgent("verbose", [text])
+        hub = Hub()
+        await hub.register(agent, capabilities=["talk"])
+
+        chunks = []
+        async for chunk in hub.ask_stream(agent, "speak"):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0] == text
+
+    @pytest.mark.asyncio
+    async def test_stream_passes_kwargs(self) -> None:
+        """ask_stream() forwards kwargs like variables to the agent."""
+        received_kwargs = {}
+
+        class _KwargsCapture:
+            name = "capture"
+
+            async def ask(self, msg, **kwargs):
+                received_kwargs.update(kwargs)
+                stream = kwargs.get("stream")
+                if stream:
+                    ctx = Context(stream)
+                    await ctx.send(ModelMessageChunk(content="ok"))
+                    msg_event = ModelMessage(content="ok")
+                    await ctx.send(msg_event)
+                    await ctx.send(ModelResponse(message=msg_event, finish_reason="stop"))
+                return type("Reply", (), {"content": "ok", "body": "ok"})()
+
+        hub = Hub()
+        await hub.register(_KwargsCapture(), capabilities=["x"])
+
+        async for _ in hub.ask_stream(
+            "capture",
+            "test",
+            variables={"session_id": "sess-123", "modality": "voice"},
+        ):
+            pass
+
+        assert received_kwargs["variables"]["session_id"] == "sess-123"
+        assert received_kwargs["variables"]["modality"] == "voice"
+
+    @pytest.mark.asyncio
+    async def test_stream_with_custom_stream(self) -> None:
+        """ask_stream() accepts a custom stream kwarg (for reuse)."""
+        custom_stream = MemoryStream()
+        agent = _StreamingAgent("worker", ["chunk"])
+        hub = Hub()
+        await hub.register(agent, capabilities=["work"])
+
+        chunks = []
+        async for c in hub.ask_stream(agent, "go", stream=custom_stream):
+            chunks.append(c)
+
+        assert chunks == ["chunk"]
