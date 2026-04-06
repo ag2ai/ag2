@@ -42,89 +42,89 @@ pip install autogen[openai,graph]
 1. Import dependencies
 
     ```python
-    from autogen.agentchat import GroupChat, AssistantAgent, UserProxyAgent, GroupChatManager
-    from autogen.oai.openai_utils import config_list_from_dotenv
+from autogen.agentchat import GroupChat, AssistantAgent, UserProxyAgent, GroupChatManager
+from autogen.oai.openai_utils import config_list_from_dotenv
     ```
 2. Configure LLM parameters
 
     ```python
-    # Please feel free to change it as you wish
-    config_list = config_list_from_dotenv(
-            dotenv_file_path='.env',
-            model_api_key_map={'gpt-4-1106-preview':'OPENAI_API_KEY'},
-            filter_dict={
-                "model": {
-                    "gpt-4-1106-preview"
-                }
+# Please feel free to change it as you wish
+config_list = config_list_from_dotenv(
+        dotenv_file_path='.env',
+        model_api_key_map={'gpt-4-1106-preview':'OPENAI_API_KEY'},
+        filter_dict={
+            "model": {
+                "gpt-4-1106-preview"
             }
-        )
+        }
+    )
 
-    gpt_config = {
-        "cache_seed": None,
-        "temperature": 0,
-        "config_list": config_list,
-        "timeout": 100,
-    }
+gpt_config = {
+    "cache_seed": None,
+    "temperature": 0,
+    "config_list": config_list,
+    "timeout": 100,
+}
     ```
 
 3. Define the task
 
     ```python
-    # describe the task
-    task = """Add 1 to the number output by the previous role. If the previous number is 20, output "TERMINATE"."""
+# describe the task
+task = """Add 1 to the number output by the previous role. If the previous number is 20, output "TERMINATE"."""
     ```
 
 4. Define agents
 
     ```python
-    # agents configuration
-    engineer = AssistantAgent(
-        name="Engineer",
-        llm_config=gpt_config,
-        system_message=task,
-        description="""I am **ONLY** allowed to speak **immediately** after `Planner`, `Critic` and `Executor`.
-    If the last number mentioned by `Critic` is not a multiple of 5, the next speaker must be `Engineer`.
-    """
-    )
+# agents configuration
+engineer = AssistantAgent(
+    name="Engineer",
+    llm_config=gpt_config,
+    system_message=task,
+    description="""I am **ONLY** allowed to speak **immediately** after `Planner`, `Critic` and `Executor`.
+If the last number mentioned by `Critic` is not a multiple of 5, the next speaker must be `Engineer`.
+"""
+)
 
-    planner = AssistantAgent(
-        name="Planner",
-        system_message=task,
-        llm_config=gpt_config,
-        description="""I am **ONLY** allowed to speak **immediately** after `User` or `Critic`.
-    If the last number mentioned by `Critic` is a multiple of 5, the next speaker must be `Planner`.
-    """
-    )
+planner = AssistantAgent(
+    name="Planner",
+    system_message=task,
+    llm_config=gpt_config,
+    description="""I am **ONLY** allowed to speak **immediately** after `User` or `Critic`.
+If the last number mentioned by `Critic` is a multiple of 5, the next speaker must be `Planner`.
+"""
+)
 
-    executor = AssistantAgent(
-        name="Executor",
-        system_message=task,
-        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("FINISH"),
-        llm_config=gpt_config,
-        description="""I am **ONLY** allowed to speak **immediately** after `Engineer`.
-    If the last number mentioned by `Engineer` is a multiple of 3, the next speaker can only be `Executor`.
-    """
-    )
+executor = AssistantAgent(
+    name="Executor",
+    system_message=task,
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("FINISH"),
+    llm_config=gpt_config,
+    description="""I am **ONLY** allowed to speak **immediately** after `Engineer`.
+If the last number mentioned by `Engineer` is a multiple of 3, the next speaker can only be `Executor`.
+"""
+)
 
-    critic = AssistantAgent(
-        name="Critic",
-        system_message=task,
-        llm_config=gpt_config,
-        description="""I am **ONLY** allowed to speak **immediately** after `Engineer`.
-    If the last number mentioned by `Engineer` is not a multiple of 3, the next speaker can only be `Critic`.
-    """
-    )
+critic = AssistantAgent(
+    name="Critic",
+    system_message=task,
+    llm_config=gpt_config,
+    description="""I am **ONLY** allowed to speak **immediately** after `Engineer`.
+If the last number mentioned by `Engineer` is not a multiple of 3, the next speaker can only be `Critic`.
+"""
+)
 
-    user_proxy = UserProxyAgent(
-        name="User",
-        system_message=task,
-        code_execution_config=False,
-        human_input_mode="NEVER",
-        llm_config=False,
-        description="""
-    Never select me as a speaker.
-    """
-    )
+user_proxy = UserProxyAgent(
+    name="User",
+    system_message=task,
+    code_execution_config=False,
+    human_input_mode="NEVER",
+    llm_config=False,
+    description="""
+Never select me as a speaker.
+"""
+)
     ```
 
     1. Here, I have configured the `system_messages` as "task" because every agent should know what it needs to do. In this example, each agent has the same task, which is to count in sequence.
@@ -133,12 +133,12 @@ pip install autogen[openai,graph]
 5. Define the graph
 
     ```python
-    graph_dict = {}
-    graph_dict[user_proxy] = [planner]
-    graph_dict[planner] = [engineer]
-    graph_dict[engineer] = [critic, executor]
-    graph_dict[critic] = [engineer, planner]
-    graph_dict[executor] = [engineer]
+graph_dict = {}
+graph_dict[user_proxy] = [planner]
+graph_dict[planner] = [engineer]
+graph_dict[engineer] = [critic, executor]
+graph_dict[critic] = [engineer, planner]
+graph_dict[executor] = [engineer]
     ```
 
     1. **The graph here and the transition conditions mentioned above together form a complete FSM. Both are essential and cannot be missing.**
@@ -149,29 +149,29 @@ pip install autogen[openai,graph]
 6. Define a `GroupChat` and a `GroupChatManager`
 
     ```python
-    agents = [user_proxy, engineer, planner, executor, critic]
+agents = [user_proxy, engineer, planner, executor, critic]
 
-    # create the groupchat
-    group_chat = GroupChat(agents=agents, messages=[], max_round=25, allowed_or_disallowed_speaker_transitions=graph_dict, allow_repeat_speaker=None, speaker_transitions_type="allowed")
+# create the groupchat
+group_chat = GroupChat(agents=agents, messages=[], max_round=25, allowed_or_disallowed_speaker_transitions=graph_dict, allow_repeat_speaker=None, speaker_transitions_type="allowed")
 
-    # create the manager
-    manager = GroupChatManager(
-        groupchat=group_chat,
-        llm_config=gpt_config,
-        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-        code_execution_config=False,
-    )
+# create the manager
+manager = GroupChatManager(
+    groupchat=group_chat,
+    llm_config=gpt_config,
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    code_execution_config=False,
+)
     ```
 
 7. Initiate the chat
 
     ```python
-    # initiate the task
-    user_proxy.initiate_chat(
-        manager,
-        message="1",
-        clear_history=True
-    )
+# initiate the task
+user_proxy.initiate_chat(
+    manager,
+    message="1",
+    clear_history=True
+)
     ```
 
 8. You may get the following output(I deleted the ignorable warning):
