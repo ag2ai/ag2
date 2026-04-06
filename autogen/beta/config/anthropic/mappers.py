@@ -15,7 +15,7 @@ from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
 from autogen.beta.tools.builtin.shell import ShellToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
+from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -85,7 +85,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         }
 
     elif isinstance(t, WebSearchToolSchema):
-        result: dict[str, Any] = {"type": t.web_search_version, "name": WEB_SEARCH_TOOL_NAME}
+        result: dict[str, Any] = {"type": t.web_search_version, "name": "web_search"}
         if t.max_uses is not None:
             result["max_uses"] = t.max_uses
         if t.user_location is not None:
