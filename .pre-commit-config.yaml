@@ -104,8 +104,9 @@ repos:
     hooks:
       - id: zizmor
         name: zizmor
-        entry: "just zizmor"
-        language: system
+        entry: zizmor --config .github/zizmor.yml .
+        language: python
+        additional_dependencies: ['zizmor']
         files: '^\.github/workflows/'
         pass_filenames: false
 
