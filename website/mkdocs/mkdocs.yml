@@ -3,7 +3,7 @@ site_name: AG2
 site_description: A programming framework for agentic AI
 site_url: https://docs.ag2.ai/
 site_author: Chi Wang & Qingyun Wu
-copyright: '&copy; 2025 <a href="https://ag2.ai/" target="_blank" rel="noopener">ag2</a>'
+copyright: '&copy; 2026 <a href="https://ag2.ai/" target="_blank" rel="noopener">ag2</a>'
 
 docs_dir: docs
 
@@ -156,13 +156,15 @@ markdown_extensions:
   - pymdownx.inlinehilite        # inline code highlighting `#!python <code>`
   - pymdownx.tabbed:
       alternate_style: true      # create tabs group
+  - pymdownx.tasklist:          # checkbox/task list support
+      custom_checkbox: true
   - attr_list                    # specify html attrs in markdown
   - md_in_html                   # render md wrapped to html tags
 
 extra:
   analytics:
     provider: google
-    property: G-2GN2KN2CE4
+    property: G-9R7S08X25X
   social_image: https://opengraph.githubassets.com/1671805243.560327/ag2ai/ag2
   social:
     # Discord link should be first

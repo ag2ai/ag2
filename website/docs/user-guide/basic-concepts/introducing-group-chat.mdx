@@ -3,6 +3,9 @@ title: "Agent Orchestration: Coordinating Multiple Agents"
 sidebarTitle: "Agent Orchestration: Coordinating Multiple Agents"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 In our financial compliance example, we've successfully implemented a human-in-the-loop agent that processes transactions and flags suspicious ones for human approval. This works well for basic compliance checking, but what if we need to provide detailed summary reports after all transactions are processed?
 
 We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The `finance_bot` would have multiple responsibilities, making it harder to maintain and extend.
@@ -59,9 +62,18 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 
+# build a Config List
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    }
+)
+
 # Create your specialized agents
-agent_1 = ConversableAgent(name="agent_1", llm_config=llm_config, system_message="...")
-agent_2 = ConversableAgent(name="agent_2", llm_config=llm_config, system_message="...")
+agent_1 = ConversableAgent(name="agent_1", llm_config=llm_config, system_message="goto agent_2")
+agent_2 = ConversableAgent(name="agent_2", llm_config=llm_config, system_message="go back to agent_1")
 
 # Create human agent if needed
 human = ConversableAgent(name="human", human_input_mode="ALWAYS")
@@ -109,16 +121,20 @@ from autogen.agentchat.group.patterns import AutoPattern
 
 import os
 import random
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Note: Make sure to set your API key in your environment first
 
-# Configure the LLM
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-    "api_key": os.environ.get("OPENAI_API_KEY"),
-    "temperature": 0.2,
-})
+# Build a LLM Config List
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    }
+)
 
 # Define the system message for our finance bot
 finance_system_message = """
@@ -206,25 +222,7 @@ result, context_variables, last_agent = initiate_group_chat(
 
 When we run this enhanced financial compliance system, here's what happens:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
-    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects transactions"| Finance
-
-    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
-    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
-
-    Summary --> |"Generates report"| Human
-    Human --> |"Reviews & exits"| End([End])
-
-    style GroupOrch fill:#fff0f5,stroke:#ff69b4
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style GroupManager fill:#ffebee,stroke:#f44336
-```
+![Group Chat Workflow](assets/group-chat-workflow.png)
 
 - **Initial Processing**: The `finance_bot` analyzes each transaction
 
@@ -261,16 +259,19 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 
     import os
     import random
+    from dotenv import load_dotenv
 
-    # Note: Make sure to set your API key in your environment first
+    load_dotenv()
 
+    # Note: Make sure to set your API key in your environment first, i.e., .env
     # Configure the LLM
-    llm_config = LLMConfig(config_list={
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ.get("OPENAI_API_KEY"),
-        "temperature": 0.2
-    })
+    llm_config = LLMConfig(
+        config_list={
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    )
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -508,24 +509,7 @@ result, _, _ = initiate_group_chat(
 
 With these changes, our workflow becomes more streamlined:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
-    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects transactions"| Finance
-
-    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
-    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
-
-    Summary --> |"Generates report with termination marker"| End([End])
-
-    style GroupOrch fill:#fff0f5,stroke:#ff69b4
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style GroupManager fill:#ffebee,stroke:#f44336
-```
+![Updated Flow with Automatic Termination](assets/auto-termination-workflow.png)
 
 Now the human agent only participates when needed for transaction approval, and the workflow automatically terminates after the summary report is generated.
 
@@ -539,6 +523,9 @@ Here's the updated code that incorporates automatic termination:
     from typing import Any
     import os
     import random
+    from dotenv import load_dotenv
+
+    load_dotenv()
 
     from autogen import ConversableAgent, LLMConfig
     from autogen.agentchat import initiate_group_chat
@@ -547,12 +534,13 @@ Here's the updated code that incorporates automatic termination:
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(config_list={
-        "api_type": "openai",
-        "model": "gpt-5-nano",
-        "api_key": os.environ.get("OPENAI_API_KEY"),
-        "temperature": 0.2,
-    })
+    llm_config = LLMConfig(
+        config_list={
+            "api_type": "openai",
+            "model": "gpt-5-nano",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    )
 
     # Define the system message for our finance bot
     finance_system_message = """

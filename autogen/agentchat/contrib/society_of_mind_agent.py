@@ -169,7 +169,7 @@ class SocietyOfMindAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        # We want to clear the inner monolgue, keeping only the exteranl chat for context.
+        # We want to clear the inner monolgue, keeping only the external chat for context.
         # Reset all the counters and histories, then populate agents with necessary context from the external chat
         self.chat_manager.reset()
         self.update_chat_manager(self.chat_manager)
@@ -193,7 +193,7 @@ class SocietyOfMindAgent(ConversableAgent):
 
         try:
             self.initiate_chat(self.chat_manager, message=messages[-1], clear_history=False)
-        except:
+        except Exception:
             traceback.print_exc()
 
         response_preparer = self.response_preparer

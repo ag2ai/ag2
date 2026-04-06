@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+import json
+from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -12,7 +13,9 @@ from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import __TOOL_EXECUTOR_NAME__, GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.code_utils import content_str
 from autogen.tools import Tool
+from autogen.types import UserMessageImageContentPart, UserMessageTextContentPart
 
 
 class TestGroupToolExecutor:
@@ -89,6 +92,44 @@ class TestGroupToolExecutor:
         # The function's signature should be updated
         assert hasattr(result, "__signature__")
         assert result.__signature__ == mock_new_sig
+
+    @pytest.mark.asyncio
+    async def test_modify_context_variables_param_preserves_async(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param preserves async nature of functions."""
+        import asyncio
+
+        async def async_tool(text: str, context_variables: ContextVariables) -> str:
+            await asyncio.sleep(0)
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(async_tool, context_vars)
+
+        # The wrapper should be a coroutine function
+        assert asyncio.iscoroutinefunction(result_func), (
+            "_modify_context_variables_param should preserve async nature of functions"
+        )
+
+        # Calling it should return an awaitable that resolves correctly
+        result = await result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
+
+    def test_modify_context_variables_param_preserves_sync(self, executor: GroupToolExecutor) -> None:
+        """Test that _modify_context_variables_param keeps sync functions as sync."""
+        import asyncio
+
+        def sync_tool(text: str, context_variables: ContextVariables) -> str:
+            return f"result:{text}"
+
+        context_vars = ContextVariables()
+        result_func = executor._modify_context_variables_param(sync_tool, context_vars)
+
+        # The wrapper should NOT be a coroutine function
+        assert not asyncio.iscoroutinefunction(result_func)
+
+        # Calling it should work correctly
+        result = result_func(text="hello", context_variables=context_vars)
+        assert result == "result:hello"
 
     @patch("autogen.agentchat.group.group_tool_executor.inject_params")
     def test_change_tool_context_variables_to_depends(
@@ -504,3 +545,255 @@ class TestGroupToolExecutor:
             result = executor.is_handoff_function(message8)
             assert result is True
             assert mock_check.call_count == 2
+
+    def test_normalize_tool_content_none(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with None."""
+        result = executor._normalize_tool_content(None)
+        assert result == ""
+
+    def test_normalize_tool_content_string(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a string."""
+        result = executor._normalize_tool_content("hello world")
+        assert result == "hello world"
+
+    def test_normalize_tool_content_plain_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a plain Python list."""
+        content = [5, 3, 10]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_empty_list(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an empty list."""
+        result = executor._normalize_tool_content([])
+        assert result == json.dumps([])
+
+    def test_normalize_tool_content_openai_format(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with OpenAI message format (list of dicts with 'type' keys)."""
+        content = [
+            {"type": "text", "text": "hello"},
+            {"type": "image_url", "image_url": {"url": "test.jpg"}},
+        ]
+        result = executor._normalize_tool_content(content)
+        assert result == content_str(cast(list[UserMessageTextContentPart | UserMessageImageContentPart], content))
+
+    def test_normalize_tool_content_list_of_dicts_no_type(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a list of dicts without 'type' keys."""
+        content = [{"key": "value"}, {"another": "dict"}]
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_tuple(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a tuple."""
+        content = (5, 3, 10)
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_dict(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a dictionary."""
+        content = {"key": "value", "nested": {"a": 1}}
+        result = executor._normalize_tool_content(content)
+        assert result == json.dumps(content)
+
+    def test_normalize_tool_content_int(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with an integer."""
+        result = executor._normalize_tool_content(42)
+        assert result == json.dumps(42)
+
+    def test_normalize_tool_content_float(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a float."""
+        result = executor._normalize_tool_content(3.14)
+        assert result == json.dumps(3.14)
+
+    def test_normalize_tool_content_bool(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a boolean."""
+        result = executor._normalize_tool_content(True)
+        assert result == json.dumps(True)
+
+    def test_normalize_tool_content_non_json_serializable(self, executor: GroupToolExecutor) -> None:
+        """Test _normalize_tool_content with a non-JSON-serializable object."""
+
+        class CustomObject:
+            def __str__(self) -> str:
+                return "custom_object"
+
+        content = CustomObject()
+        result = executor._normalize_tool_content(content)
+        assert result == str(content)
+
+
+class TestGroupToolExecutorAsync:
+    """Tests for the async _a_generate_group_tool_reply method."""
+
+    @pytest.fixture
+    def executor(self) -> GroupToolExecutor:
+        """Create a GroupToolExecutor for testing."""
+        return GroupToolExecutor()
+
+    def test_async_reply_handler_registered(self, executor: GroupToolExecutor) -> None:
+        """Test that the async reply handler is registered during __init__."""
+        async_handler_found = False
+        for reply_func_tuple in executor._reply_func_list:
+            func = reply_func_tuple["reply_func"]
+            func_name = getattr(func, "__name__", "") or getattr(func, "__func__", lambda: None).__name__
+            if func_name == "_a_generate_group_tool_reply":
+                assert reply_func_tuple.get("ignore_async_in_sync_chat"), (
+                    "Async handler should have ignore_async_in_sync_chat=True"
+                )
+                async_handler_found = True
+                break
+        assert async_handler_found, "_a_generate_group_tool_reply should be registered as a reply function"
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_with_no_tool_calls(self, executor: GroupToolExecutor) -> None:
+        """Test async handler with a message without tool_calls."""
+        message = {"role": "user", "content": "Hello"}
+        messages = [message]
+
+        success, result = await executor._a_generate_group_tool_reply(agent=executor, messages=messages)
+
+        assert success is False
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_with_tool_calls(self, executor: GroupToolExecutor) -> None:
+        """Test async handler with a message with tool_calls."""
+        tool_call = {
+            "id": "call1",
+            "function": {"name": "test_function", "arguments": '{"arg1": "value1"}'},
+        }
+        message = {"role": "user", "content": "Execute tool", "tool_calls": [tool_call]}
+        messages = [message]
+
+        mock_tool_response = {
+            "role": "tool",
+            "tool_responses": [{"tool_call_id": "call1", "role": "tool", "content": "Result: value1"}],
+            "content": "Result: value1",
+        }
+
+        with patch.object(
+            executor, "a_generate_tool_calls_reply", new_callable=AsyncMock, return_value=(True, mock_tool_response)
+        ) as mock_generate:
+            success, result = await executor._a_generate_group_tool_reply(agent=executor, messages=messages)
+
+            mock_generate.assert_called_once()
+            call_args = mock_generate.call_args[0][0]
+            assert len(call_args) == 1
+            assert "tool_calls" in call_args[0]
+            assert len(call_args[0]["tool_calls"]) == 1
+
+            assert success is True
+            assert result == mock_tool_response
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_with_reply_result(self, executor: GroupToolExecutor) -> None:
+        """Test async handler handling a ReplyResult response."""
+        result = ReplyResult(
+            message="Tool executed successfully",
+            target=MagicMock(spec=TransitionTarget),
+            context_variables=ContextVariables(data={"new_var": "new_value"}),
+        )
+
+        mock_agent = MagicMock(spec=ConversableAgent)
+        mock_agent.context_variables = ContextVariables()
+
+        tool_call = {"id": "call1", "function": {"name": "test_function", "arguments": "{}"}}
+        message = {"role": "user", "content": "Execute tool", "tool_calls": [tool_call]}
+        messages = [message]
+
+        mock_tool_response = {
+            "role": "tool",
+            "tool_responses": [{"tool_call_id": "call1", "role": "tool", "content": result}],
+            "content": str(result),
+        }
+
+        mock_agent.a_generate_tool_calls_reply = AsyncMock(return_value=(True, mock_tool_response))
+
+        success, response = await executor._a_generate_group_tool_reply(agent=mock_agent, messages=messages)
+
+        assert mock_agent.context_variables.get("new_var") == "new_value"
+        assert executor._group_next_target == result.target
+        assert success is True
+        assert response is not None
+        assert "content" in response
+        assert response["content"] == str(result)
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_with_multiple_tools(self, executor: GroupToolExecutor) -> None:
+        """Test async handler with multiple tool calls."""
+        result1 = ReplyResult(
+            message="Tool 1 executed", target=None, context_variables=ContextVariables(data={"var1": "value1"})
+        )
+        result2 = ReplyResult(
+            message="Tool 2 executed",
+            target=MagicMock(spec=TransitionTarget),
+            context_variables=ContextVariables(data={"var2": "value2"}),
+        )
+
+        mock_agent = MagicMock(spec=ConversableAgent)
+        mock_agent.context_variables = ContextVariables()
+
+        tool_call1 = {"id": "call1", "function": {"name": "function1", "arguments": "{}"}}
+        tool_call2 = {"id": "call2", "function": {"name": "function2", "arguments": "{}"}}
+        message = {"role": "user", "content": "Execute tools", "tool_calls": [tool_call1, tool_call2]}
+        messages = [message]
+
+        mock_response1 = {
+            "role": "tool",
+            "tool_responses": [{"tool_call_id": "call1", "role": "tool", "content": result1}],
+            "content": str(result1),
+        }
+        mock_response2 = {
+            "role": "tool",
+            "tool_responses": [{"tool_call_id": "call2", "role": "tool", "content": result2}],
+            "content": str(result2),
+        }
+
+        async def side_effect(messages: list[dict[str, Any]]) -> tuple[bool, dict[str, Any] | None]:
+            if len(messages) == 0:
+                return False, None
+            if messages[0]["tool_calls"][0]["id"] == "call1":
+                return True, mock_response1
+            else:
+                return True, mock_response2
+
+        mock_agent.a_generate_tool_calls_reply = AsyncMock(side_effect=side_effect)
+
+        success, response = await executor._a_generate_group_tool_reply(agent=mock_agent, messages=messages)
+
+        assert mock_agent.context_variables.get("var1") == "value1"
+        assert mock_agent.context_variables.get("var2") == "value2"
+        assert executor._group_next_target == result2.target
+        assert success is True
+        assert response is not None
+        assert "content" in response
+        assert str(result1) in response["content"]
+        assert str(result2) in response["content"]
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_error_handling(self, executor: GroupToolExecutor) -> None:
+        """Test error handling in async handler."""
+        tool_call = {"id": "call1", "function": {"name": "test_function", "arguments": "{}"}}
+        message = {"role": "user", "content": "Execute tool", "tool_calls": [tool_call]}
+        messages = [message]
+
+        with (
+            patch.object(executor, "a_generate_tool_calls_reply", new_callable=AsyncMock, return_value=(True, None)),
+            pytest.raises(ValueError, match="Tool call did not return a message"),
+        ):
+            await executor._a_generate_group_tool_reply(agent=executor, messages=messages)
+
+    @pytest.mark.asyncio
+    async def test_a_generate_group_tool_reply_structured_output(self, executor: GroupToolExecutor) -> None:
+        """Test async handler returns structured output directly."""
+        expected_args = {"key": "value", "nested": {"a": 1}}
+        tool_call = {
+            "id": "call1",
+            "function": {"name": "__structured_output", "arguments": expected_args},
+        }
+        message = {"role": "user", "content": "Execute tool", "tool_calls": [tool_call]}
+        messages = [message]
+
+        success, result = await executor._a_generate_group_tool_reply(agent=executor, messages=messages)
+
+        assert success is True
+        assert result == expected_args

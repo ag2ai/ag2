@@ -83,7 +83,7 @@ jobs:
             - Test coverage
 
             # Steps to run a Review:
-              1) Check if previous review is already done by Claude. If so, perform a re-reivew with the latest changes referring previous review.
+              1) Check if previous review is already done by Claude. If so, perform a re-review with the latest changes referring previous review.
               2) If no previous review is found, perform a new review with the latest changes.
 
             Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.

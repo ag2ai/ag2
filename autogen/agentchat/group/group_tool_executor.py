@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import json
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
@@ -11,6 +12,7 @@ from autogen.agentchat.group.events.transition_events import OnConditionLLMTrans
 from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 
+from ...fast_depends.utils import is_coroutine_callable
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -44,6 +46,9 @@ class GroupToolExecutor(ConversableAgent):
 
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
+
+        # Async version of reply function (ensures async tools run on the correct event loop)
+        self.register_reply([Agent, None], self._a_generate_group_tool_reply, ignore_async_in_sync_chat=True)
 
     def set_next_target(self, next_target: TransitionTarget) -> None:
         """Sets the next target to transition to, used in the determine_next_agent function."""
@@ -92,8 +97,18 @@ class GroupToolExecutor(ConversableAgent):
         """
         sig = inspect.signature(f)
 
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return f(*args, **kwargs)
+        if is_coroutine_callable(f):
+
+            async def _async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await f(*args, **kwargs)
+
+            wrapper: Callable[..., Any] = _async_wrapper
+        else:
+
+            def _sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return f(*args, **kwargs)
+
+            wrapper = _sync_wrapper
 
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
@@ -237,6 +252,40 @@ class GroupToolExecutor(ConversableAgent):
                 )
             )
 
+    def _normalize_tool_content(self, content: Any) -> str:
+        """Normalize tool return content to a string.
+
+        Handles both OpenAI message format (list of dicts with 'type' keys) and
+        plain Python objects (lists, tuples, dicts, primitives).
+
+        Args:
+            content: The content to normalize, can be any Python object
+
+        Returns:
+            str: String representation of the content
+        """
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+
+        # Check if it's a list in OpenAI message format (list of dicts with "type" keys)
+        if isinstance(content, list):
+            # Check if all items are dicts with "type" keys (OpenAI message format)
+            if content and all(isinstance(item, dict) and "type" in item for item in content):
+                return content_str(content)
+            # Otherwise, it's a plain Python list - serialize it
+            try:
+                return json.dumps(content)
+            except (TypeError, ValueError):
+                return str(content)
+
+        # For all other types (tuples, dicts, primitives, etc.), convert to string
+        try:
+            return json.dumps(content)
+        except (TypeError, ValueError):
+            return str(content)
+
     def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
@@ -306,9 +355,7 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    normalized_content = (
-                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
-                    )
+                    normalized_content = self._normalize_tool_content(content)
                     tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)
@@ -318,6 +365,80 @@ class GroupToolExecutor(ConversableAgent):
 
             # Put the tool responses and content strings back into the response message
             # Caters for multiple tool calls
+            if tool_message is None:
+                raise ValueError("Tool call did not return a message")
+
+            tool_message["tool_responses"] = tool_responses_inner
+            tool_message["content"] = "\n".join(contents)
+
+            return True, tool_message
+        return False, None
+
+    async def _a_generate_group_tool_reply(
+        self,
+        agent: ConversableAgent,
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
+        """Async version of _generate_group_tool_reply.
+
+        Uses a_generate_tool_calls_reply so that async tool functions
+        execute on the caller's event loop instead of a new thread.
+        """
+        if config is None:
+            config = agent  # type: ignore[assignment]
+        if messages is None:
+            messages = agent._oai_messages[sender]
+
+        message = messages[-1]
+        agent_name = message.get("name", sender.name if sender else "unknown")
+        self.set_tool_call_originator(agent_name)
+
+        if message.get("tool_calls"):
+            tool_call_count = len(message["tool_calls"])
+
+            tool_message = None
+            next_target: TransitionTarget | None = None
+            tool_responses_inner = []
+            contents = []
+            for index in range(tool_call_count):
+                message_copy = deepcopy(message)
+                tool_call = message_copy["tool_calls"][index]
+
+                function_name = tool_call.get("function", {}).get("name", "")
+                if function_name == "__structured_output":
+                    return True, tool_call.get("function", {}).get("arguments", {})
+
+                message_copy["tool_calls"] = [tool_call]
+
+                # Async tool execution — stays on the same event loop
+                _, tool_message = await agent.a_generate_tool_calls_reply([message_copy])
+
+                if tool_message is None:
+                    raise ValueError("Tool call did not return a message")
+
+                for tool_response in tool_message["tool_responses"]:
+                    content = tool_response.get("content")
+
+                    if isinstance(content, ReplyResult):
+                        if content.context_variables and content.context_variables.to_dict() != {}:
+                            agent.context_variables.update(content.context_variables.to_dict())
+                        if content.target is not None:
+                            self._send_reply_result_handoff_event(message_copy, content.target)
+                            next_target = content.target
+                    elif isinstance(content, TransitionTarget):
+                        self._send_llm_handoff_event(message_copy, content)
+                        next_target = content
+
+                    normalized_content = self._normalize_tool_content(content)
+                    tool_response["content"] = normalized_content
+
+                    tool_responses_inner.append(tool_response)
+                    contents.append(normalized_content)
+
+            self._group_next_target = next_target  # type: ignore[attr-defined]
+
             if tool_message is None:
                 raise ValueError("Tool call did not return a message")
 

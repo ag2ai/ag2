@@ -1,19 +1,22 @@
-"""A script to help with the translation of the docs."""
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# A script to help with the translation of the docs.
 
 import os
 import subprocess
+import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from shutil import rmtree
 from typing import Annotated
 
-import mkdocs.commands.build
 import mkdocs.commands.serve
 import typer
+from _website.generate_mkdocs import main as generate_files_for_mkdocs
 from create_api_docs import create_api_docs
 from mkdocs.config import load_config
-
-from autogen._website.generate_mkdocs import main as generate_files_for_mkdocs
 
 IGNORE_DIRS = ("assets", "stylesheets", "javascripts")
 
@@ -88,10 +91,20 @@ def preview():
 
 
 @app.command()
-def live(port: Annotated[str | None, typer.Argument()] = None):
+def live(
+    port: Annotated[str | None, typer.Argument()] = None,
+    skip_build: bool = typer.Option(
+        False, "--skip-build", help="Skip pre-processing (API docs, navigation generation)"
+    ),
+):
     dev_server = f"0.0.0.0:{port}" if port else DEV_SERVER
 
-    typer.echo("Serving mkdocs with live reload")
+    if not skip_build:
+        typer.echo("Pre-processing files for mkdocs...")
+        generate_files_for_mkdocs(force=False)
+        build_api_docs()
+        typer.echo("Pre-processing complete.")
+
     typer.echo(f"Serving at: http://{dev_server}")
     mkdocs.commands.serve.serve(dev_addr=dev_server)
 
@@ -219,9 +232,9 @@ def _build(force: bool = False):
     # update_contributing()
 
     # typer.echo("Updating Release Notes")
-    # update_release_notes(realease_notes_path=EN_DOCS_DIR / "release.md")
+    # update_release_notes(release_notes_path=EN_DOCS_DIR / "release.md")
 
-    subprocess.run(["mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
+    subprocess.run([sys.executable, "-m", "mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
 
 
 if __name__ == "__main__":

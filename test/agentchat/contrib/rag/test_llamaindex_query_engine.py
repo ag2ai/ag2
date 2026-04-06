@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from autogen.agentchat.contrib.rag import LlamaIndexQueryEngine, RAGQueryEngine
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block
 from test.const import reason
 
 with optional_import_block():
@@ -30,14 +30,6 @@ docs_to_add = [input_dir + "Toast_financial_report.md"]
 
 
 @pytest.fixture(scope="module")
-@pytest.mark.openai
-@pytest.mark.skip(
-    """Currently this test is not being run in CI.
-    In test optional dependencies workflow, 'rag' is not added yet.
-    https://github.com/ag2ai/ag2/issues/1383 issue is created to track this.
-    """
-)
-@skip_on_missing_imports(["chromadb", "llama_index"], "rag")
 def chroma_query_engine() -> LlamaIndexQueryEngine:
     # For testing purposes, use a host and port that point to your running ChromaDB.
     # Adjust these if necessary.

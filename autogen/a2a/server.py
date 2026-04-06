@@ -4,11 +4,11 @@
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from a2a.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
 from pydantic import Field
 
 from autogen import ConversableAgent
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from a2a.server.request_handlers import RequestHandler
     from a2a.server.tasks import PushNotificationConfigStore, PushNotificationSender, TaskStore
     from starlette.applications import Starlette
+    from starlette.middleware.base import BaseHTTPMiddleware
 
     from autogen import ConversableAgent
 
@@ -150,12 +151,58 @@ class A2aAgentServer:
                 **extended_agent_card.model_dump(exclude_none=True),
             })
 
+        # Auto-add A2UI extension to card if wrapping an A2UIAgent.
+        # Declares the extension URI and supportedCatalogIds in the agent card
+        # so clients know what A2UI version and catalogs this agent supports.
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_helpers import A2UI_EXTENSION_URI
+
+            if isinstance(agent, A2UIAgent):
+                existing_extensions = list(self.card.capabilities.extensions or [])
+                if not any(e.uri == A2UI_EXTENSION_URI for e in existing_extensions):
+                    # Build params with supportedCatalogIds per A2UI extension spec
+                    params: dict[str, Any] = {
+                        "supportedCatalogIds": [agent.catalog_id],
+                    }
+                    existing_extensions.append(
+                        AgentExtension(
+                            uri=A2UI_EXTENSION_URI,
+                            description="Provides agent-driven UI using the A2UI v0.9 JSON format.",
+                            params=params,
+                        )
+                    )
+                    self.card.capabilities.extensions = existing_extensions
+        except (ImportError, NameError):
+            pass
+
         self.card_modifier = card_modifier
         self.extended_card_modifier = extended_card_modifier
+        self.middlewares: list[tuple[BaseHTTPMiddleware, dict[str, Any]]] = []
+
+    def add_middleware(self, middleware: "BaseHTTPMiddleware", **kwargs: Any) -> None:
+        """Add a middleware to the A2A server."""
+        self.middlewares.append((middleware, kwargs))
 
     @property
     def executor(self) -> AutogenAgentExecutor:
-        """Get the A2A agent executor."""
+        """Get the A2A agent executor.
+
+        Auto-detects ``A2UIAgent`` and returns an ``A2UIAgentExecutor`` that
+        preserves A2UI DataParts in responses and handles extension negotiation.
+        """
+        try:
+            from autogen.agents.experimental.a2ui import A2UIAgent
+            from autogen.agents.experimental.a2ui.a2a_executor import A2UIAgentExecutor
+
+            if isinstance(self.agent, A2UIAgent):
+                return A2UIAgentExecutor(  # type: ignore[return-value]
+                    self.agent,
+                    delimiter=self.agent._response_delimiter,
+                    version_string=self.agent.protocol_version,
+                )
+        except (ImportError, NameError):
+            pass
         return AutogenAgentExecutor(self.agent)
 
     def build_request_handler(
@@ -205,7 +252,7 @@ class A2aAgentServer:
         """
         from a2a.server.apps import A2AStarletteApplication
 
-        return A2AStarletteApplication(
+        app = A2AStarletteApplication(
             agent_card=self.card,
             extended_agent_card=self.extended_agent_card,
             http_handler=request_handler
@@ -217,5 +264,10 @@ class A2aAgentServer:
             card_modifier=self.card_modifier,
             extended_card_modifier=self.extended_card_modifier,
         ).build()
+
+        for middleware, kwargs in self.middlewares:
+            app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]
+
+        return app
 
     build = build_starlette_app  # default alias for build_starlette_app

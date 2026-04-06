@@ -49,6 +49,51 @@ from autogen import UserProxyAgent
 proxy = UserProxyAgent(name="proxy", code_execution_config={"executor": "ipython-embedded"})
 ```
 
+## Remyx Code Executor
+
+To use [Remyx](https://docs.remyx.ai/resources/explore)'s Docker images for exploring novel codebases, install AG2 with the `remyx` option:
+```bash
+pip install "ag2[remyx]"
+```
+
+Remyx hosts Docker images that reproduce codebases from 1000+ ArXiv papers (expanding to GitHub and HuggingFace) with dependencies resolved and environments tested. See the [Remyx docs](https://docs.remyx.ai/cli) to get your API key.
+
+To use the Remyx executor:
+```python
+from autogen.coding import RemyxCodeExecutor
+from remyxai.client.search import SearchClient
+
+# Set your API key as environment variable
+# export REMYXAI_API_KEY=your_api_key
+
+# Search for papers with Docker environments
+client = SearchClient()
+papers = client.search(
+    query="llm pruning strategies",
+    has_docker=True,
+    max_results=5
+)
+
+# Create executor for a paper
+executor = RemyxCodeExecutor(
+    arxiv_id=papers[0].arxiv_id,
+    timeout=300
+)
+
+# Explore the paper's code
+executor.explore()
+```
+
+For AI-guided exploration of research code:
+```python
+# Interactive exploration with explanations
+executor.explore(goal="Understand the main finding", interactive=True)
+
+# Automated batch experiments
+executor.explore(goal="Run the quickstart example", interactive=False)
+```
+Example notebook: [Remyx Executor](/docs/use-cases/notebooks/notebooks/agentchat_remyx_executor)
+
 ## YepCode Serverless Code Executor
 
 To use YepCode's serverless code execution platform, install AG2 with the `yepcode` option:

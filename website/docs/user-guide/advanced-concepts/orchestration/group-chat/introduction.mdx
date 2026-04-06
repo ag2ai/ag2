@@ -3,6 +3,9 @@ Title: Overview
 sidebarTitle: Overview
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat patterns running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 Group Chat orchestration in AG2 allows multiple agents to collaborate within a shared context, enabling more dynamic and complex workflows than what’s possible with just two agents or sequential interactions.
 
 This powerful pattern streamlines coordination when you need more than two agents working together, whether they have specialized expertise or complementary roles in a workflow.
@@ -47,7 +50,7 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 ```
 
 ### 2. Create Specialized Agents
@@ -133,7 +136,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

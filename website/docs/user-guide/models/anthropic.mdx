@@ -1,6 +1,7 @@
 ---
-title: Anthropic
+title: Anthropic Claude API Guide | Multi-Agent Framework
 sidebarTitle: Anthropic
+description: "How to use Anthropic Claude models with AG2. Configuration, extended thinking, and code examples for building multi-agent systems with Claude."
 ---
 
 Anthropic's Claude is a family of large language models developed by Anthropic and designed to revolutionize the way you interact with AI. Claude excels at a wide variety of tasks involving language, reasoning, analysis, coding, and more. The models are highly capable, easy to use, and can be customized to suit your needs.
@@ -10,14 +11,13 @@ In this notebook, we demonstrate how to use Anthropic Claude model for AgentChat
 ## Features
 
 - Function/tool calling
+- Streaming
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
-- Token usage and cost correctly as per Anthropic's API costs (as of December 2024)
+- Token usage and cost correctly as per Anthropic's API costs (as of February 2026)
 - [Extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?q=extended_thinking#pricing-and-token-usage-for-extended-thinking)
 
 ## Requirements
 To use Anthropic Claude with AG2, first you need to install the `ag2[anthropic]` package.
-
-To try out the function call feature of Claude model, you need to install `anthropic>=0.23.1`.
 
 ```bash
 # If you need to install AG2 with Anthropic
@@ -46,20 +46,20 @@ Example:
 ```
 [
     {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-sonnet-4-5",
         "api_key": "your api key",
         "api_type": "anthropic",
     },
     {
-        "model": "claude-3-7-sonnet-20250219",
+        "model": "claude-sonnet-4-5",
         "api_key": "your api key",
         "api_type": "anthropic",
         "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
         "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
         "thinking": {"type": "enabled", "budget_tokens": 2048},
-    }
+    },
     {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-opus-4-6",
         "api_key": "your api key",
         "api_type": "anthropic",
         "temperature": 0.5,
@@ -67,24 +67,15 @@ Example:
         "max_tokens": 10000,
     },
     {
-        "model":"claude-3-opus-20240229",
-        "api_key":"your api key",
-        "api_type":"anthropic",
+        "model": "claude-haiku-4-5",
+        "api_key": "your api key",
+        "api_type": "anthropic",
     },
     {
-        "model":"claude-2.0",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-2.1",
-        "api_key":"your api key",
-        "api_type":"anthropic",
-    },
-    {
-        "model":"claude-3.0-haiku",
-        "api_key":"your api key",
-        "api_type":"anthropic",
+        "model": "claude-sonnet-4",
+        "api_key": "your api key",
+        "api_type": "anthropic",
+        "stream": true,
     },
 ]
 ```
@@ -109,9 +100,9 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config_claude = autogen.LLMConfig(config_list={
+llm_config_claude = autogen.LLMConfig({
     # Choose your model name.
-    "model": "claude-3-5-sonnet-20240620",
+    "model": "claude-sonnet-4-5",
     # You need to provide your API key here.
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
     "api_type": "anthropic",
@@ -129,8 +120,8 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 ```python
 import os
 
-llm_config_vertexai = LLMConfig(config_list={
-    "model": "claude-3-5-sonnet-20240620-v1:0",
+llm_config_vertexai = LLMConfig({
+    "model": "claude-sonnet-4-5-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region
     "gcp_auth_token": None,  # Optional: If not passed, Google Default Authentication will be used
@@ -160,7 +151,7 @@ This allows seamless integration without explicitly specifying the authenticatio
 
 ### Construct Agents
 
-Construct a simple conversation between a User proxy and an ConversableAgent based on Claude-3 model.
+Construct a simple conversation between a User proxy and a ConversableAgent based on Claude model.
 
 ```python
 assistant = autogen.AssistantAgent("assistant", llm_config=llm_config_claude)
@@ -259,7 +250,7 @@ TERMINATE
 ```
 
 ## Tool Call Example with the Latest Anthropic API
-Anthropic announced that tool use is supported in the Anthropic API. To use this feature, please install `anthropic>=0.23.1`.
+Tool use is supported in the Anthropic API.
 
 ### Register the function
 
@@ -330,17 +321,17 @@ TERMINATE
 ```python
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
-llm_config_gpt4 = autogen.LLMConfig(config_list={
+llm_config_gpt4o = autogen.LLMConfig({
     # Choose your model name.
-    "model": "gpt-4",
+    "model": "gpt-4o",
     # You need to provide your API key here.
     "api_key": os.getenv("OPENAI_API_KEY"),
     "api_type": "openai",
 })
 
-llm_config_gpt35 = autogen.LLMConfig(config_list={
+llm_config_gpt4o_mini = autogen.LLMConfig({
     # Choose your model name.
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o-mini",
     # You need to provide your API key here.
     "api_key": os.getenv("OPENAI_API_KEY"),
     "api_type": "openai",
@@ -349,13 +340,13 @@ llm_config_gpt35 = autogen.LLMConfig(config_list={
 alice = AssistantAgent(
     "Openai_agent",
     system_message="You are from OpenAI. You make arguments to support your company's position.",
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 dan = AssistantAgent(
     "Judge",
     system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 bob = autogen.AssistantAgent(
@@ -367,7 +358,7 @@ bob = autogen.AssistantAgent(
 charlie = AssistantAgent(
     "Research_Assistant",
     system_message="You are a helpful assistant to research the latest news and headlines.",
-    llm_config=llm_config_gpt35,
+    llm_config=llm_config_gpt4o_mini,
 )
 
 code_interpreter = UserProxyAgent(
@@ -403,7 +394,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 task = "Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024."
@@ -586,7 +577,7 @@ While we're proud of our record and the merits you've recognized in our argument
 --------------------------------------------------------------------------------
 ```
 
-### Same group chat with Claude 3.5 Sonnet as the judge
+### Same group chat with Claude as the judge
 
 ```python
 dan = AssistantAgent(
@@ -605,7 +596,7 @@ groupchat = GroupChat(
 manager = GroupChatManager(
     groupchat=groupchat,
     # is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    llm_config=llm_config_gpt4,
+    llm_config=llm_config_gpt4o,
 )
 
 user_proxy.initiate_chat(manager, message=task)
@@ -827,22 +818,18 @@ As always, it will be crucial to balance the pursuit of technological advancemen
 
 You can utilize Anthropic's thinking mode by setting it in the configuration.
 
-```
-from autogen import ConversableAgent
+```python
+from autogen import ConversableAgent, LLMConfig
 
 # Here we configure the thinking mode and the token budget for thinking
-llm_config = {
-    "config_list": [
-        {
-            "model": "claude-3-7-sonnet-20250219",
-            "api_type": "anthropic",
-            "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
-            "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
-            "thinking": {"type": "enabled", "budget_tokens": 2048},
-        }
-    ],
-    # Note: don't pass in temperature or top_p to avoid exceptions in thinking mode
-}
+llm_config = LLMConfig({
+    "model": "claude-sonnet-4-5",
+    "api_type": "anthropic",
+    "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
+    "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
+    "thinking": {"type": "enabled", "budget_tokens": 2048},
+})
+# Note: don't pass in temperature or top_p to avoid exceptions in thinking mode
 
 agent = ConversableAgent(
     name="test",

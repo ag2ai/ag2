@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from autogen.llm_clients.openai_responses_v2 import OpenAIResponsesV2LLMConfigEntry
 from autogen.llm_config import LLMConfig
 from autogen.oai import (
     AnthropicLLMConfigEntry,
@@ -302,7 +303,7 @@ class TestLLMConfig:
             pytest.param(
                 {
                     "api_type": "google",
-                    "model": "gemini-2.0-flash-lite",
+                    "model": "gemini-2.5-flash",
                     "api_key": "dummy_api_key",
                     "project_id": "fake-project-id",
                     "location": "us-west1",
@@ -310,13 +311,13 @@ class TestLLMConfig:
                 },
                 LLMConfig(
                     GeminiLLMConfigEntry(
-                        model="gemini-2.0-flash-lite",
+                        model="gemini-2.5-flash",
                         api_key="dummy_api_key",
                         project_id="fake-project-id",
                         location="us-west1",
                     )
                 ),
-                id="google gemini-2.0-flash-lite",
+                id="google gemini-2.5-flash",
             ),
             pytest.param(
                 {
@@ -390,14 +391,14 @@ class TestLLMConfig:
             ),
             pytest.param(
                 {
-                    "api_type": "responses",
+                    "api_type": "responses_v2",
                     "model": "o3",
                     "api_key": "fake_api_key",
                     "max_tokens": 512,
                     "stream": False,
                 },
                 LLMConfig(
-                    OpenAIResponsesLLMConfigEntry(
+                    OpenAIResponsesV2LLMConfigEntry(
                         model="o3",
                         api_key="fake_api_key",
                         max_tokens=512,
@@ -454,22 +455,6 @@ class TestLLMConfig:
                     )
                 ),
                 id="config from config",
-            ),
-            pytest.param(
-                {
-                    "config_list": {
-                        "model": "o3",
-                        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                    }
-                },
-                LLMConfig(
-                    OpenAILLMConfigEntry(
-                        model="o3",
-                        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                    )
-                ),
-                id="config from config_list",
-                marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
             ),
             pytest.param(
                 [
@@ -824,58 +809,6 @@ class TestLLMConfig:
         ]
 
         assert entry == {"top_p": 0.5, "model": "o3", "extra": "extra"}
-
-    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-    def test_with_context(self, openai_llm_config: LLMConfig) -> None:
-        # Test with dummy agent
-        class DummyAgent:
-            def __init__(self) -> None:
-                self.llm_config = LLMConfig.get_current_llm_config()
-
-        with openai_llm_config:
-            agent = DummyAgent()
-        assert agent.llm_config == openai_llm_config
-        assert agent.llm_config.temperature == 0.5
-        assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
-
-        # Test passing LLMConfig object as parameter
-        assert LLMConfig.get_current_llm_config(openai_llm_config) == openai_llm_config
-
-        # Test accessing current_llm_config outside the context
-        assert LLMConfig.get_current_llm_config() is None
-        with openai_llm_config:
-            actual = LLMConfig.get_current_llm_config()
-            assert actual == openai_llm_config
-
-        assert LLMConfig.get_current_llm_config() is None
-
-    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-    def test_current(self) -> None:
-        llm_config = LLMConfig(*JSON_SAMPLE_DICT)
-
-        # Test without context. Should raise an error
-        expected_error = "No current LLMConfig set. Are you inside a context block?"
-        with pytest.raises(ValueError) as e:
-            LLMConfig.current
-        assert str(e.value) == expected_error
-        with pytest.raises(ValueError) as e:
-            LLMConfig.default
-        assert str(e.value) == expected_error
-
-        with llm_config:
-            assert LLMConfig.get_current_llm_config() == llm_config
-            assert LLMConfig.current == llm_config
-            assert LLMConfig.default == llm_config
-
-            with LLMConfig.current.where(api_type="openai"):
-                assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai")
-                assert LLMConfig.current == llm_config.where(api_type="openai")
-                assert LLMConfig.default == llm_config.where(api_type="openai")
-
-                with LLMConfig.default.where(model="gpt-4"):
-                    assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai", model="gpt-4")
-                    assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
-                    assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
 
     def test_openai_llm_config_entry_with_workspace_dir(
         self, openai_llm_config_entry: OpenAIResponsesLLMConfigEntry

@@ -20,7 +20,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -59,7 +59,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
@@ -80,7 +80,7 @@ jobs:
         shell: bash
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs,a2a]
+          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs,a2a,tracing]
       - name: Install optional dependencies for code executors
         run: |
           uv pip install --system -e ".[jupyter-executor]"

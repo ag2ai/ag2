@@ -275,9 +275,9 @@ def credentials_all() -> Credentials:
 
 
 @pytest.fixture
-def credentials_gpt_4o_mini() -> Credentials:
+def credentials_openai_mini() -> Credentials:
     return get_credentials(
-        "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
+        "OPENAI_API_KEY", model="gpt-4.1-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
     )
 
 
@@ -322,23 +322,32 @@ def credentials_responses_gpt_4o_mini() -> Credentials:
 
 
 @pytest.fixture
+def credentials_responses_gpt_4o() -> Credentials:
+    return get_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4o",
+        api_type="responses",
+    )
+
+
+@pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
+        "GEMINI_API_KEY", model="gemini-2.5-flash", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-2.0-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+        "GEMINI_API_KEY", model="gemini-2.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash_exp() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
+        "GEMINI_API_KEY", model="gemini-3-flash-preview", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
     )
 
 

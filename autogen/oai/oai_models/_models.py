@@ -6,7 +6,6 @@
 
 
 import pydantic
-import pydantic.generics
 from pydantic import ConfigDict
 
 __all__ = ["BaseModel"]

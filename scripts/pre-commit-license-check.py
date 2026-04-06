@@ -15,7 +15,7 @@ LICENCE = """# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source project
 """
 
 REQUIRED_ELEMENTS = [
-    r"Copyright \(c\) 2023 - 20.., AG2ai, Inc\., AG2ai open-source projects maintainers and core contributors",
+    r"Copyright \(c\) (2023 - )?20.., AG2ai, Inc\., AG2ai open-source projects maintainers and core contributors",
     r"SPDX-License-Identifier: Apache-2\.0",
 ]
 

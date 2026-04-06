@@ -41,6 +41,58 @@ def test_groupchat_init():
     assert groupchat.messages == [{"content": "hello", "role": "user", "name": "alice"}]
 
 
+@pytest.mark.integration
+def test_groupchat_duplicate_agent_names():
+    """Test that GroupChat raises ValueError when agents have duplicate names."""
+    agent1 = autogen.ConversableAgent(
+        "assistant",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+    agent2 = autogen.ConversableAgent(
+        "assistant",  # Duplicate name
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+
+    with pytest.raises(ValueError, match="Duplicate agent names found"):
+        GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
+
+
+@pytest.mark.integration
+def test_groupchat_multiple_duplicate_agent_names():
+    """Test that GroupChat detects multiple duplicate agent names."""
+    agents = [
+        autogen.ConversableAgent("bob", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("bob", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("alice", human_input_mode="NEVER", llm_config=False),
+        autogen.ConversableAgent("alice", human_input_mode="NEVER", llm_config=False),
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate agent names found"):
+        GroupChat(agents=agents, messages=[], max_round=3)
+
+
+@pytest.mark.integration
+def test_groupchat_unique_agent_names():
+    """Test that GroupChat works correctly with unique agent names."""
+    agent1 = autogen.ConversableAgent(
+        "writer",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+    agent2 = autogen.ConversableAgent(
+        "reviewer",
+        human_input_mode="NEVER",
+        llm_config=False,
+    )
+
+    groupchat = GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
+    assert len(groupchat.agents) == 2
+    assert groupchat.agents[0].name == "writer"
+    assert groupchat.agents[1].name == "reviewer"
+
+
 def test_func_call_groupchat(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
@@ -944,41 +996,68 @@ def test_get_agent_by_name():
 
         return autogen.GroupChatManager(groupchat=gc, name=name, llm_config=False)
 
-    team_member1 = agent("team1_member1")
-    team_member2 = agent("team1_member2")
-    team_dup_member1 = agent("team1_member1")
-    team_dup_member2 = agent("team1_member2")
+    # Create teams with unique member names
+    team1_member1 = agent("team1_member1")
+    team1_member2 = agent("team1_member2")
+    team2_member1 = agent("team2_member1")
+    team2_member2 = agent("team2_member2")
 
     user = agent("user")
-    team1 = team([team_member1, team_member2], "team1")
-    team1_duplicate = team([team_dup_member1, team_dup_member2], "team1")
+    team1 = team([team1_member1, team1_member2], "team1")
+    team2 = team([team2_member1, team2_member2], "team2")
 
-    gc = autogen.GroupChat(agents=[user, team1, team1_duplicate], messages=[])
+    gc = autogen.GroupChat(agents=[user, team1, team2], messages=[])
 
     # Testing default arguments
     assert gc.agent_by_name("user") == user
-    assert gc.agent_by_name("team1") == team1 or gc.agent_by_name("team1") == team1_duplicate
+    assert gc.agent_by_name("team1") == team1
 
     # Testing recursive search
     assert gc.agent_by_name("user", recursive=True) == user
-    assert (
-        gc.agent_by_name("team1_member1", recursive=True) == team_member1
-        or gc.agent_by_name("team1_member1", recursive=True) == team_dup_member1
-    )
+    assert gc.agent_by_name("team1_member1", recursive=True) == team1_member1
+    assert gc.agent_by_name("team2_member1", recursive=True) == team2_member1
 
     # Get agent that does not exist
-    assert gc.agent_by_name("team2") is None
-    assert gc.agent_by_name("team2", recursive=True) is None
-    assert gc.agent_by_name("team2", raise_on_name_conflict=True) is None
-    assert gc.agent_by_name("team2", recursive=True, raise_on_name_conflict=True) is None
+    assert gc.agent_by_name("team3") is None
+    assert gc.agent_by_name("team3", recursive=True) is None
+    assert gc.agent_by_name("team3", raise_on_name_conflict=True) is None
+    assert gc.agent_by_name("team3", recursive=True, raise_on_name_conflict=True) is None
 
-    # Testing naming conflict
-    with pytest.raises(AgentNameConflictError):
-        gc.agent_by_name("team1", raise_on_name_conflict=True)
 
-    # Testing name conflict with recursive search
+def test_get_agent_by_name_duplicate_in_nested():
+    """Test agent_by_name with duplicate names in nested GroupChats (recursive search)."""
+
+    def agent(name: str) -> autogen.ConversableAgent:
+        return autogen.ConversableAgent(
+            name=name,
+            max_consecutive_auto_reply=10,
+            human_input_mode="NEVER",
+            llm_config=False,
+        )
+
+    def team(members: list[autogen.Agent], name: str) -> autogen.Agent:
+        gc = autogen.GroupChat(agents=members, messages=[])
+        return autogen.GroupChatManager(groupchat=gc, name=name, llm_config=False)
+
+    # Create two teams with members that have the same names (duplicates across teams)
+    team1_member1 = agent("shared_member")
+    team1_member2 = agent("team1_unique")
+    team2_member1 = agent("shared_member")  # Same name as team1_member1
+    team2_member2 = agent("team2_unique")
+
+    user = agent("user")
+    team1 = team([team1_member1, team1_member2], "team1")
+    team2 = team([team2_member1, team2_member2], "team2")
+
+    gc = autogen.GroupChat(agents=[user, team1, team2], messages=[])
+
+    # Recursive search finds duplicate "shared_member" across nested teams
+    result = gc.agent_by_name("shared_member", recursive=True)
+    assert result in (team1_member1, team2_member1)
+
+    # Testing name conflict with recursive search for duplicates in nested teams
     with pytest.raises(AgentNameConflictError):
-        gc.agent_by_name("team1_member1", recursive=True, raise_on_name_conflict=True)
+        gc.agent_by_name("shared_member", recursive=True, raise_on_name_conflict=True)
 
 
 def test_get_nested_agents_in_groupchat():
@@ -1498,7 +1577,7 @@ def test_speaker_selection_agent_name_match():
 
 
 def test_role_for_reflection_summary():
-    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}
+    llm_config = {"config_list": [{"model": "mock", "api_key": "mock"}]}  # pragma: allowlist secret
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=10,
@@ -1591,7 +1670,7 @@ def test_speaker_selection_auto_process_result():
     # Invalid result messages, will return the next agent
     chat_result.chat_history[3]["content"] = "This text should not be here."
 
-    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Maanger)
+    # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Manager)
     assert groupchat._process_speaker_selection_result(chat_result, pm, agent_list) == cmo
 
 
@@ -2255,7 +2334,7 @@ def test_manager_resume_message_assignment():
 @suppress_json_decoder_error
 @run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
-    credentials_gpt_4o_mini: Credentials,
+    credentials_openai_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2288,7 +2367,7 @@ def test_groupchat_with_deepseek_reasoner(
         manager = autogen.GroupChatManager(
             groupchat=groupchat,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
         )
 

@@ -103,6 +103,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
 
         Raises:
             ValueError: On argument error, or if the container fails to start.
+            RuntimeError: If Docker is not available or the daemon is not running.
         """
         work_dir = work_dir if work_dir is not None else Path()
 
@@ -118,7 +119,16 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         elif isinstance(bind_dir, str):
             bind_dir = Path(bind_dir)
 
-        client = docker.from_env()
+        try:
+            client = docker.from_env()
+            # Fail fast with a clearer error when the daemon/socket is unavailable.
+            client.ping()
+        except docker.errors.DockerException as exc:
+            raise RuntimeError(
+                "Docker is not available. Make sure the Docker daemon/service is running "
+                "and that your user can access the Docker socket. On macOS/Windows, "
+                "start Docker Desktop, then retry."
+            ) from exc
         # Check if the image exists
         try:
             client.images.get(image)

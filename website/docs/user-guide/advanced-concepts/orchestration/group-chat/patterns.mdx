@@ -3,6 +3,9 @@ Title: "Orchestration Patterns"
 sidebarTitle: "Orchestration Patterns"
 ---
 
+!!! example "Try it on the AG2 Playground"
+    See group chat patterns running live at [playground.ag2.ai](https://playground.ag2.ai){:target="_blank"} — no setup required.
+
 Patterns are the foundation of group chat orchestration - they define how agents take turns speaking and collaborating. Each pattern offers a different approach to determining which agent speaks next, giving you control over the conversation flow.
 
 ## Pattern Types
@@ -76,7 +79,7 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -182,7 +185,7 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -295,7 +298,7 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -372,7 +375,7 @@ pattern = RandomPattern(
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -450,7 +453,7 @@ pattern = ManualPattern(
     import os
     load_dotenv()
 
-    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

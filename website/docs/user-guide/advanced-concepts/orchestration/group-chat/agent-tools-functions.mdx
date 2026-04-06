@@ -55,7 +55,7 @@ def classify_query(query: str) -> ReplyResult:
         )
 
 # Create the triage agent with the tool
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 triage_agent = ConversableAgent(
     name="triage_agent",
@@ -176,7 +176,7 @@ def classify_query(
         )
 
 # Create the agents
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 triage_agent = ConversableAgent(
     name="triage_agent",

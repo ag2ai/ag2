@@ -1,0 +1,34 @@
+[project]
+name = "ag2-cli"
+version = "0.1.0"
+description = "AG2 CLI — build, run, test, and deploy multi-agent applications"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = [
+    "typer[all]>=0.12",
+    "rich>=13.0",
+    "questionary>=2.0",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+ag2 = "ag2_cli.app:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ag2_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-v"]

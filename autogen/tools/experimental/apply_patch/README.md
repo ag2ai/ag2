@@ -47,7 +47,7 @@ load_dotenv()
 # Configure LLM with apply_patch tool
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -80,7 +80,7 @@ Specify a dedicated workspace directory for file operations:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -98,7 +98,7 @@ Control which paths can be accessed for security:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch"],
@@ -122,7 +122,7 @@ Apply patches asynchronously for better performance:
 ```python
 llm_config = LLMConfig(
     config_list={
-        "api_type": "responses",
+        "api_type": "responses_v2",
         "model": "gpt-5.1",
         "api_key": os.getenv("OPENAI_API_KEY"),
         "built_in_tools": ["apply_patch_async"],  # Use async version

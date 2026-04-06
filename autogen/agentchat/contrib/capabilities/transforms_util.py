@@ -9,7 +9,7 @@ from typing import Any
 
 from .... import token_count_utils
 from ....cache.abstract_cache_base import AbstractCache
-from ....oai.openai_utils import filter_config
+from ....llm_config.utils import filter_config
 from ....types import MessageContentType
 
 

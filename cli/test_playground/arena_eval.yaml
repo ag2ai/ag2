@@ -1,0 +1,52 @@
+name: "arena-eval"
+description: "Evaluation suite for arena comparisons — tests quality, accuracy, and style"
+
+cases:
+  - name: "factual_accuracy"
+    input: "What is the capital of France and what is its population?"
+    assertions:
+      - type: contains
+        value: "Paris"
+      - type: min_length
+        value: 20
+      - type: no_error
+
+  - name: "explanation_quality"
+    input: "Explain what a REST API is."
+    assertions:
+      - type: contains_any
+        values: ["HTTP", "endpoint", "request", "response"]
+      - type: min_length
+        value: 50
+      - type: no_error
+
+  - name: "code_generation"
+    input: "Write a Python function that checks if a string is a palindrome."
+    assertions:
+      - type: contains
+        value: "def"
+      - type: contains_any
+        values: ["palindrome", "reverse", "[::-1]"]
+      - type: min_length
+        value: 30
+      - type: no_error
+
+  - name: "structured_output"
+    input: "List 3 benefits of using version control. Number them 1, 2, 3."
+    assertions:
+      - type: contains_all
+        values: ["1", "2", "3"]
+      - type: min_length
+        value: 50
+      - type: no_error
+
+  - name: "conciseness"
+    input: "What is 2 + 2? Answer with just the number."
+    assertions:
+      - type: contains
+        value: "4"
+      - type: max_length
+        value: 200
+      - type: max_turns
+        value: 3
+      - type: no_error

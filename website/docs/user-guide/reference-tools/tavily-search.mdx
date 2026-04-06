@@ -1,0 +1,117 @@
+---
+title: Tavily Search Tool
+description: "Integrate Tavily Search API with AG2 agents for real-time AI-powered web search. Learn how to set up TAVILY_API_KEY, install the tool, and use TavilySearchTool in your multi-agent workflows."
+---
+
+The [Tavily Search](https://tavily.com/) integration allows AG2 agents to perform real-time, AI-powered web searches. Tavily is a search API purpose-built for AI agents and LLMs, delivering accurate and factual results optimized for retrieval-augmented generation (RAG) workflows.
+
+## Configuring Your Tavily API Key
+
+1. **Create a Tavily Account**:
+   - Visit [Tavily](https://tavily.com/)
+   - Click **Sign Up** and create an account
+
+2. **Get Your API Key**:
+   - Navigate to [Tavily API Dashboard](https://app.tavily.com/)
+   - Generate an API key under **API Keys**
+
+3. **Set the `TAVILY_API_KEY` Environment Variable**:
+   ```bash
+   export TAVILY_API_KEY="your_api_key_here"
+   ```
+
+## Package Installation
+
+Install AG2 with the `tavily` extra (and `openai` for the example below):
+
+```bash
+pip install -U "ag2[openai,tavily]"
+```
+
+> **Note:** `autogen` and `ag2` are aliases for the same PyPI package:
+> ```bash
+> pip install -U "autogen[openai,tavily]"
+> ```
+
+## Implementation
+
+### Imports
+
+```python
+import os
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen.tools.experimental import TavilySearchTool
+```
+
+### Agent Configuration
+
+```python
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o"})
+
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+)
+```
+
+### Tool Setup
+
+```python
+tavily_search_tool = TavilySearchTool(tavily_api_key=os.getenv("TAVILY_API_KEY"))
+
+# Register the tool for LLM recommendation and execution.
+tavily_search_tool.register_for_llm(assistant)
+tavily_search_tool.register_for_execution(user_proxy)
+```
+
+### Usage Example
+
+```python
+response = user_proxy.initiate_chat(
+    recipient=assistant,
+    message="What are the latest developments in multi-agent AI systems?",
+    max_turns=2,
+)
+print(f"Final Answer: {response.summary}")
+```
+
+## Parameters
+
+`TavilySearchTool` accepts the following search parameters at call time:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `query` | `str` | *required* | The search query string |
+| `search_depth` | `str` | `"basic"` | Search depth — `"basic"` for fast results or `"advanced"` for deeper, more comprehensive search |
+| `include_answer` | `str` | `"basic"` | Whether to include an AI-generated answer — `"basic"` or `"advanced"` |
+| `include_raw_content` | `bool` | `False` | Whether to include the raw page content in results |
+| `include_domains` | `list[str]` | `[]` | Restrict search to specific domains (e.g., `["arxiv.org", "github.com"]`) |
+| `num_results` | `int` | `5` | Maximum number of results to return |
+
+## Output
+
+Each search returns a list of dictionaries with:
+
+- `title` — the result title
+- `link` — the result URL
+- `snippet` — a relevant content excerpt
+
+## Deep Research with Tavily
+
+Tavily powers the web search layer in both of AG2's deep research approaches:
+
+- **[DeepResearchTool](/docs/user-guide/reference-tools/deep-research#deepresearchtool)** — AG2's built-in tool for multi-step research tasks. Uses Tavily under the hood for web retrieval, tightly integrated into your agent pipeline.
+- **[GPT Researcher](/docs/user-guide/reference-tools/deep-research#gpt-researcher)** — a standalone multi-agent research system that uses Tavily for recursive querying and produces structured reports (Markdown, PDF, Docx).
+
+Both approaches require a `TAVILY_API_KEY`. See the [Deep Research guide](/docs/user-guide/reference-tools/deep-research) for setup and configuration.
+
+## See Also
+
+- [Tavily API Documentation](https://docs.tavily.com/)
+- [Deep Research with AG2](/docs/user-guide/reference-tools/deep-research)
+- [Reference Tools Overview](/docs/user-guide/reference-tools)
