@@ -191,12 +191,12 @@ async def test_find_files(tmp_path: Path) -> None:
 
     # "**/*.py" — recursive, matches .py files at any depth
     result_1 = json.loads(tracking.mock.call_args_list[1][0][0].results[0].content)
-    assert sorted(result_1) == ["a.py", "sub/c.py", "sub/sub2/e.py"]
+    assert sorted(result_1) == ["a.py", str(Path("sub/c.py")), str(Path("sub/sub2/e.py"))]
 
     # "sub/*" — non-recursive, matches all files directly in sub/
     result_2 = json.loads(tracking.mock.call_args_list[2][0][0].results[0].content)
-    assert sorted(result_2) == ["sub/c.py", "sub/d.txt"]
+    assert sorted(result_2) == [str(Path("sub/c.py")), str(Path("sub/d.txt"))]
 
     # "sub/**" — recursive, matches all files under sub/ at any depth
     result_3 = json.loads(tracking.mock.call_args_list[3][0][0].results[0].content)
-    assert sorted(result_3) == ["sub/c.py", "sub/d.txt", "sub/sub2/e.py"]
+    assert sorted(result_3) == [str(Path("sub/c.py")), str(Path("sub/d.txt")), str(Path("sub/sub2/e.py"))]

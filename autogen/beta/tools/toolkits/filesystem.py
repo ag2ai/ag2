@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated
 
@@ -85,9 +87,37 @@ def _make_find_files(base: Path) -> FunctionTool:
         ),
     ) -> list[str]:
         target = _resolve_path(base, path)
-        return sorted(str(p.relative_to(base)) for p in target.glob(pattern) if p.is_file())
+        return sorted(str(p.relative_to(base)) for p in _glob(target, pattern))
 
     return find_files
+
+
+def _glob_files(target: Path, pattern: str) -> Iterable[Path]:
+    """Yield files matching *pattern* under *target* with consistent behavior across Python versions."""
+    return (p for p in target.glob(pattern) if p.is_file())
+
+
+def _glob_files_compat(target: Path, pattern: str) -> Iterable[Path]:
+    """Yield files matching *pattern* under *target*.
+
+    Backfills Python 3.13 ``**`` semantics for older interpreters:
+    - ``**`` matches zero directory segments (e.g. ``**/*.py`` matches root-level ``.py`` files).
+    - A trailing ``**`` matches files, not only directories.
+    """
+    results = {p for p in target.glob(pattern) if p.is_file()}
+    if "**" in pattern:
+        prefix, suffix = pattern.split("**", 1)
+        suffix = suffix.lstrip("/")
+        prefix_dir = target / prefix if prefix else target
+        if prefix_dir.is_dir():
+            if suffix:
+                results.update(p for p in prefix_dir.glob(suffix) if p.is_file())
+            else:
+                results.update(p for p in prefix_dir.rglob("*") if p.is_file())
+    return results
+
+
+_glob = _glob_files if sys.version_info >= (3, 13) else _glob_files_compat
 
 
 def _make_write_file(base: Path) -> FunctionTool:
