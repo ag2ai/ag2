@@ -17,7 +17,7 @@ from autogen.beta.tools.builtin.shell import (
     ContainerReferenceEnvironment,
     ShellToolSchema,
 )
-from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -186,7 +186,7 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         }
 
     elif isinstance(t, WebSearchToolSchema):
-        result: dict[str, Any] = {"type": "web_search"}
+        result: dict[str, Any] = {"type": WEB_SEARCH_TOOL_NAME}
         if t.search_context_size is not None:
             result["search_context_size"] = t.search_context_size
         if t.max_uses is not None:

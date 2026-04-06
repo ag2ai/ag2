@@ -81,7 +81,7 @@ class ToolCallEvent(ToolEvent):
         self._serialized_arguments = value
 
     def __repr__(self) -> str:
-        return f"ToolCallEvent(id={self.id}, name={self.name}, arguments={self.arguments})"
+        return f"{self.__class__.__name__}(id={self.id}, name={self.name}, arguments={self.arguments})"
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -109,6 +109,10 @@ class ClientToolCallEvent(ToolCallEvent):
         )
 
 
+class BuiltinToolCallEvent(ToolCallEvent):
+    """Represents a builtin tool invocation requested by the model."""
+
+
 class ToolResultEvent(ToolEvent, Generic[ResultT]):
     """Represents a successful tool execution result."""
 
@@ -129,7 +133,7 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
         self._content = value
 
     def __repr__(self) -> str:
-        return f"ToolResultEvent(parent_id={self.parent_id}, name={self.name}, content={self.content})"
+        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name={self.name}, content={self.content})"
 
     @classmethod
     def from_call(cls, call: ToolCallEvent, result: ResultT) -> "ToolResultEvent[ResultT]":
