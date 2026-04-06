@@ -99,7 +99,7 @@ async def test_custom_denied_message(tool_call: ToolCallEvent) -> None:
 
 @pytest.mark.asyncio()
 async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
-    hook = approval_required()
+    hook = approval_required(allow_always=True)
     context = make_context("always")
 
     expected = ToolResultEvent.from_call(tool_call, result="ok")
@@ -117,8 +117,7 @@ async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
 
 @pytest.mark.asyncio()
 async def test_always_is_per_tool(tool_call: ToolCallEvent) -> None:
-    """Approving 'always' for one tool does not bypass approval for a different tool."""
-    hook = approval_required()
+    hook = approval_required(allow_always=True)
     context = make_context("y", variables={"approval_required:always": {"other_tool": True}})
 
     expected = ToolResultEvent.from_call(tool_call, result="ok")
@@ -129,3 +128,16 @@ async def test_always_is_per_tool(tool_call: ToolCallEvent) -> None:
     assert result == expected
     # Should still prompt since "calculator" is not in the bypass dict
     context.input.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_always_ignored_when_disabled(tool_call: ToolCallEvent) -> None:
+    hook = approval_required(allow_always=False)
+    context = make_context("always")
+
+    call_next = AsyncMock()
+
+    result = await hook(call_next, tool_call, context)
+
+    call_next.assert_not_awaited()
+    assert result == ToolResultEvent.from_call(tool_call, result="User denied the tool call request")
