@@ -6,6 +6,7 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
+from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .stream import MemoryStream
 from .tools import ToolResult, tool
@@ -21,6 +22,7 @@ __all__ = (
     "ResponseSchema",
     "ToolResult",
     "Variable",
+    "observer",
     "response_schema",
     "tool",
 )

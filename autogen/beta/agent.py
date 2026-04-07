@@ -26,17 +26,20 @@ from .events import (
     ModelResponse,
     ToolResultsEvent,
 )
+from .events.conditions import Condition
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddleware
+from .observer import Observer
+from .observer import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
-from .types import Omittable, omit
+from .types import ClassInfo, Omittable, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -132,6 +135,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: type[T2],
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
@@ -147,6 +151,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
@@ -162,6 +167,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: None,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TAgent]": ...
@@ -177,6 +183,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TAgent, TAgent]": ...
 
@@ -190,6 +197,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
+        observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
@@ -212,6 +220,7 @@ class AgentReply(Generic[TResult, TAgent]):
             hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_middleware=middleware,
+            additional_observers=observers,
             response_schema=response_schema,
         )
 
@@ -231,6 +240,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = ...,
         tools: Iterable[Callable[..., Any] | Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: type[TResult],
@@ -246,6 +256,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = ...,
         tools: Iterable[Callable[..., Any] | Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: ResponseProto[TResult],
@@ -261,6 +272,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = ...,
         tools: Iterable[Callable[..., Any] | Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: types.UnionType,
@@ -276,6 +288,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = ...,
         tools: Iterable[Callable[..., Any] | Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: None = ...,
@@ -290,6 +303,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
+        observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         response_schema: ResponseProto[TResult] | type[TResult] | types.UnionType | None = None,
@@ -301,6 +315,7 @@ class Agent(Generic[TResult]):
         self._agent_variables = variables or {}
 
         self._middleware = middleware
+        self._observers: list[Observer] = list(observers)
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
@@ -409,6 +424,33 @@ class Agent(Generic[TResult]):
         return make_tool
 
     @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any],
+    ) -> Callable[..., Any]: ...
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any] | None = None,
+    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+            obs = observer_factory(condition, func)
+            self._observers.append(obs)
+            return func
+
+        if callback is not None:
+            return wrapper(callback)
+        return wrapper
+
+    @overload
     async def ask(
         self,
         msg: str,
@@ -420,6 +462,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: type[T2],
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
@@ -436,6 +479,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
@@ -452,6 +496,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         response_schema: None,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TResult]": ...
@@ -468,6 +513,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TResult, TResult]": ...
 
@@ -482,6 +528,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
+        observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
@@ -516,6 +563,7 @@ class Agent(Generic[TResult]):
             hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_middleware=middleware,
+            additional_observers=observers,
             response_schema=response_schema,
         )
 
@@ -528,6 +576,7 @@ class Agent(Generic[TResult]):
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
+        additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> "AgentReply[Any, Any]":
         if response_schema is omit:
@@ -600,6 +649,15 @@ class Agent(Generic[TResult]):
                 known_tools=known_tools,
                 middleware=middleware_instances,
             )
+
+            for obs in chain(self._observers, additional_observers):
+                stack.enter_context(
+                    context.stream.where(obs.condition).sub_scope(
+                        obs.callback,
+                        interrupt=obs.interrupt,
+                        sync_to_thread=obs.sync_to_thread,
+                    )
+                )
 
             message = await agent_turn(event, context)
 
