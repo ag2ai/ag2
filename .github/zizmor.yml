@@ -1,0 +1,26 @@
+rules:
+  dangerous-triggers:
+    ignore:
+      - mkdocs-check-broken-links.yml
+      - pr_labeler.yaml
+  dependabot-cooldown:
+    ignore:
+      - dependabot.yml
+  secrets-outside-env:
+    ignore:
+      - beta-test.yml
+      - claude-code-review.yml
+      - claude.yml
+      - contrib-test.yml
+      - contrib-graph-rag-tests.yml
+      - contrib-llm-test.yml
+      - core-llm-test.yml
+      - core-test.yml
+      - beta-llm-test.yml
+      - integration-test.yml
+      - pr-checks.yml
+      - test-with-optional-deps.yml
+      - zizmor.yml
+  use-trusted-publishing:
+    ignore:
+      - python-package.yml

@@ -19,11 +19,13 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
+from .toolkits import FilesystemToolset
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
+    "FilesystemToolset",
     "ImageGenerationTool",
     "LocalEnvironment",
     "MCPServerTool",

@@ -29,45 +29,50 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Check PR and checkout branch
         id: check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+          GITHUB_REPO: ${{ github.repository }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+          if [ "$EVENT_NAME" == "workflow_dispatch" ]; then
+            PR_NUMBER="$INPUT_PR_NUMBER"
           else
-            PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_NUMBER="$PR_NUMBER_EVENT"
           fi
 
           echo "Checking PR #$PR_NUMBER"
 
           # Check if it's a forked PR
-          PR_INFO=$(gh pr view $PR_NUMBER --json isCrossRepository,headRepositoryOwner,headRepository 2>/dev/null || echo '{}')
+          PR_INFO=$(gh pr view "$PR_NUMBER" --json isCrossRepository,headRepositoryOwner,headRepository 2>/dev/null || echo '{}')
           IS_FORK=$(echo "$PR_INFO" | jq -r '.isCrossRepository // false')
           HEAD_REPO=$(echo "$PR_INFO" | jq -r '.headRepository.nameWithOwner // ""')
 
           # Skip (don't fail) forked PRs on automatic triggers, but allow manual triggers
-          if [ "${{ github.event_name }}" == "pull_request" ] && ([ "$IS_FORK" = "true" ] || [ "$HEAD_REPO" != "${{ github.repository }}" ]); then
+          if [ "$EVENT_NAME" == "pull_request" ] && ([ "$IS_FORK" = "true" ] || [ "$HEAD_REPO" != "$GITHUB_REPO" ]); then
             echo "⏭️  Skipping review: PR #$PR_NUMBER is from a forked repository"
             echo "Forked PRs are skipped for automatic reviews. Use workflow_dispatch to manually trigger a review."
-            echo "skip_review=true" >> $GITHUB_OUTPUT
+            echo "skip_review=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "Checking out PR #$PR_NUMBER"
-          gh pr checkout $PR_NUMBER
+          gh pr checkout "$PR_NUMBER"
           echo "✅ PR branch checked out successfully"
-          echo "skip_review=false" >> $GITHUB_OUTPUT
+          echo "skip_review=false" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code Review
         if: steps.check-pr.outputs.skip_review != 'true'
         id: claude-review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1eddb334cfa79fdb21ecbe2180ca1a016e8e7d47 # v1.0.88
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

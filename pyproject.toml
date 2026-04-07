@@ -361,6 +361,7 @@ types = [
 lint = [
     "ruff==0.14.14",
     "codespell==2.4.1",
+    "zizmor==1.11.0",
 ]
 
 dev = [
