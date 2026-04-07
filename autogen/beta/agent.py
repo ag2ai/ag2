@@ -15,6 +15,8 @@ from fast_depends import Provider
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
+
 from .annotations import Context
 from .config import LLMClient, ModelConfig
 from .events import (
@@ -549,6 +551,8 @@ class Agent(Generic[TResult]):
             for schema in schemas:
                 if isinstance(schema, FunctionToolSchema):
                     known_tools.add(schema.function.name)
+                elif isinstance(schema, WebSearchToolSchema):
+                    known_tools.add(WEB_SEARCH_TOOL_NAME)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn

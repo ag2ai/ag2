@@ -6,6 +6,7 @@ from .base import BaseEvent, Field
 from .conditions import Condition
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
+    BuiltinToolCallEvent,
     ClientToolCallEvent,
     ToolCallEvent,
     ToolCallsEvent,
@@ -27,6 +28,7 @@ from .types import (
 
 __all__ = (
     "BaseEvent",
+    "BuiltinToolCallEvent",
     "ClientToolCallEvent",
     "Condition",
     "Field",

@@ -1,0 +1,94 @@
+---
+title: Common Toolsets
+sidebarTitle: Common Toolsets
+---
+
+# Common Toolsets
+
+AG2 ships with ready-made toolsets that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+
+## FilesystemToolset
+
+`FilesystemToolset` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import FilesystemToolset
+
+fs = FilesystemToolset(base_path="/tmp/workspace")
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs],
+)
+```
+
+### Available tools
+
+| Tool | Description |
+| :--- | :--- |
+| `read_file` | Read the contents of a file |
+| `write_file` | Create or overwrite a file (creates parent directories automatically) |
+| `update_file` | Replace the first occurrence of a string in a file |
+| `delete_file` | Delete a file |
+| `find_files` | Search for files matching a glob pattern (supports recursive `**` patterns) |
+
+### Read-only mode
+
+Pass `#!python read_only=True` to expose only `read_file` and `find_files`:
+
+```python linenums="1"
+fs = FilesystemToolset(base_path="./docs", read_only=True)
+```
+
+### Using individual tools
+
+Every tool is available as an attribute on the toolset instance. You can pass individual tools to an agent instead of the whole set:
+
+```python linenums="1"
+fs = FilesystemToolset(base_path="/tmp/workspace")
+
+agent = Agent(
+    "reader",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[fs.read_file, fs.find_files],
+)
+```
+
+### Using a temporary directory
+
+For throwaway workspaces, use `#!python tempfile.TemporaryDirectory` so the directory and all its contents are automatically cleaned up when the context manager exits:
+
+```python linenums="1"
+import tempfile
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import FilesystemToolset
+
+async def main() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fs = FilesystemToolset(base_path=tmpdir)
+
+        agent = Agent(
+            "assistant",
+            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            tools=[fs],
+        )
+        await agent.ask("Create a hello.py file that prints 'Hello, World!'")
+```
+
+!!! tip
+    Prefer `#!python tempfile.TemporaryDirectory` over hardcoded `/tmp` paths. It guarantees a unique directory per run and cleans up after itself, avoiding leftover files and collisions between concurrent executions.
+
+### Path safety
+
+All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
+
+```python linenums="1"
+fs = FilesystemToolset(base_path="/tmp/sandbox")
+
+# The agent can access /tmp/sandbox/data.txt
+# but NOT /tmp/sandbox/../../etc/passwd
+```
