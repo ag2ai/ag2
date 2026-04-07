@@ -137,20 +137,16 @@ def response_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
         history = []
         if history_submsg is not None and isinstance(history_submsg.content, dict):
             history = history_submsg.content.get("messages", [])
-        
+
         context = {}
         if context_submsg is not None and isinstance(context_submsg.content, dict):
             context = context_submsg.content
-        
+
         client_tools = {}
         if client_tools_submsg is not None and isinstance(client_tools_submsg.content, dict):
             client_tools = client_tools_submsg.content
 
-        return RequestMessage(
-            messages=history,
-            context=context,
-            client_tools=client_tools
-        )
+        return RequestMessage(messages=history, context=context, client_tools=client_tools)
 
     # Fallback: treat top-level text as a single user message
     text = nlip_msg.extract_text() or ""
@@ -186,6 +182,9 @@ def response_message_to_nlip(response: ResponseMessage) -> NLIP_Message:
             break
 
     nlip_msg = NLIP_Factory.create_text(main_text, language="english")
+
+    if response.context:
+        nlip_msg.add_json(response.context, label="ag2_context")
 
     if response.input_required:
         error_msg = NLIP_Factory.create_error_code("INPUT_REQUIRED")
@@ -244,7 +243,10 @@ class AG2NlipSession(NLIP_Session):
             response_msg = ResponseMessage(messages=[{"role": "assistant", "content": "No response generated"}])
         else:
             # ServiceResponse has a single 'message' (dict), not 'messages' (list)
-            response_msg = ResponseMessage(messages=[final_service_response.message])
+            response_msg = ResponseMessage(
+                messages=[final_service_response.message],
+                context=final_service_response.context,
+            )
 
         return response_message_to_nlip(response_msg)
 
@@ -260,11 +262,40 @@ class AG2NlipSession(NLIP_Session):
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
 class AG2NlipApplication(NLIP_Application):
-    """NLIP Application that serves AG2 agents."""
+    """NLIP Application that serves AG2 agents.
+
+    This class is both a :class:`nlip_server.server.NLIP_Application` (so
+    ``nlip-server`` can call :meth:`create_session` / :meth:`startup` /
+    :meth:`shutdown` on it) **and** an ASGI callable. The latter lets users
+    hand the instance directly to any ASGI server without an extra wrapper::
+
+        import uvicorn
+        from autogen import ConversableAgent
+        from autogen.agentchat.contrib.nlip_agent import AG2NlipApplication
+
+        agent = ConversableAgent(name="assistant", ...)
+        nlip_app = AG2NlipApplication(agent)
+        uvicorn.run(nlip_app, host="0.0.0.0", port=8000)
+
+    Internally the instance eagerly builds the FastAPI application via
+    :func:`nlip_server.server.setup_server` and delegates all ASGI traffic
+    to it. Building eagerly (rather than lazily on first request) is
+    required so that ASGI lifespan startup/shutdown events are wired up
+    before any request arrives.
+    """
 
     def __init__(self, agent: ConversableAgent):
         super().__init__()
         self.agent = agent
+        self._asgi_app = setup_server(self)
+
+    @property
+    def asgi_app(self):
+        return self._asgi_app
+
+    async def __call__(self, scope, receive, send) -> None:
+        """ASGI entrypoint — delegates to the wrapped FastAPI application."""
+        await self._asgi_app(scope, receive, send)
 
     async def startup(self):
         """Application startup hook."""
@@ -463,15 +494,20 @@ class NlipRemoteAgent(ConversableAgent):
         if text.strip():
             messages.append({"role": "assistant", "content": text})
 
-        # Check for INPUT_REQUIRED error in submessages
+        # Check for INPUT_REQUIRED error and ag2_context in submessages
         input_required = None
+        context: dict[str, Any] | None = None
         if nlip_msg.submessages:
+            context_submsg = nlip_msg.find_labeled_submessage("ag2_context")
+            if context_submsg is not None and isinstance(context_submsg.content, dict):
+                context = context_submsg.content
+
             for submsg in nlip_msg.submessages:
                 if submsg.format == "error" and submsg.content and "INPUT_REQUIRED" in str(submsg.content):
                     input_required = submsg.content
                     break
 
-        return ResponseMessage(messages=messages, input_required=input_required)
+        return ResponseMessage(messages=messages, context=context, input_required=input_required)
 
     def update_tool_signature(
         self,
