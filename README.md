@@ -46,7 +46,7 @@ AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from a
 > [!IMPORTANT]
 > **AG2 is on the path to v1.0.** The current framework will be tidied up through deprecations over the next few minor versions and moved to maintenance mode. The beta framework (`autogen.beta`) will become the official version of AG2 at v1.0.
 >
-> [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/release-roadmap/)
+> [Read the full release roadmap →](https://docs.ag2.ai/latest/docs/user-guide/release-roadmap/)
 
 # AG2: Open-Source AgentOS for AI Agents
 

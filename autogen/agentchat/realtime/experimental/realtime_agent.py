@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, TypeVar
 
 from anyio import create_task_group, lowlevel
+from typing_extensions import deprecated
 
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -29,8 +31,16 @@ class RealtimeAgentCallbacks:
     on_observers_ready: Callable[[], Any] = lambda: lowlevel.checkpoint()
 
 
+@deprecated("RealtimeAgent is deprecated and will be removed in v0.14. It relies on deprecated realtime API endpoints.")
 @export_module("autogen.agentchat.realtime.experimental")
 class RealtimeAgent:
+    """(Deprecated) Agent for real-time voice interactions.
+
+    .. deprecated::
+        RealtimeAgent is deprecated and will be removed in v0.14.
+        It relies on deprecated realtime API endpoints.
+    """
+
     def __init__(
         self,
         *,
@@ -53,6 +63,11 @@ class RealtimeAgent:
             observers (Optional[list[RealtimeObserver]]): The additional observers for the agent.
             **client_kwargs (Any): The keyword arguments for the client.
         """
+        warnings.warn(
+            "RealtimeAgent is deprecated and will be removed in v0.14. It relies on deprecated realtime API endpoints.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._logger = logger
         self._name = name
         self._system_message = system_message

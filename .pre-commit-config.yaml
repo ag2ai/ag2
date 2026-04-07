@@ -100,6 +100,16 @@ repos:
           website/.*
         )$
 
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: zizmor
+        entry: zizmor --config .github/zizmor.yml .
+        language: python
+        additional_dependencies: ['zizmor']
+        files: '^\.github/workflows/'
+        pass_filenames: false
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

@@ -76,7 +76,7 @@ You have access to the following functions. You can write python code to call th
         return
 
     def bind_user_proxy(self, agent: UserProxyAgent, tool_root: str | list):
-        """Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
+        """Updates user proxy agent with an executor so that code executor can successfully execute function-related code.
         Returns an updated user proxy.
         """
         if isinstance(tool_root, str):

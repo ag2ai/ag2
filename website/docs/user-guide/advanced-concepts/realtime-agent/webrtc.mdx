@@ -3,6 +3,9 @@ title: RealtimeAgent over WebRTC
 sidebarTitle: WebRTC Integration
 ---
 
+!!! warning "Deprecated"
+    `RealtimeAgent` is deprecated as of v0.12 and will be removed in v0.14. It relies on deprecated realtime API endpoints. This documentation will also be removed in v0.14.
+
 ![Realtime agent communication over WebRTC](/snippets/advanced-concepts/realtime-agent/img/webrtc_communication_diagram.png)
 
 Previously, we introduced the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter), a simple way to stream real-time audio using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/). While effective, [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) can face challenges with quality and reliability in high-latency or network-variable scenarios. Enter [WebRTC](https://webrtc.org/).

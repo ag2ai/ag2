@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,9 +8,9 @@ import pytest
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
-from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution
+from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools import ToolResult, tool
+from autogen.beta.tools import Toolkit, tool
 
 
 @pytest.mark.asyncio()
@@ -121,7 +121,7 @@ async def test_capture_tool_execution_error(mock: MagicMock) -> None:
             r = await call_next(event, ctx)
             self.mock.exit(repr(r.error))
             # suppress the error
-            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("tool executed"))
+            return ToolResultEvent.from_call(event, result="tool executed")
 
     def my_tool() -> str:
         raise ValueError("tool execution error")
@@ -187,3 +187,95 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
     # the mutated ToolResultEvent content.
     tool_results_event = tracking_config.mock.call_args_list[1].args[0]
     assert tool_results_event.results[0].content == '"4!!!"'
+
+
+@pytest.mark.asyncio()
+async def test_tool_local_then_agent_middleware_order(mock: MagicMock) -> None:
+    def hook_factory(pos: int) -> ToolMiddleware:
+        async def _hook(
+            call_next: ToolExecution,
+            event: ToolCallEvent,
+            ctx: Context,
+        ) -> ToolResultEvent:
+            mock.enter(pos)
+            r = await call_next(event, ctx)
+            mock.exit(pos)
+            return r
+
+        return _hook
+
+    @tool(middleware=[hook_factory(2), hook_factory(3)])
+    def my_tool() -> str:
+        return "ok"
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        middleware=[Middleware(OrderingMiddleware, mock=mock, position=1)],
+    )
+
+    await agent.ask("Hi!")
+
+    assert [c.args[0] for c in mock.enter.call_args_list] == [1, 2, 3]
+    assert [c.args[0] for c in mock.exit.call_args_list] == [3, 2, 1]
+
+
+@pytest.mark.asyncio()
+async def test_agent_tool_consumes_middleware_option(mock: MagicMock) -> None:
+    async def tool_hook(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        ctx: Context,
+    ) -> ToolResultEvent:
+        mock.tool_middleware()
+        return await call_next(event, ctx)
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+    )
+
+    @agent.tool(middleware=[tool_hook])
+    def my_tool() -> str:
+        return "from agent.tool"
+
+    await agent.ask("Hi!")
+
+    mock.tool_middleware.assert_called_once()
+
+
+@pytest.mark.asyncio()
+async def test_toolkit_tool_consumes_middleware_option(mock: MagicMock) -> None:
+    async def tool_hook(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        ctx: Context,
+    ) -> ToolResultEvent:
+        mock.tool_middleware()
+        return await call_next(event, ctx)
+
+    tk = Toolkit()
+
+    @tk.tool(middleware=[tool_hook])
+    def my_tool() -> str:
+        return "from toolkit.tool"
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[tk],
+    )
+
+    await agent.ask("Hi!")
+
+    mock.tool_middleware.assert_called_once()

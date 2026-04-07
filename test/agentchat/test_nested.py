@@ -33,7 +33,7 @@ class MockAgentReplies(AgentCapability):
 
 @run_for_optional_imports("openai", "openai")
 def test_nested(
-    credentials_gpt_4o_mini: Credentials,
+    credentials_openai_mini: Credentials,
     credentials_gpt_4o: Credentials,
 ):
     tasks = [
@@ -43,7 +43,7 @@ def test_nested(
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
     )
 
@@ -84,7 +84,7 @@ def test_nested(
 
     assistant_2 = autogen.AssistantAgent(
         name="Assistant",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         # is_termination_msg=lambda x: x.get("content", "") == "",
     )
 
@@ -112,7 +112,7 @@ def test_nested(
 
     writer = autogen.AssistantAgent(
         name="Writer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         system_message="""
         You are a professional writer, known for
         your insightful and engaging articles.
@@ -123,7 +123,7 @@ def test_nested(
 
     autogen.AssistantAgent(
         name="Reviewer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
         system_message="""
         You are a compliance reviewer, known for your thoroughness and commitment to standards.
         Your task is to scrutinize content for any harmful elements or regulatory violations, ensuring

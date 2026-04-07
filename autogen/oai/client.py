@@ -961,7 +961,7 @@ class OpenAIWrapper:
         after removing extra kwargs.
 
         For Azure models/deployment names there's a convenience modification of model removing dots in
-        the it's value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
+        its value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
         "gpt-35-turbo" and define model "gpt-3.5-turbo" in the config the function will remove the dot
         from the name and create a client that connects to "gpt-35-turbo" Azure deployment.
         """

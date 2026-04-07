@@ -2,7 +2,7 @@ name: Deploy MkDocs to GitHub Pages
 
 on:
   push:
-    branches: [main,"0.9"]
+    branches: main
     paths:
       - "autogen/**"
       - "website/**"
@@ -14,8 +14,10 @@ on:
       - "scripts/docs_serve_mkdocs.sh"
       - ".muffet-excluded-links.txt"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build_and_deploy:
     uses: ./.github/workflows/build-mkdocs.yml
