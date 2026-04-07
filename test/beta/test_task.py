@@ -1,15 +1,36 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+
+from typing import Annotated
+from unittest.mock import MagicMock
 
 import pytest
 
 from autogen.beta import Agent, MemoryStream, tool
+from autogen.beta.annotations import Context as Ctx
+from autogen.beta.annotations import Variable
+from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TaskStarted
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent
-from autogen.beta.task import DEFAULT_MAX_TASK_DEPTH, _run_task, _task_depth
 from autogen.beta.testing import TestConfig
+from autogen.beta.tools import subagent_tool
+from autogen.beta.tools.final.task import run_task
+
+
+def _make_parent_context(
+    *,
+    dependencies: dict | None = None,
+    variables: dict | None = None,
+) -> Context:
+    """Helper to build a minimal parent Context for run_task tests."""
+    return Context(
+        stream=MemoryStream(),
+        dependencies=dependencies or {},
+        variables=variables or {},
+    )
+
 
 # ---------------------------------------------------------------------------
 # run_task() tests
@@ -21,7 +42,7 @@ async def test_run_task_basic():
     config = TestConfig(ModelResponse(message=ModelMessage(content="Task done!")))
     agent = Agent("worker", config=config)
 
-    result = await _run_task(agent, "Do something")
+    result = await run_task(agent, "Do something", parent_context=_make_parent_context())
 
     assert result.completed is True
     assert result.result == "Task done!"
@@ -34,7 +55,7 @@ async def test_run_task_with_context():
     config = TestConfig(ModelResponse(message=ModelMessage(content="Analyzed.")))
     agent = Agent("analyst", config=config)
 
-    result = await _run_task(agent, "Analyze data", context="Here is some data")
+    result = await run_task(agent, "Analyze data", parent_context=_make_parent_context(), context="Here is some data")
 
     assert result.completed is True
     # Verify the prompt included the context
@@ -50,7 +71,7 @@ async def test_run_task_failure():
     config = TestConfig()  # no responses → StopIteration
     agent = Agent("broken", config=config)
 
-    result = await _run_task(agent, "This will fail")
+    result = await run_task(agent, "This will fail", parent_context=_make_parent_context())
 
     assert result.completed is False
     assert result.result is not None
@@ -63,7 +84,7 @@ async def test_run_task_with_custom_stream():
     agent = Agent("worker", config=config)
 
     custom_stream = MemoryStream()
-    result = await _run_task(agent, "Do it", stream=custom_stream)
+    result = await run_task(agent, "Do it", parent_context=_make_parent_context(), stream=custom_stream)
 
     assert result.completed is True
     assert result.stream is custom_stream
@@ -76,7 +97,6 @@ async def test_run_task_with_custom_stream():
 @pytest.mark.asyncio
 async def test_run_task_with_dependencies():
     """Dependencies are passed through to the agent."""
-    from autogen.beta.annotations import Context as Ctx
 
     @tool
     def get_db_name(ctx: Ctx) -> str:
@@ -89,7 +109,8 @@ async def test_run_task_with_dependencies():
     )
     agent = Agent("worker", config=config, tools=[get_db_name])
 
-    result = await _run_task(agent, "Check DB", dependencies={"db_name": "prod_db"})
+    parent_ctx = _make_parent_context(dependencies={"db_name": "prod_db"})
+    result = await run_task(agent, "Check DB", parent_context=parent_ctx)
 
     assert result.completed is True
 
@@ -100,7 +121,7 @@ async def test_run_task_default_stream():
     config = TestConfig(ModelResponse(message=ModelMessage(content="OK")))
     agent = Agent("worker", config=config)
 
-    result = await _run_task(agent, "Test")
+    result = await run_task(agent, "Test", parent_context=_make_parent_context())
 
     assert result.completed is True
     assert result.stream is not None
@@ -109,7 +130,7 @@ async def test_run_task_default_stream():
 
 
 # ---------------------------------------------------------------------------
-# as_tool() — specialist delegation
+# subagent_tool / as_tool — specialist delegation
 # ---------------------------------------------------------------------------
 
 
@@ -127,6 +148,27 @@ async def test_specialist_delegation():
         "coordinator",
         config=coordinator_config,
         tools=[researcher.as_tool(description="Delegate research tasks to the researcher agent")],
+    )
+
+    reply = await coordinator.ask("Tell me about X")
+
+    assert reply.body == "Based on research, X is true."
+
+
+@pytest.mark.asyncio
+async def test_specialist_delegation_with_subagent_tool():
+    """Coordinator delegates to a specialist via subagent_tool."""
+    researcher_config = TestConfig(ModelResponse(message=ModelMessage(content="Research findings: X is true.")))
+    researcher = Agent("researcher", config=researcher_config)
+
+    coordinator_config = TestConfig(
+        ToolCallEvent(name="task_researcher", arguments='{"objective": "Find info about X"}'),
+        ModelResponse(message=ModelMessage(content="Based on research, X is true.")),
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=coordinator_config,
+        tools=[subagent_tool(researcher, description="Delegate research tasks to the researcher agent")],
     )
 
     reply = await coordinator.ask("Tell me about X")
@@ -241,7 +283,7 @@ async def test_multiple_specialists():
 
 
 # ---------------------------------------------------------------------------
-# as_tool() — self-delegation
+# as_tool — self-delegation
 # ---------------------------------------------------------------------------
 
 
@@ -373,7 +415,7 @@ async def test_as_tool_stream_factory():
     """Stream factory creates a fresh stream for each sub-task."""
     streams_created: list[MemoryStream] = []
 
-    def make_stream():
+    def make_stream(agent, ctx):
         s = MemoryStream()
         streams_created.append(s)
         return s
@@ -404,7 +446,7 @@ async def test_as_tool_stream_factory_multiple_calls():
     """Each sub-task invocation gets its own stream from the factory."""
     streams_created: list[MemoryStream] = []
 
-    def make_stream():
+    def make_stream(agent, ctx):
         s = MemoryStream()
         streams_created.append(s)
         return s
@@ -468,84 +510,66 @@ async def test_as_tool_no_stream_factory_defaults_to_memory():
 
 
 # ---------------------------------------------------------------------------
-# Depth guard
+# Variables propagation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_default_max_depth():
-    """DEFAULT_MAX_TASK_DEPTH is 1."""
-    assert DEFAULT_MAX_TASK_DEPTH == 1
+async def test_delegation_propagates_variables(mock: MagicMock) -> None:
+    @tool
+    def read_var(secret: Annotated[str, Variable("secret")], ctx: Ctx) -> str:
+        """Read a variable from context."""
+        mock(secret)
+        return ctx.variables["secret"]
+
+    worker_config = TestConfig(
+        ToolCallEvent(name="read_var", arguments="{}"),
+        ModelResponse(message=ModelMessage(content="Got the secret.")),
+    )
+    worker = Agent("worker", config=worker_config, tools=[read_var])
+
+    coordinator_config = TestConfig(
+        ToolCallEvent(name="task_worker", arguments='{"objective": "Read the secret"}'),
+        ModelResponse(message=ModelMessage(content="Secret retrieved.")),
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=coordinator_config,
+        tools=[worker.as_tool(description="Worker with variable access")],
+    )
+
+    # act
+    await coordinator.ask("Get secret", variables={"secret": "42"})
+
+    # assert
+    mock.assert_called_once_with("42")
 
 
 @pytest.mark.asyncio
-async def test_depth_guard_safety_net():
-    """If depth >= max_depth, delegate returns an error string (safety net)."""
-    # Manually set depth to simulate being at max
-    from autogen.beta.task import _make_task_tool
+async def test_subagent_variable_mutation_affects_parent() -> None:
+    """Mutating variables in a sub-task is visible in the parent context
+    because run_task syncs variables back after completion."""
 
-    worker_config = TestConfig(ModelResponse(message=ModelMessage(content="Should not reach.")))
-    worker = Agent("worker", config=worker_config)
-    task_tool = _make_task_tool(worker, description="Test", max_depth=1)
+    @tool
+    def mutate_var(ctx: Ctx) -> str:
+        """Add a new variable and update an existing one."""
+        ctx.variables["new_key"] = "new_value"
+        ctx.variables["counter"] = ctx.variables["counter"] + 1
+        return "mutated"
 
-    # Simulate being at depth 1 (>= max_depth=1)
-    token = _task_depth.set(1)
-    try:
-        # The inner FunctionTool's delegate function should return an error
-        # We can't easily call it directly, but we can verify schemas are hidden
-        schemas = list(await task_tool.schemas(None))
-        assert len(schemas) == 0  # tool hidden at this depth
-    finally:
-        _task_depth.reset(token)
+    worker_config = TestConfig(
+        ToolCallEvent(name="mutate_var", arguments="{}"),
+        ModelResponse(message=ModelMessage(content="Done.")),
+    )
+    worker = Agent("worker", config=worker_config, tools=[mutate_var])
 
+    parent_ctx = _make_parent_context(variables={"counter": 10, "existing": "yes"})
 
-@pytest.mark.asyncio
-async def test_depth_guard_tool_visible_at_lower_depth():
-    """Task tool is visible when depth < max_depth."""
-    worker_config = TestConfig(ModelResponse(message=ModelMessage(content="OK")))
-    worker = Agent("worker", config=worker_config)
-    task_tool = worker.as_tool(description="Test", max_depth=2)
+    result = await run_task(worker, "Mutate", parent_context=parent_ctx)
 
-    # At depth 0, tool should be visible
-    schemas = list(await task_tool.schemas(None))
-    assert len(schemas) == 1
-
-    # At depth 1, still visible (< 2)
-    token = _task_depth.set(1)
-    try:
-        schemas = list(await task_tool.schemas(None))
-        assert len(schemas) == 1
-    finally:
-        _task_depth.reset(token)
-
-    # At depth 2, hidden (>= 2)
-    token = _task_depth.set(2)
-    try:
-        schemas = list(await task_tool.schemas(None))
-        assert len(schemas) == 0
-    finally:
-        _task_depth.reset(token)
-
-
-@pytest.mark.asyncio
-async def test_custom_max_depth():
-    """as_tool respects custom max_depth."""
-    worker_config = TestConfig(ModelResponse(message=ModelMessage(content="OK")))
-    worker = Agent("worker", config=worker_config)
-    task_tool = worker.as_tool(description="Test", max_depth=5)
-
-    # At depth 4, still visible
-    token = _task_depth.set(4)
-    try:
-        schemas = list(await task_tool.schemas(None))
-        assert len(schemas) == 1
-    finally:
-        _task_depth.reset(token)
-
-    # At depth 5, hidden
-    token = _task_depth.set(5)
-    try:
-        schemas = list(await task_tool.schemas(None))
-        assert len(schemas) == 0
-    finally:
-        _task_depth.reset(token)
+    assert result.completed is True
+    # Mutations from sub-task are visible on the parent context
+    assert parent_ctx.variables["counter"] == 11
+    assert parent_ctx.variables["new_key"] == "new_value"
+    # Pre-existing variable is untouched
+    assert parent_ctx.variables["existing"] == "yes"

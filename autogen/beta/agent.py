@@ -41,6 +41,7 @@ from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
+    from .tools.final.task import StreamFactory
 
 
 TResult = TypeVar313("TResult", default=str)
@@ -577,10 +578,8 @@ class Agent(Generic[TResult]):
             llm_call = partial(mw.on_llm_call, llm_call)
 
         async def _call_client(context: Context) -> None:
-            result = await llm_call(
-                await context.stream.history.get_events(),
-                context,
-            )
+            messages = await context.stream.history.get_events()
+            result = await llm_call(messages, context)
             await context.send(result)
 
         with ExitStack() as stack:
@@ -617,14 +616,17 @@ class Agent(Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        max_depth: int | None = None,
-        stream: "Callable[[], Stream] | None" = None,
-    ) -> "Tool":
-        """Use this agent as a tool callable by another agent."""
-        from .task import DEFAULT_MAX_TASK_DEPTH, _make_task_tool
+        stream: "StreamFactory | None" = None,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        from .tools import subagent_tool
 
-        return _make_task_tool(
-            self, description=description, name=name, max_depth=max_depth or DEFAULT_MAX_TASK_DEPTH, stream=stream
+        return subagent_tool(
+            self,
+            description=description,
+            name=name,
+            stream=stream,
+            middleware=middleware,
         )
 
     def as_conversable(self) -> "ConversableAdapter":

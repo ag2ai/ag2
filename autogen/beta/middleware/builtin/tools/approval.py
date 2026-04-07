@@ -10,7 +10,7 @@ _DEFAULT_MESSAGE = (
     "Agent wants to call the tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N?\n"
 )
 _DEFAULT_MESSAGE_ALWAYS = "Agent wants to call the tool:\n`{tool_name}`, {tool_arguments}\nPlease approve or deny this request.\nY/N/Always?\n"
-BYPASS_KEY = "approval_required:always"
+BYPASS_KEY = "ag:approval_required:always"
 
 
 def approval_required(

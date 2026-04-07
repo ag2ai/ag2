@@ -4,6 +4,7 @@
 
 from .client_tool import ClientTool
 from .function_tool import FunctionDefinition, FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .task import persistent_stream, subagent_tool
 from .toolkit import Toolkit
 
 __all__ = (
@@ -13,5 +14,7 @@ __all__ = (
     "FunctionTool",
     "FunctionToolSchema",
     "Toolkit",
+    "persistent_stream",
+    "subagent_tool",
     "tool",
 )
