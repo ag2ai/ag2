@@ -173,6 +173,78 @@ async def intercept_message(
     return event
 ```
 
+## RedisStream — Persistent & Cross-Process Events
+
+`RedisStream` is a drop-in replacement for `MemoryStream` that adds **persistent event history** and **cross-process pub/sub** via Redis. Events are delivered to all subscribers — even across different processes or machines.
+
+```bash
+pip install "ag2[redis]"
+```
+
+### Basic Usage
+
+```python linenums="1" hl_lines="2 5"
+from autogen.beta import Agent
+from autogen.beta.streams.redis import RedisStream
+from autogen.beta.config import OpenAIConfig
+
+stream = RedisStream("redis://localhost:6379")
+
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig("gpt-4o-mini"),
+)
+
+reply = await agent.ask("Hello!", stream=stream)
+
+# History is persisted in Redis and survives restarts
+history = list(await stream.history.get_events())
+```
+
+All the same subscription patterns (`subscribe`, `where`, `sub_scope`, `get`, interrupters) work exactly as with `MemoryStream`.
+
+### Serialization Format
+
+By default, events are serialized as **JSON** for human readability. You can switch to **pickle** for full Python object fidelity:
+
+```python linenums="1"
+from autogen.beta.streams.redis import RedisStream, Serializer
+
+# JSON (default) — readable in Redis tools
+stream = RedisStream("redis://localhost:6379")
+
+# Pickle — preserves exact Python types
+stream = RedisStream("redis://localhost:6379", serializer=Serializer.PICKLE)
+```
+
+### Cross-Process Communication
+
+Multiple `RedisStream` instances sharing the same `id` automatically receive each other's events via Redis Pub/Sub:
+
+```python linenums="1"
+from uuid import UUID
+from autogen.beta.streams.redis import RedisStream
+
+STREAM_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+# Process A
+stream_a = RedisStream("redis://localhost:6379", id=STREAM_ID)
+
+# Process B (separate Python process)
+stream_b = RedisStream("redis://localhost:6379", id=STREAM_ID)
+
+# Events sent on stream_a are received by subscribers on stream_b, and vice versa
+```
+
+### Cleanup
+
+Always close the stream when done to release Redis connections:
+
+```python
+await stream.close()
+```
+
 ## Custom events
 
 You can create your own custom events by subclassing `BaseEvent`. Because of its metaclass, field definitions automatically support value-based filtering in `where` clauses.

@@ -18,8 +18,8 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_single_agent_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     my_agent = ConversableAgent(
         name="helpful_agent",
@@ -42,8 +42,8 @@ def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_single_agent_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     my_agent = ConversableAgent(
         name="helpful_agent",
@@ -65,8 +65,8 @@ async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_two_agents_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     jack = ConversableAgent(
         "Jack",
@@ -99,8 +99,8 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_two_agents_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     jack = ConversableAgent(
         "Jack",
@@ -136,8 +136,8 @@ async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_group_chat_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     planner = ConversableAgent(
         name="planner_agent",
@@ -189,8 +189,8 @@ def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_group_chat_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     planner = ConversableAgent(
         name="planner_agent",
@@ -241,8 +241,8 @@ async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_swarm_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     planner_message = """You are a classroom lesson planner.
     Given a topic, write a lesson plan for a fourth grade class.
@@ -295,8 +295,8 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_swarm_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     # 1. Create our agents
     planner_message = """You are a classroom lesson planner.
@@ -348,9 +348,10 @@ async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
     assert isinstance(await response.cost, Cost)
 
 
+@pytest.mark.timeout(60)
 @run_for_optional_imports("openai", "openai")
-def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_sequential_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     financial_tasks = [
         """What are the current stock prices of NVDA and TESLA, and how is the performance over the past month in terms of percentage change?""",
@@ -425,10 +426,11 @@ def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
         assert isinstance(response.cost, Cost)
 
 
+@pytest.mark.timeout(60)
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_sequential_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     financial_tasks = [
         """What are the current stock prices of NVDA and TESLA, and how is the performance over the past month in terms of percentage change?""",
@@ -503,8 +505,8 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
-def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_run_group_chat_sync(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -560,8 +562,8 @@ def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
-async def test_run_group_chat_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = credentials_gpt_4o_mini.llm_config
+async def test_run_group_chat_async(credentials_openai_mini: Credentials):
+    llm_config = credentials_openai_mini.llm_config
 
     triage_agent = ConversableAgent(
         name="triage_agent",

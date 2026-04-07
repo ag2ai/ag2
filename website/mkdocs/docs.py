@@ -6,18 +6,17 @@
 
 import os
 import subprocess
+import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from shutil import rmtree
 from typing import Annotated
 
-import mkdocs.commands.build
 import mkdocs.commands.serve
 import typer
+from _website.generate_mkdocs import main as generate_files_for_mkdocs
 from create_api_docs import create_api_docs
 from mkdocs.config import load_config
-
-from autogen._website.generate_mkdocs import main as generate_files_for_mkdocs
 
 IGNORE_DIRS = ("assets", "stylesheets", "javascripts")
 
@@ -233,9 +232,9 @@ def _build(force: bool = False):
     # update_contributing()
 
     # typer.echo("Updating Release Notes")
-    # update_release_notes(realease_notes_path=EN_DOCS_DIR / "release.md")
+    # update_release_notes(release_notes_path=EN_DOCS_DIR / "release.md")
 
-    subprocess.run(["mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
+    subprocess.run([sys.executable, "-m", "mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
 
 
 if __name__ == "__main__":

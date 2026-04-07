@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -110,7 +110,7 @@ async def test_hitl_decorator_override(
     )
 
     @agent.hitl_hook
-    def overrided_hook(event: HumanInputRequest) -> HumanMessage:
+    def overridden_hook(event: HumanInputRequest) -> HumanMessage:
         return HumanMessage(content="wrong")
 
     with pytest.warns(RuntimeWarning):

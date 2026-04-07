@@ -1,22 +1,39 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from .base import BaseEvent, Field
 from .tool_events import ToolCallsEvent
+
+
+@dataclass(frozen=True, slots=True)
+class Usage:
+    """Token usage normalized across beta LLM providers."""
+
+    prompt_tokens: float | None = None
+    completion_tokens: float | None = None
+    total_tokens: float | None = None
+    cache_read_input_tokens: float | None = None
+    cache_creation_input_tokens: float | None = None
+
+    def __bool__(self) -> bool:
+        return any((
+            self.prompt_tokens,
+            self.completion_tokens,
+            self.total_tokens,
+            self.cache_read_input_tokens,
+            self.cache_creation_input_tokens,
+        ))
 
 
 class ModelRequest(BaseEvent):
     """Event representing an input request sent to the model."""
 
     content: str
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ModelRequest):
-            return NotImplemented
-        return self.content == other.content
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -34,21 +51,11 @@ class ModelReasoning(ModelEvent):
 
     content: str
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ModelReasoning):
-            return NotImplemented
-        return self.content == other.content
-
 
 class ModelMessage(ModelEvent):
     """Single message emitted by the model."""
 
     content: str
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ModelMessage):
-            return NotImplemented
-        return self.content == other.content
 
 
 class ModelResponse(ModelEvent):
@@ -56,11 +63,15 @@ class ModelResponse(ModelEvent):
 
     message: ModelMessage | None = None
     tool_calls: ToolCallsEvent = Field(default_factory=ToolCallsEvent)
-    usage: dict[str, float] = Field(default_factory=dict)
+    usage: Usage = Field(default_factory=Usage)
     response_force: bool = False
-    model: str | None = None
-    provider: str | None = None
-    finish_reason: str | None = None
+
+    images: list[bytes] = Field(default_factory=list)
+
+    # Tracing information
+    model: str | None = Field(default=None, compare=False)
+    provider: str | None = Field(default=None, compare=False)
+    finish_reason: str | None = Field(default=None, compare=False)
 
     @property
     def content(self) -> str | None:
@@ -72,6 +83,8 @@ class ModelResponse(ModelEvent):
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
             text += f", usage={self.usage}"
+        if self.images:
+            text += f", images={len(self.images)}"
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
@@ -83,45 +96,30 @@ class ModelResponse(ModelEvent):
             msg["tool_calls"] = self.tool_calls.to_api()
         return msg
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ModelResponse):
-            return NotImplemented
-        return (
-            self.message == other.message
-            and self.tool_calls == other.tool_calls
-            and self.usage == other.usage
-            and self.response_force == other.response_force
-        )
-
 
 class ModelMessageChunk(ModelEvent):
     """Chunk of a streamed model message."""
 
     content: str
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ModelMessageChunk):
-            return NotImplemented
-        return self.content == other.content
-
 
 class HumanInputRequest(BaseEvent):
     """Event requesting input from a human user."""
 
+    id: str = Field(default_factory=lambda: str(uuid4()), compare=False)
     content: str
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, HumanInputRequest):
-            return NotImplemented
-        return self.content == other.content
 
 
 class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
+    parent_id: str = Field(default="", compare=False)
     content: str
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, HumanMessage):
-            return NotImplemented
-        return self.content == other.content
+    @classmethod
+    def ensure_message(cls, content: "str | HumanMessage", parent_id: str) -> "HumanMessage":
+        msg = content if isinstance(content, HumanMessage) else cls(content=content)
+        if not msg.parent_id:
+            # Set parent_id after creation to hide this option from public API
+            msg.parent_id = parent_id
+        return msg
