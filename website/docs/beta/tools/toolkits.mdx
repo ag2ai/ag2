@@ -74,6 +74,27 @@ agent = Agent(
 )
 ```
 
-## Tool middleware
+## Toolkit middleware
 
-`@toolkit.tool` accepts the same `middleware=[...]` option as `@tool` and `@agent.tool`. See [Tool middleware](/docs/beta/tools/tool_middleware).
+Pass `middleware=[...]` to the `Toolkit` constructor to apply hooks to **every** tool in the set — both tools passed to the constructor and tools added later via `@toolkit.tool`:
+
+```python linenums="1" hl_lines="12"
+from autogen.beta import Context
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import ToolExecution
+from autogen.beta.tools import Toolkit
+
+async def log_calls(
+    call_next: ToolExecution, event: ToolCallEvent, context: Context,
+) -> ToolResultEvent:
+    print(f"Calling {event.name}")
+    return await call_next(event, context)
+
+support_tools = Toolkit(search_orders, cancel_order, middleware=[log_calls])
+```
+
+Toolkit middleware is the **outermost** layer: it runs before any per-tool middleware defined with `@tool(middleware=[...])`.
+
+### Per-tool middleware
+
+`@toolkit.tool` also accepts the same `middleware=[...]` option as `@tool` and `@agent.tool`. These per-tool hooks run **inside** the toolkit-level middleware. See [Tool middleware](/docs/beta/tools/tool_middleware).

@@ -82,6 +82,23 @@ async def main() -> None:
 !!! tip
     Prefer `#!python tempfile.TemporaryDirectory` over hardcoded `/tmp` paths. It guarantees a unique directory per run and cleans up after itself, avoiding leftover files and collisions between concurrent executions.
 
+### Middleware
+
+`FilesystemToolset` accepts a `middleware=[...]` parameter to wrap all tools with shared hooks. This works the same as [Toolkit middleware](/docs/beta/tools/toolkits#toolkit-middleware):
+
+```python linenums="1" hl_lines="11"
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import ToolExecution
+
+async def confirm_writes(
+    call_next: ToolExecution, event: ToolCallEvent, context: Context,
+) -> ToolResultEvent:
+    print(f"Executing: {event.name}")
+    return await call_next(event, context)
+
+fs = FilesystemToolset(base_path="/tmp/workspace", middleware=[confirm_writes])
+```
+
 ### Path safety
 
 All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
