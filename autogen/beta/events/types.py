@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from .base import BaseEvent, Field
 from .tool_events import ToolCallsEvent
@@ -136,6 +137,7 @@ class ModelMessageChunk(ModelEvent):
 class HumanInputRequest(BaseEvent):
     """Event requesting input from a human user."""
 
+    id: str = Field(default_factory=lambda: str(uuid4()))
     content: str
 
     def __eq__(self, other: object) -> bool:
@@ -147,15 +149,13 @@ class HumanInputRequest(BaseEvent):
 class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
+    parent_id: str = Field(default="")
     content: str
 
     @classmethod
-    def ensure_message(cls, content: "str | HumanMessage") -> "HumanMessage":
-        if isinstance(content, HumanMessage):
-            return content
-        return cls(content=content)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, HumanMessage):
-            return NotImplemented
-        return self.content == other.content
+    def ensure_message(cls, content: "str | HumanMessage", parent_id: str) -> "HumanMessage":
+        msg = content if isinstance(content, HumanMessage) else cls(content=content)
+        if not msg.parent_id:
+            # Set parent_id after creation to hide this option from public API
+            msg.parent_id = parent_id
+        return msg
