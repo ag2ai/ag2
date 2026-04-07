@@ -39,21 +39,11 @@ class ToolCallsEvent(BaseEvent):
     def to_api(self) -> list[dict[str, Any]]:
         return [c.to_api() for c in self.calls]
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallsEvent):
-            return NotImplemented
-        return self.calls == other.calls
-
 
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
     results: list["ToolResultEvent[Any] | ToolErrorEvent"]
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolResultsEvent):
-            return NotImplemented
-        return self.results == other.results
 
 
 class ToolEvent(BaseEvent):
@@ -66,9 +56,9 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=dict)
+    provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
-    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False)
+    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
     @property
     def serialized_arguments(self) -> dict[str, Any]:
@@ -92,11 +82,6 @@ class ToolCallEvent(ToolEvent):
                 "name": self.name,
             },
         }
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallEvent):
-            return NotImplemented
-        return self.id == other.id and self.name == other.name and self.arguments == other.arguments
 
 
 class ClientToolCallEvent(ToolCallEvent):

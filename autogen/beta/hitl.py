@@ -37,7 +37,7 @@ def wrap_hitl(
                 dependency_provider=context.dependency_provider,
                 **{CONTEXT_OPTION_NAME: context},
             )
-        return HumanMessage.ensure_message(result)
+        return HumanMessage.ensure_message(result, parent_id=event.id)
 
     def make_hook(middlewares: Iterable["BaseMiddleware"]) -> HitlExecution:
         ask_user: HumanInputHook = _call_model
