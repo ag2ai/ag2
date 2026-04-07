@@ -81,3 +81,14 @@ async def main() -> None:
 
 !!! tip
     Prefer `#!python tempfile.TemporaryDirectory` over hardcoded `/tmp` paths. It guarantees a unique directory per run and cleans up after itself, avoiding leftover files and collisions between concurrent executions.
+
+### Path safety
+
+All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
+
+```python linenums="1"
+fs = FilesystemToolset(base_path="/tmp/sandbox")
+
+# The agent can access /tmp/sandbox/data.txt
+# but NOT /tmp/sandbox/../../etc/passwd
+```
