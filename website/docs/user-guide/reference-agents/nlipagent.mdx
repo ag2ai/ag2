@@ -12,7 +12,7 @@ Two classes cover the full lifecycle:
 
 | Class | Role |
 |---|---|
-| [`NlipAgentServer`](#server-expose-an-agent-via-nlip) | Wraps a `ConversableAgent` and serves it over HTTP at `/nlip/` |
+| [`AG2NlipApplication`](#server-expose-an-agent-via-nlip) | Wraps a `ConversableAgent` as an `NLIP_Application` that is also an ASGI callable — pass it directly to `uvicorn.run` |
 | [`NlipRemoteAgent`](#client-connect-to-a-remote-nlip-endpoint) | Connects to any NLIP endpoint and uses it as a `ConversableAgent` |
 
 ## Installation
@@ -21,24 +21,29 @@ Two classes cover the full lifecycle:
 pip install "ag2[openai,nlip]"
 ```
 
-This installs `nlip-sdk`, `nlip-server`, `uvicorn`, and the OpenAI client in one step.
+This installs `nlip-sdk`, `nlip-server`, and the OpenAI client in one step.
 
 You can also install the optional packages separately:
 
 ```bash
-pip install nlip-server nlip-sdk uvicorn
+pip install nlip-server nlip-sdk
+```
+
+You'll also need an ASGI server (e.g. `uvicorn`) to actually serve the application:
+
+```bash
+pip install uvicorn
 ```
 
 ## Server — Expose a ConversableAgent as an NLIP server
 
-`NlipAgentServer` wraps any `ConversableAgent` as a NLIP HTTP endpoint.
+`AG2NlipApplication` wraps any `ConversableAgent` as an `NLIP_Application` that is also a standard ASGI app. You can hand the instance directly to any ASGI server (`uvicorn`, `hypercorn`, …) without an extra wrapper.
 
 Each request creates an isolated session: the agent runs, responds, and the session tears down. No conversation state is shared between requests.
 
 ```python title="server.py"
-import os
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat.contrib.nlip_agent import NlipAgentServer
+from autogen.agentchat.contrib.nlip_agent import AG2NlipApplication
 
 llm_config = LLMConfig({"model": "gpt-4o-mini"})
 
@@ -52,15 +57,21 @@ agent = ConversableAgent(
     human_input_mode="NEVER",  # required for unattended server operation
 )
 
-server = NlipAgentServer(agent, host="0.0.0.0", port=8000)
+app = AG2NlipApplication(agent)
 
 if __name__ == "__main__":
-    server.run()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 ```
 
 Start the server:
 ```bash
-uvicorn server:server --host 0.0.0.0 --port 8000
+python server.py
+```
+
+Or run it directly via `uvicorn`:
+```bash
+uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
 This will start an NLIP endpoint and we can send an NLIP message to test whether it works:
@@ -131,12 +142,12 @@ This example shows a realistic multi-agent setup where:
 
 ### Step 1 — Start the weather agent
 
-The weather server is an AG2 `ConversableAgent` with two registered tools — `get_weather_alerts` (by US state code) and `get_weather_forecast` (by latitude/longitude) — exposed as an NLIP endpoint via `NlipAgentServer`.
+The weather server is an AG2 `ConversableAgent` with two registered tools — `get_weather_alerts` (by US state code) and `get_weather_forecast` (by latitude/longitude) — exposed as an NLIP endpoint via `AG2NlipApplication`.
 
 ```python title="weather_agent.py"
 import httpx
 from autogen import ConversableAgent, LLMConfig, register_function
-from autogen.agentchat.contrib.nlip_agent import NlipAgentServer
+from autogen.agentchat.contrib.nlip_agent import AG2NlipApplication
 
 
 NWS_API_BASE = "https://api.weather.gov"
@@ -208,18 +219,25 @@ register_function(get_weather_forecast, caller=agent, executor=agent,
                   name="get_weather_forecast",
                   description="Get weather forecast for a latitude/longitude location.")
 
-server = NlipAgentServer(agent, host="127.0.0.1", port=8014)
+app = AG2NlipApplication(agent)
 
 if __name__ == "__main__":
-    server.run()
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8014)
 ```
 
-This file contains a weather agent with two tools: `weather_forecast` and `get_weather_alerts`, which is then exposed as an NLIP server with `NlipAgentServer` on port 8014.
+This file contains a weather agent with two tools: `weather_forecast` and `get_weather_alerts`, which is then exposed as an NLIP server with `AG2NlipApplication` on port 8014.
 
-Start the server with this command:
+Start the server with:
 
 ```bash
-uvicorn weather_agent:server --host 127.0.0.1 --port 8014
+python weather_agent.py
+```
+
+Or run it directly via `uvicorn`:
+
+```bash
+uvicorn weather_agent:app --host 127.0.0.1 --port 8014
 ```
 
 You can verify whether it works with a quick `curl`:
