@@ -5,6 +5,7 @@
 from .base import BaseEvent, Field
 from .conditions import Condition
 from .tool_events import (
+    BuiltinToolCallEvent,
     ClientToolCallEvent,
     ToolCallEvent,
     ToolCallsEvent,
@@ -26,6 +27,7 @@ from .types import (
 
 __all__ = (
     "BaseEvent",
+    "BuiltinToolCallEvent",
     "ClientToolCallEvent",
     "Condition",
     "Field",

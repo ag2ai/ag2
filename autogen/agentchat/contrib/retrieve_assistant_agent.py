@@ -13,9 +13,9 @@ from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
 
-@deprecated("The RetrieveAssistantAgent is deprecated. Please use the AssistantAgent instead.")
+@deprecated("RetrieveAssistantAgent is deprecated and will be removed in v0.14. Please use the AssistantAgent instead.")
 class RetrieveAssistantAgent(AssistantAgent):
-    """(Experimental) Retrieve Assistant agent, designed to solve a task with LLM.
+    """(Deprecated) Retrieve Assistant agent, designed to solve a task with LLM. Will be removed in v0.14.
 
     RetrieveAssistantAgent is a subclass of AssistantAgent configured with a default system message.
     The default system message is designed to solve a task with LLM,
@@ -27,7 +27,7 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            "The RetrieveAssistantAgent is deprecated. Please use the AssistantAgent instead.",
+            "RetrieveAssistantAgent is deprecated and will be removed in v0.14. Please use the AssistantAgent instead.",
             DeprecationWarning,
             stacklevel=2,
         )
