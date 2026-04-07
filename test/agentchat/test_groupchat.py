@@ -2334,7 +2334,7 @@ def test_manager_resume_message_assignment():
 @suppress_json_decoder_error
 @run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
-    credentials_gpt_4o_mini: Credentials,
+    credentials_openai_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2367,7 +2367,7 @@ def test_groupchat_with_deepseek_reasoner(
         manager = autogen.GroupChatManager(
             groupchat=groupchat,
             llm_config={
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
             },
         )
 

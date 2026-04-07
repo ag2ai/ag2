@@ -171,7 +171,7 @@ def get_credentials_from_env_vars(
     )
     if openai_config:
         config_list.append({**openai_config, "tags": ["gpt-4o"]})
-        config_list.append({**openai_config, "model": "gpt-4o-mini", "tags": ["gpt-4o-mini"]})
+        config_list.append({**openai_config, "model": "gpt-4.1-mini", "tags": ["gpt-4o-mini"]})
         config_list.append({**openai_config, "model": "gpt-4-turbo", "tags": ["gpt-4-turbo"]})
         config_list.append({**openai_config, "model": "gpt-4o-realtime-preview", "tags": ["gpt-4o-realtime"]})
         config_list.append({**openai_config, "model": "o1-mini", "tags": ["o1-mini"]})

@@ -115,7 +115,7 @@ class TestDuckDuckGoSearchTool:
         assert "Input should be a valid string" in str(exc_info.value)
 
     @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         """
         Test integration with AssistantAgent.
         """
@@ -123,7 +123,7 @@ class TestDuckDuckGoSearchTool:
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the duckduckgo_search tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
         # Mock the underlying query execution function

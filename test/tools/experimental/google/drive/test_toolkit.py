@@ -47,9 +47,9 @@ class TestGoogleDriveToolkit:
 
     @pytest.mark.skip(reason="This test requires real google credentials and is not suitable for CI at the moment")
     @run_for_optional_imports("openai", "openai")
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_end2end(self, credentials_openai_mini: Credentials) -> None:
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-        assistant = AssistantAgent(name="assistant", llm_config=credentials_gpt_4o_mini.llm_config)
+        assistant = AssistantAgent(name="assistant", llm_config=credentials_openai_mini.llm_config)
 
         client_secret_file = "client_secret_ag2.json"
         provider = GoogleCredentialsLocalProvider(
