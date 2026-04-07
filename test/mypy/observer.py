@@ -36,6 +36,17 @@ async def check_agent_ask_with_observers() -> None:
     )
 
 
+async def check_agent_turn_ask_with_observers() -> None:
+    agent = Agent("test", config=TestConfig())
+
+    turn = await agent.ask("Hi!")
+
+    await turn.ask(
+        "More!",
+        observers=[observer(ModelResponse, lambda e: None)],
+    )
+
+
 async def check_agent_observer_decorator() -> None:
     agent = Agent("test", config=TestConfig())
 

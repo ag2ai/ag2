@@ -315,7 +315,7 @@ class Agent(Generic[TResult]):
         self._agent_variables = variables or {}
 
         self._middleware = middleware
-        self._observers: list[Observer] = list(observers)
+        self._observers = list(observers)
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
