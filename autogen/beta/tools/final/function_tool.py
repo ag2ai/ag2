@@ -72,7 +72,7 @@ class FunctionTool(Tool):
         Does not modify the original tool.
         """
         clone = deepcopy(self)
-        clone._tool_middleware = self._tool_middleware + tuple(middleware)
+        clone._tool_middleware = tuple(middleware) + self._tool_middleware
         return clone
 
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:

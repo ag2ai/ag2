@@ -120,4 +120,4 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
     agent = Agent("", config=config, tools=[wrapped])
     await agent.ask("Hi!")
 
-    assert call_order == ["first", "second", "tool"]
+    assert call_order == ["second", "first", "tool"]
