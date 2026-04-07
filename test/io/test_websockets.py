@@ -104,7 +104,7 @@ class TestConsoleIOWithWebsockets:
         print("Test passed.", flush=True)
 
     @run_for_optional_imports("openai", "openai")
-    def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_chat(self, credentials_openai_mini: Credentials) -> None:
         print("Testing setup", flush=True)
 
         mock = MagicMock()
@@ -117,7 +117,7 @@ class TestConsoleIOWithWebsockets:
             initial_msg = iostream.input()
 
             llm_config = {
-                "config_list": credentials_gpt_4o_mini.config_list,
+                "config_list": credentials_openai_mini.config_list,
                 "stream": True,
             }
 
@@ -131,8 +131,9 @@ class TestConsoleIOWithWebsockets:
             user_proxy = autogen.UserProxyAgent(
                 name="user_proxy",
                 system_message="A proxy for the user.",
-                is_termination_msg=lambda x: x.get("content", "")
-                and x.get("content", "").rstrip().endswith("TERMINATE"),
+                is_termination_msg=lambda x: (
+                    x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE")
+                ),
                 human_input_mode="NEVER",
                 max_consecutive_auto_reply=10,
             )

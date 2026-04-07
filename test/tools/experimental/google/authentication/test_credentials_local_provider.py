@@ -48,7 +48,7 @@ class TestGoogleCredentialsLocalProvider:
             user_creds = MagicMock()
             user_creds.refresh_token = "refresh"
             user_creds.client_id = "client"
-            user_creds.client_secret = "secret"
+            user_creds.client_secret = "secret"  # pragma: allowlist secret
             user_creds.valid = True
             mock_refresh_or_get_new_credentials.return_value = user_creds
 
@@ -61,7 +61,7 @@ class TestGoogleCredentialsLocalProvider:
         """Shows basic usage of the Sheets API.
         Prints values from a sample spreadsheet.
         """
-        client_secret_file = "client_secret_ag2.json"
+        client_secret_file = "client_secret_ag2.json"  # pragma: allowlist secret
         # The ID and range of a sample spreadsheet.
         spreadsheet_id = "1iqxU1SnfAqfWlC_7yezC-bW6CrF827NcTvZ81x_Q_KA"
         range_name = "Sheet1!A1:C"

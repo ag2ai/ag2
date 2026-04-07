@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -39,21 +39,11 @@ class ToolCallsEvent(BaseEvent):
     def to_api(self) -> list[dict[str, Any]]:
         return [c.to_api() for c in self.calls]
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallsEvent):
-            return NotImplemented
-        return self.calls == other.calls
-
 
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
-    results: list["ToolResultEvent | ToolErrorEvent"]
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolResultsEvent):
-            return NotImplemented
-        return self.results == other.results
+    results: list["ToolResultEvent[Any] | ToolErrorEvent"]
 
 
 class ToolEvent(BaseEvent):
@@ -66,14 +56,14 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=dict)
+    provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
-    _serialized_arguments: dict[str, Any] | None = Field(default=None)
+    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
     @property
     def serialized_arguments(self) -> dict[str, Any]:
         if self._serialized_arguments is None:
-            self._serialized_arguments = json.loads(self.arguments)
+            self._serialized_arguments = json.loads(self.arguments or "{}")
         return self._serialized_arguments
 
     @serialized_arguments.setter
@@ -81,7 +71,7 @@ class ToolCallEvent(ToolEvent):
         self._serialized_arguments = value
 
     def __repr__(self) -> str:
-        return f"ToolCallEvent(id={self.id}, name={self.name}, arguments={self.arguments})"
+        return f"{self.__class__.__name__}(id={self.id}, name={self.name}, arguments={self.arguments})"
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -92,11 +82,6 @@ class ToolCallEvent(ToolEvent):
                 "name": self.name,
             },
         }
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallEvent):
-            return NotImplemented
-        return self.id == other.id and self.name == other.name and self.arguments == other.arguments
 
 
 class ClientToolCallEvent(ToolCallEvent):
@@ -109,14 +94,18 @@ class ClientToolCallEvent(ToolCallEvent):
         )
 
 
-class ToolResultEvent(ToolEvent):
+class BuiltinToolCallEvent(ToolCallEvent):
+    """Represents a builtin tool invocation requested by the model."""
+
+
+class ToolResultEvent(ToolEvent, Generic[ResultT]):
     """Represents a successful tool execution result."""
 
     parent_id: str
     name: str
 
-    result: "ToolResult"
-    _content: str = Field(default_factory=str)
+    result: "ToolResult[ResultT]"
+    _content: str = Field(default_factory=str, init=False)
 
     @property
     def content(self) -> str:
@@ -129,7 +118,15 @@ class ToolResultEvent(ToolEvent):
         self._content = value
 
     def __repr__(self) -> str:
-        return f"ToolResultEvent(parent_id={self.parent_id}, name={self.name}, content={self.content})"
+        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name={self.name}, content={self.content})"
+
+    @classmethod
+    def from_call(cls, call: ToolCallEvent, result: ResultT) -> "ToolResultEvent[ResultT]":
+        return cls(
+            parent_id=call.id,
+            name=call.name,
+            result=ToolResult.ensure_result(result),
+        )
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -144,10 +141,19 @@ class ToolResultEvent(ToolEvent):
         return self.parent_id == other.parent_id and self.name == other.name and self.content == other.content
 
 
-class ToolErrorEvent(ToolResultEvent):
+class ToolErrorEvent(ToolResultEvent[None]):
     """Represents a failed tool execution with an associated error."""
 
     error: Exception
+
+    @classmethod
+    def from_call(cls, call: ToolCallEvent, error: Exception) -> "ToolErrorEvent":
+        return cls(
+            parent_id=call.id,
+            name=call.name,
+            error=error,
+            result=ToolResult(),
+        )
 
     @property
     def content(self) -> str:

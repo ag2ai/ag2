@@ -22,8 +22,8 @@ from test.credentials import Credentials
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 @run_for_optional_imports(["openai"], "openai")
-def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+def test_eval_math_responses(credentials_openai_mini: Credentials):
+    config_list = credentials_openai_mini.config_list
     tools = [
         {
             "type": "function",
@@ -77,8 +77,8 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 @run_for_optional_imports(["openai"], "openai")
-def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+def test_eval_math_responses_api_style_function(credentials_openai_mini: Credentials):
+    config_list = credentials_openai_mini.config_list
     functions = [
         {
             "name": "eval_math_responses",

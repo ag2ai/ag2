@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -78,6 +78,18 @@ class TestSerializedArgumentsCache:
             _ = tc.serialized_arguments
             assert mock_loads.call_count == 1
             assert result == {"key": "value"}
+
+
+class TestSerializedArgumentsEmptyInput:
+    """serialized_arguments must handle empty string and None without crashing."""
+
+    def test_empty_string_returns_empty_dict(self) -> None:
+        tc = ToolCallEvent(name="tool", arguments="")
+        assert tc.serialized_arguments == {}
+
+    def test_none_returns_empty_dict(self) -> None:
+        tc = ToolCallEvent(name="tool", arguments=None)
+        assert tc.serialized_arguments == {}
 
     def test_setter_updates_cache(self) -> None:
         tc = ToolCallEvent(name="tool", arguments='{"a": 1}')

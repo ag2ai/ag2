@@ -22,7 +22,6 @@ with optional_import_block():
 
 # Optional PDF support
 with optional_import_block() as result:
-    import pdfminer
     import pdfminer.high_level
 
 IS_PDF_CAPABLE = result.is_successful

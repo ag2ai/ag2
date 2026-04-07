@@ -1,10 +1,11 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from typing import Literal
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
@@ -17,6 +18,7 @@ class CodeExecutionToolSchema(ToolSchema):
     """Provider-neutral capability flag for code execution."""
 
     type: str = field(default="code_execution", init=False)
+    version: Literal["code_execution_20250825"] = "code_execution_20250825"
 
 
 class CodeExecutionTool(Tool):
@@ -26,8 +28,15 @@ class CodeExecutionTool(Tool):
     into the correct provider-specific API format.
     """
 
+    def __init__(
+        self,
+        *,
+        version: Literal["code_execution_20250825"] = "code_execution_20250825",
+    ) -> None:
+        self._schema = CodeExecutionToolSchema(version=version)
+
     async def schemas(self, context: "Context") -> list[ToolSchema]:
-        return [CodeExecutionToolSchema()]
+        return [self._schema]
 
     def register(
         self,
