@@ -229,18 +229,27 @@ class AG2NlipSession(NLIP_Session):
         final_service_response = None
         async for service_response in self.agent_service(request):
             if service_response.input_required:
-                # Return input request
+                # Return input request — propagate any context updates
+                # the agent may have made before asking for input.
                 return response_message_to_nlip(
                     ResponseMessage(
                         messages=[{"role": "assistant", "content": "Input required"}],
+                        context=service_response.context,
                         input_required=service_response.input_required,
                     )
                 )
             final_service_response = service_response
 
         # Convert ServiceResponse → ResponseMessage → NLIP
-        if final_service_response is None or final_service_response.message is None:
+        if final_service_response is None:
             response_msg = ResponseMessage(messages=[{"role": "assistant", "content": "No response generated"}])
+        elif final_service_response.message is None:
+            # Agent finished but produced no final message — still propagate
+            # any context updates it may have made along the way.
+            response_msg = ResponseMessage(
+                messages=[{"role": "assistant", "content": "No response generated"}],
+                context=final_service_response.context,
+            )
         else:
             # ServiceResponse has a single 'message' (dict), not 'messages' (list)
             response_msg = ResponseMessage(
