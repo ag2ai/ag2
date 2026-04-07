@@ -2,14 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from contextlib import ExitStack
 from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import MemoryStream
+from autogen.beta import Agent, MemoryStream, tool
 from autogen.beta.context import Context
 from autogen.beta.events import ClientToolCallEvent, ToolCallEvent
+from autogen.beta.middleware import ToolExecution, ToolResultType
+from autogen.beta.testing import TestConfig
 from autogen.beta.tools.final.client_tool import ClientTool
 
 
@@ -76,3 +79,45 @@ async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> 
     assert len(events) == 2
     assert isinstance(events[-1], ClientToolCallEvent)
     assert getattr(events[-1], "_tag", None) == "middleware_ran"
+
+
+@pytest.mark.asyncio()
+async def test_function_tool_with_middleware_preserves_existing() -> None:
+    """with_middleware appends to existing middleware without replacing it."""
+    call_order: list[str] = []
+
+    async def first_mw(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        call_order.append("first")
+        return await call_next(event, context)
+
+    async def second_mw(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        call_order.append("second")
+        return await call_next(event, context)
+
+    @tool(middleware=[first_mw])
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        call_order.append("tool")
+        return a + b
+
+    wrapped = add.with_middleware(second_mw)
+
+    assert len(add._tool_middleware) == 1
+    assert len(wrapped._tool_middleware) == 2
+
+    config = TestConfig(
+        ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[wrapped])
+    await agent.ask("Hi!")
+
+    assert call_order == ["first", "second", "tool"]
