@@ -1,11 +1,10 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 from ollama import AsyncClient
@@ -18,12 +17,14 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
+    Usage,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_to_api
 
 OLLAMA_DEFAULT_HOST = "http://localhost:11434"
 
@@ -58,8 +59,14 @@ class OllamaClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        ollama_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        ollama_messages = convert_messages(prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}
@@ -68,6 +75,9 @@ class OllamaClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+
+        if fmt := response_proto_to_format(response_schema):
+            kwargs["format"] = fmt
 
         if self._streaming:
             return await self._call_streaming(ollama_messages, kwargs, context)
@@ -96,7 +106,7 @@ class OllamaClient(LLMClient):
             await context.send(model_msg)
 
         calls = [
-            ToolCall(
+            ToolCallEvent(
                 id=f"call_{i}",
                 name=tc.function.name,
                 arguments=json.dumps(tc.function.arguments),
@@ -104,16 +114,21 @@ class OllamaClient(LLMClient):
             for i, tc in enumerate(msg.tool_calls or [])
         ]
 
-        usage_dict = {
-            "prompt_tokens": response.prompt_eval_count or 0,
-            "completion_tokens": response.eval_count or 0,
-            "total_tokens": (response.prompt_eval_count or 0) + (response.eval_count or 0),
-        }
+        prompt_n = float(response.prompt_eval_count or 0)
+        completion_n = float(response.eval_count or 0)
+        usage = Usage(
+            prompt_tokens=prompt_n,
+            completion_tokens=completion_n,
+            total_tokens=prompt_n + completion_n,
+        )
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls=calls),
+            usage=usage,
+            model=response.model,
+            provider="ollama",
+            finish_reason=getattr(response, "done_reason", None),
         )
 
     async def _call_streaming(
@@ -130,8 +145,10 @@ class OllamaClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        usage = Usage()
+        calls: list[ToolCallEvent] = []
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         async for chunk in response_stream:
             msg = chunk.message
@@ -145,7 +162,7 @@ class OllamaClient(LLMClient):
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=f"call_{len(calls) + i}",
                         name=tc.function.name,
                         arguments=json.dumps(tc.function.arguments),
@@ -153,11 +170,11 @@ class OllamaClient(LLMClient):
                 )
 
             if chunk.done:
-                usage_dict = {
-                    "prompt_tokens": chunk.prompt_eval_count or 0,
-                    "completion_tokens": chunk.eval_count or 0,
-                    "total_tokens": (chunk.prompt_eval_count or 0) + (chunk.eval_count or 0),
-                }
+                p_n = float(chunk.prompt_eval_count or 0)
+                c_n = float(chunk.eval_count or 0)
+                usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
+                finish_reason = getattr(chunk, "done_reason", None)
+                resolved_model = chunk.model
 
         message: ModelMessage | None = None
         if full_content:
@@ -166,6 +183,9 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls=calls),
+            usage=usage,
+            model=resolved_model,
+            provider="ollama",
+            finish_reason=finish_reason,
         )

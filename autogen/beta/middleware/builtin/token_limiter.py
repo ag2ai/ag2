@@ -1,11 +1,11 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
@@ -39,7 +39,7 @@ class _TokenLimiter(BaseMiddleware):
 
     @staticmethod
     def _skip_leading_tool_results(events: Sequence[BaseEvent], start: int) -> int:
-        while start < len(events) and isinstance(events[start], ToolResults):
+        while start < len(events) and isinstance(events[start], ToolResultsEvent):
             start += 1
         return start
 

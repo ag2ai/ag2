@@ -1,44 +1,56 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
 
+import base64
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given, omit
+from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omit
+from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
     ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
+    ResponseFunctionWebSearch,
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
+from autogen.beta.response import ResponseProto
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import events_to_responses_input, tool_to_responses_api
+from .mappers import (
+    events_to_responses_input,
+    normalize_responses_usage,
+    response_proto_to_text_config,
+    tool_to_responses_api,
+)
 
 
 class CreateOptions(TypedDict, total=False):
-    model: Required[str]
+    model: Required[ChatModel | str]
 
     temperature: float | None
     top_p: float | None
@@ -91,14 +103,26 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
-        instructions = "\n\n".join(context.prompt) if context.prompt else None
+
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        instructions = "\n".join(prompt) or None
 
         openai_tools = [tool_to_responses_api(t) for t in tools]
 
+        kwargs: dict[str, Any] = {}
+        if r := response_proto_to_text_config(response_schema):
+            kwargs["text"] = r
+
         response = await self._client.responses.create(
             **self._create_options,
+            **kwargs,
             input=input_items,
             instructions=instructions,
             tools=openai_tools or omit,
@@ -114,7 +138,8 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
+        images: list[bytes] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -128,42 +153,59 @@ class OpenAIResponsesClient(LLMClient):
                         model_msg = ModelMessage(content=part.text)
                         await context.send(model_msg)
 
+            elif isinstance(item, ResponseFunctionWebSearch):
+                web_search_tool_call = BuiltinToolCallEvent(
+                    id=item.id,
+                    name=WEB_SEARCH_TOOL_NAME,
+                    arguments=item.action.model_dump_json(),
+                )
+                # do not append to calls list, as it is not a tool call
+                await context.send(web_search_tool_call)
+
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=item.call_id,
                         name=item.name,
                         arguments=item.arguments,
                     )
                 )
 
-        usage = response.usage.model_dump() if response.usage else {}
+            elif isinstance(item, ImageGenerationCall) and item.result:
+                images.append(base64.b64decode(item.result))
+
+        usage = normalize_responses_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
+            tool_calls=ToolCallsEvent(calls=calls),
             usage=usage,
+            model=response.model,
+            provider="openai",
+            finish_reason=response.status,
+            images=images,
         )
 
     async def _process_stream(
         self,
-        response_stream: Any,
+        response_stream: AsyncStream[ResponseStreamEvent],
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        calls: list[ToolCallEvent] = []
+        images: list[bytes] = []
+        finish_reason: str | None = None
+        resolved_model: str | None = None
 
         async for event in response_stream:
-            event: ResponseStreamEvent
-
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
                 await context.send(ModelMessageChunk(content=event.delta))
 
             elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
                 calls.append(
-                    ToolCall(
+                    ToolCallEvent(
                         id=event.item_id,
                         name=event.name,
                         arguments=event.arguments,
@@ -173,6 +215,19 @@ class OpenAIResponsesClient(LLMClient):
             elif isinstance(event, ResponseCompletedEvent):
                 if event.response.usage:
                     usage = event.response.usage.model_dump()
+                finish_reason = event.response.status
+                resolved_model = event.response.model
+                for item in event.response.output:
+                    if isinstance(item, ResponseFunctionWebSearch):
+                        web_search_tool_call = BuiltinToolCallEvent(
+                            id=item.id,
+                            name=WEB_SEARCH_TOOL_NAME,
+                            arguments=item.action.model_dump_json(),
+                        )
+                        await context.send(web_search_tool_call)
+
+                    elif isinstance(item, ImageGenerationCall) and item.result:
+                        images.append(base64.b64decode(item.result))
 
         message: ModelMessage | None = None
         if full_content:
@@ -181,6 +236,10 @@ class OpenAIResponsesClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
-            usage=usage,
+            tool_calls=ToolCallsEvent(calls=calls),
+            usage=normalize_responses_usage(usage),
+            model=resolved_model,
+            provider="openai",
+            finish_reason=finish_reason,
+            images=images,
         )

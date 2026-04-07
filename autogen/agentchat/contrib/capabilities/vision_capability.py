@@ -34,7 +34,7 @@ class VisionCapability(AgentCapability):
         The vision capability will hook to the ConversableAgent's `process_last_received_message`.
 
         Some technical details:
-        When the agent (who has the vision capability) received an message, it will:
+        When the agent (who has the vision capability) receives a message, it will:
         1. _process_received_message:
             a. _append_oai_message
         2. generate_reply: if the agent is a MultimodalAgent, it will also use the image tag.
@@ -158,7 +158,7 @@ class VisionCapability(AgentCapability):
             A beautiful sunset over the mountains\n"
             (Caption added after the image)
         """
-        copy.deepcopy(content)
+        content = copy.deepcopy(content)
         # normalize the content into the gpt-4v format for multimodal
         # we want to keep the URL format to keep it concise.
         if isinstance(content, str):
@@ -183,7 +183,7 @@ class VisionCapability(AgentCapability):
 
                 aug_content += f"<img {img_url}> in case you can not see, the caption of this image is: {img_caption}\n"
             else:
-                print(f"Warning: the input type should either be `test` or `image_url`. Skip {item['type']} here.")
+                print(f"Warning: the input type should either be `text` or `image_url`. Skip {item['type']} here.")
 
         return aug_content
 

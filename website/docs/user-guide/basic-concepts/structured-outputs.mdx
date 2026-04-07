@@ -179,25 +179,7 @@ print(json.dumps(structured_data, indent=4))
 
 With structured outputs added to our financial compliance system, our workflow becomes much more reliable:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| Finance[Finance Bot]
-    Finance --> |"Processes transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects"| Finance
-    Finance --> |"Handoff"| Summary[Summary Bot with Structured Output]
-    Summary --> |"Generates structured audit log"| Output[["JSON in exact required format"]]
-    Output --> RiskSystem[Risk Management System]
-    Output --> Dashboard[Finance Dashboard]
-    Output --> Database[(Transaction Database)]
-
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style Output fill:#fff8e1,stroke:#ffa000
-    style RiskSystem fill:#e8f5e9,stroke:#4caf50
-    style Dashboard fill:#e0f2f1,stroke:#009688
-    style Database fill:#f3e5f5,stroke:#7b1fa2
-```
+![Understanding the Enhanced Workflow](assets/structured-output-workflow.png)
 
 ## Complete Code Example
 

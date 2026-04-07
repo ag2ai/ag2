@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,14 +8,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context, Variable
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "result",
     )
 
@@ -174,8 +174,8 @@ async def test_set_variable_by_tool(mock: MagicMock) -> None:
     agent = Agent(
         "",
         config=TestConfig(
-            ToolCall(name="my_tool"),
-            ToolCall(name="another_tool"),
+            ToolCallEvent(name="my_tool"),
+            ToolCallEvent(name="another_tool"),
             "result",
         ),
         tools=[my_tool, another_tool],
@@ -208,8 +208,8 @@ async def test_variable_with_default_factory_called_once(mock: MagicMock) -> Non
     agent = Agent(
         "",
         config=TestConfig(
-            ToolCall(name="my_tool"),
-            ToolCall(name="another_tool"),
+            ToolCallEvent(name="my_tool"),
+            ToolCallEvent(name="another_tool"),
             "result",
         ),
         tools=[my_tool, another_tool],

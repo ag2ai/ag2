@@ -77,7 +77,7 @@ class TestRemyxCodeExecutor:
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     def test_init_with_api_key_from_env(self, mock_parent_init, mock_get_asset):
         """Test initialization with API key from environment."""
-        os.environ["REMYX_API_KEY"] = "test_key"
+        os.environ["REMYX_API_KEY"] = "test_key"  # pragma: allowlist secret
         mock_asset = Mock()
         mock_asset.arxiv_id = "2010.11929v2"
         mock_asset.has_docker = True
@@ -119,7 +119,7 @@ class TestRemyxCodeExecutor:
     def test_environment_variable_handling(self, mock_parent_init, mock_get_asset):
         """Test that environment variables are passed to container."""
         os.environ["HF_TOKEN"] = "test_hf_token"
-        os.environ["WANDB_API_KEY"] = "test_wandb_key"
+        os.environ["WANDB_API_KEY"] = "test_wandb_key"  # pragma: allowlist secret
 
         mock_asset = Mock()
         mock_asset.arxiv_id = "2010.11929v2"
@@ -309,7 +309,7 @@ class TestRemyxCodeExecutor:
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     @patch("autogen.ConversableAgent")
-    @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})  # pragma: allowlist secret
     def test_create_agents(self, mock_agent, mock_parent_init, mock_get_asset):
         """Test create_agents method."""
         mock_asset = Mock()
@@ -341,7 +341,7 @@ class TestRemyxCodeExecutor:
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
     @patch("autogen.ConversableAgent")
-    @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})  # pragma: allowlist secret
     def test_create_agents_with_system_message(self, mock_agent, mock_parent_init, mock_get_asset):
         """Test create_agents method with additional system message."""
         mock_asset = Mock()

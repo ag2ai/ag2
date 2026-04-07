@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -90,4 +90,4 @@ async def test_middleware_incoming_message_mutation() -> None:
     result = await agent.ask("1")
 
     tracking_config.mock.assert_called_once_with(ModelRequest(content="1" * (2**3)))
-    assert result.content == "2" * (2**3)
+    assert result.body == "2" * (2**3)

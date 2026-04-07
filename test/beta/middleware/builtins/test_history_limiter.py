@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 from collections.abc import Sequence
@@ -12,10 +12,10 @@ from autogen.beta.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
-    ToolResult,
-    ToolResults,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
 from autogen.beta.middleware import HistoryLimiter
 
@@ -114,12 +114,12 @@ async def test_history_limiter_drops_overlapping_turns(mock: MagicMock) -> None:
 async def test_history_limiter_drops_incomplete_tool_interaction(mock: MagicMock) -> None:
     history_limiter = HistoryLimiter(max_events=4)
 
-    tool_call = ToolCall(id="tool-call-1", name="lookup", arguments="{}")
+    tool_call = ToolCallEvent(id="tool-call-1", name="lookup", arguments="{}")
     middleware = history_limiter(ModelRequest(content="turn 2"), mock)
     events = [
         ModelRequest(content="turn 1"),
-        ModelResponse(tool_calls=ToolCalls(calls=[tool_call])),
-        ToolResults(results=[ToolResult(parent_id=tool_call.id, name=tool_call.name, raw_content="ok")]),
+        ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
+        ToolResultsEvent(results=[ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(message=ModelMessage(content="answer 1")),
         ModelRequest(content="turn 2"),
     ]

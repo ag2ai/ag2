@@ -169,7 +169,7 @@ def test_parsing_params(bedrock_client: BedrockClient):
         "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     }) == ({}, {})
 
-    with pytest.raises(AssertionError, match="Please provide the 'model` in the config_list to use Amazon Bedrock"):
+    with pytest.raises(AssertionError, match="Please provide the 'model' in the config_list to use Amazon Bedrock"):
         bedrock_client.parse_params({})
 
 

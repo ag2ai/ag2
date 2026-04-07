@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,14 +9,14 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.beta import Agent, Context, Depends, Inject
-from autogen.beta.events import ToolCall
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "result",
     )
 
@@ -112,7 +112,7 @@ async def test_inject_alias(
 
 
 @pytest.mark.asyncio()
-async def test_inject_by_custon_name(
+async def test_inject_by_custom_name(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:

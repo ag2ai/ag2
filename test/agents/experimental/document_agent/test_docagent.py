@@ -16,16 +16,16 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports(["openai"], "openai")
-def test_document_triage_agent_init(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_document_triage_agent_init(credentials_openai_mini: Credentials) -> None:
+    llm_config = credentials_openai_mini.llm_config
     triage_agent = DocumentTriageAgent(llm_config)
     assert triage_agent.llm_config["response_format"] == DocumentTask  # type: ignore [index]
 
 
 @pytest.mark.openai
 @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
-def test_document_agent_init(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
-    llm_config = credentials_gpt_4o_mini.llm_config
+def test_document_agent_init(credentials_openai_mini: Credentials, tmp_path: Path) -> None:
+    llm_config = credentials_openai_mini.llm_config
     document_agent = DocAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
 
     assert hasattr(document_agent, "_task_manager_agent")

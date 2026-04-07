@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,13 +8,13 @@ from typing import Any, Protocol, TypeAlias
 from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
-    ClientToolCall,
+    ClientToolCallEvent,
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
-    ToolCall,
-    ToolError,
-    ToolResult,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
 )
 
 
@@ -41,11 +41,14 @@ class Middleware(MiddlewareFactory):
         return self._cls(event, context, **self._options)
 
 
-ToolResultType: TypeAlias = "ToolResult | ToolError | ClientToolCall"
+ToolResultType: TypeAlias = "ToolResultEvent | ToolErrorEvent | ClientToolCallEvent"
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
-ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable[ToolResultType]]
 LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 HumanInputHook: TypeAlias = Callable[["HumanInputRequest", "Context"], Awaitable["HumanMessage"]]
+
+ToolExecution: TypeAlias = Callable[["ToolCallEvent", "Context"], Awaitable[ToolResultType]]
+# call_next + ToolExecution type. BaseMiddleware.on_tool_execution() hook signature.
+ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"], Awaitable[ToolResultType]]
 
 
 class BaseMiddleware:
@@ -68,7 +71,7 @@ class BaseMiddleware:
     async def on_tool_execution(
         self,
         call_next: ToolExecution,
-        event: "ToolCall",
+        event: "ToolCallEvent",
         context: "Context",
     ) -> ToolResultType:
         return await call_next(event, context)

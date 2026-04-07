@@ -1,11 +1,11 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import deepcopy
 from dataclasses import dataclass, field
-from functools import partial
 from typing import Any, TypeAlias, overload
 
 from fast_depends import Provider
@@ -13,8 +13,8 @@ from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import ToolCall, ToolError, ToolResult
-from autogen.beta.middleware import BaseMiddleware, ToolExecution
+from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
@@ -40,9 +40,7 @@ class FunctionToolSchema(ToolSchema):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FunctionToolSchema":
         func_data = data.get("function", {})
-        return cls(
-            function=FunctionDefinition(**func_data),
-        )
+        return cls(function=FunctionDefinition(**func_data))
 
 
 class FunctionTool(Tool):
@@ -53,8 +51,10 @@ class FunctionTool(Tool):
         name: str,
         description: str,
         schema: FunctionParameters,
+        tool_middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self.model = model
+        self._tool_middleware: tuple[ToolMiddleware, ...] = tuple(tool_middleware)
 
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
@@ -75,7 +75,7 @@ class FunctionTool(Tool):
         *,
         provider: Provider | None = None,
     ) -> "FunctionTool":
-        t = func if isinstance(func, Tool) else tool(func)
+        t = deepcopy(func) if isinstance(func, Tool) else tool(func)
         t.provider = provider
         return t
 
@@ -87,16 +87,18 @@ class FunctionTool(Tool):
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         execution: ToolExecution = self
+        for hook in reversed(self._tool_middleware):
+            execution = _wrap_tool_middleware(hook, execution)
         for mw in middleware:
-            execution = partial(mw.on_tool_execution, execution)
+            execution = _wrap_tool_middleware(mw.on_tool_execution, execution)
 
-        async def execute(event: "ToolCall", context: "Context") -> None:
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
             result = await execution(event, context)
             await context.send(result)
 
-        stack.enter_context(context.stream.where(ToolCall.name == self.schema.function.name).sub_scope(execute))
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
 
-    async def __call__(self, event: "ToolCall", context: "Context") -> "ToolResult":
+    async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
@@ -106,18 +108,10 @@ class FunctionTool(Tool):
                     dependency_provider=self.provider,
                 )
 
-            return ToolResult(
-                parent_id=event.id,
-                name=event.name,
-                raw_content=result,
-            )
+            return ToolResultEvent.from_call(event, result=result)
 
         except Exception as e:
-            return ToolError(
-                parent_id=event.id,
-                name=event.name,
-                error=e,
-            )
+            return ToolErrorEvent.from_call(event, error=e)
 
 
 @overload
@@ -128,6 +122,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool: ...
 
 
@@ -139,6 +134,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
 
@@ -149,6 +145,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
         call_model = build_model(f, sync_to_thread=sync_to_thread)
@@ -162,8 +159,16 @@ def tool(
                 call_model,
                 exclude=(CONTEXT_OPTION_NAME,),
             ),
+            tool_middleware=middleware,
         )
 
     if function:
         return make_tool(function)
     return make_tool
+
+
+def _wrap_tool_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
+    async def call(event: "ToolCallEvent", context: "Context") -> "ToolResultType":
+        return await hook(inner, event, context)
+
+    return call

@@ -22,7 +22,6 @@ with optional_import_block():
 
 # Optional PDF support
 with optional_import_block() as result:
-    import pdfminer
     import pdfminer.high_level
 
 IS_PDF_CAPABLE = result.is_successful
@@ -216,7 +215,7 @@ class SimpleTextBrowser:
             request_kwargs = self.request_kwargs.copy() if self.request_kwargs is not None else {}
             request_kwargs["stream"] = True
 
-            # Send a HTTP request to the URL
+            # Send an HTTP request to the URL
             response = requests.get(url, **request_kwargs)
             response.raise_for_status()
 

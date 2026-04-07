@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCall
+from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware
 from autogen.beta.middleware.base import HumanInputHook
 from autogen.beta.testing import TestConfig
@@ -16,7 +16,7 @@ from autogen.beta.testing import TestConfig
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "result",
     )
 
@@ -122,7 +122,7 @@ async def test_human_input_middleware_mutates_request(mock: MagicMock, test_conf
             event: HumanInputRequest,
             ctx: Context,
         ) -> HumanMessage:
-            event = HumanInputRequest(content=event.content + "!")
+            event = HumanInputRequest(id=event.id, content=event.content + "!")
             return await call_next(event, ctx)
 
     async def my_tool(ctx: Context) -> str:
@@ -156,7 +156,7 @@ async def test_human_input_middleware_mutates_response(mock: MagicMock, test_con
             ctx: Context,
         ) -> HumanMessage:
             result = await call_next(event, ctx)
-            return HumanMessage(content=result.content + "!")
+            return HumanMessage.ensure_message(result.content + "!", parent_id=result.parent_id)
 
     async def my_tool(ctx: Context) -> str:
         mock(await ctx.input("Say smth", timeout=1.0))
@@ -188,7 +188,7 @@ async def test_human_input_middleware_short_circuits(mock: MagicMock, test_confi
             ctx: Context,
         ) -> HumanMessage:
             mock.intercepted(event.content)
-            return HumanMessage(content="intercepted")
+            return HumanMessage.ensure_message("intercepted", parent_id=event.id)
 
     async def my_tool(ctx: Context) -> str:
         mock(await ctx.input("Say smth", timeout=1.0))
@@ -211,3 +211,83 @@ async def test_human_input_middleware_short_circuits(mock: MagicMock, test_confi
     mock.intercepted.assert_called_once_with("Say smth")
     mock.hitl.assert_not_called()
     mock.assert_called_once_with("intercepted")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_returns_raw_string(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    def hitl_hook(event: HumanInputRequest) -> str:
+        return "raw answer"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=hitl_hook,
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with("raw answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_returns_raw_string_async(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    async def hitl_hook(event: HumanInputRequest) -> str:
+        return "async raw answer"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=hitl_hook,
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with("async raw answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_passed_at_ask(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+    )
+
+    await agent.ask("Hi!", hitl_hook=lambda event: "ask-level answer")
+
+    mock.assert_called_once_with("ask-level answer")
+
+
+@pytest.mark.asyncio()
+async def test_human_input_hook_at_ask_overrides_agent(mock: MagicMock, test_config: TestConfig) -> None:
+    async def my_tool(ctx: Context) -> str:
+        mock(await ctx.input("Say smth", timeout=1.0))
+        return ""
+
+    def agent_hook(event: HumanInputRequest) -> str:
+        return "agent-level"
+
+    agent = Agent(
+        "",
+        config=test_config,
+        tools=[my_tool],
+        hitl_hook=agent_hook,
+    )
+
+    await agent.ask("Hi!", hitl_hook=lambda event: "ask-level")
+
+    mock.assert_called_once_with("ask-level")

@@ -7,9 +7,12 @@
 import copy
 import logging
 import re
+import warnings
 from collections.abc import Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
+
+from typing_extensions import deprecated
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
@@ -20,8 +23,17 @@ from ...token_count_utils import count_token, get_max_token_limit
 logger = logging.getLogger(__name__)
 
 
+@deprecated(
+    "WebSurferAgent (contrib) is deprecated and will be removed in v0.14. "
+    "Use autogen.agents.experimental.WebSurferAgent instead."
+)
 class WebSurferAgent(ConversableAgent):
-    """(In preview) An agent that acts as a basic web surfer that can search the web and visit web pages."""
+    """(Deprecated) An agent that acts as a basic web surfer that can search the web and visit web pages.
+
+    .. deprecated::
+        WebSurferAgent (contrib) is deprecated and will be removed in v0.14.
+        Use autogen.agents.experimental.WebSurferAgent instead.
+    """
 
     DEFAULT_PROMPT = (
         "You are a helpful AI assistant with access to a web browser (via the provided functions). In fact, YOU ARE THE ONLY MEMBER OF YOUR PARTY WITH ACCESS TO A WEB BROWSER, so please help out where you can by performing web searches, navigating pages, and reporting what you find. Today's date is "
@@ -46,6 +58,12 @@ class WebSurferAgent(ConversableAgent):
         browser_config: dict[str, Any] | None = None,
         **kwargs: Any,
     ):
+        warnings.warn(
+            "WebSurferAgent (contrib) is deprecated and will be removed in v0.14. "
+            "Use autogen.agents.experimental.WebSurferAgent instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message=system_message,

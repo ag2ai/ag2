@@ -256,7 +256,7 @@ def test_execute_code_with_custom_filename_on_docker():
     skip_docker_test,
     reason="docker is not running or requested to skip docker tests",
 )
-def test_execute_code_with_misformed_filename_on_docker():
+def test_execute_code_with_malformed_filename_on_docker():
     with tempfile.TemporaryDirectory() as tempdir:
         filename = "codetest.py (some extra information)"
         exit_code, msg, image = execute_code(

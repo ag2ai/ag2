@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import HumanInputRequest, HumanMessage, ToolCall
+from autogen.beta.events import HumanInputRequest, HumanMessage, ToolCallEvent
 from autogen.beta.exceptions import HumanInputNotProvidedError
 from autogen.beta.testing import TestConfig
 
@@ -15,7 +15,7 @@ from autogen.beta.testing import TestConfig
 @pytest.fixture()
 def test_config() -> TestConfig:
     return TestConfig(
-        ToolCall(name="my_tool"),
+        ToolCallEvent(name="my_tool"),
         "result",
     )
 
@@ -110,7 +110,7 @@ async def test_hitl_decorator_override(
     )
 
     @agent.hitl_hook
-    def overrided_hook(event: HumanInputRequest) -> HumanMessage:
+    def overridden_hook(event: HumanInputRequest) -> HumanMessage:
         return HumanMessage(content="wrong")
 
     with pytest.warns(RuntimeWarning):

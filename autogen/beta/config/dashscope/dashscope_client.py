@@ -1,11 +1,10 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable, Sequence
+from itertools import chain
 from typing import Any, TypedDict
 
 import dashscope
@@ -19,12 +18,14 @@ from autogen.beta.events import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
-    ToolCall,
-    ToolCalls,
+    ToolCallEvent,
+    ToolCallsEvent,
+    Usage,
 )
+from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_to_api
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -60,8 +61,14 @@ class DashScopeClient(LLMClient):
         context: Context,
         *,
         tools: Iterable[ToolSchema],
+        response_schema: ResponseProto | None,
     ) -> ModelResponse:
-        ds_messages = convert_messages(context.prompt, messages)
+        if response_schema and response_schema.system_prompt:
+            prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
+        else:
+            prompt = context.prompt
+
+        ds_messages = convert_messages(prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {
@@ -71,6 +78,9 @@ class DashScopeClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+
+        if r := response_proto_to_format(response_schema):
+            kwargs["response_format"] = r
 
         # Set the base URL for this call (SDK uses a global)
         dashscope.base_http_api_url = self._base_url
@@ -112,24 +122,29 @@ class DashScopeClient(LLMClient):
         for tc in msg.get("tool_calls") or []:
             args = tc["function"]["arguments"]
             calls.append(
-                ToolCall(
+                ToolCallEvent(
                     id=tc["id"],
                     name=tc["function"]["name"],
                     arguments=args if isinstance(args, str) else json.dumps(args),
                 )
             )
 
-        usage = response.usage or {}
-        usage_dict = {
-            "prompt_tokens": usage.get("input_tokens", 0),
-            "completion_tokens": usage.get("output_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-        }
+        u = response.usage or {}
+        usage = Usage(
+            prompt_tokens=float(u.get("input_tokens", 0)),
+            completion_tokens=float(u.get("output_tokens", 0)),
+            total_tokens=float(u.get("total_tokens", 0)),
+        )
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCalls(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls=calls),
+            usage=usage,
+            model=self._model,
+            provider="dashscope",
+            finish_reason=choice.get("finish_reason")
+            if hasattr(choice, "get")
+            else getattr(choice, "finish_reason", None),
         )
 
     async def _call_streaming(
@@ -148,22 +163,27 @@ class DashScopeClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
-        calls: list[ToolCall] = []
+        usage = Usage()
+        calls: list[ToolCallEvent] = []
+        finish_reason: str | None = None
 
         async for chunk in responses:
             if chunk.status_code != 200:
                 raise RuntimeError(f"DashScope error: {chunk.code} - {chunk.message}")
 
             if chunk.usage:
-                usage = chunk.usage
-                usage_dict = {
-                    "prompt_tokens": usage.get("input_tokens", 0),
-                    "completion_tokens": usage.get("output_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                }
+                u = chunk.usage
+                usage = Usage(
+                    prompt_tokens=float(u.get("input_tokens", 0)),
+                    completion_tokens=float(u.get("output_tokens", 0)),
+                    total_tokens=float(u.get("total_tokens", 0)),
+                )
 
             for choice in chunk.output.choices:
+                fr = choice.get("finish_reason") if hasattr(choice, "get") else getattr(choice, "finish_reason", None)
+                if fr:
+                    finish_reason = fr
+
                 msg = choice.message
 
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
@@ -178,7 +198,7 @@ class DashScopeClient(LLMClient):
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
                     calls.append(
-                        ToolCall(
+                        ToolCallEvent(
                             id=tc["id"],
                             name=tc["function"]["name"],
                             arguments=args if isinstance(args, str) else json.dumps(args),
@@ -192,6 +212,9 @@ class DashScopeClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCalls(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls=calls),
+            usage=usage,
+            model=self._model,
+            provider="dashscope",
+            finish_reason=finish_reason,
         )

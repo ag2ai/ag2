@@ -92,11 +92,11 @@ def test_web_surfer() -> None:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["markdownify", "pathvalidate", "pdfminer", "requests", "bs4"], "websurfer")
-def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
+def test_web_surfer_oai(credentials_openai_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
     llm_config = {"config_list": credentials_gpt_4o.config_list, "timeout": 180, "cache_seed": 42}
 
     summarizer_llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials_openai_mini.config_list,
         "timeout": 180,
     }
 
@@ -140,7 +140,7 @@ def test_web_surfer_bing() -> None:
             "config_list": [
                 {
                     "model": "gpt-4o",
-                    "api_key": "sk-PLACEHOLDER_KEY",
+                    "api_key": "sk-PLACEHOLDER_KEY",  # pragma: allowlist secret
                 }
             ]
         },
