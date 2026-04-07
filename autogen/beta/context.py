@@ -71,7 +71,6 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> AbstractContextManager[None]: ...
 
     def get(

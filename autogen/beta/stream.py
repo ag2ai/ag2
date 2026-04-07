@@ -29,13 +29,11 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> Iterator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
             sync_to_thread=sync_to_thread,
-            condition=condition,
         )
 
         try:
