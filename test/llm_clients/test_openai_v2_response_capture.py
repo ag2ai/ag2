@@ -109,12 +109,12 @@ def _save_response_fixture(response: Any, fixture_name: str, output_dir: Path) -
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_simple_text_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_simple_text_response(credentials_openai_mini: Credentials) -> None:
     """Capture a simple text-only response for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Make simple API call
@@ -135,12 +135,12 @@ def test_capture_simple_text_response(credentials_gpt_4o_mini: Credentials) -> N
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_multimodal_vision_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_multimodal_vision_response(credentials_openai_mini: Credentials) -> None:
     """Capture a multimodal vision response with image for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Make vision API call with image (blue square test image)
@@ -170,12 +170,12 @@ def test_capture_multimodal_vision_response(credentials_gpt_4o_mini: Credentials
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_tool_call_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_tool_call_response(credentials_openai_mini: Credentials) -> None:
     """Capture a response with tool calls for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Define a simple tool
@@ -213,12 +213,12 @@ def test_capture_tool_call_response(credentials_gpt_4o_mini: Credentials) -> Non
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_multi_turn_context_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_multi_turn_context_response(credentials_openai_mini: Credentials) -> None:
     """Capture a multi-turn conversation response for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Multi-turn conversation
@@ -241,12 +241,12 @@ def test_capture_multi_turn_context_response(credentials_gpt_4o_mini: Credential
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_system_message_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_system_message_response(credentials_openai_mini: Credentials) -> None:
     """Capture a response with system message for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Call with system message
@@ -268,12 +268,12 @@ def test_capture_system_message_response(credentials_gpt_4o_mini: Credentials) -
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_capture_multiple_images_response(credentials_gpt_4o_mini: Credentials) -> None:
+def test_capture_multiple_images_response(credentials_openai_mini: Credentials) -> None:
     """Capture a response with multiple images using Base64 encoding for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
-    api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
+    api_key = _get_api_key_from_credentials(credentials_openai_mini)
     client = OpenAI(api_key=api_key)
 
     # Two simple Base64 encoded images (1x1 pixel red and blue PNG)

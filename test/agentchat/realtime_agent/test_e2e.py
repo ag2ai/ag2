@@ -102,7 +102,7 @@ class TestE2E:
         ],
     )
     async def test_e2e(
-        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+        self, credentials_llm_realtime: str, credentials_openai_mini: Credentials, request: FixtureRequest
     ) -> None:
         """End-to-end test for the RealtimeAgent.
 
@@ -113,7 +113,7 @@ class TestE2E:
         while True:
             try:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
-                await self._test_e2e(credentials_llm=credentials, credentials_openai=credentials_gpt_4o_mini)
+                await self._test_e2e(credentials_llm=credentials, credentials_openai=credentials_openai_mini)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(

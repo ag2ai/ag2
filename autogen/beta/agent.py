@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,6 +15,8 @@ from fast_depends import Provider
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
+
 from .annotations import Context
 from .config import LLMClient, ModelConfig
 from .events import (
@@ -27,7 +29,7 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddleware
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
@@ -131,6 +133,7 @@ class AgentReply(Generic[TResult, TAgent]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
     @overload
@@ -145,6 +148,7 @@ class AgentReply(Generic[TResult, TAgent]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
     @overload
@@ -159,6 +163,7 @@ class AgentReply(Generic[TResult, TAgent]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: None,
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TAgent]": ...
 
     @overload
@@ -172,6 +177,7 @@ class AgentReply(Generic[TResult, TAgent]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TAgent, TAgent]": ...
 
     async def ask(
@@ -185,6 +191,7 @@ class AgentReply(Generic[TResult, TAgent]):
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest(content=msg)
 
@@ -202,6 +209,7 @@ class AgentReply(Generic[TResult, TAgent]):
             initial_event,
             context=context,
             client=client,
+            hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_middleware=middleware,
             response_schema=response_schema,
@@ -357,6 +365,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool: ...
 
     @overload
@@ -368,6 +377,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
     def tool(
@@ -378,6 +388,7 @@ class Agent(Generic[TResult]):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> Tool | Callable[[Callable[..., Any]], Tool]:
         def make_tool(f: Callable[..., Any]) -> Tool:
             t = tool(
@@ -386,6 +397,7 @@ class Agent(Generic[TResult]):
                 description=description,
                 schema=schema,
                 sync_to_thread=sync_to_thread,
+                middleware=middleware,
             )
             t = FunctionTool.ensure_tool(t, provider=self.dependency_provider)
             self.tools.append(t)
@@ -409,6 +421,7 @@ class Agent(Generic[TResult]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
     @overload
@@ -424,6 +437,7 @@ class Agent(Generic[TResult]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
     @overload
@@ -439,6 +453,7 @@ class Agent(Generic[TResult]):
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
         response_schema: None,
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TResult]": ...
 
     @overload
@@ -453,6 +468,7 @@ class Agent(Generic[TResult]):
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         middleware: Iterable["MiddlewareFactory"] = ...,
+        hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TResult, TResult]": ...
 
     async def ask(
@@ -467,6 +483,7 @@ class Agent(Generic[TResult]):
         tools: Iterable[Tool] = (),
         middleware: Iterable["MiddlewareFactory"] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         config = config or self.config
         if not config:
@@ -496,6 +513,7 @@ class Agent(Generic[TResult]):
             initial_event,
             context=context,
             client=client,
+            hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_middleware=middleware,
             response_schema=response_schema,
@@ -507,6 +525,7 @@ class Agent(Generic[TResult]):
         *,
         context: Context,
         client: LLMClient,
+        hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable["MiddlewareFactory"] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -532,6 +551,8 @@ class Agent(Generic[TResult]):
             for schema in schemas:
                 if isinstance(schema, FunctionToolSchema):
                     known_tools.add(schema.function.name)
+                elif isinstance(schema, WebSearchToolSchema):
+                    known_tools.add(WEB_SEARCH_TOOL_NAME)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
@@ -567,8 +588,9 @@ class Agent(Generic[TResult]):
                 context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
             )
 
+            hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self.__hitl_hook
             stack.enter_context(
-                context.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook(middleware_instances)),
+                context.stream.where(HumanInputRequest).sub_scope(hitl_hook_maker(middleware_instances)),
             )
 
             self.__tool_executor.register(

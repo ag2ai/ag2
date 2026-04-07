@@ -29,7 +29,7 @@ def test_credentials_from_test_param_fixture(
     assert isinstance(credentials_from_test_param, Credentials)
 
     first_config = credentials_from_test_param.config_list[0]
-    if "gpt_4" in current_llm:
+    if "gpt_4" in current_llm or "openai" in current_llm:
         if "api_type" in first_config:
             assert first_config["api_type"] == "openai"
     elif "gemini" in current_llm:

@@ -8,8 +8,11 @@ import copy
 import json
 import logging
 import time
+import warnings
 from collections import defaultdict
 from typing import Any
+
+from typing_extensions import deprecated
 
 from ... import OpenAIWrapper
 from ...llm_config import LLMConfig
@@ -21,9 +24,14 @@ from ..assistant_agent import AssistantAgent, ConversableAgent
 logger = logging.getLogger(__name__)
 
 
+@deprecated("GPTAssistantAgent is deprecated and will be removed in v0.14. Use ConversableAgent instead.")
 class GPTAssistantAgent(ConversableAgent):
-    """An experimental AG2 agent class that leverages the OpenAI Assistant API for conversational capabilities.
+    """(Deprecated) An experimental AG2 agent class that leverages the OpenAI Assistant API for conversational capabilities.
     This agent is unique in its reliance on the OpenAI Assistant for state management, differing from other agents like ConversableAgent.
+
+    .. deprecated::
+        GPTAssistantAgent is deprecated and will be removed in v0.14.
+        Use ConversableAgent instead.
     """
 
     DEFAULT_MODEL_NAME = "gpt-4-0125-preview"
@@ -40,6 +48,10 @@ class GPTAssistantAgent(ConversableAgent):
     ):
         """Args:
         name (str): name of the agent. It will be used to find the existing assistant by name. Please remember to delete an old assistant with the same name if you intend to create a new assistant with the same name.
+
+        .. deprecated::
+            GPTAssistantAgent is deprecated and will be removed in v0.14.
+            Use ConversableAgent instead.
         instructions (str): instructions for the OpenAI assistant configuration.
         When instructions is not None, the system message of the agent will be
         set to the provided instructions and used in the assistant run, irrespective
@@ -62,6 +74,11 @@ class GPTAssistantAgent(ConversableAgent):
             - verbose (bool): If set to True, enables more detailed output from the assistant thread.
             - Other kwargs: Except verbose, others are passed directly to ConversableAgent.
         """
+        warnings.warn(
+            "GPTAssistantAgent is deprecated and will be removed in v0.14. Use ConversableAgent instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._verbose = kwargs.pop("verbose", False)
         openai_client_cfg, openai_assistant_cfg = self._process_assistant_config(llm_config, assistant_config)
 

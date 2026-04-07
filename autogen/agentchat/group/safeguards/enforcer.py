@@ -69,7 +69,7 @@ class SafeguardEnforcer:
 
             self.mask_agent = ConversableAgent(
                 name="mask_agent",
-                system_message="You are a agent responsible for masking sensitive information.",
+                system_message="You are an agent responsible for masking sensitive information.",
                 llm_config=self.mask_llm_config,
                 human_input_mode="NEVER",
                 max_consecutive_auto_reply=1,

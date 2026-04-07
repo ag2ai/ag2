@@ -22,7 +22,7 @@ with optional_import_block() as result:
 
 credentials_structured_output = [
     pytest.param(
-        "credentials_gpt_4o_mini",
+        "credentials_openai_mini",
         marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(

@@ -15,16 +15,16 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
-def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
+def test_gathering(credentials_gpt_4o: Credentials, credentials_openai_mini: Credentials):
     assistant1 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
     assistant2 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_openai_mini.llm_config,
     )
     assistant3 = AssistantAgent(
         "assistant",

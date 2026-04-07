@@ -6,7 +6,10 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
+import warnings
 from typing import Any
+
+from typing_extensions import deprecated
 
 from ... import OpenAIWrapper
 from ...code_utils import execute_code
@@ -169,9 +172,17 @@ if result is not None: print(result)
     return result[1]
 
 
+@deprecated(
+    "AgentOptimizer is deprecated and will be removed in v0.14. "
+    "Use ConversableAgent with tool calling for agent configuration and tooling instead."
+)
 class AgentOptimizer:
-    """Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
+    """(Deprecated) Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
     More information could be found in the following paper: https://arxiv.org/abs/2402.11359.
+
+    .. deprecated::
+        AgentOptimizer is deprecated and will be removed in v0.14.
+        Use ConversableAgent with tool calling for agent configuration and tooling instead.
     """
 
     def __init__(
@@ -190,6 +201,12 @@ class AgentOptimizer:
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
         """
+        warnings.warn(
+            "AgentOptimizer is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with tool calling for agent configuration and tooling instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.max_actions_per_step = max_actions_per_step
         self._max_trials = 3
         self.optimizer_model = optimizer_model

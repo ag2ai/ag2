@@ -55,6 +55,7 @@ class SlackSendTool(Tool):
                         message[i : i + (MAX_MESSAGE_LENGTH - 1)]
                         for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
                     ]
+                    sent_message_id = None
                     for i, chunk in enumerate(chunks):
                         response = web_client.chat_postMessage(channel=channel_id, text=chunk)
 
@@ -109,10 +110,10 @@ class SlackRetrieveTool(Tool):
                 int | None, "Maximum number of messages to retrieve. If None, retrieves all messages since date."
             ] = None,
         ) -> Any:
-            """Retrieves messages from a Discord channel.
+            """Retrieves messages from a Slack channel.
 
             Args:
-                bot_token: The bot token to use for Discord. (uses dependency injection)
+                bot_token: The bot token to use for Slack. (uses dependency injection)
                 channel_id: The ID of the channel. (uses dependency injection)
                 messages_since: ISO format date string OR Slack message ID, to retrieve messages from. If None, retrieves latest messages.
                 maximum_messages: Maximum number of messages to retrieve. If None, retrieves all messages since date.
@@ -165,7 +166,8 @@ class SlackRetrieveTool(Tool):
                         if not response["has_more"]:
                             break
 
-                        cursor = response["response_metadata"]["next_cursor"]
+                        metadata = response.get("response_metadata") or {}
+                        cursor = metadata.get("next_cursor")  # type: ignore[union-attr]
 
                     except SlackApiError as e:
                         return f"Message retrieval failed on pagination, Slack API error: {e.response['error']}"

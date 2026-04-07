@@ -99,11 +99,11 @@ class AfterWork:  # noqa: N801
 
 
 class AFTER_WORK(AfterWork):  # noqa: N801
-    """Deprecated: Use AfterWork instead. This class will be removed in a future version (TBD)."""
+    """Deprecated: Use AfterWork instead. This class will be removed in v0.14. All swarm functionality has been incorporated into group chat."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
-            "AFTER_WORK is deprecated and will be removed in a future version (TBD). Use AfterWork instead.",
+            "AFTER_WORK is deprecated and will be removed in v0.14. All swarm functionality has been incorporated into group chat.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -161,11 +161,11 @@ class OnCondition:  # noqa: N801
 
 
 class ON_CONDITION(OnCondition):  # noqa: N801
-    """Deprecated: Use OnCondition instead. This class will be removed in a future version (TBD)."""
+    """Deprecated: Use OnCondition instead. This class will be removed in v0.14."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
-            "ON_CONDITION is deprecated and will be removed in a future version (TBD). Use OnCondition instead.",
+            "ON_CONDITION is deprecated and will be removed in v0.14. Use OnCondition instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -879,7 +879,14 @@ def initiate_swarm_chat(
     | None = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
-    """Initialize and run a swarm chat
+    """(Deprecated) Initialize and run a swarm chat.
+
+    .. deprecated::
+        initiate_swarm_chat is deprecated and will be removed in v0.14.
+        Use run_group_chat instead.
+
+    .. note::
+        This function will emit a DeprecationWarning at runtime.
 
     Args:
         initial_agent: The first receiving agent of the conversation.
@@ -908,6 +915,11 @@ def initiate_swarm_chat(
         ContextVariables: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
+    warnings.warn(
+        "initiate_swarm_chat is deprecated and will be removed in v0.14. Use run_group_chat instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     context_variables = context_variables or ContextVariables()
 
     tool_execution, nested_chat_agents = _prepare_swarm_agents(
@@ -978,6 +990,17 @@ def run_swarm(
     | None = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
 ) -> RunResponseProtocol:
+    """(Deprecated) Run a swarm chat. Use run_group_chat instead.
+
+    .. deprecated::
+        run_swarm is deprecated and will be removed in v0.14.
+        Use run_group_chat instead.
+    """
+    warnings.warn(
+        "run_swarm is deprecated and will be removed in v0.14. Use run_group_chat instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     iostream = ThreadIOStream()
     response = RunResponse(iostream, agents)  # type: ignore[arg-type]
 
@@ -1386,7 +1409,7 @@ def _generate_swarm_tool_reply(
 
 
 class SwarmAgent(ConversableAgent):
-    """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
+    """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in v0.14"""
 
     def __init__(self, *args: Any, **kwargs: Any):
         """Initializes a new instance of the SwarmAgent class.
@@ -1396,7 +1419,7 @@ class SwarmAgent(ConversableAgent):
             **kwargs: Arbitrary keyword arguments.
         """
         warnings.warn(
-            "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
+            "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in v0.14.",
             DeprecationWarning,
             stacklevel=2,
         )

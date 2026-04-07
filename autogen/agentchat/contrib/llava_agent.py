@@ -6,9 +6,11 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
+import warnings
 from typing import Any
 
 import requests
+from typing_extensions import deprecated
 
 from ...code_utils import content_str
 from ...formatting_utils import colored
@@ -29,7 +31,17 @@ SEP = "###"
 DEFAULT_LLAVA_SYS_MSG = "You are an AI agent and you can view images."
 
 
+@deprecated(
+    "LLaVAAgent is deprecated and will be removed in v0.14. v1.0 will contain native multimodal support on Agent."
+)
 class LLaVAAgent(MultimodalConversableAgent):
+    """(Deprecated) LLaVA-based multimodal agent.
+
+    .. deprecated::
+        LLaVAAgent is deprecated and will be removed in v0.14.
+        v1.0 will contain native multimodal support on Agent.
+    """
+
     def __init__(
         self,
         name: str,
@@ -44,6 +56,12 @@ class LLaVAAgent(MultimodalConversableAgent):
         **kwargs (dict): Please refer to other kwargs in
             [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
+        warnings.warn(
+            "LLaVAAgent is deprecated and will be removed in v0.14. "
+            "v1.0 will contain native multimodal support on Agent.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name,
             system_message=system_message,

@@ -37,7 +37,7 @@ func_def = {
     ],
 )
 @pytest.mark.asyncio
-async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key, value, sync):
+async def test_function_call_groupchat(credentials_openai_mini: Credentials, key, value, sync):
     import random
 
     class Function:
@@ -48,9 +48,9 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
             return random.randint(0, 100)
 
     # llm_config without functions
-    llm_config_no_function = credentials_gpt_4o_mini.llm_config
+    llm_config_no_function = credentials_openai_mini.llm_config
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials_openai_mini.config_list,
         key: value,
     }
 
@@ -99,10 +99,10 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
 
 @run_for_optional_imports("openai", "openai")
 @pytest.mark.asyncio
-async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credentials):
+async def test_async_function_call_groupchat(credentials_openai_mini: Credentials):
     # Configure the LLM
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials_openai_mini.config_list,
     }
 
     mock_func = MagicMock()
@@ -143,13 +143,13 @@ async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credential
 
 
 @pytest.mark.integration()
-def test_group_chat_tool_returns_list(credentials_gpt_4o_mini: Credentials) -> None:
+def test_group_chat_tool_returns_list(credentials_openai_mini: Credentials) -> None:
     """Integration test: tool that returns list[int] in group chat with AutoPattern completes without TypeError."""
     from autogen import ConversableAgent
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
 
-    llm_config = credentials_gpt_4o_mini.llm_config
+    llm_config = credentials_openai_mini.llm_config
 
     def get_numbers_list() -> list[int]:
         return [5, 3, 10]
