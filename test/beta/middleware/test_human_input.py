@@ -122,7 +122,7 @@ async def test_human_input_middleware_mutates_request(mock: MagicMock, test_conf
             event: HumanInputRequest,
             ctx: Context,
         ) -> HumanMessage:
-            event = HumanInputRequest(content=event.content + "!")
+            event = HumanInputRequest(id=event.id, content=event.content + "!")
             return await call_next(event, ctx)
 
     async def my_tool(ctx: Context) -> str:
@@ -156,7 +156,7 @@ async def test_human_input_middleware_mutates_response(mock: MagicMock, test_con
             ctx: Context,
         ) -> HumanMessage:
             result = await call_next(event, ctx)
-            return HumanMessage(content=result.content + "!")
+            return HumanMessage.ensure_message(result.content + "!", parent_id=result.parent_id)
 
     async def my_tool(ctx: Context) -> str:
         mock(await ctx.input("Say smth", timeout=1.0))
@@ -188,7 +188,7 @@ async def test_human_input_middleware_short_circuits(mock: MagicMock, test_confi
             ctx: Context,
         ) -> HumanMessage:
             mock.intercepted(event.content)
-            return HumanMessage(content="intercepted")
+            return HumanMessage.ensure_message("intercepted", parent_id=event.id)
 
     async def my_tool(ctx: Context) -> str:
         mock(await ctx.input("Say smth", timeout=1.0))
