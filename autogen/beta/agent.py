@@ -651,13 +651,7 @@ class Agent(Generic[TResult]):
             )
 
             for obs in chain(self._observers, additional_observers):
-                stack.enter_context(
-                    context.stream.where(obs.condition).sub_scope(
-                        obs.callback,
-                        interrupt=obs.interrupt,
-                        sync_to_thread=obs.sync_to_thread,
-                    )
-                )
+                obs.register(stack, context)
 
             message = await agent_turn(event, context)
 

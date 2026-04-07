@@ -3,22 +3,38 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Any, overload
+from typing import Any, Protocol, overload, runtime_checkable
 
 from autogen.beta.types import ClassInfo
 
+from .context import Context
 from .events.conditions import Condition, TypeCondition
 
 __all__ = ("Observer", "observer")
 
 
+@runtime_checkable
+class Observer(Protocol):
+    def register(self, stack: ExitStack, context: Context) -> None: ...
+
+
 @dataclass(slots=True)
-class Observer:
+class StreamObserver:
     condition: Condition
     callback: Callable[..., Any]
     interrupt: bool = False
     sync_to_thread: bool = True
+
+    def register(self, stack: ExitStack, context: Context) -> None:
+        stack.enter_context(
+            context.stream.where(self.condition).sub_scope(
+                self.callback,
+                interrupt=self.interrupt,
+                sync_to_thread=self.sync_to_thread,
+            )
+        )
 
 
 def _ensure_condition(condition: ClassInfo | Condition) -> Condition:
@@ -34,7 +50,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> Observer: ...
+) -> StreamObserver: ...
 
 
 @overload
@@ -44,7 +60,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> Callable[[Callable[..., Any]], Observer]: ...
+) -> Callable[[Callable[..., Any]], StreamObserver]: ...
 
 
 def observer(
@@ -53,13 +69,13 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> Observer | Callable[[Callable[..., Any]], Observer]:
+) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
     cond = _ensure_condition(condition)
 
     if callback is not None:
-        return Observer(condition=cond, callback=callback, interrupt=interrupt, sync_to_thread=sync_to_thread)
+        return StreamObserver(condition=cond, callback=callback, interrupt=interrupt, sync_to_thread=sync_to_thread)
 
-    def decorator(func: Callable[..., Any]) -> Observer:
-        return Observer(condition=cond, callback=func, interrupt=interrupt, sync_to_thread=sync_to_thread)
+    def decorator(func: Callable[..., Any]) -> StreamObserver:
+        return StreamObserver(condition=cond, callback=func, interrupt=interrupt, sync_to_thread=sync_to_thread)
 
     return decorator
