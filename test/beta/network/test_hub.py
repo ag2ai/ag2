@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -908,19 +908,23 @@ class _StreamingAgentWithToolUse:
             # Intermediate: tool_use response (chunks shouldn't be in final output)
             for chunk in self._intermediate:
                 await ctx.send(ModelMessageChunk(content=chunk))
-            await ctx.send(ModelResponse(
-                message=ModelMessage(content="".join(self._intermediate)),
-                finish_reason="tool_use",
-            ))
+            await ctx.send(
+                ModelResponse(
+                    message=ModelMessage(content="".join(self._intermediate)),
+                    finish_reason="tool_use",
+                )
+            )
 
             # Final answer
             for chunk in self._final:
                 await ctx.send(ModelMessageChunk(content=chunk))
             full = "".join(self._final)
-            await ctx.send(ModelResponse(
-                message=ModelMessage(content=full),
-                finish_reason="stop",
-            ))
+            await ctx.send(
+                ModelResponse(
+                    message=ModelMessage(content=full),
+                    finish_reason="stop",
+                )
+            )
 
         full = "".join(self._final)
         return type("Reply", (), {"content": full, "body": full})()

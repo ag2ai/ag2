@@ -82,8 +82,8 @@ class TestOrphanedToolResults:
     @pytest.mark.asyncio
     async def test_leading_orphaned_tool_result_is_skipped(self, context: Context) -> None:
         events = [
-            _tool_response("tc_1"),       # will be trimmed
-            _tool_results("tc_1"),         # orphaned after trim — should be skipped
+            _tool_response("tc_1"),  # will be trimmed
+            _tool_results("tc_1"),  # orphaned after trim — should be skipped
             ModelRequest(content="next"),
             ModelRequest(content="final"),
         ]

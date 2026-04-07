@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -51,6 +51,8 @@ _delegation_depth: contextvars.ContextVar[int] = contextvars.ContextVar("delegat
 
 _delegation_source: contextvars.ContextVar[str] = contextvars.ContextVar("delegation_source", default="")
 
+_delegation_metadata: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("delegation_metadata", default={})
+
 
 @dataclass
 class RegistrationHandle:
@@ -78,6 +80,19 @@ class Hub:
         hub.register(writer, capabilities=["writing", "editing"])
 
         reply = await hub.ask(researcher, "Research and write a report")
+
+    When ``propagate_metadata=True``, metadata passed to ``hub.ask(metadata=...)``
+    is set on the delegation envelope and bridged into agent variables at each
+    delegation boundary. This lets tools receive cross-agent state via ``Variable``
+    annotation — invisible to the LLM, automatically propagated through the
+    delegation chain via ``Envelope.child()``.
+
+    Example::
+
+        hub = Hub(propagate_metadata=True)
+        reply = await hub.ask(coordinator, task, metadata={"project_id": "abc"})
+        # Every delegated agent's tools can now access project_id via:
+        #   project_id: Annotated[str, Variable("project_id")]
     """
 
     def __init__(
@@ -92,7 +107,9 @@ class Hub:
         priority_scheme: PriorityScheme | None = None,
         conflict_resolver: ConflictResolver | None = None,
         max_delegation_depth: int = 5,
+        propagate_metadata: bool = False,
     ) -> None:
+        self._propagate_metadata = propagate_metadata
         self._registry = registry or LocalRegistry()
         # Auto-wire PriorityChannel when a priority_scheme is provided but
         # no explicit channel was given.  This ensures that envelopes with
@@ -224,7 +241,13 @@ class Hub:
                     return "Error: cannot delegate to yourself."
                 if not message:
                     return "Error: message is required for request action."
-                return await hub._delegate(target, message, source=caller)
+                # Optionally propagate metadata through the delegation chain via contextvar
+                metadata = None
+                if hub._propagate_metadata:
+                    current = _delegation_metadata.get()
+                    if current:
+                        metadata = dict(current)
+                return await hub._delegate(target, message, source=caller, metadata=metadata)
 
             elif action == "publish":
                 tp = hub._topic_plugin
@@ -284,7 +307,14 @@ class Hub:
     # ------------------------------------------------------------------
 
     async def _delegate(
-        self, to_agent: str, task: str, *, source: str = "", priority: Any = None, **kwargs: Any
+        self,
+        to_agent: str,
+        task: str,
+        *,
+        source: str = "",
+        priority: Any = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> str:
         """Internal: route a task to a registered agent."""
         agent = self._agents.get(to_agent)
@@ -313,6 +343,7 @@ class Hub:
             sender=source,
             recipient=to_agent,
             priority=priority,
+            metadata=metadata or {},
         )
 
         # Run through topology pipeline if configured
@@ -372,9 +403,14 @@ class Hub:
 
         depth_token = _delegation_depth.set(depth + 1)
         source_token = _delegation_source.set(source)
+        meta_token = _delegation_metadata.set(envelope.metadata)
         try:
             await self._channel.send(envelope)
             network_tools = self._build_network_tools(caller=to_agent)
+            # Bridge envelope metadata → agent variables for tool injection (opt-in)
+            if self._propagate_metadata and envelope.metadata:
+                existing_vars = kwargs.pop("variables", None) or {}
+                kwargs["variables"] = {**envelope.metadata, **existing_vars}
             reply = await agent.ask(effective_task, tools=network_tools, **kwargs)
             result = reply.body or ""
             result_event = DelegationResult(source=source, target=to_agent, result=result)
@@ -395,6 +431,7 @@ class Hub:
         finally:
             _delegation_depth.reset(depth_token)
             _delegation_source.reset(source_token)
+            _delegation_metadata.reset(meta_token)
 
     def _dispatch_additional(self, envelopes: list[Envelope]) -> None:
         """Dispatch additional delegations from topology as background tasks.
@@ -439,12 +476,23 @@ class Hub:
         self,
         agent: Agent | str,
         message: str,
+        *,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> AgentReply:
         """Start a task through the Hub.
 
         Injects network tools (discover_agents, delegate_to) so the agent
         can find and communicate with other registered agents.
+
+        Args:
+            agent: The agent to ask, by name or reference.
+            message: The task or question.
+            metadata: Key-value pairs to propagate through the delegation chain.
+                Flows via envelope metadata → agent variables, so tools can
+                receive values via ``Variable`` annotation without exposing
+                them to the LLM tool schema.
+            **kwargs: Passed through to ``agent.ask()``.
         """
         resolved: Agent
         if isinstance(agent, str):
@@ -457,7 +505,20 @@ class Hub:
 
         network_tools = self._build_network_tools(caller=resolved.name)
         existing_tools = list(kwargs.pop("tools", []))
-        return await resolved.ask(message, tools=existing_tools + network_tools, **kwargs)
+        # Inject metadata as variables so the initiating agent's tools can access them (opt-in)
+        if self._propagate_metadata and metadata:
+            existing_vars = kwargs.pop("variables", None) or {}
+            kwargs["variables"] = {**metadata, **existing_vars}
+        # Set metadata contextvar so network tool can propagate it through delegations
+        if self._propagate_metadata and metadata:
+            meta_token = _delegation_metadata.set(metadata)
+        else:
+            meta_token = None
+        try:
+            return await resolved.ask(message, tools=existing_tools + network_tools, **kwargs)
+        finally:
+            if meta_token is not None:
+                _delegation_metadata.reset(meta_token)
 
     async def ask_stream(
         self,

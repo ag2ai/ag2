@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -52,6 +52,7 @@ class Network:
         priority_scheme: PriorityScheme | None = None,
         conflict_resolver: ConflictResolver | None = None,
         max_delegation_depth: int = 5,
+        propagate_metadata: bool = False,
     ) -> None:
         self.hub = Hub(
             stream=stream,
@@ -63,6 +64,7 @@ class Network:
             priority_scheme=priority_scheme,
             conflict_resolver=conflict_resolver,
             max_delegation_depth=max_delegation_depth,
+            propagate_metadata=propagate_metadata,
         )
         self.scheduler = Scheduler(hub=self.hub)
 
