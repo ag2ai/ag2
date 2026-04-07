@@ -111,7 +111,7 @@ def request_message_to_nlip(request: RequestMessage) -> NLIP_Message:
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-def response_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
+def request_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
     """Convert an incoming NLIP_Message (from a client) to an AG2 RequestMessage.
 
     Supports two wire formats produced by :func:`request_message_to_nlip`:
@@ -197,6 +197,42 @@ def response_message_to_nlip(response: ResponseMessage) -> NLIP_Message:
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
+def response_message_from_nlip(nlip_msg: NLIP_Message) -> ResponseMessage:
+    """Parse a NLIP response message received from a remote server.
+
+    The server's top-level text content is treated as the assistant's
+    reply.  No role-prefix parsing is performed — the content is taken
+    as-is.
+
+    Args:
+        nlip_msg: NLIP_Message from server
+
+    Returns:
+        ResponseMessage with messages and optional input_required
+    """
+    text = nlip_msg.extract_text() or ""
+
+    messages: list[dict[str, Any]] = []
+    if text.strip():
+        messages.append({"role": "assistant", "content": text})
+
+    # Check for INPUT_REQUIRED error and ag2_context in submessages
+    input_required = None
+    context: dict[str, Any] | None = None
+    if nlip_msg.submessages:
+        context_submsg = nlip_msg.find_labeled_submessage("ag2_context")
+        if context_submsg is not None and isinstance(context_submsg.content, dict):
+            context = context_submsg.content
+
+        for submsg in nlip_msg.submessages:
+            if submsg.format == "error" and submsg.content and "INPUT_REQUIRED" in str(submsg.content):
+                input_required = submsg.content
+                break
+
+    return ResponseMessage(messages=messages, context=context, input_required=input_required)
+
+
+@require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
 class AG2NlipSession(NLIP_Session):
     """NLIP Session that executes an AG2 ConversableAgent."""
 
@@ -222,7 +258,7 @@ class AG2NlipSession(NLIP_Session):
         logger.info(f"Executing agent {self.agent.name} with NLIP message")
 
         # Convert NLIP → RequestMessage
-        request = response_message_from_nlip(msg)
+        request = request_message_from_nlip(msg)
 
         # Execute agent via AgentService
         # Note: AgentService yields ServiceResponse objects
@@ -429,7 +465,7 @@ class NlipRemoteAgent(ConversableAgent):
 
                 # Parse response
                 nlip_response = NLIP_Message.model_validate(response.json())
-                response_msg = self._parse_nlip_response(nlip_response)
+                response_msg = response_message_from_nlip(nlip_response)
 
                 # Handle input_required
                 if response_msg.input_required:
@@ -483,40 +519,6 @@ class NlipRemoteAgent(ConversableAgent):
 
         # Should never reach here
         raise NlipClientError("Failed after maximum retries")
-
-    def _parse_nlip_response(self, nlip_msg: NLIP_Message) -> ResponseMessage:
-        """Parse a NLIP response message received from a remote server.
-
-        The server's top-level text content is treated as the assistant's
-        reply.  No role-prefix parsing is performed — the content is taken
-        as-is.
-
-        Args:
-            nlip_msg: NLIP_Message from server
-
-        Returns:
-            ResponseMessage with messages and optional input_required
-        """
-        text = nlip_msg.extract_text() or ""
-
-        messages: list[dict[str, Any]] = []
-        if text.strip():
-            messages.append({"role": "assistant", "content": text})
-
-        # Check for INPUT_REQUIRED error and ag2_context in submessages
-        input_required = None
-        context: dict[str, Any] | None = None
-        if nlip_msg.submessages:
-            context_submsg = nlip_msg.find_labeled_submessage("ag2_context")
-            if context_submsg is not None and isinstance(context_submsg.content, dict):
-                context = context_submsg.content
-
-            for submsg in nlip_msg.submessages:
-                if submsg.format == "error" and submsg.content and "INPUT_REQUIRED" in str(submsg.content):
-                    input_required = submsg.content
-                    break
-
-        return ResponseMessage(messages=messages, context=context, input_required=input_required)
 
     def update_tool_signature(
         self,
