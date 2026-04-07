@@ -69,7 +69,7 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 
 Use `#!python tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:
 
-```python linenums="1" hl_lines="13"
+```python linenums="1" hl_lines="16"
 from autogen.beta import tool
 from autogen.beta.events import ToolCallEvent, ToolResultEvent
 from autogen.beta.middleware import ToolExecution
