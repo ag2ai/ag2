@@ -84,6 +84,11 @@ typos:
 lint: ruff-check ruff-format typos
   prek run --all-files check-license-headers
 
+[doc("Run zizmor on GitHub Actions workflows")]
+[group("linter")]
+zizmor *params:
+  zizmor {{ params }} .
+
 # Static analysis
 
 [doc("Run mypy type check")]

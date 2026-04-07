@@ -36,12 +36,14 @@ jobs:
         python-version: ["3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for RetrieveChat
@@ -60,7 +62,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: retrievechat, retrievechat-qdrant, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -75,7 +77,7 @@ jobs:
         python-version: ["3.10", "3.11"]
     services:
       pgvector:
-        image: ankane/pgvector
+        image: ankane/pgvector@sha256:e24d0c7f0e1166b25052f48c2d935b0c74db3b412891a7c70294ee9287ec7427
         env:
           POSTGRES_DB: postgres
           POSTGRES_USER: postgres
@@ -89,11 +91,11 @@ jobs:
         ports:
           - 5432:5432
       mongodb:
-        image: mongodb/mongodb-atlas-local:latest
+        image: mongodb/mongodb-atlas-local:latest@sha256:e1d07d20904fd903becdbd46c82fa4331cb76bbdf5e0f7c495036c0c1c64a136
         ports:
           - 27017:27017
       couchbase:
-        image: couchbase:enterprise-7.6.3
+        image: couchbase:enterprise-7.6.3@sha256:244eeee969ebe7e9db82f62cf577fd2aedea4b16710680e16b2737c8788ff8ab
         ports:
           - "8091-8095:8091-8095"
           - "11210:11210"
@@ -109,12 +111,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install unstructured[all-docs]
@@ -149,7 +153,7 @@ jobs:
           done
       - name: Initialize Couchbase
         run: |
-          docker exec ${{ job.services.couchbase.id }} couchbase-cli cluster-init \
+          docker exec ${JOB_SERVICES_COUCHBASE_ID} couchbase-cli cluster-init \
             --cluster localhost:8091 \
             --cluster-name myCluster \
             --cluster-username Administrator \
@@ -158,15 +162,19 @@ jobs:
             --cluster-ramsize 512 \
             --cluster-index-ramsize 256 \
             --cluster-fts-ramsize 256
+        env:
+          JOB_SERVICES_COUCHBASE_ID: ${{ job.services.couchbase.id }}
       - name: Create Couchbase bucket
         run: |
-          docker exec ${{ job.services.couchbase.id }} couchbase-cli bucket-create \
+          docker exec ${JOB_SERVICES_COUCHBASE_ID} couchbase-cli bucket-create \
             --cluster localhost:8091 \
             --username Administrator \
             --password password \
             --bucket autogen_test_bucket \
             --bucket-type couchbase \
             --bucket-ramsize 256
+        env:
+          JOB_SERVICES_COUCHBASE_ID: ${{ job.services.couchbase.id }}
       - name: Run tests
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
@@ -174,7 +182,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, retrievechat-couchbase, ubuntu-latest, ${{ matrix.python-version }}
@@ -189,12 +197,14 @@ jobs:
         python-version: ["3.10"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for AgentEval
@@ -207,7 +217,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: agent-eval, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -222,12 +232,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for GPTAssistantAgent
@@ -246,7 +258,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: gpt-assistant-agent, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -261,12 +273,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Teachability
@@ -285,7 +299,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -300,12 +314,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for WebSurfer
@@ -324,7 +340,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: websurfer, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -339,14 +355,15 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.13"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for LMM
@@ -369,7 +386,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: lmm, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -385,12 +402,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Gemini
@@ -409,7 +428,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: gemini, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -424,12 +443,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Transform Messages
@@ -448,7 +469,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: long-context, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -463,12 +484,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for LlamaIndexConverableAgent
@@ -482,7 +505,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: llama-index-agent, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -498,12 +521,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Anthropic
@@ -524,7 +549,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: anthropic, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -540,12 +565,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Cerebras
@@ -564,7 +591,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: cerebras, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -580,12 +607,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Mistral
@@ -604,7 +633,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: mistral, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -620,12 +649,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Together
@@ -644,7 +675,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: together, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -660,12 +691,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Groq
@@ -684,7 +717,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: groq, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -698,12 +731,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Cohere
@@ -722,7 +757,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: cohere, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -738,12 +773,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Ollama
@@ -762,7 +799,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: ollama, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -778,12 +815,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Amazon Bedrock
@@ -802,7 +841,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: bedrock, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -818,12 +857,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for Swarms
@@ -842,7 +883,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: swarm, ${{ matrix.os }}, ${{ matrix.python-version }}
