@@ -10,6 +10,7 @@ from typing import Annotated
 
 from pydantic import Field
 
+from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
@@ -43,6 +44,7 @@ class FilesystemToolset(Toolkit):
         base_path: str | Path = ".",
         *,
         read_only: bool = False,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         base = Path(base_path).resolve()
 
@@ -55,7 +57,7 @@ class FilesystemToolset(Toolkit):
         tools = [self.read_file, self.find_files]
         if not read_only:
             tools.extend([self.write_file, self.update_file, self.delete_file])
-        super().__init__(*tools)
+        super().__init__(*tools, middleware=middleware)
 
 
 def _make_read_file(base: Path) -> FunctionTool:
