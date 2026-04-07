@@ -10,6 +10,15 @@ from autogen.beta.network.convenience import Network
 from autogen.beta.network.hub import Hub
 from autogen.beta.network.primitives.envelope import Envelope
 
+try:
+    import aiohttp  # noqa: F401
+
+    _has_aiohttp = True
+except ImportError:
+    _has_aiohttp = False
+
+_skip_no_aiohttp = pytest.mark.skipif(not _has_aiohttp, reason="aiohttp not installed")
+
 # ---------------------------------------------------------------------------
 # Mock agents
 # ---------------------------------------------------------------------------
@@ -180,3 +189,38 @@ class TestEnvelopeMetadata:
 
         assert child.metadata["project_id"] == "abc"  # inherited
         assert child.metadata["step"] == "2"  # overridden
+
+
+_REMOTE_PORT = 19876
+
+
+@_skip_no_aiohttp
+class TestMetadataOverHTTP:
+    """Metadata propagates across Hub boundaries via RemoteAgent HTTP delegation."""
+
+    @pytest.mark.asyncio
+    async def test_metadata_propagates_over_http(self) -> None:
+        """Metadata survives the RemoteAgent → HTTP → remote Hub boundary."""
+        # Hub A: hosts a worker that captures variables
+        hub_a = Hub(propagate_metadata=True)
+        worker = _VariableCaptureAgent("worker", result="remote work done")
+        await hub_a.register(worker)
+
+        async with hub_a.serve(host="127.0.0.1", port=_REMOTE_PORT):
+            # Hub B: coordinator connects to Hub A
+            hub_b = Hub(propagate_metadata=True)
+            await hub_b.connect(f"http://127.0.0.1:{_REMOTE_PORT}")
+
+            # Delegate to the remote worker with metadata
+            result = await hub_b.delegate(
+                "coordinator",
+                "worker",
+                "do remote task",
+                metadata={"project_id": "abc-123"},
+            )
+
+            assert "remote work done" in result
+            assert worker.received_variables is not None
+            assert worker.received_variables["project_id"] == "abc-123"
+
+            await hub_b.close()

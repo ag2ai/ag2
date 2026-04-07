@@ -460,13 +460,21 @@ class Hub:
         except Exception:
             logger.exception("Additional delegation to '%s' failed", target)
 
-    async def delegate(self, source: str, target: str, task: str, *, priority: Any = None) -> str:
+    async def delegate(
+        self,
+        source: str,
+        target: str,
+        task: str,
+        *,
+        priority: Any = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
         """Headless mode: route a task directly without an initiating LLM call.
 
         Use for infrastructure Hubs that only route traffic, run plugins,
         and manage registry — zero LLM cost for the Hub itself.
         """
-        return await self._delegate(target, task, source=source, priority=priority)
+        return await self._delegate(target, task, source=source, priority=priority, metadata=metadata)
 
     # ------------------------------------------------------------------
     # Public API
@@ -662,6 +670,7 @@ class Hub:
             agent_name = data.get("agent", "")
             task = data.get("task", "")
             source = data.get("source", "remote")
+            metadata = data.get("metadata")
 
             if not agent_name or not task:
                 return web.json_response(
@@ -681,7 +690,7 @@ class Hub:
 
             # Route through the full delegation pipeline so remote delegations
             # get event emission, topology processing, and depth tracking.
-            result = await self._delegate(agent_name, task, source=source)
+            result = await self._delegate(agent_name, task, source=source, metadata=metadata)
 
             return web.json_response({"status": "ok", "result": result})
 

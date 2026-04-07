@@ -107,12 +107,14 @@ class RemoteAgent:
         compatibility, but only the message text is forwarded — the remote
         Hub configures its own tools and middleware.
         """
-        # Read source from context variable if available (set by Hub._delegate)
+        # Read source and metadata from context variables (set by Hub._delegate)
         source = ""
+        metadata: dict[str, Any] = {}
         try:
-            from .hub import _delegation_source  # lazy import to avoid circular dep
+            from .hub import _delegation_metadata, _delegation_source  # lazy import to avoid circular dep
 
             source = _delegation_source.get("")
+            metadata = _delegation_metadata.get({})
         except (ImportError, LookupError):
             pass
 
@@ -121,6 +123,8 @@ class RemoteAgent:
             "task": msg,
             "source": source,
         }
+        if metadata:
+            payload["metadata"] = metadata
 
         result = await self._post("/delegate", payload)
 
