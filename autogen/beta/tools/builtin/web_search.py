@@ -8,11 +8,14 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
+
+WEB_SEARCH_TOOL_NAME = "web_search"
 
 
 @dataclass(slots=True)
@@ -25,7 +28,7 @@ class UserLocation:
 
 @dataclass(slots=True)
 class WebSearchToolSchema(ToolSchema):
-    type: str = field(default="web_search", init=False)
+    type: str = field(default=WEB_SEARCH_TOOL_NAME, init=False)
     search_context_size: Literal["low", "medium", "high"] | None = None
     max_uses: int | None = None
     user_location: UserLocation | None = None
@@ -72,4 +75,9 @@ class WebSearchTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == WEB_SEARCH_TOOL_NAME).sub_scope(execute),
+        )
