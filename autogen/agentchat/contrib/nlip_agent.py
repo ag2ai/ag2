@@ -20,6 +20,10 @@ with optional_import_block() as result:
     from nlip_sdk.nlip import NLIP_Factory, NLIP_Message
     from nlip_server.server import NLIP_Application, NLIP_Session, setup_server
 
+if result.failed:
+    NLIP_Session = object
+    NLIP_Application = object
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +52,7 @@ class NlipAgentNotFoundError(NlipClientError, RemoteAgentNotFoundError):
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-def request_message_to_nlip(request: RequestMessage) -> NLIP_Message:
+def request_message_to_nlip(request: RequestMessage) -> "NLIP_Message":
     """Convert AG2 RequestMessage to NLIP_Message.
 
     NLIP sessions are stateless — each request is independent.  When an
@@ -111,7 +115,7 @@ def request_message_to_nlip(request: RequestMessage) -> NLIP_Message:
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-def request_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
+def request_message_from_nlip(nlip_msg: "NLIP_Message") -> RequestMessage:
     """Convert an incoming NLIP_Message (from a client) to an AG2 RequestMessage.
 
     Supports two wire formats produced by :func:`request_message_to_nlip`:
@@ -157,7 +161,7 @@ def request_message_from_nlip(nlip_msg: NLIP_Message) -> RequestMessage:
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-def response_message_to_nlip(response: ResponseMessage) -> NLIP_Message:
+def response_message_to_nlip(response: ResponseMessage) -> "NLIP_Message":
     """Convert AG2 ResponseMessage to NLIP_Message.
 
     The response content is encoded as plain text (no ``role: `` prefix) so
@@ -197,7 +201,7 @@ def response_message_to_nlip(response: ResponseMessage) -> NLIP_Message:
 
 
 @require_optional_import(["nlip_sdk", "nlip_server"], "nlip")
-def response_message_from_nlip(nlip_msg: NLIP_Message) -> ResponseMessage:
+def response_message_from_nlip(nlip_msg: "NLIP_Message") -> ResponseMessage:
     """Parse a NLIP response message received from a remote server.
 
     The server's top-level text content is treated as the assistant's
@@ -246,7 +250,7 @@ class AG2NlipSession(NLIP_Session):
         await super().start()
         logger.info(f"Started NLIP session for agent: {self.agent.name}")
 
-    async def execute(self, msg: NLIP_Message) -> NLIP_Message:
+    async def execute(self, msg: "NLIP_Message") -> "NLIP_Message":
         """Execute the agent and return NLIP response.
 
         Args:
@@ -295,7 +299,7 @@ class AG2NlipSession(NLIP_Session):
 
         return response_message_to_nlip(response_msg)
 
-    async def correlated_execute(self, msg: NLIP_Message) -> dict[str, Any]:  # type: ignore[override]
+    async def correlated_execute(self, msg: "NLIP_Message") -> dict[str, Any]:  # type: ignore[override]
         response: NLIP_Message = await super().correlated_execute(msg)
         return response.model_dump(exclude_none=True)
 
@@ -350,7 +354,7 @@ class AG2NlipApplication(NLIP_Application):
         """Application shutdown hook."""
         logger.info(f"Shutting down NLIP application for agent: {self.agent.name}")
 
-    def create_session(self) -> NLIP_Session:
+    def create_session(self) -> "NLIP_Session":
         """Create a new session for each request.
 
         Returns:
