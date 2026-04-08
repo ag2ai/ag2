@@ -62,7 +62,7 @@ def on_response(event: ModelResponse) -> None:
 
 ### Per-call observers
 
-Pass observers to a specific `#!python ask()` call. These are scoped to that call only and automatically cleaned up when the call finishes:
+Pass observers to a specific `#!python ask()` call. These are scoped to that call only and are automatically cleaned up when the call finishes:
 
 ```python linenums="1" hl_lines="3"
 reply = await agent.ask(
