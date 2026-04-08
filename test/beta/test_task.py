@@ -15,7 +15,8 @@ from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TaskC
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools.subagents import depth_limiter, run_task, subagent_tool
+from autogen.beta.tools.subagents import depth_limiter, subagent_tool
+from autogen.beta.tools.subagents.run_task import run_task
 
 
 def _make_parent_context(
@@ -299,7 +300,7 @@ async def test_self_delegation():
         ModelResponse(message=ModelMessage(content="All sub-tasks complete.")),
     )
     agent = Agent("analyst", config=outer_config)
-    agent.tools.append(inner_agent.as_tool(description="Break work into sub-tasks", name="self_delegate"))
+    agent.add_tool(inner_agent.as_tool(description="Break work into sub-tasks", name="self_delegate"))
 
     reply = await agent.ask("Do complex analysis")
 

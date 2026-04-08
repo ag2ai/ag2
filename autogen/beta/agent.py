@@ -381,6 +381,10 @@ class Agent(Generic[TResult]):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
+    def add_tool(self, t: Callable[..., Any] | Tool) -> "Agent[TResult]":
+        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
+        return self
+
     def tool(
         self,
         function: Callable[..., Any] | None = None,
@@ -400,8 +404,7 @@ class Agent(Generic[TResult]):
                 sync_to_thread=sync_to_thread,
                 middleware=middleware,
             )
-            t = FunctionTool.ensure_tool(t, provider=self.dependency_provider)
-            self.tools.append(t)
+            self.add_tool(t)
             return t
 
         if function:

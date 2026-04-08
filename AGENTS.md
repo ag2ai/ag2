@@ -13,6 +13,7 @@
 | `events/` | Event types for the agent loop | `BaseEvent`, `ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `Usage`, … |
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Tool system — builtin + user-defined | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `depth_limiter`, `persistent_stream`, `StreamFactory` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
@@ -25,6 +26,7 @@ Top-level modules:
 - `autogen.beta` - top-level module with most basic functionality
 - `autogen.beta.config` - LLM provider clients (see [below](#llm-provider-clients))
 - `autogen.beta.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
+- `autogen.beta.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
 - `autogen.beta.testing` - Testing utilities
 - `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
 
@@ -64,6 +66,47 @@ Builtin tools live in `autogen/beta/tools/builtin/`. Each tool has:
    - Unsupported: the existing fallback `raise UnsupportedToolError(t.type, "provider")` handles it.
 3. Add tests for every provider (see test guidelines below).
 4. If the tool accepts `Variable` parameters, add 2 tests to `test/beta/tools/test_resolve.py`: one resolving from context, one raising `KeyError` on missing.
+
+## Subagent Delegation
+
+Subagent tools live in `autogen/beta/tools/subagents/` and are imported from `autogen.beta.tools.subagents` (not re-exported from `autogen.beta.tools`).
+
+| File | Purpose |
+|------|---------|
+| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task |
+| `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
+| `depth_limiter.py` | `depth_limiter()` — `ToolMiddleware` to cap nesting depth |
+| `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
+
+### Agent.as_tool()
+
+`Agent.as_tool(description, name?, stream?, middleware?)` is a convenience method that delegates to `subagent_tool()`. It creates a tool named `task_{agent.name}` with parameters `objective` (required) and `context` (optional).
+
+### depth_limiter
+
+`depth_limiter(max_depth=3)` returns a `ToolMiddleware` that prevents unbounded recursive delegation (A → B → A, or deep chains).
+
+- **Concurrent-safe**: the middleware is read-only — it checks `context.variables["ag:task_depth"]` without mutation. Depth is incremented by `run_task()` in a per-call variables copy, so concurrent sibling calls (dispatched via `asyncio.gather`) get independent counters.
+- Attach to `subagent_tool(middleware=[depth_limiter()])` or `agent.as_tool(middleware=[depth_limiter()])`.
+
+### persistent_stream
+
+`persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
+
+Use it when sub-task history should accumulate across calls rather than starting fresh each time:
+
+```python
+agent.as_tool(description="...", stream=persistent_stream())
+```
+
+### Context flow in run_task
+
+| What | Behavior | Why |
+|------|----------|-----|
+| Dependencies | Copied (`dict.copy()`) | Isolated; child mutations don't affect parent |
+| Variables | Copied (new dict); synced back on success (excluding `_DEPTH_KEY`) | Concurrent-safe; user variable mutations propagate back |
+| History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
+| Depth counter | Incremented in child copy; excluded from sync-back | Internal bookkeeping; never leaks to parent |
 
 ## LLM Provider Clients
 

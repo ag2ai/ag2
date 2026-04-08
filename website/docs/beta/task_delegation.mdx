@@ -105,7 +105,7 @@ analyst = Agent(
     tools=[search_tool],
 )
 
-analyst.tools.append(
+analyst.add_tool(
     analyst.as_tool(
         description="Break work into a focused sub-task for independent analysis.",
         name="sub_task",
@@ -124,7 +124,7 @@ Self-delegation and deep chains (A → B → C → …) can cause infinite recur
 ```python linenums="1" hl_lines="1 7"
 from autogen.beta.tools.subagents import depth_limiter
 
-analyst.tools.append(
+analyst.add_tool(
     analyst.as_tool(
         description="Break work into a focused sub-task.",
         name="sub_task",
