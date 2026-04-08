@@ -11,7 +11,15 @@ from autogen.beta import Agent, MemoryStream, tool
 from autogen.beta.annotations import Context as Ctx
 from autogen.beta.annotations import Variable
 from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TaskStarted
+from autogen.beta.events import (
+    HumanInputRequest,
+    HumanMessage,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TaskCompleted,
+    TaskStarted,
+)
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -731,3 +739,99 @@ async def test_depth_limiter_concurrent_subagents() -> None:
     events = list(await parent_stream.history.get_events())
     completed = [e for e in events if isinstance(e, TaskCompleted)]
     assert len(completed) == 2
+
+
+# ---------------------------------------------------------------------------
+# HITL hook propagation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_subagent_reuses_parent_hitl_hook(mock: MagicMock) -> None:
+    """Subagent should use the parent agent's HITL hook when it calls ctx.input().
+
+    The worker agent has a tool that requests human input via ctx.input().
+    The HITL hook is set only on the coordinator (parent). The worker (subagent)
+    should inherit and use the parent's HITL hook to answer the input request.
+    """
+
+    worker_config = TestConfig(
+        ToolCallEvent(name="ask_human", arguments="{}"),
+        ModelResponse(message=ModelMessage(content="Human approved.")),
+    )
+    worker = Agent("worker", config=worker_config)
+
+    @worker.tool
+    async def ask_human(ctx: Ctx) -> str:
+        """Tool that asks for human input."""
+        answer = await ctx.input("Need approval", timeout=1.0)
+        mock.tool_got(answer)
+        return f"Human said: {answer}"
+
+    coordinator_config = TestConfig(
+        ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
+        ModelResponse(message=ModelMessage(content="Approval obtained.")),
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=coordinator_config,
+        tools=[worker.as_tool(description="Worker that needs human input")],
+    )
+
+    @coordinator.hitl_hook
+    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+        mock.hitl_called(event.content)
+        return HumanMessage(content="approved")
+
+    # act
+    await coordinator.ask("Get approval from human")
+
+    # assert
+    mock.hitl_called.assert_called_once_with("Need approval")
+    mock.tool_got.assert_called_once_with("approved")
+
+
+@pytest.mark.asyncio
+async def test_subagent_own_hitl_hook_takes_priority(mock: MagicMock) -> None:
+    """When the subagent has its own HITL hook, it should be used instead of the parent's."""
+
+    worker_config = TestConfig(
+        ToolCallEvent(name="ask_human", arguments="{}"),
+        ModelResponse(message=ModelMessage(content="Done.")),
+    )
+    worker = Agent("worker", config=worker_config)
+
+    @worker.tool
+    async def ask_human(ctx: Ctx) -> str:
+        """Tool that asks for human input."""
+        answer = await ctx.input("Need approval", timeout=1.0)
+        mock.tool_got(answer)
+        return f"Human said: {answer}"
+
+    @worker.hitl_hook
+    def worker_hitl(event: HumanInputRequest) -> HumanMessage:
+        mock.worker_hitl(event.content)
+        return HumanMessage(content="worker answer")
+
+    coordinator_config = TestConfig(
+        ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
+        ModelResponse(message=ModelMessage(content="OK.")),
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=coordinator_config,
+        tools=[worker.as_tool(description="Worker")],
+    )
+
+    @coordinator.hitl_hook
+    def parent_hitl(event: HumanInputRequest) -> HumanMessage:
+        mock.parent_hitl(event.content)
+        return HumanMessage(content="parent answer")
+
+    # act
+    await coordinator.ask("Go")
+
+    # assert
+    mock.worker_hitl.assert_called_once_with("Need approval")
+    mock.tool_got.assert_called_once_with("worker answer")
+    mock.parent_hitl.assert_not_called()

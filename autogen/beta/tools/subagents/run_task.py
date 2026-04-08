@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from autogen.beta.annotations import Context
+from autogen.beta.events import HumanInputRequest
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
@@ -37,6 +38,18 @@ async def run_task(
     prompt = objective
     if context:
         prompt = f"{objective}\n\n## Context\n{context}"
+
+    # Bridge HITL events to the parent stream so the parent's hook
+    # can handle them. If the subagent has its own HITL hook, it is
+    # registered as an interrupter and swallows the event first.
+    if not agent._hitl_hook:
+
+        async def _bridge_hitl(event: HumanInputRequest, context: Context) -> None:
+            await parent_context.stream.send(event, context)
+
+        sub_id = task_stream.where(HumanInputRequest).subscribe(_bridge_hitl, interrupt=True)
+    else:
+        sub_id = None
 
     try:
         reply = await agent.ask(
@@ -71,3 +84,7 @@ async def run_task(
             stream=task_stream,
             error=e,
         )
+
+    finally:
+        if sub_id:
+            task_stream.unsubscribe(sub_id)

@@ -305,7 +305,7 @@ class Agent(Generic[TResult]):
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
-        self.__hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else default_hitl_hook
+        self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
         self.__tool_executor = ToolExecutor()
 
         self._system_prompt: list[str] = []
@@ -323,14 +323,14 @@ class Agent(Generic[TResult]):
                 self._dynamic_prompt.append(_wrap_prompt_hook(p))
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
-        if self.__hitl_hook is not default_hitl_hook:
+        if self._hitl_hook is not None:
             warnings.warn(
                 "You already set HITL hook, provided value overrides it",
                 category=RuntimeWarning,
                 stacklevel=2,
             )
 
-        self.__hitl_hook = wrap_hitl(func)
+        self._hitl_hook = wrap_hitl(func)
         return func
 
     @overload
@@ -590,10 +590,21 @@ class Agent(Generic[TResult]):
                 context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
             )
 
-            hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self.__hitl_hook
-            stack.enter_context(
-                context.stream.where(HumanInputRequest).sub_scope(hitl_hook_maker(middleware_instances)),
-            )
+            hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+            if hitl_hook_maker is not None:
+                stack.enter_context(
+                    context.stream.where(HumanInputRequest).sub_scope(
+                        hitl_hook_maker(middleware_instances),
+                        interrupt=True,
+                    ),
+                )
+
+            else:
+                stack.enter_context(
+                    context.stream.where(HumanInputRequest).sub_scope(
+                        default_hitl_hook(middleware_instances),
+                    ),
+                )
 
             self.__tool_executor.register(
                 stack,
