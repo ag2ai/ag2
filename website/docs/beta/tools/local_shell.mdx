@@ -1,0 +1,145 @@
+---
+title: Local Shell Tool
+sidebarTitle: Local Shell
+---
+
+# Local Shell Tool
+
+`LocalShellTool` lets an agent run shell commands on your local machine via subprocess. Unlike the provider-native [`ShellTool`](/docs/beta/tools/builtin_tools#shell), it works with **any model provider** (OpenAI, Anthropic, Gemini, Ollama, etc.) because the execution happens client-side.
+
+## Quick Start
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import LocalShellTool
+
+agent = Agent(
+    "coder",
+    "You write and run Python code.",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[LocalShellTool()],
+)
+
+reply = await agent.ask("Write a hello world script and run it.")
+print(await reply.content())
+```
+
+With no arguments, `LocalShellTool` creates a temporary working directory automatically and cleans it up when the process exits.
+
+## Setting the Working Directory
+
+Pass a path (string or `Path`) to run commands in a specific directory:
+
+```python linenums="1"
+from pathlib import Path
+from autogen.beta.tools import LocalShellTool
+
+# String path
+sh = LocalShellTool("/tmp/my_project")
+
+# pathlib.Path
+sh = LocalShellTool(Path("/tmp/my_project"))
+```
+
+The directory is created automatically if it does not exist. It is **not** deleted on exit when an explicit path is given.
+
+## Full Control with LocalShellEnvironment
+
+For advanced configuration, pass a `LocalShellEnvironment` explicitly:
+
+```python linenums="1"
+from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+
+sh = LocalShellTool(
+    LocalShellEnvironment(
+        path="/tmp/my_project",
+        allowed=["python", "uv run", "git"],
+        blocked=["rm -rf", "curl", "wget"],
+        ignore=["**/.env", "*.key", "secrets/**"],
+        timeout=30,
+        max_output=50_000,
+    )
+)
+```
+
+### LocalShellEnvironment Parameters
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `path` | `None` | Working directory. `None` → temporary dir prefixed `ag2_shell_`, deleted on exit |
+| `cleanup` | `None` | `None` → auto (`True` when `path=None`, `False` otherwise). Deletes `path` on process exit |
+| `allowed` | `None` | Whitelist of command prefixes. `None` → all commands allowed |
+| `blocked` | `None` | Blacklist of command prefixes. `None` → nothing blocked |
+| `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
+| `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in read-only list (`cat`, `ls`, `grep`, `git log`, …) |
+| `env` | `None` | Extra environment variables merged into each command's environment |
+| `timeout` | `60` | Per-command timeout in seconds. Returns `"Command timed out after Ns [exit code: 124]"` on expiry |
+| `max_output` | `100_000` | Maximum characters in the returned output. Truncated output includes a `[truncated: …]` suffix |
+
+### Command Filtering
+
+Filtering is applied in this order on every `shell(command)` call:
+
+1. **`allowed`** — if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
+2. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
+3. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+4. **Execute** — the command is passed to `subprocess.run`.
+
+!!! note
+    `ignore` checks only literal path tokens in the command string. Paths computed dynamically inside the shell (variable substitution, command substitution, glob expansion) are not inspected.
+
+## Read-Only Mode
+
+Use `readonly=True` to let the agent inspect files without modifying anything:
+
+```python linenums="1"
+from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+
+sh = LocalShellTool(
+    LocalShellEnvironment(
+        path="/my/codebase",
+        readonly=True,
+    )
+)
+```
+
+This restricts commands to `cat`, `head`, `tail`, `ls`, `grep`, `find`, `git log`, `git diff`, `git status`, and a few others. Pass an explicit `allowed` list to override this set.
+
+## Accessing the Working Directory
+
+`LocalShellTool` exposes the resolved working directory via the `workdir` property:
+
+```python linenums="1"
+sh = LocalShellTool("/tmp/my_project")
+print(sh.workdir)  # PosixPath('/tmp/my_project')
+```
+
+## Stateful Multi-Turn Conversations
+
+Because files persist in `workdir` across `ask()` calls, the agent can build on prior work in a chained conversation:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import LocalShellTool, LocalShellEnvironment
+
+sh = LocalShellTool(LocalShellEnvironment(path="/tmp/counter_demo"))
+agent = Agent("coder", "You manage files.", config=AnthropicConfig(model="claude-sonnet-4-6"), tools=[sh])
+
+reply1 = await agent.ask("Create counter.txt with value 0")
+reply2 = await reply1.ask("Increment the counter by 1")
+reply3 = await reply2.ask("Read the counter and tell me the value")
+```
+
+!!! warning
+    `LocalShellTool` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts.
+
+## LocalShellTool vs ShellTool
+
+| | `LocalShellTool` | `ShellTool` |
+| :--- | :--- | :--- |
+| **Execution** | Client-side via `subprocess` | Provider-side (Anthropic / OpenAI) |
+| **Provider support** | Any provider | Anthropic, OpenAI only |
+| **Environment control** | Full (`allowed`, `blocked`, `ignore`, …) | Limited (provider-dependent) |
+| **Import** | `autogen.beta.tools.LocalShellTool` | `autogen.beta.tools.ShellTool` |
