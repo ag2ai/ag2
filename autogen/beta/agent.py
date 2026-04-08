@@ -41,7 +41,7 @@ from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
-    from .tools.final.task import StreamFactory
+    from .tools.subagents import StreamFactory
 
 
 TResult = TypeVar313("TResult", default=str)
@@ -619,7 +619,7 @@ class Agent(Generic[TResult]):
         stream: "StreamFactory | None" = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        from .tools import subagent_tool
+        from .tools.subagents import subagent_tool
 
         return subagent_tool(
             self,

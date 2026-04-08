@@ -13,10 +13,9 @@ from autogen.beta.annotations import Variable
 from autogen.beta.context import Context
 from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TaskStarted
 from autogen.beta.events.task_events import TaskFailed
-from autogen.beta.events.tool_events import ToolCallEvent
-from autogen.beta.testing import TestConfig
-from autogen.beta.tools import subagent_tool
-from autogen.beta.tools.final.task import run_task
+from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.testing import TestConfig, TrackingConfig
+from autogen.beta.tools.subagents import depth_limiter, run_task, subagent_tool
 
 
 def _make_parent_context(
@@ -573,3 +572,158 @@ async def test_subagent_variable_mutation_affects_parent() -> None:
     assert parent_ctx.variables["new_key"] == "new_value"
     # Pre-existing variable is untouched
     assert parent_ctx.variables["existing"] == "yes"
+
+
+# ---------------------------------------------------------------------------
+# Depth limiter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_depth_limiter_rejects() -> None:
+    """Real nested delegation: outer → L1 → L2 → L3 (rejected at depth 3 with max_depth=2).
+
+    outer (depth 0) delegates to L1 (depth 1) which delegates to L2 (depth 2).
+    L2 tries to delegate to L3 but the limiter sees depth=2 >= max_depth=2 and blocks.
+    """
+    limiter = depth_limiter(max_depth=2)
+
+    # L3 — should never actually run
+    l3 = Agent(
+        "l3",
+        config=TestConfig(ModelResponse(message=ModelMessage(content="Should not reach."))),
+    )
+
+    # L2 — tries to delegate to L3, gets blocked
+    l2_config = TestConfig(
+        ToolCallEvent(name="task_l3", arguments='{"objective": "Go even deeper"}'),
+        ModelResponse(message=ModelMessage(content="L3 was blocked.")),
+    )
+    l2_tracking = TrackingConfig(l2_config)
+    l2 = Agent(
+        "l2",
+        config=l2_tracking,
+        tools=[l3.as_tool(description="L3 agent", middleware=[limiter])],
+    )
+
+    # L1 — delegates to L2 (depth 1, allowed)
+    l1 = Agent(
+        "l1",
+        config=TestConfig(
+            ToolCallEvent(name="task_l2", arguments='{"objective": "Go deeper"}'),
+            ModelResponse(message=ModelMessage(content="L2 done.")),
+        ),
+        tools=[l2.as_tool(description="L2 agent", middleware=[limiter])],
+    )
+
+    # outer — delegates to L1 (depth 0, allowed)
+    outer = Agent(
+        "outer",
+        config=TestConfig(
+            ToolCallEvent(name="task_l1", arguments='{"objective": "Start"}'),
+            ModelResponse(message=ModelMessage(content="Done.")),
+        ),
+        tools=[l1.as_tool(description="L1 agent", middleware=[limiter])],
+    )
+
+    await outer.ask("Go")
+
+    # L2's LLM saw the rejection error when it tried to call L3
+    tool_results = l2_tracking.mock.call_args_list[1].args[0]
+    assert "maximum task depth" in tool_results.results[0].content
+
+
+@pytest.mark.asyncio
+async def test_depth_limiter_passes() -> None:
+    """Below max_depth the tool executes and produces a TaskCompleted event."""
+    worker_config = TestConfig(ModelResponse(message=ModelMessage(content="Done.")))
+    worker = Agent("worker", config=worker_config)
+
+    inner_config = TestConfig(
+        ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
+        ModelResponse(message=ModelMessage(content="OK.")),
+    )
+    tracking_config = TrackingConfig(inner_config)
+
+    coordinator = Agent(
+        "coordinator",
+        config=tracking_config,
+        tools=[worker.as_tool(description="Worker", middleware=[depth_limiter(max_depth=2)])],
+    )
+
+    parent_stream = MemoryStream()
+    await coordinator.ask("Go", stream=parent_stream)
+
+    # TaskCompleted appears on the parent stream
+    events = list(await parent_stream.history.get_events())
+    assert any(isinstance(e, TaskCompleted) for e in events)
+
+
+@pytest.mark.asyncio
+async def test_depth_limiter_concurrent_subagents() -> None:
+    """Concurrent subagent calls get independent depth counters.
+
+    coordinator (depth 0) dispatches worker_a and worker_b in parallel.
+    worker_a itself delegates to sub_worker (depth 2), proving it can go
+    deeper without affecting worker_b's depth counter.  If depth leaked
+    between siblings, worker_b would see depth=2 and be incorrectly blocked.
+    """
+    limiter = depth_limiter(max_depth=3)
+
+    # sub_worker — called by worker_a at depth 2
+    sub_worker = Agent(
+        "sub_worker",
+        config=TestConfig(ModelResponse(message=ModelMessage(content="Sub done."))),
+    )
+
+    # worker_a — delegates to sub_worker (depth 1 → 2, allowed)
+    worker_a = Agent(
+        "worker_a",
+        config=TestConfig(
+            ToolCallEvent(name="task_sub_worker", arguments='{"objective": "Sub-task"}'),
+            ModelResponse(message=ModelMessage(content="A done.")),
+        ),
+        tools=[sub_worker.as_tool(description="Sub-worker", middleware=[limiter])],
+    )
+
+    # worker_b — simple leaf, no further delegation
+    worker_b = Agent(
+        "worker_b",
+        config=TestConfig(ModelResponse(message=ModelMessage(content="B done."))),
+    )
+
+    # coordinator — dispatches both workers concurrently via a single ToolCallsEvent
+    inner_config = TestConfig(
+        ModelResponse(
+            tool_calls=ToolCallsEvent(
+                calls=[
+                    ToolCallEvent(name="task_worker_a", arguments='{"objective": "Task A"}'),
+                    ToolCallEvent(name="task_worker_b", arguments='{"objective": "Task B"}'),
+                ]
+            )
+        ),
+        ModelResponse(message=ModelMessage(content="Both done.")),
+    )
+    tracking_config = TrackingConfig(inner_config)
+
+    coordinator = Agent(
+        "coordinator",
+        config=tracking_config,
+        tools=[
+            worker_a.as_tool(description="Worker A", middleware=[limiter]),
+            worker_b.as_tool(description="Worker B", middleware=[limiter]),
+        ],
+    )
+
+    parent_stream = MemoryStream()
+    await coordinator.ask("Go", stream=parent_stream)
+
+    # Both tool results should be successful (not rejected by depth limiter)
+    tool_results = tracking_config.mock.call_args_list[1].args[0]
+    assert "A done." in tool_results.results[0].content
+    assert "B done." in tool_results.results[1].content
+
+    # Both concurrent calls plus sub_worker produce TaskCompleted events
+    events = list(await parent_stream.history.get_events())
+    completed = [e for e in events if isinstance(e, TaskCompleted)]
+    assert len(completed) == 2

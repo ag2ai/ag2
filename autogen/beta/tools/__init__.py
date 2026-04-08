@@ -18,7 +18,7 @@ from .builtin import (
     WebFetchTool,
     WebSearchTool,
 )
-from .final import Toolkit, persistent_stream, subagent_tool, tool
+from .final import Toolkit, tool
 from .toolkits import FilesystemToolset
 
 __all__ = (
@@ -37,7 +37,5 @@ __all__ = (
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",
-    "persistent_stream",
-    "subagent_tool",
     "tool",
 )
