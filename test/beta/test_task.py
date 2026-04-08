@@ -74,7 +74,8 @@ async def test_run_task_failure():
     result = await run_task(agent, "This will fail", parent_context=_make_parent_context())
 
     assert result.completed is False
-    assert result.result is not None
+    assert result.error is not None
+    assert result.result is None
 
 
 @pytest.mark.asyncio
@@ -201,7 +202,7 @@ async def test_specialist_delegation_with_context_param():
     # Verify the sub-task's stream has the context in the request
     events = list(await parent_stream.history.get_events())
     completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-    sub_events = list(await completed.task_stream.history.get_events())
+    sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
     request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
     assert "Focus on recent papers" in request.content
 
@@ -240,7 +241,7 @@ async def test_specialist_with_tools():
     # Verify sub-task used the lookup tool
     events = list(await parent_stream.history.get_events())
     completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-    sub_events = list(await completed.task_stream.history.get_events())
+    sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
     tool_calls = [e for e in sub_events if isinstance(e, ToolCallEvent)]
     assert any(tc.name == "lookup" for tc in tool_calls)
 
@@ -369,9 +370,9 @@ async def test_task_completed_has_stream_reference():
     events = list(await parent_stream.history.get_events())
     completed = [e for e in events if isinstance(e, TaskCompleted)][0]
 
-    # task_stream should be a real stream with history
+    # task_stream is a StreamId pointing to the sub-task's history
     assert completed.task_stream is not None
-    sub_events = list(await completed.task_stream.history.get_events())
+    sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
     assert len(sub_events) > 0
     assert any(isinstance(e, ModelRequest) for e in sub_events)
     assert any(isinstance(e, ModelResponse) for e in sub_events)
@@ -403,6 +404,8 @@ async def test_task_failure_event():
     assert len(task_failed) == 1
     assert task_failed[0].agent_name == "broken"
     assert task_failed[0].objective == "Do impossible thing"
+    assert isinstance(task_failed[0].error, Exception)
+    assert task_failed[0].content  # traceback string is non-empty
 
 
 # ---------------------------------------------------------------------------
@@ -503,9 +506,9 @@ async def test_as_tool_no_stream_factory_defaults_to_memory():
 
     events = list(await parent_stream.history.get_events())
     completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-    # task_stream exists and is a MemoryStream
+    # task_stream is a StreamId; events are in the shared storage
     assert completed.task_stream is not None
-    sub_events = list(await completed.task_stream.history.get_events())
+    sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
     assert len(sub_events) > 0
 
 

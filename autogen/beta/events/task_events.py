@@ -2,27 +2,47 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+import traceback
+from typing import TYPE_CHECKING
 
 from .base import BaseEvent, Field
 
+if TYPE_CHECKING:
+    from autogen.beta.context import StreamId
 
-class TaskStarted(BaseEvent):
+
+class TaskEvent(BaseEvent):
     task_id: str
     agent_name: str
     objective: str
 
 
-class TaskCompleted(BaseEvent):
-    task_id: str
-    agent_name: str
-    objective: str
-    result: str
-    task_stream: Any = Field(default=None)  # Stream reference for inspection
+class TaskStarted(TaskEvent):
+    pass
 
 
-class TaskFailed(BaseEvent):
-    task_id: str
-    agent_name: str
-    objective: str
-    error: str
+class TaskCompleted(TaskEvent):
+    result: str | None
+    task_stream: "StreamId"  # Stream reference for inspection
+
+
+class TaskFailed(TaskEvent):
+    error: Exception
+
+    _content: str = Field(
+        default_factory=str,
+        init=False,
+        compare=False,
+    )
+
+    @property
+    def content(self) -> str:
+        if not self._content:
+            self._content = "".join(
+                traceback.format_exception(
+                    type(self.error),
+                    self.error,
+                    self.error.__traceback__,
+                )
+            )
+        return self._content

@@ -20,6 +20,7 @@ class TaskResult:
     result: str | None
     completed: bool
     stream: "Stream"
+    error: Exception | None = None
 
 
 async def run_task(
@@ -30,7 +31,9 @@ async def run_task(
     context: str = "",
     stream: "Stream | None" = None,
 ) -> TaskResult:
-    task_stream = stream or MemoryStream()
+    task_stream = stream or MemoryStream(
+        storage=parent_context.stream.history.storage,
+    )
     prompt = objective
     if context:
         prompt = f"{objective}\n\n## Context\n{context}"
@@ -63,7 +66,8 @@ async def run_task(
     except Exception as e:
         return TaskResult(
             objective=objective,
-            result=str(e),
+            result=None,
             completed=False,
             stream=task_stream,
+            error=e,
         )
