@@ -20,7 +20,7 @@ with optional_import_block() as result:
     from nlip_sdk.nlip import NLIP_Factory, NLIP_Message
     from nlip_server.server import NLIP_Application, NLIP_Session, setup_server
 
-if result.failed:
+if not result.is_successful:
     NLIP_Session = object
     NLIP_Application = object
 
