@@ -52,7 +52,7 @@ _event_classes: dict[str, type[BaseModel]] = {}
 
 @export_module("autogen.events")
 def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
-    """Wrap a event class with a type field to be used in a union type
+    """Wrap an event class with a type field to be used in a union type
 
     This is needed for proper serialization and deserialization of events in a union type.
 

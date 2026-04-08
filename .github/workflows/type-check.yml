@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         optional-dependencies:
           - "none"
           # LLMs
@@ -53,8 +53,8 @@ jobs:
           - "mcp"
           - "websockets"
         exclude:
-          # Issues with installing retrievechat-qdrant in python 3.13
-          - python-version: "3.13"
+          # Issues with installing retrievechat-qdrant in python 3.14
+          - python-version: "3.14"
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
           - python-version: "3.10"
