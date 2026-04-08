@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .arxiv import ArxivSearchTool
 from .browser_use import BrowserUseTool
 from .code_execution import PythonCodeExecutionTool
 from .crawl4ai import Crawl4AITool
@@ -28,6 +29,7 @@ from .web_search_preview import WebSearchPreviewTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 __all__ = [
+    "ArxivSearchTool",
     "BrowserUseTool",
     "Crawl4AITool",
     "DeepResearchTool",

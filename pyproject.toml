@@ -226,6 +226,8 @@ google-search = ["ag2[google-client]"]
 
 wikipedia = ["wikipedia-api>=0.8.1, <1.0"]
 
+arxiv = ["arxiv>=2.1.0, <3.0"]
+
 neo4j = [
     "docx2txt==0.9",
     # Updated llama-index constraints
