@@ -886,7 +886,7 @@ class GroupChat:
                         select_speaker_auto_verbose=self.select_speaker_auto_verbose,
                     )
                 )
-            elif no_of_mentions == 1:
+            elif no_of_mentions > 1:
                 iostream.send(
                     SpeakerAttemptFailedMultipleAgentsEvent(
                         mentions=mentions,
