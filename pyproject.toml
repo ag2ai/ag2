@@ -76,7 +76,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "diskcache",
     "termcolor",
     "python-dotenv",
     "tiktoken",
@@ -101,6 +100,9 @@ a2a = [
 ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]
+
+# cache backends
+diskcache = ["diskcache"]
 
 # providers
 openai = ["openai>=1.99.3,<2"]
@@ -281,6 +283,7 @@ long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
+daytona = ["daytona>=0.1.0"]
 cohere = ["cohere>=5.13.5"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
