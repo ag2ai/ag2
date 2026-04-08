@@ -22,6 +22,7 @@ from .perplexity import PerplexitySearchTool
 from .quick_research import QuickResearchTool
 from .reliable import ReliableTool, ReliableToolError, SuccessfulExecutionParameters, ToolExecutionDetails
 from .searxng import SearxngSearchTool
+from .semantic_scholar import SemanticScholarSearchTool
 from .tavily import TavilySearchTool
 from .tinyfish import TinyFishTool
 from .web_search_preview import WebSearchPreviewTool
@@ -42,6 +43,7 @@ __all__ = [
     "ReliableTool",
     "ReliableToolError",
     "SearxngSearchTool",
+    "SemanticScholarSearchTool",
     "SlackRetrieveRepliesTool",
     "SlackRetrieveTool",
     "SlackSendTool",
