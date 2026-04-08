@@ -44,7 +44,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           persist-credentials: false
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
           version: "latest"
       - uses: extractions/setup-just@dd310ad5a97d8e7b41793f8ef055398d51ad4de6 # v2.0.0
@@ -69,7 +69,7 @@ jobs:
           just test-beta-llm-cov "$llm_fixed"
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
           files: ./coverage.xml
           flags: beta-llm, ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
