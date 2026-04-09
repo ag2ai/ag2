@@ -6,7 +6,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.ollama.mappers import convert_messages
-from autogen.beta.events import ImageInput, ModelResponse
+from autogen.beta.events import BinaryInput, ImageInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -43,3 +43,8 @@ class TestConvertMessagesEmptyArguments:
 def test_image_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="ImageInput.*ollama"):
         convert_messages([], [ImageInput(url="https://example.com/img.png")])
+
+
+def test_binary_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="BinaryInput.*ollama"):
+        convert_messages([], [BinaryInput(data=b"data", media_type="image/png")])

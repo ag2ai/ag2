@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from autogen.beta.types import MediaType
+
 from .base import BaseEvent, Field
 
 
@@ -31,6 +33,14 @@ class TextInput(Input):
             "content": self.content,
             "role": "user",
         }
+
+
+class BinaryInput(Input):
+    """Binary data input event sent to the model."""
+
+    data: bytes
+    media_type: MediaType | str
+    vendor_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ImageInput(Input):

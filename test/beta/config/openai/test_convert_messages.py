@@ -2,28 +2,78 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
+
+from dirty_equals import IsPartialDict
+
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.beta.events import ImageInput
-
-IMAGE_URL = "https://example.com/image.png"
+from autogen.beta.events import BinaryInput, ImageInput
 
 
-def test_completions_image_input() -> None:
-    result = convert_messages([], [ImageInput(url=IMAGE_URL)])
+class TestImageInput:
+    IMAGE_URL = "https://example.com/image.png"
 
-    msg = result[1]  # index 0 is the system prompt
-    assert msg["role"] == "user"
-    assert msg["content"] == [
-        {"type": "image_url", "image_url": {"url": IMAGE_URL}},
-    ]
+    def test_completions(self) -> None:
+        result = convert_messages([], [ImageInput(url=self.IMAGE_URL)])
 
-
-def test_responses_image_input() -> None:
-    result = events_to_responses_input([ImageInput(url=IMAGE_URL)])
-
-    assert result == [
-        {
+        assert result[1] == {
             "role": "user",
-            "content": [{"type": "input_image", "image_url": IMAGE_URL}],
+            "content": [{"type": "image_url", "image_url": {"url": self.IMAGE_URL}}],
         }
-    ]
+
+    def test_responses(self) -> None:
+        result = events_to_responses_input([ImageInput(url=self.IMAGE_URL)])
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_image", "image_url": self.IMAGE_URL}],
+            }
+        ]
+
+
+class TestBinaryInput:
+    SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
+
+    def test_completions(self) -> None:
+        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "image_url", "image_url": {"url": expected_url}}],
+        }
+
+    def test_completions_with_vendor_metadata(self) -> None:
+        result = convert_messages(
+            [],
+            [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"detail": "low"})],
+        )
+
+        assert result[1] == IsPartialDict({
+            "role": "user",
+            "content": [IsPartialDict({"type": "image_url", "detail": "low"})],
+        })
+
+    def test_responses(self) -> None:
+        result = events_to_responses_input([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+
+        expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_file", "file_data": expected_data}],
+            }
+        ]
+
+    def test_responses_with_vendor_metadata(self) -> None:
+        result = events_to_responses_input(
+            [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"filename": "test.png"})],
+        )
+
+        assert result == [
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({"type": "input_file", "filename": "test.png"})],
+            })
+        ]

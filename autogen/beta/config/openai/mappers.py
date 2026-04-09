@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ImageInput, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import Input
+from autogen.beta.events import BaseEvent, BinaryInput, ImageInput, Input, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -111,6 +111,18 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "content": [{"type": "input_image", "image_url": message.url}],
             })
 
+        elif isinstance(message, BinaryInput):
+            b64 = base64.b64encode(message.data).decode()
+            item: dict[str, Any] = {
+                "type": "input_file",
+                "file_data": f"data:{message.media_type};base64,{b64}",
+            }
+            item.update(message.vendor_metadata)
+            result.append({
+                "role": "user",
+                "content": [item],
+            })
+
         elif isinstance(message, Input):
             raise UnsupportedInputError(type(message).__name__, "openai-responses")
 
@@ -157,6 +169,12 @@ def convert_messages(
                 "role": "user",
                 "content": [{"type": "image_url", "image_url": {"url": message.url}}],
             })
+        elif isinstance(message, BinaryInput):
+            b64 = base64.b64encode(message.data).decode()
+            data_url = f"data:{message.media_type};base64,{b64}"
+            item: dict[str, Any] = {"type": "image_url", "image_url": {"url": data_url}}
+            item.update(message.vendor_metadata)
+            result.append({"role": "user", "content": [item]})
         elif isinstance(message, (TextInput, ModelResponse)):
             result.append(message.to_api())
         elif isinstance(message, Input):

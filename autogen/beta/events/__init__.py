@@ -4,7 +4,7 @@
 
 from .base import BaseEvent, Field
 from .conditions import Condition
-from .input_events import ImageInput, Input, TextInput
+from .input_events import BinaryInput, ImageInput, Input, TextInput
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
@@ -28,6 +28,7 @@ from .types import (
 
 __all__ = (
     "BaseEvent",
+    "BinaryInput",
     "BuiltinToolCallEvent",
     "ClientToolCallEvent",
     "Condition",
