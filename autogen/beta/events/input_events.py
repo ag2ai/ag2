@@ -26,7 +26,7 @@ class Input(BaseEvent):
 class TextInput(Input):
     """Text input event sent to the model."""
 
-    content: str
+    content: str = Field(kw_only=False)
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -38,7 +38,7 @@ class TextInput(Input):
 class BinaryInput(Input):
     """Binary data input event sent to the model."""
 
-    data: bytes
+    data: bytes = Field(kw_only=False)
     media_type: MediaType | str
     vendor_metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -46,4 +46,4 @@ class BinaryInput(Input):
 class ImageInput(Input):
     """Image input event sent to the model."""
 
-    url: str
+    url: str = Field(kw_only=False)
