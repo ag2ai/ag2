@@ -7,8 +7,8 @@ import pytest
 from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
-    ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
@@ -59,7 +59,7 @@ class TestConvertMessagesRoundTrip:
 
     def test_full_sequence_with_empty_args(self) -> None:
         events = [
-            ModelRequest(content="What items do we have?"),
+            TextInput(content="What items do we have?"),
             _model_response_with_tool_call(""),
             ToolResultsEvent(
                 results=[

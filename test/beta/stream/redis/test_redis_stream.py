@@ -11,7 +11,7 @@ import pytest
 import pytest_asyncio
 
 from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ToolCallEvent
+from autogen.beta.events import ModelMessage, TextInput, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 
 pytestmark = [
@@ -318,7 +318,7 @@ class TestRedisStream:
         stream2._ensure_listener()
         await asyncio.sleep(0.1)
 
-        await stream1.send(ModelRequest(content="from stream1"), context=Context(stream1))
+        await stream1.send(TextInput(content="from stream1"), context=Context(stream1))
         await asyncio.sleep(0.1)
 
         await stream2.send(ModelMessage(content="from stream2"), context=Context(stream2))

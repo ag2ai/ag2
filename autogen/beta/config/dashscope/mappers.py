@@ -5,7 +5,7 @@
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.final import FunctionToolSchema
@@ -48,30 +48,10 @@ def convert_messages(
     result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
 
     for message in messages:
-        if isinstance(message, ModelRequest):
-            result.append({"role": "user", "content": message.content})
-        elif isinstance(message, ModelResponse):
-            msg: dict[str, Any] = {
-                "role": "assistant",
-                "content": message.content or "",
-            }
-            tool_calls = [
-                {
-                    "id": c.id,
-                    "type": "function",
-                    "function": {"name": c.name, "arguments": c.arguments},
-                }
-                for c in message.tool_calls.calls
-            ]
-            if tool_calls:
-                msg["tool_calls"] = tool_calls
-            result.append(msg)
+        if isinstance(message, (TextInput, ModelResponse)):
+            result.append(message.to_api())
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result.append({
-                    "role": "tool",
-                    "tool_call_id": r.parent_id,
-                    "content": r.content,
-                })
+                result.append(r.to_api())
 
     return result

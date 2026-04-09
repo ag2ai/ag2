@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -171,11 +171,8 @@ def convert_messages(
     result: list[dict[str, Any]] = []
 
     for message in messages:
-        if isinstance(message, ModelRequest):
-            result.append({
-                "role": "user",
-                "content": message.content,
-            })
+        if isinstance(message, TextInput):
+            result.append(message.to_api())
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:

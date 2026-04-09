@@ -8,7 +8,7 @@ from typing import Any
 
 from google.genai import types
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -82,7 +82,7 @@ def convert_messages(
     result: list[types.Content] = []
 
     for message in messages:
-        if isinstance(message, ModelRequest):
+        if isinstance(message, TextInput):
             result.append(
                 types.Content(
                     role="user",

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Context
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
 from autogen.beta.middleware import RetryMiddleware
 
 
@@ -27,11 +27,11 @@ async def test_llm_retry_calls_next_once_when_successful(mock: MagicMock) -> Non
         mock.llm_call(events)
         return ModelResponse(message=ModelMessage(content="result"))
 
-    middleware = retry_middleware(ModelRequest(content="Hi!"), mock)
-    response = await middleware.on_llm_call(llm_call, [ModelRequest(content="Hi!")], mock)
+    middleware = retry_middleware(TextInput(content="Hi!"), mock)
+    response = await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
     assert response == ModelResponse(message=ModelMessage(content="result"))
-    mock.llm_call.assert_called_once_with([ModelRequest(content="Hi!")])
+    mock.llm_call.assert_called_once_with([TextInput(content="Hi!")])
 
 
 @pytest.mark.asyncio()
@@ -47,8 +47,8 @@ async def test_llm_retry_retries_matching_errors_until_success(mock: MagicMock) 
             raise TransientError(f"transient failure {attempts}")
         return ModelResponse(message=ModelMessage(content="result"))
 
-    middleware = retry_middleware(ModelRequest(content="Hi!"), mock)
-    response = await middleware.on_llm_call(llm_call, [ModelRequest(content="Hi!")], mock)
+    middleware = retry_middleware(TextInput(content="Hi!"), mock)
+    response = await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
     assert response == ModelResponse(message=ModelMessage(content="result"))
     assert mock.llm_call.call_count == attempts == 3
@@ -62,9 +62,9 @@ async def test_llm_retry_raises_after_exhausting_retries(mock: MagicMock) -> Non
         mock.llm_call(events)
         raise TransientError("still failing")
 
-    middleware = retry_middleware(ModelRequest(content="Hi!"), mock)
+    middleware = retry_middleware(TextInput(content="Hi!"), mock)
     with pytest.raises(TransientError, match="still failing"):
-        await middleware.on_llm_call(llm_call, [ModelRequest(content="Hi!")], mock)
+        await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
     assert mock.llm_call.call_count == 3
 
@@ -72,13 +72,13 @@ async def test_llm_retry_raises_after_exhausting_retries(mock: MagicMock) -> Non
 @pytest.mark.asyncio()
 async def test_llm_retry_does_not_retry_non_matching_errors(mock: MagicMock) -> None:
     retry_middleware = RetryMiddleware(max_retries=3, retry_on=(TransientError,))
-    middleware = retry_middleware(ModelRequest(content="Hi!"), mock)
+    middleware = retry_middleware(TextInput(content="Hi!"), mock)
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
         raise PermanentError("do not retry")
 
     with pytest.raises(PermanentError, match="do not retry"):
-        await middleware.on_llm_call(llm_call, [ModelRequest(content="Hi!")], mock)
+        await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
-    mock.llm_call.assert_called_once_with([ModelRequest(content="Hi!")])
+    mock.llm_call.assert_called_once_with([TextInput(content="Hi!")])

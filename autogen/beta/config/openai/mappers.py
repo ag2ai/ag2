@@ -5,7 +5,7 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -98,7 +98,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
     result: list[dict[str, Any]] = []
 
     for message in messages:
-        if isinstance(message, ModelRequest):
+        if isinstance(message, TextInput):
             result.append({
                 "role": "user",
                 "content": [{"type": "input_text", "text": message.content}],
@@ -142,7 +142,7 @@ def convert_messages(
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
     for message in messages:
-        if isinstance(message, (ModelRequest, ModelResponse)):
+        if isinstance(message, (TextInput, ModelResponse)):
             result.append(message.to_api())
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:

@@ -4,6 +4,7 @@
 
 from .base import BaseEvent, Field
 from .conditions import Condition
+from .input_events import Input, TextInput
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
@@ -21,7 +22,6 @@ from .types import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     Usage,
 )
@@ -34,14 +34,15 @@ __all__ = (
     "Field",
     "HumanInputRequest",
     "HumanMessage",
+    "Input",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
-    "ModelRequest",
     "ModelResponse",
     "TaskCompleted",
     "TaskFailed",
     "TaskStarted",
+    "TextInput",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",

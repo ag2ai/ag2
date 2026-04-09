@@ -30,18 +30,6 @@ class Usage:
         ))
 
 
-class ModelRequest(BaseEvent):
-    """Event representing an input request sent to the model."""
-
-    content: str
-
-    def to_api(self) -> dict[str, Any]:
-        return {
-            "content": self.content,
-            "role": "user",
-        }
-
-
 class ModelEvent(BaseEvent):
     """Base class for all model-related events."""
 

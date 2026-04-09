@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
 from autogen.beta.middleware import AgentTurn, BaseMiddleware, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 
@@ -48,7 +48,7 @@ async def test_middleware_creation(mock: MagicMock) -> None:
 
     await agent.ask("Hi!")
 
-    mock.create.assert_called_once_with(ModelRequest(content="Hi!"))
+    mock.create.assert_called_once_with(TextInput(content="Hi!"))
 
 
 @pytest.mark.asyncio()
@@ -76,8 +76,8 @@ async def test_middleware_incoming_message_mutation() -> None:
             event: BaseEvent,
             ctx: Context,
         ) -> ModelResponse:
-            if isinstance(event, ModelRequest):
-                event = ModelRequest(content=event.content * 2)
+            if isinstance(event, TextInput):
+                event = TextInput(content=event.content * 2)
             result = await call_next(event, ctx)
             return ModelResponse(message=ModelMessage(content=result.content * 2))
 
@@ -89,5 +89,5 @@ async def test_middleware_incoming_message_mutation() -> None:
 
     result = await agent.ask("1")
 
-    tracking_config.mock.assert_called_once_with(ModelRequest(content="1" * (2**3)))
+    tracking_config.mock.assert_called_once_with(TextInput(content="1" * (2**3)))
     assert result.body == "2" * (2**3)
