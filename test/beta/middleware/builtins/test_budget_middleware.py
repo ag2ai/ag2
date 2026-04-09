@@ -12,7 +12,12 @@ from unittest import mock
 import pytest
 
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
-from autogen.beta.middleware.builtin.budget import BudgetConfig, BudgetMiddleware
+from autogen.beta.middleware.builtin.budget import (
+    BudgetConfig,
+    BudgetExceededError,
+    BudgetMiddleware,
+    _BudgetTracker,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,12 +85,11 @@ class TestBudgetEnforcement:
     @pytest.mark.asyncio()
     async def test_allows_within_budget(self) -> None:
         # Given: budget of $1, no prior spending
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=1.0,
             cost_per_1k_input_tokens=0.30,
             cost_per_1k_output_tokens=0.60,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = _make_model_response(100, 50)
 
@@ -100,13 +104,12 @@ class TestBudgetEnforcement:
         assert result.message.content == "ok"
 
     @pytest.mark.asyncio()
-    async def test_blocks_when_exhausted(self) -> None:
-        # Given: budget exhausted by directly setting _spent above limit
-        config = BudgetConfig(max_cost_usd=0.001)
-        mw = BudgetMiddleware(config)
-        mw._budget._spent = 0.002  # manually exhaust
-
+    async def test_raises_when_exhausted(self) -> None:
+        # Given: an instance whose tracker is exhausted above the limit
+        mw = BudgetMiddleware(max_cost_usd=0.001)
         instance = mw(_make_event(), _make_context())
+        instance._budget._spent = 0.002  # manually exhaust
+
         called = False
 
         async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:
@@ -115,21 +118,22 @@ class TestBudgetEnforcement:
             return _make_model_response()
 
         # When: budget is exhausted
-        result = await instance.on_llm_call(call_next, [], _make_context())
+        # Then: BudgetExceededError is raised and downstream is not invoked
+        with pytest.raises(BudgetExceededError) as excinfo:
+            await instance.on_llm_call(call_next, [], _make_context())
 
-        # Then: call is blocked and downstream is not invoked
-        assert result.message is None
         assert not called
+        assert excinfo.value.spent == 0.002
+        assert excinfo.value.limit == 0.001
 
     @pytest.mark.asyncio()
     async def test_records_exact_cost(self) -> None:
         # Given: $0.30/1k input, $0.60/1k output
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=0.30,
             cost_per_1k_output_tokens=0.60,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         # 1000 prompt + 500 output = 1000/1000*0.30 + 500/1000*0.60 = 0.30 + 0.30 = 0.60 USD
         response = _make_model_response(1000, 500, key_style="prompt")
@@ -140,18 +144,17 @@ class TestBudgetEnforcement:
         # When: call completes
         await instance.on_llm_call(call_next, [], _make_context())
 
-        # Then: cost is 0.60
-        assert abs(mw._budget.spent - 0.60) < 1e-9
+        # Then: cost is 0.60 on this conversation's tracker
+        assert abs(instance._budget.spent - 0.60) < 1e-9
 
     @pytest.mark.asyncio()
     async def test_completion_tokens_key(self) -> None:
         # Given: OpenAI-style keys with completion_tokens
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=0.0,
             cost_per_1k_output_tokens=1.0,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -165,18 +168,17 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: 2000/1000 * $1.0 = $2.0
-        assert abs(mw._budget.spent - 2.0) < 1e-9
+        assert abs(instance._budget.spent - 2.0) < 1e-9
 
     @pytest.mark.asyncio()
     async def test_zero_prompt_tokens_not_masked(self) -> None:
         # Given: prompt_tokens=0 is present; input_tokens=9999 is also present
         # The `in` check must use prompt_tokens (not fall through to input_tokens)
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=1.0,
             cost_per_1k_output_tokens=0.0,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -190,17 +192,16 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: cost uses prompt_tokens=0, not input_tokens=9999
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     async def test_input_tokens_key_gemini_style(self) -> None:
         # Given: generic input_tokens / output_tokens keys
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=1.0,
             cost_per_1k_output_tokens=0.0,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = _make_model_response(2000, 0, key_style="input")
 
@@ -211,13 +212,12 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: 2000/1000 * $1.0 = $2.0
-        assert abs(mw._budget.spent - 2.0) < 1e-9
+        assert abs(instance._budget.spent - 2.0) < 1e-9
 
     @pytest.mark.asyncio()
     async def test_empty_usage_no_cost(self) -> None:
         # Given: response with no usage dict entries
-        config = BudgetConfig(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(message=ModelMessage(content="ok"), usage={})
 
@@ -228,17 +228,16 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: no cost accumulated
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     async def test_gemini_token_keys(self) -> None:
         # Given: Gemini-style prompt_token_count / candidates_token_count
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=0.30,
             cost_per_1k_output_tokens=0.60,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = _make_model_response(1000, 1000, key_style="prompt_count")
 
@@ -249,17 +248,16 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: 1000/1000 * 0.30 + 1000/1000 * 0.60 = 0.90
-        assert abs(mw._budget.spent - 0.90) < 1e-9
+        assert abs(instance._budget.spent - 0.90) < 1e-9
 
     @pytest.mark.asyncio()
     async def test_string_token_values_coerced(self) -> None:
         # Given: token values as numeric strings (some APIs return strings)
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=10.0,
             cost_per_1k_input_tokens=1.0,
             cost_per_1k_output_tokens=0.0,
         )
-        mw = BudgetMiddleware(config)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -273,13 +271,12 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: 500/1000 * $1.0 = $0.50
-        assert abs(mw._budget.spent - 0.50) < 1e-9
+        assert abs(instance._budget.spent - 0.50) < 1e-9
 
     @pytest.mark.asyncio()
     async def test_non_numeric_string_tokens_ignored(self) -> None:
         # Given: non-numeric token value
-        config = BudgetConfig(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -293,13 +290,12 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: treated as zero, no cost
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     async def test_nan_tokens_ignored(self) -> None:
         # Given: NaN token value
-        config = BudgetConfig(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -313,13 +309,12 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: treated as zero
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     async def test_none_tokens_no_crash(self) -> None:
         # Given: None token value
-        config = BudgetConfig(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -333,16 +328,15 @@ class TestBudgetEnforcement:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: no crash, treated as zero
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     async def test_zero_budget_means_unlimited(self) -> None:
         # Given: max_cost_usd=0 (unlimited mode)
-        config = BudgetConfig(max_cost_usd=0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
-        # Manually inflate spent to a huge value
-        mw._budget._spent = 999999.0
+        mw = BudgetMiddleware(max_cost_usd=0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
+        # Manually inflate spent to a huge value
+        instance._budget._spent = 999999.0
         called = False
 
         async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:
@@ -358,31 +352,32 @@ class TestBudgetEnforcement:
 
 
 # ---------------------------------------------------------------------------
-# TestBudgetConfigValidation
+# TestBudgetMiddlewareConstructor
 # ---------------------------------------------------------------------------
 
 
-class TestBudgetConfigValidation:
-    def test_negative_budget_rejected(self) -> None:
-        # Given/When/Then: negative max_cost_usd raises ValueError
-        with pytest.raises(ValueError, match="max_cost_usd"):
-            BudgetConfig(max_cost_usd=-0.01)
+class TestBudgetMiddlewareConstructor:
+    def test_flat_constructor(self) -> None:
+        # Given arguments passed directly (no explicit config object)
+        mw = BudgetMiddleware(
+            max_cost_usd=1.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.60,
+        )
 
-    @pytest.mark.parametrize(
-        ("field_name", "value"),
-        [
-            ("cost_per_1k_input_tokens", math.nan),
-            ("cost_per_1k_input_tokens", math.inf),
-            ("cost_per_1k_input_tokens", -1.0),
-            ("cost_per_1k_output_tokens", math.nan),
-            ("cost_per_1k_output_tokens", math.inf),
-            ("cost_per_1k_output_tokens", -1.0),
-        ],
-    )
-    def test_non_finite_pricing_rejected(self, field_name: str, value: float) -> None:
-        # Given/When/Then: invalid pricing raises ValueError
-        with pytest.raises(ValueError, match=field_name):
-            BudgetConfig(**{field_name: value})
+        # Then the internal config is built from those arguments
+        assert mw._config.max_cost_usd == 1.0
+        assert mw._config.cost_per_1k_input_tokens == 0.30
+        assert mw._config.cost_per_1k_output_tokens == 0.60
+
+    def test_default_constructor(self) -> None:
+        # Given no arguments
+        mw = BudgetMiddleware()
+
+        # Then all defaults are zero (unlimited, free pricing)
+        assert mw._config.max_cost_usd == 0.0
+        assert mw._config.cost_per_1k_input_tokens == 0.0
+        assert mw._config.cost_per_1k_output_tokens == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +393,6 @@ class TestBudgetConcurrency:
             cost_per_1k_input_tokens=1.0,
             cost_per_1k_output_tokens=0.0,
         )
-        from autogen.beta.middleware.builtin.budget import _BudgetTracker
 
         tracker = _BudgetTracker(config)
         usage = {"prompt_tokens": 1000}  # each record adds $1.0
@@ -433,8 +427,7 @@ class TestBudgetAdversarial:
     @pytest.mark.asyncio()
     async def test_negative_tokens_clamped_to_zero(self) -> None:
         # Given: negative token value (malformed provider response)
-        config = BudgetConfig(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
-        mw = BudgetMiddleware(config)
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
         instance = mw(_make_event(), _make_context())
         response = ModelResponse(
             message=ModelMessage(content="ok"),
@@ -448,7 +441,7 @@ class TestBudgetAdversarial:
         await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: clamped to zero, no negative cost
-        assert mw._budget.spent == 0.0
+        assert instance._budget.spent == 0.0
 
     @pytest.mark.asyncio()
     @pytest.mark.parametrize(
@@ -461,11 +454,10 @@ class TestBudgetAdversarial:
     )
     async def test_budget_boundary_triple(self, spent: float, limit: float, expected_allowed: bool) -> None:
         # Given: budget at boundary conditions
-        config = BudgetConfig(max_cost_usd=limit)
-        mw = BudgetMiddleware(config)
-        mw._budget._spent = spent
-
+        mw = BudgetMiddleware(max_cost_usd=limit)
         instance = mw(_make_event(), _make_context())
+        instance._budget._spent = spent
+
         called = False
 
         async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:
@@ -474,31 +466,59 @@ class TestBudgetAdversarial:
             return ModelResponse(message=ModelMessage(content="ok"), usage={})
 
         # When: call is made at boundary
-        await instance.on_llm_call(call_next, [], _make_context())
+        if expected_allowed:
+            await instance.on_llm_call(call_next, [], _make_context())
+        else:
+            with pytest.raises(BudgetExceededError):
+                await instance.on_llm_call(call_next, [], _make_context())
 
         # Then: allowed or blocked as expected
         assert called == expected_allowed
 
     @pytest.mark.asyncio()
-    async def test_cumulative_cost_across_calls(self) -> None:
-        # Given: multiple calls each costing $0.30
-        config = BudgetConfig(
+    async def test_cumulative_cost_within_single_conversation(self) -> None:
+        # Given: a single conversation instance running several LLM calls
+        # (per-conversation scope: cost accumulates inside one ask(), not across ask()s)
+        mw = BudgetMiddleware(
             max_cost_usd=1.0,
             cost_per_1k_input_tokens=0.30,
             cost_per_1k_output_tokens=0.0,
         )
-        mw = BudgetMiddleware(config)
+        instance = mw(_make_event(), _make_context())
 
         async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:
             return _make_model_response(1000, 0, key_style="prompt")
 
-        # When: 3 calls are made
+        # When: 3 LLM calls are made inside the same conversation
         for _ in range(3):
-            instance = mw(_make_event(), _make_context())
             await instance.on_llm_call(call_next, [], _make_context())
 
-        # Then: cumulative cost is 3 * $0.30 = $0.90
-        assert abs(mw._budget.spent - 0.90) < 1e-9
+        # Then: cumulative cost on this instance is 3 * $0.30 = $0.90
+        assert abs(instance._budget.spent - 0.90) < 1e-9
+
+    @pytest.mark.asyncio()
+    async def test_tracker_isolated_across_conversations(self) -> None:
+        # Given: a single factory used for two separate conversations
+        mw = BudgetMiddleware(
+            max_cost_usd=1.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.0,
+        )
+
+        async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:
+            return _make_model_response(1000, 0, key_style="prompt")
+
+        # When: two different instances each run one call
+        instance_a = mw(_make_event(), _make_context())
+        await instance_a.on_llm_call(call_next, [], _make_context())
+
+        instance_b = mw(_make_event(), _make_context())
+        await instance_b.on_llm_call(call_next, [], _make_context())
+
+        # Then: each conversation has its own tracker, neither sees the other's spend
+        assert abs(instance_a._budget.spent - 0.30) < 1e-9
+        assert abs(instance_b._budget.spent - 0.30) < 1e-9
+        assert instance_a._budget is not instance_b._budget
 
 
 # ---------------------------------------------------------------------------
@@ -509,12 +529,11 @@ class TestBudgetAdversarial:
 @pytest.mark.asyncio()
 async def test_zero_budget_allows_calls_async() -> None:
     # Given: full async path with max_cost_usd=0 (unlimited)
-    config = BudgetConfig(
+    mw = BudgetMiddleware(
         max_cost_usd=0,
         cost_per_1k_input_tokens=1.0,
         cost_per_1k_output_tokens=1.0,
     )
-    mw = BudgetMiddleware(config)
     responses = []
 
     async def call_next(events: Sequence[BaseEvent], ctx: object) -> ModelResponse:

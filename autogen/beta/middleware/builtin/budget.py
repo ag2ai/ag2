@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Budget middleware -- blocks LLM calls when cumulative cost exceeds a configured limit."""
+"""Budget middleware -- raises when cumulative cost exceeds a configured limit."""
 
 import math
 import threading
@@ -16,6 +16,20 @@ from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFact
 # Token key variants per provider
 _INPUT_KEYS = ("prompt_tokens", "prompt_token_count", "input_tokens")
 _OUTPUT_KEYS = ("completion_tokens", "candidates_token_count", "output_tokens")
+
+
+class BudgetExceededError(Exception):
+    """Raised when a BudgetMiddleware blocks an LLM call because the budget is exhausted.
+
+    Attributes:
+        spent: USD already consumed before this call would have run.
+        limit: Configured budget cap in USD.
+    """
+
+    def __init__(self, spent: float, limit: float) -> None:
+        self.spent = spent
+        self.limit = limit
+        super().__init__(f"budget exceeded: spent ${spent:.4f} of ${limit:.2f} USD limit")
 
 
 def _safe_float(value: object) -> float:
@@ -42,16 +56,6 @@ class BudgetConfig:
     max_cost_usd: float = 0.0
     cost_per_1k_input_tokens: float = 0.0
     cost_per_1k_output_tokens: float = 0.0
-
-    def __post_init__(self) -> None:
-        if not math.isfinite(self.max_cost_usd) or self.max_cost_usd < 0:
-            raise ValueError("max_cost_usd must be a non-negative finite number")
-        for name, value in (
-            ("cost_per_1k_input_tokens", self.cost_per_1k_input_tokens),
-            ("cost_per_1k_output_tokens", self.cost_per_1k_output_tokens),
-        ):
-            if not math.isfinite(value) or value < 0:
-                raise ValueError(f"{name} must be a non-negative finite number")
 
 
 class _BudgetTracker:
@@ -111,38 +115,49 @@ class _BudgetTracker:
             self._spent += cost
 
 
-def _blocked_response() -> ModelResponse:
-    """Return a minimal ModelResponse indicating a blocked call."""
-    return ModelResponse(message=None, usage={})
-
-
 class BudgetMiddleware(MiddlewareFactory):
-    """Factory that creates per-invocation budget middleware instances.
+    """Factory that creates a budget tracker scoped to a single conversation.
 
-    A single BudgetMiddleware shares one _BudgetTracker across all instances
-    it creates, so cost accumulates across the lifetime of the factory.
+    Each time this factory is invoked by the agent runtime, a fresh
+    ``_BudgetTracker`` is created, so budgets do not leak across separate
+    ``ask()`` invocations or across unrelated agents that share the same
+    middleware instance. Within a single conversation, the tracker
+    persists across the tool-use loop, so cumulative cost tracking still
+    works as expected.
 
     Example::
 
-        config = BudgetConfig(
+        mw = BudgetMiddleware(
             max_cost_usd=1.0,
             cost_per_1k_input_tokens=0.30,
             cost_per_1k_output_tokens=0.60,
         )
-        mw = BudgetMiddleware(config)
         agent = MyAgent(middleware=[mw])
+
+    When the configured budget is exhausted, ``BudgetExceededError`` is
+    raised so callers see an explicit failure rather than a silent empty
+    response.
     """
 
-    def __init__(self, config: BudgetConfig | None = None) -> None:
-        self._config = config or BudgetConfig()
-        self._budget = _BudgetTracker(self._config)
+    def __init__(
+        self,
+        max_cost_usd: float = 0.0,
+        cost_per_1k_input_tokens: float = 0.0,
+        cost_per_1k_output_tokens: float = 0.0,
+    ) -> None:
+        self._config = BudgetConfig(
+            max_cost_usd=max_cost_usd,
+            cost_per_1k_input_tokens=cost_per_1k_input_tokens,
+            cost_per_1k_output_tokens=cost_per_1k_output_tokens,
+        )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        return _BudgetMiddlewareInstance(event, context, self._budget)
+        tracker = _BudgetTracker(self._config)
+        return _BudgetMiddlewareInstance(event, context, tracker)
 
 
 class _BudgetMiddlewareInstance(BaseMiddleware):
-    """Per-invocation middleware instance that enforces the shared budget."""
+    """Per-conversation middleware instance that enforces a budget."""
 
     def __init__(
         self,
@@ -160,7 +175,7 @@ class _BudgetMiddlewareInstance(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         if not self._budget.check():
-            return _blocked_response()
+            raise BudgetExceededError(spent=self._budget.spent, limit=self._budget.limit)
 
         response = await call_next(events, context)
         self._budget.record(response.usage)
