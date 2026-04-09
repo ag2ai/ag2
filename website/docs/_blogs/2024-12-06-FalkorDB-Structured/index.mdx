@@ -50,7 +50,7 @@ For example:
 import os
 import autogen
 
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
 os.environ["OPENAI_API_KEY"] = llm_config.config_list[0].api_key # Utilised by the FalkorGraphQueryEngine
 
 from autogen import ConversableAgent, UserProxyAgent
