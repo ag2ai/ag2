@@ -9,6 +9,8 @@ from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     BinaryInput,
+    DocumentUrlInput,
+    FileIdInput,
     ImageUrlInput,
     ModelResponse,
     TextInput,
@@ -99,6 +101,16 @@ def test_image_input_raises() -> None:
         convert_messages([ImageUrlInput(url="https://example.com/img.png")])
 
 
+def test_file_id_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="FileIdInput.*anthropic"):
+        convert_messages([FileIdInput(file_id="file-abc123")])
+
+
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*anthropic"):
         convert_messages([BinaryInput(data=b"data", media_type="image/png")])
+
+
+def test_document_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*anthropic"):
+        convert_messages([DocumentUrlInput(url="https://example.com/doc.pdf")])

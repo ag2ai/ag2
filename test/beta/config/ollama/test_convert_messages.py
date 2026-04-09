@@ -6,7 +6,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.ollama.mappers import convert_messages
-from autogen.beta.events import BinaryInput, ImageUrlInput, ModelResponse
+from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -45,6 +45,16 @@ def test_image_input_raises() -> None:
         convert_messages([], [ImageUrlInput(url="https://example.com/img.png")])
 
 
+def test_file_id_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="FileIdInput.*ollama"):
+        convert_messages([], [FileIdInput(file_id="file-abc123")])
+
+
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*ollama"):
         convert_messages([], [BinaryInput(data=b"data", media_type="image/png")])
+
+
+def test_document_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*ollama"):
+        convert_messages([], [DocumentUrlInput(url="https://example.com/doc.pdf")])

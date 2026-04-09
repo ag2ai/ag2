@@ -4,10 +4,12 @@
 
 import base64
 
+import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.beta.events import BinaryInput, ImageUrlInput
+from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
+from autogen.beta.exceptions import UnsupportedInputError
 
 
 class TestImageUrlInput:
@@ -28,6 +30,34 @@ class TestImageUrlInput:
             {
                 "role": "user",
                 "content": [{"type": "input_image", "image_url": self.IMAGE_URL}],
+            }
+        ]
+
+
+class TestFileIdInput:
+    FILE_ID = "file-6F2ksmvXxt4VdoqmHRw6kL"
+
+    def test_completions_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="FileIdInput.*openai-completions"):
+            convert_messages([], [FileIdInput(file_id=self.FILE_ID)])
+
+    def test_responses(self) -> None:
+        result = events_to_responses_input([FileIdInput(file_id=self.FILE_ID)])
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_file", "file_id": self.FILE_ID}],
+            }
+        ]
+
+    def test_responses_with_filename(self) -> None:
+        result = events_to_responses_input([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_file", "file_id": self.FILE_ID, "filename": "report.pdf"}],
             }
         ]
 
@@ -76,4 +106,22 @@ class TestBinaryInput:
                 "role": "user",
                 "content": [IsPartialDict({"type": "input_file", "filename": "test.png"})],
             })
+        ]
+
+
+class TestDocumentUrlInput:
+    DOC_URL = "https://example.com/document.pdf"
+
+    def test_completions_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*openai-completions"):
+            convert_messages([], [DocumentUrlInput(url=self.DOC_URL)])
+
+    def test_responses(self) -> None:
+        result = events_to_responses_input([DocumentUrlInput(url=self.DOC_URL)])
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_file", "file_url": self.DOC_URL}],
+            }
         ]

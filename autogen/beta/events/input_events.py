@@ -8,7 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, overload
 
-from autogen.beta.types import ImageMediaType, MediaType
+from autogen.beta.types import DocumentMediaType, ImageMediaType, MediaType
 
 from .base import BaseEvent, Field
 
@@ -45,14 +45,31 @@ class BinaryInput(Input):
     vendor_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class FileIdInput(Input):
+    """Input event referencing a pre-uploaded file by ID."""
+
+    file_id: str = Field(kw_only=False)
+    filename: str | None = None
+
+
 class ImageUrlInput(Input):
     """Image input event sent to the model."""
 
     url: str = Field(kw_only=False)
 
 
+class DocumentUrlInput(Input):
+    """Document URL input event sent to the model."""
+
+    url: str = Field(kw_only=False)
+
+
 @overload
 def ImageInput(url: str) -> ImageUrlInput: ...
+
+
+@overload
+def ImageInput(*, file_id: str, filename: str | None = None) -> FileIdInput: ...
 
 
 @overload
@@ -66,19 +83,25 @@ def ImageInput(*, path: str | PathLike[str], media_type: ImageMediaType | None =
 def ImageInput(  # noqa: N802
     url: str | None = None,
     *,
+    file_id: str | None = None,
+    filename: str | None = None,
     data: bytes | None = None,
     media_type: ImageMediaType | None = None,
     path: str | PathLike[str] | None = None,
-) -> ImageUrlInput | BinaryInput:
+) -> ImageUrlInput | FileIdInput | BinaryInput:
     """Factory for creating image input events.
 
     Usage:
-        ImageInput("https://example.com/img.png")          # URL
+        ImageInput("https://example.com/img.png")           # URL
+        ImageInput(file_id="file-abc123")                   # pre-uploaded file
         ImageInput(data=raw_bytes, media_type="image/png")  # raw binary
         ImageInput(path="photo.jpg")                        # local file
     """
     if url is not None:
         return ImageUrlInput(url)
+
+    if file_id is not None:
+        return FileIdInput(file_id, filename=filename)
 
     if path is not None:
         p = Path(path)
@@ -93,14 +116,76 @@ def ImageInput(  # noqa: N802
 
             resolved_type = media_type
 
-        return BinaryInput(p.read_bytes(), media_type=resolved_type)
+        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
 
     if data is not None:
         if media_type is None:
             raise ValueError("'media_type' is required when using 'data'")
         return BinaryInput(data, media_type=media_type)
 
-    raise ValueError("Image() requires one of: 'url', 'data' + 'media_type', or 'path'")
+    raise ValueError("ImageInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
+
+
+@overload
+def DocumentInput(url: str) -> DocumentUrlInput: ...
+
+
+@overload
+def DocumentInput(*, file_id: str, filename: str | None = None) -> FileIdInput: ...
+
+
+@overload
+def DocumentInput(*, data: bytes, media_type: DocumentMediaType) -> BinaryInput: ...
+
+
+@overload
+def DocumentInput(*, path: str | PathLike[str], media_type: DocumentMediaType | None = None) -> BinaryInput: ...
+
+
+def DocumentInput(  # noqa: N802
+    url: str | None = None,
+    *,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: DocumentMediaType | None = None,
+    path: str | PathLike[str] | None = None,
+) -> DocumentUrlInput | FileIdInput | BinaryInput:
+    """Factory for creating document input events.
+
+    Usage:
+        DocumentInput("https://example.com/doc.pdf")               # URL
+        DocumentInput(file_id="file-abc123")                       # pre-uploaded file
+        DocumentInput(data=raw_bytes, media_type="application/pdf")  # raw binary
+        DocumentInput(path="report.pdf")                            # local file
+    """
+    if url is not None:
+        return DocumentUrlInput(url)
+
+    if file_id is not None:
+        return FileIdInput(file_id, filename=filename)
+
+    if path is not None:
+        p = Path(path)
+        suffix = p.suffix.lower()
+        resolved_type = _DOC_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+
+        if resolved_type is None:
+            if media_type is None:
+                raise ValueError(
+                    f"Cannot infer document media type from extension '{suffix}'. Provide 'media_type' explicitly."
+                )
+
+            resolved_type = media_type
+
+        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
+
+    if data is not None:
+        if media_type is None:
+            raise ValueError("'media_type' is required when using 'data'")
+        return BinaryInput(data, media_type=media_type)
+
+    raise ValueError("DocumentInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
 
 
 _EXTENSION_TO_MEDIA_TYPE: dict[str, ImageMediaType] = {
@@ -109,4 +194,78 @@ _EXTENSION_TO_MEDIA_TYPE: dict[str, ImageMediaType] = {
     ".png": "image/png",
     ".gif": "image/gif",
     ".webp": "image/webp",
+}
+
+
+_DOC_EXTENSION_TO_MEDIA_TYPE: dict[str, DocumentMediaType] = {
+    # PDF
+    ".pdf": "application/pdf",
+    # Text and code
+    ".txt": "text/plain",
+    ".text": "text/plain",
+    ".log": "text/plain",
+    ".asm": "text/plain",
+    ".bat": "text/plain",
+    ".c": "text/plain",
+    ".cc": "text/plain",
+    ".conf": "text/plain",
+    ".cpp": "text/plain",
+    ".cxx": "text/plain",
+    ".def": "text/plain",
+    ".dic": "text/plain",
+    ".h": "text/plain",
+    ".hh": "text/plain",
+    ".in": "text/plain",
+    ".ksh": "text/plain",
+    ".list": "text/plain",
+    ".nws": "text/plain",
+    ".pl": "text/plain",
+    ".py": "text/plain",
+    ".rst": "text/plain",
+    ".s": "text/plain",
+    ".csv": "text/csv",
+    ".tsv": "text/tsv",
+    ".iif": "text/plain",
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".mht": "text/html",
+    ".mhtml": "text/html",
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".xml": "text/xml",
+    ".json": "application/json",
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".sql": "application/sql",
+    ".eml": "message/rfc822",
+    ".mime": "message/rfc822",
+    ".ics": "text/calendar",
+    ".ifb": "text/calendar",
+    ".vcf": "text/vcard",
+    ".srt": "text/srt",
+    ".vtt": "text/vtt",
+    # Rich documents
+    ".doc": "application/msword",
+    ".dot": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".rtf": "application/rtf",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    # Spreadsheets
+    ".xls": "application/vnd.ms-excel",
+    ".xla": "application/vnd.ms-excel",
+    ".xlb": "application/vnd.ms-excel",
+    ".xlc": "application/vnd.ms-excel",
+    ".xlm": "application/vnd.ms-excel",
+    ".xlt": "application/vnd.ms-excel",
+    ".xlw": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # Presentations
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pot": "application/vnd.ms-powerpoint",
+    ".ppa": "application/vnd.ms-powerpoint",
+    ".pps": "application/vnd.ms-powerpoint",
+    ".pwz": "application/vnd.ms-powerpoint",
+    ".wiz": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }

@@ -6,7 +6,7 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
-from .events import BinaryInput, ImageInput, TextInput
+from .events import BinaryInput, DocumentInput, ImageInput, TextInput
 from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .stream import MemoryStream
@@ -18,6 +18,7 @@ __all__ = (
     "BinaryInput",
     "Context",
     "Depends",
+    "DocumentInput",
     "ImageInput",
     "Inject",
     "MemoryStream",

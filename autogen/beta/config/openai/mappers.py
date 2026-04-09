@@ -6,7 +6,17 @@ import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, BinaryInput, ImageUrlInput, Input, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events import (
+    BaseEvent,
+    BinaryInput,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageUrlInput,
+    Input,
+    ModelResponse,
+    TextInput,
+    ToolResultsEvent,
+)
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -111,17 +121,29 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "content": [{"type": "input_image", "image_url": message.url}],
             })
 
+        elif isinstance(message, DocumentUrlInput):
+            result.append({
+                "role": "user",
+                "content": [{"type": "input_file", "file_url": message.url}],
+            })
+
+        elif isinstance(message, FileIdInput):
+            item: dict[str, Any] = {"type": "input_file", "file_id": message.file_id}
+            if message.filename is not None:
+                item["filename"] = message.filename
+            result.append({
+                "role": "user",
+                "content": [item],
+            })
+
         elif isinstance(message, BinaryInput):
             b64 = base64.b64encode(message.data).decode()
             item: dict[str, Any] = {
                 "type": "input_file",
                 "file_data": f"data:{message.media_type};base64,{b64}",
+                **message.vendor_metadata,
             }
-            item.update(message.vendor_metadata)
-            result.append({
-                "role": "user",
-                "content": [item],
-            })
+            result.append({"role": "user", "content": [item]})
 
         elif isinstance(message, Input):
             raise UnsupportedInputError(type(message).__name__, "openai-responses")

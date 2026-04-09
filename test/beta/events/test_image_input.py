@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta.events import BinaryInput, ImageInput, ImageUrlInput
+from autogen.beta.events import BinaryInput, FileIdInput, ImageInput, ImageUrlInput
 
 
 def test_url_returns_image_url_input() -> None:
@@ -14,6 +14,21 @@ def test_url_returns_image_url_input() -> None:
 
     assert isinstance(result, ImageUrlInput)
     assert result.url == "https://example.com/img.png"
+
+
+class TestFileId:
+    def test_returns_image_file_id_input(self) -> None:
+        result = ImageInput(file_id="file-img123")
+
+        assert isinstance(result, FileIdInput)
+        assert result.file_id == "file-img123"
+        assert result.filename is None
+
+    def test_with_filename(self) -> None:
+        result = ImageInput(file_id="file-img123", filename="photo.png")
+
+        assert isinstance(result, FileIdInput)
+        assert result.filename == "photo.png"
 
 
 class TestData:
