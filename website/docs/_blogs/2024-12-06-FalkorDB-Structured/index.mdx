@@ -50,10 +50,10 @@ For example:
 import os
 import autogen
 
-llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 os.environ["OPENAI_API_KEY"] = llm_config.config_list[0].api_key # Utilised by the FalkorGraphQueryEngine
 
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent, LLMConfig, UserProxyAgent
 from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
 from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
 from autogen.agentchat.contrib.graph_rag.falkor_graph_rag_capability import FalkorGraphRagCapability
