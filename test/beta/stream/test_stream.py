@@ -157,18 +157,32 @@ class TestStreamChainedFilters:
         mock.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_multiple_subscribers_same_stream(mock: MagicMock) -> None:
-    stream = MemoryStream()
+class TestStreamSubscription:
+    @pytest.mark.asyncio
+    async def test_multiple_subscribers_same_stream(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
 
-    stream.subscribe(mock.one)
-    stream.subscribe(mock.two)
+        stream.subscribe(mock.one)
+        stream.subscribe(mock.two)
 
-    await stream.send(ToolCallEvent(name="func1", arguments="test"), context=Context(stream))
-    await stream.send(ModelMessage(content="response"), context=Context(stream))
+        await stream.send(ToolCallEvent(name="func1", arguments="test"), context=Context(stream))
+        await stream.send(ModelMessage(content="response"), context=Context(stream))
 
-    assert mock.one.call_count == 2
-    assert mock.two.call_count == 2
+        assert mock.one.call_count == 2
+        assert mock.two.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_stops_receiving_events(self, mock: MagicMock) -> None:
+        stream = MemoryStream()
+
+        sub_id = stream.subscribe(lambda ev: mock(ev))
+        event = ToolCallEvent(name="func1", arguments="test1")
+        await stream.send(event, context=Context(stream))
+
+        stream.unsubscribe(sub_id)
+        await stream.send(ToolCallEvent(name="func2", arguments="test2"), context=Context(stream))
+
+        mock.assert_called_once_with(event)
 
 
 @pytest.mark.asyncio
@@ -210,20 +224,6 @@ async def test_play_py_scenario() -> None:
 
     assert tool_func1_listener.call_args[0][0].name == "func1"
     assert model_listener.call_args[0][0].content == "Test"
-
-
-@pytest.mark.asyncio
-async def test_unsubscribe_stops_receiving_events(mock: MagicMock) -> None:
-    stream = MemoryStream()
-
-    sub_id = stream.subscribe(lambda ev: mock(ev))
-    event = ToolCallEvent(name="func1", arguments="test1")
-    await stream.send(event, context=Context(stream))
-
-    stream.unsubscribe(sub_id)
-    await stream.send(ToolCallEvent(name="func2", arguments="test2"), context=Context(stream))
-
-    mock.assert_called_once_with(event)
 
 
 @pytest.mark.asyncio

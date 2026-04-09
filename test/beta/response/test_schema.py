@@ -148,7 +148,6 @@ class TestEmbeddedTypes:
         assert not schema._embedded_type
 
 
-# --- Dataclass schemas ---
 class TestDataclassSchemas:
     def test_simple_dataclass(self) -> None:
         @dataclass
@@ -216,7 +215,6 @@ class TestDataclassSchemas:
         })
 
 
-# --- Pydantic model schemas ---
 class TestPydanticModelSchemas:
     def test_simple_model(self) -> None:
         class Item(BaseModel):
@@ -310,7 +308,6 @@ class TestPydanticModelSchemas:
         })
 
 
-# --- Union type schemas ---
 class TestUnionSchemas:
     @pytest.mark.parametrize(
         ("type_", "expected_any_of"),
@@ -353,7 +350,6 @@ class TestUnionSchemas:
         })
 
 
-# --- Name and description resolution ---
 class TestNameDescription:
     def test_explicit_name_overrides_title(self) -> None:
         class MyModel(BaseModel):
@@ -408,7 +404,6 @@ class TestNameDescription:
         assert "description" not in schema.json_schema
 
 
-# --- ensure_schema ---
 class TestEnsureSchema:
     def test_none_returns_none(self) -> None:
         assert ResponseSchema.ensure_schema(None) is None
@@ -456,7 +451,6 @@ class TestEnsureSchema:
         }
 
 
-# --- RawSchema ---
 class TestRawSchema:
     def test_creation(self) -> None:
         raw = ResponseSchema.from_schema(
@@ -489,7 +483,6 @@ class TestRawSchema:
         assert "can't validate" in str(w[0].message)
 
 
-# --- Validation ---
 @pytest.mark.asyncio()
 class TestValidation:
     @pytest.mark.parametrize(

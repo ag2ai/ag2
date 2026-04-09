@@ -11,8 +11,6 @@ from pydantic import BaseModel
 from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.testing import TestConfig, TrackingConfig
 
-# --- Agent-level response_schema ---
-
 
 @pytest.mark.asyncio()
 class TestAgentLevelResponseSchema:
@@ -179,7 +177,6 @@ class TestAgentLevelResponseSchema:
         assert tracking.mock.call_count == 4
 
 
-# --- Ask-level response_schema ---
 @pytest.mark.asyncio()
 class TestAskLevelResponseSchema:
     async def test_ask_type_override(self) -> None:

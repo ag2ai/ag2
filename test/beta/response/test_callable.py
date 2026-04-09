@@ -52,7 +52,6 @@ class TestNameDescription:
         assert parse.description is None
 
 
-# --- Schema generation by parameter type ---
 class TestSchemaGeneration:
     def test_single_str_param_no_schema(self) -> None:
         @response_schema
@@ -210,9 +209,6 @@ class TestSchemaGeneration:
         assert parse.json_schema == custom
 
 
-# --- Validation ---
-
-
 class TestValidation:
     @pytest.mark.asyncio()
     async def test_sync_str_param(self) -> None:
@@ -322,9 +318,6 @@ class TestValidation:
         )
 
         assert result == "Bob is 25"
-
-
-# --- Dependency injection ---
 
 
 class TestDependencyInjection:
