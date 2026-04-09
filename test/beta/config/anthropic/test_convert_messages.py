@@ -8,6 +8,7 @@ from dirty_equals import IsPartialDict
 from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
+    BinaryInput,
     ImageInput,
     ModelResponse,
     TextInput,
@@ -65,36 +66,39 @@ class TestConvertMessagesEmptyArguments:
         ]
 
 
-class TestConvertMessagesRoundTrip:
-    """A request → response-with-tool-call → tool-result sequence should convert cleanly."""
+def test_full_sequence_with_empty_args() -> None:
+    """A request -> response-with-tool-call -> tool-result sequence should convert cleanly."""
+    events = [
+        TextInput(content="What items do we have?"),
+        _model_response_with_tool_call(""),
+        ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="list_items",
+                    result=ToolResult(content="apple, banana"),
+                )
+            ],
+        ),
+    ]
+    result = convert_messages(events)
 
-    def test_full_sequence_with_empty_args(self) -> None:
-        events = [
-            TextInput(content="What items do we have?"),
-            _model_response_with_tool_call(""),
-            ToolResultsEvent(
-                results=[
-                    ToolResultEvent(
-                        parent_id="tc_1",
-                        name="list_items",
-                        result=ToolResult(content="apple, banana"),
-                    )
-                ],
-            ),
-        ]
-        result = convert_messages(events)
-
-        assert result[0] == IsPartialDict({"role": "user"})
-        assert result[1] == IsPartialDict({
-            "role": "assistant",
-            "content": [IsPartialDict({"input": {}})],
-        })
-        assert result[2] == IsPartialDict({
-            "role": "user",
-            "content": [IsPartialDict({"type": "tool_result"})],
-        })
+    assert result[0] == IsPartialDict({"role": "user"})
+    assert result[1] == IsPartialDict({
+        "role": "assistant",
+        "content": [IsPartialDict({"input": {}})],
+    })
+    assert result[2] == IsPartialDict({
+        "role": "user",
+        "content": [IsPartialDict({"type": "tool_result"})],
+    })
 
 
 def test_image_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="ImageInput.*anthropic"):
         convert_messages([ImageInput(url="https://example.com/img.png")])
+
+
+def test_binary_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="BinaryInput.*anthropic"):
+        convert_messages([BinaryInput(data=b"data", media_type="image/png")])

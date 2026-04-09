@@ -157,90 +157,86 @@ class TestStreamChainedFilters:
         mock.assert_not_called()
 
 
-class TestStreamMultipleSubscribers:
-    @pytest.mark.asyncio
-    async def test_multiple_subscribers_same_stream(self, mock: MagicMock) -> None:
-        stream = MemoryStream()
+@pytest.mark.asyncio
+async def test_multiple_subscribers_same_stream(mock: MagicMock) -> None:
+    stream = MemoryStream()
 
-        stream.subscribe(mock.one)
-        stream.subscribe(mock.two)
+    stream.subscribe(mock.one)
+    stream.subscribe(mock.two)
 
-        await stream.send(ToolCallEvent(name="func1", arguments="test"), context=Context(stream))
-        await stream.send(ModelMessage(content="response"), context=Context(stream))
+    await stream.send(ToolCallEvent(name="func1", arguments="test"), context=Context(stream))
+    await stream.send(ModelMessage(content="response"), context=Context(stream))
 
-        assert mock.one.call_count == 2
-        assert mock.two.call_count == 2
-
-
-class TestStreamPlayScenario:
-    @pytest.mark.asyncio
-    async def test_play_py_scenario(self) -> None:
-        stream = MemoryStream()
-        all_listener = MagicMock()
-        tool_listener = MagicMock()
-        tool_func1_listener = MagicMock()
-        model_listener = MagicMock()
-        unreachable_listener = MagicMock()
-
-        stream.subscribe(all_listener)
-
-        tool_stream = stream.where(ToolCallEvent)
-        tool_stream.subscribe(tool_listener)
-        tool_stream.where(ToolCallEvent.name == "func1").subscribe(tool_func1_listener)
-
-        stream.where(ModelMessage).subscribe(model_listener)
-        tool_stream.where(ModelMessage).subscribe(unreachable_listener)
-
-        await stream.send(ToolCallEvent(name="func1", arguments="Wtf1"), context=Context(stream))
-        await stream.send(ToolCallEvent(name="func2", arguments="Wtf2"), context=Context(stream))
-        await stream.send(ModelMessage(content="Test"), context=Context(stream))
-
-        assert all_listener.call_count == 3
-        assert tool_listener.call_count == 2
-        assert tool_func1_listener.call_count == 1
-        assert model_listener.call_count == 1
-        unreachable_listener.assert_not_called()
-
-        all_calls = all_listener.call_args_list
-        assert all_calls[0][0][0].name == "func1"
-        assert all_calls[1][0][0].name == "func2"
-        assert all_calls[2][0][0].content == "Test"
-
-        tool_calls = tool_listener.call_args_list
-        assert tool_calls[0][0][0].name == "func1"
-        assert tool_calls[1][0][0].name == "func2"
-
-        assert tool_func1_listener.call_args[0][0].name == "func1"
-        assert model_listener.call_args[0][0].content == "Test"
+    assert mock.one.call_count == 2
+    assert mock.two.call_count == 2
 
 
-class TestStreamUnsubscribe:
-    @pytest.mark.asyncio
-    async def test_unsubscribe_stops_receiving_events(self, mock: MagicMock) -> None:
-        stream = MemoryStream()
+@pytest.mark.asyncio
+async def test_play_py_scenario() -> None:
+    stream = MemoryStream()
+    all_listener = MagicMock()
+    tool_listener = MagicMock()
+    tool_func1_listener = MagicMock()
+    model_listener = MagicMock()
+    unreachable_listener = MagicMock()
 
-        sub_id = stream.subscribe(lambda ev: mock(ev))
-        event = ToolCallEvent(name="func1", arguments="test1")
-        await stream.send(event, context=Context(stream))
+    stream.subscribe(all_listener)
 
-        stream.unsubscribe(sub_id)
-        await stream.send(ToolCallEvent(name="func2", arguments="test2"), context=Context(stream))
+    tool_stream = stream.where(ToolCallEvent)
+    tool_stream.subscribe(tool_listener)
+    tool_stream.where(ToolCallEvent.name == "func1").subscribe(tool_func1_listener)
 
-        mock.assert_called_once_with(event)
+    stream.where(ModelMessage).subscribe(model_listener)
+    tool_stream.where(ModelMessage).subscribe(unreachable_listener)
+
+    await stream.send(ToolCallEvent(name="func1", arguments="Wtf1"), context=Context(stream))
+    await stream.send(ToolCallEvent(name="func2", arguments="Wtf2"), context=Context(stream))
+    await stream.send(ModelMessage(content="Test"), context=Context(stream))
+
+    assert all_listener.call_count == 3
+    assert tool_listener.call_count == 2
+    assert tool_func1_listener.call_count == 1
+    assert model_listener.call_count == 1
+    unreachable_listener.assert_not_called()
+
+    all_calls = all_listener.call_args_list
+    assert all_calls[0][0][0].name == "func1"
+    assert all_calls[1][0][0].name == "func2"
+    assert all_calls[2][0][0].content == "Test"
+
+    tool_calls = tool_listener.call_args_list
+    assert tool_calls[0][0][0].name == "func1"
+    assert tool_calls[1][0][0].name == "func2"
+
+    assert tool_func1_listener.call_args[0][0].name == "func1"
+    assert model_listener.call_args[0][0].content == "Test"
 
 
-class TestStreamContextPropagation:
-    @pytest.mark.asyncio
-    async def test_context_propagates_to_substream(self, mock: MagicMock) -> None:
-        stream = MemoryStream()
+@pytest.mark.asyncio
+async def test_unsubscribe_stops_receiving_events(mock: MagicMock) -> None:
+    stream = MemoryStream()
 
-        def listener(ctx: Context):
-            mock(ctx)
+    sub_id = stream.subscribe(lambda ev: mock(ev))
+    event = ToolCallEvent(name="func1", arguments="test1")
+    await stream.send(event, context=Context(stream))
 
-        tool_stream = stream.where(ToolCallEvent)
-        tool_stream.subscribe(listener)
+    stream.unsubscribe(sub_id)
+    await stream.send(ToolCallEvent(name="func2", arguments="test2"), context=Context(stream))
 
-        custom_ctx = Context(stream)
-        await stream.send(ToolCallEvent(name="func1", arguments="test"), custom_ctx)
+    mock.assert_called_once_with(event)
 
-        mock.assert_called_once_with(custom_ctx)
+
+@pytest.mark.asyncio
+async def test_context_propagates_to_substream(mock: MagicMock) -> None:
+    stream = MemoryStream()
+
+    def listener(ctx: Context):
+        mock(ctx)
+
+    tool_stream = stream.where(ToolCallEvent)
+    tool_stream.subscribe(listener)
+
+    custom_ctx = Context(stream)
+    await stream.send(ToolCallEvent(name="func1", arguments="test"), custom_ctx)
+
+    mock.assert_called_once_with(custom_ctx)

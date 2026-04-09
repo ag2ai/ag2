@@ -66,17 +66,17 @@ class TestSchemaGeneration:
         def double(value: int) -> int:
             return value * 2
 
-        assert double.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                data=IsPartialDict(
-                    description='Response with a one-field JSON `"{"data":...}"`',
-                    title="Data",
-                    type="integer",
-                ),
-            ),
-            required=["data"],
-        )
+        assert double.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "data": IsPartialDict({
+                    "description": 'Response with a one-field JSON `"{"data":...}"`',
+                    "title": "Data",
+                    "type": "integer",
+                }),
+            }),
+            "required": ["data"],
+        })
 
     def test_single_dataclass_param_generates_schema(self) -> None:
         @dataclass
@@ -88,47 +88,47 @@ class TestSchemaGeneration:
         def process(point: Point) -> str:
             return f"{point.x},{point.y}"
 
-        assert process.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                x=IsPartialDict(type="integer"),
-                y=IsPartialDict(type="integer"),
-            ),
-        )
+        assert process.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "x": IsPartialDict({"type": "integer"}),
+                "y": IsPartialDict({"type": "integer"}),
+            }),
+        })
 
     def test_single_union_param_generates_schema(self) -> None:
         @response_schema
         def process(value: int | str) -> str:
             return str(value)
 
-        assert process.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                data=IsPartialDict(
-                    description='Response with a one-field JSON `"{"data":...}"`',
-                    title="Data",
-                    anyOf=[
+        assert process.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "data": IsPartialDict({
+                    "description": 'Response with a one-field JSON `"{"data":...}"`',
+                    "title": "Data",
+                    "anyOf": [
                         {"type": "integer"},
                         {"type": "string"},
                     ],
-                ),
-            ),
-            required=["data"],
-        )
+                }),
+            }),
+            "required": ["data"],
+        })
 
     def test_multi_params_generates_object_schema(self) -> None:
         @response_schema
         def combine(name: str, age: int) -> str:
             return f"{name} is {age}"
 
-        assert combine.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                name=IsPartialDict(type="string"),
-                age=IsPartialDict(type="integer"),
-            ),
-            required=["name", "age"],
-        )
+        assert combine.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"type": "string"}),
+                "age": IsPartialDict({"type": "integer"}),
+            }),
+            "required": ["name", "age"],
+        })
 
     def test_multi_params_with_field_descriptions(self) -> None:
         @response_schema
@@ -138,12 +138,12 @@ class TestSchemaGeneration:
         ) -> str:
             return f"{name}: {score}"
 
-        assert process.json_schema == IsPartialDict(
-            properties=IsPartialDict(
-                name=IsPartialDict(description="User name"),
-                score=IsPartialDict(description="Test score", default=1.0),
-            ),
-        )
+        assert process.json_schema == IsPartialDict({
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"description": "User name"}),
+                "score": IsPartialDict({"description": "Test score", "default": 1.0}),
+            }),
+        })
 
     def test_multi_params_with_defaults(self) -> None:
         @response_schema
@@ -153,12 +153,12 @@ class TestSchemaGeneration:
         ) -> str:
             return f"{name} x{retries}"
 
-        assert process.json_schema == IsPartialDict(
-            required=["name"],
-            properties=IsPartialDict(
-                retries=IsPartialDict(default=3),
-            ),
-        )
+        assert process.json_schema == IsPartialDict({
+            "required": ["name"],
+            "properties": IsPartialDict({
+                "retries": IsPartialDict({"default": 3}),
+            }),
+        })
 
     def test_custom_fields_has_no_effect(self) -> None:
         @response_schema
@@ -171,14 +171,14 @@ class TestSchemaGeneration:
         ) -> str:
             return f"{name} is {age}"
 
-        assert combine.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                name=IsPartialDict(type="string"),
-                age=IsPartialDict(type="integer"),
-            ),
-            required=["name", "age"],
-        )
+        assert combine.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"type": "string"}),
+                "age": IsPartialDict({"type": "integer"}),
+            }),
+            "required": ["name", "age"],
+        })
 
     def test_respect_dependencies(self) -> None:
         def get_age(age: int) -> int:
@@ -191,14 +191,14 @@ class TestSchemaGeneration:
         ) -> str:
             return f"{name} is {age}"
 
-        assert combine.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                name=IsPartialDict(type="string"),
-                age=IsPartialDict(type="integer"),
-            ),
-            required=["name", "age"],
-        )
+        assert combine.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"type": "string"}),
+                "age": IsPartialDict({"type": "integer"}),
+            }),
+            "required": ["name", "age"],
+        })
 
     def test_custom_schema_overrides_generated(self) -> None:
         custom = {"type": "object", "properties": {"x": {"type": "number"}}}
@@ -436,14 +436,14 @@ class TestDependencyInjection:
             return f"{name}({age}) [{lang}]"
 
         # DI params excluded from schema (multi-arg message body is a flat object, not ``data``-wrapped)
-        assert parse.json_schema == IsPartialDict(
-            type="object",
-            properties=IsPartialDict(
-                name=IsPartialDict(type="string"),
-                age=IsPartialDict(type="integer"),
-            ),
-            required=["name", "age"],
-        )
+        assert parse.json_schema == IsPartialDict({
+            "type": "object",
+            "properties": IsPartialDict({
+                "name": IsPartialDict({"type": "string"}),
+                "age": IsPartialDict({"type": "integer"}),
+            }),
+            "required": ["name", "age"],
+        })
 
         # But resolved at runtime
         context = self._make_context(variables={"lang": "fr"})

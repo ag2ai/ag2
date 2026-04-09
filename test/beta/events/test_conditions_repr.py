@@ -72,10 +72,9 @@ class TestOrConditionRepr:
         assert repr(condition) == expected
 
 
-class TestNotConditionRepr:
-    def test_not_condition_repr(self):
-        condition = ~(TestEvent.field == 5)
-        assert repr(condition) == "~Is(TestEvent.field == 5)"
+def test_not_condition_repr():
+    condition = ~(TestEvent.field == 5)
+    assert repr(condition) == "~Is(TestEvent.field == 5)"
 
 
 class TextTypeConditionRepr:

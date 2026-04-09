@@ -191,10 +191,10 @@ class TestDataclassSchemas:
         schema = ResponseSchema(Config)
 
         assert schema.name == "Config"
-        assert schema.json_schema == IsPartialDict(
-            required=["mode"],
-            properties=IsPartialDict(retries=IsPartialDict(default=3)),
-        )
+        assert schema.json_schema == IsPartialDict({
+            "required": ["mode"],
+            "properties": IsPartialDict({"retries": IsPartialDict({"default": 3})}),
+        })
 
     def test_nested_dataclass(self) -> None:
         @dataclass
@@ -211,8 +211,8 @@ class TestDataclassSchemas:
 
         assert schema.name == "Person"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(Address=IsPartialDict(type="object")),
-            "properties": IsPartialDict(address={"$ref": "#/$defs/Address"}),
+            "$defs": IsPartialDict({"Address": IsPartialDict({"type": "object"})}),
+            "properties": IsPartialDict({"address": {"$ref": "#/$defs/Address"}}),
         })
 
 
@@ -272,7 +272,7 @@ class TestPydanticModelSchemas:
 
         assert schema.name == "Shape"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(Coord=IsPartialDict(type="object")),
+            "$defs": IsPartialDict({"Coord": IsPartialDict({"type": "object"})}),
         })
 
     def test_model_with_enum_field(self) -> None:
@@ -303,11 +303,11 @@ class TestPydanticModelSchemas:
 
         schema = ResponseSchema(Bounded)
 
-        assert schema.json_schema == IsPartialDict(
-            properties=IsPartialDict(
-                value=IsPartialDict(minimum=0, maximum=100),
-            ),
-        )
+        assert schema.json_schema == IsPartialDict({
+            "properties": IsPartialDict({
+                "value": IsPartialDict({"minimum": 0, "maximum": 100}),
+            }),
+        })
 
 
 # --- Union type schemas ---
@@ -346,10 +346,10 @@ class TestUnionSchemas:
 
         assert schema.name == "Result"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(
-                Error=IsPartialDict(),
-                Success=IsPartialDict(),
-            ),
+            "$defs": IsPartialDict({
+                "Error": IsPartialDict({}),
+                "Success": IsPartialDict({}),
+            }),
         })
 
 

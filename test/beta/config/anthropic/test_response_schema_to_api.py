@@ -29,39 +29,36 @@ def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
     }
 
 
-class TestResponseProtoToOutputConfigNone:
-    def test_none_returns_none(self) -> None:
-        assert response_proto_to_output_config(None) is None
+def test_response_proto_to_output_config_none_returns_none() -> None:
+    assert response_proto_to_output_config(None) is None
 
 
-class TestPrimitiveSchemas:
-    @pytest.mark.parametrize(
-        ("type_", "name", "expected_inner_schema"),
-        [
-            pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
-            pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
-            pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
-        ],
-    )
-    def test_primitive_type(
-        self,
-        type_: type,
-        name: str,
-        expected_inner_schema: dict,  # type: ignore[type-arg]
-    ) -> None:
-        schema = ResponseSchema(type_, name=name)
+@pytest.mark.parametrize(
+    ("type_", "name", "expected_inner_schema"),
+    [
+        pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
+        pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
+        pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
+    ],
+)
+def test_primitive_schemas_primitive_type(
+    type_: type,
+    name: str,
+    expected_inner_schema: dict,  # type: ignore[type-arg]
+) -> None:
+    schema = ResponseSchema(type_, name=name)
 
-        result = response_proto_to_output_config(schema)
+    result = response_proto_to_output_config(schema)
 
-        assert result == {
-            "format": {
-                "type": "json_schema",
-                "schema": IsPartialDict({
-                    **_embedded_data_schema(expected_inner_schema),
-                    "title": "ResponseSchema",
-                }),
-            },
-        }
+    assert result == {
+        "format": {
+            "type": "json_schema",
+            "schema": IsPartialDict({
+                **_embedded_data_schema(expected_inner_schema),
+                "title": "ResponseSchema",
+            }),
+        },
+    }
 
 
 class TestDataclassSchemas:
@@ -280,13 +277,12 @@ class TestRawSchema:
         }
 
 
-class TestNoJsonSchema:
-    def test_no_schema_returns_none(self) -> None:
-        class FakeProto:
-            name = "test"
-            description = None
-            json_schema = None
-            system_prompt = None
+def test_no_json_schema_returns_none() -> None:
+    class FakeProto:
+        name = "test"
+        description = None
+        json_schema = None
+        system_prompt = None
 
-        result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
-        assert result is None
+    result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
+    assert result is None
