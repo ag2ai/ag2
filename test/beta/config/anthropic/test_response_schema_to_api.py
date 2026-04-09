@@ -56,10 +56,10 @@ class TestPrimitiveSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
+                "schema": IsPartialDict({
                     **_embedded_data_schema(expected_inner_schema),
-                    title="ResponseSchema",
-                ),
+                    "title": "ResponseSchema",
+                }),
             },
         }
 
@@ -78,14 +78,14 @@ class TestDataclassSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    type="object",
-                    additionalProperties=False,
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        age=IsPartialDict(type="integer"),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "age": IsPartialDict({"type": "integer"}),
+                    }),
+                }),
             },
         }
 
@@ -100,8 +100,9 @@ class TestDataclassSchemas:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["type"] == "json_schema"
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"type": "json_schema"}),
+        })
 
 
 class TestPydanticModelSchemas:
@@ -117,14 +118,14 @@ class TestPydanticModelSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    type="object",
-                    additionalProperties=False,
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        price=IsPartialDict(type="number"),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "price": IsPartialDict({"type": "number"}),
+                    }),
+                }),
             },
         }
 
@@ -139,11 +140,11 @@ class TestPydanticModelSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    properties=IsPartialDict(
-                        value=IsPartialDict(minimum=0, maximum=100),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "properties": IsPartialDict({
+                        "value": IsPartialDict({"minimum": 0, "maximum": 100}),
+                    }),
+                }),
             },
         }
 
@@ -154,21 +155,19 @@ class TestUnionSchemas:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        fmt_schema = result["format"]["schema"]
         # Union is embedded in {"data": ...} object
-        assert fmt_schema["type"] == "object"
-        assert fmt_schema["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
     def test_tuple_of_types(self) -> None:
         schema = ResponseSchema((int, float), name="Number")
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        fmt_schema = result["format"]["schema"]
-        assert fmt_schema["type"] == "object"
-        assert fmt_schema["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
 
 class TestAdditionalPropertiesFalse:
@@ -182,8 +181,9 @@ class TestAdditionalPropertiesFalse:
         schema = ResponseSchema(Simple)
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["schema"]["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"additionalProperties": False})}),
+        })
 
     def test_added_to_nested_objects(self) -> None:
         class Inner(BaseModel):
@@ -215,9 +215,9 @@ class TestAdditionalPropertiesFalse:
         schema = ResponseSchema(int, name="IntSchema")
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["schema"]["type"] == "object"
-        assert result["format"]["schema"]["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
 
 class TestDescriptionHandling:
@@ -231,8 +231,9 @@ class TestDescriptionHandling:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["type"] == "json_schema"
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"type": "json_schema"}),
+        })
 
     def test_description_not_passed_to_api(self) -> None:
         """Anthropic output_config format does not include name or description."""

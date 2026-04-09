@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from autogen.beta.config.ollama.mappers import convert_messages
-from autogen.beta.events import ModelResponse
+from autogen.beta.events import ImageInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.exceptions import UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -25,11 +27,19 @@ class TestConvertMessagesEmptyArguments:
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
         result = convert_messages([], [_model_response_with_tool_call(arguments)])
 
-        assistant_msg = result[0]
-        assert assistant_msg["role"] == "assistant"
-        assert assistant_msg["tool_calls"][0]["function"]["arguments"] == {}
+        assert result[0] == IsPartialDict({
+            "role": "assistant",
+            "tool_calls": [IsPartialDict({"function": IsPartialDict({"name": "list_items", "arguments": {}})})],
+        })
 
     def test_valid_arguments_are_preserved(self) -> None:
         result = convert_messages([], [_model_response_with_tool_call('{"category": "books"}')])
 
-        assert result[0]["tool_calls"][0]["function"]["arguments"] == {"category": "books"}
+        assert result[0] == IsPartialDict({
+            "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {"category": "books"}})})],
+        })
+
+
+def test_image_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="ImageInput.*ollama"):
+        convert_messages([], [ImageInput(url="https://example.com/img.png")])

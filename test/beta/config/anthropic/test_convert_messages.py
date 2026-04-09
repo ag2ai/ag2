@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
+    ImageInput,
     ModelResponse,
     TextInput,
     ToolCallEvent,
@@ -14,6 +16,7 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
+from autogen.beta.exceptions import UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -34,24 +37,32 @@ class TestConvertMessagesEmptyArguments:
         response = _model_response_with_tool_call(arguments)
         result = convert_messages([response])
 
-        assert len(result) == 1
-        tool_use_block = result[0]["content"][0]
-        assert tool_use_block["type"] == "tool_use"
-        assert tool_use_block["input"] == {}
+        assert result == [
+            IsPartialDict({
+                "role": "assistant",
+                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
+            }),
+        ]
 
     def test_valid_arguments_are_preserved(self) -> None:
         response = _model_response_with_tool_call('{"category": "books"}')
         result = convert_messages([response])
 
-        tool_use_block = result[0]["content"][0]
-        assert tool_use_block["input"] == {"category": "books"}
+        assert result == [
+            IsPartialDict({
+                "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
+            }),
+        ]
 
     def test_empty_object_arguments(self) -> None:
         response = _model_response_with_tool_call("{}")
         result = convert_messages([response])
 
-        tool_use_block = result[0]["content"][0]
-        assert tool_use_block["input"] == {}
+        assert result == [
+            IsPartialDict({
+                "content": [IsPartialDict({"type": "tool_use", "input": {}})],
+            }),
+        ]
 
 
 class TestConvertMessagesRoundTrip:
@@ -73,8 +84,17 @@ class TestConvertMessagesRoundTrip:
         ]
         result = convert_messages(events)
 
-        assert result[0]["role"] == "user"
-        assert result[1]["role"] == "assistant"
-        assert result[1]["content"][0]["input"] == {}
-        assert result[2]["role"] == "user"
-        assert result[2]["content"][0]["type"] == "tool_result"
+        assert result[0] == IsPartialDict({"role": "user"})
+        assert result[1] == IsPartialDict({
+            "role": "assistant",
+            "content": [IsPartialDict({"input": {}})],
+        })
+        assert result[2] == IsPartialDict({
+            "role": "user",
+            "content": [IsPartialDict({"type": "tool_result"})],
+        })
+
+
+def test_image_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="ImageInput.*anthropic"):
+        convert_messages([ImageInput(url="https://example.com/img.png")])
