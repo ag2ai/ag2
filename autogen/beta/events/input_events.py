@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 from os import PathLike
 from pathlib import Path
 from typing import Any, overload
@@ -19,7 +17,7 @@ class Input(BaseEvent):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
-    def ensure_input(cls, content: str | Input) -> Input:
+    def ensure_input(cls, content: "str | Input") -> "Input":
         if isinstance(content, Input):
             return content
         return TextInput(content=content)
