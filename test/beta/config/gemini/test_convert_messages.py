@@ -5,8 +5,9 @@
 import pytest
 
 from autogen.beta.config.gemini.mappers import convert_messages
-from autogen.beta.events import ModelResponse
+from autogen.beta.events import ImageInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.exceptions import UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -35,3 +36,8 @@ class TestConvertMessagesEmptyArguments:
 
         part = result[0].parts[0]
         assert part.function_call.args == {"category": "books"}
+
+
+def test_image_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="ImageInput.*gemini"):
+        convert_messages([ImageInput(url="https://example.com/img.png")])

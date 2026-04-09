@@ -135,3 +135,25 @@ Provider clients live in `autogen/beta/config/{provider}/`. Each provider has at
 2. Register the config in `autogen/beta/config/__init__.py`: import inside a `try/except ImportError` block and add a `_missing_optional_dependency_config` fallback.
 3. Add the config to `__all__`.
 4. Add mapper tests under `test/beta/config/{provider}/`
+
+## Testing Conventions
+
+Use `just test-beta` as alias for `pytest` execution to run beta tests.
+
+### Assertion style
+
+Avoid chained field-access assertions like `result[0]["tool_calls"][0]["function"]["arguments"] == {...}`. Instead, compare the whole object directly (`assert msg == {...}`) or use **dirty-equals** `IsPartialDict` when only some fields matter:
+
+```python
+# Bad
+assert result[0]["role"] == "assistant"
+assert result[0]["tool_calls"][0]["function"]["arguments"] == {}
+
+# Good — full comparison
+assert result[0] == {"role": "assistant", "tool_calls": [...]}
+
+# Good — partial match with dirty-equals (always use dict syntax, not kwargs)
+from dirty_equals import IsPartialDict
+assert result[0] == IsPartialDict({"role": "assistant"})  # Good
+assert result[0] == IsPartialDict(role="assistant")        # Bad — use dict syntax
+```

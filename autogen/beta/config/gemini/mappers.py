@@ -9,8 +9,9 @@ from typing import Any
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import Input
 from autogen.beta.events.types import Usage
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
@@ -89,6 +90,9 @@ def convert_messages(
                     parts=[types.Part.from_text(text=message.content)],
                 )
             )
+
+        elif isinstance(message, Input):
+            raise UnsupportedInputError(type(message).__name__, "gemini")
 
         elif isinstance(message, ModelResponse):
             parts: list[types.Part] = []

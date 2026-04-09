@@ -7,8 +7,9 @@ from collections.abc import Iterable
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import Input
 from autogen.beta.events.types import Usage
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -173,6 +174,8 @@ def convert_messages(
     for message in messages:
         if isinstance(message, TextInput):
             result.append(message.to_api())
+        elif isinstance(message, Input):
+            raise UnsupportedInputError(type(message).__name__, "anthropic")
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:

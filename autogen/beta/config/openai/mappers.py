@@ -5,9 +5,10 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ImageInput, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import Input
 from autogen.beta.events.types import Usage
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
@@ -104,6 +105,15 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "content": [{"type": "input_text", "text": message.content}],
             })
 
+        elif isinstance(message, ImageInput):
+            result.append({
+                "role": "user",
+                "content": [{"type": "input_image", "image_url": message.url}],
+            })
+
+        elif isinstance(message, Input):
+            raise UnsupportedInputError(type(message).__name__, "openai-responses")
+
         elif isinstance(message, ModelResponse):
             # Reconstruct assistant message
             content: list[dict[str, Any]] = []
@@ -142,8 +152,15 @@ def convert_messages(
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
     for message in messages:
-        if isinstance(message, (TextInput, ModelResponse)):
+        if isinstance(message, ImageInput):
+            result.append({
+                "role": "user",
+                "content": [{"type": "image_url", "image_url": {"url": message.url}}],
+            })
+        elif isinstance(message, (TextInput, ModelResponse)):
             result.append(message.to_api())
+        elif isinstance(message, Input):
+            raise UnsupportedInputError(type(message).__name__, "openai-completions")
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append(r.to_api())

@@ -31,3 +31,9 @@ class TextInput(Input):
             "content": self.content,
             "role": "user",
         }
+
+
+class ImageInput(Input):
+    """Image input event sent to the model."""
+
+    url: str

@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.events.input_events import Input
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -50,6 +51,8 @@ def convert_messages(
     for message in messages:
         if isinstance(message, (TextInput, ModelResponse)):
             result.append(message.to_api())
+        elif isinstance(message, Input):
+            raise UnsupportedInputError(type(message).__name__, "dashscope")
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append(r.to_api())

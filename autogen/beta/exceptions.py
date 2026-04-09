@@ -25,6 +25,13 @@ class UnsupportedToolError(ToolExecutionError):
         super().__init__(f"Unsupported tool type `{tool_type}` for provider `{provider}`")
 
 
+class UnsupportedInputError(AG2Error):
+    """Raised when an input type is not supported by a provider."""
+
+    def __init__(self, input_type: str, provider: str):
+        super().__init__(f"Unsupported input type `{input_type}` for provider `{provider}`")
+
+
 class HumanInputNotProvidedError(AG2Error):
     """Raised when human-in-the-loop input was requested but not provided."""
 

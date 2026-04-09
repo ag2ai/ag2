@@ -4,7 +4,7 @@
 
 from .base import BaseEvent, Field
 from .conditions import Condition
-from .input_events import Input, TextInput
+from .input_events import ImageInput, Input, TextInput
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
@@ -34,6 +34,7 @@ __all__ = (
     "Field",
     "HumanInputRequest",
     "HumanMessage",
+    "ImageInput",
     "Input",
     "ModelMessage",
     "ModelMessageChunk",
