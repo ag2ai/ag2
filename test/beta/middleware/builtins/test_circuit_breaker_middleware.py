@@ -64,7 +64,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio()
     async def test_open_blocks_call(self) -> None:
         # Given an OPEN circuit (threshold=1)
-        factory = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=9999.0))
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=9999.0)
         factory.circuit_breaker.record_failure()
 
         # When on_llm_call is invoked
@@ -92,7 +92,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio()
     async def test_half_open_probe_allowed(self) -> None:
         # Given an OPEN circuit whose timeout has expired (timeout=0)
-        factory = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=0.0))
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
         factory.circuit_breaker.record_failure()
 
         # When on_llm_call is invoked (circuit transitions to HALF_OPEN)
@@ -107,8 +107,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio()
     async def test_half_open_second_probe_blocked(self) -> None:
         # Given a HALF_OPEN circuit with a probe already in flight
-        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=0.0)
-        factory = CircuitBreakerMiddleware(config)
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
         cb = factory.circuit_breaker
         cb.record_failure()
 
@@ -131,7 +130,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio()
     async def test_cancelled_error_releases_probe_without_tripping(self) -> None:
         # Given a HALF_OPEN circuit
-        factory = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=0.0))
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
         factory.circuit_breaker.record_failure()
 
         # When call_next raises CancelledError (a BaseException, not Exception)
@@ -149,7 +148,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio()
     async def test_cancelled_error_in_closed_state(self) -> None:
         # Given a CLOSED circuit
-        factory = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=5, recovery_timeout_s=60.0))
+        factory = CircuitBreakerMiddleware(failure_threshold=5, recovery_timeout_s=60.0)
 
         # When call_next raises CancelledError
         async def _cancel(_events: Sequence[BaseEvent], _ctx: object) -> ModelResponse:
@@ -167,7 +166,7 @@ class TestCircuitBreaker:
         # Given a circuit with threshold=1
         import logging
 
-        factory = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=9999.0))
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=9999.0)
 
         # When the circuit trips
         with caplog.at_level(logging.WARNING, logger="autogen.beta.middleware.builtin.circuit_breaker"):
@@ -184,32 +183,67 @@ class TestCircuitBreaker:
 
 
 # ---------------------------------------------------------------------------
-# TestCircuitBreakerConfig -- validation tests
+# TestCircuitBreakerMiddleware -- constructor and fallback behavior
 # ---------------------------------------------------------------------------
 
 
-class TestCircuitBreakerConfig:
-    def test_zero_threshold_rejected(self) -> None:
-        # Given / When / Then
-        with pytest.raises(ValueError, match="failure_threshold"):
-            CircuitBreakerConfig(failure_threshold=0)
+class TestCircuitBreakerMiddleware:
+    def test_flat_constructor(self) -> None:
+        # Given arguments passed directly (no explicit config object)
+        mw = CircuitBreakerMiddleware(failure_threshold=3, recovery_timeout_s=30.0)
 
-    def test_negative_timeout_rejected(self) -> None:
-        with pytest.raises(ValueError, match="recovery_timeout_s"):
-            CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=-1.0)
+        # Then the internal config is built from those arguments
+        assert mw._config.failure_threshold == 3
+        assert mw._config.recovery_timeout_s == 30.0
 
-    @pytest.mark.parametrize(
-        "bad_threshold",
-        [
-            pytest.param(1.5, id="float"),
-            pytest.param(float("nan"), id="nan"),
-            pytest.param(float("inf"), id="inf"),
-            pytest.param("3", id="string"),
-        ],
-    )
-    def test_non_int_threshold_rejected(self, bad_threshold: object) -> None:
-        with pytest.raises((TypeError, ValueError)):
-            CircuitBreakerConfig(failure_threshold=bad_threshold)  # type: ignore[arg-type]
+    def test_default_constructor(self) -> None:
+        # Given no arguments
+        mw = CircuitBreakerMiddleware()
+
+        # Then defaults match CircuitBreakerConfig defaults
+        assert mw._config.failure_threshold == 5
+        assert mw._config.recovery_timeout_s == 60.0
+
+    @pytest.mark.asyncio()
+    async def test_fallback_invoked_when_circuit_open(self) -> None:
+        # Given a middleware with a fallback callable
+        fallback_called = []
+
+        def degraded() -> ModelResponse:
+            fallback_called.append(True)
+            return ModelResponse(message="service unavailable", usage={})
+
+        factory = CircuitBreakerMiddleware(
+            failure_threshold=1,
+            recovery_timeout_s=9999.0,
+            fallback=degraded,
+        )
+        factory.circuit_breaker.record_failure()
+
+        # When on_llm_call is invoked on an OPEN circuit
+        call_next = mock.AsyncMock()
+        mw = factory(_make_event(), _make_context())
+        response = await mw.on_llm_call(call_next, [], _make_context())
+
+        # Then the fallback was invoked and its response returned
+        assert fallback_called == [True]
+        assert response.message == "service unavailable"
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio()
+    async def test_default_blocked_response_without_fallback(self) -> None:
+        # Given a middleware without a fallback
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=9999.0)
+        factory.circuit_breaker.record_failure()
+
+        # When on_llm_call is invoked on an OPEN circuit
+        call_next = mock.AsyncMock()
+        mw = factory(_make_event(), _make_context())
+        response = await mw.on_llm_call(call_next, [], _make_context())
+
+        # Then the sentinel None-message response is returned
+        assert response.message is None
+        call_next.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
 import logging
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -14,6 +14,8 @@ from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 logger = logging.getLogger(__name__)
+
+FallbackCallable = Callable[[], ModelResponse]
 
 
 class CircuitState(Enum):
@@ -35,20 +37,6 @@ class CircuitBreakerConfig:
 
     failure_threshold: int = 5
     recovery_timeout_s: float = 60.0
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.failure_threshold, int) or isinstance(self.failure_threshold, bool):
-            raise TypeError("failure_threshold must be an int")
-        if self.failure_threshold < 1:
-            raise ValueError("failure_threshold must be >= 1")
-        import math
-
-        if not isinstance(self.recovery_timeout_s, (int, float)) or isinstance(self.recovery_timeout_s, bool):
-            raise TypeError("recovery_timeout_s must be a number")
-        if math.isnan(self.recovery_timeout_s) or math.isinf(self.recovery_timeout_s):
-            raise ValueError("recovery_timeout_s must be a finite number")
-        if self.recovery_timeout_s < 0:
-            raise ValueError("recovery_timeout_s must be >= 0")
 
 
 class _CircuitBreaker:
@@ -135,17 +123,41 @@ class CircuitBreakerMiddleware(MiddlewareFactory):
 
     Usage::
 
-        middleware = CircuitBreakerMiddleware(CircuitBreakerConfig(failure_threshold=3, recovery_timeout_s=30))
+        middleware = CircuitBreakerMiddleware(failure_threshold=3, recovery_timeout_s=30)
         agent.register_middleware(middleware)
 
+    With a fallback callable to customize the blocked-state response::
+
+        def degraded() -> ModelResponse:
+            return ModelResponse(message="service temporarily unavailable", usage={})
+
+
+        middleware = CircuitBreakerMiddleware(
+            failure_threshold=3,
+            recovery_timeout_s=30,
+            fallback=degraded,
+        )
+
     Args:
-        config: CircuitBreakerConfig controlling thresholds and timeouts.
-            Defaults to failure_threshold=5, recovery_timeout_s=60.
+        failure_threshold: Consecutive failures before the circuit opens.
+        recovery_timeout_s: Seconds to wait in OPEN state before allowing a probe.
+        fallback: Optional callable returning a ModelResponse to use when the
+            circuit is blocking a call. Defaults to a sentinel response with
+            ``message=None``.
     """
 
-    def __init__(self, config: CircuitBreakerConfig | None = None) -> None:
-        self._config = config or CircuitBreakerConfig()
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout_s: float = 60.0,
+        fallback: FallbackCallable | None = None,
+    ) -> None:
+        self._config = CircuitBreakerConfig(
+            failure_threshold=failure_threshold,
+            recovery_timeout_s=recovery_timeout_s,
+        )
         self._circuit_breaker = _CircuitBreaker(self._config)
+        self._fallback = fallback
 
     @property
     def circuit_breaker(self) -> _CircuitBreaker:
@@ -153,7 +165,7 @@ class CircuitBreakerMiddleware(MiddlewareFactory):
         return self._circuit_breaker
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        return _CircuitBreakerInstance(event, context, self._circuit_breaker)
+        return _CircuitBreakerInstance(event, context, self._circuit_breaker, self._fallback)
 
 
 class _CircuitBreakerInstance(BaseMiddleware):
@@ -164,9 +176,11 @@ class _CircuitBreakerInstance(BaseMiddleware):
         event: "BaseEvent",
         context: "Context",
         circuit_breaker: _CircuitBreaker,
+        fallback: FallbackCallable | None,
     ) -> None:
         super().__init__(event, context)
         self._cb = circuit_breaker
+        self._fallback = fallback
 
     async def on_llm_call(
         self,
@@ -178,11 +192,11 @@ class _CircuitBreakerInstance(BaseMiddleware):
 
         if state == CircuitState.OPEN:
             logger.debug("CircuitBreaker is OPEN -- blocking LLM call")
-            return _blocked_response()
+            return self._blocked_response()
 
         if state == CircuitState.HALF_OPEN and not claimed_probe:
             logger.debug("CircuitBreaker is HALF_OPEN and probe slot occupied -- blocking LLM call")
-            return _blocked_response()
+            return self._blocked_response()
 
         try:
             response = await call_next(events, context)
@@ -198,7 +212,8 @@ class _CircuitBreakerInstance(BaseMiddleware):
         self._cb.record_success()
         return response
 
-
-def _blocked_response() -> ModelResponse:
-    """Return a sentinel response when the circuit is blocking the call."""
-    return ModelResponse(message=None, usage={})
+    def _blocked_response(self) -> ModelResponse:
+        """Return a response for a blocked call, invoking the fallback if set."""
+        if self._fallback is not None:
+            return self._fallback()
+        return ModelResponse(message=None, usage={})
