@@ -48,15 +48,14 @@ Below is a simple example of creating a FalkorDB Graph RAG agent in AG2. A data 
 For example:
 ```python
 import os
-import autogen
 
-llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
-os.environ["OPENAI_API_KEY"] = llm_config.config_list[0].api_key # Utilised by the FalkorGraphQueryEngine
-
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent, LLMConfig, UserProxyAgent
 from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
 from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
 from autogen.agentchat.contrib.graph_rag.falkor_graph_rag_capability import FalkorGraphRagCapability
+
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+os.environ["OPENAI_API_KEY"] = llm_config.config_list[0].api_key.get_secret_value() # Utilised by the FalkorGraphQueryEngine
 
 # Auto generate graph schema from unstructured data
 input_path = "../test/agentchat/contrib/graph_rag/the_matrix.txt"
@@ -131,9 +130,9 @@ This capability provides strict responses, where the LLM provides the data in a 
 This is available when using OpenAI LLMs and is set in the LLM configuration (gpt-3.5-turbo-0613 or gpt-4-0613 and above):
 
 ```python
-import autogen
 import os
 from pydantic import BaseModel
+from autogen import AssistantAgent, LLMConfig
 
 # Here is our model
 class Step(BaseModel):
@@ -145,7 +144,7 @@ class MathReasoning(BaseModel):
     final_answer: str
 
 # response_format is added to our configuration
-llm_config = autogen.LLMConfig(config_list={
+llm_config = LLMConfig({
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.getenv("OPENAI_API_KEY"),
@@ -153,7 +152,7 @@ llm_config = autogen.LLMConfig(config_list={
 })
 
 # This agent's responses will now be based on the MathReasoning model
-assistant = autogen.AssistantAgent(name="Math_solver", llm_config=llm_config)
+assistant = AssistantAgent(name="Math_solver", llm_config=llm_config)
 ```
 
 A sample response to `how can I solve 8x + 7 = -23` would be:
