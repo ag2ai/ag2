@@ -5,13 +5,13 @@
 import pytest
 
 from autogen.beta.config.dashscope.mappers import convert_messages
-from autogen.beta.events import BinaryInput, ImageInput
+from autogen.beta.events import BinaryInput, ImageUrlInput
 from autogen.beta.exceptions import UnsupportedInputError
 
 
 def test_image_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="ImageInput.*dashscope"):
-        convert_messages([], [ImageInput(url="https://example.com/img.png")])
+    with pytest.raises(UnsupportedInputError, match="ImageUrlInput.*dashscope"):
+        convert_messages([], [ImageUrlInput(url="https://example.com/img.png")])
 
 
 def test_binary_input_raises() -> None:

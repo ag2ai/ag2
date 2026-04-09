@@ -6,7 +6,7 @@ import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from autogen.beta.events import BaseEvent, BinaryInput, ImageInput, Input, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events import BaseEvent, BinaryInput, ImageUrlInput, Input, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -105,7 +105,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 "content": [{"type": "input_text", "text": message.content}],
             })
 
-        elif isinstance(message, ImageInput):
+        elif isinstance(message, ImageUrlInput):
             result.append({
                 "role": "user",
                 "content": [{"type": "input_image", "image_url": message.url}],
@@ -164,7 +164,7 @@ def convert_messages(
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
     for message in messages:
-        if isinstance(message, ImageInput):
+        if isinstance(message, ImageUrlInput):
             result.append({
                 "role": "user",
                 "content": [{"type": "image_url", "image_url": {"url": message.url}}],

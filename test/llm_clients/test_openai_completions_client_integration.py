@@ -400,7 +400,7 @@ class TestOpenAICompletionsClientStructuredOutput:
         assert "default_field" not in parsed_data  # Not from DefaultModel
 
 
-class TestOpenAICompletionsClientImageInput:
+class TestOpenAICompletionsClientImageUrlInput:
     """Test image input/vision capabilities (from agentchat_oai_responses_image.ipynb)."""
 
     @pytest.mark.openai

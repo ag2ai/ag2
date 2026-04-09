@@ -7,14 +7,14 @@ import base64
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.beta.events import BinaryInput, ImageInput
+from autogen.beta.events import BinaryInput, ImageUrlInput
 
 
-class TestImageInput:
+class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ImageInput(url=self.IMAGE_URL)])
+        result = convert_messages([], [ImageUrlInput(url=self.IMAGE_URL)])
 
         assert result[1] == {
             "role": "user",
@@ -22,7 +22,7 @@ class TestImageInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ImageInput(url=self.IMAGE_URL)])
+        result = events_to_responses_input([ImageUrlInput(url=self.IMAGE_URL)])
 
         assert result == [
             {

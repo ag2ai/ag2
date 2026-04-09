@@ -9,7 +9,7 @@ from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     BinaryInput,
-    ImageInput,
+    ImageUrlInput,
     ModelResponse,
     TextInput,
     ToolCallEvent,
@@ -95,8 +95,8 @@ def test_full_sequence_with_empty_args() -> None:
 
 
 def test_image_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="ImageInput.*anthropic"):
-        convert_messages([ImageInput(url="https://example.com/img.png")])
+    with pytest.raises(UnsupportedInputError, match="ImageUrlInput.*anthropic"):
+        convert_messages([ImageUrlInput(url="https://example.com/img.png")])
 
 
 def test_binary_input_raises() -> None:
