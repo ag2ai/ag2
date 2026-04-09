@@ -8,7 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, overload
 
-from autogen.beta.types import DocumentMediaType, ImageMediaType, MediaType
+from autogen.beta.types import AudioMediaType, DocumentMediaType, ImageMediaType, MediaType
 
 from .base import BaseEvent, Field
 
@@ -54,6 +54,12 @@ class FileIdInput(Input):
 
 class ImageUrlInput(Input):
     """Image input event sent to the model."""
+
+    url: str = Field(kw_only=False)
+
+
+class AudioUrlInput(Input):
+    """Audio URL input event sent to the model."""
 
     url: str = Field(kw_only=False)
 
@@ -186,6 +192,79 @@ def DocumentInput(  # noqa: N802
         return BinaryInput(data, media_type=media_type)
 
     raise ValueError("DocumentInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
+
+
+@overload
+def AudioInput(url: str) -> AudioUrlInput: ...
+
+
+@overload
+def AudioInput(*, file_id: str, filename: str | None = None) -> FileIdInput: ...
+
+
+@overload
+def AudioInput(*, data: bytes, media_type: AudioMediaType) -> BinaryInput: ...
+
+
+@overload
+def AudioInput(*, path: str | PathLike[str], media_type: AudioMediaType | None = None) -> BinaryInput: ...
+
+
+def AudioInput(  # noqa: N802
+    url: str | None = None,
+    *,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: AudioMediaType | None = None,
+    path: str | PathLike[str] | None = None,
+) -> AudioUrlInput | FileIdInput | BinaryInput:
+    """Factory for creating audio input events.
+
+    Usage:
+        AudioInput("https://example.com/audio.wav")            # URL
+        AudioInput(file_id="file-abc123")                      # pre-uploaded file
+        AudioInput(data=raw_bytes, media_type="audio/wav")      # raw binary
+        AudioInput(path="recording.wav")                        # local file
+    """
+    if url is not None:
+        return AudioUrlInput(url)
+
+    if file_id is not None:
+        return FileIdInput(file_id, filename=filename)
+
+    if path is not None:
+        p = Path(path)
+        suffix = p.suffix.lower()
+        resolved_type = _AUDIO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+
+        if resolved_type is None:
+            if media_type is None:
+                raise ValueError(
+                    f"Cannot infer audio media type from extension '{suffix}'. Provide 'media_type' explicitly."
+                )
+
+            resolved_type = media_type
+
+        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
+
+    if data is not None:
+        if media_type is None:
+            raise ValueError("'media_type' is required when using 'data'")
+        return BinaryInput(data, media_type=media_type)
+
+    raise ValueError("AudioInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
+
+
+_AUDIO_EXTENSION_TO_MEDIA_TYPE: dict[str, AudioMediaType] = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aiff": "audio/aiff",
+    ".aif": "audio/aiff",
+    ".aac": "audio/aac",
+}
 
 
 _EXTENSION_TO_MEDIA_TYPE: dict[str, ImageMediaType] = {

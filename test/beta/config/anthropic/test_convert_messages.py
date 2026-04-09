@@ -8,6 +8,7 @@ from dirty_equals import IsPartialDict
 from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
+    AudioUrlInput,
     BinaryInput,
     DocumentUrlInput,
     FileIdInput,
@@ -94,6 +95,11 @@ def test_full_sequence_with_empty_args() -> None:
         "role": "user",
         "content": [IsPartialDict({"type": "tool_result"})],
     })
+
+
+def test_audio_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*anthropic"):
+        convert_messages([AudioUrlInput(url="https://example.com/audio.wav")])
 
 
 def test_image_input_raises() -> None:

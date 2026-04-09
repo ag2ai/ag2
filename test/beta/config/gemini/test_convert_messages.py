@@ -5,7 +5,7 @@
 import pytest
 
 from autogen.beta.config.gemini.mappers import convert_messages
-from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput, ModelResponse
+from autogen.beta.events import AudioUrlInput, BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -36,6 +36,11 @@ class TestConvertMessagesEmptyArguments:
 
         part = result[0].parts[0]
         assert part.function_call.args == {"category": "books"}
+
+
+def test_audio_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*gemini"):
+        convert_messages([AudioUrlInput(url="https://example.com/audio.wav")])
 
 
 def test_image_input_raises() -> None:

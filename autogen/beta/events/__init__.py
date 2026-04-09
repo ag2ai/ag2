@@ -5,6 +5,8 @@
 from .base import BaseEvent, Field
 from .conditions import Condition
 from .input_events import (
+    AudioInput,
+    AudioUrlInput,
     BinaryInput,
     DocumentInput,
     DocumentUrlInput,
@@ -36,6 +38,8 @@ from .types import (
 )
 
 __all__ = (
+    "AudioInput",
+    "AudioUrlInput",
     "BaseEvent",
     "BinaryInput",
     "BuiltinToolCallEvent",

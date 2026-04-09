@@ -5,8 +5,13 @@
 import pytest
 
 from autogen.beta.config.dashscope.mappers import convert_messages
-from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
+from autogen.beta.events import AudioUrlInput, BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
 from autogen.beta.exceptions import UnsupportedInputError
+
+
+def test_audio_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*dashscope"):
+        convert_messages([], [AudioUrlInput(url="https://example.com/audio.wav")])
 
 
 def test_image_input_raises() -> None:

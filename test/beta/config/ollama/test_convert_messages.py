@@ -6,7 +6,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.ollama.mappers import convert_messages
-from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput, ModelResponse
+from autogen.beta.events import AudioUrlInput, BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput, ModelResponse
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -38,6 +38,11 @@ class TestConvertMessagesEmptyArguments:
         assert result[0] == IsPartialDict({
             "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {"category": "books"}})})],
         })
+
+
+def test_audio_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*ollama"):
+        convert_messages([], [AudioUrlInput(url="https://example.com/audio.wav")])
 
 
 def test_image_input_raises() -> None:

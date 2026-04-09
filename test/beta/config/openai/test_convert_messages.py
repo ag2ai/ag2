@@ -8,7 +8,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.beta.events import BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
+from autogen.beta.events import AudioUrlInput, BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
 from autogen.beta.exceptions import UnsupportedInputError
 
 
@@ -60,6 +60,40 @@ class TestFileIdInput:
                 "content": [{"type": "input_file", "file_id": self.FILE_ID, "filename": "report.pdf"}],
             }
         ]
+
+
+class TestAudioUrlInput:
+    AUDIO_URL = "https://example.com/audio.wav"
+
+    def test_completions_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-completions"):
+            convert_messages([], [AudioUrlInput(url=self.AUDIO_URL)])
+
+    def test_responses_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-responses"):
+            events_to_responses_input([AudioUrlInput(url=self.AUDIO_URL)])
+
+
+class TestAudioBinaryInput:
+    SAMPLE_BYTES = b"\x00\x01\x02audio"
+
+    def test_completions(self) -> None:
+        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])
+
+        expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "input_audio", "input_audio": {"data": expected_b64, "format": "wav"}}],
+        }
+
+    def test_completions_mp3(self) -> None:
+        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])
+
+        expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "input_audio", "input_audio": {"data": expected_b64, "format": "mp3"}}],
+        }
 
 
 class TestBinaryInput:

@@ -193,10 +193,17 @@ def convert_messages(
             })
         elif isinstance(message, BinaryInput):
             b64 = base64.b64encode(message.data).decode()
-            data_url = f"data:{message.media_type};base64,{b64}"
-            item: dict[str, Any] = {"type": "image_url", "image_url": {"url": data_url}}
-            item.update(message.vendor_metadata)
-            result.append({"role": "user", "content": [item]})
+            audio_fmt = _MIME_TO_AUDIO_FORMAT.get(message.media_type)
+            if audio_fmt is not None:
+                result.append({
+                    "role": "user",
+                    "content": [{"type": "input_audio", "input_audio": {"data": b64, "format": audio_fmt}}],
+                })
+            else:
+                data_url = f"data:{message.media_type};base64,{b64}"
+                item: dict[str, Any] = {"type": "image_url", "image_url": {"url": data_url}}
+                item.update(message.vendor_metadata)
+                result.append({"role": "user", "content": [item]})
         elif isinstance(message, (TextInput, ModelResponse)):
             result.append(message.to_api())
         elif isinstance(message, Input):
@@ -352,3 +359,13 @@ def _usage_float(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+_MIME_TO_AUDIO_FORMAT: dict[str, str] = {
+    "audio/wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/ogg": "ogg",
+    "audio/flac": "flac",
+    "audio/aiff": "aiff",
+    "audio/aac": "aac",
+}
