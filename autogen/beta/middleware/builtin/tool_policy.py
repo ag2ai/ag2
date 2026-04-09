@@ -4,13 +4,15 @@
 
 """Tool policy middleware -- blocks disallowed tool calls before execution."""
 
-import threading
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolErrorEvent
 from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory, ToolExecution, ToolResultType
 from autogen.beta.tools import ToolResult
+
+OnBlockedCallback = Callable[[ToolCallEvent, str], None]
 
 
 @dataclass
@@ -71,40 +73,39 @@ class _ToolPolicy:
 class ToolPolicyMiddleware(MiddlewareFactory):
     """Factory that creates per-invocation tool policy middleware instances.
 
-    A single ToolPolicyMiddleware shares counters across all instances it
-    creates, so statistics accumulate over the lifetime of the factory.
+    The middleware is stateless: no counters or shared mutable state are
+    retained across invocations. To observe denied calls, pass an
+    ``on_blocked`` callback when constructing the middleware.
 
     Example::
 
-        config = ToolPolicyConfig(
+        def audit(call: ToolCallEvent, reason: str) -> None:
+            logger.info("blocked %s: %s", call.name, reason)
+
+
+        mw = ToolPolicyMiddleware(
             blocked_tools=["delete_all"],
             allowed_tools=["search", "calc"],
+            on_blocked=audit,
         )
-        mw = ToolPolicyMiddleware(config)
         agent = MyAgent(middleware=[mw])
     """
 
-    def __init__(self, config: ToolPolicyConfig | None = None) -> None:
-        self._config = config or ToolPolicyConfig()
+    def __init__(
+        self,
+        blocked_tools: Sequence[str] | None = None,
+        allowed_tools: Sequence[str] | None = None,
+        on_blocked: OnBlockedCallback | None = None,
+    ) -> None:
+        self._config = ToolPolicyConfig(
+            blocked_tools=list(blocked_tools) if blocked_tools else [],
+            allowed_tools=list(allowed_tools) if allowed_tools is not None else None,
+        )
         self._policy = _ToolPolicy(self._config)
-        self._total_tool_calls: int = 0
-        self._total_blocked: int = 0
-        self._lock = threading.Lock()
-
-    @property
-    def total_tool_calls(self) -> int:
-        """Number of tool calls that passed the policy check and were forwarded."""
-        with self._lock:
-            return self._total_tool_calls
-
-    @property
-    def total_blocked(self) -> int:
-        """Number of tool calls that were blocked."""
-        with self._lock:
-            return self._total_blocked
+        self._on_blocked = on_blocked
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        return _ToolPolicyInstance(event, context, self._policy, self)
+        return _ToolPolicyInstance(event, context, self._policy, self._on_blocked)
 
 
 class _ToolPolicyInstance(BaseMiddleware):
@@ -115,11 +116,11 @@ class _ToolPolicyInstance(BaseMiddleware):
         event: "BaseEvent",
         context: "Context",
         policy: _ToolPolicy,
-        factory: ToolPolicyMiddleware,
+        on_blocked: OnBlockedCallback | None,
     ) -> None:
         super().__init__(event, context)
         self._policy = policy
-        self._factory = factory
+        self._on_blocked = on_blocked
 
     async def on_tool_execution(
         self,
@@ -129,10 +130,8 @@ class _ToolPolicyInstance(BaseMiddleware):
     ) -> ToolResultType:
         allowed, reason = self._policy.check(event.name)
         if not allowed:
-            with self._factory._lock:
-                self._factory._total_blocked += 1
+            if self._on_blocked is not None:
+                self._on_blocked(event, reason)
             return _make_tool_error(event, reason)
 
-        with self._factory._lock:
-            self._factory._total_tool_calls += 1
         return await call_next(event, context)

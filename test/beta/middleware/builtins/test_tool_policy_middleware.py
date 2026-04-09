@@ -162,36 +162,98 @@ class TestToolPolicyAdversarial:
 
 
 # ---------------------------------------------------------------------------
-# TestToolPolicyStats
+# TestToolPolicyMiddleware
 # ---------------------------------------------------------------------------
 
 
-class TestToolPolicyStats:
+class TestToolPolicyMiddleware:
+    def test_flat_constructor(self) -> None:
+        # Given arguments passed directly (no explicit config object)
+        mw = ToolPolicyMiddleware(
+            blocked_tools=["delete_all"],
+            allowed_tools=["search"],
+        )
+
+        # Then the internal config is built from those arguments
+        assert mw._config.blocked_tools == ("delete_all",)
+        assert mw._config.allowed_tools == ("search",)
+
+    def test_default_constructor(self) -> None:
+        # Given no arguments
+        mw = ToolPolicyMiddleware()
+
+        # Then defaults are empty blocklist and None allowlist (no restriction)
+        assert mw._config.blocked_tools == ()
+        assert mw._config.allowed_tools is None
+
     @pytest.mark.asyncio()
-    async def test_call_and_blocked_counters(self) -> None:
-        # Given a middleware factory with a blocklist
-        config = ToolPolicyConfig(blocked_tools=["bad_tool"])
-        factory = ToolPolicyMiddleware(config)
+    async def test_on_blocked_callback_fires_on_denial(self) -> None:
+        # Given a middleware with a blocklist and an on_blocked callback
+        recorded: list[tuple[str, str]] = []
+
+        def audit(call: ToolCallEvent, reason: str) -> None:
+            recorded.append((call.name, reason))
+
+        factory = ToolPolicyMiddleware(blocked_tools=["bad_tool"], on_blocked=audit)
 
         ctx = _make_context()
         initial_event = _make_event()
 
-        # Prepare a real ToolResultEvent to return from call_next
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When a blocked call is denied
+        blocked_call = ToolCallEvent(id="c1", name="bad_tool")
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, blocked_call, ctx)
+
+        # Then the callback was invoked with the call and reason, and a ToolErrorEvent was returned
+        assert len(recorded) == 1
+        assert recorded[0][0] == "bad_tool"
+        assert "blocked" in recorded[0][1]
+        assert isinstance(result, ToolErrorEvent)
+
+    @pytest.mark.asyncio()
+    async def test_on_blocked_not_called_when_allowed(self) -> None:
+        # Given a middleware with a callback and an allowed call
+        recorded: list[tuple[str, str]] = []
+
+        def audit(call: ToolCallEvent, reason: str) -> None:
+            recorded.append((call.name, reason))
+
+        factory = ToolPolicyMiddleware(allowed_tools=["good_tool"], on_blocked=audit)
+
+        ctx = _make_context()
+        initial_event = _make_event()
         good_call = ToolCallEvent(id="c1", name="good_tool")
         good_result = ToolResultEvent(parent_id="c1", name="good_tool", result=ToolResult("ok"))
 
         async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
             return good_result
 
-        # When processing one allowed call and one blocked call
-        instance_allow = factory(initial_event, ctx)
-        await instance_allow.on_tool_execution(call_next, good_call, ctx)
+        # When the call passes the policy
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, good_call, ctx)
 
-        blocked_call = ToolCallEvent(id="c2", name="bad_tool")
-        instance_block = factory(initial_event, ctx)
-        result = await instance_block.on_tool_execution(call_next, blocked_call, ctx)
+        # Then the callback was not invoked and the downstream result was returned
+        assert recorded == []
+        assert result is good_result
 
-        # Then counters reflect the activity
-        assert factory.total_tool_calls == 1
-        assert factory.total_blocked == 1
+    @pytest.mark.asyncio()
+    async def test_no_callback_means_no_error(self) -> None:
+        # Given a middleware without an on_blocked callback
+        factory = ToolPolicyMiddleware(blocked_tools=["bad_tool"])
+
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When a blocked call is denied without a callback
+        blocked_call = ToolCallEvent(id="c1", name="bad_tool")
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, blocked_call, ctx)
+
+        # Then denial still works, just without observation
         assert isinstance(result, ToolErrorEvent)
