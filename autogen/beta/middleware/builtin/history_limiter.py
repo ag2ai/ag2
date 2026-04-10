@@ -5,8 +5,7 @@
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse, ToolResultsEvent
-from autogen.beta.events.input_events import Input
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
@@ -37,7 +36,7 @@ class _HistoryLimiter(BaseMiddleware):
             return await call_next(events, context)
 
         first = events[0]
-        if isinstance(first, Input):
+        if isinstance(first, ModelRequest):
             if self._max_events == 1:
                 trimmed: Sequence[BaseEvent] = [first]
             else:

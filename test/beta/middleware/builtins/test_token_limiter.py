@@ -10,6 +10,7 @@ from autogen.beta import Context
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
@@ -23,7 +24,7 @@ from autogen.beta.middleware import TokenLimiter
 @pytest.mark.asyncio()
 async def test_token_limiter_passes_events_through_when_within_budget(mock: MagicMock) -> None:
     events = [
-        TextInput("hello"),
+        ModelRequest([TextInput("hello")]),
         ModelResponse(ModelMessage("world")),
     ]
     middleware = TokenLimiter(max_tokens=10_000)(events[-1], mock)
@@ -40,7 +41,7 @@ async def test_token_limiter_passes_events_through_when_within_budget(mock: Magi
 @pytest.mark.asyncio()
 async def test_token_limiter_keeps_first_request_while_trimming(mock: MagicMock) -> None:
     events = [
-        TextInput("keep-me"),
+        ModelRequest([TextInput("keep-me")]),
         ModelResponse(ModelMessage("drop-me-1")),
         ModelResponse(ModelMessage("drop-me-2")),
         ModelResponse(ModelMessage("keep-me-too")),
@@ -54,7 +55,7 @@ async def test_token_limiter_keeps_first_request_while_trimming(mock: MagicMock)
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
-        TextInput("keep-me"),
+        ModelRequest([TextInput("keep-me")]),
         ModelResponse(ModelMessage("keep-me-too")),
     ])
 
@@ -81,11 +82,11 @@ async def test_token_limiter_trims_from_front_without_initial_request(mock: Magi
 async def test_token_limiter_drops_tool_results_without_parent_message(mock: MagicMock) -> None:
     tool_call = ToolCallEvent(id="tool-call-1", name="lookup", arguments="{}")
     events = [
-        TextInput("turn 1"),
+        ModelRequest([TextInput("turn 1")]),
         ModelResponse(tool_calls=ToolCallsEvent([tool_call])),
         ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(ModelMessage("answer 1")),
-        TextInput("turn 2"),
+        ModelRequest([TextInput("turn 2")]),
     ]
     budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[0], events[2], events[3], events[4]])
     middleware = TokenLimiter(max_tokens=budget_after_dropping_tool_call, chars_per_token=1)(events[-1], mock)
@@ -97,9 +98,9 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
-        TextInput("turn 1"),
+        ModelRequest([TextInput("turn 1")]),
         ModelResponse(ModelMessage("answer 1")),
-        TextInput("turn 2"),
+        ModelRequest([TextInput("turn 2")]),
     ])
 
 

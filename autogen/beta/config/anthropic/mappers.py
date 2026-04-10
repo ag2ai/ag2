@@ -6,8 +6,7 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import Input
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -172,10 +171,13 @@ def convert_messages(
     result: list[dict[str, Any]] = []
 
     for message in messages:
-        if isinstance(message, TextInput):
-            result.append(message.to_api())
-        elif isinstance(message, Input):
-            raise UnsupportedInputError(type(message).__name__, "anthropic")
+        if isinstance(message, ModelRequest):
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "anthropic")
+
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
@@ -189,6 +191,7 @@ def convert_messages(
                 })
             if content:
                 result.append({"role": "assistant", "content": content})
+
         elif isinstance(message, ToolResultsEvent):
             tool_results = [
                 {

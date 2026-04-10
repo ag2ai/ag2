@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context, Depends, Inject, Variable, observer
-from autogen.beta.events import ModelResponse, TextInput, ToolCallEvent
+from autogen.beta.events import ModelRequest, ModelResponse, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 
@@ -60,7 +60,7 @@ async def test_multiple_observers(
         "",
         config=test_config,
         observers=[
-            observer(TextInput, mock.request),
+            observer(ModelRequest, mock.request),
             observer(ModelResponse, mock.response),
         ],
     )

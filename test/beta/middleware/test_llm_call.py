@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ModelResponse, TextInput
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput
 from autogen.beta.middleware import AgentTurn, BaseMiddleware, LLMCall, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 
@@ -70,7 +70,7 @@ class TestLLMCallMiddleware:
 
         await agent.ask("Hi!")
 
-        mock.enter.assert_called_once_with(TextInput("Hi!"))
+        mock.enter.assert_called_once_with(ModelRequest([TextInput("Hi!")]))
         mock.exit.assert_called_once()
 
     @pytest.mark.asyncio()
@@ -97,8 +97,10 @@ class TestLLMCallMiddleware:
                 events: Sequence[BaseEvent],
                 ctx: Context,
             ) -> ModelResponse:
-                if isinstance(events[-1], TextInput):
-                    events[-1] = TextInput(events[-1].content * 2)
+                last = events[-1]
+                if isinstance(last, ModelRequest) and isinstance(last.inputs[0], TextInput):
+                    doubled = TextInput(last.inputs[0].content * 2)
+                    events[-1] = ModelRequest([doubled])
                 return await call_next(events, ctx)
 
         agent = Agent(
@@ -109,4 +111,4 @@ class TestLLMCallMiddleware:
 
         await agent.ask("1")
 
-        tracking_config.mock.assert_called_once_with(TextInput("1" * (2**3)))
+        tracking_config.mock.assert_called_once_with(ModelRequest([TextInput("1" * (2**3))]))

@@ -6,7 +6,15 @@ import json
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
+from autogen.beta.events import (
+    BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+)
 from autogen.beta.middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -143,7 +151,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([e.to_api() for e in events if hasattr(e, "to_api")])
+                input_messages = json.dumps([
+                    inp.to_api()
+                    for event in events
+                    if isinstance(event, ModelRequest)
+                    for inp in event.inputs
+                    if isinstance(inp, TextInput)
+                ])
                 span.set_attribute("gen_ai.input.messages", input_messages)
 
             try:

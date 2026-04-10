@@ -13,6 +13,7 @@ from autogen.beta.events import (
     DocumentUrlInput,
     FileIdInput,
     ImageUrlInput,
+    ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
@@ -72,7 +73,7 @@ class TestConvertMessagesEmptyArguments:
 def test_full_sequence_with_empty_args() -> None:
     """A request -> response-with-tool-call -> tool-result sequence should convert cleanly."""
     events = [
-        TextInput("What items do we have?"),
+        ModelRequest([TextInput("What items do we have?")]),
         _model_response_with_tool_call(""),
         ToolResultsEvent(
             results=[
@@ -99,24 +100,24 @@ def test_full_sequence_with_empty_args() -> None:
 
 def test_audio_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*anthropic"):
-        convert_messages([AudioUrlInput(url="https://example.com/audio.wav")])
+        convert_messages([ModelRequest([AudioUrlInput(url="https://example.com/audio.wav")])])
 
 
 def test_image_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="ImageUrlInput.*anthropic"):
-        convert_messages([ImageUrlInput(url="https://example.com/img.png")])
+        convert_messages([ModelRequest([ImageUrlInput(url="https://example.com/img.png")])])
 
 
 def test_file_id_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput.*anthropic"):
-        convert_messages([FileIdInput(file_id="file-abc123")])
+        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])])
 
 
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*anthropic"):
-        convert_messages([BinaryInput(data=b"data", media_type="image/png")])
+        convert_messages([ModelRequest([BinaryInput(data=b"data", media_type="image/png")])])
 
 
 def test_document_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*anthropic"):
-        convert_messages([DocumentUrlInput(url="https://example.com/doc.pdf")])
+        convert_messages([ModelRequest([DocumentUrlInput(url="https://example.com/doc.pdf")])])

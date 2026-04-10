@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable
 from enum import Enum
 from os import PathLike
 from pathlib import Path
@@ -22,6 +23,16 @@ class Input(BaseEvent):
         if isinstance(content, Input):
             return content
         return TextInput(content)
+
+
+class ModelRequest(BaseEvent):
+    """Event representing a user turn sent to the model, containing one or more inputs."""
+
+    inputs: "list[Input]" = Field(kw_only=False)
+
+    @classmethod
+    def ensure_request(cls, msgs: "Iterable[str | Input]") -> "ModelRequest":
+        return cls([Input.ensure_input(m) for m in msgs])
 
 
 class TextInput(Input):

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, TextInput
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.middleware import AgentTurn, BaseMiddleware, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 
@@ -49,7 +49,7 @@ class TestAgentTurnMiddleware:
 
         await agent.ask("Hi!")
 
-        mock.create.assert_called_once_with(TextInput("Hi!"))
+        mock.create.assert_called_once_with(ModelRequest([TextInput("Hi!")]))
 
     @pytest.mark.asyncio()
     async def test_chaining(self, mock: MagicMock) -> None:
@@ -75,8 +75,8 @@ class TestAgentTurnMiddleware:
                 event: BaseEvent,
                 ctx: Context,
             ) -> ModelResponse:
-                if isinstance(event, TextInput):
-                    event = TextInput(event.content * 2)
+                if isinstance(event, ModelRequest) and isinstance(event.inputs[0], TextInput):
+                    event = ModelRequest([TextInput(event.inputs[0].content * 2)])
                 result = await call_next(event, ctx)
                 return ModelResponse(ModelMessage(result.content * 2))
 
@@ -88,5 +88,5 @@ class TestAgentTurnMiddleware:
 
         result = await agent.ask("1")
 
-        tracking_config.mock.assert_called_once_with(TextInput("1" * (2**3)))
+        tracking_config.mock.assert_called_once_with(ModelRequest([TextInput("1" * (2**3))]))
         assert result.body == "2" * (2**3)

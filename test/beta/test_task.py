@@ -15,10 +15,10 @@ from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
     TaskCompleted,
     TaskStarted,
-    TextInput,
 )
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
@@ -64,9 +64,9 @@ class TestRunTask:
 
         assert result.completed is True
         events = list(await result.stream.history.get_events())
-        request = [e for e in events if isinstance(e, TextInput)][0]
-        assert "## Context" in request.content
-        assert "Here is some data" in request.content
+        request = [e for e in events if isinstance(e, ModelRequest)][0]
+        assert "## Context" in request.inputs[0].content
+        assert "Here is some data" in request.inputs[0].content
 
     @pytest.mark.asyncio
     async def test_failure(self):
@@ -93,7 +93,7 @@ class TestRunTask:
         assert result.stream is custom_stream
         events = list(await custom_stream.history.get_events())
         assert len(events) > 0
-        assert any(isinstance(e, TextInput) for e in events)
+        assert any(isinstance(e, ModelRequest) for e in events)
 
     @pytest.mark.asyncio
     async def test_with_dependencies(self):
@@ -195,8 +195,8 @@ class TestSpecialistDelegation:
         events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
-        request = [e for e in sub_events if isinstance(e, TextInput)][0]
-        assert "Focus on recent papers" in request.content
+        request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
+        assert "Focus on recent papers" in request.inputs[0].content
 
     @pytest.mark.asyncio
     async def test_with_tools(self):
@@ -351,7 +351,7 @@ class TestLifecycleEvents:
         assert completed.task_stream is not None
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         assert len(sub_events) > 0
-        assert any(isinstance(e, TextInput) for e in sub_events)
+        assert any(isinstance(e, ModelRequest) for e in sub_events)
         assert any(isinstance(e, ModelResponse) for e in sub_events)
 
     @pytest.mark.asyncio
@@ -412,7 +412,7 @@ class TestStreamFactory:
 
         assert len(streams_created) == 1
         events = list(await streams_created[0].history.get_events())
-        assert any(isinstance(e, TextInput) for e in events)
+        assert any(isinstance(e, ModelRequest) for e in events)
 
     @pytest.mark.asyncio
     async def test_multiple_calls(self):
@@ -446,10 +446,10 @@ class TestStreamFactory:
         assert len(streams_created) == 2
         events_a = list(await streams_created[0].history.get_events())
         events_b = list(await streams_created[1].history.get_events())
-        requests_a = [e for e in events_a if isinstance(e, TextInput)]
-        requests_b = [e for e in events_b if isinstance(e, TextInput)]
-        assert "Task A" in requests_a[0].content
-        assert "Task B" in requests_b[0].content
+        requests_a = [e for e in events_a if isinstance(e, ModelRequest)]
+        requests_b = [e for e in events_b if isinstance(e, ModelRequest)]
+        assert "Task A" in requests_a[0].inputs[0].content
+        assert "Task B" in requests_b[0].inputs[0].content
 
     @pytest.mark.asyncio
     async def test_defaults_to_memory_stream(self):

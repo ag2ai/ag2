@@ -5,8 +5,7 @@
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse, ToolResultsEvent
-from autogen.beta.events.input_events import Input
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 
@@ -54,7 +53,7 @@ class _TokenLimiter(BaseMiddleware):
         if sum(event_lengths) <= self._max_chars:
             return await call_next(events, context)
 
-        prefix_length = 1 if isinstance(events[0], Input) else 0
+        prefix_length = 1 if isinstance(events[0], ModelRequest) else 0
         current_chars = event_lengths[0] if prefix_length else 0
         retained_start = len(events)
 

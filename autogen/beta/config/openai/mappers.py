@@ -16,7 +16,7 @@ from autogen.beta.events import (
     DocumentUrlInput,
     FileIdInput,
     ImageUrlInput,
-    Input,
+    ModelRequest,
     ModelResponse,
     TextInput,
     ToolResultsEvent,
@@ -113,44 +113,37 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
     result: list[dict[str, Any]] = []
 
     for message in messages:
-        if isinstance(message, TextInput):
-            result.append({
-                "role": "user",
-                "content": [{"type": "input_text", "text": message.content}],
-            })
+        if isinstance(message, ModelRequest):
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    result.append({"role": "user", "content": [{"type": "input_text", "text": inp.content}]})
 
-        elif isinstance(message, ImageUrlInput):
-            result.append({
-                "role": "user",
-                "content": [{"type": "input_image", "image_url": message.url}],
-            })
+                elif isinstance(inp, ImageUrlInput):
+                    result.append({"role": "user", "content": [{"type": "input_image", "image_url": inp.url}]})
 
-        elif isinstance(message, DocumentUrlInput):
-            result.append({
-                "role": "user",
-                "content": [{"type": "input_file", "file_url": message.url}],
-            })
+                elif isinstance(inp, DocumentUrlInput):
+                    result.append({"role": "user", "content": [{"type": "input_file", "file_url": inp.url}]})
 
-        elif isinstance(message, FileIdInput):
-            item: dict[str, Any] = {"type": "input_file", "file_id": message.file_id}
-            if message.filename is not None:
-                item["filename"] = message.filename
-            result.append({
-                "role": "user",
-                "content": [item],
-            })
+                elif isinstance(inp, FileIdInput):
+                    item: dict[str, Any] = {"type": "input_file", "file_id": inp.file_id}
+                    if inp.filename is not None:
+                        item["filename"] = inp.filename
+                    result.append({
+                        "role": "user",
+                        "content": [item],
+                    })
 
-        elif isinstance(message, BinaryInput):
-            b64 = base64.b64encode(message.data).decode()
-            item: dict[str, Any] = {
-                "type": "input_file",
-                "file_data": f"data:{message.media_type};base64,{b64}",
-                **message.vendor_metadata,
-            }
-            result.append({"role": "user", "content": [item]})
+                elif isinstance(inp, BinaryInput):
+                    b64 = base64.b64encode(inp.data).decode()
+                    item: dict[str, Any] = {
+                        "type": "input_file",
+                        "file_data": f"data:{inp.media_type};base64,{b64}",
+                        **inp.vendor_metadata,
+                    }
+                    result.append({"role": "user", "content": [item]})
 
-        elif isinstance(message, Input):
-            raise UnsupportedInputError(type(message).__name__, "openai-responses")
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "openai-responses")
 
         elif isinstance(message, ModelResponse):
             # Reconstruct assistant message
@@ -190,27 +183,37 @@ def convert_messages(
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
     for message in messages:
-        if isinstance(message, ImageUrlInput):
-            result.append({
-                "role": "user",
-                "content": [{"type": "image_url", "image_url": {"url": message.url}}],
-            })
-        elif isinstance(message, BinaryInput):
-            if message.kind == BinaryType.AUDIO:
-                b64 = base64.b64encode(message.data).decode()
-                fmt = _MIME_TO_AUDIO_FORMAT.get(message.media_type, message.media_type.split("/", 1)[1])
-                item: dict[str, Any] = {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}}
-            elif message.kind == BinaryType.IMAGE:
-                b64 = base64.b64encode(message.data).decode()
-                data_url = f"data:{message.media_type};base64,{b64}"
-                item = {"type": "image_url", "image_url": {"url": data_url}, **message.vendor_metadata}
-            else:
-                raise UnsupportedInputError(type(message).__name__, "openai-completions")
-            result.append({"role": "user", "content": [item]})
-        elif isinstance(message, (TextInput, ModelResponse)):
+        if isinstance(message, ModelRequest):
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+
+                if isinstance(inp, ImageUrlInput):
+                    result.append({
+                        "role": "user",
+                        "content": [{"type": "image_url", "image_url": {"url": inp.url}}],
+                    })
+
+                elif isinstance(inp, BinaryInput):
+                    if inp.kind == BinaryType.AUDIO:
+                        b64 = base64.b64encode(inp.data).decode()
+                        fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type, inp.media_type.split("/", 1)[1])
+                        item: dict[str, Any] = {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}}
+                    elif inp.kind == BinaryType.IMAGE:
+                        b64 = base64.b64encode(inp.data).decode()
+                        data_url = f"data:{inp.media_type};base64,{b64}"
+                        item = {"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata}
+                    else:
+                        raise UnsupportedInputError(type(inp).__name__, "openai-completions")
+
+                    result.append({"role": "user", "content": [item]})
+
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "openai-completions")
+
+        elif isinstance(message, ModelResponse):
             result.append(message.to_api())
-        elif isinstance(message, Input):
-            raise UnsupportedInputError(type(message).__name__, "openai-completions")
+
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append(r.to_api())

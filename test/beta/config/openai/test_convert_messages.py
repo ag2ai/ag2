@@ -17,6 +17,7 @@ from autogen.beta.events import (
     FileIdInput,
     ImageInput,
     ImageUrlInput,
+    ModelRequest,
 )
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -25,7 +26,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ImageUrlInput(url=self.IMAGE_URL)])
+        result = convert_messages([], [ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
 
         assert result[1] == {
             "role": "user",
@@ -33,7 +34,7 @@ class TestImageUrlInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ImageUrlInput(url=self.IMAGE_URL)])
+        result = events_to_responses_input([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
 
         assert result == [
             {
@@ -48,10 +49,10 @@ class TestFileIdInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="FileIdInput.*openai-completions"):
-            convert_messages([], [FileIdInput(file_id=self.FILE_ID)])
+            convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([FileIdInput(file_id=self.FILE_ID)])
+        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
 
         assert result == [
             {
@@ -61,7 +62,7 @@ class TestFileIdInput:
         ]
 
     def test_responses_with_filename(self) -> None:
-        result = events_to_responses_input([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])
+        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
 
         assert result == [
             {
@@ -76,18 +77,18 @@ class TestAudioUrlInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-completions"):
-            convert_messages([], [AudioUrlInput(url=self.AUDIO_URL)])
+            convert_messages([], [ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
 
     def test_responses_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-responses"):
-            events_to_responses_input([AudioUrlInput(url=self.AUDIO_URL)])
+            events_to_responses_input([ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
 
 
 class TestAudioBinaryInput:
     SAMPLE_BYTES = b"\x00\x01\x02audio"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])
+        result = convert_messages([], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])])
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -96,7 +97,7 @@ class TestAudioBinaryInput:
         }
 
     def test_completions_mp3(self) -> None:
-        result = convert_messages([], [AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])
+        result = convert_messages([], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])])
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -109,7 +110,7 @@ class TestBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+        result = convert_messages([], [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])])
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result[1] == {
@@ -121,12 +122,14 @@ class TestBinaryInput:
         result = convert_messages(
             [],
             [
-                BinaryInput(
-                    data=self.SAMPLE_BYTES,
-                    media_type="image/png",
-                    vendor_metadata={"detail": "low"},
-                    kind=BinaryType.IMAGE,
-                )
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="image/png",
+                        vendor_metadata={"detail": "low"},
+                        kind=BinaryType.IMAGE,
+                    )
+                ])
             ],
         )
 
@@ -136,7 +139,9 @@ class TestBinaryInput:
         })
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+        result = events_to_responses_input([
+            ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+        ])
 
         expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
@@ -148,7 +153,13 @@ class TestBinaryInput:
 
     def test_responses_with_vendor_metadata(self) -> None:
         result = events_to_responses_input(
-            [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"filename": "test.png"})],
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"filename": "test.png"}
+                    )
+                ])
+            ],
         )
 
         assert result == [
@@ -164,10 +175,10 @@ class TestDocumentUrlInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*openai-completions"):
-            convert_messages([], [DocumentUrlInput(url=self.DOC_URL)])
+            convert_messages([], [ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([DocumentUrlInput(url=self.DOC_URL)])
+        result = events_to_responses_input([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
 
         assert result == [
             {

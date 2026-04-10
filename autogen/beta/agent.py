@@ -24,6 +24,7 @@ from .events import (
     BaseEvent,
     HumanInputRequest,
     Input,
+    ModelRequest,
     ModelResponse,
     ToolResultsEvent,
 )
@@ -129,8 +130,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -145,8 +145,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -161,8 +160,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -177,8 +175,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -191,8 +188,7 @@ class AgentReply(Generic[TResult, TAgent]):
 
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         prompt: Iterable[str] = (),
@@ -203,7 +199,7 @@ class AgentReply(Generic[TResult, TAgent]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        initial_event = Input.ensure_input(msg)
+        initial_event = ModelRequest.ensure_request(list(msg))
 
         context = self.context
         if dependencies:
@@ -325,7 +321,7 @@ class Agent(Generic[TResult]):
         self.__tool_executor = ToolExecutor()
 
         self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[Callable[[Input, Context], Awaitable[str]]] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
@@ -458,8 +454,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -524,8 +519,7 @@ class Agent(Generic[TResult]):
 
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -544,7 +538,7 @@ class Agent(Generic[TResult]):
 
         stream = stream or MemoryStream()
 
-        initial_event = Input.ensure_input(msg)
+        initial_event = ModelRequest.ensure_request(msg)
 
         context = Context(
             stream,
@@ -637,7 +631,7 @@ class Agent(Generic[TResult]):
 
         with ExitStack() as stack:
             stack.enter_context(
-                context.stream.where(Input | ToolResultsEvent).sub_scope(_call_client),
+                context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
             )
 
             hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
@@ -715,10 +709,10 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     return message
 
 
-def _wrap_prompt_hook(func: PromptHook) -> Callable[[Input, Context], Awaitable[str]]:
+def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awaitable[str]]:
     call_model = build_model(func)
 
-    async def wrapper(event: Input, context: Context) -> str:
+    async def wrapper(event: ModelRequest, context: Context) -> str:
         async with AsyncExitStack() as stack:
             r = await call_model.asolve(
                 event,
