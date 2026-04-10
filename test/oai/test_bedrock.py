@@ -2563,3 +2563,363 @@ def test_parsing_params_additional_model_request_fields_with_none_values(bedrock
         except json.JSONDecodeError:
             # If not JSON, verify it contains expected content
             assert "answer" in content.lower() or "x =" in content.lower()
+
+
+# ============================================================================
+# Prompt Caching Tests
+# ============================================================================
+
+
+@pytest.fixture
+def bedrock_client_with_caching():
+    """Create a BedrockClient with prompt caching enabled."""
+    client = BedrockClient(
+        aws_region="us-east-1",
+        prompt_caching=True,
+        prompt_cache_ttl="5m",
+    )
+    client._supports_system_prompts = True
+    return client
+
+
+@pytest.fixture
+def bedrock_client_auto_caching():
+    """Create a BedrockClient with auto prompt caching."""
+    client = BedrockClient(
+        aws_region="us-east-1",
+        prompt_caching="auto",
+    )
+    client._supports_system_prompts = True
+    return client
+
+
+# Test 1: Caching config initialization
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_prompt_caching_initialization():
+    client = BedrockClient(aws_region="us-east-1", prompt_caching=True, prompt_cache_ttl="1h")
+    assert client._prompt_caching is True
+    assert client._prompt_cache_ttl == "1h"
+
+
+# Test 2: Caching disabled by default
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_prompt_caching_disabled_by_default():
+    client = BedrockClient(aws_region="us-east-1")
+    assert client._prompt_caching is None
+    assert client._prompt_cache_ttl is None
+    assert client._should_use_caching() is False
+
+
+# Test 3: Auto caching with supported model
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_prompt_caching_auto_supported_model(bedrock_client_auto_caching: BedrockClient):
+    bedrock_client_auto_caching._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    assert bedrock_client_auto_caching._should_use_caching() is True
+
+
+# Test 4: Auto caching with unsupported model
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_prompt_caching_auto_unsupported_model(bedrock_client_auto_caching: BedrockClient):
+    bedrock_client_auto_caching._model_id = "meta.llama3-8b-instruct-v1:0"
+    assert bedrock_client_auto_caching._should_use_caching() is False
+
+
+# Test 5: Explicit caching enabled
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_prompt_caching_explicit_true(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._model_id = "meta.llama3-8b-instruct-v1:0"
+    assert bedrock_client_with_caching._should_use_caching() is True
+
+
+# Test 6: Model support detection
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_is_cache_supported(bedrock_client_with_caching: BedrockClient):
+    assert bedrock_client_with_caching._is_cache_supported("anthropic.claude-sonnet-4-5-20250929-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("anthropic.claude-opus-4-5-20250929-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("anthropic.claude-3-7-sonnet-20250219-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("anthropic.claude-3-5-haiku-20241022-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("amazon.nova-pro-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("amazon.nova-micro-v1:0") is True
+    assert bedrock_client_with_caching._is_cache_supported("meta.llama3-8b-instruct-v1:0") is False
+    assert bedrock_client_with_caching._is_cache_supported("mistral.mistral-large-2402-v1:0") is False
+
+
+# Test 7: Cache point generation with default TTL
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_cache_point_default(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._prompt_cache_ttl = None
+    cache_point = bedrock_client_with_caching._get_cache_point()
+    assert cache_point == {"cachePoint": {"type": "default"}}
+
+
+# Test 8: Cache point generation with 5m TTL
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_cache_point_5m_ttl(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._prompt_cache_ttl = "5m"
+    cache_point = bedrock_client_with_caching._get_cache_point()
+    assert cache_point == {"cachePoint": {"type": "default", "ttl": "5m"}}
+
+
+# Test 9: Cache point generation with 1h TTL
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_cache_point_1h_ttl(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._prompt_cache_ttl = "1h"
+    cache_point = bedrock_client_with_caching._get_cache_point("anthropic.claude-sonnet-4-5-20250929-v1:0")
+    assert cache_point == {"cachePoint": {"type": "default", "ttl": "1h"}}
+
+
+# Test 10: 1h TTL fallback for unsupported model
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_cache_point_1h_ttl_fallback(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._prompt_cache_ttl = "1h"
+    with pytest.warns(UserWarning, match="does not support 1h TTL"):
+        cache_point = bedrock_client_with_caching._get_cache_point("anthropic.claude-3-7-sonnet-20250219-v1:0")
+    assert cache_point == {"cachePoint": {"type": "default", "ttl": "5m"}}
+
+
+# Test 11: System message cache injection
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_inject_cache_points_system(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    bedrock_client_with_caching._prompt_cache_ttl = None
+    system_messages = [{"text": "You are a helpful assistant."}]
+    result = bedrock_client_with_caching._inject_cache_points_system(system_messages)
+    assert len(result) == 2
+    assert result[0] == {"text": "You are a helpful assistant."}
+    assert result[1] == {"cachePoint": {"type": "default"}}
+
+
+# Test 12: Empty system message cache injection
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_inject_cache_points_system_empty(bedrock_client_with_caching: BedrockClient):
+    result = bedrock_client_with_caching._inject_cache_points_system([])
+    assert result == []
+
+
+# Test 13: Message cache injection
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_inject_cache_points_messages(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    bedrock_client_with_caching._prompt_cache_ttl = None
+    messages = [
+        {"role": "user", "content": [{"text": "Hello"}]},
+        {"role": "assistant", "content": [{"text": "Hi there!"}]},
+        {"role": "user", "content": [{"text": "Tell me about caching."}]},
+    ]
+    result = bedrock_client_with_caching._inject_cache_points_messages(messages)
+    # Cache point should be added to the last user message
+    assert len(result) == 3
+    assert result[2]["content"][-1] == {"cachePoint": {"type": "default"}}
+    # First user message should not be modified
+    assert len(result[0]["content"]) == 1
+
+
+# Test 14: Tool config cache injection
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_inject_cache_points_tools(bedrock_client_with_caching: BedrockClient):
+    bedrock_client_with_caching._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    bedrock_client_with_caching._prompt_cache_ttl = None
+    tool_config = {
+        "tools": [
+            {"toolSpec": {"name": "calculator", "description": "A calculator", "inputSchema": {"json": {}}}}
+        ]
+    }
+    result = bedrock_client_with_caching._inject_cache_points_tools(tool_config)
+    assert len(result["tools"]) == 2
+    assert result["tools"][-1] == {"cachePoint": {"type": "default"}}
+
+
+# Test 15: Tool config cache injection with empty tools
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_inject_cache_points_tools_empty(bedrock_client_with_caching: BedrockClient):
+    result = bedrock_client_with_caching._inject_cache_points_tools({"tools": []})
+    assert result == {"tools": []}
+
+
+# Test 16: Full create flow with caching enabled
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@patch("autogen.oai.bedrock.BedrockClient.__init__", return_value=None)
+def test_create_with_prompt_caching(mock_init):
+    client = BedrockClient.__new__(BedrockClient)
+    client._prompt_caching = True
+    client._prompt_cache_ttl = "5m"
+    client._supports_system_prompts = True
+    client._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    client._response_format = None
+
+    mock_response = {
+        "stopReason": "end_turn",
+        "output": {"message": {"content": [{"text": "Hello from cache!"}]}},
+        "usage": {
+            "inputTokens": 100,
+            "outputTokens": 50,
+            "totalTokens": 150,
+            "cacheReadInputTokens": 80,
+            "cacheWriteInputTokens": 20,
+        },
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+
+    client.bedrock_runtime = MagicMock()
+    client.bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "messages": [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+        ],
+    }
+
+    response = client.create(params)
+
+    # Verify cache metrics are in usage
+    assert response.usage.prompt_tokens == 100
+    assert response.usage.completion_tokens == 50
+    assert response.usage.prompt_tokens_details is not None
+    assert response.usage.prompt_tokens_details.cached_tokens == 80
+    assert response.usage._cache_creation_input_tokens == 20
+
+    # Verify the converse call included cache points
+    call_args = client.bedrock_runtime.converse.call_args
+    call_kwargs = call_args[1] if call_args[1] else call_args[0]
+
+    # System should have cache point
+    system = call_kwargs.get("system", [])
+    assert any("cachePoint" in item for item in system), "System messages should contain a cachePoint"
+
+    # Messages should have cache point on the last user message
+    messages = call_kwargs.get("messages", [])
+    last_user = None
+    for msg in messages:
+        if msg.get("role") == "user":
+            last_user = msg
+    assert last_user is not None
+    assert any("cachePoint" in item for item in last_user["content"]), (
+        "Last user message should contain a cachePoint"
+    )
+
+
+# Test 17: get_usage includes cache metrics
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_usage_with_cache_metrics():
+    from autogen.oai.oai_models.completion_usage import PromptTokensDetails
+
+    mock_response = MagicMock()
+    mock_response.usage.prompt_tokens = 100
+    mock_response.usage.completion_tokens = 50
+    mock_response.usage.total_tokens = 150
+    mock_response.usage.prompt_tokens_details = PromptTokensDetails(cached_tokens=80)
+    mock_response.usage._cache_creation_input_tokens = 20
+    mock_response.cost = 0.01
+    mock_response.model = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+    usage = BedrockClient.get_usage(mock_response)
+    assert usage["prompt_tokens"] == 100
+    assert usage["completion_tokens"] == 50
+    assert usage["cache_read_input_tokens"] == 80
+    assert usage["cache_creation_input_tokens"] == 20
+
+
+# Test 18: get_usage without cache metrics
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_usage_without_cache_metrics():
+    mock_response = MagicMock()
+    mock_response.usage.prompt_tokens = 100
+    mock_response.usage.completion_tokens = 50
+    mock_response.usage.total_tokens = 150
+    mock_response.usage.prompt_tokens_details = None
+    mock_response.cost = 0.01
+    mock_response.model = "meta.llama3-8b-instruct-v1:0"
+    # No _cache_creation_input_tokens attribute
+    del mock_response.usage._cache_creation_input_tokens
+
+    usage = BedrockClient.get_usage(mock_response)
+    assert "cache_read_input_tokens" not in usage
+    assert "cache_creation_input_tokens" not in usage
+
+
+# Test 19: LLMConfigEntry with caching params
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_bedrock_llm_config_entry_with_caching():
+    config = BedrockLLMConfigEntry(
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+        aws_region="us-east-1",
+        prompt_caching=True,
+        prompt_cache_ttl="1h",
+    )
+    dumped = config.model_dump()
+    assert dumped["prompt_caching"] is True
+    assert dumped["prompt_cache_ttl"] == "1h"
+
+
+# Test 20: LLMConfigEntry caching defaults
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_bedrock_llm_config_entry_caching_defaults():
+    config = BedrockLLMConfigEntry(
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+        aws_region="us-east-1",
+    )
+    dumped = config.model_dump()
+    assert dumped.get("prompt_caching") is None
+    assert dumped.get("prompt_cache_ttl") is None
+
+
+# Test 21: Create without caching does not inject cache points
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@patch("autogen.oai.bedrock.BedrockClient.__init__", return_value=None)
+def test_create_without_caching_no_cache_points(mock_init):
+    client = BedrockClient.__new__(BedrockClient)
+    client._prompt_caching = None
+    client._prompt_cache_ttl = None
+    client._supports_system_prompts = True
+    client._model_id = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    client._response_format = None
+
+    mock_response = {
+        "stopReason": "end_turn",
+        "output": {"message": {"content": [{"text": "No cache"}]}},
+        "usage": {"inputTokens": 50, "outputTokens": 25, "totalTokens": 75},
+        "ResponseMetadata": {"RequestId": "test-no-cache"},
+    }
+
+    client.bedrock_runtime = MagicMock()
+    client.bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "messages": [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+        ],
+    }
+
+    response = client.create(params)
+
+    call_kwargs = client.bedrock_runtime.converse.call_args[1]
+    system = call_kwargs.get("system", [])
+    messages = call_kwargs.get("messages", [])
+
+    # No cache points should be present
+    for item in system:
+        assert "cachePoint" not in item
+    for msg in messages:
+        if isinstance(msg.get("content"), list):
+            for item in msg["content"]:
+                assert "cachePoint" not in item
+
+
+# Test 22: parse_params excludes caching fields from inference params
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_parse_params_excludes_caching_fields(bedrock_client_with_caching: BedrockClient):
+    base_params, additional_params = bedrock_client_with_caching.parse_params({
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "prompt_caching": True,
+        "prompt_cache_ttl": "5m",
+        "temperature": 0.7,
+    })
+    assert "prompt_caching" not in base_params
+    assert "prompt_caching" not in additional_params
+    assert "prompt_cache_ttl" not in base_params
+    assert "prompt_cache_ttl" not in additional_params
+    assert base_params["temperature"] == 0.7

@@ -46,6 +46,7 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
+from .oai_models.completion_usage import PromptTokensDetails
 
 with optional_import_block():
     import boto3
@@ -70,6 +71,8 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     total_max_attempts: int | None
     max_attempts: int | None
     mode: Literal["standard", "adaptive", "legacy"]
+    prompt_caching: bool | Literal["auto"] | None
+    prompt_cache_ttl: Literal["5m", "1h"] | None
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -92,6 +95,8 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     total_max_attempts: int | None = 5
     max_attempts: int | None = 5
     mode: Literal["standard", "adaptive", "legacy"] = "standard"
+    prompt_caching: bool | Literal["auto"] | None = None
+    prompt_cache_ttl: Literal["5m", "1h"] | None = None
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -105,7 +110,15 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
 
-    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+    RESPONSE_USAGE_KEYS: list[str] = [
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost",
+        "model",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+    ]
 
     _retries = 5
 
@@ -120,6 +133,8 @@ class BedrockClient:
         self._total_max_attempts = kwargs.get("total_max_attempts", 5)
         self._max_attempts = kwargs.get("max_attempts", 5)
         self._mode = kwargs.get("mode", "standard")
+        self._prompt_caching = kwargs.get("prompt_caching", None)
+        self._prompt_cache_ttl = kwargs.get("prompt_cache_ttl", None)
         self._retry_config = {
             "total_max_attempts": self._total_max_attempts,
             "max_attempts": self._max_attempts,
@@ -360,6 +375,107 @@ class BedrockClient:
         except Exception as e:
             raise ValueError(f"Failed to validate structured output against schema: {e!s}") from e
 
+    # Models that support prompt caching on Bedrock
+    _CACHE_SUPPORTED_MODELS = {
+        "anthropic.claude-opus-4-5",
+        "anthropic.claude-sonnet-4-5",
+        "anthropic.claude-opus-4-1",
+        "anthropic.claude-3-7-sonnet",
+        "anthropic.claude-3-5-haiku",
+        "amazon.nova-micro",
+        "amazon.nova-lite",
+        "amazon.nova-pro",
+        "amazon.nova-premier",
+    }
+
+    # Models that support 1h TTL (others only support 5m)
+    _HOUR_TTL_MODELS = {
+        "anthropic.claude-opus-4-5",
+        "anthropic.claude-sonnet-4-5",
+        "anthropic.claude-3-5-haiku",
+    }
+
+    def _is_cache_supported(self, model_id: str) -> bool:
+        """Check if the model supports prompt caching on Bedrock."""
+        for prefix in self._CACHE_SUPPORTED_MODELS:
+            if model_id.startswith(prefix):
+                return True
+        return False
+
+    def _get_cache_point(self, model_id: str | None = None) -> dict[str, Any]:
+        """Create a cache point marker for the Converse API.
+
+        Returns a cachePoint dict suitable for insertion into system, messages, or tools.
+        """
+        cache_point: dict[str, Any] = {"type": "default"}
+        ttl = self._prompt_cache_ttl
+        if ttl is not None:
+            # Validate 1h TTL is only used with supported models
+            if ttl == "1h" and model_id:
+                is_hour_supported = any(model_id.startswith(p) for p in self._HOUR_TTL_MODELS)
+                if not is_hour_supported:
+                    warnings.warn(
+                        f"Model {model_id} does not support 1h TTL for prompt caching. "
+                        "Falling back to default 5m TTL.",
+                        UserWarning,
+                    )
+                    ttl = "5m"
+            cache_point["ttl"] = ttl
+        return {"cachePoint": cache_point}
+
+    def _inject_cache_points_system(self, system_messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Inject a cache point at the end of system messages."""
+        if not system_messages:
+            return system_messages
+        result = list(system_messages)
+        result.append(self._get_cache_point(self._model_id))
+        return result
+
+    def _inject_cache_points_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Inject cache points into message content blocks.
+
+        Adds a cache point after the last user message's content to mark the
+        conversation prefix for caching.
+        """
+        if not messages:
+            return messages
+
+        result = [msg.copy() for msg in messages]
+
+        # Find the last user message and add a cache point to its content
+        for i in range(len(result) - 1, -1, -1):
+            if result[i].get("role") == "user":
+                content = result[i].get("content", [])
+                if isinstance(content, list):
+                    result[i]["content"] = list(content) + [self._get_cache_point(self._model_id)]
+                break
+
+        return result
+
+    def _inject_cache_points_tools(self, tool_config: dict[str, list]) -> dict[str, list]:
+        """Inject a cache point into tool configuration.
+
+        Adds a cache point marker after the last tool definition.
+        """
+        if not tool_config.get("tools"):
+            return tool_config
+
+        result = {"tools": list(tool_config["tools"])}
+        result["tools"].append(self._get_cache_point(self._model_id))
+        return result
+
+    def _should_use_caching(self) -> bool:
+        """Determine if prompt caching should be used for this request."""
+        if self._prompt_caching is None or self._prompt_caching is False:
+            return False
+
+        if self._prompt_caching == "auto":
+            # Auto mode: enable caching only for supported models
+            return self._is_cache_supported(self._model_id)
+
+        # Explicit True
+        return True
+
     def message_retrieval(self, response):
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
@@ -414,6 +530,8 @@ class BedrockClient:
             "messages",  # Handled separately
             "tools",  # Handled separately
             "response_format",  # Handled separately in create method
+            "prompt_caching",  # Handled in create method
+            "prompt_cache_ttl",  # Handled in create method
         }
 
         # Here are the possible "base" parameters and their suitable types
@@ -504,6 +622,15 @@ class BedrockClient:
         if len(tool_config["tools"]) > 0:
             request_args["toolConfig"] = tool_config
 
+        # Inject prompt caching markers if enabled
+        if self._should_use_caching():
+            if "system" in request_args:
+                request_args["system"] = self._inject_cache_points_system(request_args["system"])
+            if "messages" in request_args:
+                request_args["messages"] = self._inject_cache_points_messages(request_args["messages"])
+            if "toolConfig" in request_args:
+                request_args["toolConfig"] = self._inject_cache_points_tools(request_args["toolConfig"])
+
         response = self.bedrock_runtime.converse(**request_args)
         if response is None:
             raise RuntimeError(f"Failed to get response from Bedrock after retrying {self._retries} times.")
@@ -536,11 +663,22 @@ class BedrockClient:
         message = ChatCompletionMessage(role="assistant", content=text, tool_calls=tool_calls)
 
         response_usage = response["usage"]
+
+        # Extract prompt caching metrics if present
+        prompt_tokens_details = None
+        cache_read_tokens = response_usage.get("cacheReadInputTokens", 0)
+        cache_write_tokens = response_usage.get("cacheWriteInputTokens", 0)
+        if cache_read_tokens > 0 or cache_write_tokens > 0:
+            prompt_tokens_details = PromptTokensDetails(cached_tokens=cache_read_tokens)
+
         usage = CompletionUsage(
             prompt_tokens=response_usage["inputTokens"],
             completion_tokens=response_usage["outputTokens"],
             total_tokens=response_usage["totalTokens"],
+            prompt_tokens_details=prompt_tokens_details,
         )
+        # Store cache write tokens as an extra attribute for get_usage()
+        usage._cache_creation_input_tokens = cache_write_tokens
 
         return ChatCompletion(
             id=response["ResponseMetadata"]["RequestId"],
@@ -557,14 +695,27 @@ class BedrockClient:
 
     @staticmethod
     def get_usage(response) -> dict:
-        """Get the usage of tokens and their cost information."""
-        return {
+        """Get the usage of tokens and their cost information.
+
+        Includes prompt caching metrics when available:
+        - cache_read_input_tokens: Number of tokens read from cache
+        - cache_creation_input_tokens: Number of tokens written to cache
+        """
+        usage = {
             "prompt_tokens": response.usage.prompt_tokens,
             "completion_tokens": response.usage.completion_tokens,
             "total_tokens": response.usage.total_tokens,
             "cost": response.cost,
             "model": response.model,
         }
+
+        # Include prompt caching metrics if available
+        if response.usage.prompt_tokens_details is not None:
+            usage["cache_read_input_tokens"] = response.usage.prompt_tokens_details.cached_tokens or 0
+        if hasattr(response.usage, "_cache_creation_input_tokens"):
+            usage["cache_creation_input_tokens"] = response.usage._cache_creation_input_tokens
+
+        return usage
 
 
 def extract_system_messages(messages: list[dict[str, Any]]) -> list:
