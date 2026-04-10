@@ -28,7 +28,7 @@ async def test_history_limiter(mock: MagicMock) -> None:
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
@@ -42,21 +42,21 @@ async def test_history_limiter_saves_first_turn(mock: MagicMock) -> None:
     middleware = history_limiter(TextInput(content="turn 3"), mock)
     events = [
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
-        ModelResponse(message=ModelMessage(content="answer 2")),
+        ModelResponse(message=ModelMessage("answer 2")),
         TextInput(content="turn 3"),
     ]
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 2")),
+        ModelResponse(message=ModelMessage("answer 2")),
         TextInput(content="turn 3"),
     ])
 
@@ -68,15 +68,15 @@ async def test_no_history_limiter(mock: MagicMock) -> None:
     middleware = history_limiter(TextInput(content="turn 3"), mock)
     events = [
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
-        ModelResponse(message=ModelMessage(content="answer 2")),
+        ModelResponse(message=ModelMessage("answer 2")),
         TextInput(content="turn 3"),
     ]
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
@@ -89,23 +89,23 @@ async def test_history_limiter_drops_overlapping_turns(mock: MagicMock) -> None:
 
     middleware = history_limiter(TextInput(content="turn 3"), mock)
     events = [
-        ModelResponse(message=ModelMessage(content="answer 0")),
+        ModelResponse(message=ModelMessage("answer 0")),
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
-        ModelResponse(message=ModelMessage(content="answer 2")),
+        ModelResponse(message=ModelMessage("answer 2")),
         TextInput(content="turn 3"),
     ]
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
         TextInput(content="turn 2"),
-        ModelResponse(message=ModelMessage(content="answer 2")),
+        ModelResponse(message=ModelMessage("answer 2")),
         TextInput(content="turn 3"),
     ])
 
@@ -120,18 +120,18 @@ async def test_history_limiter_drops_incomplete_tool_interaction(mock: MagicMock
         TextInput(content="turn 1"),
         ModelResponse(tool_calls=ToolCallsEvent([tool_call])),
         ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
     ]
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
     ])

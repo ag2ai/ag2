@@ -78,7 +78,7 @@ class TestAgentTurnMiddleware:
                 if isinstance(event, TextInput):
                     event = TextInput(content=event.content * 2)
                 result = await call_next(event, ctx)
-                return ModelResponse(message=ModelMessage(content=result.content * 2))
+                return ModelResponse(message=ModelMessage(result.content * 2))
 
         agent = Agent(
             "",

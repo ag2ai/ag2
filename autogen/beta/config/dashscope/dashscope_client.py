@@ -111,11 +111,11 @@ class DashScopeClient(LLMClient):
         # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
         # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
-            await context.send(ModelReasoning(content=reasoning))
+            await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
         if content := msg.get("content"):
-            model_msg = ModelMessage(content=content)
+            model_msg = ModelMessage(content)
             await context.send(model_msg)
 
         calls = []
@@ -189,11 +189,11 @@ class DashScopeClient(LLMClient):
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
                 # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
                 if rc := msg.get("reasoning_content"):
-                    await context.send(ModelReasoning(content=rc))
+                    await context.send(ModelReasoning(rc))
 
                 if c := msg.get("content"):
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
@@ -207,7 +207,7 @@ class DashScopeClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(

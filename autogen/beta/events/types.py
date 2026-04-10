@@ -38,13 +38,13 @@ class ModelEvent(BaseEvent):
 class ModelReasoning(ModelEvent):
     """Intermediate reasoning content emitted by the model."""
 
-    content: str
+    content: str = Field(kw_only=False)
 
 
 class ModelMessage(ModelEvent):
     """Single message emitted by the model."""
 
-    content: str
+    content: str = Field(kw_only=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,25 +97,25 @@ class ModelResponse(ModelEvent):
 class ModelMessageChunk(ModelEvent):
     """Chunk of a streamed model message."""
 
-    content: str
+    content: str = Field(kw_only=False)
 
 
 class HumanInputRequest(BaseEvent):
     """Event requesting input from a human user."""
 
     id: str = Field(default_factory=lambda: str(uuid4()), compare=False)
-    content: str
+    content: str = Field(kw_only=False)
 
 
 class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
     parent_id: str = Field(default="", compare=False)
-    content: str
+    content: str = Field(kw_only=False)
 
     @classmethod
     def ensure_message(cls, content: "str | HumanMessage", parent_id: str) -> "HumanMessage":
-        msg = content if isinstance(content, HumanMessage) else cls(content=content)
+        msg = content if isinstance(content, HumanMessage) else cls(content)
         if not msg.parent_id:
             # Set parent_id after creation to hide this option from public API
             msg.parent_id = parent_id

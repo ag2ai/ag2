@@ -152,12 +152,12 @@ class OpenAIResponsesClient(LLMClient):
             if isinstance(item, ResponseReasoningItem):
                 for summary in item.summary or []:
                     if hasattr(summary, "text") and summary.text:
-                        await context.send(ModelReasoning(content=summary.text))
+                        await context.send(ModelReasoning(summary.text))
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
                     if hasattr(part, "text") and part.text:
-                        model_msg = ModelMessage(content=part.text)
+                        model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
 
             elif isinstance(item, ResponseFunctionWebSearch):
@@ -234,7 +234,7 @@ class OpenAIResponsesClient(LLMClient):
         async for event in response_stream:
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
-                await context.send(ModelMessageChunk(content=event.delta))
+                await context.send(ModelMessageChunk(event.delta))
 
             elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
                 calls.append(
@@ -305,7 +305,7 @@ class OpenAIResponsesClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(

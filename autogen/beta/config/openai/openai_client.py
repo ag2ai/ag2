@@ -140,11 +140,11 @@ class OpenAIClient(LLMClient):
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
-                await context.send(ModelReasoning(content=r))
+                await context.send(ModelReasoning(r))
 
             model_msg: ModelMessage | None = None
             if c := msg.content:
-                model_msg = ModelMessage(content=c)
+                model_msg = ModelMessage(c)
                 await context.send(model_msg)
 
             calls = [
@@ -192,11 +192,11 @@ class OpenAIClient(LLMClient):
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
-                    await context.send(ModelReasoning(content=r))
+                    await context.send(ModelReasoning(r))
 
                 if c := delta.content:
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
@@ -219,7 +219,7 @@ class OpenAIClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         calls = [

@@ -75,7 +75,7 @@ class TestHumanInputMiddleware:
             return ""
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
         agent = Agent(
             "",
@@ -97,7 +97,7 @@ class TestHumanInputMiddleware:
             return ""
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
         agent = Agent(
             "",
@@ -130,7 +130,7 @@ class TestHumanInputMiddleware:
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             mock.hitl(event.content)
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
         agent = Agent(
             "",
@@ -161,7 +161,7 @@ class TestHumanInputMiddleware:
             return ""
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
         agent = Agent(
             "",
@@ -193,7 +193,7 @@ class TestHumanInputMiddleware:
 
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             mock.hitl()
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
         agent = Agent(
             "",

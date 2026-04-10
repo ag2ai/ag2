@@ -91,7 +91,7 @@ class Context:
     variables: dict[str, Any] = field(default_factory=dict)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
-        request_msg = HumanInputRequest(content=message)
+        request_msg = HumanInputRequest(message)
         async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
             await self.send(request_msg)
             result: HumanMessage = await asyncio.wait_for(response, timeout)

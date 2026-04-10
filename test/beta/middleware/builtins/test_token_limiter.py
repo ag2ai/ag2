@@ -24,13 +24,13 @@ from autogen.beta.middleware import TokenLimiter
 async def test_token_limiter_passes_events_through_when_within_budget(mock: MagicMock) -> None:
     events = [
         TextInput(content="hello"),
-        ModelResponse(message=ModelMessage(content="world")),
+        ModelResponse(message=ModelMessage("world")),
     ]
     middleware = TokenLimiter(max_tokens=10_000)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
@@ -41,40 +41,40 @@ async def test_token_limiter_passes_events_through_when_within_budget(mock: Magi
 async def test_token_limiter_keeps_first_request_while_trimming(mock: MagicMock) -> None:
     events = [
         TextInput(content="keep-me"),
-        ModelResponse(message=ModelMessage(content="drop-me-1")),
-        ModelResponse(message=ModelMessage(content="drop-me-2")),
-        ModelResponse(message=ModelMessage(content="keep-me-too")),
+        ModelResponse(message=ModelMessage("drop-me-1")),
+        ModelResponse(message=ModelMessage("drop-me-2")),
+        ModelResponse(message=ModelMessage("keep-me-too")),
     ]
     middleware = TokenLimiter(max_tokens=30, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
         TextInput(content="keep-me"),
-        ModelResponse(message=ModelMessage(content="keep-me-too")),
+        ModelResponse(message=ModelMessage("keep-me-too")),
     ])
 
 
 @pytest.mark.asyncio()
 async def test_token_limiter_trims_from_front_without_initial_request(mock: MagicMock) -> None:
     events = [
-        ModelResponse(message=ModelMessage(content="drop-me-1")),
-        ModelResponse(message=ModelMessage(content="drop-me-2")),
-        ModelResponse(message=ModelMessage(content="keep-me")),
+        ModelResponse(message=ModelMessage("drop-me-1")),
+        ModelResponse(message=ModelMessage("drop-me-2")),
+        ModelResponse(message=ModelMessage("keep-me")),
     ]
     middleware = TokenLimiter(max_tokens=20, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
-    mock.llm_call.assert_called_once_with([ModelResponse(message=ModelMessage(content="keep-me"))])
+    mock.llm_call.assert_called_once_with([ModelResponse(message=ModelMessage("keep-me"))])
 
 
 @pytest.mark.asyncio()
@@ -84,7 +84,7 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
         TextInput(content="turn 1"),
         ModelResponse(tool_calls=ToolCallsEvent([tool_call])),
         ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
     ]
     budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[0], events[2], events[3], events[4]])
@@ -92,13 +92,13 @@ async def test_token_limiter_drops_tool_results_without_parent_message(mock: Mag
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([
         TextInput(content="turn 1"),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
         TextInput(content="turn 2"),
     ])
 
@@ -111,18 +111,18 @@ async def test_token_limiter_drops_tool_results_without_parent_message_and_no_in
     events = [
         ModelResponse(tool_calls=ToolCallsEvent([tool_call])),
         ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
-        ModelResponse(message=ModelMessage(content="answer 1")),
+        ModelResponse(message=ModelMessage("answer 1")),
     ]
     budget_after_dropping_tool_call = sum(len(str(event)) for event in [events[1], events[2]])
     middleware = TokenLimiter(max_tokens=budget_after_dropping_tool_call, chars_per_token=1)(events[-1], mock)
 
     async def llm_call(history: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(history)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     await middleware.on_llm_call(llm_call, events, mock)
 
-    mock.llm_call.assert_called_once_with([ModelResponse(message=ModelMessage(content="answer 1"))])
+    mock.llm_call.assert_called_once_with([ModelResponse(message=ModelMessage("answer 1"))])
 
 
 def test_token_limiter_rejects_invalid_limits() -> None:

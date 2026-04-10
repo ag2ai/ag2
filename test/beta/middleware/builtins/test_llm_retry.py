@@ -25,12 +25,12 @@ async def test_llm_retry_calls_next_once_when_successful(mock: MagicMock) -> Non
 
     async def llm_call(events: Sequence[BaseEvent], ctx: Context) -> ModelResponse:
         mock.llm_call(events)
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     middleware = retry_middleware(TextInput(content="Hi!"), mock)
     response = await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
-    assert response == ModelResponse(message=ModelMessage(content="result"))
+    assert response == ModelResponse(message=ModelMessage("result"))
     mock.llm_call.assert_called_once_with([TextInput(content="Hi!")])
 
 
@@ -45,12 +45,12 @@ async def test_llm_retry_retries_matching_errors_until_success(mock: MagicMock) 
         mock.llm_call(events)
         if attempts < 3:
             raise TransientError(f"transient failure {attempts}")
-        return ModelResponse(message=ModelMessage(content="result"))
+        return ModelResponse(message=ModelMessage("result"))
 
     middleware = retry_middleware(TextInput(content="Hi!"), mock)
     response = await middleware.on_llm_call(llm_call, [TextInput(content="Hi!")], mock)
 
-    assert response == ModelResponse(message=ModelMessage(content="result"))
+    assert response == ModelResponse(message=ModelMessage("result"))
     assert mock.llm_call.call_count == attempts == 3
 
 
