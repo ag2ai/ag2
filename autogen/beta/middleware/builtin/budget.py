@@ -10,12 +10,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse
+from autogen.beta.events import BaseEvent, ModelResponse, Usage
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 # Token key variants per provider
 _INPUT_KEYS = ("prompt_tokens", "prompt_token_count", "input_tokens")
 _OUTPUT_KEYS = ("completion_tokens", "candidates_token_count", "output_tokens")
+_SPENT_KEY = "autogen.beta.middleware.budget.spent"
 
 
 class BudgetExceededError(Exception):
@@ -61,9 +62,9 @@ class BudgetConfig:
 class _BudgetTracker:
     """Thread-safe cumulative cost tracker."""
 
-    def __init__(self, config: BudgetConfig) -> None:
+    def __init__(self, config: BudgetConfig, initial_spent: float = 0.0) -> None:
         self._config = config
-        self._spent: float = 0.0
+        self._spent: float = _safe_float(initial_spent)
         self._lock = threading.Lock()
 
     @property
@@ -92,19 +93,33 @@ class _BudgetTracker:
         with self._lock:
             return self._spent / self._config.max_cost_usd
 
-    def record(self, usage: dict[str, float]) -> None:
-        """Accumulate cost from a usage dict returned by the LLM provider."""
+    def record(self, usage: Usage | dict[str, object] | object) -> None:
+        """Accumulate cost from a provider usage payload."""
         input_tokens = 0.0
         output_tokens = 0.0
 
         for key in _INPUT_KEYS:
-            if key in usage:
+            if isinstance(usage, dict):
+                if key not in usage:
+                    continue
                 input_tokens = _safe_float(usage[key])
                 break
 
+            value = getattr(usage, key, None)
+            if value is not None:
+                input_tokens = _safe_float(value)
+                break
+
         for key in _OUTPUT_KEYS:
-            if key in usage:
+            if isinstance(usage, dict):
+                if key not in usage:
+                    continue
                 output_tokens = _safe_float(usage[key])
+                break
+
+            value = getattr(usage, key, None)
+            if value is not None:
+                output_tokens = _safe_float(value)
                 break
 
         cost = (input_tokens / 1000.0) * self._config.cost_per_1k_input_tokens + (
@@ -116,14 +131,14 @@ class _BudgetTracker:
 
 
 class BudgetMiddleware(MiddlewareFactory):
-    """Factory that creates a budget tracker scoped to a single conversation.
+    """Factory that tracks budget cumulatively per conversation context.
 
-    Each time this factory is invoked by the agent runtime, a fresh
-    ``_BudgetTracker`` is created, so budgets do not leak across separate
-    ``ask()`` invocations or across unrelated agents that share the same
-    middleware instance. Within a single conversation, the tracker
-    persists across the tool-use loop, so cumulative cost tracking still
-    works as expected.
+    Each time this factory is invoked by the agent runtime, it seeds a local
+    ``_BudgetTracker`` from ``context.variables[_SPENT_KEY]``. That keeps the
+    mutable tracker instance request-local while persisting cumulative spend as
+    a serializable float on the conversation context. Separate ``Context``
+    objects therefore stay isolated, while repeated ``ask()`` calls that reuse
+    the same context continue accumulating spend.
 
     Example::
 
@@ -152,7 +167,8 @@ class BudgetMiddleware(MiddlewareFactory):
         )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        tracker = _BudgetTracker(self._config)
+        prior_spent = float(context.variables.get(_SPENT_KEY, 0.0))
+        tracker = _BudgetTracker(self._config, initial_spent=prior_spent)
         return _BudgetMiddlewareInstance(event, context, tracker)
 
 
@@ -179,4 +195,5 @@ class _BudgetMiddlewareInstance(BaseMiddleware):
 
         response = await call_next(events, context)
         self._budget.record(response.usage)
+        context.variables[_SPENT_KEY] = self._budget.spent
         return response

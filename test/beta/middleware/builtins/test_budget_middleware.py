@@ -11,13 +11,17 @@ from unittest import mock
 
 import pytest
 
+from autogen.beta.context import Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
+from autogen.beta.events.types import Usage
 from autogen.beta.middleware.builtin.budget import (
+    _SPENT_KEY,
     BudgetConfig,
     BudgetExceededError,
     BudgetMiddleware,
     _BudgetTracker,
 )
+from autogen.beta.stream import MemoryStream
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,8 +32,8 @@ def _make_event() -> mock.MagicMock:
     return mock.MagicMock(spec=BaseEvent)
 
 
-def _make_context() -> mock.MagicMock:
-    return mock.MagicMock()
+def _make_context() -> Context:
+    return Context(stream=MemoryStream())
 
 
 def _make_model_response(
@@ -417,6 +421,28 @@ class TestBudgetConcurrency:
         assert not errors
         assert abs(tracker.spent - 1000.0) < 1e-6
 
+    @pytest.mark.asyncio()
+    async def test_record_accepts_usage_instance_through_middleware(self) -> None:
+        mw = BudgetMiddleware(
+            max_cost_usd=10.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.60,
+        )
+        ctx = _make_context()
+        instance = mw(_make_event(), ctx)
+        response = ModelResponse(
+            message=ModelMessage(content="ok"),
+            usage=Usage(prompt_tokens=1000, completion_tokens=500),
+        )
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            return response
+
+        await instance.on_llm_call(call_next, [], ctx)
+
+        assert abs(instance._budget.spent - 0.60) < 1e-9
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(0.60)
+
 
 # ---------------------------------------------------------------------------
 # TestBudgetAdversarial
@@ -478,7 +504,7 @@ class TestBudgetAdversarial:
     @pytest.mark.asyncio()
     async def test_cumulative_cost_within_single_conversation(self) -> None:
         # Given: a single conversation instance running several LLM calls
-        # (per-conversation scope: cost accumulates inside one ask(), not across ask()s)
+        # repeated calls on the same middleware instance keep accumulating locally
         mw = BudgetMiddleware(
             max_cost_usd=1.0,
             cost_per_1k_input_tokens=0.30,
@@ -498,7 +524,7 @@ class TestBudgetAdversarial:
 
     @pytest.mark.asyncio()
     async def test_tracker_isolated_across_conversations(self) -> None:
-        # Given: a single factory used for two separate conversations
+        # Given: a single factory used with two separate contexts
         mw = BudgetMiddleware(
             max_cost_usd=1.0,
             cost_per_1k_input_tokens=0.30,
@@ -519,6 +545,54 @@ class TestBudgetAdversarial:
         assert abs(instance_a._budget.spent - 0.30) < 1e-9
         assert abs(instance_b._budget.spent - 0.30) < 1e-9
         assert instance_a._budget is not instance_b._budget
+
+    @pytest.mark.asyncio()
+    async def test_tracker_persists_across_reply_ask(self) -> None:
+        mw = BudgetMiddleware(
+            max_cost_usd=1.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.0,
+        )
+        ctx = _make_context()
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            return _make_model_response(1000, 0, key_style="prompt")
+
+        first_instance = mw(_make_event(), ctx)
+        await first_instance.on_llm_call(call_next, [], ctx)
+
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(0.30)
+
+        second_instance = mw(_make_event(), ctx)
+
+        assert second_instance._budget.spent == pytest.approx(0.30)
+
+        await second_instance.on_llm_call(call_next, [], ctx)
+
+        assert second_instance._budget.spent == pytest.approx(0.60)
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(0.60)
+
+    @pytest.mark.asyncio()
+    async def test_cross_context_isolation(self) -> None:
+        mw = BudgetMiddleware(
+            max_cost_usd=1.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.0,
+        )
+        ctx_a = _make_context()
+        ctx_b = _make_context()
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            return _make_model_response(1000, 0, key_style="prompt")
+
+        first_instance = mw(_make_event(), ctx_a)
+        await first_instance.on_llm_call(call_next, [], ctx_a)
+
+        second_instance = mw(_make_event(), ctx_b)
+
+        assert ctx_a.variables[_SPENT_KEY] == pytest.approx(0.30)
+        assert _SPENT_KEY not in ctx_b.variables
+        assert second_instance._budget.spent == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -557,3 +631,17 @@ def test_budget_importable_from_builtin_init() -> None:
 
     assert builtin_pkg.BudgetConfig is BudgetConfig
     assert builtin_pkg.BudgetMiddleware is BudgetMiddleware
+
+
+def test_record_accepts_usage_dataclass() -> None:
+    tracker = _BudgetTracker(
+        BudgetConfig(
+            max_cost_usd=10.0,
+            cost_per_1k_input_tokens=0.30,
+            cost_per_1k_output_tokens=0.60,
+        )
+    )
+
+    tracker.record(Usage(prompt_tokens=1000, completion_tokens=500))
+
+    assert tracker.spent == pytest.approx(0.60)
