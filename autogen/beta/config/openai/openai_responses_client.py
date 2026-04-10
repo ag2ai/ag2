@@ -17,6 +17,8 @@ from openai.types.responses import (
     ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
     ResponseFunctionWebSearch,
+    ResponseOutputItemAddedEvent,
+    ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
@@ -29,15 +31,20 @@ from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
 from autogen.beta.events import (
     BaseEvent,
+    BinaryResult,
     BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
+from autogen.beta.tools import ToolResult
+from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -139,7 +146,7 @@ class OpenAIResponsesClient(LLMClient):
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
-        images: list[bytes] = []
+        files: list[bytes] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -172,9 +179,14 @@ class OpenAIResponsesClient(LLMClient):
                 )
 
             elif isinstance(item, ImageGenerationCall) and item.result:
-                images.append(base64.b64decode(item.result))
+                files.append(
+                    BinaryResult(
+                        base64.b64decode(item.result),
+                        metadata=item.model_dump(exclude={"result", "status", "type"}),
+                    )
+                )
 
-        usage = normalize_responses_usage(response.usage.model_dump() if response.usage else {})
+        usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
         return ModelResponse(
             message=model_msg,
@@ -183,7 +195,7 @@ class OpenAIResponsesClient(LLMClient):
             model=response.model,
             provider="openai",
             finish_reason=response.status,
-            images=images,
+            files=files,
         )
 
     async def _process_stream(
@@ -192,11 +204,11 @@ class OpenAIResponsesClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
-        usage: dict[str, Any] = {}
         calls: list[ToolCallEvent] = []
-        images: list[bytes] = []
+        files: list[BinaryResult] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
+        usage = Usage()
 
         async for event in response_stream:
             if isinstance(event, ResponseTextDeltaEvent):
@@ -212,22 +224,63 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
+            elif isinstance(event, ResponseOutputItemAddedEvent):
+                # call image generation tool
+                if isinstance(event.item, ImageGenerationCall):
+                    await context.send(
+                        BuiltinToolCallEvent(
+                            id=event.item.id,
+                            name=IMAGE_GENERATION_TOOL_NAME,
+                            arguments="",
+                        )
+                    )
+
+                # call web search tool
+                elif isinstance(event.item, ResponseFunctionWebSearch):
+                    await context.send(
+                        BuiltinToolCallEvent(
+                            id=event.item.id,
+                            name=WEB_SEARCH_TOOL_NAME,
+                            arguments=event.item.action.model_dump_json(),
+                        )
+                    )
+
+                else:
+                    pass
+
+            elif isinstance(event, ResponseOutputItemDoneEvent):
+                # image generation tool call result
+                if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                    result = BinaryResult(
+                        base64.b64decode(event.item.result),
+                        metadata=event.item.model_dump(exclude={"result", "status", "type"}),
+                    )
+                    await context.send(
+                        BuiltinToolResultEvent(
+                            parent_id=event.item.id,
+                            name=IMAGE_GENERATION_TOOL_NAME,
+                            result=ToolResult(event.item.result),
+                        )
+                    )
+                    files.append(result)
+
+                # web search tool call result
+                elif isinstance(event.item, ResponseFunctionWebSearch):
+                    await context.send(
+                        BuiltinToolResultEvent(
+                            parent_id=event.item.id,
+                            name=WEB_SEARCH_TOOL_NAME,
+                            result=ToolResult(event.item.action.model_dump_json()),
+                        )
+                    )
+
             elif isinstance(event, ResponseCompletedEvent):
+                # Stream finished
                 if event.response.usage:
-                    usage = event.response.usage.model_dump()
+                    usage = normalize_responses_usage(event.response.usage)
+
                 finish_reason = event.response.status
                 resolved_model = event.response.model
-                for item in event.response.output:
-                    if isinstance(item, ResponseFunctionWebSearch):
-                        web_search_tool_call = BuiltinToolCallEvent(
-                            id=item.id,
-                            name=WEB_SEARCH_TOOL_NAME,
-                            arguments=item.action.model_dump_json(),
-                        )
-                        await context.send(web_search_tool_call)
-
-                    elif isinstance(item, ImageGenerationCall) and item.result:
-                        images.append(base64.b64decode(item.result))
 
         message: ModelMessage | None = None
         if full_content:
@@ -237,9 +290,9 @@ class OpenAIResponsesClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_responses_usage(usage),
+            usage=usage,
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
-            images=images,
+            files=files,
         )

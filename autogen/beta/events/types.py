@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
 from uuid import uuid4
 
@@ -46,6 +47,14 @@ class ModelMessage(ModelEvent):
     content: str
 
 
+@dataclass(frozen=True, slots=True)
+class BinaryResult:
+    """Binary result emitted by the model."""
+
+    data: bytes
+    metadata: dict[str, Any] = dataclass_field(default_factory=dict)
+
+
 class ModelResponse(ModelEvent):
     """Final model response produced for a given request."""
 
@@ -54,7 +63,7 @@ class ModelResponse(ModelEvent):
     usage: Usage = Field(default_factory=Usage)
     response_force: bool = False
 
-    images: list[bytes] = Field(default_factory=list)
+    files: list[BinaryResult] = Field(default_factory=list)
 
     # Tracing information
     model: str | None = Field(default=None, compare=False)
@@ -71,8 +80,8 @@ class ModelResponse(ModelEvent):
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
             text += f", usage={self.usage}"
-        if self.images:
-            text += f", images={len(self.images)}"
+        if self.files:
+            text += f", files={len(self.files)}"
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:

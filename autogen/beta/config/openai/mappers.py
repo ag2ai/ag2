@@ -6,6 +6,9 @@ import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from openai.types import CompletionUsage
+from openai.types.responses import ResponseUsage
+
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -333,32 +336,26 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     raise UnsupportedToolError(t.type, "openai-responses")
 
 
-def normalize_usage(usage: dict[str, Any]) -> Usage:
-    """Lift OpenAI's nested cache token counts to top-level keys."""
+def normalize_usage(usage: CompletionUsage) -> Usage:
     return Usage(
-        prompt_tokens=_usage_float(usage.get("prompt_tokens")),
-        completion_tokens=_usage_float(usage.get("completion_tokens")),
-        total_tokens=_usage_float(usage.get("total_tokens")),
-        cache_read_input_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens") or None,
-        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+        prompt_tokens=usage.prompt_tokens,
+        completion_tokens=usage.completion_tokens,
+        total_tokens=usage.total_tokens,
+        cache_read_input_tokens=usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None,
+        cache_creation_input_tokens=usage.completion_tokens_details.reasoning_tokens
+        if usage.completion_tokens_details
+        else None,
     )
 
 
-def normalize_responses_usage(usage: dict[str, Any]) -> Usage:
-    """Normalize Responses API usage keys and lift nested cache tokens."""
+def normalize_responses_usage(usage: ResponseUsage) -> Usage:
     return Usage(
-        prompt_tokens=_usage_float(usage.get("prompt_tokens") or usage.get("input_tokens")),
-        completion_tokens=_usage_float(usage.get("completion_tokens") or usage.get("output_tokens")),
-        total_tokens=_usage_float(usage.get("total_tokens")),
-        cache_read_input_tokens=(usage.get("input_tokens_details") or {}).get("cached_tokens") or None,
-        cache_creation_input_tokens=_usage_float(usage.get("cache_creation_input_tokens")),
+        prompt_tokens=usage.input_tokens,
+        completion_tokens=usage.output_tokens,
+        total_tokens=usage.total_tokens,
+        cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
+        cache_creation_input_tokens=usage.output_tokens_details.reasoning_tokens,
     )
-
-
-def _usage_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    return float(value)
 
 
 _MIME_TO_AUDIO_FORMAT: dict[str, str] = {

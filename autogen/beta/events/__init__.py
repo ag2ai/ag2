@@ -22,6 +22,7 @@ from .input_events import (
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ClientToolCallEvent,
     ToolCallEvent,
     ToolCallsEvent,
@@ -31,6 +32,7 @@ from .tool_events import (
     ToolResultsEvent,
 )
 from .types import (
+    BinaryResult,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -45,8 +47,10 @@ __all__ = (
     "AudioUrlInput",
     "BaseEvent",
     "BinaryInput",
+    "BinaryResult",
     "BinaryType",
     "BuiltinToolCallEvent",
+    "BuiltinToolResultEvent",
     "ClientToolCallEvent",
     "Condition",
     "DocumentInput",

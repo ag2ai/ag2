@@ -71,7 +71,10 @@ class ToolCallEvent(ToolEvent):
         self._serialized_arguments = value
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(id={self.id}, name={self.name}, arguments={self.arguments})"
+        text = f"id={self.id}, name='{self.name}'"
+        if c := self.arguments:
+            text += f", arguments='{c}'"
+        return f"{self.__class__.__name__}({text})"
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -118,7 +121,7 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
         self._content = value
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name={self.name}, content={self.content})"
+        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name='{self.name}', content={self.content})"
 
     @classmethod
     def from_call(cls, call: ToolCallEvent, result: ResultT) -> "ToolResultEvent[ResultT]":
@@ -139,6 +142,10 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
         if not isinstance(other, ToolResultEvent):
             return NotImplemented
         return self.parent_id == other.parent_id and self.name == other.name and self.content == other.content
+
+
+class BuiltinToolResultEvent(ToolResultEvent):
+    """Represents a successful builtin tool execution result."""
 
 
 class ToolErrorEvent(ToolResultEvent[None]):

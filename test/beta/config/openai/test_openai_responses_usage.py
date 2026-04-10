@@ -4,41 +4,60 @@
 
 """Tests for OpenAI Responses client usage normalization."""
 
+from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails, ResponseUsage
+
 from autogen.beta.config.openai.mappers import normalize_responses_usage
 from autogen.beta.events import Usage
 
 
 class TestNormalizeUsage:
     def test_normalizes_input_output_keys(self):
-        usage = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
+        usage = ResponseUsage(
+            input_tokens=100,
+            output_tokens=20,
+            total_tokens=120,
+            input_tokens_details=InputTokensDetails(cached_tokens=0),
+            output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
+        )
         result = normalize_responses_usage(usage)
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
             total_tokens=120,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
         )
 
     def test_lifts_cached_tokens(self):
-        usage = {
-            "input_tokens": 100,
-            "output_tokens": 20,
-            "total_tokens": 120,
-            "input_tokens_details": {"cached_tokens": 80},
-        }
+        usage = ResponseUsage(
+            input_tokens=100,
+            output_tokens=20,
+            total_tokens=120,
+            input_tokens_details=InputTokensDetails(cached_tokens=80),
+            output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
+        )
         result = normalize_responses_usage(usage)
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=80,
+            cache_creation_input_tokens=0,
         )
 
-    def test_no_details_no_cache_key(self):
-        usage = {"input_tokens": 50, "output_tokens": 10, "total_tokens": 60}
+    def test_lifts_reasoning_tokens(self):
+        usage = ResponseUsage(
+            input_tokens=100,
+            output_tokens=20,
+            total_tokens=120,
+            input_tokens_details=InputTokensDetails(cached_tokens=0),
+            output_tokens_details=OutputTokensDetails(reasoning_tokens=10),
+        )
         result = normalize_responses_usage(usage)
-        assert result.cache_read_input_tokens is None
-
-    def test_does_not_overwrite_existing_prompt_tokens(self):
-        usage = {"input_tokens": 100, "prompt_tokens": 999}
-        result = normalize_responses_usage(usage)
-        assert result.prompt_tokens == 999
+        assert result == Usage(
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=10,
+        )

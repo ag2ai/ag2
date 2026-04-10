@@ -14,12 +14,14 @@ from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
 
+IMAGE_GENERATION_TOOL_NAME = "image_generation"
+
 
 @dataclass(slots=True)
 class ImageGenerationToolSchema(ToolSchema):
     """Schema for the image_generation builtin tool (OpenAI Responses API)."""
 
-    type: str = field(default="image_generation", init=False)
+    type: str = field(default=IMAGE_GENERATION_TOOL_NAME, init=False)
     quality: Literal["low", "medium", "high", "auto"] | None = None
     size: str | None = None
     background: Literal["transparent", "opaque", "auto"] | None = None
@@ -35,7 +37,7 @@ class ImageGenerationTool(Tool):
     Only supported with ``OpenAIResponsesConfig`` — raises ``UnsupportedToolError``
     when used with ``OpenAIConfig`` (Chat Completions API).
 
-    Generated images are returned as ``list[bytes]`` via ``reply.images``.
+    Generated images are returned as ``list[BinaryResult]`` via ``reply.files``.
 
     Args:
         quality: Image quality — ``"low"``, ``"medium"``, ``"high"``, or ``"auto"``.
