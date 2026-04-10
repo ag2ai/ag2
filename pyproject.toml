@@ -209,9 +209,7 @@ quick-research = [
 ]
 
 browser-use = [
-    # ToDo: Restrict browser-use to a specific version
-    # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
-    "browser-use==0.1.37",
+    "browser-use>=0.3.1,<1.0",
 ]
 
 google-client = ["google-api-python-client>=2.163.0,<3.0"]
