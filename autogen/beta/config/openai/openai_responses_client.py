@@ -146,7 +146,7 @@ class OpenAIResponsesClient(LLMClient):
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
-        files: list[bytes] = []
+        files: list[BinaryResult] = []
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -161,13 +161,21 @@ class OpenAIResponsesClient(LLMClient):
                         await context.send(model_msg)
 
             elif isinstance(item, ResponseFunctionWebSearch):
-                web_search_tool_call = BuiltinToolCallEvent(
-                    id=item.id,
-                    name=WEB_SEARCH_TOOL_NAME,
-                    arguments=item.action.model_dump_json(),
+                args = item.action.model_dump_json()
+                await context.send(
+                    BuiltinToolCallEvent(
+                        id=item.id,
+                        name=WEB_SEARCH_TOOL_NAME,
+                        arguments=args,
+                    )
                 )
-                # do not append to calls list, as it is not a tool call
-                await context.send(web_search_tool_call)
+                await context.send(
+                    BuiltinToolResultEvent(
+                        parent_id=item.id,
+                        name=WEB_SEARCH_TOOL_NAME,
+                        result=ToolResult(args),
+                    )
+                )
 
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
@@ -179,12 +187,25 @@ class OpenAIResponsesClient(LLMClient):
                 )
 
             elif isinstance(item, ImageGenerationCall) and item.result:
-                files.append(
-                    BinaryResult(
-                        base64.b64decode(item.result),
-                        metadata=item.model_dump(exclude={"result", "status", "type"}),
+                result = BinaryResult(
+                    base64.b64decode(item.result),
+                    metadata=item.model_dump(exclude={"result", "status", "type"}),
+                )
+                await context.send(
+                    BuiltinToolCallEvent(
+                        id=item.id,
+                        name=IMAGE_GENERATION_TOOL_NAME,
+                        arguments="",
                     )
                 )
+                await context.send(
+                    BuiltinToolResultEvent(
+                        parent_id=item.id,
+                        name=IMAGE_GENERATION_TOOL_NAME,
+                        result=ToolResult(item.result),
+                    )
+                )
+                files.append(result)
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
