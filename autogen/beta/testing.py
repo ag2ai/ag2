@@ -34,7 +34,7 @@ class TestClient(LLMClient):
         if isinstance(next_msg, str):
             next_msg = ModelResponse(message=ModelMessage(content=next_msg))
         elif isinstance(next_msg, ToolCallEvent):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent(calls=[next_msg]))
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
 
         return next_msg
 

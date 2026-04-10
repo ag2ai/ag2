@@ -31,7 +31,7 @@ class ToolResult(Generic[ResultT]):
 class ToolCallsEvent(BaseEvent):
     """Container event holding a collection of tool calls."""
 
-    calls: list["ToolCallEvent"] = Field(default_factory=list)
+    calls: list["ToolCallEvent"] = Field(default_factory=list, kw_only=False)
 
     def __len__(self) -> int:
         return len(self.calls)
@@ -43,7 +43,7 @@ class ToolCallsEvent(BaseEvent):
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
-    results: list["ToolResultEvent[Any] | ToolErrorEvent"]
+    results: list["ToolResultEvent[Any] | ToolErrorEvent"] = Field(kw_only=False)
 
 
 class ToolEvent(BaseEvent):

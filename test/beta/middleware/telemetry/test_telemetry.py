@@ -185,7 +185,7 @@ async def test_tool_error_marks_span_error(otel_setup):
         "assistant",
         config=TestConfig(
             ModelResponse(
-                tool_calls=ToolCallsEvent(calls=[ToolCallEvent(id="call_1", name="fail_tool", arguments="{}")]),
+                tool_calls=ToolCallsEvent([ToolCallEvent(id="call_1", name="fail_tool", arguments="{}")]),
             ),
             ModelResponse(message=ModelMessage(content="Error handled")),
         ),

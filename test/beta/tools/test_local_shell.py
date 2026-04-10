@@ -122,7 +122,7 @@ class TestShellExecution:
 
     def _make_config(self, command: str, final_reply: str = "done") -> TestConfig:
         return TestConfig(
-            ModelResponse(tool_calls=ToolCallsEvent(calls=[self._make_tool_call(command)])),
+            ModelResponse(tool_calls=ToolCallsEvent([self._make_tool_call(command)])),
             final_reply,
         )
 

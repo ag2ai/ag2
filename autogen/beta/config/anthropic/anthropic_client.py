@@ -200,7 +200,7 @@ class AnthropicClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="anthropic",
@@ -263,7 +263,7 @@ class AnthropicClient(LLMClient):
         # Mapped to our usage keys
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
             model=final_message.model,
             provider="anthropic",

@@ -157,7 +157,7 @@ class OpenAIClient(LLMClient):
 
             return ModelResponse(
                 message=model_msg,
-                tool_calls=ToolCallsEvent(calls=calls),
+                tool_calls=ToolCallsEvent(calls),
                 usage=normalize_usage(completion.usage.model_dump() if completion.usage else {}),
                 model=completion.model,
                 provider="openai",
@@ -232,7 +232,7 @@ class OpenAIClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=normalize_usage(usage),
             model=resolved_model,
             provider="openai",

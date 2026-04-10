@@ -76,13 +76,13 @@ class ToolExecutor:
         if client_calls:
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=client_calls),
+                    tool_calls=ToolCallsEvent(client_calls),
                     response_force=True,
                 )
             )
 
         else:
-            await context.send(ToolResultsEvent(results=results))
+            await context.send(ToolResultsEvent(results))
 
 
 async def _execute_call(

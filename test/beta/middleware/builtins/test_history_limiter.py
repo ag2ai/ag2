@@ -118,8 +118,8 @@ async def test_history_limiter_drops_incomplete_tool_interaction(mock: MagicMock
     middleware = history_limiter(TextInput(content="turn 2"), mock)
     events = [
         TextInput(content="turn 1"),
-        ModelResponse(tool_calls=ToolCallsEvent(calls=[tool_call])),
-        ToolResultsEvent(results=[ToolResultEvent.from_call(tool_call, result="ok")]),
+        ModelResponse(tool_calls=ToolCallsEvent([tool_call])),
+        ToolResultsEvent([ToolResultEvent.from_call(tool_call, result="ok")]),
         ModelResponse(message=ModelMessage(content="answer 1")),
         TextInput(content="turn 2"),
     ]

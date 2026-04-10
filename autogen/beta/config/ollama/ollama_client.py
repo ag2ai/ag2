@@ -124,7 +124,7 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="ollama",
@@ -183,7 +183,7 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=resolved_model,
             provider="ollama",
