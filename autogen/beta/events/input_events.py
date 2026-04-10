@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from enum import Enum
 from os import PathLike
 from pathlib import Path
 from typing import Any, overload
 
-from autogen.beta.types import AudioMediaType, DocumentMediaType, ImageMediaType, MediaType
+from autogen.beta.types import AudioMediaType, DocumentMediaType, ImageMediaType, MediaType, VideoMediaType
 
 from .base import BaseEvent, Field
 
@@ -35,12 +36,22 @@ class TextInput(Input):
         }
 
 
+class BinaryType(str, Enum):
+    BINARY = "binary"
+    IMAGE = "image"
+    AUDIO = "audio"
+    DOCUMENT = "document"
+    VIDEO = "video"
+
+
 class BinaryInput(Input):
     """Binary data input event sent to the model."""
 
     data: bytes = Field(kw_only=False)
     media_type: MediaType | str
     vendor_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    kind: BinaryType = BinaryType.BINARY
 
 
 class FileIdInput(Input):
@@ -64,6 +75,12 @@ class AudioUrlInput(Input):
 
 class DocumentUrlInput(Input):
     """Document URL input event sent to the model."""
+
+    url: str = Field(kw_only=False)
+
+
+class VideoUrlInput(Input):
+    """Video URL input event sent to the model."""
 
     url: str = Field(kw_only=False)
 
@@ -120,12 +137,21 @@ def ImageInput(  # noqa: N802
 
             resolved_type = media_type
 
-        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
+        return BinaryInput(
+            p.read_bytes(),
+            media_type=resolved_type,
+            vendor_metadata={"filename": p.name},
+            kind=BinaryType.IMAGE,
+        )
 
     if data is not None:
         if media_type is None:
             raise ValueError("'media_type' is required when using 'data'")
-        return BinaryInput(data, media_type=media_type)
+        return BinaryInput(
+            data,
+            media_type=media_type,
+            kind=BinaryType.IMAGE,
+        )
 
     raise ValueError("ImageInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
 
@@ -182,12 +208,21 @@ def DocumentInput(  # noqa: N802
 
             resolved_type = media_type
 
-        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
+        return BinaryInput(
+            p.read_bytes(),
+            media_type=resolved_type,
+            vendor_metadata={"filename": p.name},
+            kind=BinaryType.DOCUMENT,
+        )
 
     if data is not None:
         if media_type is None:
             raise ValueError("'media_type' is required when using 'data'")
-        return BinaryInput(data, media_type=media_type)
+        return BinaryInput(
+            data,
+            media_type=media_type,
+            kind=BinaryType.DOCUMENT,
+        )
 
     raise ValueError("DocumentInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
 
@@ -244,14 +279,107 @@ def AudioInput(  # noqa: N802
 
             resolved_type = media_type
 
-        return BinaryInput(p.read_bytes(), media_type=resolved_type, vendor_metadata={"filename": p.name})
+        return BinaryInput(
+            p.read_bytes(),
+            media_type=resolved_type,
+            vendor_metadata={"filename": p.name},
+            kind=BinaryType.AUDIO,
+        )
 
     if data is not None:
         if media_type is None:
             raise ValueError("'media_type' is required when using 'data'")
-        return BinaryInput(data, media_type=media_type)
+        return BinaryInput(
+            data,
+            media_type=media_type,
+            kind=BinaryType.AUDIO,
+        )
 
     raise ValueError("AudioInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
+
+
+@overload
+def VideoInput(url: str) -> VideoUrlInput: ...
+
+
+@overload
+def VideoInput(*, file_id: str, filename: str | None = None) -> FileIdInput: ...
+
+
+@overload
+def VideoInput(*, data: bytes, media_type: VideoMediaType) -> BinaryInput: ...
+
+
+@overload
+def VideoInput(*, path: str | PathLike[str], media_type: VideoMediaType | None = None) -> BinaryInput: ...
+
+
+def VideoInput(  # noqa: N802
+    url: str | None = None,
+    *,
+    file_id: str | None = None,
+    filename: str | None = None,
+    data: bytes | None = None,
+    media_type: VideoMediaType | None = None,
+    path: str | PathLike[str] | None = None,
+) -> VideoUrlInput | FileIdInput | BinaryInput:
+    """Factory for creating video input events.
+
+    Usage:
+        VideoInput("https://example.com/video.mp4")            # URL
+        VideoInput(file_id="file-abc123")                      # pre-uploaded file
+        VideoInput(data=raw_bytes, media_type="video/mp4")     # raw binary
+        VideoInput(path="clip.mp4")                            # local file
+    """
+    if url is not None:
+        return VideoUrlInput(url)
+
+    if file_id is not None:
+        return FileIdInput(file_id, filename=filename)
+
+    if path is not None:
+        p = Path(path)
+        suffix = p.suffix.lower()
+        resolved_type = _VIDEO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+
+        if resolved_type is None:
+            if media_type is None:
+                raise ValueError(
+                    f"Cannot infer video media type from extension '{suffix}'. Provide 'media_type' explicitly."
+                )
+
+            resolved_type = media_type
+
+        return BinaryInput(
+            p.read_bytes(),
+            media_type=resolved_type,
+            vendor_metadata={"filename": p.name},
+            kind=BinaryType.VIDEO,
+        )
+
+    if data is not None:
+        if media_type is None:
+            raise ValueError("'media_type' is required when using 'data'")
+        return BinaryInput(
+            data,
+            media_type=media_type,
+            kind=BinaryType.VIDEO,
+        )
+
+    raise ValueError("VideoInput() requires one of: 'url', 'file_id', 'data' + 'media_type', or 'path'")
+
+
+_VIDEO_EXTENSION_TO_MEDIA_TYPE: dict[str, VideoMediaType] = {
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".flv": "video/x-flv",
+    ".mpeg": "video/mpeg",
+    ".mpg": "video/mpeg",
+    ".wmv": "video/x-ms-wmv",
+    ".3gp": "video/3gpp",
+}
 
 
 _AUDIO_EXTENSION_TO_MEDIA_TYPE: dict[str, AudioMediaType] = {

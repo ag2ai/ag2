@@ -8,6 +8,7 @@ from .input_events import (
     AudioInput,
     AudioUrlInput,
     BinaryInput,
+    BinaryType,
     DocumentInput,
     DocumentUrlInput,
     FileIdInput,
@@ -15,6 +16,8 @@ from .input_events import (
     ImageUrlInput,
     Input,
     TextInput,
+    VideoInput,
+    VideoUrlInput,
 )
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
@@ -42,6 +45,7 @@ __all__ = (
     "AudioUrlInput",
     "BaseEvent",
     "BinaryInput",
+    "BinaryType",
     "BuiltinToolCallEvent",
     "ClientToolCallEvent",
     "Condition",
@@ -69,4 +73,6 @@ __all__ = (
     "ToolResultEvent",
     "ToolResultsEvent",
     "Usage",
+    "VideoInput",
+    "VideoUrlInput",
 )

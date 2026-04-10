@@ -8,7 +8,16 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
-from autogen.beta.events import AudioUrlInput, BinaryInput, DocumentUrlInput, FileIdInput, ImageUrlInput
+from autogen.beta.events import (
+    AudioInput,
+    AudioUrlInput,
+    BinaryInput,
+    BinaryType,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageInput,
+    ImageUrlInput,
+)
 from autogen.beta.exceptions import UnsupportedInputError
 
 
@@ -78,7 +87,7 @@ class TestAudioBinaryInput:
     SAMPLE_BYTES = b"\x00\x01\x02audio"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])
+        result = convert_messages([], [AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -87,7 +96,7 @@ class TestAudioBinaryInput:
         }
 
     def test_completions_mp3(self) -> None:
-        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])
+        result = convert_messages([], [AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -100,7 +109,7 @@ class TestBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
+        result = convert_messages([], [ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result[1] == {
@@ -111,7 +120,14 @@ class TestBinaryInput:
     def test_completions_with_vendor_metadata(self) -> None:
         result = convert_messages(
             [],
-            [BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"detail": "low"})],
+            [
+                BinaryInput(
+                    data=self.SAMPLE_BYTES,
+                    media_type="image/png",
+                    vendor_metadata={"detail": "low"},
+                    kind=BinaryType.IMAGE,
+                )
+            ],
         )
 
         assert result[1] == IsPartialDict({
