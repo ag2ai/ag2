@@ -318,7 +318,7 @@ class TestRedisStream:
         stream2._ensure_listener()
         await asyncio.sleep(0.1)
 
-        await stream1.send(TextInput(content="from stream1"), context=Context(stream1))
+        await stream1.send(TextInput("from stream1"), context=Context(stream1))
         await asyncio.sleep(0.1)
 
         await stream2.send(ModelMessage("from stream2"), context=Context(stream2))

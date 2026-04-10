@@ -72,7 +72,7 @@ class TestConvertMessagesEmptyArguments:
 def test_full_sequence_with_empty_args() -> None:
     """A request -> response-with-tool-call -> tool-result sequence should convert cleanly."""
     events = [
-        TextInput(content="What items do we have?"),
+        TextInput("What items do we have?"),
         _model_response_with_tool_call(""),
         ToolResultsEvent(
             results=[

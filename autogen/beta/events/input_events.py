@@ -21,7 +21,7 @@ class Input(BaseEvent):
     def ensure_input(cls, content: "str | Input") -> "Input":
         if isinstance(content, Input):
             return content
-        return TextInput(content=content)
+        return TextInput(content)
 
 
 class TextInput(Input):

@@ -58,7 +58,7 @@ class BinaryResult:
 class ModelResponse(ModelEvent):
     """Final model response produced for a given request."""
 
-    message: ModelMessage | None = None
+    message: ModelMessage | None = Field(default=None, kw_only=False)
     tool_calls: ToolCallsEvent = Field(default_factory=ToolCallsEvent)
     usage: Usage = Field(default_factory=Usage)
     response_force: bool = False

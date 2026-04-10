@@ -13,7 +13,7 @@ from autogen.beta.testing import TestConfig
 async def test_agent_ask_accepts_text_input() -> None:
     agent = Agent("", config=TestConfig("result"))
 
-    reply = await agent.ask(TextInput(content="Hi!"))
+    reply = await agent.ask(TextInput("Hi!"))
 
     assert reply.body == "result"
 
@@ -23,6 +23,6 @@ async def test_turn_ask_accepts_text_input() -> None:
     agent = Agent("", config=TestConfig("first", "second"))
 
     reply = await agent.ask("Hi!")
-    reply = await reply.ask(TextInput(content="Follow up"))
+    reply = await reply.ask(TextInput("Follow up"))
 
     assert reply.body == "second"

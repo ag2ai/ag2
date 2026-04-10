@@ -70,7 +70,7 @@ class TestLLMCallMiddleware:
 
         await agent.ask("Hi!")
 
-        mock.enter.assert_called_once_with(TextInput(content="Hi!"))
+        mock.enter.assert_called_once_with(TextInput("Hi!"))
         mock.exit.assert_called_once()
 
     @pytest.mark.asyncio()
@@ -98,7 +98,7 @@ class TestLLMCallMiddleware:
                 ctx: Context,
             ) -> ModelResponse:
                 if isinstance(events[-1], TextInput):
-                    events[-1] = TextInput(content=events[-1].content * 2)
+                    events[-1] = TextInput(events[-1].content * 2)
                 return await call_next(events, ctx)
 
         agent = Agent(
@@ -109,4 +109,4 @@ class TestLLMCallMiddleware:
 
         await agent.ask("1")
 
-        tracking_config.mock.assert_called_once_with(TextInput(content="1" * (2**3)))
+        tracking_config.mock.assert_called_once_with(TextInput("1" * (2**3)))

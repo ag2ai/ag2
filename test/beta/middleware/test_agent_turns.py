@@ -49,7 +49,7 @@ class TestAgentTurnMiddleware:
 
         await agent.ask("Hi!")
 
-        mock.create.assert_called_once_with(TextInput(content="Hi!"))
+        mock.create.assert_called_once_with(TextInput("Hi!"))
 
     @pytest.mark.asyncio()
     async def test_chaining(self, mock: MagicMock) -> None:
@@ -76,9 +76,9 @@ class TestAgentTurnMiddleware:
                 ctx: Context,
             ) -> ModelResponse:
                 if isinstance(event, TextInput):
-                    event = TextInput(content=event.content * 2)
+                    event = TextInput(event.content * 2)
                 result = await call_next(event, ctx)
-                return ModelResponse(message=ModelMessage(result.content * 2))
+                return ModelResponse(ModelMessage(result.content * 2))
 
         agent = Agent(
             "",
@@ -88,5 +88,5 @@ class TestAgentTurnMiddleware:
 
         result = await agent.ask("1")
 
-        tracking_config.mock.assert_called_once_with(TextInput(content="1" * (2**3)))
+        tracking_config.mock.assert_called_once_with(TextInput("1" * (2**3)))
         assert result.body == "2" * (2**3)
