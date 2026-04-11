@@ -961,10 +961,7 @@ class Hub:
             existing_vars = kwargs.pop("variables", None) or {}
             kwargs["variables"] = {**metadata, **existing_vars}
         # Set metadata contextvar so network tool can propagate it through delegations
-        if self._propagate_metadata and metadata:
-            meta_token = _delegation_metadata.set(metadata)
-        else:
-            meta_token = None
+        meta_token = _delegation_metadata.set(metadata) if self._propagate_metadata and metadata else None
         try:
             return await resolved.ask(message, tools=existing_tools + network_tools, **kwargs)
         finally:

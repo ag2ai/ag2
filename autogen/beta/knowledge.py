@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -135,6 +136,75 @@ class MemoryKnowledgeStore:
         # Check if it's a directory (any children exist)
         prefix = normalized.rstrip("/") + "/"
         return any(k.startswith(prefix) for k in self._data)
+
+
+# ---------------------------------------------------------------------------
+# Disk implementation
+# ---------------------------------------------------------------------------
+
+
+class DiskKnowledgeStore:
+    """Persistent KnowledgeStore backed by the local filesystem.
+
+    Maps virtual paths directly to real files under a root directory.
+    Directories are created on write. Supports macOS and Linux.
+    Not supported on Windows (filenames may contain characters that
+    are illegal on NTFS such as ``:``, ``?``, ``*``, ``<``, ``>``).
+
+    Example::
+
+        store = DiskKnowledgeStore("/tmp/my-agent")
+        await store.write("/artifacts/report.md", "# Report")
+        # Creates /tmp/my-agent/artifacts/report.md on disk
+    """
+
+    def __init__(self, root: str) -> None:
+        self._root = Path(root)
+        self._root.mkdir(parents=True, exist_ok=True)
+
+    def _resolve(self, path: str) -> Path:
+        """Map virtual path to real filesystem path."""
+        normalized = _normalize(path).lstrip("/")
+        resolved = (self._root / normalized).resolve() if normalized else self._root.resolve()
+        # Prevent path traversal
+        if not str(resolved).startswith(str(self._root.resolve())):
+            raise ValueError(f"Path traversal blocked: {path}")
+        return resolved
+
+    async def read(self, path: str) -> str | None:
+        target = self._resolve(path)
+        if not target.is_file():
+            return None
+        return target.read_text(encoding="utf-8")
+
+    async def write(self, path: str, content: str) -> None:
+        target = self._resolve(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    async def list(self, path: str = "/") -> list[str]:
+        target = self._resolve(path)
+        if not target.is_dir():
+            return []
+        children: list[str] = []
+        for entry in sorted(target.iterdir()):
+            if entry.is_dir():
+                children.append(entry.name + "/")
+            else:
+                children.append(entry.name)
+        return children
+
+    async def delete(self, path: str) -> None:
+        target = self._resolve(path)
+        if target.is_file():
+            target.unlink()
+        elif target.is_dir():
+            import shutil
+
+            shutil.rmtree(target)
+
+    async def exists(self, path: str) -> bool:
+        return self._resolve(path).exists()
 
 
 # ---------------------------------------------------------------------------

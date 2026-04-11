@@ -35,6 +35,7 @@ from .events.lifecycle import (
 )
 from .knowledge import (
     DefaultBootstrap,
+    DiskKnowledgeStore,
     EventLogWriter,
     KnowledgeStore,
     LockedKnowledgeStore,
@@ -95,6 +96,7 @@ __all__ = (
     "DefaultBootstrap",
     "DelayWatch",
     "Depends",
+    "DiskKnowledgeStore",
     "EpisodicMemoryPolicy",
     "EventLogWriter",
     "EventWatch",
