@@ -3924,15 +3924,26 @@ class ConversableAgent(LLMAgent):
         func_or_tool: F | Tool,
         name: str | None,
         description: str | None,
+        parameters_json_schema: dict[str, Any] | None = None,
     ) -> Tool:
         if isinstance(func_or_tool, Tool):
             tool: Tool = func_or_tool
             # create new tool object if name or description is not None
             if name or description:
-                tool = Tool(func_or_tool=tool, name=name, description=description)
+                tool = Tool(
+                    func_or_tool=tool,
+                    name=name,
+                    description=description,
+                    parameters_json_schema=parameters_json_schema,
+                )
         elif inspect.isfunction(func_or_tool):
             function: Callable[..., Any] = func_or_tool
-            tool = Tool(func_or_tool=function, name=name, description=description)
+            tool = Tool(
+                func_or_tool=function,
+                name=name,
+                description=description,
+                parameters_json_schema=parameters_json_schema,
+            )
         else:
             raise TypeError(f"'func_or_tool' must be a function or a Tool object, got '{type(func_or_tool)}' instead.")
         return tool

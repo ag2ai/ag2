@@ -358,7 +358,12 @@ def _change_tool_context_variables_to_depends(
         # Recreate the tool without the context_variables parameter
         tool_func = _modify_context_variables_param(current_tool._func, context_variables)
         tool_func = inject_params(tool_func)
-        new_tool = ConversableAgent._create_tool_if_needed(func_or_tool=tool_func, name=name, description=description)
+        new_tool = ConversableAgent._create_tool_if_needed(
+            func_or_tool=tool_func,
+            name=name,
+            description=description,
+            parameters_json_schema=current_tool.parameters_json_schema,
+        )
 
         # Re-register with the agent
         agent.register_for_llm()(new_tool)

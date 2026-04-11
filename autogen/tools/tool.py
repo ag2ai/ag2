@@ -86,6 +86,13 @@ class Tool:
     def func(self) -> Callable[..., Any]:
         return self._func
 
+    @property
+    def parameters_json_schema(self) -> dict[str, Any] | None:
+        """Get the custom parameters JSON schema, if one was provided."""
+        if self._func_schema is not None:
+            return self._func_schema["function"].get("parameters")
+        return None
+
     def register_for_llm(self, agent: "ConversableAgent") -> None:
         """Registers the tool for use with a ConversableAgent's language model (LLM).
 

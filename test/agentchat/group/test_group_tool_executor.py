@@ -621,6 +621,198 @@ class TestGroupToolExecutor:
         assert result == str(content)
 
 
+    def test_make_tool_copy_preserves_parameters_json_schema(self, executor: GroupToolExecutor) -> None:
+        """Test that make_tool_copy_with_context_variables preserves parameters_json_schema.
+
+        This is a regression test for https://github.com/ag2ai/ag2/issues/1814.
+        When a Tool uses parameters_json_schema for custom parameter schema AND uses
+        context_variables, the dependency injection process must preserve the custom schema.
+        """
+        custom_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["start", "stop", "restart"],
+                    "description": "The action to perform",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "The target service",
+                },
+            },
+            "required": ["action", "target"],
+        }
+
+        def my_tool_func(action: str, target: str, context_variables: ContextVariables) -> str:
+            return f"{action} {target}"
+
+        tool = Tool(
+            name="service_control",
+            description="Control a service",
+            func_or_tool=my_tool_func,
+            parameters_json_schema=custom_schema,
+        )
+
+        # Verify the tool has a custom schema before the copy
+        assert tool.parameters_json_schema is not None
+        assert tool.parameters_json_schema == custom_schema
+
+        # Make a copy with context variables injected
+        context_vars = ContextVariables()
+        new_tool = executor.make_tool_copy_with_context_variables(tool, context_vars)
+
+        # The new tool must exist (context_variables was in the schema)
+        assert new_tool is not None
+
+        # The custom parameters_json_schema must be preserved
+        assert new_tool.parameters_json_schema is not None
+        assert new_tool.parameters_json_schema == custom_schema
+
+        # Verify name and description are preserved too
+        assert new_tool.name == "service_control"
+        assert new_tool.description == "Control a service"
+
+    def test_make_tool_copy_without_parameters_json_schema(self, executor: GroupToolExecutor) -> None:
+        """Test that make_tool_copy_with_context_variables works for tools without custom schema.
+
+        This is a regression test to ensure the fix for #1814 does not break
+        tools that use the default auto-generated schema.
+        """
+
+        def my_tool_func(query: str, context_variables: ContextVariables) -> str:
+            return f"searching: {query}"
+
+        tool = Tool(
+            name="search",
+            description="Search for something",
+            func_or_tool=my_tool_func,
+        )
+
+        # Verify the tool does NOT have a custom schema
+        assert tool.parameters_json_schema is None
+
+        # Make a copy with context variables injected
+        context_vars = ContextVariables()
+        new_tool = executor.make_tool_copy_with_context_variables(tool, context_vars)
+
+        # The new tool should exist
+        assert new_tool is not None
+
+        # parameters_json_schema should still be None (no custom schema)
+        assert new_tool.parameters_json_schema is None
+
+        # Verify name and description are preserved
+        assert new_tool.name == "search"
+        assert new_tool.description == "Search for something"
+
+    def test_make_tool_copy_returns_none_without_context_variables_param(self, executor: GroupToolExecutor) -> None:
+        """Test that make_tool_copy_with_context_variables returns None when
+        the tool does not have a context_variables parameter."""
+
+        def simple_func(x: str) -> str:
+            return x
+
+        tool = Tool(
+            name="simple",
+            description="A simple tool",
+            func_or_tool=simple_func,
+        )
+
+        context_vars = ContextVariables()
+        result = executor.make_tool_copy_with_context_variables(tool, context_vars)
+
+        # Should return None because the tool has no context_variables param
+        assert result is None
+
+
+class TestParametersJsonSchemaProperty:
+    """Tests for the Tool.parameters_json_schema property."""
+
+    def test_parameters_json_schema_with_custom_schema(self) -> None:
+        """Test that parameters_json_schema returns the custom schema when provided."""
+        custom_schema = {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string",
+                    "enum": ["red", "green", "blue"],
+                },
+            },
+            "required": ["color"],
+        }
+
+        def my_func(color: str) -> str:
+            return color
+
+        tool = Tool(
+            name="pick_color",
+            description="Pick a color",
+            func_or_tool=my_func,
+            parameters_json_schema=custom_schema,
+        )
+
+        assert tool.parameters_json_schema == custom_schema
+
+    def test_parameters_json_schema_without_custom_schema(self) -> None:
+        """Test that parameters_json_schema returns None when no custom schema is provided."""
+
+        def my_func(x: str) -> str:
+            return x
+
+        tool = Tool(
+            name="echo",
+            description="Echo input",
+            func_or_tool=my_func,
+        )
+
+        assert tool.parameters_json_schema is None
+
+
+class TestCreateToolIfNeededWithSchema:
+    """Tests for ConversableAgent._create_tool_if_needed with parameters_json_schema."""
+
+    def test_create_tool_from_function_with_schema(self) -> None:
+        """Test that _create_tool_if_needed passes parameters_json_schema when creating from a function."""
+        custom_schema = {
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["fast", "slow"]},
+            },
+            "required": ["mode"],
+        }
+
+        def my_func(mode: str) -> str:
+            return mode
+
+        tool = ConversableAgent._create_tool_if_needed(
+            func_or_tool=my_func,
+            name="mode_tool",
+            description="Select mode",
+            parameters_json_schema=custom_schema,
+        )
+
+        assert tool.name == "mode_tool"
+        assert tool.description == "Select mode"
+        assert tool.parameters_json_schema == custom_schema
+
+    def test_create_tool_from_function_without_schema(self) -> None:
+        """Test that _create_tool_if_needed works without parameters_json_schema (regression)."""
+
+        def my_func(x: str) -> str:
+            return x
+
+        tool = ConversableAgent._create_tool_if_needed(
+            func_or_tool=my_func,
+            name="echo",
+            description="Echo",
+        )
+
+        assert tool.name == "echo"
+        assert tool.description == "Echo"
+        assert tool.parameters_json_schema is None
+
+
 class TestGroupToolExecutorAsync:
     """Tests for the async _a_generate_group_tool_reply method."""
 
