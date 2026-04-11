@@ -34,6 +34,7 @@ class DelegationRequest(BaseEvent):
     source: str
     target: str
     task: str
+    delegation_id: str = ""
 
 
 class DelegationResult(BaseEvent):
@@ -42,6 +43,7 @@ class DelegationResult(BaseEvent):
     source: str
     target: str
     result: str
+    delegation_id: str = ""
 
 
 class DelegationRejected(BaseEvent):
@@ -51,6 +53,7 @@ class DelegationRejected(BaseEvent):
     target: str
     task: str
     reason: str
+    delegation_id: str = ""
 
 
 class DelegationError(BaseEvent):
@@ -60,6 +63,47 @@ class DelegationError(BaseEvent):
     target: str
     task: str
     error: str
+    delegation_id: str = ""
+
+
+class DelegationStarted(BaseEvent):
+    """Emitted when a background (non-blocking) delegation is spawned.
+
+    Unlike ``DelegationRequest`` (which fires for every delegation, blocking
+    or background), this event fires only when ``Hub.request_background`` is
+    called. Subscribers can use it to correlate progress/completion events
+    with a specific background job.
+    """
+
+    source: str
+    target: str
+    task: str
+    delegation_id: str
+
+
+class DelegationProgress(BaseEvent):
+    """Incremental progress from a long-running delegation.
+
+    Reported by the delegatee (directly or via an adapter) while it is still
+    executing. ``progress`` is optional — set it when the total work is
+    quantifiable (0.0–1.0); otherwise use ``message`` for a human-readable
+    status update.
+    """
+
+    source: str
+    target: str
+    delegation_id: str
+    progress: float | None = None
+    message: str = ""
+
+
+class DelegationCancelled(BaseEvent):
+    """Emitted when a background delegation is cancelled."""
+
+    source: str
+    target: str
+    delegation_id: str
+    reason: str = ""
 
 
 # ------------------------------------------------------------------

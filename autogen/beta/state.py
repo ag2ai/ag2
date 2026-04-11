@@ -20,12 +20,17 @@ class StateStore(Protocol):
     """Persistent key-value state for actors and plugins.
 
     Enables crash recovery, checkpointing, and distributed state.
+
+    ``scan`` is optional: stores that cannot enumerate efficiently may raise
+    ``NotImplementedError``. Callers (e.g. ``Hub.recover_orphaned_delegations``)
+    guard for that.
     """
 
     async def get(self, key: str) -> Any | None: ...
     async def set(self, key: str, value: Any, ttl: float | None = None) -> None: ...
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> bool: ...
+    async def scan(self, prefix: str) -> list[str]: ...
 
 
 class MemoryStateStore:
@@ -35,8 +40,11 @@ class MemoryStateStore:
         self._store: dict[str, Any] = {}
         self._expiry: dict[str, float] = {}
 
+    def _expired(self, key: str) -> bool:
+        return key in self._expiry and time.monotonic() > self._expiry[key]
+
     async def get(self, key: str) -> Any | None:
-        if key in self._expiry and time.monotonic() > self._expiry[key]:
+        if self._expired(key):
             del self._store[key]
             del self._expiry[key]
             return None
@@ -54,8 +62,21 @@ class MemoryStateStore:
         self._expiry.pop(key, None)
 
     async def exists(self, key: str) -> bool:
-        if key in self._expiry and time.monotonic() > self._expiry[key]:
+        if self._expired(key):
             del self._store[key]
             del self._expiry[key]
             return False
         return key in self._store
+
+    async def scan(self, prefix: str) -> list[str]:
+        """Return all non-expired keys starting with ``prefix``."""
+        result: list[str] = []
+        for key in list(self._store.keys()):
+            if not key.startswith(prefix):
+                continue
+            if self._expired(key):
+                del self._store[key]
+                del self._expiry[key]
+                continue
+            result.append(key)
+        return result

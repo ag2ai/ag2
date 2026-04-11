@@ -31,10 +31,13 @@ from .convenience import Network
 
 # Events — network-specific
 from .events import (
+    DelegationCancelled,
     DelegationError,
+    DelegationProgress,
     DelegationRejected,
     DelegationRequest,
     DelegationResult,
+    DelegationStarted,
     SchedulerTriggerFired,
     TopicMessage,
     TopicSubscription,
@@ -70,6 +73,9 @@ from .primitives.priority import (
 # Remote
 from .remote import RemoteAgent, RemoteAgentReply
 
+# Desktop proxy (for AgentOS local agents)
+from .desktop_proxy import DesktopAgentReply, DesktopProxyAgent
+
 # Topology
 from .topology import (
     BasePlugin,
@@ -89,6 +95,10 @@ def __getattr__(name: str) -> object:
         from .channels.http import HttpChannel
 
         return HttpChannel
+    if name == "DesktopChannel":
+        from .channels.desktop import DesktopChannel
+
+        return DesktopChannel
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -103,10 +113,16 @@ __all__ = (
     "ConflictResolver",
     "DefaultPriority",
     "DefaultPriorityScheme",
+    "DelegationCancelled",
     "DelegationError",
+    "DelegationProgress",
     "DelegationRejected",
     "DelegationRequest",
     "DelegationResult",
+    "DelegationStarted",
+    "DesktopAgentReply",
+    "DesktopChannel",  # noqa: F822
+    "DesktopProxyAgent",
     "Envelope",
     "EventRegistry",
     "Fanout",
