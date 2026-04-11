@@ -458,6 +458,97 @@ class TestWaitRelease:
 
 
 # ---------------------------------------------------------------------------
+# TestProbeGeneration
+# ---------------------------------------------------------------------------
+
+
+class TestProbeGeneration:
+    def test_probe_generation_advances_on_first_failure(self) -> None:
+        # Given a fresh CLOSED circuit
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=60.0)
+        cb = _CircuitBreaker(config)
+        initial_generation = cb._probe_generation
+        assert initial_generation == 0
+
+        # When the threshold-crossing failure trips the circuit
+        cb.record_failure()
+        assert cb.get_state() == CircuitState.OPEN
+
+        # Then _probe_generation advances to 1
+        assert cb._probe_generation == 1
+
+    def test_probe_generation_advances_again_on_subsequent_failure(self) -> None:
+        # Given an already-OPEN circuit
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=60.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+        assert cb._probe_generation == 1
+        assert cb._opened_at is not None
+
+        # When another failure arrives while already OPEN
+        cb.record_failure()
+
+        # Then _probe_generation advances again
+        assert cb._probe_generation == 2
+
+    @pytest.mark.asyncio()
+    async def test_middleware_stale_claimed_probe_does_not_close_circuit(self) -> None:
+        """Middleware-level regression for the stale claimed-probe timeline.
+
+        Timeline:
+        1. Trip circuit to OPEN.
+        2. Let recovery elapse; probe P is admitted (HALF_OPEN).
+        3. Trigger a failure that refreshes _opened_at and bumps _probe_generation.
+        4. Let recovery elapse again.
+        5. Complete probe P successfully.
+        6. Assert circuit is not CLOSED.
+        """
+
+        event = _make_event()
+        ctx = _make_context()
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
+
+        # --- Step 1: trip the circuit ---
+        call_count = 0
+
+        async def failing(events: Sequence[BaseEvent], c: object) -> ModelResponse:
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("trip")
+
+        instance = factory(event, ctx)
+        with pytest.raises(RuntimeError):
+            await instance.on_llm_call(failing, [], ctx)
+
+        # --- Step 2: probe P is admitted; hold it by monkey-patching record_success ---
+        probe_token_holder: list[int | None] = []
+
+        # Expose the internal _CircuitBreaker via the factory
+        cb: _CircuitBreaker = factory._circuit_breaker  # type: ignore[attr-defined]
+
+        # recovery_timeout_s=0 means HALF_OPEN immediately -- claim the probe
+        state, probe_token = cb.check_and_claim()
+        assert state == CircuitState.HALF_OPEN
+        assert probe_token is not None
+        probe_token_holder.append(probe_token)
+
+        # --- Step 3: intervening failure refreshes _opened_at and bumps generation ---
+        generation_before = cb._probe_generation
+        cb.record_failure()
+        assert cb._probe_generation == generation_before + 1
+
+        # --- Step 4: recovery elapses again (timeout=0, so already elapsed) ---
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+        # --- Step 5: stale probe completes successfully ---
+        cb.record_success(probe_token=probe_token_holder[0])
+
+        # --- Step 6: circuit must NOT be CLOSED ---
+        state = cb.get_state()
+        assert state in (CircuitState.HALF_OPEN, CircuitState.OPEN), f"Stale probe must not close circuit; got {state}"
+
+
+# ---------------------------------------------------------------------------
 # TestConcurrency
 # ---------------------------------------------------------------------------
 
