@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import pickle
 import threading
 from collections.abc import Sequence
 from unittest import mock
@@ -90,6 +91,35 @@ class TestCircuitBreaker:
 
         # Then the circuit is CLOSED again
         assert cb.get_state() == CircuitState.CLOSED
+
+    def test_record_success_in_open_state_does_not_close(self) -> None:
+        # Given an OPEN circuit
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=9999.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+        assert cb.get_state() == CircuitState.OPEN
+
+        # When a delayed success is recorded while still OPEN
+        cb.record_success()
+
+        # Then the OPEN state is preserved
+        assert cb.get_state() == CircuitState.OPEN
+
+    def test_record_success_in_closed_state_resets_failure_count(self) -> None:
+        # Given a CLOSED circuit with failures below threshold
+        config = CircuitBreakerConfig(failure_threshold=5, recovery_timeout_s=60.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.get_state() == CircuitState.CLOSED
+        assert cb._failure_count == 2
+
+        # When a success is recorded
+        cb.record_success()
+
+        # Then the circuit stays CLOSED and the failure count is reset
+        assert cb.get_state() == CircuitState.CLOSED
+        assert cb._failure_count == 0
 
     @pytest.mark.asyncio()
     async def test_half_open_probe_allowed(self) -> None:
@@ -218,8 +248,19 @@ class TestCircuitBreakerMiddleware:
         with pytest.raises(CircuitBreakerOpenError, match="open") as exc_info:
             await mw.on_llm_call(mock.AsyncMock(), [], _make_context())
 
-        # Then the error carries a reference to the breaker and its state
+        # Then the error carries the rejection state
         assert exc_info.value.state == CircuitState.OPEN
+
+    def test_circuit_breaker_open_error_picklable(self) -> None:
+        # Given an open-circuit error with only snapshot state
+        error = CircuitBreakerOpenError(remaining_s=5.0, state=CircuitState.OPEN)
+
+        # When the error is pickled and restored
+        restored = pickle.loads(pickle.dumps(error))
+
+        # Then the observable state and message are preserved
+        assert restored.state == CircuitState.OPEN
+        assert str(restored) == str(error)
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +269,36 @@ class TestCircuitBreakerMiddleware:
 
 
 class TestWaitRelease:
+    @pytest.mark.asyncio()
+    async def test_wait_release_sleeps_for_remaining_time(self) -> None:
+        # Given an error with remaining recovery time
+        error = CircuitBreakerOpenError(remaining_s=5.0, state=CircuitState.OPEN)
+
+        # When wait_release is awaited
+        with mock.patch(
+            "autogen.beta.middleware.builtin.circuit_breaker.asyncio.sleep",
+            new_callable=mock.AsyncMock,
+        ) as sleep:
+            await error.wait_release()
+
+        # Then it sleeps for the captured remaining time
+        sleep.assert_awaited_once_with(5.0)
+
+    @pytest.mark.asyncio()
+    async def test_wait_release_returns_immediately_when_zero(self) -> None:
+        # Given an error with no remaining recovery time
+        error = CircuitBreakerOpenError(remaining_s=0.0, state=CircuitState.HALF_OPEN)
+
+        # When wait_release is awaited
+        with mock.patch(
+            "autogen.beta.middleware.builtin.circuit_breaker.asyncio.sleep",
+            new_callable=mock.AsyncMock,
+        ) as sleep:
+            await error.wait_release()
+
+        # Then it returns without sleeping
+        sleep.assert_not_awaited()
+
     @pytest.mark.asyncio()
     async def test_wait_release_sleeps_remaining_recovery_time(self) -> None:
         # Given an OPEN circuit with a 0.1s recovery timeout
@@ -350,3 +421,20 @@ class TestTimerRefresh:
         # Then the recovery timer is refreshed (opened_at moved forward)
         assert cb._opened_at is not None
         assert cb._opened_at > first_opened_at
+
+
+# ---------------------------------------------------------------------------
+# TestCircuitBreakerTopLevelExport
+# ---------------------------------------------------------------------------
+
+
+def test_circuit_breaker_importable_from_middleware_top_level() -> None:
+    # Given/When/Then: CircuitBreakerMiddleware, CircuitBreakerConfig,
+    # CircuitBreakerOpenError, and CircuitState are importable from the
+    # top-level autogen.beta.middleware package (export regression).
+    import autogen.beta.middleware as mw_pkg
+
+    assert mw_pkg.CircuitBreakerMiddleware is CircuitBreakerMiddleware
+    assert mw_pkg.CircuitBreakerConfig is CircuitBreakerConfig
+    assert mw_pkg.CircuitBreakerOpenError is CircuitBreakerOpenError
+    assert mw_pkg.CircuitState is CircuitState

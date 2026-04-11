@@ -91,11 +91,20 @@ class _CircuitBreaker:
             return self._state_unlocked()
 
     def record_success(self) -> None:
-        """Reset the circuit to CLOSED on a successful call."""
+        """Record a successful call according to the current circuit state."""
         with self._lock:
-            self._failure_count = 0
-            self._opened_at = None
-            self._probe_in_flight = False
+            state = self._state_unlocked()
+            if state == CircuitState.CLOSED:
+                self._failure_count = 0
+                return
+
+            if state == CircuitState.HALF_OPEN:
+                self._failure_count = 0
+                self._opened_at = None
+                self._probe_in_flight = False
+                return
+
+            logger.debug("CircuitBreaker received success while OPEN; leaving state unchanged")
 
     def get_state(self) -> CircuitState:
         """Return the current circuit state."""
@@ -143,10 +152,13 @@ class CircuitBreakerOpenError(RuntimeError):
     ``HALF_OPEN`` (probe slot busy) at the time of rejection.
     """
 
-    def __init__(self, breaker: "_CircuitBreaker", state: CircuitState) -> None:
+    def __init__(self, remaining_s: float, state: CircuitState) -> None:
         super().__init__(f"CircuitBreaker is {state.value}; LLM call blocked")
-        self._breaker = breaker
+        self._remaining_s = remaining_s
         self.state = state
+
+    def __reduce__(self) -> tuple[type["CircuitBreakerOpenError"], tuple[float, CircuitState]]:
+        return (self.__class__, (self._remaining_s, self.state))
 
     async def wait_release(self) -> None:
         """Sleep until the circuit breaker's recovery timeout elapses.
@@ -158,9 +170,8 @@ class CircuitBreakerOpenError(RuntimeError):
         there is no deterministic signal for when the in-flight probe will
         complete.
         """
-        remaining = self._breaker.remaining_recovery_s()
-        if remaining > 0:
-            await asyncio.sleep(remaining)
+        if self._remaining_s > 0:
+            await asyncio.sleep(self._remaining_s)
 
 
 class CircuitBreakerMiddleware(MiddlewareFactory):
@@ -238,11 +249,11 @@ class _CircuitBreakerInstance(BaseMiddleware):
 
         if state == CircuitState.OPEN:
             logger.debug("CircuitBreaker is OPEN -- blocking LLM call")
-            raise CircuitBreakerOpenError(self._cb, CircuitState.OPEN)
+            raise CircuitBreakerOpenError(self._cb.remaining_recovery_s(), CircuitState.OPEN)
 
         if state == CircuitState.HALF_OPEN and not claimed_probe:
             logger.debug("CircuitBreaker is HALF_OPEN and probe slot occupied -- blocking LLM call")
-            raise CircuitBreakerOpenError(self._cb, CircuitState.HALF_OPEN)
+            raise CircuitBreakerOpenError(self._cb.remaining_recovery_s(), CircuitState.HALF_OPEN)
 
         try:
             response = await call_next(events, context)
