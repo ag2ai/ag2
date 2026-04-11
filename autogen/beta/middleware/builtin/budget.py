@@ -319,6 +319,12 @@ class _BudgetMiddlewareInstance(BaseMiddleware):
         serializing concurrent calls. If strict enforcement is required,
         callers should serialize LLM calls for the context or use external
         admission control.
+
+        Known limitation: when used with subagents (run_task), budget spend is
+        tracked per-context copy. Concurrent subagent costs are summed through
+        last-writer-wins variable sync, so concurrent subagents can undercount
+        total spend. For strict per-tree budget enforcement, use a shared
+        external ledger or explicit delta-merge semantics in run_task.
         """
         if not self._budget.context_check(context):
             raise BudgetExceededError(spent=self._budget.spent, limit=self._budget.limit)
