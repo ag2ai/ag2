@@ -70,6 +70,7 @@ def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:
             annotation=get_typed_annotation(param.annotation, globalns),
         )
         for param in signature.parameters.values()
+        if param.kind not in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
     ]
     typed_signature = inspect.Signature(typed_params)
     return typed_signature
@@ -104,7 +105,10 @@ def get_param_annotations(typed_signature: inspect.Signature) -> dict[str, Annot
         A dictionary of the type annotations of the parameters of the function
     """
     return {
-        k: v.annotation for k, v in typed_signature.parameters.items() if v.annotation is not inspect.Signature.empty
+        k: v.annotation
+        for k, v in typed_signature.parameters.items()
+        if v.annotation is not inspect.Signature.empty
+        and v.kind not in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
     }
 
 
@@ -173,7 +177,12 @@ def get_required_params(typed_signature: inspect.Signature) -> list[str]:
     Returns:
         A list of the required parameters of the function
     """
-    return [k for k, v in typed_signature.parameters.items() if v.default == inspect.Signature.empty]
+    return [
+        k
+        for k, v in typed_signature.parameters.items()
+        if v.default == inspect.Signature.empty
+        and v.kind not in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
+    ]
 
 
 def get_default_values(typed_signature: inspect.Signature) -> dict[str, Any]:
@@ -185,7 +194,12 @@ def get_default_values(typed_signature: inspect.Signature) -> dict[str, Any]:
     Returns:
         A dictionary of the default values of the parameters of the function
     """
-    return {k: v.default for k, v in typed_signature.parameters.items() if v.default != inspect.Signature.empty}
+    return {
+        k: v.default
+        for k, v in typed_signature.parameters.items()
+        if v.default != inspect.Signature.empty
+        and v.kind not in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
+    }
 
 
 def get_parameters(
@@ -225,7 +239,12 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
     Returns:
         A set of the missing annotations of the function
     """
-    all_missing = {k for k, v in typed_signature.parameters.items() if v.annotation is inspect.Signature.empty}
+    all_missing = {
+        k
+        for k, v in typed_signature.parameters.items()
+        if v.annotation is inspect.Signature.empty
+        and v.kind not in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
+    }
     missing = all_missing.intersection(set(required))
     unannotated_with_default = all_missing.difference(missing)
     return missing, unannotated_with_default

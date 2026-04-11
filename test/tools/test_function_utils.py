@@ -9,7 +9,7 @@ import inspect
 import unittest.mock
 from collections.abc import Callable
 from enum import Enum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Dict, Literal
 
 import pytest
 from pydantic import BaseModel, Field
@@ -491,3 +491,202 @@ def test_serialize_to_str_list_pydantic() -> None:
         serialize_to_str([A(a=1, b=2.3, c="abc"), A(a=4, b=5.6, c="def")])
         == "[{'a': 1, 'b': 2.3, 'c': 'abc'}, {'a': 4, 'b': 5.6, 'c': 'def'}]"
     )
+
+
+# ==================== Tests for **kwargs / *args filtering (GitHub issue #1790) ====================
+
+
+def test_get_typed_signature_filters_var_keyword() -> None:
+    """get_typed_signature should exclude **kwargs parameters."""
+
+    def func_with_kwargs(a: Annotated[str, AG2Field(description="Param a")], **kwargs: Any) -> str:
+        return ""
+
+    sig = get_typed_signature(func_with_kwargs)
+    param_names = list(sig.parameters.keys())
+    assert "kwargs" not in param_names
+    assert "a" in param_names
+
+
+def test_get_typed_signature_filters_var_positional() -> None:
+    """get_typed_signature should exclude *args parameters."""
+
+    def func_with_args(a: Annotated[str, AG2Field(description="Param a")], *args: Any) -> str:
+        return ""
+
+    sig = get_typed_signature(func_with_args)
+    param_names = list(sig.parameters.keys())
+    assert "args" not in param_names
+    assert "a" in param_names
+
+
+def test_get_typed_signature_filters_both_var_positional_and_keyword() -> None:
+    """get_typed_signature should exclude both *args and **kwargs."""
+
+    def func_with_both(
+        a: Annotated[str, AG2Field(description="Param a")],
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        return ""
+
+    sig = get_typed_signature(func_with_both)
+    param_names = list(sig.parameters.keys())
+    assert "args" not in param_names
+    assert "kwargs" not in param_names
+    assert "a" in param_names
+
+
+def test_get_param_annotations_excludes_kwargs() -> None:
+    """get_param_annotations should not include **kwargs in annotations."""
+
+    def func_with_kwargs(
+        a: Annotated[str, AG2Field(description="Param a")],
+        b: int = 2,
+        **kwargs: Annotated[Dict, "Extra keyword arguments"],
+    ) -> str:
+        return ""
+
+    typed_sig = get_typed_signature(func_with_kwargs)
+    annotations = get_param_annotations(typed_sig)
+    assert "kwargs" not in annotations
+    assert "a" in annotations
+
+
+def test_get_required_params_excludes_kwargs() -> None:
+    """get_required_params should not list **kwargs as required."""
+
+    def func_with_kwargs(
+        a: Annotated[str, AG2Field(description="Param a")],
+        **kwargs: Any,
+    ) -> str:
+        return ""
+
+    typed_sig = get_typed_signature(func_with_kwargs)
+    required = get_required_params(typed_sig)
+    assert "kwargs" not in required
+    assert "a" in required
+
+
+def test_get_required_params_excludes_args() -> None:
+    """get_required_params should not list *args as required."""
+
+    def func_with_args(
+        a: Annotated[str, AG2Field(description="Param a")],
+        *args: Any,
+    ) -> str:
+        return ""
+
+    typed_sig = get_typed_signature(func_with_args)
+    required = get_required_params(typed_sig)
+    assert "args" not in required
+    assert "a" in required
+
+
+def test_get_default_values_excludes_kwargs() -> None:
+    """get_default_values should not include **kwargs."""
+
+    def func_with_kwargs(
+        a: Annotated[str, AG2Field(description="Param a")],
+        b: int = 5,
+        **kwargs: Any,
+    ) -> str:
+        return ""
+
+    typed_sig = get_typed_signature(func_with_kwargs)
+    defaults = get_default_values(typed_sig)
+    assert "kwargs" not in defaults
+    assert defaults == {"b": 5}
+
+
+def test_get_missing_annotations_excludes_var_params() -> None:
+    """get_missing_annotations should not flag *args/**kwargs as missing."""
+
+    def func_with_both(a: str, *args, **kwargs) -> str:  # type: ignore[no-untyped-def]
+        return ""
+
+    typed_sig = get_typed_signature(func_with_both)
+    required = get_required_params(typed_sig)
+    missing, unannotated = get_missing_annotations(typed_sig, required)
+    assert "args" not in missing
+    assert "kwargs" not in missing
+    assert "args" not in unannotated
+    assert "kwargs" not in unannotated
+
+
+def test_get_function_schema_with_kwargs_only() -> None:
+    """Schema for a function with only **kwargs should have no properties/required."""
+
+    def func_kwargs_only(**kwargs: Any) -> str:
+        return ""
+
+    schema = get_function_schema(func_kwargs_only, description="kwargs only function")
+    params = schema["function"]["parameters"]
+    assert "kwargs" not in params["properties"]
+    assert "kwargs" not in params["required"]
+    assert params["properties"] == {}
+    assert params["required"] == []
+
+
+def test_get_function_schema_with_regular_params_and_kwargs() -> None:
+    """Schema should include regular params but exclude **kwargs (issue #1790 repro)."""
+
+    def hello_world(
+        arg1: Annotated[str, AG2Field(description="Case Name")],
+        arg2: Annotated[str, AG2Field(description="Clue Name")],
+        **kwargs: Annotated[Dict, "Extra keyword arguments"],
+    ) -> str:
+        return f"{arg1} {arg2}"
+
+    schema = get_function_schema(hello_world, description="Hello world with kwargs")
+    params = schema["function"]["parameters"]
+
+    # kwargs must NOT appear in the schema
+    assert "kwargs" not in params["properties"]
+    assert "kwargs" not in params["required"]
+
+    # Regular params must be present
+    assert "arg1" in params["properties"]
+    assert "arg2" in params["properties"]
+    assert "arg1" in params["required"]
+    assert "arg2" in params["required"]
+
+
+def test_get_function_schema_with_args_and_kwargs() -> None:
+    """Schema should exclude both *args and **kwargs."""
+
+    def func_with_both(
+        name: Annotated[str, AG2Field(description="The name")],
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        return name
+
+    schema = get_function_schema(func_with_both, description="Function with args and kwargs")
+    params = schema["function"]["parameters"]
+
+    assert "args" not in params["properties"]
+    assert "kwargs" not in params["properties"]
+    assert "args" not in params["required"]
+    assert "kwargs" not in params["required"]
+
+    assert "name" in params["properties"]
+    assert "name" in params["required"]
+
+
+def test_get_function_schema_no_kwargs_regression() -> None:
+    """Functions without *args/**kwargs should still work correctly (regression test)."""
+
+    def normal_func(
+        a: Annotated[str, AG2Field(description="Parameter a")],
+        b: Annotated[int, AG2Field(description="Parameter b")] = 10,
+    ) -> str:
+        return a
+
+    schema = get_function_schema(normal_func, description="Normal function")
+    params = schema["function"]["parameters"]
+
+    assert "a" in params["properties"]
+    assert "b" in params["properties"]
+    assert params["required"] == ["a"]
+    assert params["properties"]["b"]["default"] == 10
