@@ -18,7 +18,7 @@ from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFact
 _INPUT_KEYS = ("prompt_tokens", "prompt_token_count", "input_tokens")
 _OUTPUT_KEYS = ("completion_tokens", "candidates_token_count", "output_tokens")
 _SPENT_KEY = "autogen.beta.middleware.budget.spent"
-_CONTEXT_LOCK_KEY = "autogen.beta.middleware.budget.context_lock_key"
+_CONTEXT_LOCK_KEY = f"{_SPENT_KEY}.context_lock_key"
 
 _context_locks: weakref.WeakKeyDictionary[object, threading.Lock] = weakref.WeakKeyDictionary()
 _registry_lock = threading.Lock()
@@ -52,6 +52,9 @@ def _get_context_lock_key(context: object) -> _ContextLockKey:
     if not isinstance(dependencies, dict):
         return _ContextLockKey()
 
+    # Store the private, non-serializable lock key in dependencies rather than
+    # variables. Dependencies are shallow-copied to subagents but not synced
+    # back, unlike variables which are synced after subagent completion.
     lock_key = dependencies.get(_CONTEXT_LOCK_KEY)
     if not isinstance(lock_key, _ContextLockKey):
         lock_key = _ContextLockKey()
@@ -123,6 +126,27 @@ class _BudgetTracker:
         with self._lock:
             return self._spent < self._config.max_cost_usd
 
+    def context_check(self, context: object) -> bool:
+        """Return True after syncing the tracker from the shared context.
+
+        The context value is the latest spend known across middleware
+        instances for the same conversation. Syncing under the per-context
+        lock keeps admission checks from using a stale tracker-local value
+        when multiple factories were seeded from the same earlier context
+        state.
+        """
+        lock = _get_context_lock(context)
+        with lock:
+            variables = getattr(context, "variables", {})
+            context_spent = _safe_float(variables.get(_SPENT_KEY, 0.0)) if isinstance(variables, dict) else 0.0
+            with self._lock:
+                self._spent = max(self._spent, context_spent)
+                spent = self._spent
+
+        if self._config.max_cost_usd == 0:
+            return True
+        return spent < self._config.max_cost_usd
+
     def utilization(self) -> float:
         """Return fraction of budget consumed (0.0 to 1.0+).
 
@@ -159,7 +183,7 @@ class _BudgetTracker:
         cost = self._compute_cost(usage)
         lock = _get_context_lock(context)
         with lock:
-            context_prior = float(getattr(context, "variables", {}).get(_SPENT_KEY, 0.0))
+            context_prior = _safe_float(getattr(context, "variables", {}).get(_SPENT_KEY, 0.0))
             # Compute the new tracker-local total first (adds this call's cost).
             with self._lock:
                 self._spent += cost
@@ -230,6 +254,22 @@ class BudgetMiddleware(MiddlewareFactory):
     When the configured budget is exhausted, ``BudgetExceededError`` is
     raised so callers see an explicit failure rather than a silent empty
     response.
+
+    Budget enforcement is postpaid: each LLM call is admitted when the spend
+    known at the start of the call is below the configured limit, and the
+    call's cost is recorded only after the model response returns. Concurrent
+    calls that are both admitted before either records its cost can therefore
+    push total spend above the cap. This is intentional; a strict pre-charge
+    reservation would require holding the budget lock across the full LLM
+    round-trip, serializing all concurrent calls. If strict enforcement is
+    required, serialize LLM calls for the context or use external admission
+    control.
+
+    Known limitation: When used with subagents (run_task), budget spend is
+    tracked per-context copy. Concurrent subagent costs are summed through
+    variables.update() on completion, but last-writer-wins semantics mean
+    concurrent subagents can undercount total spend. For strict per-tree budget
+    enforcement, a shared external ledger is required.
     """
 
     def __init__(
@@ -245,7 +285,7 @@ class BudgetMiddleware(MiddlewareFactory):
         )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        prior_spent = float(context.variables.get(_SPENT_KEY, 0.0))
+        prior_spent = _safe_float(context.variables.get(_SPENT_KEY, 0.0))
         tracker = _BudgetTracker(self._config, initial_spent=prior_spent)
         return _BudgetMiddlewareInstance(event, context, tracker)
 
@@ -268,7 +308,19 @@ class _BudgetMiddlewareInstance(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        if not self._budget.check():
+        """Admit the call using postpaid budget enforcement.
+
+        The call is admitted if spend at the start of the call is below the
+        limit, after first syncing the tracker from the shared context. The
+        cost is recorded after the response returns. Concurrent calls that
+        are both admitted before either records may push total spend above
+        the cap. This is intentional because strict pre-charge reservation
+        would require holding the budget lock across the full LLM round-trip,
+        serializing concurrent calls. If strict enforcement is required,
+        callers should serialize LLM calls for the context or use external
+        admission control.
+        """
+        if not self._budget.context_check(context):
             raise BudgetExceededError(spent=self._budget.spent, limit=self._budget.limit)
 
         response = await call_next(events, context)

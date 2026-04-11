@@ -132,6 +132,26 @@ class TestBudgetEnforcement:
         assert excinfo.value.limit == 0.001
 
     @pytest.mark.asyncio()
+    async def test_syncs_context_spend_before_check(self) -> None:
+        mw = BudgetMiddleware(max_cost_usd=1.0)
+        ctx = _make_context()
+        instance = mw(_make_event(), ctx)
+        ctx.variables[_SPENT_KEY] = 1.0
+        called = False
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            nonlocal called
+            called = True
+            return _make_model_response()
+
+        with pytest.raises(BudgetExceededError) as excinfo:
+            await instance.on_llm_call(call_next, [], ctx)
+
+        assert not called
+        assert excinfo.value.spent == pytest.approx(1.0)
+        assert instance._budget.spent == pytest.approx(1.0)
+
+    @pytest.mark.asyncio()
     async def test_records_exact_cost(self) -> None:
         # Given: $0.30/1k input, $0.60/1k output
         mw = BudgetMiddleware(
@@ -422,6 +442,50 @@ class TestBudgetConcurrency:
         assert not errors
         assert abs(tracker.spent - 1000.0) < 1e-6
 
+    def test_atomic_update_context_with_threads(self) -> None:
+        config = BudgetConfig(
+            max_cost_usd=100.0,
+            cost_per_1k_input_tokens=1.0,
+            cost_per_1k_output_tokens=0.0,
+        )
+        ctx = _make_context()
+        usage = {"prompt_tokens": 1000}
+        errors: list[Exception] = []
+        barrier = threading.Barrier(10)
+
+        def worker() -> None:
+            try:
+                tracker = _BudgetTracker(config)
+                barrier.wait(timeout=5)
+                tracker.atomic_update_context(usage, ctx)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+        assert all(not t.is_alive() for t in threads)
+        assert not errors
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(10.0)
+
+    @pytest.mark.asyncio()
+    async def test_malformed_spent_key_in_context_does_not_crash(self) -> None:
+        mw = BudgetMiddleware(max_cost_usd=10.0, cost_per_1k_input_tokens=1.0)
+        ctx = _make_context()
+        ctx.variables[_SPENT_KEY] = "invalid"
+        instance = mw(_make_event(), ctx)
+        response = _make_model_response(1000, 0, key_style="prompt")
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            return response
+
+        await instance.on_llm_call(call_next, [], ctx)
+
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(1.0)
+
     @pytest.mark.asyncio()
     async def test_record_accepts_usage_instance_through_middleware(self) -> None:
         mw = BudgetMiddleware(
@@ -482,6 +546,45 @@ class TestBudgetConcurrencyContext:
         await asyncio.gather(*tasks)
 
         assert ctx.variables[_SPENT_KEY] == pytest.approx(10.0)
+
+    @pytest.mark.asyncio()
+    async def test_concurrent_calls_may_exceed_budget_postpaid(self) -> None:
+        mw = BudgetMiddleware(
+            max_cost_usd=0.50,
+            cost_per_1k_input_tokens=0.50,
+            cost_per_1k_output_tokens=0.0,
+        )
+        ctx = _make_context()
+        task_count = 2
+        all_waiting = asyncio.Event()
+        release = asyncio.Event()
+        waiting = 0
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            nonlocal waiting
+            waiting += 1
+            if waiting == task_count:
+                all_waiting.set()
+            await release.wait()
+            return _make_model_response(1000, 0, key_style="prompt")
+
+        async def run_call() -> None:
+            instance = mw(_make_event(), ctx)
+            await instance.on_llm_call(call_next, [], ctx)
+
+        tasks = [asyncio.create_task(run_call()) for _ in range(task_count)]
+        try:
+            await asyncio.wait_for(all_waiting.wait(), timeout=1.0)
+            release.set()
+            await asyncio.gather(*tasks)
+        finally:
+            release.set()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -671,6 +774,13 @@ def test_budget_importable_from_builtin_init() -> None:
 
     assert builtin_pkg.BudgetConfig is BudgetConfig
     assert builtin_pkg.BudgetMiddleware is BudgetMiddleware
+
+
+def test_budget_exceeded_error_importable_from_builtin_init() -> None:
+    # Given/When/Then: BudgetExceededError is importable from builtin __init__
+    import autogen.beta.middleware.builtin as builtin_pkg
+
+    assert builtin_pkg.BudgetExceededError is BudgetExceededError
 
 
 def test_budget_importable_from_middleware_top_level() -> None:

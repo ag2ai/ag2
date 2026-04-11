@@ -4,7 +4,7 @@
 
 from unittest.mock import Mock
 
-from .budget import BudgetConfig, BudgetMiddleware
+from .budget import BudgetConfig, BudgetExceededError, BudgetMiddleware
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
@@ -28,6 +28,7 @@ except ImportError as e:
 
 __all__ = (
     "BudgetConfig",
+    "BudgetExceededError",
     "BudgetMiddleware",
     "HistoryLimiter",
     "LoggingMiddleware",
