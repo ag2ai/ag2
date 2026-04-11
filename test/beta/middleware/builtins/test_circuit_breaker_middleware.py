@@ -13,6 +13,7 @@ from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware.builtin.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerMiddleware,
+    CircuitBreakerOpenError,
     CircuitState,
     _CircuitBreaker,
 )
@@ -62,7 +63,7 @@ class TestCircuitBreaker:
         assert state == CircuitState.OPEN
 
     @pytest.mark.asyncio()
-    async def test_open_blocks_call(self) -> None:
+    async def test_open_raises_and_blocks_call(self) -> None:
         # Given an OPEN circuit (threshold=1)
         factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=9999.0)
         factory.circuit_breaker.record_failure()
@@ -70,10 +71,11 @@ class TestCircuitBreaker:
         # When on_llm_call is invoked
         call_next = mock.AsyncMock()
         mw = factory(_make_event(), _make_context())
-        response = await mw.on_llm_call(call_next, [], _make_context())
 
-        # Then the call is blocked and call_next is never invoked
-        assert response.message is None
+        # Then CircuitBreakerOpenError is raised and call_next is never invoked
+        with pytest.raises(CircuitBreakerOpenError) as exc_info:
+            await mw.on_llm_call(call_next, [], _make_context())
+        assert exc_info.value.state == CircuitState.OPEN
         call_next.assert_not_called()
 
     def test_success_resets(self) -> None:
@@ -118,10 +120,11 @@ class TestCircuitBreaker:
         # When a second call is attempted
         call_next = mock.AsyncMock()
         mw = factory(_make_event(), _make_context())
-        response = await mw.on_llm_call(call_next, [], _make_context())
 
-        # Then the second call is blocked
-        assert response.message is None
+        # Then CircuitBreakerOpenError(state=HALF_OPEN) is raised
+        with pytest.raises(CircuitBreakerOpenError) as exc_info:
+            await mw.on_llm_call(call_next, [], _make_context())
+        assert exc_info.value.state == CircuitState.HALF_OPEN
         call_next.assert_not_called()
 
         # Cleanup
@@ -205,45 +208,86 @@ class TestCircuitBreakerMiddleware:
         assert mw._config.recovery_timeout_s == 60.0
 
     @pytest.mark.asyncio()
-    async def test_fallback_invoked_when_circuit_open(self) -> None:
-        # Given a middleware with a fallback callable
-        fallback_called = []
-
-        def degraded() -> ModelResponse:
-            fallback_called.append(True)
-            return ModelResponse(message="service unavailable", usage={})
-
-        factory = CircuitBreakerMiddleware(
-            failure_threshold=1,
-            recovery_timeout_s=9999.0,
-            fallback=degraded,
-        )
-        factory.circuit_breaker.record_failure()
-
-        # When on_llm_call is invoked on an OPEN circuit
-        call_next = mock.AsyncMock()
-        mw = factory(_make_event(), _make_context())
-        response = await mw.on_llm_call(call_next, [], _make_context())
-
-        # Then the fallback was invoked and its response returned
-        assert fallback_called == [True]
-        assert response.message == "service unavailable"
-        call_next.assert_not_called()
-
-    @pytest.mark.asyncio()
-    async def test_default_blocked_response_without_fallback(self) -> None:
-        # Given a middleware without a fallback
+    async def test_open_error_message_mentions_state(self) -> None:
+        # Given an OPEN circuit
         factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=9999.0)
         factory.circuit_breaker.record_failure()
 
-        # When on_llm_call is invoked on an OPEN circuit
-        call_next = mock.AsyncMock()
+        # When on_llm_call is invoked
         mw = factory(_make_event(), _make_context())
-        response = await mw.on_llm_call(call_next, [], _make_context())
+        with pytest.raises(CircuitBreakerOpenError, match="open") as exc_info:
+            await mw.on_llm_call(mock.AsyncMock(), [], _make_context())
 
-        # Then the sentinel None-message response is returned
-        assert response.message is None
-        call_next.assert_not_called()
+        # Then the error carries a reference to the breaker and its state
+        assert exc_info.value.state == CircuitState.OPEN
+
+
+# ---------------------------------------------------------------------------
+# TestWaitRelease
+# ---------------------------------------------------------------------------
+
+
+class TestWaitRelease:
+    @pytest.mark.asyncio()
+    async def test_wait_release_sleeps_remaining_recovery_time(self) -> None:
+        # Given an OPEN circuit with a 0.1s recovery timeout
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.1)
+        factory.circuit_breaker.record_failure()
+
+        # When we trigger the error and await wait_release
+        mw = factory(_make_event(), _make_context())
+        with pytest.raises(CircuitBreakerOpenError) as exc_info:
+            await mw.on_llm_call(mock.AsyncMock(), [], _make_context())
+
+        start = asyncio.get_event_loop().time()
+        await exc_info.value.wait_release()
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Then we slept roughly the remaining recovery time (bounded above 0)
+        assert elapsed >= 0.05
+        # After waking, the circuit should be HALF_OPEN or CLOSED, not OPEN
+        assert factory.circuit_breaker.get_state() != CircuitState.OPEN
+
+    @pytest.mark.asyncio()
+    async def test_wait_release_half_open_returns_immediately(self) -> None:
+        # Given a HALF_OPEN circuit with a probe slot already occupied
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
+        cb = factory.circuit_breaker
+        cb.record_failure()
+        _, claimed = cb.check_and_claim()
+        assert claimed
+
+        mw = factory(_make_event(), _make_context())
+        with pytest.raises(CircuitBreakerOpenError) as exc_info:
+            await mw.on_llm_call(mock.AsyncMock(), [], _make_context())
+        assert exc_info.value.state == CircuitState.HALF_OPEN
+
+        # When we await wait_release
+        start = asyncio.get_event_loop().time()
+        await exc_info.value.wait_release()
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Then it returns immediately (remaining recovery time is 0)
+        assert elapsed < 0.05
+        cb.release_probe()
+
+    def test_remaining_recovery_s_zero_when_not_open(self) -> None:
+        # Given a CLOSED circuit
+        config = CircuitBreakerConfig(failure_threshold=5, recovery_timeout_s=60.0)
+        cb = _CircuitBreaker(config)
+
+        # Then remaining_recovery_s is 0.0
+        assert cb.remaining_recovery_s() == 0.0
+
+    def test_remaining_recovery_s_positive_when_open(self) -> None:
+        # Given a freshly OPEN circuit with a long recovery timeout
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=9999.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+
+        # Then remaining_recovery_s is close to the full timeout
+        remaining = cb.remaining_recovery_s()
+        assert 9990.0 < remaining <= 9999.0
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +343,8 @@ class TestTimerRefresh:
         assert first_opened_at is not None
 
         # When another failure arrives while already OPEN
-        time.sleep(0.01)
+        # (use 50ms sleep -- Windows monotonic clock resolution is ~15ms)
+        time.sleep(0.05)
         cb.record_failure()
 
         # Then the recovery timer is refreshed (opened_at moved forward)

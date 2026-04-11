@@ -4,7 +4,12 @@
 
 from unittest.mock import Mock
 
-from .circuit_breaker import CircuitBreakerConfig, CircuitBreakerMiddleware, CircuitState
+from .circuit_breaker import (
+    CircuitBreakerConfig,
+    CircuitBreakerMiddleware,
+    CircuitBreakerOpenError,
+    CircuitState,
+)
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
@@ -29,6 +34,7 @@ except ImportError as e:
 __all__ = (
     "CircuitBreakerConfig",
     "CircuitBreakerMiddleware",
+    "CircuitBreakerOpenError",
     "CircuitState",
     "HistoryLimiter",
     "LoggingMiddleware",

@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import logging
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -14,8 +15,6 @@ from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
 
 logger = logging.getLogger(__name__)
-
-FallbackCallable = Callable[[], ModelResponse]
 
 
 class CircuitState(Enum):
@@ -103,6 +102,18 @@ class _CircuitBreaker:
         with self._lock:
             return self._state_unlocked()
 
+    def remaining_recovery_s(self) -> float:
+        """Return seconds remaining until the OPEN -> HALF_OPEN transition.
+
+        Returns 0.0 if the circuit is not OPEN, or if the recovery timeout
+        has already elapsed.
+        """
+        with self._lock:
+            if self._opened_at is None:
+                return 0.0
+            elapsed = time.monotonic() - self._opened_at
+            return max(0.0, self._config.recovery_timeout_s - elapsed)
+
     def _state_unlocked(self) -> CircuitState:
         """Compute state without acquiring the lock. Caller must hold it."""
         if self._failure_count < self._config.failure_threshold:
@@ -115,49 +126,86 @@ class _CircuitBreaker:
         return CircuitState.HALF_OPEN
 
 
+class CircuitBreakerOpenError(RuntimeError):
+    """Raised when a call is blocked because the circuit breaker is not CLOSED.
+
+    Callers can await :meth:`wait_release` to sleep until the OPEN state
+    expires, then retry the call::
+
+        while True:
+            try:
+                result = await agent.ask(...)
+                break
+            except CircuitBreakerOpenError as exc:
+                await exc.wait_release()
+
+    The attribute :attr:`state` records whether the circuit was ``OPEN`` or
+    ``HALF_OPEN`` (probe slot busy) at the time of rejection.
+    """
+
+    def __init__(self, breaker: "_CircuitBreaker", state: CircuitState) -> None:
+        super().__init__(f"CircuitBreaker is {state.value}; LLM call blocked")
+        self._breaker = breaker
+        self.state = state
+
+    async def wait_release(self) -> None:
+        """Sleep until the circuit breaker's recovery timeout elapses.
+
+        For ``OPEN`` state, this computes the exact remaining time and
+        sleeps once -- no polling. For ``HALF_OPEN`` contention (a probe
+        slot is already occupied), the method returns immediately; callers
+        should impose their own backoff before retrying in that case, since
+        there is no deterministic signal for when the in-flight probe will
+        complete.
+        """
+        remaining = self._breaker.remaining_recovery_s()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+
 class CircuitBreakerMiddleware(MiddlewareFactory):
     """Factory that creates a circuit breaker middleware for LLM calls.
 
-    Wraps outgoing LLM calls and blocks them when the circuit is OPEN
-    or when a HALF_OPEN probe slot is already occupied.
+    Wraps outgoing LLM calls and raises :class:`CircuitBreakerOpenError`
+    when the circuit is ``OPEN`` or when a ``HALF_OPEN`` probe slot is
+    already occupied.
 
     Usage::
 
         middleware = CircuitBreakerMiddleware(failure_threshold=3, recovery_timeout_s=30)
-        agent.register_middleware(middleware)
+        agent = Agent(..., middleware=(middleware,))
 
-    With a fallback callable to customize the blocked-state response::
+        try:
+            result = await agent.ask(...)
+        except CircuitBreakerOpenError as exc:
+            await exc.wait_release()
+            result = await agent.ask(...)
 
-        def degraded() -> ModelResponse:
-            return ModelResponse(message="service temporarily unavailable", usage={})
+    .. warning::
+        Each :class:`CircuitBreakerMiddleware` instance owns an internal
+        lock and counter. **Do not share one instance across multiple
+        agents** unless you explicitly want their failures to count
+        against the same circuit -- doing so couples their health and
+        serializes their state updates. Prefer per-agent construction::
 
-
-        middleware = CircuitBreakerMiddleware(
-            failure_threshold=3,
-            recovery_timeout_s=30,
-            fallback=degraded,
-        )
+            agent1 = Agent(..., middleware=(CircuitBreakerMiddleware(),))
+            agent2 = Agent(..., middleware=(CircuitBreakerMiddleware(),))
 
     Args:
         failure_threshold: Consecutive failures before the circuit opens.
         recovery_timeout_s: Seconds to wait in OPEN state before allowing a probe.
-        fallback: Optional callable returning a ModelResponse to use when the
-            circuit is blocking a call. Defaults to a sentinel response with
-            ``message=None``.
     """
 
     def __init__(
         self,
         failure_threshold: int = 5,
         recovery_timeout_s: float = 60.0,
-        fallback: FallbackCallable | None = None,
     ) -> None:
         self._config = CircuitBreakerConfig(
             failure_threshold=failure_threshold,
             recovery_timeout_s=recovery_timeout_s,
         )
         self._circuit_breaker = _CircuitBreaker(self._config)
-        self._fallback = fallback
 
     @property
     def circuit_breaker(self) -> _CircuitBreaker:
@@ -165,7 +213,7 @@ class CircuitBreakerMiddleware(MiddlewareFactory):
         return self._circuit_breaker
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
-        return _CircuitBreakerInstance(event, context, self._circuit_breaker, self._fallback)
+        return _CircuitBreakerInstance(event, context, self._circuit_breaker)
 
 
 class _CircuitBreakerInstance(BaseMiddleware):
@@ -176,11 +224,9 @@ class _CircuitBreakerInstance(BaseMiddleware):
         event: "BaseEvent",
         context: "Context",
         circuit_breaker: _CircuitBreaker,
-        fallback: FallbackCallable | None,
     ) -> None:
         super().__init__(event, context)
         self._cb = circuit_breaker
-        self._fallback = fallback
 
     async def on_llm_call(
         self,
@@ -192,11 +238,11 @@ class _CircuitBreakerInstance(BaseMiddleware):
 
         if state == CircuitState.OPEN:
             logger.debug("CircuitBreaker is OPEN -- blocking LLM call")
-            return self._blocked_response()
+            raise CircuitBreakerOpenError(self._cb, CircuitState.OPEN)
 
         if state == CircuitState.HALF_OPEN and not claimed_probe:
             logger.debug("CircuitBreaker is HALF_OPEN and probe slot occupied -- blocking LLM call")
-            return self._blocked_response()
+            raise CircuitBreakerOpenError(self._cb, CircuitState.HALF_OPEN)
 
         try:
             response = await call_next(events, context)
@@ -211,9 +257,3 @@ class _CircuitBreakerInstance(BaseMiddleware):
 
         self._cb.record_success()
         return response
-
-    def _blocked_response(self) -> ModelResponse:
-        """Return a response for a blocked call, invoking the fallback if set."""
-        if self._fallback is not None:
-            return self._fallback()
-        return ModelResponse(message=None, usage={})
