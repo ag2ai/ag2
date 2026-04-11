@@ -552,6 +552,17 @@ class TestProbeGeneration:
                 results["probe_p"] = f"error:{exc}"
                 return None
 
+        # Spy on record_success to confirm the middleware passes the probe token.
+        cb: _CircuitBreaker = factory._circuit_breaker  # type: ignore[attr-defined]
+        record_success_calls: list[int | None] = []
+        original_record_success = cb.record_success
+
+        def spy_record_success(probe_token: int | None = None) -> None:
+            record_success_calls.append(probe_token)
+            original_record_success(probe_token=probe_token)
+
+        cb.record_success = spy_record_success  # type: ignore[method-assign]
+
         # Step 1: start call A (CLOSED, slow) -- it is in-flight but not yet failing
         task_a = asyncio.create_task(run_call_a())
         await call_a_started.wait()
@@ -576,9 +587,14 @@ class TestProbeGeneration:
         await task_p
 
         # Step 7: circuit must NOT be CLOSED
-        cb: _CircuitBreaker = factory._circuit_breaker  # type: ignore[attr-defined]
         state = cb.get_state()
         assert state in (CircuitState.HALF_OPEN, CircuitState.OPEN), f"Stale probe must not close circuit; got {state}"
+
+        # Step 8: middleware must have passed a non-None probe_token to record_success
+        assert len(record_success_calls) >= 1, "record_success was not called for probe P"
+        assert any(t is not None for t in record_success_calls), (
+            "middleware passed probe_token=None to record_success; wiring regression"
+        )
 
 
 # ---------------------------------------------------------------------------
