@@ -105,6 +105,66 @@ class TestCircuitBreaker:
         # Then the OPEN state is preserved
         assert cb.get_state() == CircuitState.OPEN
 
+    def test_closed_stale_success_arriving_after_half_open_does_not_close(self) -> None:
+        # Given a circuit whose recovery timeout has elapsed
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=0.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+        # When a stale success from a non-probe call completes
+        cb.record_success(probe_token=None)
+
+        # Then the success is ignored and the circuit remains HALF_OPEN
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+    def test_stale_probe_does_not_close_circuit_after_failure_refresh(self) -> None:
+        # Given a circuit with a claimed HALF_OPEN probe
+        import time
+
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=0.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+
+        state, first_probe_token = cb.check_and_claim()
+        assert state == CircuitState.HALF_OPEN
+        assert first_probe_token is not None
+
+        # When a later failure refreshes opened_at and advances the probe generation
+        cb.record_failure()
+        assert cb._probe_generation != first_probe_token
+
+        # And the circuit becomes HALF_OPEN again
+        cb._opened_at = time.monotonic() - 1.0
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+        # Then the stale probe success is ignored instead of closing the circuit
+        cb.record_success(probe_token=first_probe_token)
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+    def test_failed_half_open_probe_reopens_to_open(self) -> None:
+        # Given a circuit whose recovery timeout has elapsed
+        import time
+
+        config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_s=60.0)
+        cb = _CircuitBreaker(config)
+        cb.record_failure()
+        assert cb.get_state() == CircuitState.OPEN
+        cb._opened_at = time.monotonic() - 61.0
+        assert cb.get_state() == CircuitState.HALF_OPEN
+
+        # And the recovery probe has been claimed
+        state, probe_token = cb.check_and_claim()
+        assert state == CircuitState.HALF_OPEN
+        assert probe_token is not None
+
+        # When that probe fails
+        state = cb.record_failure()
+
+        # Then the circuit reopens instead of staying HALF_OPEN
+        assert state == CircuitState.OPEN
+        assert cb.get_state() == CircuitState.OPEN
+
     def test_record_success_in_closed_state_resets_failure_count(self) -> None:
         # Given a CLOSED circuit with failures below threshold
         config = CircuitBreakerConfig(failure_threshold=5, recovery_timeout_s=60.0)
@@ -144,8 +204,8 @@ class TestCircuitBreaker:
         cb.record_failure()
 
         # Claim the single probe slot manually
-        _, claimed = cb.check_and_claim()
-        assert claimed, "Expected to claim the probe slot"
+        _, probe_token = cb.check_and_claim()
+        assert probe_token is not None, "Expected to claim the probe slot"
 
         # When a second call is attempted
         call_next = mock.AsyncMock()
@@ -177,6 +237,47 @@ class TestCircuitBreaker:
         # Then no additional failure is recorded -- circuit stays HALF_OPEN
         state = factory.circuit_breaker.get_state()
         assert state == CircuitState.HALF_OPEN
+
+    @pytest.mark.asyncio()
+    async def test_half_open_probe_exception_releases_slot(self) -> None:
+        # Given a HALF_OPEN circuit
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
+        cb = factory.circuit_breaker
+        cb.record_failure()
+
+        # When the claimed recovery probe raises a normal exception
+        mw = factory(_make_event(), _make_context())
+        with pytest.raises(RuntimeError, match="LLM error"):
+            await mw.on_llm_call(_failing_call, [], _make_context())
+
+        # Then the failed probe slot is released and another probe can be claimed
+        assert cb._probe_in_flight is False
+        state, probe_token = cb.check_and_claim()
+        assert state == CircuitState.HALF_OPEN
+        assert probe_token is not None
+        cb.release_probe()
+
+    @pytest.mark.asyncio()
+    async def test_cancellation_release_allows_next_probe(self) -> None:
+        # Given a HALF_OPEN circuit
+        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
+        cb = factory.circuit_breaker
+        cb.record_failure()
+
+        # When the claimed recovery probe is cancelled
+        async def _cancel(_events: Sequence[BaseEvent], _ctx: object) -> ModelResponse:
+            raise asyncio.CancelledError()
+
+        mw = factory(_make_event(), _make_context())
+        with pytest.raises(asyncio.CancelledError):
+            await mw.on_llm_call(_cancel, [], _make_context())
+
+        # Then the cancelled probe slot is released and another probe can be claimed
+        assert cb._probe_in_flight is False
+        state, probe_token = cb.check_and_claim()
+        assert state == CircuitState.HALF_OPEN
+        assert probe_token is not None
+        cb.release_probe()
 
     @pytest.mark.asyncio()
     async def test_cancelled_error_in_closed_state(self) -> None:
@@ -301,23 +402,18 @@ class TestWaitRelease:
 
     @pytest.mark.asyncio()
     async def test_wait_release_sleeps_remaining_recovery_time(self) -> None:
-        # Given an OPEN circuit with a 0.1s recovery timeout
-        factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.1)
-        factory.circuit_breaker.record_failure()
+        # Given a CircuitBreakerOpenError with a known remaining_s
+        error = CircuitBreakerOpenError(remaining_s=5.0, state=CircuitState.OPEN)
 
-        # When we trigger the error and await wait_release
-        mw = factory(_make_event(), _make_context())
-        with pytest.raises(CircuitBreakerOpenError) as exc_info:
-            await mw.on_llm_call(mock.AsyncMock(), [], _make_context())
+        # When wait_release is awaited, asyncio.sleep is called with the snapshot value
+        with mock.patch(
+            "autogen.beta.middleware.builtin.circuit_breaker.asyncio.sleep",
+            new_callable=mock.AsyncMock,
+        ) as sleep:
+            await error.wait_release()
 
-        start = asyncio.get_event_loop().time()
-        await exc_info.value.wait_release()
-        elapsed = asyncio.get_event_loop().time() - start
-
-        # Then we slept roughly the remaining recovery time (bounded above 0)
-        assert elapsed >= 0.05
-        # After waking, the circuit should be HALF_OPEN or CLOSED, not OPEN
-        assert factory.circuit_breaker.get_state() != CircuitState.OPEN
+        # Then asyncio.sleep was called with the exact remaining snapshot
+        sleep.assert_awaited_once_with(5.0)
 
     @pytest.mark.asyncio()
     async def test_wait_release_half_open_returns_immediately(self) -> None:
@@ -325,8 +421,8 @@ class TestWaitRelease:
         factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
         cb = factory.circuit_breaker
         cb.record_failure()
-        _, claimed = cb.check_and_claim()
-        assert claimed
+        _, probe_token = cb.check_and_claim()
+        assert probe_token is not None
 
         mw = factory(_make_event(), _make_context())
         with pytest.raises(CircuitBreakerOpenError) as exc_info:
@@ -379,8 +475,8 @@ class TestConcurrency:
 
         def _try_claim() -> None:
             nonlocal claimed_count
-            state, claimed = cb.check_and_claim()
-            if claimed:
+            _state, probe_token = cb.check_and_claim()
+            if probe_token is not None:
                 with count_lock:
                     claimed_count += 1
 

@@ -50,23 +50,27 @@ class _CircuitBreaker:
         self._failure_count = 0
         self._opened_at: float | None = None
         self._probe_in_flight = False
+        self._probe_generation = 0
 
-    def check_and_claim(self) -> tuple[CircuitState, bool]:
-        """Return current state and whether a HALF_OPEN probe was claimed.
+    def check_and_claim(self) -> tuple[CircuitState, int | None]:
+        """Return current state and a HALF_OPEN probe token, if claimed.
 
         Atomically checks the state and claims a probe slot when HALF_OPEN.
-        Returns (state, claimed_probe).
+        Returns (state, probe_token).
         """
         with self._lock:
             state = self._state_unlocked()
             if state == CircuitState.HALF_OPEN and not self._probe_in_flight:
                 self._probe_in_flight = True
-                return state, True
-            return state, False
+                return state, self._probe_generation
+            return state, None
 
-    def release_probe(self) -> None:
+    def release_probe(self, probe_token: int | None = None) -> None:
         """Release a claimed probe without recording success or failure."""
         with self._lock:
+            if probe_token is not None and probe_token != self._probe_generation:
+                logger.debug("CircuitBreaker received stale probe release, ignoring")
+                return
             self._probe_in_flight = False
 
     def record_failure(self) -> CircuitState:
@@ -81,6 +85,7 @@ class _CircuitBreaker:
                 if self._opened_at is None:
                     # First time tripping -- log once
                     self._opened_at = time.monotonic()
+                    self._probe_generation += 1
                     logger.warning(
                         "CircuitBreaker tripped to OPEN after %d consecutive failures",
                         self._failure_count,
@@ -88,23 +93,28 @@ class _CircuitBreaker:
                 else:
                     # Refresh timer on subsequent failures while already open
                     self._opened_at = time.monotonic()
+                    self._probe_generation += 1
             return self._state_unlocked()
 
-    def record_success(self) -> None:
+    def record_success(self, probe_token: int | None = None) -> None:
         """Record a successful call according to the current circuit state."""
         with self._lock:
             state = self._state_unlocked()
             if state == CircuitState.CLOSED:
                 self._failure_count = 0
-                return
-
-            if state == CircuitState.HALF_OPEN:
-                self._failure_count = 0
-                self._opened_at = None
                 self._probe_in_flight = False
                 return
 
-            logger.debug("CircuitBreaker received success while OPEN; leaving state unchanged")
+            if state == CircuitState.HALF_OPEN:
+                if probe_token == self._probe_generation and self._probe_in_flight:
+                    self._failure_count = 0
+                    self._opened_at = None
+                    self._probe_in_flight = False
+                    return
+                logger.debug("CircuitBreaker received stale or non-probe success while HALF_OPEN, ignoring")
+                return
+
+            logger.debug("CircuitBreaker received stale success while OPEN, ignoring")
 
     def get_state(self) -> CircuitState:
         """Return the current circuit state."""
@@ -245,13 +255,13 @@ class _CircuitBreakerInstance(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        state, claimed_probe = self._cb.check_and_claim()
+        state, probe_token = self._cb.check_and_claim()
 
         if state == CircuitState.OPEN:
             logger.debug("CircuitBreaker is OPEN -- blocking LLM call")
             raise CircuitBreakerOpenError(self._cb.remaining_recovery_s(), CircuitState.OPEN)
 
-        if state == CircuitState.HALF_OPEN and not claimed_probe:
+        if state == CircuitState.HALF_OPEN and probe_token is None:
             logger.debug("CircuitBreaker is HALF_OPEN and probe slot occupied -- blocking LLM call")
             raise CircuitBreakerOpenError(self._cb.remaining_recovery_s(), CircuitState.HALF_OPEN)
 
@@ -262,9 +272,9 @@ class _CircuitBreakerInstance(BaseMiddleware):
             raise
         except BaseException:
             # CancelledError and similar -- release probe without recording failure
-            if claimed_probe:
-                self._cb.release_probe()
+            if probe_token is not None:
+                self._cb.release_probe(probe_token=probe_token)
             raise
 
-        self._cb.record_success()
+        self._cb.record_success(probe_token=probe_token)
         return response
