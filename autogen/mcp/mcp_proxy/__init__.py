@@ -5,12 +5,12 @@
 from autogen.import_utils import optional_import_block
 
 from .patch_fastapi_code_generator import (  # noqa: E402
-    SUCCESFUL_IMPORT,
+    SUCCESSFUL_IMPORT,
     patch_function_name_parsing,
     patch_generate_code,
 )
 
-if SUCCESFUL_IMPORT:
+if SUCCESSFUL_IMPORT:
     patch_function_name_parsing()
     patch_generate_code()
 

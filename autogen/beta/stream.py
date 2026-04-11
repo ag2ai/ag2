@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -29,13 +29,11 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> Iterator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
             sync_to_thread=sync_to_thread,
-            condition=condition,
         )
 
         try:

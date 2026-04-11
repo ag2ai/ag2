@@ -6,7 +6,10 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
+import warnings
 from typing import Any
+
+from typing_extensions import deprecated
 
 from ... import OpenAIWrapper
 from ...code_utils import execute_code
@@ -137,7 +140,7 @@ Here are {best_conversations_num} conversation histories of solving {best_conver
 History:
 {best_conversations_history}
 
-{statistic_informations}
+{statistic_information}
 
 According to the information I provide, please take one of four actions to manipulate list B using the functions you know.
 Instead of returning TERMINATE directly or taking no action, you should try your best to optimize the function list. Only take no action if you really think the current list is optimal, as more actions will harm performance in future tasks.
@@ -169,9 +172,17 @@ if result is not None: print(result)
     return result[1]
 
 
+@deprecated(
+    "AgentOptimizer is deprecated and will be removed in v0.14. "
+    "Use ConversableAgent with tool calling for agent configuration and tooling instead."
+)
 class AgentOptimizer:
-    """Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
+    """(Deprecated) Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
     More information could be found in the following paper: https://arxiv.org/abs/2402.11359.
+
+    .. deprecated::
+        AgentOptimizer is deprecated and will be removed in v0.14.
+        Use ConversableAgent with tool calling for agent configuration and tooling instead.
     """
 
     def __init__(
@@ -190,6 +201,12 @@ class AgentOptimizer:
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
         """
+        warnings.warn(
+            "AgentOptimizer is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with tool calling for agent configuration and tooling instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.max_actions_per_step = max_actions_per_step
         self._max_trials = 3
         self.optimizer_model = optimizer_model
@@ -277,7 +294,7 @@ class AgentOptimizer:
                 best_functions=best_functions,
                 incumbent_functions=incumbent_functions,
                 accumulated_experience=failure_experience_prompt,
-                statistic_informations=statistic_prompt,
+                statistic_information=statistic_prompt,
             )
             messages = [{"role": "user", "content": prompt}]
             for _ in range(self._max_trials):
@@ -296,10 +313,10 @@ class AgentOptimizer:
         )
 
         register_for_llm = []
-        register_for_exector = {}
+        register_for_executor = {}
         for name in remove_functions:
             register_for_llm.append({"func_sig": {"name": name}, "is_remove": True})
-            register_for_exector.update({name: None})
+            register_for_executor.update({name: None})
         for func in incumbent_functions:
             register_for_llm.append({
                 "func_sig": {
@@ -309,14 +326,14 @@ class AgentOptimizer:
                 },
                 "is_remove": False,
             })
-            register_for_exector.update({
+            register_for_executor.update({
                 func.get("name"): lambda **args: execute_func(
                     func.get("name"), func.get("packages"), func.get("code"), **args
                 )
             })
 
         self._trial_functions = incumbent_functions
-        return register_for_llm, register_for_exector
+        return register_for_llm, register_for_executor
 
     def reset_optimizer(self):
         """Reset the optimizer."""

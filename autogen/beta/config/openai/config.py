@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -51,7 +51,6 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     modalities: list[str] | None | Omit
     prediction: dict[str, Any] | None | Omit
     prompt_cache_key: str | Omit
-    prompt_cache_retention: str | None | Omit
     safety_identifier: str | Omit
     service_tier: str | None | Omit
     store: bool | None | Omit
@@ -93,7 +92,6 @@ class OpenAIConfig(ModelConfig):
     modalities: list[str] | None | Omit = omit
     prediction: dict[str, Any] | None | Omit = omit
     prompt_cache_key: str | Omit = omit
-    prompt_cache_retention: str | None | Omit = omit
     safety_identifier: str | Omit = omit
     service_tier: str | None | Omit = omit
     store: bool | None | Omit = omit
@@ -127,7 +125,6 @@ class OpenAIConfig(ModelConfig):
             modalities=self.modalities,
             prediction=self.prediction,
             prompt_cache_key=self.prompt_cache_key,
-            prompt_cache_retention=self.prompt_cache_retention,
             safety_identifier=self.safety_identifier,
             service_tier=self.service_tier,
             store=self.store,

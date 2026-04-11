@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -71,7 +71,6 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> AbstractContextManager[None]: ...
 
     def get(
@@ -92,8 +91,9 @@ class Context:
     variables: dict[str, Any] = field(default_factory=dict)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
-        async with self.stream.get(HumanMessage) as response:
-            await self.send(HumanInputRequest(content=message))
+        request_msg = HumanInputRequest(message)
+        async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
+            await self.send(request_msg)
             result: HumanMessage = await asyncio.wait_for(response, timeout)
             return result.content
 

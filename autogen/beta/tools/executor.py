@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -62,7 +62,7 @@ class ToolExecutor:
                     if result.final:
                         await context.send(
                             ModelResponse(
-                                message=ModelMessage(content=ev.content),
+                                message=ModelMessage(ev.content),
                                 response_force=True,
                             )
                         )
@@ -76,13 +76,13 @@ class ToolExecutor:
         if client_calls:
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=client_calls),
+                    tool_calls=ToolCallsEvent(client_calls),
                     response_force=True,
                 )
             )
 
         else:
-            await context.send(ToolResultsEvent(results=results))
+            await context.send(ToolResultsEvent(results))
 
 
 async def _execute_call(

@@ -19,7 +19,7 @@ from test.credentials import Credentials
 
 
 @run_for_optional_imports(["openai"], "openai")
-def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
+def test_eval_math_responses(credentials_openai_mini: Credentials):
     functions = [
         {
             "name": "eval_math_responses",
@@ -41,7 +41,7 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
             },
         },
     ]
-    client = autogen.OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = autogen.OpenAIWrapper(config_list=credentials_openai_mini.config_list)
     response = client.create(
         messages=[
             {
@@ -234,9 +234,9 @@ async def test_a_execute_function_awaits_awaitable_returned_by_sync_callable():
     not sys.version.startswith("3.10"),
     reason="Test available only on Python 3.10",
 )
-def test_update_function(credentials_gpt_4o_mini: Credentials):
+def test_update_function(credentials_openai_mini: Credentials):
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials_openai_mini.config_list,
         "seed": 42,
         "functions": [],
     }

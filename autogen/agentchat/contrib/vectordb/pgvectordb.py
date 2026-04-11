@@ -575,7 +575,7 @@ class PGVectorDB(VectorDB):
             conn: psycopg.Connection | A customer connection object to connect to the database.
                 A connection object may include additional key/values:
                 https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-            connection_string: "postgresql://username:password@hostname:port/database" | The PGVector connection string. Default is None.
+            connection_string: "postgresql://username:password@hostname:port/database" | The PGVector connection string. Default is None.  # pragma: allowlist secret
             host: str | The host to connect to. Default is None.
             port: int | The port to connect to. Default is None.
             dbname: str | The database name to connect to. Default is None.

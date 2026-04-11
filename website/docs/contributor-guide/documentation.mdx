@@ -112,19 +112,19 @@ Please refer to <a href="https://github.com/ag2ai/ag2/blob/main/notebook/contrib
 
 ## Before Making a Pull Request
 
-To maintain code quality and consistency, we use pre-commit hooks that automatically run checks like linting, formatting, and other validations before each commit. It’s important to have these properly set up in your development environment before you start committing changes.
+To maintain code quality and consistency, we use [prek](https://github.com/j178/prek) hooks that automatically run checks like linting, formatting, and other validations before each commit. It’s important to have these properly set up in your development environment before you start committing changes.
 
-If you skip this setup, your pull request’s CI checks may fail, and you'll need to fix issues and update your PR later — so it's highly recommended to get everything configured upfront.
+If you skip this setup, your pull request’s CI checks may fail, and you’ll need to fix issues and update your PR later — so it’s highly recommended to get everything configured upfront.
 
 <Note>
 For more information on setting up the development environment, refer to this [page](/docs/contributor-guide/setup-development-environment/).
 </Note>
 
-### Setting up Pre-commit Hooks
+### Setting up Prek Hooks
 
-From the project root, run the following command to install the development dependencies and set up the pre-commit hooks:
+From the project root, run the following command to install the development dependencies and set up the prek hooks:
 
 ```console
-pip install -e ".[dev]" && pre-commit install
+pip install -e ".[dev]" && prek install
 ```
 This ensures that every time you run git commit, a **series of checks will automatically be executed**.

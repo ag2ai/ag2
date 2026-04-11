@@ -172,14 +172,14 @@ class TestYoutubeSearchTool:
     @run_for_optional_imports("openai", "openai")
     def test_end_to_end_openai(
         self,
-        credentials_gpt_4o_mini: Credentials,
+        credentials_openai_mini: Credentials,
         mock_search_response: dict[str, Any],
         mock_video_details: dict[str, Any],
     ) -> None:
         youtube_search_tool = YoutubeSearchTool(youtube_api_key="api_key")
         self._test_end_to_end(
             youtube_search_tool=youtube_search_tool,
-            credentials=credentials_gpt_4o_mini,
+            credentials=credentials_openai_mini,
             expected_search_result=mock_search_response,
             expected_details_result=mock_video_details,
         )

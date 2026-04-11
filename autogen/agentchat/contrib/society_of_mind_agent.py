@@ -7,16 +7,23 @@
 # ruff: noqa: E722
 import copy
 import traceback
+import warnings
 from collections.abc import Callable
 from contextlib import suppress
 from typing import Any, Literal
+
+from typing_extensions import deprecated
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 from ...llm_config import LLMConfig
 
 
+@deprecated(
+    "SocietyOfMindAgent is deprecated and will be removed in v0.14. "
+    "Use GroupChat patterns for multi-agent orchestration instead."
+)
 class SocietyOfMindAgent(ConversableAgent):
-    """(In preview) A single agent that runs a Group Chat as an inner monologue.
+    """(Deprecated) A single agent that runs a Group Chat as an inner monologue.
     At the end of the conversation (termination for any reason), the SocietyOfMindAgent
     applies the response_preparer method on the entire inner monologue message history to
     extract a final answer for the reply.
@@ -50,6 +57,12 @@ class SocietyOfMindAgent(ConversableAgent):
         default_auto_reply: str | dict[str, Any] | None = "",
         **kwargs: Any,
     ):
+        warnings.warn(
+            "SocietyOfMindAgent is deprecated and will be removed in v0.14. "
+            "Use GroupChat patterns for multi-agent orchestration instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message="",
@@ -169,7 +182,7 @@ class SocietyOfMindAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        # We want to clear the inner monolgue, keeping only the exteranl chat for context.
+        # We want to clear the inner monolgue, keeping only the external chat for context.
         # Reset all the counters and histories, then populate agents with necessary context from the external chat
         self.chat_manager.reset()
         self.update_chat_manager(self.chat_manager)

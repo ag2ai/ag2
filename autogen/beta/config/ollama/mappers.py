@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,8 +6,8 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -51,7 +51,12 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
-            result.append({"role": "user", "content": message.content})
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "ollama")
+
         elif isinstance(message, ModelResponse):
             msg: dict[str, Any] = {
                 "role": "assistant",
@@ -69,6 +74,7 @@ def convert_messages(
             if tool_calls:
                 msg["tool_calls"] = tool_calls
             result.append(msg)
+
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
                 result.append({

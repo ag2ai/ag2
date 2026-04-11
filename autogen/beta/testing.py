@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -32,9 +32,9 @@ class TestClient(LLMClient):
         next_msg = next(self.events)
 
         if isinstance(next_msg, str):
-            next_msg = ModelResponse(message=ModelMessage(content=next_msg))
+            next_msg = ModelResponse(ModelMessage(next_msg))
         elif isinstance(next_msg, ToolCallEvent):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent(calls=[next_msg]))
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
 
         return next_msg
 

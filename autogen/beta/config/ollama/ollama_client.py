@@ -1,8 +1,6 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-
-from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
@@ -21,6 +19,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -99,11 +98,11 @@ class OllamaClient(LLMClient):
         msg = response.message
 
         if msg.thinking:
-            await context.send(ModelReasoning(content=msg.thinking))
+            await context.send(ModelReasoning(msg.thinking))
 
         model_msg: ModelMessage | None = None
         if msg.content:
-            model_msg = ModelMessage(content=msg.content)
+            model_msg = ModelMessage(msg.content)
             await context.send(model_msg)
 
         calls = [
@@ -115,16 +114,18 @@ class OllamaClient(LLMClient):
             for i, tc in enumerate(msg.tool_calls or [])
         ]
 
-        usage_dict = {
-            "prompt_tokens": response.prompt_eval_count or 0,
-            "completion_tokens": response.eval_count or 0,
-            "total_tokens": (response.prompt_eval_count or 0) + (response.eval_count or 0),
-        }
+        prompt_n = float(response.prompt_eval_count or 0)
+        completion_n = float(response.eval_count or 0)
+        usage = Usage(
+            prompt_tokens=prompt_n,
+            completion_tokens=completion_n,
+            total_tokens=prompt_n + completion_n,
+        )
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=response.model,
             provider="ollama",
             finish_reason=getattr(response, "done_reason", None),
@@ -144,7 +145,7 @@ class OllamaClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
+        usage = Usage()
         calls: list[ToolCallEvent] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
@@ -153,11 +154,11 @@ class OllamaClient(LLMClient):
             msg = chunk.message
 
             if msg.thinking:
-                await context.send(ModelReasoning(content=msg.thinking))
+                await context.send(ModelReasoning(msg.thinking))
 
             if msg.content:
                 full_content += msg.content
-                await context.send(ModelMessageChunk(content=msg.content))
+                await context.send(ModelMessageChunk(msg.content))
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
@@ -169,23 +170,21 @@ class OllamaClient(LLMClient):
                 )
 
             if chunk.done:
-                usage_dict = {
-                    "prompt_tokens": chunk.prompt_eval_count or 0,
-                    "completion_tokens": chunk.eval_count or 0,
-                    "total_tokens": (chunk.prompt_eval_count or 0) + (chunk.eval_count or 0),
-                }
+                p_n = float(chunk.prompt_eval_count or 0)
+                c_n = float(chunk.eval_count or 0)
+                usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
                 finish_reason = getattr(chunk, "done_reason", None)
                 resolved_model = chunk.model
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=resolved_model,
             provider="ollama",
             finish_reason=finish_reason,

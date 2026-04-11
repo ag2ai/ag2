@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,7 +6,15 @@ import json
 from collections.abc import Sequence
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
+from autogen.beta.events import (
+    BaseEvent,
+    HumanInputRequest,
+    HumanMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+)
 from autogen.beta.middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -143,7 +151,13 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.request.model", self._model_name)
 
             if self._capture_content:
-                input_messages = json.dumps([e.to_api() for e in events if hasattr(e, "to_api")])
+                input_messages = json.dumps([
+                    inp.to_api()
+                    for event in events
+                    if isinstance(event, ModelRequest)
+                    for inp in event.inputs
+                    if isinstance(inp, TextInput)
+                ])
                 span.set_attribute("gen_ai.input.messages", input_messages)
 
             try:
@@ -168,10 +182,14 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.response.finish_reasons", [response.finish_reason])
 
             usage = response.usage
-            if usage.get("prompt_tokens"):
-                span.set_attribute("gen_ai.usage.input_tokens", int(usage["prompt_tokens"]))
-            if usage.get("completion_tokens"):
-                span.set_attribute("gen_ai.usage.output_tokens", int(usage["completion_tokens"]))
+            if usage.prompt_tokens:
+                span.set_attribute("gen_ai.usage.input_tokens", int(usage.prompt_tokens))
+            if usage.completion_tokens:
+                span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
+            if usage.cache_creation_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_read_input_tokens:
+                span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
 
             if self._capture_content and response.message:
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
