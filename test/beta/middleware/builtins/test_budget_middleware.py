@@ -4,6 +4,7 @@
 
 """Tests for BudgetMiddleware."""
 
+import asyncio
 import math
 import threading
 from collections.abc import Sequence
@@ -445,6 +446,45 @@ class TestBudgetConcurrency:
 
 
 # ---------------------------------------------------------------------------
+# TestBudgetConcurrencyContext
+# ---------------------------------------------------------------------------
+
+
+class TestBudgetConcurrencyContext:
+    @pytest.mark.asyncio()
+    async def test_concurrent_instances_accumulate_shared_context_spend(self) -> None:
+        mw = BudgetMiddleware(
+            max_cost_usd=100.0,
+            cost_per_1k_input_tokens=1.0,
+            cost_per_1k_output_tokens=0.0,
+        )
+        ctx = _make_context()
+        task_count = 10
+        all_waiting = asyncio.Event()
+        release = asyncio.Event()
+        waiting = 0
+
+        async def call_next(events: Sequence[BaseEvent], current_ctx: object) -> ModelResponse:
+            nonlocal waiting
+            waiting += 1
+            if waiting == task_count:
+                all_waiting.set()
+            await release.wait()
+            return _make_model_response(1000, 0, key_style="prompt")
+
+        async def run_call() -> None:
+            instance = mw(_make_event(), ctx)
+            await instance.on_llm_call(call_next, [], ctx)
+
+        tasks = [asyncio.create_task(run_call()) for _ in range(task_count)]
+        await all_waiting.wait()
+        release.set()
+        await asyncio.gather(*tasks)
+
+        assert ctx.variables[_SPENT_KEY] == pytest.approx(10.0)
+
+
+# ---------------------------------------------------------------------------
 # TestBudgetAdversarial
 # ---------------------------------------------------------------------------
 
@@ -631,6 +671,16 @@ def test_budget_importable_from_builtin_init() -> None:
 
     assert builtin_pkg.BudgetConfig is BudgetConfig
     assert builtin_pkg.BudgetMiddleware is BudgetMiddleware
+
+
+def test_budget_importable_from_middleware_top_level() -> None:
+    # Given/When/Then: BudgetConfig, BudgetMiddleware, BudgetExceededError are importable
+    # from the top-level autogen.beta.middleware package (B-2 regression)
+    import autogen.beta.middleware as mw_pkg
+
+    assert mw_pkg.BudgetConfig is BudgetConfig
+    assert mw_pkg.BudgetMiddleware is BudgetMiddleware
+    assert mw_pkg.BudgetExceededError is BudgetExceededError
 
 
 def test_record_accepts_usage_dataclass() -> None:
