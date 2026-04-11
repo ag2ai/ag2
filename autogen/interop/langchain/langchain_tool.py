@@ -15,6 +15,36 @@ with optional_import_block():
     from langchain_core.tools import BaseTool as LangchainTool
 
 
+def _langchain_tool_has_async_implementation(langchain_tool: "LangchainTool") -> bool:
+    """Check if a LangChain tool has a real async implementation.
+
+    LangChain's ``BaseTool`` defines a default ``_arun`` that raises
+    ``NotImplementedError``.  We walk the MRO to find the first class that
+    defines ``_arun``.  If that class is the tool's own concrete class (or
+    any intermediate subclass that is *not* ``BaseTool``), we treat it as
+    having a real async implementation.
+
+    Returns:
+        True if the tool overrides ``_arun`` with a custom implementation.
+    """
+    try:
+        from langchain_core.tools import BaseTool as LangchainBaseTool
+    except ImportError:
+        return False
+
+    # Walk the MRO to find the first class that defines ``_arun``.
+    for cls in type(langchain_tool).__mro__:
+        if "_arun" in cls.__dict__:
+            # If the defining class is BaseTool itself, there is no
+            # custom override — it's the default NotImplementedError stub.
+            if cls is LangchainBaseTool:
+                return False
+            # Otherwise a subclass has overridden _arun.
+            return True
+
+    return False
+
+
 @register_interoperable_class("langchain")
 @export_module("autogen.interop")
 class LangChainInteroperability:
@@ -34,6 +64,14 @@ class LangChainInteroperability:
         This method verifies that the provided tool is a valid `LangchainTool`,
         processes the tool's input and description, and returns a standardized
         `Tool` object.
+
+        When the LangChain tool provides a native async implementation
+        (i.e. overrides ``_arun``), the converted tool will be an async
+        function that calls ``ainvoke``, allowing it to be properly awaited
+        inside ``a_initiate_chat`` and other async execution paths.
+
+        For tools without async support, the synchronous ``run`` method is
+        used, preserving backward compatibility.
 
         Args:
             tool (Any): The tool to convert, expected to be an instance of `LangchainTool`.
@@ -55,6 +93,17 @@ class LangChainInteroperability:
         langchain_tool: LangchainTool = tool  # type: ignore[no-any-unimported]
 
         model_type = langchain_tool.get_input_schema()
+
+        if _langchain_tool_has_async_implementation(langchain_tool):
+
+            async def async_func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+                return await langchain_tool.ainvoke(tool_input.model_dump())  # type: ignore[attr-defined]
+
+            return Tool(
+                name=langchain_tool.name,
+                description=langchain_tool.description,
+                func_or_tool=async_func,
+            )
 
         def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
             return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
