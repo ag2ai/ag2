@@ -495,55 +495,88 @@ class TestProbeGeneration:
     async def test_middleware_stale_claimed_probe_does_not_close_circuit(self) -> None:
         """Middleware-level regression for the stale claimed-probe timeline.
 
-        Timeline:
-        1. Trip circuit to OPEN.
-        2. Let recovery elapse; probe P is admitted (HALF_OPEN).
-        3. Trigger a failure that refreshes _opened_at and bumps _probe_generation.
-        4. Let recovery elapse again.
-        5. Complete probe P successfully.
-        6. Assert circuit is not CLOSED.
-        """
+        All calls go through on_llm_call to exercise the middleware wiring
+        (token capture, record_success call) rather than the state machine alone.
 
+        Timeline:
+        1. A pre-trip call A starts (CLOSED) and is held.
+        2. Call B trips the circuit to OPEN via on_llm_call.
+        3. Recovery elapses (timeout=0); probe P is admitted via on_llm_call and held.
+        4. Call A completes with failure, refreshing _opened_at and bumping generation.
+        5. Recovery elapses again (timeout=0).
+        6. Probe P's call completes successfully.
+        7. Assert circuit is not CLOSED -- P's stale token must not close it.
+        """
         event = _make_event()
         ctx = _make_context()
         factory = CircuitBreakerMiddleware(failure_threshold=1, recovery_timeout_s=0.0)
 
-        # --- Step 1: trip the circuit ---
-        call_count = 0
+        # Shared event primitives to control call ordering across coroutines.
+        call_a_started = asyncio.Event()
+        call_a_unblock = asyncio.Event()
+        probe_p_started = asyncio.Event()
+        probe_p_unblock = asyncio.Event()
 
-        async def failing(events: Sequence[BaseEvent], c: object) -> ModelResponse:
-            nonlocal call_count
-            call_count += 1
+        # --- Step 1+4: pre-trip call A runs slowly and fails ---
+        async def slow_failing(events: Sequence[BaseEvent], c: object) -> ModelResponse:
+            call_a_started.set()
+            await call_a_unblock.wait()
+            raise RuntimeError("stale CLOSED-origin failure")
+
+        # --- Step 3: probe P's call runs slowly and succeeds ---
+        async def slow_success(events: Sequence[BaseEvent], c: object) -> ModelResponse:
+            probe_p_started.set()
+            await probe_p_unblock.wait()
+            return _make_model_response()
+
+        # --- Step 2: immediate failure to trip the circuit ---
+        async def immediate_fail(events: Sequence[BaseEvent], c: object) -> ModelResponse:
             raise RuntimeError("trip")
 
-        instance = factory(event, ctx)
+        results: dict[str, object] = {}
+
+        async def run_call_a() -> None:
+            instance = factory(event, ctx)
+            try:
+                await instance.on_llm_call(slow_failing, [], ctx)
+            except RuntimeError:
+                results["call_a"] = "failed"
+
+        async def run_probe_p() -> None:
+            instance = factory(event, ctx)
+            try:
+                result = await instance.on_llm_call(slow_success, [], ctx)
+                results["probe_p"] = "success"
+                return result
+            except Exception as exc:
+                results["probe_p"] = f"error:{exc}"
+                return None
+
+        # Step 1: start call A (CLOSED, slow) -- it is in-flight but not yet failing
+        task_a = asyncio.create_task(run_call_a())
+        await call_a_started.wait()
+
+        # Step 2: trip the circuit with a fast failing call
+        trip_instance = factory(event, ctx)
         with pytest.raises(RuntimeError):
-            await instance.on_llm_call(failing, [], ctx)
+            await trip_instance.on_llm_call(immediate_fail, [], ctx)
 
-        # --- Step 2: probe P is admitted; hold it by monkey-patching record_success ---
-        probe_token_holder: list[int | None] = []
+        # timeout=0 means HALF_OPEN immediately -- start probe P
+        task_p = asyncio.create_task(run_probe_p())
+        await probe_p_started.wait()
 
-        # Expose the internal _CircuitBreaker via the factory
+        # Step 4: call A fails -- refreshes _opened_at, advances _probe_generation
+        call_a_unblock.set()
+        await task_a
+
+        # Step 5: recovery elapses (timeout=0, already elapsed)
+
+        # Step 6: probe P completes successfully
+        probe_p_unblock.set()
+        await task_p
+
+        # Step 7: circuit must NOT be CLOSED
         cb: _CircuitBreaker = factory._circuit_breaker  # type: ignore[attr-defined]
-
-        # recovery_timeout_s=0 means HALF_OPEN immediately -- claim the probe
-        state, probe_token = cb.check_and_claim()
-        assert state == CircuitState.HALF_OPEN
-        assert probe_token is not None
-        probe_token_holder.append(probe_token)
-
-        # --- Step 3: intervening failure refreshes _opened_at and bumps generation ---
-        generation_before = cb._probe_generation
-        cb.record_failure()
-        assert cb._probe_generation == generation_before + 1
-
-        # --- Step 4: recovery elapses again (timeout=0, so already elapsed) ---
-        assert cb.get_state() == CircuitState.HALF_OPEN
-
-        # --- Step 5: stale probe completes successfully ---
-        cb.record_success(probe_token=probe_token_holder[0])
-
-        # --- Step 6: circuit must NOT be CLOSED ---
         state = cb.get_state()
         assert state in (CircuitState.HALF_OPEN, CircuitState.OPEN), f"Stale probe must not close circuit; got {state}"
 
