@@ -4,6 +4,7 @@
 
 """Tool policy middleware -- blocks disallowed tool calls before execution."""
 
+import contextlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -118,7 +119,7 @@ class ToolPolicyMiddleware(MiddlewareFactory):
         return self._config
 
     def update_policy(self, config: ToolPolicyConfig) -> None:
-        """Atomically replace the tool policy at runtime.
+        """Replace the tool policy at runtime.
 
         Subsequent tool calls use the new policy. Calls that have already
         entered ``on_tool_execution`` continue with the policy snapshot
@@ -129,10 +130,12 @@ class ToolPolicyMiddleware(MiddlewareFactory):
         kill switches, per-tenant rule updates from an ops dashboard,
         role changes during a long-running session, etc.
 
-        Under CPython's GIL each individual attribute assignment is atomic
-        at the bytecode level.  ``_policy`` is assigned last so that
-        :meth:`__call__` readers never observe a new policy paired with a
-        stale :attr:`config`.
+        ``self._policy`` is the sole authority used for enforcement in
+        :meth:`__call__`; ``self._config`` is updated for the :attr:`config`
+        property. Under CPython the two ``STORE_ATTR`` operations below are
+        not a single transaction, so a :attr:`config` reader may briefly see
+        the new config while :meth:`__call__` uses the old policy for one
+        final middleware instantiation.
 
         Args:
             config: The new :class:`ToolPolicyConfig` to enforce. Passing
@@ -140,9 +143,6 @@ class ToolPolicyMiddleware(MiddlewareFactory):
                 effectively clears all restrictions.
         """
         new_policy = _ToolPolicy(config)
-        # Assign _config first, _policy last.  __call__ reads only _policy,
-        # so the window where _config and _policy disagree is one bytecode
-        # instruction -- no reader in __call__ can observe the mismatch.
         self._config = config
         self._policy = new_policy
 
@@ -173,7 +173,9 @@ class _ToolPolicyInstance(BaseMiddleware):
         allowed, reason = self._policy.check(event.name)
         if not allowed:
             if self._on_blocked is not None:
-                self._on_blocked(event, reason)
+                # Policy enforcement must not depend on observer success.
+                with contextlib.suppress(Exception):
+                    self._on_blocked(event, reason)
             return _make_tool_error(event, reason)
 
         return await call_next(event, context)

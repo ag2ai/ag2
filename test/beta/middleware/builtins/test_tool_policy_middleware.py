@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import threading
 from unittest import mock
 
 import pytest
@@ -214,6 +216,29 @@ class TestToolPolicyMiddleware:
         assert isinstance(result, ToolErrorEvent)
 
     @pytest.mark.asyncio()
+    async def test_on_blocked_callback_error_is_suppressed(self) -> None:
+        # Given a middleware with a blocklist and a failing on_blocked callback
+        def audit(call: ToolCallEvent, reason: str) -> None:
+            raise RuntimeError("audit failed")
+
+        factory = ToolPolicyMiddleware(blocked_tools=["bad_tool"], on_blocked=audit)
+
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When the observer fails while a blocked call is denied
+        blocked_call = ToolCallEvent(id="c1", name="bad_tool")
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, blocked_call, ctx)
+
+        # Then enforcement still returns the policy denial
+        assert isinstance(result, ToolErrorEvent)
+        assert result.content == "tool 'bad_tool' is blocked"
+
+    @pytest.mark.asyncio()
     async def test_on_blocked_not_called_when_allowed(self) -> None:
         # Given a middleware with a callback and an allowed call
         recorded: list[tuple[str, str]] = []
@@ -322,6 +347,100 @@ class TestToolPolicyMiddleware:
 
         # Then denial still works, just without observation
         assert isinstance(result, ToolErrorEvent)
+
+    @pytest.mark.asyncio()
+    async def test_concurrent_update_policy_consistent_decisions(self) -> None:
+        # Given a factory and N concurrent tool-execution coroutines
+        # interleaved with a background writer swapping the policy.
+        factory = ToolPolicyMiddleware(allowed_tools=["search"])
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        stop_flag = threading.Event()
+
+        def writer() -> None:
+            configs = [
+                ToolPolicyConfig(allowed_tools=["search"]),
+                ToolPolicyConfig(),
+            ]
+            i = 0
+            while not stop_flag.is_set():
+                factory.update_policy(configs[i % 2])
+                i += 1
+
+        writer_thread = threading.Thread(target=writer, daemon=True)
+        writer_thread.start()
+
+        async def one_call() -> None:
+            instance = factory(initial_event, ctx)
+            result = await instance.on_tool_execution(call_next, ToolCallEvent(id="cx", name="shell_exec"), ctx)
+            # Result must be either ToolErrorEvent or ToolResultEvent -- never an exception.
+            assert isinstance(result, (ToolErrorEvent, ToolResultEvent))
+
+        await asyncio.gather(*[one_call() for _ in range(20)])
+        stop_flag.set()
+        writer_thread.join(timeout=2.0)
+        assert not writer_thread.is_alive()
+
+    @pytest.mark.asyncio()
+    async def test_on_blocked_callback_exception_does_not_prevent_denial(self) -> None:
+        # Given an on_blocked callback that always raises
+        def bad_callback(call: ToolCallEvent, reason: str) -> None:
+            raise RuntimeError("audit failed")
+
+        factory = ToolPolicyMiddleware(blocked_tools=["bad_tool"], on_blocked=bad_callback)
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When the blocked call is attempted
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, ToolCallEvent(id="c1", name="bad_tool"), ctx)
+
+        # Then the callback exception is swallowed and denial still returns ToolErrorEvent
+        assert isinstance(result, ToolErrorEvent)
+
+    @pytest.mark.asyncio()
+    async def test_empty_tool_name_denied_by_allowlist(self) -> None:
+        # Given a middleware that only allows "search"
+        factory = ToolPolicyMiddleware(allowed_tools=["search"])
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When called with an empty tool name
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, ToolCallEvent(id="c1", name=""), ctx)
+
+        # Then the empty name is not in the allowlist and is denied
+        assert isinstance(result, ToolErrorEvent)
+
+    @pytest.mark.asyncio()
+    async def test_empty_allowlist_blocks_all_via_public_interface(self) -> None:
+        # Given a middleware constructed with an empty allowed list (deny all)
+        factory = ToolPolicyMiddleware(allowed_tools=[])
+        ctx = _make_context()
+        initial_event = _make_event()
+        called: list[bool] = []
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            called.append(True)
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When any tool call passes through
+        instance = factory(initial_event, ctx)
+        result = await instance.on_tool_execution(call_next, ToolCallEvent(id="c1", name="search"), ctx)
+
+        # Then the call is denied and call_next is never invoked
+        assert isinstance(result, ToolErrorEvent)
+        assert called == []
 
 
 # ---------------------------------------------------------------------------
