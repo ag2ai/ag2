@@ -77,6 +77,11 @@ class ToolPolicyMiddleware(MiddlewareFactory):
     retained across invocations. To observe denied calls, pass an
     ``on_blocked`` callback when constructing the middleware.
 
+    The policy can be replaced at runtime via :meth:`update_policy` --
+    useful for rate-limit kill switches, per-tenant rules driven by an
+    ops dashboard, or role changes that land mid-session without
+    rebuilding the agent.
+
     Example::
 
         def audit(call: ToolCallEvent, reason: str) -> None:
@@ -89,6 +94,9 @@ class ToolPolicyMiddleware(MiddlewareFactory):
             on_blocked=audit,
         )
         agent = MyAgent(middleware=[mw])
+
+        # Later, swap the policy without rebuilding the agent:
+        mw.update_policy(ToolPolicyConfig(blocked_tools=["delete_all", "shell_exec"]))
     """
 
     def __init__(
@@ -103,6 +111,34 @@ class ToolPolicyMiddleware(MiddlewareFactory):
         )
         self._policy = _ToolPolicy(self._config)
         self._on_blocked = on_blocked
+
+    @property
+    def config(self) -> ToolPolicyConfig:
+        """Return the currently active policy configuration."""
+        return self._config
+
+    def update_policy(self, config: ToolPolicyConfig) -> None:
+        """Atomically replace the tool policy at runtime.
+
+        Subsequent tool calls use the new policy. Calls that have already
+        entered ``on_tool_execution`` continue with the policy snapshot
+        their per-invocation instance captured at construction time, so
+        in-flight executions are never torn across a configuration change.
+
+        This is the intended hook for dynamic policy sources: rate-limit
+        kill switches, per-tenant rule updates from an ops dashboard,
+        role changes during a long-running session, etc.
+
+        Args:
+            config: The new :class:`ToolPolicyConfig` to enforce. Passing
+                a fresh config with defaults (empty blocklist, no allowlist)
+                effectively clears all restrictions.
+        """
+        new_policy = _ToolPolicy(config)
+        # Assign _policy last so readers in __call__ never observe a state
+        # where _config is new but _policy is stale.
+        self._config = config
+        self._policy = new_policy
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _ToolPolicyInstance(event, context, self._policy, self._on_blocked)

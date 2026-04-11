@@ -240,6 +240,71 @@ class TestToolPolicyMiddleware:
         assert result is good_result
 
     @pytest.mark.asyncio()
+    async def test_update_policy_takes_effect_on_next_call(self) -> None:
+        # Given a middleware that initially allows "search" only
+        factory = ToolPolicyMiddleware(allowed_tools=["search"])
+        ctx = _make_context()
+        initial_event = _make_event()
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When "shell_exec" is attempted before the update -- denied
+        instance_before = factory(initial_event, ctx)
+        result_before = await instance_before.on_tool_execution(
+            call_next, ToolCallEvent(id="c1", name="shell_exec"), ctx
+        )
+        assert isinstance(result_before, ToolErrorEvent)
+
+        # And the policy is replaced at runtime to allow shell_exec
+        factory.update_policy(ToolPolicyConfig(allowed_tools=["search", "shell_exec"]))
+
+        # Then a new instance picks up the new policy and permits the call
+        instance_after = factory(initial_event, ctx)
+        result_after = await instance_after.on_tool_execution(call_next, ToolCallEvent(id="c2", name="shell_exec"), ctx)
+        assert not isinstance(result_after, ToolErrorEvent)
+        assert factory.config.allowed_tools == ("search", "shell_exec")
+
+    @pytest.mark.asyncio()
+    async def test_update_policy_in_flight_instance_uses_snapshot(self) -> None:
+        # Given a factory that allows "search" and an instance constructed under that policy
+        factory = ToolPolicyMiddleware(allowed_tools=["search"])
+        ctx = _make_context()
+        instance = factory(_make_event(), ctx)  # snapshot taken here
+
+        async def call_next(event: ToolCallEvent, context: mock.MagicMock) -> ToolResultEvent:
+            return ToolResultEvent(parent_id=event.id, name=event.name, result=ToolResult("ok"))
+
+        # When the factory policy is swapped to allow everything mid-flight
+        factory.update_policy(ToolPolicyConfig())
+
+        # Then the previously constructed instance still enforces the old snapshot
+        result = await instance.on_tool_execution(call_next, ToolCallEvent(id="c1", name="shell_exec"), ctx)
+        assert isinstance(result, ToolErrorEvent)
+
+    def test_update_policy_clears_restrictions(self) -> None:
+        # Given a middleware with both blocked and allowed lists
+        factory = ToolPolicyMiddleware(blocked_tools=["x"], allowed_tools=["y"])
+
+        # When the policy is replaced with an empty config
+        factory.update_policy(ToolPolicyConfig())
+
+        # Then check() permits any tool name
+        allowed, reason = factory._policy.check("anything")
+        assert allowed
+        assert reason == ""
+        assert factory.config.blocked_tools == ()
+        assert factory.config.allowed_tools is None
+
+    def test_config_property_returns_active_config(self) -> None:
+        # Given a middleware
+        factory = ToolPolicyMiddleware(blocked_tools=["delete_all"])
+
+        # Then config property exposes the active ToolPolicyConfig
+        assert isinstance(factory.config, ToolPolicyConfig)
+        assert factory.config.blocked_tools == ("delete_all",)
+
+    @pytest.mark.asyncio()
     async def test_no_callback_means_no_error(self) -> None:
         # Given a middleware without an on_blocked callback
         factory = ToolPolicyMiddleware(blocked_tools=["bad_tool"])
