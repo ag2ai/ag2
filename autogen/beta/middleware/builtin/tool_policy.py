@@ -129,14 +129,20 @@ class ToolPolicyMiddleware(MiddlewareFactory):
         kill switches, per-tenant rule updates from an ops dashboard,
         role changes during a long-running session, etc.
 
+        Under CPython's GIL each individual attribute assignment is atomic
+        at the bytecode level.  ``_policy`` is assigned last so that
+        :meth:`__call__` readers never observe a new policy paired with a
+        stale :attr:`config`.
+
         Args:
             config: The new :class:`ToolPolicyConfig` to enforce. Passing
                 a fresh config with defaults (empty blocklist, no allowlist)
                 effectively clears all restrictions.
         """
         new_policy = _ToolPolicy(config)
-        # Assign _policy last so readers in __call__ never observe a state
-        # where _config is new but _policy is stale.
+        # Assign _config first, _policy last.  __call__ reads only _policy,
+        # so the window where _config and _policy disagree is one bytecode
+        # instruction -- no reader in __call__ can observe the mismatch.
         self._config = config
         self._policy = new_policy
 

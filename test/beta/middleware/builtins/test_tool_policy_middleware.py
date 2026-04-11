@@ -322,3 +322,17 @@ class TestToolPolicyMiddleware:
 
         # Then denial still works, just without observation
         assert isinstance(result, ToolErrorEvent)
+
+
+# ---------------------------------------------------------------------------
+# Standalone export tests
+# ---------------------------------------------------------------------------
+
+
+def test_tool_policy_importable_from_middleware_top_level() -> None:
+    # Given/When/Then: ToolPolicyMiddleware and ToolPolicyConfig are importable
+    # from the top-level autogen.beta.middleware package (TP-2 export regression).
+    import autogen.beta.middleware as mw_pkg
+
+    assert mw_pkg.ToolPolicyMiddleware is ToolPolicyMiddleware
+    assert mw_pkg.ToolPolicyConfig is ToolPolicyConfig
