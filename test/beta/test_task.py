@@ -7,10 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, MemoryStream, tool
+from autogen.beta import Agent, Context, MemoryStream, tool
 from autogen.beta.annotations import Context as Ctx
 from autogen.beta.annotations import Variable
-from autogen.beta.context import Context
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,

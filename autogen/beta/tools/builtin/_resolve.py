@@ -5,12 +5,12 @@
 from typing import Any
 
 from autogen.beta.annotations import Variable
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 
 
 def resolve_variable(
     value: Any,
-    context: Context,
+    context: ConversationContext,
     *,
     param_name: str = "",
 ) -> Any:

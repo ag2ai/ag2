@@ -12,7 +12,7 @@ from fast_depends.core import CallModel
 
 from autogen.beta.types import ClassInfo
 
-from .context import Context, Stream, StreamId, SubId
+from .context import ConversationContext, Stream, StreamId, SubId
 from .events import BaseEvent
 from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
@@ -154,7 +154,7 @@ class MemoryStream(ABCStream):
         self._subscribers.pop(sub_id, None)
         self._interrupters.pop(sub_id, None)
 
-    async def send(self, event: BaseEvent, context: "Context") -> None:
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         # interrupters should follow registration order
         for condition, interrupter in tuple(self._interrupters.values()):
             if condition and not condition(event):
@@ -254,5 +254,5 @@ class SubStream(ABCStream):
     def unsubscribe(self, sub_id: SubId) -> None:
         return self._parent.unsubscribe(sub_id)
 
-    async def send(self, event: BaseEvent, context: "Context") -> None:
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)

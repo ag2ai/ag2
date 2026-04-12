@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from autogen.beta.context import Context
+from autogen.beta import Context
 from autogen.beta.events import ModelMessage, TextInput, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 

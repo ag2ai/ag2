@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 from ollama import AsyncClient
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -56,7 +56,7 @@ class OllamaClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -87,7 +87,7 @@ class OllamaClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response = await self._client.chat(
             model=self._model,
@@ -135,7 +135,7 @@ class OllamaClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response_stream = await self._client.chat(
             model=self._model,
