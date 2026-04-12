@@ -4,8 +4,8 @@
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.config.gemini.mappers import build_tools
-from autogen.beta.context import Context
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool

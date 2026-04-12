@@ -28,7 +28,7 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     BinaryResult,
@@ -107,7 +107,7 @@ class OpenAIResponsesClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -142,7 +142,7 @@ class OpenAIResponsesClient(LLMClient):
     async def _process_response(
         self,
         response: Response,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
@@ -222,7 +222,7 @@ class OpenAIResponsesClient(LLMClient):
     async def _process_stream(
         self,
         response_stream: AsyncStream[ResponseStreamEvent],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []

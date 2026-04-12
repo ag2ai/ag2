@@ -24,7 +24,7 @@ SubId: TypeAlias = UUID
 class Stream(Protocol):
     id: StreamId
 
-    async def send(self, event: BaseEvent, context: "Context") -> None: ...
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
     def where(self, condition: ClassInfo | Condition) -> "Stream": ...
 
@@ -80,7 +80,7 @@ class Stream(Protocol):
 
 
 @dataclass(slots=True)
-class Context:
+class ConversationContext:
     stream: Stream
     dependency_provider: "Provider | None" = None
 

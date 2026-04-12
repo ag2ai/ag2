@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.annotations import Variable
-from autogen.beta.context import Context
 from autogen.beta.tools import ImageGenerationTool, UserLocation, WebSearchTool
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
