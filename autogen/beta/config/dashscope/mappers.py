@@ -8,6 +8,7 @@ from typing import Any
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
@@ -37,6 +38,9 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
                 "parameters": t.function.parameters,
             },
         }
+
+    elif isinstance(t, SkillsToolSchema):
+        raise UnsupportedToolError(t.type, "dashscope")
 
     raise UnsupportedToolError(t.type, "dashscope")
 

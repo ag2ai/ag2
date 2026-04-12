@@ -242,6 +242,7 @@ class Agent(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: type[TResult],
+        plugins: Iterable["Plugin"] = ...,
     ) -> None: ...
 
     @overload
@@ -258,6 +259,7 @@ class Agent(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: ResponseProto[TResult],
+        plugins: Iterable["Plugin"] = ...,
     ) -> None: ...
 
     @overload
@@ -274,6 +276,7 @@ class Agent(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: types.UnionType,
+        plugins: Iterable["Plugin"] = ...,
     ) -> None: ...
 
     @overload
@@ -290,6 +293,7 @@ class Agent(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: None = ...,
+        plugins: Iterable["Plugin"] = ...,
     ) -> None: ...
 
     def __init__(
@@ -305,6 +309,7 @@ class Agent(Generic[TResult]):
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         response_schema: ResponseProto[TResult] | type[TResult] | types.UnionType | None = None,
+        plugins: Iterable["Plugin"] = (),
     ):
         self.name = name
         self.config = config
@@ -312,10 +317,13 @@ class Agent(Generic[TResult]):
         self._agent_dependencies = dependencies or {}
         self._agent_variables = variables or {}
 
-        self._middleware = middleware
+        self._middleware = list(middleware)
         self._observers = list(observers)
+
         self.dependency_provider = Provider()
-        self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
+        self.tools: list[FunctionTool] = []
+        for t in tools:
+            self.add_tool(t)
 
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
         self.__tool_executor = ToolExecutor()
@@ -333,6 +341,9 @@ class Agent(Generic[TResult]):
                 self._system_prompt.append(p)
             else:
                 self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+        for p in plugins:
+            p.register(self)
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
         if self._hitl_hook is not None:
@@ -392,6 +403,24 @@ class Agent(Generic[TResult]):
         sync_to_thread: bool = True,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
+
+    def add_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
+        """Append middleware as the innermost wrapper in the chain.
+
+        The added middleware is called last on turn entry and first on turn exit,
+        executing closer to the LLM call than any middleware already registered.
+        """
+        self._middleware.append(m)
+        return self
+
+    def insert_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
+        """Insert middleware as the outermost wrapper in the chain.
+
+        The inserted middleware is called first on turn entry and last on turn exit,
+        executing before all middleware already registered on the agent.
+        """
+        self._middleware.insert(0, m)
+        return self
 
     def add_tool(self, t: Callable[..., Any] | Tool) -> "Agent[TResult]":
         self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
@@ -724,3 +753,169 @@ def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awa
         return r
 
     return wrapper
+
+
+class Plugin:
+    def __init__(
+        self,
+        *,
+        prompt: PromptType | Iterable[PromptType] = (),
+        hitl_hook: HumanHook | None = None,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+    ) -> None:
+        self._tools = list(tools)
+        self._middleware = list(middleware)
+        self._observers = list(observers)
+        self._dependencies = dependencies or {}
+        self._variables = variables or {}
+        self._hitl_hook = hitl_hook
+
+        self._system_prompt: list[str] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
+
+        if isinstance(prompt, str) or callable(prompt):
+            prompt = [prompt]
+        for p in prompt:
+            if isinstance(p, str):
+                self._system_prompt.append(p)
+            else:
+                self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+    def register(self, agent: "Agent[Any]") -> None:
+        """Apply this plugin's contributions to an Agent instance."""
+        for t in self._tools:
+            agent.add_tool(t)
+
+        for m in self._middleware:
+            agent.add_middleware(m)
+
+        if self._hitl_hook is not None:
+            if agent._hitl_hook is not None:
+                warnings.warn(
+                    f"Agent '{agent.name}' already has a HITL hook; the plugin's hook will be ignored.",
+                    stacklevel=2,
+                )
+            else:
+                agent._hitl_hook = wrap_hitl(self._hitl_hook)
+
+        agent._agent_dependencies = self._dependencies | agent._agent_dependencies
+        agent._agent_variables.update(self._variables)
+
+        agent._observers.extend(self._observers)
+        agent._system_prompt.extend(self._system_prompt)
+        agent._dynamic_prompt.extend(self._dynamic_prompt)
+
+    def hitl_hook(self, func: HumanHook) -> HumanHook:
+        if self._hitl_hook is not None:
+            warnings.warn(
+                "You already set HITL hook, provided value overrides it",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+        self._hitl_hook = func
+        return func
+
+    @overload
+    def prompt(
+        self,
+        func: PromptHook,
+    ) -> PromptHook: ...
+
+    @overload
+    def prompt(
+        self,
+        func: None = None,
+    ) -> Callable[[PromptHook], PromptHook]: ...
+
+    def prompt(
+        self,
+        func: PromptHook | None = None,
+    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
+        def wrapper(f: PromptHook) -> PromptHook:
+            self._dynamic_prompt.append(_wrap_prompt_hook(f))
+            return f
+
+        if func:
+            return wrapper(func)
+        return wrapper
+
+    @overload
+    def tool(
+        self,
+        function: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool: ...
+
+    @overload
+    def tool(
+        self,
+        function: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
+
+    def tool(
+        self,
+        function: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
+        def make_tool(f: Callable[..., Any]) -> FunctionTool:
+            t = tool(
+                f,
+                name=name,
+                description=description,
+                schema=schema,
+                sync_to_thread=sync_to_thread,
+                middleware=middleware,
+            )
+            self._tools.append(t)
+            return t
+
+        if function:
+            return make_tool(function)
+        return make_tool
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any],
+    ) -> Callable[..., Any]: ...
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any] | None = None,
+    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+            obs = observer_factory(condition, func)
+            self._observers.append(obs)
+            return func
+
+        if callback is not None:
+            return wrapper(callback)
+        return wrapper

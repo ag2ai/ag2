@@ -7,6 +7,7 @@ from .image_generation import ImageGenerationTool
 from .mcp_server import MCPServerTool
 from .memory import MemoryTool
 from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, NetworkPolicy, ShellTool
+from .skills import Skill, SkillsTool
 from .web_fetch import WebFetchTool
 from .web_search import UserLocation, WebSearchTool
 
@@ -19,6 +20,8 @@ __all__ = (
     "MemoryTool",
     "NetworkPolicy",
     "ShellTool",
+    "Skill",
+    "SkillsTool",
     "UserLocation",
     "WebFetchTool",
     "WebSearchTool",

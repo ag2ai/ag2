@@ -15,7 +15,7 @@ from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
 
-class FilesystemToolset(Toolkit):
+class FilesystemToolkit(Toolkit):
     """Toolkit that exposes local filesystem operations as function tools.
 
     All paths are resolved relative to *base_path*.  A path-traversal guard
@@ -24,7 +24,7 @@ class FilesystemToolset(Toolkit):
     Individual tools are available as attributes and can be passed to an agent
     separately::
 
-        fs = FilesystemToolset(base_path="/tmp/workspace")
+        fs = FilesystemToolkit(base_path="/tmp/workspace")
 
         # use the full toolset
         agent = Agent("a", config=config, tools=[fs])

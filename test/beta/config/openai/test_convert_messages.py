@@ -18,8 +18,40 @@ from autogen.beta.events import (
     ImageInput,
     ImageUrlInput,
     ModelRequest,
+    TextInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
+
+
+class TestTextInput:
+    def test_completions(self) -> None:
+        result = convert_messages([], [ModelRequest([TextInput("hello")])])
+
+        assert result[1] == {"role": "user", "content": "hello"}
+
+    def test_responses(self) -> None:
+        result = events_to_responses_input([ModelRequest([TextInput("hello")])])
+
+        assert result == [{"role": "user", "content": [{"type": "input_text", "text": "hello"}]}]
+
+    def test_completions_text_with_image_url(self) -> None:
+        """Text + image in one ModelRequest must produce a single message with content array."""
+        image_url = "https://example.com/image.png"
+        result = convert_messages(
+            [],
+            [
+                ModelRequest([TextInput("describe this"), ImageUrlInput(url=image_url)]),
+            ],
+        )
+
+        assert len(result) == 2  # system + one user message
+        assert result[1] == {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "describe this"},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        }
 
 
 class TestImageUrlInput:

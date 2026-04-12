@@ -13,6 +13,7 @@ from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
@@ -38,6 +39,19 @@ def build_system_instruction(
     return joined or None
 
 
+def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
+    """Gemini requires every function's parameters schema to be type=object.
+
+    Parameterless functions produce ``{"type": "null"}`` (from pydantic/fast_depends)
+    or ``{}`` — both rejected by Gemini with ``INVALID_ARGUMENT``.
+    Normalise to ``{"type": "object", "properties": {}}``.
+    """
+    raw_type = str(params.get("type", "")).lower()
+    if not params or raw_type in ("null", "none", ""):
+        return {"type": "object", "properties": {}}
+    return params
+
+
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     """Build Gemini tool objects from a list of ToolSchemas."""
     function_declarations: list[types.FunctionDeclaration] = []
@@ -49,7 +63,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
                 types.FunctionDeclaration(
                     name=t.function.name,
                     description=t.function.description,
-                    parameters=t.function.parameters,
+                    parameters=_ensure_object_schema(t.function.parameters),
                 )
             )
 
@@ -64,6 +78,9 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
 
         elif isinstance(t, CodeExecutionToolSchema):
             extra_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
+
+        elif isinstance(t, SkillsToolSchema):
+            raise UnsupportedToolError(t.type, "gemini")
 
         else:
             raise UnsupportedToolError(t.type, "gemini")

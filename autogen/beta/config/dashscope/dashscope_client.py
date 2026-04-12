@@ -11,7 +11,7 @@ import dashscope
 from dashscope.aigc.generation import AioGeneration
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -58,7 +58,7 @@ class DashScopeClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -93,7 +93,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response = await AioGeneration.call(
             model=self._model,
@@ -151,7 +151,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         responses = await AioGeneration.call(
             model=self._model,

@@ -30,6 +30,29 @@ All imports must be at the top of the test file. Never place imports inside indi
 
 Use **plain functions** for standalone tests. Use **classes** to group multiple related tests that share a logical subject (e.g., `TestImageUrlInput`, `TestBinaryInput`). Do not wrap a single test method in a class — keep it a plain function instead.
 
+If you need to apply markers to each test in class, apply them to the class itself.
+
+```python
+# Bad - markers are applied to each test individually
+class TestAgent:
+    @pytest.mark.asyncio
+    async def test_defaults(self, context: Context) -> None: ...
+
+    @pytest.mark.asyncio
+    async def test_defaults(self, context: Context) -> None: ...
+
+# Good - markers are applied to the class itself
+@pytest.mark.asyncio
+class TestAgent:
+    async def test_defaults(self, context: Context) -> None: ...
+
+    async def test_defaults(self, context: Context) -> None: ...
+```
+
+### Section comments
+
+Do not use banner-style section dividers (e.g. `# ---\n# Section\n# ---`). Class names and test names are sufficient structure.
+
 ## Builtin Tools Testing
 
 ### Structure

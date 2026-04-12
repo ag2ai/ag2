@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta.context import Context
+from autogen.beta import Context
 from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.subagents.persistent_stream import persistent_stream

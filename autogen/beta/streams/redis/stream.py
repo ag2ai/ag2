@@ -8,7 +8,8 @@ from uuid import uuid4
 
 import redis.asyncio as aioredis
 
-from autogen.beta.context import Context, StreamId
+from autogen.beta.annotations import Context
+from autogen.beta.context import StreamId
 from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
 

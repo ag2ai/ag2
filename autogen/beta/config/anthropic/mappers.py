@@ -14,6 +14,7 @@ from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
 from autogen.beta.tools.builtin.shell import ShellToolSchema
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
@@ -131,6 +132,11 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
         return {"type": t.version, "name": "bash"}
 
+    elif isinstance(t, SkillsToolSchema):
+        # Skills are handled via the container parameter, not the tools[] array.
+        # Use extract_skills_for_container() in the client instead.
+        raise UnsupportedToolError(t.type, "anthropic")
+
     elif isinstance(t, MCPServerToolSchema):
         # https://platform.claude.com/docs/en/docs/agents-and-tools/mcp-connector
         result = {
@@ -163,6 +169,21 @@ def extract_mcp_servers(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
                 server["authorization_token"] = t.authorization_token
             servers.append(server)
     return servers
+
+
+def extract_skills_for_container(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
+    """Extract Anthropic skills from SkillsToolSchema instances for the container parameter."""
+    skills: list[dict[str, Any]] = []
+    for t in tools:
+        if isinstance(t, SkillsToolSchema):
+            for s in t.skills:
+                entry: dict[str, Any] = {
+                    "type": "anthropic",
+                    "skill_id": s.id,
+                    "version": str(s.version) if s.version is not None else "latest",
+                }
+                skills.append(entry)
+    return skills
 
 
 def convert_messages(
