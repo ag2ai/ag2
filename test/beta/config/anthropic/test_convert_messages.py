@@ -26,6 +26,7 @@ from autogen.beta.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    VideoInput,
     VideoUrlInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
@@ -292,7 +293,11 @@ class TestUnsupportedInputs:
             convert_messages([ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])])
 
     def test_video_binary_raises(self) -> None:
-        from autogen.beta.events import VideoInput
-
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*video.*anthropic"):
             convert_messages([ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])])
+
+    def test_generic_binary_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="BinaryInput.*binary.*anthropic"):
+            convert_messages([
+                ModelRequest([BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)])
+            ])

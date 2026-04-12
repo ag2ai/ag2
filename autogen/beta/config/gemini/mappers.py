@@ -5,6 +5,7 @@
 import json
 from collections.abc import Iterable
 from typing import Any
+from urllib.parse import urlparse
 
 from google.genai import types
 
@@ -111,11 +112,17 @@ _URL_EXTENSION_TO_MIME: dict[str, str] = {
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
     ".aac": "audio/aac",
+    ".aiff": "audio/aiff",
+    ".aif": "audio/aiff",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mov": "video/quicktime",
     ".mkv": "video/x-matroska",
     ".mpeg": "video/mpeg",
+    ".mpg": "video/mpeg",
+    ".flv": "video/x-flv",
+    ".wmv": "video/x-ms-wmv",
+    ".3gp": "video/3gpp",
     ".pdf": "application/pdf",
     ".txt": "text/plain",
     ".html": "text/html",
@@ -128,8 +135,6 @@ _URL_EXTENSION_TO_MIME: dict[str, str] = {
 
 def _mime_from_url(url: str) -> str | None:
     """Infer MIME type from URL path extension, or None if unknown."""
-    from urllib.parse import urlparse
-
     path = urlparse(url).path
     dot = path.rfind(".")
     if dot != -1:
