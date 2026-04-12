@@ -830,7 +830,7 @@ def add_front_matter_to_metadata_yml(
     global _is_first_notebook
 
     source = front_matter.get("source_notebook")
-    if isinstance(source, str) and source.startswith("/website/docs/"):
+    if isinstance(source, str) and source.startswith("website/docs/"):
         return
 
     # Get the metadata file path
@@ -1098,7 +1098,7 @@ def post_process_func(
     # Each intermediate path needs to be resolved for this to work reliably
     repo_root = Path(__file__).resolve().parents[3]
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
-    front_matter["source_notebook"] = f"/{repo_relative_notebook}"
+    front_matter["source_notebook"] = f"{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
 
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"

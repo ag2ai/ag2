@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .filesystem import FilesystemToolkit
+from .agent import Plugin
 
-__all__ = ("FilesystemToolkit",)
+__all__ = ("Plugin",)

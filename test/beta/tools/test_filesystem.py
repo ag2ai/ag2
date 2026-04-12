@@ -12,7 +12,7 @@ import pytest
 from autogen.beta import Agent, Context
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools import FilesystemToolset
+from autogen.beta.tools import FilesystemToolkit
 
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_path_traversal_blocked(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_schemas(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolset()
+    toolset = FilesystemToolkit()
     schemas = list(await toolset.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
@@ -34,7 +34,7 @@ async def test_schemas(async_mock: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_read_only(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolset(read_only=True)
+    toolset = FilesystemToolkit(read_only=True)
     schemas = list(await toolset.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
@@ -45,7 +45,7 @@ async def test_read_only(async_mock: AsyncMock) -> None:
 async def test_read_file(tmp_path: Path) -> None:
     (tmp_path / "hello.txt").write_text("hello world")
 
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -69,7 +69,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
     binary_content = bytes(range(256))
     (tmp_path / "binary.bin").write_bytes(binary_content)
 
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -90,7 +90,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_file(tmp_path: Path) -> None:
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
@@ -107,7 +107,7 @@ async def test_write_file(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(name="write_file", arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"})),
@@ -123,7 +123,7 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
 async def test_update_file(tmp_path: Path) -> None:
     (tmp_path / "data.txt").write_text("foo bar baz")
 
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
@@ -143,7 +143,7 @@ async def test_delete_file(tmp_path: Path) -> None:
     target = tmp_path / "to_delete.txt"
     target.write_text("bye")
 
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "to_delete.txt"})),
@@ -176,7 +176,7 @@ async def test_find_files(tmp_path: Path) -> None:
     # |   |-- sub2
     # |       |-- e.py
 
-    toolset = FilesystemToolset(base_path=tmp_path)
+    toolset = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(

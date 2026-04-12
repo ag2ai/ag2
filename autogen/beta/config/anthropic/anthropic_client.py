@@ -28,11 +28,14 @@ from autogen.beta.events import (
     ToolCallsEvent,
 )
 from autogen.beta.response import ResponseProto
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
+    extract_skills_for_container,
     normalize_usage,
     response_proto_to_output_config,
     tool_to_api,
@@ -101,8 +104,14 @@ class AnthropicClient(LLMClient):
             self._inject_cache_control(anthropic_messages)
 
         tools_schemas = list(tools)
-        tools_list = [tool_to_api(t) for t in tools_schemas]
-        mcp_servers = extract_mcp_servers(tools_schemas)
+        tools_without_skills = [t for t in tools_schemas if not isinstance(t, SkillsToolSchema)]
+        anthropic_skills = extract_skills_for_container(tools_schemas)
+
+        if anthropic_skills and not any(isinstance(t, CodeExecutionToolSchema) for t in tools_without_skills):
+            tools_without_skills.append(CodeExecutionToolSchema())
+
+        tools_list = [tool_to_api(t) for t in tools_without_skills]
+        mcp_servers = extract_mcp_servers(tools_without_skills)
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_output_config(response_schema):
@@ -119,6 +128,17 @@ class AnthropicClient(LLMClient):
         if mcp_servers:
             create_kwargs["extra_headers"] = {"anthropic-beta": "mcp-client-2025-11-20"}
             create_kwargs["extra_body"] = {"mcp_servers": mcp_servers}
+
+        if anthropic_skills:
+            create_kwargs["container"] = {"skills": anthropic_skills}
+            # Merge beta headers: skills require both code-execution and skills betas
+            existing_betas: set[str] = set(
+                (create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(",")
+            )
+            existing_betas.discard("")
+            existing_betas.update(["code-execution-2025-08-25", "skills-2025-10-02"])
+            create_kwargs.setdefault("extra_headers", {})
+            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 
         max_continuations = 5
 

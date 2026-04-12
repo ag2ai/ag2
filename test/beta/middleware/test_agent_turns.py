@@ -38,6 +38,7 @@ class MockMiddleware(BaseMiddleware):
         return response
 
 
+@pytest.mark.asyncio()
 class TestAgentTurnMiddleware:
     @pytest.mark.asyncio()
     async def test_creation(self, mock: MagicMock) -> None:
@@ -51,7 +52,6 @@ class TestAgentTurnMiddleware:
 
         mock.create.assert_called_once_with(ModelRequest([TextInput("Hi!")]))
 
-    @pytest.mark.asyncio()
     async def test_chaining(self, mock: MagicMock) -> None:
         agent = Agent(
             "",
@@ -64,7 +64,6 @@ class TestAgentTurnMiddleware:
         assert [c[0][0] for c in mock.enter.call_args_list] == [1, 2, 3]
         assert [c[0][0] for c in mock.exit.call_args_list] == [3, 2, 1]
 
-    @pytest.mark.asyncio()
     async def test_incoming_message_mutation(self) -> None:
         tracking_config = TrackingConfig(TestConfig("2"))
 
@@ -90,3 +89,51 @@ class TestAgentTurnMiddleware:
 
         tracking_config.mock.assert_called_once_with(ModelRequest([TextInput("1" * (2**3))]))
         assert result.body == "2" * (2**3)
+
+
+@pytest.mark.asyncio()
+class TestInsertMiddleware:
+    async def test_is_called(self, mock: MagicMock) -> None:
+        agent = Agent("", config=TestConfig("result"))
+        agent.insert_middleware(Middleware(MockMiddleware, mock=mock))
+
+        await agent.ask("Hi!")
+
+        mock.enter.assert_called_once_with(0)
+
+    async def test_inserted_is_outer(self, mock: MagicMock) -> None:
+        agent = Agent(
+            "",
+            config=TestConfig("result"),
+            middleware=[Middleware(MockMiddleware, mock=mock, position=2)],
+        )
+        agent.insert_middleware(Middleware(MockMiddleware, mock=mock, position=1))
+
+        await agent.ask("Hi!")
+
+        assert [c[0][0] for c in mock.enter.call_args_list] == [1, 2]
+        assert [c[0][0] for c in mock.exit.call_args_list] == [2, 1]
+
+
+@pytest.mark.asyncio()
+class TestAddMiddleware:
+    async def test_is_called(self, mock: MagicMock) -> None:
+        agent = Agent("", config=TestConfig("result"))
+        agent.add_middleware(Middleware(MockMiddleware, mock=mock))
+
+        await agent.ask("Hi!")
+
+        mock.enter.assert_called_once_with(0)
+
+    async def test_added_is_inner(self, mock: MagicMock) -> None:
+        agent = Agent(
+            "",
+            config=TestConfig("result"),
+            middleware=[Middleware(MockMiddleware, mock=mock, position=1)],
+        )
+        agent.add_middleware(Middleware(MockMiddleware, mock=mock, position=2))
+
+        await agent.ask("Hi!")
+
+        assert [c[0][0] for c in mock.enter.call_args_list] == [1, 2]
+        assert [c[0][0] for c in mock.exit.call_args_list] == [2, 1]

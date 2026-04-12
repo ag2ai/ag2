@@ -11,6 +11,7 @@ from autogen.beta.tools.builtin.image_generation import ImageGenerationTool
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool
 from autogen.beta.tools.builtin.memory import MemoryTool
 from autogen.beta.tools.builtin.shell import ShellTool
+from autogen.beta.tools.builtin.skills import SkillsTool
 
 
 @pytest.mark.asyncio
@@ -46,6 +47,16 @@ async def test_image_generation(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_mcp_server(context: Context) -> None:
     tool = MCPServerTool(server_url="https://mcp.example.com/sse", server_label="example-mcp")
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError):
+        build_tools([schema])
+
+
+@pytest.mark.asyncio
+async def test_skills(context: Context) -> None:
+    tool = SkillsTool("pptx")
 
     [schema] = await tool.schemas(context)
 

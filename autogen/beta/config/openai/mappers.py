@@ -32,6 +32,7 @@ from autogen.beta.tools.builtin.shell import (
     ContainerReferenceEnvironment,
     ShellToolSchema,
 )
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -184,32 +185,34 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            parts: list[dict[str, Any]] = []
             for inp in message.inputs:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    parts.append({"type": "text", "text": inp.content})
 
-                if isinstance(inp, ImageUrlInput):
-                    result.append({
-                        "role": "user",
-                        "content": [{"type": "image_url", "image_url": {"url": inp.url}}],
-                    })
+                elif isinstance(inp, ImageUrlInput):
+                    parts.append({"type": "image_url", "image_url": {"url": inp.url}})
 
                 elif isinstance(inp, BinaryInput):
                     if inp.kind == BinaryType.AUDIO:
                         b64 = base64.b64encode(inp.data).decode()
                         fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type, inp.media_type.split("/", 1)[1])
-                        item: dict[str, Any] = {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}}
+                        parts.append({"type": "input_audio", "input_audio": {"data": b64, "format": fmt}})
                     elif inp.kind == BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
-                        item = {"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata}
+                        parts.append({"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata})
                     else:
                         raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
-                    result.append({"role": "user", "content": [item]})
-
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
+
+            # Simple string content for a single plain-text turn (most common case)
+            if len(parts) == 1 and parts[0]["type"] == "text":
+                result.append({"role": "user", "content": parts[0]["text"]})
+            else:
+                result.append({"role": "user", "content": parts})
 
         elif isinstance(message, ModelResponse):
             result.append(message.to_api())
@@ -335,6 +338,10 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         elif t.authorization_token is not None:
             result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
         return result
+
+    elif isinstance(t, SkillsToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-skills
+        raise UnsupportedToolError(t.type, "openai-responses")
 
     raise UnsupportedToolError(t.type, "openai-responses")
 
