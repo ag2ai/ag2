@@ -4,8 +4,8 @@
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.config.openai.mappers import tool_to_responses_api
-from autogen.beta.context import Context
 from autogen.beta.tools.builtin.shell import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,

@@ -4,8 +4,8 @@
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.config.anthropic.mappers import tool_to_api
-from autogen.beta.context import Context
 from autogen.beta.tools.builtin.web_search import UserLocation, WebSearchTool
 
 

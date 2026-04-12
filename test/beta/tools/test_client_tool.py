@@ -8,8 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, MemoryStream, tool
-from autogen.beta.context import Context
+from autogen.beta import Agent, Context, MemoryStream, tool
 from autogen.beta.events import ClientToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import ToolExecution, ToolResultType
 from autogen.beta.testing import TestConfig
