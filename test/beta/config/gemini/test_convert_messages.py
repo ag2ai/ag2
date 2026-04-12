@@ -5,8 +5,17 @@
 import pytest
 
 from autogen.beta.config.gemini.mappers import convert_messages
-from autogen.beta.events import ModelResponse
+from autogen.beta.events import (
+    AudioUrlInput,
+    BinaryInput,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageUrlInput,
+    ModelRequest,
+    ModelResponse,
+)
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.exceptions import UnsupportedInputError
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -35,3 +44,28 @@ class TestConvertMessagesEmptyArguments:
 
         part = result[0].parts[0]
         assert part.function_call.args == {"category": "books"}
+
+
+def test_audio_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*gemini"):
+        convert_messages([ModelRequest([AudioUrlInput(url="https://example.com/audio.wav")])])
+
+
+def test_image_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="ImageUrlInput.*gemini"):
+        convert_messages([ModelRequest([ImageUrlInput(url="https://example.com/img.png")])])
+
+
+def test_file_id_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
+        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])])
+
+
+def test_binary_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="BinaryInput.*gemini"):
+        convert_messages([ModelRequest([BinaryInput(data=b"data", media_type="image/png")])])
+
+
+def test_document_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*gemini"):
+        convert_messages([ModelRequest([DocumentUrlInput(url="https://example.com/doc.pdf")])])

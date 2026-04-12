@@ -10,15 +10,14 @@ from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.mcp_server import MCPServerTool
 
 
-class TestCompletionsApi:
-    @pytest.mark.asyncio
-    async def test_unsupported(self, context: Context) -> None:
-        tool = MCPServerTool(server_url="https://mcp.example.com/sse", server_label="example-mcp")
+@pytest.mark.asyncio
+async def test_completions_api_unsupported(context: Context) -> None:
+    tool = MCPServerTool(server_url="https://mcp.example.com/sse", server_label="example-mcp")
 
-        [schema] = await tool.schemas(context)
+    [schema] = await tool.schemas(context)
 
-        with pytest.raises(UnsupportedToolError):
-            tool_to_api(schema)
+    with pytest.raises(UnsupportedToolError):
+        tool_to_api(schema)
 
 
 class TestResponsesApi:

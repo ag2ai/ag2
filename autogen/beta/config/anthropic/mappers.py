@@ -6,9 +6,9 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.types import Usage
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -172,10 +172,12 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
-            result.append({
-                "role": "user",
-                "content": message.content,
-            })
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    result.append(inp.to_api())
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "anthropic")
+
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
@@ -189,6 +191,7 @@ def convert_messages(
                 })
             if content:
                 result.append({"role": "assistant", "content": content})
+
         elif isinstance(message, ToolResultsEvent):
             tool_results = [
                 {

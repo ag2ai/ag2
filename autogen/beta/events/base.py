@@ -126,18 +126,38 @@ class BaseEvent(metaclass=_ConditionMeta):
         super().__init_subclass__(**kwargs)
         _process_fields(cls)
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        # MRO walk: map positional args and collect defaults.
+        positional_names: list[str] = []
+        defaults: dict[str, Any] = {}
+        seen: set[str] = set()
+
+        for klass in reversed(type(self).__mro__):
+            for name, f in getattr(klass, "_event_fields_", {}).items():
+                if name not in seen:
+                    if not f.kw_only:
+                        positional_names.append(name)
+                    if name not in kwargs:
+                        default = f.get_default()
+                        if default is not Ellipsis:
+                            defaults[name] = default
+                seen.add(name)
+
+        if args:
+            if len(args) > len(positional_names):
+                raise TypeError(
+                    f"{type(self).__name__}() takes {len(positional_names)} "
+                    f"positional argument(s) but {len(args)} were given"
+                )
+            for name, value in zip(positional_names, args):
+                if name in kwargs:
+                    raise TypeError(f"{type(self).__name__}() got multiple values for argument '{name}'")
+                kwargs[name] = value
+                defaults.pop(name, None)
+
         # Apply defaults first, then user-provided kwargs so that
         # property setters (e.g. content -> _content) aren't overwritten
         # by a field default applied afterwards.
-        defaults: dict[str, Any] = {}
-        for klass in reversed(type(self).__mro__):
-            for name, f in getattr(klass, "_event_fields_", {}).items():
-                if name not in kwargs:
-                    default = f.get_default()
-                    if default is not Ellipsis:
-                        defaults[name] = default
-
         for key, value in defaults.items():
             setattr(self, key, value)
         for key, value in kwargs.items():

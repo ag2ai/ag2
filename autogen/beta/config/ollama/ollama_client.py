@@ -98,11 +98,11 @@ class OllamaClient(LLMClient):
         msg = response.message
 
         if msg.thinking:
-            await context.send(ModelReasoning(content=msg.thinking))
+            await context.send(ModelReasoning(msg.thinking))
 
         model_msg: ModelMessage | None = None
         if msg.content:
-            model_msg = ModelMessage(content=msg.content)
+            model_msg = ModelMessage(msg.content)
             await context.send(model_msg)
 
         calls = [
@@ -124,7 +124,7 @@ class OllamaClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="ollama",
@@ -154,11 +154,11 @@ class OllamaClient(LLMClient):
             msg = chunk.message
 
             if msg.thinking:
-                await context.send(ModelReasoning(content=msg.thinking))
+                await context.send(ModelReasoning(msg.thinking))
 
             if msg.content:
                 full_content += msg.content
-                await context.send(ModelMessageChunk(content=msg.content))
+                await context.send(ModelMessageChunk(msg.content))
 
             for i, tc in enumerate(msg.tool_calls or []):
                 calls.append(
@@ -178,12 +178,12 @@ class OllamaClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=resolved_model,
             provider="ollama",

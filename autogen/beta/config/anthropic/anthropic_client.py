@@ -177,7 +177,7 @@ class AnthropicClient(LLMClient):
         for block in response.content:
             if isinstance(block, ThinkingBlock):
                 if block.thinking:
-                    await context.send(ModelReasoning(content=block.thinking))
+                    await context.send(ModelReasoning(block.thinking))
 
             elif isinstance(block, TextBlock):
                 text_parts.append(block.text)
@@ -193,14 +193,14 @@ class AnthropicClient(LLMClient):
 
         model_msg: ModelMessage | None = None
         if text_parts:
-            model_msg = ModelMessage(content="\n\n".join(text_parts))
+            model_msg = ModelMessage("\n\n".join(text_parts))
             await context.send(model_msg)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=response.model,
             provider="anthropic",
@@ -235,10 +235,10 @@ class AnthropicClient(LLMClient):
 
                 if delta_type == "text_delta":
                     full_content += delta.text
-                    await context.send(ModelMessageChunk(content=delta.text))
+                    await context.send(ModelMessageChunk(delta.text))
 
                 elif delta_type == "thinking_delta":
-                    await context.send(ModelReasoning(content=delta.thinking))
+                    await context.send(ModelReasoning(delta.thinking))
 
                 elif delta_type == "input_json_delta" and current_tool is not None:
                     current_tool["arguments"] += delta.partial_json
@@ -256,14 +256,14 @@ class AnthropicClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         final_message = await stream.get_final_message()
         # Mapped to our usage keys
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
             model=final_message.model,
             provider="anthropic",

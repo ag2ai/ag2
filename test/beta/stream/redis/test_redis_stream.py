@@ -11,7 +11,7 @@ import pytest
 import pytest_asyncio
 
 from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ToolCallEvent
+from autogen.beta.events import ModelMessage, TextInput, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 
 pytestmark = [
@@ -244,7 +244,7 @@ class TestRedisStream:
         ctx = Context(stream)
 
         event1 = ToolCallEvent(name="func1", arguments="a")
-        event2 = ModelMessage(content="hello")
+        event2 = ModelMessage("hello")
 
         await stream.send(event1, context=ctx)
         await stream.send(event2, context=ctx)
@@ -318,10 +318,10 @@ class TestRedisStream:
         stream2._ensure_listener()
         await asyncio.sleep(0.1)
 
-        await stream1.send(ModelRequest(content="from stream1"), context=Context(stream1))
+        await stream1.send(TextInput("from stream1"), context=Context(stream1))
         await asyncio.sleep(0.1)
 
-        await stream2.send(ModelMessage(content="from stream2"), context=Context(stream2))
+        await stream2.send(ModelMessage("from stream2"), context=Context(stream2))
         await asyncio.sleep(0.1)
 
         # stream1 receives both (own + stream2's)
@@ -341,7 +341,7 @@ class TestRedisStream:
         stream._ensure_listener()
 
         await stream.send(ToolCallEvent(name="func1", arguments="a"), context=Context(stream))
-        await stream.send(ModelMessage(content="hello"), context=Context(stream))
+        await stream.send(ModelMessage("hello"), context=Context(stream))
         await asyncio.sleep(0.1)
 
         assert len(tool_events) == 1

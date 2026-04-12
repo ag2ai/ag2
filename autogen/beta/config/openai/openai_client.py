@@ -23,6 +23,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -139,11 +140,11 @@ class OpenAIClient(LLMClient):
             msg = choice.message
 
             if r := getattr(msg, "reasoning", None):
-                await context.send(ModelReasoning(content=r))
+                await context.send(ModelReasoning(r))
 
             model_msg: ModelMessage | None = None
             if c := msg.content:
-                model_msg = ModelMessage(content=c)
+                model_msg = ModelMessage(c)
                 await context.send(model_msg)
 
             calls = [
@@ -157,8 +158,8 @@ class OpenAIClient(LLMClient):
 
             return ModelResponse(
                 message=model_msg,
-                tool_calls=ToolCallsEvent(calls=calls),
-                usage=normalize_usage(completion.usage.model_dump() if completion.usage else {}),
+                tool_calls=ToolCallsEvent(calls),
+                usage=normalize_usage(completion.usage) if completion.usage else Usage(),
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
@@ -170,7 +171,7 @@ class OpenAIClient(LLMClient):
         context: Context,
     ) -> ModelResponse:
         full_content: str = ""
-        usage: dict[str, Any] = {}
+        usage = Usage()
         finish_reason: str | None = None
         resolved_model: str | None = None
 
@@ -180,7 +181,7 @@ class OpenAIClient(LLMClient):
         async for chunk in response_stream:
             # Usage is available only in the last chunk
             if chunk.usage:
-                usage = chunk.usage.model_dump()
+                usage = normalize_usage(chunk.usage)
 
             if chunk.model:
                 resolved_model = chunk.model
@@ -191,11 +192,11 @@ class OpenAIClient(LLMClient):
                 delta = choice.delta
 
                 if r := getattr(delta, "reasoning_content", None):
-                    await context.send(ModelReasoning(content=r))
+                    await context.send(ModelReasoning(r))
 
                 if c := delta.content:
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
@@ -218,7 +219,7 @@ class OpenAIClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         calls = [
@@ -232,8 +233,8 @@ class OpenAIClient(LLMClient):
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=normalize_usage(usage),
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,

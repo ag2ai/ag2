@@ -12,8 +12,6 @@ from pydantic import BaseModel
 from autogen.beta import PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.response import ResponseProto
 
-# --- Construction ---
-
 
 class TestPromptedSchemaFromType:
     def test_from_primitive_type(self) -> None:
@@ -73,9 +71,6 @@ class TestPromptedSchemaFromResponseProto:
         assert schema.json_schema is None
 
 
-# --- System prompt ---
-
-
 class TestSystemPrompt:
     def test_contains_json_schema(self) -> None:
         @dataclass
@@ -119,9 +114,6 @@ class TestSystemPrompt:
 
         schema = PromptedSchema(NoSchemaProto())
         assert schema.system_prompt is None
-
-
-# --- Validation ---
 
 
 @pytest.mark.asyncio

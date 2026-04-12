@@ -24,6 +24,7 @@
 
 Top-level modules:
 - `autogen.beta` - top-level module with most basic functionality
+- `autogen.beta.types` - Type aliases and constants
 - `autogen.beta.config` - LLM provider clients (see [below](#llm-provider-clients))
 - `autogen.beta.tools` - Tool system — builtin + user-defined (see [below](#builtin-tools))
 - `autogen.beta.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
