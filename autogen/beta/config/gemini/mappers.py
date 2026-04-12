@@ -9,6 +9,13 @@ from typing import Any
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import (
+    AudioUrlInput,
+    BinaryInput,
+    DocumentUrlInput,
+    ImageUrlInput,
+    VideoUrlInput,
+)
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -76,6 +83,68 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     return result or None
 
 
+_URL_EXTENSION_TO_MIME: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".mpeg": "video/mpeg",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".html": "text/html",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".xml": "text/xml",
+    ".md": "text/markdown",
+}
+
+
+def _mime_from_url(url: str) -> str | None:
+    """Infer MIME type from URL path extension, or None if unknown."""
+    from urllib.parse import urlparse
+
+    path = urlparse(url).path
+    dot = path.rfind(".")
+    if dot != -1:
+        ext = path[dot:].lower().split("?", 1)[0]
+        mime = _URL_EXTENSION_TO_MIME.get(ext)
+        if mime:
+            return mime
+    return None
+
+
+def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
+    """Apply Gemini-specific vendor_metadata fields to a Part."""
+    if not metadata:
+        return
+
+    if "media_resolution" in metadata:
+        part.media_resolution = metadata["media_resolution"]
+
+    if "video_metadata" in metadata:
+        vm = metadata["video_metadata"]
+        if isinstance(vm, dict):
+            part.video_metadata = types.VideoMetadata(**vm)
+        else:
+            part.video_metadata = vm
+
+    if "display_name" in metadata:
+        if part.inline_data is not None:
+            part.inline_data.display_name = metadata["display_name"]
+        elif part.file_data is not None:
+            part.file_data.display_name = metadata["display_name"]
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
 ) -> list[types.Content]:
@@ -83,11 +152,24 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            parts: list[types.Part] = []
             for inp in message.inputs:
                 if isinstance(inp, TextInput):
-                    result.append(types.Content(role="user", parts=[types.Part.from_text(text=inp.content)]))
+                    parts.append(types.Part.from_text(text=inp.content))
+                elif isinstance(inp, (ImageUrlInput, AudioUrlInput, DocumentUrlInput, VideoUrlInput)):
+                    mime = _mime_from_url(inp.url)
+                    if mime is not None:
+                        parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
+                    else:
+                        parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+                elif isinstance(inp, BinaryInput):
+                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
+                    _apply_vendor_metadata(part, inp.vendor_metadata)
+                    parts.append(part)
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "gemini")
+            if parts:
+                result.append(types.Content(role="user", parts=parts))
 
         elif isinstance(message, ModelResponse):
             parts: list[types.Part] = []
