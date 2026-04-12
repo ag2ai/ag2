@@ -9,10 +9,17 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
-permissions: {}
+
+# Ceiling for GITHUB_TOKEN; each job narrows with its own permissions block (zizmor).
+# contents:write is required so the build-mkdocs job can call build-mkdocs.yml (workflow_call).
+permissions:
+  contents: write
+  pull-requests: read
 
 jobs:
   pre-commit-check:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     env:
       SKIP: "mypy"
@@ -27,6 +34,8 @@ jobs:
       - uses: j178/prek-action@53276d8b0d10f8b6672aa85b4588c6921d0370cc # v2.0.1
 
   type-check:
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +57,9 @@ jobs:
           mypy
 
   test-paths-filter:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
@@ -71,6 +83,8 @@ jobs:
               - "pyproject.toml"
 
   core-test-without-llm:
+    permissions:
+      contents: read
     needs: test-paths-filter
     if: needs.test-paths-filter.outputs.hasChanges == 'true'
     runs-on: ubuntu-latest
@@ -109,6 +123,9 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   docs-paths-filter:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
@@ -137,11 +154,15 @@ jobs:
   build-mkdocs:
     needs: docs-paths-filter
     if: needs.docs-paths-filter.outputs.hasChanges == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-mkdocs.yml
     with:
       python-version: "3.10"
 
   pr-check:
+    permissions:
+      contents: read
     if: always()
     runs-on: ubuntu-latest
     needs: [pre-commit-check, type-check, core-test-without-llm, build-mkdocs]
