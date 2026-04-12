@@ -2,11 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
 from collections.abc import Iterable
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import (
+    BinaryInput,
+    BinaryType,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageUrlInput,
+)
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
@@ -165,6 +173,21 @@ def extract_mcp_servers(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
     return servers
 
 
+_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
+
+# Anthropic content block keys that are safe to pass through from vendor_metadata.
+_ANTHROPIC_VENDOR_KEYS = frozenset({"cache_control", "citations"})
+
+
+def _file_id_block_type(filename: str | None) -> str:
+    """Infer Anthropic content block type from filename extension."""
+    if filename:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if f".{ext}" in _IMAGE_EXTENSIONS:
+            return "image"
+    return "document"
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
 ) -> list[dict[str, Any]]:
@@ -172,11 +195,47 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            content_parts: list[dict[str, Any]] = []
             for inp in message.inputs:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    content_parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, ImageUrlInput):
+                    content_parts.append({"type": "image", "source": {"type": "url", "url": inp.url}})
+
+                elif isinstance(inp, DocumentUrlInput):
+                    content_parts.append({"type": "document", "source": {"type": "url", "url": inp.url}})
+
+                elif isinstance(inp, FileIdInput):
+                    block_type = _file_id_block_type(inp.filename)
+                    content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
+
+                elif isinstance(inp, BinaryInput):
+                    extra = {k: v for k, v in inp.vendor_metadata.items() if k in _ANTHROPIC_VENDOR_KEYS}
+                    if inp.kind == BinaryType.IMAGE:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item: dict[str, Any] = {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+                    elif inp.kind == BinaryType.DOCUMENT:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item = {
+                            "type": "document",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+                    else:
+                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "anthropic")
+
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "anthropic")
+
+            if content_parts:
+                result.append({"role": "user", "content": content_parts})
 
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []

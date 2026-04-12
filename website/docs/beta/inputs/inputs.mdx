@@ -74,15 +74,15 @@ Not all providers support all input types. The table below shows what each provi
 | Input Type | OpenAI | OpenAI Responses | Gemini | Anthropic |
 | :--- | :---: | :---: | :---: | :---: |
 | **Text** | Yes | Yes | Yes | Yes |
-| **Image (URL)** | Yes | Yes | Yes | Planned |
-| **Image (binary)** | Yes | Yes | Yes | Planned |
+| **Image (URL)** | Yes | Yes | Yes | Yes |
+| **Image (binary)** | Yes | Yes | Yes | Yes |
 | **Audio (URL)** | - | - | Yes | - |
 | **Audio (binary)** | Yes | - | Yes | - |
 | **Video (URL)** | - | - | Yes | - |
 | **Video (binary)** | - | - | Yes | - |
-| **Document (URL)** | - | Yes | Yes | Planned |
-| **Document (binary)** | - | - | Yes | Planned |
-| **File ID** | - | Yes | - | Planned |
+| **Document (URL)** | - | Yes | Yes | Yes |
+| **Document (binary)** | - | - | Yes | Yes |
+| **File ID** | - | Yes | - | Yes |
 
 If you pass an unsupported input type to a provider, an `#!python UnsupportedInputError` is raised with a clear message indicating what is not supported and by which provider.
 
@@ -196,4 +196,36 @@ image = ImageInput(
 
 ### Anthropic
 
-Anthropic support for images and documents is planned. Currently only text inputs are supported.
+Anthropic supports images (JPEG, PNG, GIF, WebP) and documents (PDF) via URL, base64, or File ID. Audio and video are not supported.
+
+**File ID** — upload files via the Anthropic Files API (beta) and reference by ID:
+
+```python linenums="1"
+import anthropic
+from autogen.beta.events import ImageInput, DocumentInput
+
+client = anthropic.Anthropic()
+
+# Upload an image
+uploaded = client.beta.files.upload(
+    file=("photo.jpg", open("photo.jpg", "rb"), "image/jpeg"),
+)
+
+# Reference by file_id — filename determines block type (image vs document)
+image = ImageInput(file_id=uploaded.id, filename="photo.jpg")
+reply = await agent.ask("Describe this image.", image)
+```
+
+#### Vendor Metadata
+
+Anthropic supports `#!python vendor_metadata` for prompt caching on content blocks:
+
+```python linenums="1"
+from autogen.beta.events import DocumentInput
+from autogen.beta.events.input_events import BinaryType
+
+doc = DocumentInput(
+    path="report.pdf",
+    vendor_metadata={"cache_control": {"type": "ephemeral"}},
+)
+```
