@@ -1,22 +1,22 @@
 ---
-title: Common Toolsets
-sidebarTitle: Common Toolsets
+title: Common Toolkits
+sidebarTitle: Common Toolkits
 ---
 
-# Common Toolsets
+# Common Toolkits
 
-AG2 ships with ready-made toolsets that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+AG2 ships with ready-made toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
 
-## FilesystemToolset
+## FilesystemToolkit
 
-`FilesystemToolset` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
+`FilesystemToolkit` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.
 
 ```python linenums="1"
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import FilesystemToolset
+from autogen.beta.tools import FilesystemToolkit
 
-fs = FilesystemToolset(base_path="/tmp/workspace")
+fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "assistant",
@@ -40,15 +40,15 @@ agent = Agent(
 Pass `#!python read_only=True` to expose only `read_file` and `find_files`:
 
 ```python linenums="1"
-fs = FilesystemToolset(base_path="./docs", read_only=True)
+fs = FilesystemToolkit(base_path="./docs", read_only=True)
 ```
 
 ### Using individual tools
 
-Every tool is available as an attribute on the toolset instance. You can pass individual tools to an agent instead of the whole set:
+Every tool is available as an attribute on the toolkit instance. You can pass individual tools to an agent instead of the whole set:
 
 ```python linenums="1"
-fs = FilesystemToolset(base_path="/tmp/workspace")
+fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "reader",
@@ -65,11 +65,11 @@ For throwaway workspaces, use `#!python tempfile.TemporaryDirectory` so the dire
 import tempfile
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import FilesystemToolset
+from autogen.beta.tools import FilesystemToolkit
 
 async def main() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        fs = FilesystemToolset(base_path=tmpdir)
+        fs = FilesystemToolkit(base_path=tmpdir)
 
         agent = Agent(
             "assistant",
@@ -87,7 +87,7 @@ async def main() -> None:
 All paths are resolved relative to `base_path`. Any attempt to escape the base directory (e.g. `../../etc/passwd`) raises a `#!python PermissionError`:
 
 ```python linenums="1"
-fs = FilesystemToolset(base_path="/tmp/sandbox")
+fs = FilesystemToolkit(base_path="/tmp/sandbox")
 
 # The agent can access /tmp/sandbox/data.txt
 # but NOT /tmp/sandbox/../../etc/passwd
