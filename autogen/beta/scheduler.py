@@ -8,8 +8,15 @@ The Scheduler manages Watch lifecycles: registering, arming, disarming,
 and canceling watches. It is a watch lifecycle manager, not a rigid
 scheduling engine.
 
-Works standalone (manages local watches with callbacks) or with a Hub
-(delegates tasks to actors when watches fire).
+Standalone, callback-driven. A user registers a ``Watch`` together with
+an async callback; when the watch fires, the callback runs with the
+accumulated events and the current context. The scheduler owns its own
+:class:`MemoryStream` and does not take a reference to any network hub.
+
+Callers that want a scheduler to drive hub-side behavior (e.g. the V3
+TTL sweeper) instantiate their own :class:`Scheduler`, register a
+callback, and have that callback perform the hub mutation directly.
+``Scheduler`` itself is network-agnostic.
 """
 
 from __future__ import annotations
@@ -18,7 +25,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from autogen.beta.context import Context as ContextType
@@ -26,9 +32,6 @@ from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
 
 from .watch import Watch
-
-if TYPE_CHECKING:
-    from .network.hub import Hub
 
 logger = logging.getLogger(__name__)
 
@@ -49,37 +52,20 @@ class _WatchEntry:
     id: str
     watch: Watch
     status: WatchStatus = WatchStatus.PENDING
-
-    # Target mode (Hub-connected)
-    target: str = ""
-    task: str = ""
-    task_factory: Callable[[list[BaseEvent]], str] | None = None
-    priority: Any = None
-
-    # Callback mode (standalone)
     callback: Callable[[list[BaseEvent], ContextType], Awaitable[None]] | None = None
 
 
 class Scheduler:
-    """Manages watch lifecycles. Fires callbacks or delegates tasks when watches trigger.
+    """Manages watch lifecycles. Fires user-supplied callbacks when watches trigger.
 
-    Works standalone (manages local watches) or with a Hub (delegates to actors).
-
-    Example (standalone)::
+    Example::
 
         scheduler = Scheduler()
         scheduler.add(IntervalWatch(300), callback=my_health_check)
         await scheduler.start()
-
-    Example (with Hub)::
-
-        scheduler = Scheduler(hub=hub)
-        scheduler.add(IntervalWatch(300), target="monitor", task="Check health")
-        await scheduler.start()
     """
 
-    def __init__(self, hub: Hub | None = None) -> None:
-        self._hub = hub
+    def __init__(self) -> None:
         self._entries: dict[str, _WatchEntry] = {}
         self._running = False
         self._stream = MemoryStream()
@@ -88,31 +74,22 @@ class Scheduler:
         self,
         watch: Watch,
         *,
-        target: str = "",
-        task: str = "",
-        task_factory: Callable[[list[BaseEvent]], str] | None = None,
         callback: Callable[[list[BaseEvent], ContextType], Awaitable[None]] | None = None,
-        priority: Any = None,
     ) -> str:
-        """Register a watch.
+        """Register a watch with an optional async callback.
 
-        Either provide ``target``+``task`` (Hub mode) or ``callback`` (standalone).
+        ``callback`` is invoked with the accumulated events and the
+        current :class:`Context` whenever the watch fires. A watch with
+        no callback is a silent no-op — useful for observability-only
+        registrations where you want the watch to run but don't need to
+        react to it.
 
         Returns the watch ID for lifecycle management.
         """
         entry_id = uuid4().hex[:12]
-        entry = _WatchEntry(
-            id=entry_id,
-            watch=watch,
-            target=target,
-            task=task,
-            task_factory=task_factory,
-            callback=callback,
-            priority=priority,
-        )
+        entry = _WatchEntry(id=entry_id, watch=watch, callback=callback)
         self._entries[entry_id] = entry
 
-        # If already running, arm immediately
         if self._running:
             self._arm_entry(entry)
 
@@ -177,12 +154,11 @@ class Scheduler:
 
     def _arm_entry(self, entry: _WatchEntry) -> None:
         """Arm a watch entry — create callback and arm the watch."""
-        stream = self._hub.stream if self._hub else self._stream
 
         async def _on_fire(events: list[BaseEvent], ctx: ContextType) -> None:
             await self._handle_fire(entry, events, ctx)
 
-        entry.watch.arm(stream, _on_fire)
+        entry.watch.arm(self._stream, _on_fire)
         entry.status = WatchStatus.ARMED
 
     async def _handle_fire(
@@ -197,45 +173,10 @@ class Scheduler:
         if entry.status == WatchStatus.CANCELLED:
             return
 
-        if entry.callback is not None:
-            # Standalone mode: call the callback directly
-            try:
-                await entry.callback(events, ctx)
-            except Exception:
-                logger.exception("Scheduler callback for watch %s failed", entry.id)
+        if entry.callback is None:
             return
 
-        if self._hub and entry.target:
-            # Determine the task (only needed for hub mode)
-            try:
-                task = entry.task_factory(events) if entry.task_factory is not None else entry.task
-            except Exception:
-                logger.exception("Scheduler task_factory for watch %s failed", entry.id)
-                return
-
-            # Hub mode: emit event and delegate
-            from .network.events import SchedulerTriggerFired
-
-            hub_ctx = ContextType(stream=self._hub.stream)
-            await self._hub.stream.send(
-                SchedulerTriggerFired(
-                    watch_id=entry.id,
-                    target=entry.target,
-                    task=task,
-                ),
-                hub_ctx,
-            )
-            try:
-                await self._hub._delegate(entry.target, task, source="scheduler", priority=entry.priority)
-            except Exception:
-                logger.exception(
-                    "Scheduler trigger %s failed for agent '%s'",
-                    entry.id,
-                    entry.target,
-                )
-            return
-
-        logger.warning(
-            "Watch %s fired but has no callback or hub target — nothing to do",
-            entry.id,
-        )
+        try:
+            await entry.callback(events, ctx)
+        except Exception:
+            logger.exception("Scheduler callback for watch %s failed", entry.id)
