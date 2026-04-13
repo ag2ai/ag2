@@ -90,6 +90,8 @@ system_message = f"""You are an agent representing a student. You have access to
 **Examiner Agent:**
 
 ```python
+from autogen import ConversableAgent
+
 questions = get_examination_questions()  # Retrieve the list of questions for the examiner
 
 examiner = ConversableAgent(
@@ -132,6 +134,8 @@ examiner = ConversableAgent(
 **Evaluator Agent:**
 
 ```python
+from autogen import ConversableAgent
+
 evaluation_criteria = get_evaluation_criteria()  # Retrieve the evaluation criteria
 scoring_rubric = get_scoring_rubric()  # Retrieve the scoring rubric
 
@@ -194,6 +198,8 @@ The following code snippet does 4 things
 4.  Initiate the examination
 
 ```python
+from autogen import GroupChat, GroupChatManager
+
 allowed_transitions = {
     examiner: [student, examiner],
     student: [examiner],
