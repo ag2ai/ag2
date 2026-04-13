@@ -32,6 +32,15 @@ from .frames import (
 from .link import Link, LinkClient, LinkEndpoint, LinkServer
 from .local import LocalLink
 
+# WsLink lazily imports the ``websockets`` library so installs that
+# don't ship with it see a clear install hint instead of an opaque
+# ImportError at package load time. See :mod:`.ws` for details.
+try:
+    from .ws import WsLinkClient, WsLinkServer
+except ImportError:  # pragma: no cover — fallback for missing optional dep
+    WsLinkClient = None  # type: ignore[assignment, misc]
+    WsLinkServer = None  # type: ignore[assignment, misc]
+
 __all__ = (
     "AcceptFrame",
     "ChunkFrame",
@@ -53,6 +62,8 @@ __all__ = (
     "SubscribeFrame",
     "UnsubscribeFrame",
     "WelcomeFrame",
+    "WsLinkClient",
+    "WsLinkServer",
     "decode_frame",
     "encode_frame",
 )

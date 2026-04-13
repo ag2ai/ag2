@@ -69,7 +69,18 @@ class _ClientSide:
 
 
 class _EndpointSide:
-    """Hub-side peer handle passed to the hub's connection handler."""
+    """Hub-side peer handle passed to the hub's connection handler.
+
+    ``binding`` exposes the transport flavor to the hub so
+    ``_handle_hello`` can stamp the actor's ``runtime.json`` with the
+    right ``binding`` field (§3.4). ``LocalLink`` is always ``"local"``;
+    ``WsLink`` will set ``"ws"`` and carry ``ws_url`` / ``http_url``
+    alongside, matching the design's runtime-binding shape.
+    """
+
+    binding: str = "local"
+    ws_url: str | None = None
+    http_url: str | None = None
 
     def __init__(self, client: _ClientSide) -> None:
         self.endpoint_id = new_id()

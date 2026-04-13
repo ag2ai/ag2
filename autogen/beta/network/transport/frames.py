@@ -128,10 +128,19 @@ class UnsubscribeFrame:
 
 @dataclass(slots=True)
 class EventFrame:
-    """Hub → client: subscription delivery."""
+    """Hub → client: subscription delivery.
+
+    ``wal_offset`` is the session WAL byte offset **immediately after**
+    the envelope this frame carries. Clients checkpoint this value on
+    each delivery and use it as the ``since`` cursor when
+    re-subscribing after a connection drop — see
+    :meth:`ActorClient.reconnect`. Left at ``0`` for subscriptions
+    that are not session-scoped (where WAL offsets don't apply).
+    """
 
     subscription_id: str
     envelope: Envelope
+    wal_offset: int = 0
 
     type: ClassVar[str] = "event"
 
@@ -266,6 +275,7 @@ def _frame_to_dict(frame: Frame) -> dict[str, Any]:
             "type": frame.type,
             "subscription_id": frame.subscription_id,
             "envelope": frame.envelope.to_dict(),
+            "wal_offset": frame.wal_offset,
         }
     if isinstance(frame, HelloFrame):
         return {
@@ -346,6 +356,7 @@ def _dict_to_frame(cls: type, data: dict[str, Any]) -> Frame:
         return EventFrame(
             subscription_id=data["subscription_id"],
             envelope=Envelope.from_dict(data["envelope"]),
+            wal_offset=int(data.get("wal_offset", 0)),
         )
     if cls is HelloFrame:
         return HelloFrame(
