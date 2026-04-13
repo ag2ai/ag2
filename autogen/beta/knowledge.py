@@ -260,6 +260,134 @@ class MemoryKnowledgeStore:
 
 
 # ---------------------------------------------------------------------------
+# Disk change-notification helpers (watchdog bridge)
+# ---------------------------------------------------------------------------
+
+
+class _DiskChangeHandler:
+    """watchdog ``FileSystemEventHandler`` that bridges to an async callback.
+
+    The watchdog observer runs in a background thread and calls this
+    handler synchronously on file events. We translate the physical
+    path back into its store-relative virtual form and schedule the
+    async ``callback`` on the main event loop via
+    :func:`asyncio.run_coroutine_threadsafe`.
+
+    Directory events are ignored — only file-level writes / creations /
+    deletions / moves are delivered, matching the ``MemoryKnowledgeStore``
+    contract where every change is observed as a file path.
+    """
+
+    def __init__(
+        self,
+        *,
+        root: Path,
+        virtual_prefix: str,
+        loop: asyncio.AbstractEventLoop,
+        callback: ChangeCallback,
+    ) -> None:
+        self._root = root
+        self._virtual_prefix = virtual_prefix
+        self._loop = loop
+        self._callback = callback
+
+    def _virtual_path_for(self, src_path: str) -> str | None:
+        try:
+            rel = Path(src_path).resolve().relative_to(self._root)
+        except ValueError:
+            return None
+        virtual = "/" + str(rel).replace("\\", "/")
+        # Filter events that bubble up from sibling subtrees (recursive
+        # observer on a broader path than we subscribed to).
+        if self._virtual_prefix != "/":
+            prefix = self._virtual_prefix.rstrip("/") + "/"
+            if virtual != self._virtual_prefix and not virtual.startswith(prefix):
+                return None
+        return virtual
+
+    def _dispatch(self, src_path: str) -> None:
+        virtual = self._virtual_path_for(src_path)
+        if virtual is None:
+            return
+        try:  # noqa: SIM105
+            asyncio.run_coroutine_threadsafe(self._callback(virtual), self._loop)
+        except RuntimeError:
+            # Loop is closed — the subscription outlived its owner.
+            pass
+
+    # watchdog event dispatch hooks ---------------------------------------
+    # watchdog instantiates a ``FileSystemEventHandler`` subclass; we
+    # duck-type the five callback names it looks for. Keeping this as a
+    # plain class avoids a hard import of ``watchdog.events`` at module
+    # load time — the import is lazy in ``DiskKnowledgeStore.on_change``.
+
+    def on_modified(self, event: Any) -> None:
+        if getattr(event, "is_directory", False):
+            return
+        self._dispatch(event.src_path)
+
+    def on_created(self, event: Any) -> None:
+        if getattr(event, "is_directory", False):
+            return
+        self._dispatch(event.src_path)
+
+    def on_deleted(self, event: Any) -> None:
+        if getattr(event, "is_directory", False):
+            return
+        self._dispatch(event.src_path)
+
+    def on_moved(self, event: Any) -> None:
+        if getattr(event, "is_directory", False):
+            return
+        dest = getattr(event, "dest_path", None) or event.src_path
+        self._dispatch(dest)
+
+    def dispatch(self, event: Any) -> None:
+        """watchdog's entry point. Delegates to the per-type hooks above."""
+
+        event_type = getattr(event, "event_type", "")
+        if event_type == "modified":
+            self.on_modified(event)
+        elif event_type == "created":
+            self.on_created(event)
+        elif event_type == "deleted":
+            self.on_deleted(event)
+        elif event_type == "moved":
+            self.on_moved(event)
+
+
+class _DiskChangeSubscription:
+    """Handle returned by :meth:`DiskKnowledgeStore.on_change`.
+
+    Wraps the live watchdog ``Observer`` and ensures ``close()`` stops
+    and joins the background thread so the subscription never leaks a
+    daemon thread past the caller's lifetime.
+    """
+
+    def __init__(self, observer: Any) -> None:
+        self._observer = observer
+        self._closed = False
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        # Observer.stop() + join() are blocking — run in the default
+        # executor so we don't pin the event loop while the background
+        # thread wraps up.
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._shutdown)
+
+    def _shutdown(self) -> None:
+        with contextlib.suppress(Exception):  # pragma: no cover — watchdog internals
+            self._observer.unschedule_all()
+        with contextlib.suppress(Exception):  # pragma: no cover
+            self._observer.stop()
+        with contextlib.suppress(Exception):  # pragma: no cover
+            self._observer.join(timeout=2.0)
+
+
+# ---------------------------------------------------------------------------
 # Disk implementation
 # ---------------------------------------------------------------------------
 
@@ -355,12 +483,59 @@ class DiskKnowledgeStore:
     async def on_change(
         self, path: str, callback: ChangeCallback
     ) -> ChangeSubscription:
-        # Real inotify/FSEvents support ships with Phase 3; Phase 1 callers
-        # poll via read_range when they detect a NoopChangeSubscription.
-        return NoopChangeSubscription()
+        """Subscribe to filesystem change notifications under ``path``.
 
+        Uses the ``watchdog`` library to dispatch platform-native events
+        (inotify on Linux, FSEvents on macOS, ReadDirectoryChangesW on
+        Windows). Falls back to :class:`PollingObserver` if the native
+        backend cannot be initialized, and to :class:`NoopChangeSubscription`
+        if ``watchdog`` is not installed at all.
 
-1
+        The ``path`` argument is the virtual (store-relative) directory
+        to watch. The watcher is recursive: modifications to any file
+        beneath ``path`` deliver the file's virtual path to ``callback``.
+        If ``path`` does not exist on disk yet, the directory is created
+        so watchdog has something to attach to — this matches the
+        ``MemoryKnowledgeStore`` contract where "subscribe first, then
+        write" is legal.
+        """
+
+        try:
+            from watchdog.observers import Observer  # type: ignore[import-not-found]
+            from watchdog.observers.polling import PollingObserver  # type: ignore[import-not-found]
+        except ImportError:
+            return NoopChangeSubscription()
+
+        virtual_path = _normalize(path)
+        physical_target = self._resolve(virtual_path)
+        physical_target.mkdir(parents=True, exist_ok=True)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return NoopChangeSubscription()
+
+        handler = _DiskChangeHandler(
+            root=self._root.resolve(),
+            virtual_prefix=virtual_path,
+            loop=loop,
+            callback=callback,
+        )
+
+        observer: Any
+        try:
+            observer = Observer()
+            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.start()
+        except Exception:
+            # Native backend unavailable (e.g. inside a container with no
+            # inotify caps). Fall back to polling — slower but correct.
+            observer = PollingObserver()
+            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.start()
+
+        return _DiskChangeSubscription(observer)
+
 
 # ---------------------------------------------------------------------------
 # Locked wrapper
