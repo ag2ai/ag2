@@ -17,7 +17,10 @@ from typing import TYPE_CHECKING
 
 from ..envelope import EV_TEXT, Envelope
 from ..errors import TimeoutError as NetTimeoutError
+from ..errors import UnknownTaskError
 from ..session_types import SessionMetadata
+from ..task import TaskMetadata, TaskSpec
+from .task import Task
 
 if TYPE_CHECKING:
     from .actor_client import ActorClient
@@ -208,3 +211,103 @@ class Session:
         if len(participants) == 1:
             return participants[0].actor_id
         return None
+
+    # ------------------------------------------------------------------
+    # Phase 4 — Network tasks
+    # ------------------------------------------------------------------
+
+    async def create_task(
+        self,
+        spec: TaskSpec,
+        *,
+        owner: str | None = None,
+        blocking: bool = False,
+        timeout: float | None = None,
+        ttl_seconds: int | None = None,
+    ) -> Task | TaskMetadata:
+        """Create a hub-tracked task inside this session.
+
+        ``owner`` is a participant name or id; defaults to the single
+        non-initiator participant in 2-party sessions. For multi-party
+        sessions an explicit owner is required.
+
+        ``blocking=False`` (default) returns a :class:`Task` handle
+        immediately. The caller may ``await task.wait()``, subscribe,
+        or poll ``task.refresh()``.
+
+        ``blocking=True`` awaits the task's terminal state and returns
+        the final :class:`TaskMetadata`. Raises :class:`TaskFailedError`,
+        :class:`TaskCancelledError`, :class:`TaskExpiredError`, or
+        :class:`NetTimeoutError` depending on how the task ended.
+
+        The blocking path is implemented on top of the non-blocking
+        path: create the task, open a subscription from the current
+        WAL cursor, resolve on the first terminal task envelope. No
+        new frames, no new hub primitives.
+        """
+
+        owner_id = self._resolve_owner(owner)
+        hub = self._client._hub
+        metadata = await hub.create_task(
+            session_id=self.session_id,
+            requester_id=self._client.actor_id,
+            owner_id=owner_id,
+            spec=spec,
+            ttl_seconds=ttl_seconds,
+        )
+        handle = Task(session=self, metadata=metadata)
+        if not blocking:
+            return handle
+        return await handle.wait(timeout=timeout)
+
+    def track_task(self, task_id: str) -> TaskMetadata:
+        """Return the hub's current :class:`TaskMetadata` for ``task_id``.
+
+        Raises :class:`UnknownTaskError` if the hub has never heard of
+        this task id or has archived it out of the cache.
+        """
+
+        peek = self._client._hub.peek_task(task_id)
+        if peek is None:
+            raise UnknownTaskError(task_id)
+        return peek
+
+    def track_tasks(self) -> list[TaskMetadata]:
+        """Return every task the hub knows about for this session."""
+
+        return self._client._hub.tasks_for_session(self.session_id)
+
+    def _resolve_owner(self, owner: str | None) -> str:
+        """Resolve ``owner`` to an actor_id for :meth:`create_task`.
+
+        * ``None`` → the single non-initiator participant (2-party fast path).
+        * A name → looked up via the hub's name index.
+        * An id that matches a participant → returned verbatim.
+        """
+
+        if owner is None:
+            candidates = [
+                p.actor_id
+                for p in self._metadata.participants
+                if p.actor_id != self._client.actor_id
+            ]
+            if len(candidates) == 1:
+                return candidates[0]
+            raise ValueError(
+                "create_task requires an explicit owner in multi-party sessions"
+            )
+
+        # Name lookup first. If the string is a registered participant
+        # actor_id we accept it verbatim; otherwise look it up via the
+        # hub's name index.
+        hub = self._client._hub
+        if any(p.actor_id == owner for p in self._metadata.participants):
+            return owner
+        actor_id = hub._name_to_id.get(owner)
+        if actor_id is None:
+            raise ValueError(f"unknown owner {owner!r}")
+        if not any(p.actor_id == actor_id for p in self._metadata.participants):
+            raise ValueError(
+                f"owner {owner!r} is not a participant in this session"
+            )
+        return actor_id
