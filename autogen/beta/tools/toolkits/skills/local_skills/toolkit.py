@@ -84,7 +84,10 @@ def _make_load_tool(runtime: SkillRuntime) -> FunctionTool:
 def _make_run_tool(runtime: SkillRuntime) -> FunctionTool:
     @tool(description="Run a script from a skill's scripts directory. Only .py and .sh scripts are supported.")
     def run_skill_script(
-        name: Annotated[str, Field(description="Skill name returned by list_skills.")],
+        name: Annotated[
+            str,
+            Field(description="Skill name returned by list_skills."),
+        ],
         script: Annotated[
             str,
             Field(description="Script filename inside scripts/, for example scaffold.py or build.sh."),
