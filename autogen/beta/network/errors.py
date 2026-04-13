@@ -84,5 +84,55 @@ class InboxFullError(InboxError):
     """The recipient's inbox is at its configured capacity."""
 
 
-class TimeoutError(NetworkError):  # noqa: A001 — intentionally shadows builtin in network scope.
+class TimeoutError(
+    NetworkError
+):  # noqa: A001 — intentionally shadows builtin in network scope.
     """A ``Session.ask`` or subscription wait exceeded its deadline."""
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Task errors
+# ---------------------------------------------------------------------------
+
+
+class TaskError(NetworkError):
+    """Base class for network task errors."""
+
+
+class UnknownTaskError(TaskError):
+    """Looked up a task that does not exist or has been archived."""
+
+
+class TaskStateError(TaskError):
+    """Requested a task state transition the hub state machine forbids."""
+
+
+class TaskFailedError(TaskError):
+    """A blocking task wait resolved with a failure state.
+
+    Carries the failure ``reason`` so callers can distinguish this from
+    cancellation or expiry. The terminal :class:`TaskMetadata` is
+    exposed on ``metadata`` for inspection.
+    """
+
+    def __init__(self, reason: str, metadata: object | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.metadata = metadata
+
+
+class TaskCancelledError(TaskError):
+    """A blocking task wait resolved because the task was cancelled."""
+
+    def __init__(self, reason: str = "", metadata: object | None = None) -> None:
+        super().__init__(reason or "task was cancelled")
+        self.reason = reason
+        self.metadata = metadata
+
+
+class TaskExpiredError(TaskError):
+    """A blocking task wait resolved because the task's TTL elapsed."""
+
+    def __init__(self, metadata: object | None = None) -> None:
+        super().__init__("task TTL expired")
+        self.metadata = metadata

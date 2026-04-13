@@ -50,9 +50,10 @@ from .envelope import (
     EV_SESSION_INVITE_REJECT,
     EV_SESSION_OPENED,
     EV_TEXT,
+    TASK_EVENT_TYPES,
 )
 
-# Built-in event type names — every event the Phase 1 & 2 surface emits.
+# Built-in event type names — every event the Phase 1 & 2 & 4 surface emits.
 BUILTIN_EVENT_TYPES: frozenset[str] = frozenset(
     {
         EV_TEXT,
@@ -65,6 +66,7 @@ BUILTIN_EVENT_TYPES: frozenset[str] = frozenset(
         # Phase 2 adapter events
         "ag2.auction.select",
     }
+    | TASK_EVENT_TYPES  # Phase 4 network tasks
 )
 
 

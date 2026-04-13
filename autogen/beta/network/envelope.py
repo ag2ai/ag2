@@ -32,6 +32,40 @@ EV_SESSION_CLOSED = "ag2.session.closed"
 EV_SESSION_OPENED = "ag2.session.opened"
 EV_ERROR = "ag2.error"
 
+# Phase 4 — Task events. Task creation is a direct ``Hub.create_task`` call
+# (no wire envelope), but every subsequent state transition rides the session
+# WAL so subscribers and cold-restart hydrate both see the full trail.
+EV_TASK_ASSIGNED = "ag2.task.assigned"
+EV_TASK_PHASE_ENTERED = "ag2.task.phase_entered"
+EV_TASK_PHASE_COMPLETED = "ag2.task.phase_completed"
+EV_TASK_PROGRESS = "ag2.task.progress"
+EV_TASK_RESULT = "ag2.task.result"
+EV_TASK_ERROR = "ag2.task.error"
+EV_TASK_CANCELLED = "ag2.task.cancelled"
+EV_TASK_EXPIRED = "ag2.task.expired"
+
+TASK_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        EV_TASK_ASSIGNED,
+        EV_TASK_PHASE_ENTERED,
+        EV_TASK_PHASE_COMPLETED,
+        EV_TASK_PROGRESS,
+        EV_TASK_RESULT,
+        EV_TASK_ERROR,
+        EV_TASK_CANCELLED,
+        EV_TASK_EXPIRED,
+    }
+)
+
+TASK_TERMINAL_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        EV_TASK_RESULT,
+        EV_TASK_ERROR,
+        EV_TASK_CANCELLED,
+        EV_TASK_EXPIRED,
+    }
+)
+
 
 # Priority is a tagged enum — the wire format is a plain string so Phase 3
 # WsLink and custom backends don't need to teach an Enum decoder. Operators
