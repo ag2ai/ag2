@@ -57,6 +57,8 @@ Next we will see how to define each agent.
 **Student Agent**
 
 ```python
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+
 system_message = f"""You are an agent representing a student. You have access to the following essay content: {essay}.
 
     Your task is to answer questions about the essay strictly based on information found in the essay content.
