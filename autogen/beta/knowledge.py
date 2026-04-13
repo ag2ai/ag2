@@ -16,8 +16,10 @@ Filesystem semantics are used because:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from uuid import UUID
@@ -30,7 +32,33 @@ from autogen.beta.events._serialization import (
 if TYPE_CHECKING:
     from autogen.beta.events import BaseEvent
 
-    from .network.primitives.envelope import EventRegistry
+
+ChangeCallback = Callable[[str], Awaitable[None]]
+
+
+class ChangeSubscription(Protocol):
+    """Handle returned by :meth:`KnowledgeStore.on_change`.
+
+    Closing the subscription stops delivery of change notifications. This
+    is filesystem-level reactivity for the backing store — not to be
+    confused with ``autogen.beta.watch.Watch``, which is the event- and
+    time-pattern trigger system used by the framework-core ``Scheduler``.
+    """
+
+    async def close(self) -> None:
+        """Stop receiving change notifications."""
+        ...
+
+
+class NoopChangeSubscription:
+    """Sentinel returned by backends that cannot observe changes efficiently.
+
+    The hub falls back to polling when it sees a
+    :class:`NoopChangeSubscription`.
+    """
+
+    async def close(self) -> None:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +74,13 @@ class KnowledgeStore(Protocol):
     Paths use Unix conventions: /dir/subdir/file.txt
     Directories are implicit -- writing /a/b/c.txt implies /a/ and /a/b/ exist.
     Listing returns immediate children. Directory entries end with '/'.
+
+    The network layer uses the same protocol to back the hub's virtual file
+    system; see :mod:`autogen.beta.network`. Three methods beyond the basic
+    CRUD are required for WAL-backed sessions: ``append`` and ``read_range``
+    are mandatory, while ``on_change`` is optional (backends that cannot
+    observe changes efficiently return a :class:`NoopChangeSubscription`
+    and callers fall back to polling).
     """
 
     async def read(self, path: str) -> str | None:
@@ -70,6 +105,37 @@ class KnowledgeStore(Protocol):
 
     async def exists(self, path: str) -> bool:
         """Check if path exists."""
+        ...
+
+    async def append(self, path: str, content: str) -> int:
+        """Atomically append ``content`` to the file at ``path``.
+
+        Creates the file (and its parents) if it does not exist. Returns the
+        byte offset at which ``content`` was written, so callers can record a
+        cursor for later ``read_range`` calls.
+        """
+        ...
+
+    async def read_range(self, path: str, start: int, end: int | None = None) -> str:
+        """Read the byte slice ``[start, end)`` of the file at ``path``.
+
+        ``end`` of ``None`` means "up to the current end of file". Returns an
+        empty string if the file does not exist. Slices are returned as UTF-8
+        text; callers that append multi-byte content must align offsets to
+        character boundaries themselves.
+        """
+        ...
+
+    async def on_change(
+        self, path: str, callback: ChangeCallback
+    ) -> ChangeSubscription:
+        """Subscribe to change notifications at ``path``.
+
+        Backends that can observe changes efficiently invoke
+        ``callback(path)`` whenever a file under ``path`` changes. Backends
+        that cannot must return :class:`NoopChangeSubscription`; the hub
+        then polls on a short interval instead.
+        """
         ...
 
 
@@ -98,12 +164,16 @@ class MemoryKnowledgeStore:
 
     def __init__(self) -> None:
         self._data: dict[str, str] = {}
+        self._append_lock = asyncio.Lock()
+        self._subscribers: dict[str, list[ChangeCallback]] = {}
 
     async def read(self, path: str) -> str | None:
         return self._data.get(_normalize(path))
 
     async def write(self, path: str, content: str) -> None:
-        self._data[_normalize(path)] = content
+        normalized = _normalize(path)
+        self._data[normalized] = content
+        await self._notify(normalized)
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
@@ -121,21 +191,72 @@ class MemoryKnowledgeStore:
 
     async def delete(self, path: str) -> None:
         normalized = _normalize(path)
-        # Delete exact match
-        self._data.pop(normalized, None)
-        # Delete children (if deleting a directory)
+        affected: list[str] = []
+        if normalized in self._data:
+            del self._data[normalized]
+            affected.append(normalized)
         prefix = normalized.rstrip("/") + "/"
-        to_delete = [k for k in self._data if k.startswith(prefix)]
-        for k in to_delete:
-            del self._data[k]
+        for key in [k for k in self._data if k.startswith(prefix)]:
+            del self._data[key]
+            affected.append(key)
+        for key in affected:
+            await self._notify(key)
 
     async def exists(self, path: str) -> bool:
         normalized = _normalize(path)
         if normalized in self._data:
             return True
-        # Check if it's a directory (any children exist)
         prefix = normalized.rstrip("/") + "/"
         return any(k.startswith(prefix) for k in self._data)
+
+    async def append(self, path: str, content: str) -> int:
+        normalized = _normalize(path)
+        async with self._append_lock:
+            existing = self._data.get(normalized, "")
+            offset = len(existing.encode("utf-8"))
+            self._data[normalized] = existing + content
+        await self._notify(normalized)
+        return offset
+
+    async def read_range(self, path: str, start: int, end: int | None = None) -> str:
+        normalized = _normalize(path)
+        existing = self._data.get(normalized)
+        if existing is None:
+            return ""
+        data = existing.encode("utf-8")
+        stop = len(data) if end is None else min(end, len(data))
+        if start >= stop:
+            return ""
+        return data[start:stop].decode("utf-8", errors="strict")
+
+    async def on_change(
+        self, path: str, callback: ChangeCallback
+    ) -> ChangeSubscription:
+        normalized = _normalize(path)
+        self._subscribers.setdefault(normalized, []).append(callback)
+
+        subscribers = self._subscribers
+        key = normalized
+
+        class _Sub:
+            async def close(self) -> None:
+                bucket = subscribers.get(key)
+                if not bucket:
+                    return
+                with contextlib.suppress(ValueError):
+                    bucket.remove(callback)
+                if not bucket:
+                    subscribers.pop(key, None)
+
+        return _Sub()
+
+    async def _notify(self, changed_path: str) -> None:
+        for subscribed_path, callbacks in list(self._subscribers.items()):
+            if changed_path == subscribed_path or changed_path.startswith(
+                subscribed_path.rstrip("/") + "/"
+            ):
+                for callback in list(callbacks):
+                    await callback(changed_path)
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +286,9 @@ class DiskKnowledgeStore:
     def _resolve(self, path: str) -> Path:
         """Map virtual path to real filesystem path."""
         normalized = _normalize(path).lstrip("/")
-        resolved = (self._root / normalized).resolve() if normalized else self._root.resolve()
+        resolved = (
+            (self._root / normalized).resolve() if normalized else self._root.resolve()
+        )
         # Prevent path traversal
         if not str(resolved).startswith(str(self._root.resolve())):
             raise ValueError(f"Path traversal blocked: {path}")
@@ -206,6 +329,38 @@ class DiskKnowledgeStore:
     async def exists(self, path: str) -> bool:
         return self._resolve(path).exists()
 
+    async def append(self, path: str, content: str) -> int:
+        target = self._resolve(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = content.encode("utf-8")
+        # Open in append-binary so POSIX guarantees atomicity per write().
+        with target.open("ab") as fh:
+            offset = fh.tell()
+            fh.write(payload)
+        return offset
+
+    async def read_range(self, path: str, start: int, end: int | None = None) -> str:
+        target = self._resolve(path)
+        if not target.is_file():
+            return ""
+        with target.open("rb") as fh:
+            fh.seek(start)
+            if end is None:
+                data = fh.read()
+            else:
+                span = max(0, end - start)
+                data = fh.read(span)
+        return data.decode("utf-8", errors="strict")
+
+    async def on_change(
+        self, path: str, callback: ChangeCallback
+    ) -> ChangeSubscription:
+        # Real inotify/FSEvents support ships with Phase 3; Phase 1 callers
+        # poll via read_range when they detect a NoopChangeSubscription.
+        return NoopChangeSubscription()
+
+
+1
 
 # ---------------------------------------------------------------------------
 # Locked wrapper
@@ -250,6 +405,23 @@ class LockedKnowledgeStore:
     async def exists(self, path: str) -> bool:
         return await self._store.exists(path)
 
+    async def append(self, path: str, content: str) -> int:
+        acquired = await self._lock.acquire(f"store:write:{path}", ttl=30.0)
+        if not acquired:
+            raise RuntimeError(f"Failed to acquire append lock for {path}")
+        try:
+            return await self._store.append(path, content)
+        finally:
+            await self._lock.release(f"store:write:{path}")
+
+    async def read_range(self, path: str, start: int, end: int | None = None) -> str:
+        return await self._store.read_range(path, start, end)
+
+    async def on_change(
+        self, path: str, callback: ChangeCallback
+    ) -> ChangeSubscription:
+        return await self._store.on_change(path, callback)
+
 
 # ---------------------------------------------------------------------------
 # EventLogWriter — WAL persistence for stream events
@@ -276,7 +448,9 @@ class EventLogWriter:
         lines = self._serialize_events(events)
         await self._store.write(path, "\n".join(lines))
 
-    async def persist_dropped(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:
+    async def persist_dropped(
+        self, stream_id: StreamId, events: Iterable[BaseEvent]
+    ) -> None:
         """Write compaction-dropped events to /log/{stream_id}.dropped-{n}.jsonl.
 
         Discovers existing segments in the store to avoid overwriting.
@@ -289,11 +463,7 @@ class EventLogWriter:
         lines = self._serialize_events(events)
         await self._store.write(path, "\n".join(lines))
 
-    async def load(
-        self,
-        stream_id: StreamId,
-        registry: EventRegistry | None = None,
-    ) -> list[BaseEvent]:
+    async def load(self, stream_id: StreamId) -> list[BaseEvent]:
         """Load events from WAL files: all dropped segments in order, then final.
 
         Returns typed BaseEvent instances. Unknown types become UnknownEvent.
@@ -309,11 +479,11 @@ class EventLogWriter:
             key=lambda e: int(e[len(prefix) : -len(".jsonl")]),
         )
         for segment in segments:
-            events = await self._load_file(f"/log/{segment}", registry)
+            events = await self._load_file(f"/log/{segment}")
             all_events.extend(events)
 
         # Read final log
-        final = await self._load_file(f"/log/{stream_id}.jsonl", registry)
+        final = await self._load_file(f"/log/{stream_id}.jsonl")
         all_events.extend(final)
 
         return all_events
@@ -328,11 +498,7 @@ class EventLogWriter:
             lines.append(json.dumps(record, default=str))
         return lines
 
-    async def _load_file(
-        self,
-        path: str,
-        registry: EventRegistry | None = None,
-    ) -> list[BaseEvent]:
+    async def _load_file(self, path: str) -> list[BaseEvent]:
 
         from .events.lifecycle import UnknownEvent
 
@@ -348,12 +514,7 @@ class EventLogWriter:
             event_type = record["type"]
             event_data = record["data"]
 
-            # Resolve type — try registry, then import
-            cls: type[BaseEvent] | None = None
-            if registry is not None:
-                cls = registry.resolve(event_type)
-            if cls is None:
-                cls = import_event_class(event_type)
+            cls: type[BaseEvent] | None = import_event_class(event_type)
 
             if cls is not None:
                 try:
