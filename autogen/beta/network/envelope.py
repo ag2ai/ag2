@@ -63,6 +63,7 @@ class Envelope:
     created_at: str | None = None
     ttl_seconds: int | None = None
     idempotency_key: str | None = None
+    depth: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -113,6 +114,7 @@ class Envelope:
             "created_at": self.created_at,
             "ttl_seconds": self.ttl_seconds,
             "idempotency_key": self.idempotency_key,
+            "depth": self.depth,
             "event": {"type": self.event_type, "data": dict(self.event_data)},
             "metadata": dict(self.metadata),
         }
@@ -132,6 +134,7 @@ class Envelope:
             created_at=data.get("created_at"),
             ttl_seconds=data.get("ttl_seconds"),
             idempotency_key=data.get("idempotency_key"),
+            depth=int(data.get("depth", 0)),
             event_type=event.get("type", EV_TEXT),
             event_data=dict(event.get("data", {})),
             metadata=dict(data.get("metadata", {})),

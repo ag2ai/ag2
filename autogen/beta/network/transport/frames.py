@@ -138,11 +138,30 @@ class EventFrame:
 
 @dataclass(slots=True)
 class ChunkFrame:
-    """Hub → client: streaming content token (Phase 2+)."""
+    """Streaming content fragment for an in-flight response.
+
+    Flows bidirectionally:
+
+    * **Client → hub** — a sender streams tokens as they come out of
+      the model. The hub routes them to the recipient's endpoint.
+    * **Hub → client** — the hub relays the chunk to each recipient
+      whose session filter matches.
+
+    ``session_id`` / ``sender_id`` / ``recipient_id`` let the hub route
+    chunks without threading extra lookup state through every call.
+    ``envelope_id`` is the hub-stamped id of the envelope these chunks
+    will aggregate into — typically the ``causation_id`` of the
+    in-progress reply, so clients can correlate chunk streams with the
+    original request.
+    ``final`` marks the last chunk in a stream.
+    """
 
     envelope_id: str
     chunk_index: int
     content: str
+    session_id: str | None = None
+    sender_id: str | None = None
+    recipient_id: str | None = None
     final: bool = False
 
     type: ClassVar[str] = "chunk"
@@ -298,6 +317,9 @@ def _frame_to_dict(frame: Frame) -> dict[str, Any]:
             "envelope_id": frame.envelope_id,
             "chunk_index": frame.chunk_index,
             "content": frame.content,
+            "session_id": frame.session_id,
+            "sender_id": frame.sender_id,
+            "recipient_id": frame.recipient_id,
             "final": frame.final,
         }
     if isinstance(frame, RuleChangedFrame):
@@ -369,6 +391,9 @@ def _dict_to_frame(cls: type, data: dict[str, Any]) -> Frame:
             envelope_id=data["envelope_id"],
             chunk_index=int(data["chunk_index"]),
             content=data["content"],
+            session_id=data.get("session_id"),
+            sender_id=data.get("sender_id"),
+            recipient_id=data.get("recipient_id"),
             final=bool(data.get("final", False)),
         )
     if cls is RuleChangedFrame:
