@@ -39,8 +39,36 @@ def actor_runtime(actor_id: str) -> str:
     return f"{actor_dir(actor_id)}/runtime.json"
 
 
-def actor_inbox_log(actor_id: str) -> str:
-    return f"{actor_dir(actor_id)}/inbox.jsonl"
+def actor_inbox_dir(actor_id: str) -> str:
+    return f"{actor_dir(actor_id)}/inbox"
+
+
+def actor_inbox_pending_dir(actor_id: str) -> str:
+    return f"{actor_inbox_dir(actor_id)}/pending"
+
+
+def actor_inbox_received_dir(actor_id: str) -> str:
+    return f"{actor_inbox_dir(actor_id)}/received"
+
+
+def actor_inbox_overflow_dir(actor_id: str) -> str:
+    return f"{actor_inbox_dir(actor_id)}/overflow"
+
+
+def actor_inbox_pending(actor_id: str, envelope_id: str) -> str:
+    return f"{actor_inbox_pending_dir(actor_id)}/{envelope_id}.json"
+
+
+def actor_inbox_received(actor_id: str, envelope_id: str) -> str:
+    return f"{actor_inbox_received_dir(actor_id)}/{envelope_id}.json"
+
+
+def actor_inbox_overflow(actor_id: str, envelope_id: str) -> str:
+    return f"{actor_inbox_overflow_dir(actor_id)}/{envelope_id}.json"
+
+
+def actor_inbox_nacks(actor_id: str) -> str:
+    return f"{actor_inbox_dir(actor_id)}/nacks.jsonl"
 
 
 def name_pointer(name: str) -> str:

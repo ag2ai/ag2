@@ -24,6 +24,7 @@ the notify handler and posting the reply back.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -54,6 +55,7 @@ from ..envelope import (
 from ..errors import (
     AccessDeniedError,
     DuplicateRegistrationError,
+    InboxFullError,
     InviteRejectedError,
     LimitExceededError,
     RuleViolationError,
@@ -270,6 +272,13 @@ class Hub:
         # ``(envelope_id, wal_offset, expires_at)``. Lazily GC'd on
         # lookup so Phase 2 doesn't need a background sweeper.
         self._idempotency: dict[tuple[str, str], _IdempotencyEntry] = {}
+        # Phase 3a structured inbox — per-actor count of envelopes
+        # currently sitting in ``hub/actors/{id}/inbox/pending/``. Bumped
+        # on _deliver_to, decremented on ReceiptFrame(ack)/(nack) via
+        # _handle_receipt, rebuilt from the store on hydrate. Used for
+        # fast ``max_pending`` checks in _preflight_inbox_capacity so
+        # we don't stat the pending dir on every post_envelope call.
+        self._inbox_pending: dict[str, int] = {}
 
     @classmethod
     async def open(
@@ -406,6 +415,15 @@ class Hub:
             self._rules[actor_id] = rule
             self._name_to_id[identity.name] = actor_id
             self._active_sessions.setdefault(actor_id, set())
+            # Rebuild the pending inbox counter by listing pending/ —
+            # authoritative after restart since the in-memory count was
+            # wiped with the process.
+            pending = await self._store.list(
+                layout.actor_inbox_pending_dir(actor_id) + "/"
+            )
+            self._inbox_pending[actor_id] = sum(
+                1 for entry in pending if entry.endswith(".json")
+            )
 
         # Sessions next — metadata only (WAL stays on disk).
         session_ids = await self._store.list(layout.SESSIONS_ROOT)
@@ -490,6 +508,7 @@ class Hub:
             self._identities[actor_id] = stamped
             self._rules[actor_id] = applied_rule
             self._active_sessions[actor_id] = set()
+            self._inbox_pending[actor_id] = 0
 
         return stamped
 
@@ -501,6 +520,7 @@ class Hub:
             self._rules.pop(actor_id, None)
             self._active_sessions.pop(actor_id, None)
             self._name_to_id.pop(identity.name, None)
+            self._inbox_pending.pop(actor_id, None)
 
         await self._store.delete(layout.actor_dir(actor_id))
         await self._store.delete(layout.name_pointer(identity.name))
@@ -830,6 +850,14 @@ class Hub:
 
         adapter.validate_send(metadata, envelope, prior)
 
+        # Preflight the structured inbox: any recipient whose rule has
+        # ``inbox.max_pending`` hit with ``overflow="reject"`` fails the
+        # whole post before we touch the WAL. Spool-mode overflow falls
+        # through to _deliver_to and is handled lazily there. This is
+        # what makes the post_envelope atomicity hold — if delivery
+        # fails for one recipient, the envelope is not persisted.
+        self._preflight_inbox_capacity(metadata, envelope)
+
         envelope.envelope_id = new_id()
         envelope.created_at = self._clock()
         envelope.trace_id = envelope.trace_id or envelope.envelope_id
@@ -852,7 +880,9 @@ class Hub:
             await self._fanout_to_participants(metadata, envelope)
         else:
             await self._deliver(envelope)
-        await self._fanout_to_subs(subs_snapshot, metadata, envelope)
+        await self._fanout_to_subs(
+            subs_snapshot, metadata, envelope, wal_offset=next_offset
+        )
 
         result = adapter.on_accepted(metadata, envelope, prior)
         await self._apply_adapter_result(metadata, result)
@@ -877,10 +907,12 @@ class Hub:
         if envelope.created_at is None:
             envelope.created_at = self._clock()
         async with self._wal_lock:
-            await self._append_to_wal(metadata, envelope)
+            next_offset = await self._append_to_wal(metadata, envelope)
             subs_snapshot = list(self._subscriptions.values())
         await self._deliver(envelope)
-        await self._fanout_to_subs(subs_snapshot, metadata, envelope)
+        await self._fanout_to_subs(
+            subs_snapshot, metadata, envelope, wal_offset=next_offset
+        )
 
     async def _apply_adapter_result(
         self, metadata: SessionMetadata, result: AdapterResult
@@ -943,9 +975,11 @@ class Hub:
             opened.envelope_id = new_id()
             opened.created_at = self._clock()
             async with self._wal_lock:
-                await self._append_to_wal(metadata, opened)
+                opened_offset = await self._append_to_wal(metadata, opened)
                 subs_snapshot = list(self._subscriptions.values())
-            await self._fanout_to_subs(subs_snapshot, metadata, opened)
+            await self._fanout_to_subs(
+                subs_snapshot, metadata, opened, wal_offset=opened_offset
+            )
             pending.future.set_result(metadata)
 
     async def _record_invite_reject(
@@ -986,13 +1020,15 @@ class Hub:
         closed.envelope_id = new_id()
         closed.created_at = self._clock()
         async with self._wal_lock:
-            await self._append_to_wal(metadata, closed)
+            closed_offset = await self._append_to_wal(metadata, closed)
             subs_snapshot = list(self._subscriptions.values())
         for participant in metadata.participants:
             closed_for = Envelope.from_dict(closed.to_dict())
             closed_for.recipient_id = participant.actor_id
             await self._deliver(closed_for)
-        await self._fanout_to_subs(subs_snapshot, metadata, closed)
+        await self._fanout_to_subs(
+            subs_snapshot, metadata, closed, wal_offset=closed_offset
+        )
 
     # ------------------------------------------------------------------
     # Session queries + close
@@ -1043,6 +1079,33 @@ class Hub:
                 continue
             envelopes.append(Envelope.from_json(line))
         return envelopes
+
+    async def _read_wal_with_offsets(
+        self, session_id: str, *, since: int = 0
+    ) -> list[tuple[Envelope, int]]:
+        """Read the WAL and return ``(envelope, end_offset)`` tuples.
+
+        Used by :meth:`_handle_subscribe`'s initial replay — the client
+        needs each envelope's end-of-record byte offset to pin its
+        cursor correctly, so a subsequent reconnect with ``since=<end>``
+        resumes exactly after the envelope just delivered. The WAL
+        format is one ``Envelope.to_json() + '\\n'`` per line, so the
+        end offset is the running sum of line byte lengths (+1 per
+        newline separator).
+        """
+
+        wal = await self._store.read_range(layout.session_wal(session_id), since)
+        entries: list[tuple[Envelope, int]] = []
+        if not wal:
+            return entries
+        offset = since
+        for line in wal.split("\n"):
+            if not line:
+                continue
+            envelope = Envelope.from_json(line)
+            offset += len(line.encode("utf-8")) + 1  # +1 for '\n'
+            entries.append((envelope, offset))
+        return entries
 
     # ------------------------------------------------------------------
     # WAL + inbox helpers
@@ -1097,14 +1160,126 @@ class Hub:
         await self._deliver_to(envelope.recipient_id, envelope)
 
     async def _deliver_to(self, recipient_id: str, envelope: Envelope) -> None:
-        payload = envelope.to_json() + "\n"
-        await self._store.append(layout.actor_inbox_log(recipient_id), payload)
-        endpoint = self._endpoints.get(recipient_id)
-        if endpoint is not None and not endpoint.closed:
-            try:
-                await endpoint.send_frame(NotifyFrame(envelope=envelope))
-            except Exception:  # pragma: no cover
-                log.warning("failed to push notify frame", exc_info=True)
+        """Persist ``envelope`` in the recipient's structured inbox and notify.
+
+        Writes the envelope to ``hub/actors/{id}/inbox/pending/{envelope_id}.json``
+        under the normal path, or ``inbox/overflow/{envelope_id}.json`` when
+        the recipient's ``rule.limits.inbox`` is at ``max_pending`` with an
+        ``overflow="spool"`` policy. The notify frame is only pushed for
+        pending-path deliveries — spooled envelopes wait for the recipient
+        to drain them explicitly.
+
+        **System envelopes bypass the structured inbox.** ``ag2.session.*``
+        handshake signals (invites, acks, opens, closes) are ephemeral:
+        a disconnected actor that comes back later does not want a
+        stale invite replayed from disk — the session's own state
+        machine authoritatively tracks handshake progress. They are
+        delivered via ``notify`` only, never written to ``pending/``,
+        and therefore never count against ``max_pending``. This is
+        what keeps user workload budget (the 1000-pending-envelope
+        limit) separate from handshake chatter.
+
+        Assumes :meth:`_preflight_inbox_capacity` has already rejected
+        the envelope if any recipient's rule is ``reject``-mode full, so
+        ``_deliver_to`` never raises :class:`InboxFullError` itself.
+        """
+
+        # System envelopes: notify-only, no structured-inbox slot.
+        if envelope.event_type.startswith("ag2.session."):
+            endpoint = self._endpoints.get(recipient_id)
+            if endpoint is not None and not endpoint.closed:
+                try:
+                    await endpoint.send_frame(NotifyFrame(envelope=envelope))
+                except Exception:  # pragma: no cover
+                    log.warning("failed to push notify frame", exc_info=True)
+            return
+
+        rule = self._rules.get(recipient_id)
+        inbox = rule.limits.inbox if rule is not None else None
+        spooling = False
+        if inbox is not None and inbox.max_pending > 0:
+            current = self._inbox_pending.get(recipient_id, 0)
+            if current >= inbox.max_pending:
+                spooling = True
+
+        if spooling:
+            path = layout.actor_inbox_overflow(recipient_id, envelope.envelope_id or "")
+        else:
+            path = layout.actor_inbox_pending(recipient_id, envelope.envelope_id or "")
+
+        await self._store.write(path, envelope.to_json())
+
+        if not spooling:
+            self._inbox_pending[recipient_id] = (
+                self._inbox_pending.get(recipient_id, 0) + 1
+            )
+            endpoint = self._endpoints.get(recipient_id)
+            if endpoint is not None and not endpoint.closed:
+                try:
+                    await endpoint.send_frame(NotifyFrame(envelope=envelope))
+                except Exception:  # pragma: no cover
+                    log.warning("failed to push notify frame", exc_info=True)
+
+    def _recipient_ids_for(
+        self, metadata: SessionMetadata, envelope: Envelope
+    ) -> list[str]:
+        """Return the list of actor ids the envelope will be delivered to.
+
+        Unicast envelopes ship to their ``recipient_id``; broadcast
+        envelopes fan out to every non-sender participant. Used both by
+        :meth:`_preflight_inbox_capacity` and the delivery code.
+        """
+
+        if envelope.recipient_id is not None:
+            return [envelope.recipient_id]
+        return [
+            p.actor_id
+            for p in metadata.participants
+            if p.actor_id != envelope.sender_id
+        ]
+
+    def _preflight_inbox_capacity(
+        self, metadata: SessionMetadata, envelope: Envelope
+    ) -> None:
+        """Raise :class:`InboxFullError` if any recipient is ``reject``-full.
+
+        Runs before the WAL append in :meth:`post_envelope` so a
+        rejected envelope leaves no trace on disk. ``spool`` overflow
+        is handled lazily in :meth:`_deliver_to` itself so partial
+        spool-mixed-with-pending deliveries are not pre-rejected here.
+        ``drop_oldest`` / ``drop_newest`` are accepted in the rule but
+        fall through to reject semantics in Phase 3a (see Phase 3b).
+
+        System envelopes (``ag2.session.*``) bypass the check: they
+        are ephemeral handshake signals that never consume an inbox
+        slot. See :meth:`_deliver_to` for the symmetric write-path
+        skip.
+        """
+
+        if envelope.event_type.startswith("ag2.session."):
+            return
+
+        for recipient_id in self._recipient_ids_for(metadata, envelope):
+            rule = self._rules.get(recipient_id)
+            if rule is None:
+                continue
+            inbox = rule.limits.inbox
+            if inbox.max_pending == 0:
+                continue
+            current = self._inbox_pending.get(recipient_id, 0)
+            if current < inbox.max_pending:
+                continue
+            if inbox.overflow == "spool":
+                continue  # overflow handled in _deliver_to
+            recipient_name = (
+                self._identities[recipient_id].name
+                if recipient_id in self._identities
+                else recipient_id
+            )
+            raise InboxFullError(
+                f"{recipient_name} inbox is full "
+                f"({current}/{inbox.max_pending}, overflow={inbox.overflow})"
+            )
 
     async def _fanout_to_participants(
         self, metadata: SessionMetadata, envelope: Envelope
@@ -1165,6 +1340,8 @@ class Hub:
         subs: list[_Subscription],
         metadata: SessionMetadata,
         envelope: Envelope,
+        *,
+        wal_offset: int = 0,
     ) -> None:
         """Fan-out an envelope to a pre-captured subscription snapshot.
 
@@ -1172,6 +1349,12 @@ class Hub:
         :meth:`post_envelope` so subscriptions registered *after* this
         envelope was appended are not double-delivered — they will see
         this envelope through :meth:`_handle_subscribe`'s replay path.
+
+        ``wal_offset`` is the byte position immediately after this
+        envelope's append, stamped on every outgoing ``EventFrame``
+        so clients can checkpoint their cursor and resume from it on
+        reconnect (see :meth:`ActorClient.reconnect`). ``0`` is a
+        safe default for subscriptions that don't pin a session.
         """
 
         for sub in subs:
@@ -1184,7 +1367,11 @@ class Hub:
                 continue
             try:
                 await sub.endpoint.send_frame(
-                    EventFrame(subscription_id=sub.subscription_id, envelope=envelope)
+                    EventFrame(
+                        subscription_id=sub.subscription_id,
+                        envelope=envelope,
+                        wal_offset=wal_offset,
+                    )
                 )
             except Exception:  # pragma: no cover
                 log.warning("failed to push event frame", exc_info=True)
@@ -1205,13 +1392,27 @@ class Hub:
         except Exception as exc:  # pragma: no cover
             log.warning("connection handler error: %r", exc, exc_info=True)
         finally:
+            # Only clear the endpoint mapping if THIS connection is the
+            # current one — a reconnect that landed on a new endpoint
+            # with the same actor_id already repointed ``_endpoints``
+            # to the new endpoint and that new entry must not be wiped.
+            was_current = False
             if actor_id is not None:
                 registered = self._endpoints.get(actor_id)
                 if registered is endpoint:
                     self._endpoints.pop(actor_id, None)
+                    was_current = True
             for sid, sub in list(self._subscriptions.items()):
                 if sub.endpoint is endpoint:
                     self._subscriptions.pop(sid, None)
+            # Phase 3a §3.4: mark the runtime unreachable when the
+            # current endpoint goes away. If a reconnect already
+            # replaced the endpoint, the hello for the new one has
+            # already stamped runtime with ``reachable=true``, so
+            # we must not overwrite it here.
+            if actor_id is not None and was_current:
+                with contextlib.suppress(Exception):  # pragma: no cover
+                    await self._write_runtime(actor_id, None, reachable=False)
 
     async def _dispatch_frame(
         self,
@@ -1230,6 +1431,7 @@ class Hub:
             await self._handle_send(endpoint, frame, actor_id)
             return actor_id
         if isinstance(frame, ReceiptFrame):
+            await self._handle_receipt(endpoint, frame, actor_id)
             return actor_id
         if isinstance(frame, ChunkFrame):
             await self._handle_chunk(endpoint, frame, actor_id)
@@ -1273,10 +1475,70 @@ class Hub:
         self._endpoints[actor_id] = endpoint
         endpoint.actor_id = actor_id
 
+        # Phase 3a §3.4: stamp the actor's runtime.json with the
+        # binding shape of the live transport so ``describe`` /
+        # discovery responses report the real address. Phase 1 wrote
+        # a placeholder ``{"binding": "local", "reachable": false}``
+        # at registration time and never updated it; the runtime
+        # record was effectively stale the moment the actor connected.
+        await self._write_runtime(actor_id, endpoint, reachable=True)
+
         await endpoint.send_frame(
             WelcomeFrame(actor_id=actor_id, hub_id=self.config.hub_id)
         )
         return actor_id
+
+    async def _write_runtime(
+        self,
+        actor_id: str,
+        endpoint: _EndpointSide | None,
+        *,
+        reachable: bool,
+    ) -> None:
+        """Rewrite an actor's runtime.json with the current transport shape.
+
+        Called from :meth:`_handle_hello` (``reachable=True`` with the
+        live endpoint) and from :meth:`connection_handler`'s cleanup
+        path (``reachable=False`` with ``endpoint=None`` — the fields
+        for the last-known binding are preserved so discovery can
+        still report where the actor was).
+        """
+
+        existing_raw = await self._store.read(layout.actor_runtime(actor_id))
+        existing: dict[str, Any] = {}
+        if existing_raw:
+            try:
+                existing = json.loads(existing_raw)
+            except json.JSONDecodeError:  # pragma: no cover
+                existing = {}
+
+        if endpoint is not None:
+            runtime = {
+                "actor_id": actor_id,
+                "binding": getattr(endpoint, "binding", "local"),
+                "target": endpoint.endpoint_id,
+                "ws_url": getattr(endpoint, "ws_url", None),
+                "http_url": getattr(endpoint, "http_url", None),
+                "reachable": reachable,
+                "last_heartbeat": self._clock(),
+            }
+        else:
+            # Disconnect path: preserve the last-known address but
+            # flip reachable to false and bump last_heartbeat.
+            runtime = {
+                "actor_id": actor_id,
+                "binding": existing.get("binding", "local"),
+                "target": existing.get("target"),
+                "ws_url": existing.get("ws_url"),
+                "http_url": existing.get("http_url"),
+                "reachable": reachable,
+                "last_heartbeat": self._clock(),
+            }
+
+        await self._store.write(
+            layout.actor_runtime(actor_id),
+            json.dumps(runtime, sort_keys=True),
+        )
 
     async def _handle_send(
         self,
@@ -1335,12 +1597,87 @@ class Hub:
                 ErrorFrame(code="unknown_actor", message=str(exc))
             )
             return
+        except InboxFullError as exc:
+            await endpoint.send_frame(
+                ErrorFrame(code="inbox_full", message=str(exc))
+            )
+            return
         if idempotency_key is not None:
             self._record_idempotent(
                 envelope.session_id, idempotency_key, envelope_id, wal_offset
             )
         await endpoint.send_frame(
             AcceptFrame(envelope_id=envelope_id, wal_offset=wal_offset)
+        )
+
+    async def _handle_receipt(
+        self,
+        endpoint: _EndpointSide,
+        frame: ReceiptFrame,
+        actor_id: str,
+    ) -> None:
+        """Apply a :class:`ReceiptFrame` against the actor's structured inbox.
+
+        ``ack`` → move ``pending/{id}.json`` to ``received/{id}.json``
+        and decrement the actor's pending counter. Idempotent: a
+        receipt for an envelope that's already been processed (file
+        already moved, or was never persisted — e.g. a spooled
+        envelope) is a no-op.
+
+        ``nack`` → append a structured entry to
+        ``hub/actors/{id}/inbox/nacks.jsonl`` recording the reason, and
+        remove the pending file. The sender has already gotten its
+        AcceptFrame from the prior post, so nack is purely a signal to
+        the hub about why delivery failed — it does not propagate back
+        to the original sender in Phase 3a. (Phase 3b: nack surfaces
+        via the audit log so operators can trace delivery failures.)
+        """
+
+        envelope_id = frame.envelope_id
+        pending_path = layout.actor_inbox_pending(actor_id, envelope_id)
+        received_path = layout.actor_inbox_received(actor_id, envelope_id)
+
+        payload = await self._store.read(pending_path)
+
+        if frame.status == "ack":
+            if payload is None:
+                # Already processed, or the envelope was spooled
+                # (overflow/), or the actor is acking something it
+                # invented. All three are no-ops.
+                return
+            await self._store.write(received_path, payload)
+            await self._store.delete(pending_path)
+            self._inbox_pending[actor_id] = max(
+                0, self._inbox_pending.get(actor_id, 0) - 1
+            )
+            return
+
+        if frame.status == "nack":
+            nack_entry = json.dumps(
+                {
+                    "envelope_id": envelope_id,
+                    "actor_id": actor_id,
+                    "reason": frame.reason,
+                    "at": self._clock(),
+                },
+                sort_keys=True,
+            )
+            await self._store.append(
+                layout.actor_inbox_nacks(actor_id), nack_entry + "\n"
+            )
+            if payload is not None:
+                await self._store.delete(pending_path)
+                self._inbox_pending[actor_id] = max(
+                    0, self._inbox_pending.get(actor_id, 0) - 1
+                )
+            return
+
+        # Unknown status — log and ignore; the protocol only defines
+        # ack/nack in Phase 3a.
+        log.warning(
+            "hub: ignoring receipt with unknown status %r for %s",
+            frame.status,
+            envelope_id,
         )
 
     def _lookup_idempotent(
@@ -1531,22 +1868,49 @@ class Hub:
         # see ``sub`` in the snapshot and fan-out will deliver it).
         if frame.session_id is not None:
             async with self._wal_lock:
-                prior = await self.read_wal(frame.session_id, since=sub.since)
+                prior = await self._read_wal_with_offsets(
+                    frame.session_id, since=sub.since
+                )
                 self._subscriptions[sub.subscription_id] = sub
         else:
             async with self._wal_lock:
                 self._subscriptions[sub.subscription_id] = sub
             prior = []
 
-        for envelope in prior:
+        replay_end_offset = sub.since
+        for envelope, offset in prior:
             if (
                 sub.causation_id is not None
                 and envelope.causation_id != sub.causation_id
             ):
                 continue
             await endpoint.send_frame(
-                EventFrame(subscription_id=sub.subscription_id, envelope=envelope)
+                EventFrame(
+                    subscription_id=sub.subscription_id,
+                    envelope=envelope,
+                    wal_offset=offset,
+                )
             )
+            replay_end_offset = offset
+
+        # Phase 3a: acknowledge the subscription now that it is live on
+        # the hub side and the initial replay has been pushed. The
+        # client uses this to know "subscribe was applied + replay
+        # drained" — critical for reconnect ordering so subsequent
+        # sends reach the new subscription. We overload ``AcceptFrame``
+        # with ``request_id=<subscription_id>`` and ``envelope_id=""``;
+        # the client's frame dispatcher routes it to a per-sub future
+        # instead of the outbound-send accept path. ``wal_offset`` is
+        # the byte position after the last replayed envelope so the
+        # client's cursor is up-to-date even before the first live
+        # fan-out delivery.
+        await endpoint.send_frame(
+            AcceptFrame(
+                envelope_id="",
+                wal_offset=replay_end_offset,
+                request_id=sub.subscription_id,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Public accessors
