@@ -17,7 +17,7 @@ async def test_defaults(context: Context) -> None:
     [schema] = await tool.schemas(context)
 
     assert tool_to_api(schema) == {
-        "type": "mcp_toolset",
+        "type": "mcp_toolkit",
         "mcp_server_name": "example-mcp",
     }
 
@@ -68,7 +68,7 @@ async def test_allowed_tools(context: Context) -> None:
     [schema] = await tool.schemas(context)
 
     assert tool_to_api(schema) == {
-        "type": "mcp_toolset",
+        "type": "mcp_toolkit",
         "mcp_server_name": "example-mcp",
         "default_config": {"enabled": False},
         "configs": {
@@ -89,7 +89,7 @@ async def test_blocked_tools(context: Context) -> None:
     [schema] = await tool.schemas(context)
 
     assert tool_to_api(schema) == {
-        "type": "mcp_toolset",
+        "type": "mcp_toolkit",
         "mcp_server_name": "example-mcp",
         "configs": {
             "delete_all": {"enabled": False},

@@ -4,18 +4,19 @@
 
 import shlex
 import stat
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field
 
+from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.runtime.local import LocalRuntime
-from autogen.beta.tools.runtime.protocol import SkillRuntime
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime, SkillRuntime
 
 
-class LocalSkillsTool(Toolkit):
+class SkillsToolkit(Toolkit):
     """Client-side skills toolkit using the agentskills.io convention.
 
     Implements a three-step progressive-disclosure pattern:
@@ -29,13 +30,13 @@ class LocalSkillsTool(Toolkit):
 
     Example::
         # Default runtime (.agents/skills + ~/.agents/skills)
-        LocalSkillsTool()
+        SkillsToolkit()
 
         # Custom install directory
-        LocalSkillsTool(runtime=LocalRuntime("./skills"))
+        SkillsToolkit(runtime=LocalRuntime("./skills"))
 
         # Additional read-only search paths
-        LocalSkillsTool(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
+        SkillsToolkit(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
     """
 
     list_skills: FunctionTool
@@ -45,13 +46,21 @@ class LocalSkillsTool(Toolkit):
     def __init__(
         self,
         runtime: SkillRuntime | None = None,
+        *,
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
+
         self.list_skills = _make_list_tool(_runtime)
         self.load_skill = _make_load_tool(_runtime)
         self.run_skill_script = _make_run_tool(_runtime)
 
-        super().__init__(self.list_skills, self.load_skill, self.run_skill_script)
+        super().__init__(
+            self.list_skills,
+            self.load_skill,
+            self.run_skill_script,
+            middleware=middleware,
+        )
 
 
 def _make_list_tool(runtime: SkillRuntime) -> FunctionTool:

@@ -148,7 +148,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     elif isinstance(t, MCPServerToolSchema):
         # https://platform.claude.com/docs/en/docs/agents-and-tools/mcp-connector
         result = {
-            "type": "mcp_toolset",
+            "type": "mcp_toolkit",
             "mcp_server_name": t.server_label,
         }
         if t.allowed_tools is not None:

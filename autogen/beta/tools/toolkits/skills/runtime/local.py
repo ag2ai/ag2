@@ -8,10 +8,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from autogen.beta.tools.local_skills.loader import SkillLoader
 from autogen.beta.tools.shell.environment.base import ShellEnvironment
 from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
-from autogen.beta.tools.skill_types import SkillMetadata
+from autogen.beta.tools.toolkits.skills.local_skills.loader import SkillLoader
+from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
 
 
 @dataclass
