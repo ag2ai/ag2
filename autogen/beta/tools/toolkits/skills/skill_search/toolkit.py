@@ -92,12 +92,7 @@ class SkillSearchToolkit(SkillsToolkit):
         self.install_skill = _make_install_tool(_client, lock, _runtime)
         self.remove_skill = _make_remove_tool(_runtime, lock)
 
-        super(SkillsToolkit, self).__init__(
-            self.search_skills,
-            self.install_skill,
-            self.remove_skill,
-            middleware=middleware,
-        )
+        self.tools.extend([self.search_skills, self.install_skill, self.remove_skill])
 
 
 def _make_search_tool(client: SkillsClient) -> FunctionTool:
