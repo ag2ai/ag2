@@ -19,6 +19,7 @@ from ..identity import ActorIdentity
 from ..rule import Rule
 from ..transport.link import Link
 from .actor_client import ActorClient
+from .human import HumanClient, HumanSurface
 
 
 class HubClient:
@@ -49,6 +50,53 @@ class HubClient:
             hub=self._hub,
             link=self._link,
             hub_client=self,
+        )
+        await client._start()
+        self._actor_clients.append(client)
+        return client
+
+    async def register_human(
+        self,
+        *,
+        surface: HumanSurface,
+        identity: ActorIdentity,
+        rule: Rule | None = None,
+        auth_claim: dict[str, Any] | None = None,
+        actor: Any = None,
+    ) -> HumanClient:
+        """Register a human identity with the hub and return a :class:`HumanClient`.
+
+        Mirrors :meth:`register` but produces a :class:`HumanClient`
+        wired to ``surface`` instead of a regular
+        :class:`ActorClient`. The identity's ``runtime_kind`` is
+        automatically set to ``"human"`` if it is still at the
+        default ``"python"`` — explicit overrides are preserved so
+        callers can ship ``"browser"`` or ``"external"`` identities
+        that happen to use the same human surface protocol.
+
+        Design §13.5: the hub has no idea this registration is a
+        human. From its perspective it is just another identity
+        with its own rule, its own inbox, and its own transport.
+        The only specialization happens in this Python process.
+        """
+
+        if identity.runtime_kind == "python":
+            identity.runtime_kind = "human"
+
+        stamped = await self._hub.register(identity, rule, auth_claim=auth_claim)
+        applied_rule = (
+            rule
+            if rule is not None
+            else await self._hub.get_rule(stamped.actor_id or "")
+        )
+        client = HumanClient(
+            surface=surface,
+            identity=stamped,
+            rule=applied_rule,
+            hub=self._hub,
+            link=self._link,
+            hub_client=self,
+            actor=actor,
         )
         await client._start()
         self._actor_clients.append(client)
