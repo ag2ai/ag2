@@ -6,9 +6,17 @@
 
 Six session types are declared up front so rules and handlers can reference
 them by stable name. Phase 1 ships adapters for three of them (consulting,
-conversation, notification); the remaining three arrive in Phase 2. Every
-session — regardless of type — shares the same :class:`SessionMetadata` on
-disk so adapters are strictly swappable.
+conversation, notification); Phase 2 adds broadcast / discussion / auction
+and opens the set to operator-registered custom types via
+:meth:`Hub.register_adapter` (§5.5). Every session — regardless of type —
+shares the same :class:`SessionMetadata` on disk so adapters are strictly
+swappable.
+
+:class:`SessionType` is a canonical namespace of built-in type names. It
+subclasses ``str`` so members double as the wire value, and
+:attr:`SessionMetadata.type` is annotated as ``str`` — the hub dispatches
+adapters by string, letting operators register types that are not members
+of the built-in enum.
 """
 
 from __future__ import annotations
@@ -20,7 +28,14 @@ from typing import Any
 
 
 class SessionType(str, Enum):
-    """Enumeration of every session type known to the hub."""
+    """Canonical namespace of built-in session type names.
+
+    Members subclass ``str``, so ``SessionType.CONSULTING == "consulting"``
+    and the enum members are interchangeable with their string values
+    anywhere a session type is expected. Operators that ship custom types
+    via :meth:`Hub.register_adapter` pass plain strings — the enum is a
+    convenience, not a closed set.
+    """
 
     NOTIFICATION = "notification"
     BROADCAST = "broadcast"
@@ -77,7 +92,7 @@ class Participant:
 @dataclass(slots=True)
 class SessionMetadata:
     session_id: str
-    type: SessionType
+    type: str
     creator_id: str
     participants: list[Participant]
     state: SessionState = SessionState.PENDING
@@ -94,7 +109,7 @@ class SessionMetadata:
     def to_dict(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
-            "type": self.type.value,
+            "type": _type_value(self.type),
             "creator_id": self.creator_id,
             "participants": [p.to_dict() for p in self.participants],
             "state": self.state.value,
@@ -113,7 +128,7 @@ class SessionMetadata:
     def from_dict(cls, data: dict[str, Any]) -> SessionMetadata:
         return cls(
             session_id=data["session_id"],
-            type=SessionType(data["type"]),
+            type=_type_value(data["type"]),
             creator_id=data["creator_id"],
             participants=[Participant.from_dict(p) for p in data.get("participants", [])],
             state=SessionState(data.get("state", SessionState.PENDING.value)),
@@ -149,7 +164,7 @@ class SessionMetadata:
 
     def copy(self) -> SessionMetadata:
         data = asdict(self)
-        data["type"] = SessionType(data["type"])
+        data["type"] = _type_value(data["type"])
         data["state"] = SessionState(data["state"])
         data["participants"] = [
             Participant(
@@ -161,3 +176,17 @@ class SessionMetadata:
             for p in data["participants"]
         ]
         return SessionMetadata(**data)
+
+
+def _type_value(session_type: SessionType | str) -> str:
+    """Return the canonical string value for a session type.
+
+    Python 3.11+ makes ``str(SessionType.CONSULTING)`` return the
+    qualified name (``"SessionType.CONSULTING"``) instead of the
+    underlying value (``"consulting"``); we go through ``.value`` for
+    enum members and accept any other string as-is.
+    """
+
+    if isinstance(session_type, SessionType):
+        return session_type.value
+    return str(session_type)

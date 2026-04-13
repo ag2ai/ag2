@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 from .session_types import SessionType
@@ -57,6 +57,67 @@ class SessionTypeAccess:
         )
 
 
+# ---------------------------------------------------------------------------
+# Subscription access policy
+# ---------------------------------------------------------------------------
+
+
+SUBSCRIBE_MEMBER_ONLY = "member-only"
+SUBSCRIBE_HUB_PUBLIC = "public-within-hub"
+SUBSCRIBE_PUBLIC = "public"
+
+_VALID_SUBSCRIBE_POLICIES: frozenset[str] = frozenset(
+    {SUBSCRIBE_MEMBER_ONLY, SUBSCRIBE_HUB_PUBLIC, SUBSCRIBE_PUBLIC}
+)
+
+
+@dataclass(slots=True)
+class SubscribeAccess:
+    """Who may open non-participant subscriptions on sessions / tasks.
+
+    ``sessions``:
+
+    * ``member-only`` (default) — only session participants may subscribe.
+    * ``public-within-hub`` — any actor registered with the hub may
+      subscribe.
+    * ``public`` — reserved for federation (Phase 7); currently behaves
+      the same as ``public-within-hub`` locally.
+
+    ``tasks`` is reserved for Phase 4 task subscriptions; Phase 2 only
+    uses ``sessions``.
+    """
+
+    sessions: str = SUBSCRIBE_MEMBER_ONLY
+    tasks: str = "owner-or-member"
+
+    def allows_session_observer(
+        self, *, is_participant: bool, is_hub_member: bool
+    ) -> bool:
+        if is_participant:
+            return True
+        if self.sessions == SUBSCRIBE_MEMBER_ONLY:
+            return False
+        if self.sessions in (SUBSCRIBE_HUB_PUBLIC, SUBSCRIBE_PUBLIC):
+            return is_hub_member
+        return False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"sessions": self.sessions, "tasks": self.tasks}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SubscribeAccess:
+        sessions = str(data.get("sessions", SUBSCRIBE_MEMBER_ONLY))
+        if sessions not in _VALID_SUBSCRIBE_POLICIES:
+            raise ValueError(
+                f"access.subscribe.sessions must be one of "
+                f"{sorted(_VALID_SUBSCRIBE_POLICIES)}, got {sessions!r}"
+            )
+        return cls(
+            sessions=sessions,
+            tasks=str(data.get("tasks", "owner-or-member")),
+        )
+
+
 @dataclass(slots=True)
 class AccessBlock:
     """Who may interact with this actor."""
@@ -64,6 +125,7 @@ class AccessBlock:
     inbound_from: list[str] = field(default_factory=lambda: ["*"])
     outbound_to: list[str] = field(default_factory=lambda: ["*"])
     session_types: SessionTypeAccess = field(default_factory=SessionTypeAccess)
+    subscribe: SubscribeAccess = field(default_factory=SubscribeAccess)
 
     def allows_inbound(self, sender_name: str) -> bool:
         return _match(sender_name, self.inbound_from)
@@ -76,6 +138,7 @@ class AccessBlock:
             "inbound_from": list(self.inbound_from),
             "outbound_to": list(self.outbound_to),
             "session_types": self.session_types.to_dict(),
+            "subscribe": self.subscribe.to_dict(),
         }
 
     @classmethod
@@ -84,6 +147,7 @@ class AccessBlock:
             inbound_from=list(data.get("inbound_from", ["*"])),
             outbound_to=list(data.get("outbound_to", ["*"])),
             session_types=SessionTypeAccess.from_dict(data.get("session_types", {})),
+            subscribe=SubscribeAccess.from_dict(data.get("subscribe", {})),
         )
 
 
@@ -93,15 +157,62 @@ class AccessBlock:
 
 
 @dataclass(slots=True)
+class RateBlock:
+    """Rate-limit parameters for a token-bucket enforcement path.
+
+    ``per_minute`` is the refill rate (envelopes per minute).
+    ``burst`` is the maximum bucket capacity — how many envelopes can
+    queue up in a sudden spike before being throttled. Setting
+    ``per_minute`` to zero disables rate limiting; ``burst`` defaults
+    to ``per_minute`` when not supplied so a small steady-state limit
+    doesn't accidentally paper over a 10x burst.
+    """
+
+    per_minute: int = 0  # 0 disables
+    burst: int = 0
+
+    def is_enabled(self) -> bool:
+        return self.per_minute > 0
+
+    def effective_burst(self) -> int:
+        return self.burst if self.burst > 0 else self.per_minute
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"per_minute": self.per_minute, "burst": self.burst}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RateBlock:
+        return cls(
+            per_minute=int(data.get("per_minute", 0)),
+            burst=int(data.get("burst", 0)),
+        )
+
+
+@dataclass(slots=True)
 class LimitsBlock:
     max_concurrent_sessions: int = 32
     max_concurrent_tasks: int = 64
     session_ttl_default: str = "2h"
     task_ttl_default: str = "15m"
     delegation_depth: int = 5
+    rate: RateBlock = field(default_factory=RateBlock)
+    # Phase 2 stores these two verbatim; per-hour and per-day window
+    # enforcement lands with Phase 4 (tasks), where attribution to a
+    # specific LLM call is natural.
+    tokens_per_hour: int = 0  # 0 disables
+    cost_per_day_usd: float = 0.0  # 0 disables
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "max_concurrent_sessions": self.max_concurrent_sessions,
+            "max_concurrent_tasks": self.max_concurrent_tasks,
+            "session_ttl_default": self.session_ttl_default,
+            "task_ttl_default": self.task_ttl_default,
+            "delegation_depth": self.delegation_depth,
+            "rate": self.rate.to_dict(),
+            "tokens_per_hour": self.tokens_per_hour,
+            "cost_per_day_usd": self.cost_per_day_usd,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LimitsBlock:
@@ -111,6 +222,9 @@ class LimitsBlock:
             session_ttl_default=str(data.get("session_ttl_default", "2h")),
             task_ttl_default=str(data.get("task_ttl_default", "15m")),
             delegation_depth=int(data.get("delegation_depth", 5)),
+            rate=RateBlock.from_dict(data.get("rate", {})),
+            tokens_per_hour=int(data.get("tokens_per_hour", 0)),
+            cost_per_day_usd=float(data.get("cost_per_day_usd", 0.0)),
         )
 
     def session_ttl_seconds(self) -> int:
