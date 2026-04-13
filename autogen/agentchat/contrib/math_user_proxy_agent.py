@@ -468,7 +468,7 @@ class WolframAlphaAPIWrapper(BaseModel):
                 )
         if res is None:
             return (
-                "Wolfram Alpha wasn't able to answer it (may due to web error), you can try again or use python.",
+                "Wolfram Alpha wasn't able to answer it (may be due to web error), you can try again or use python.",
                 is_success,
             )
 

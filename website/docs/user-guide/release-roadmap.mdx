@@ -55,6 +55,22 @@ The current stable release. All existing features and APIs continue to work as-i
 | `ImageGeneration` capability | Depends on deprecated `TextAnalyzerAgent` |
 | `agent_eval` module (`generate_criteria`, `quantify_criteria`, `CriticAgent`, `QuantifierAgent`, `SubCriticAgent`) | experimental evaluation framework |
 
+### Deprecated interoperability
+
+| Feature | Alternative |
+|---------|-------------|
+| `CrewAIInteroperability` | LangChain or PydanticAI interop |
+
+### Deprecated experimental tools
+
+| Tool | Alternative |
+|------|-------------|
+| `PythonCodeExecutionTool` | `autogen.beta.tools.CodeExecutionTool` |
+| `FirecrawlTool` | `Crawl4AITool` or `BrowserUseTool` |
+| `PerplexitySearchTool` | `QuickResearchTool` or `DeepResearchTool` |
+| `SearxngSearchTool` | `DuckDuckGoSearchTool` or `TavilySearchTool` |
+| `WebSearchPreviewTool` | `autogen.beta.tools.WebSearchTool` |
+
 ### What is NOT being deprecated
 
 The core framework and actively maintained features continue without change:

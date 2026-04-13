@@ -5,8 +5,8 @@
 import pytest
 from google.genai import types
 
+from autogen.beta import Context
 from autogen.beta.config.gemini.mappers import build_tools
-from autogen.beta.context import Context
 from autogen.beta.tools.builtin.code_execution import CodeExecutionTool
 
 

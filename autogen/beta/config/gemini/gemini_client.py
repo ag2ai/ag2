@@ -11,7 +11,7 @@ from google import genai
 from google.genai import types
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -57,7 +57,7 @@ class GeminiClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -103,7 +103,7 @@ class GeminiClient(LLMClient):
     async def _process_response(
         self,
         response: types.GenerateContentResponse,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
@@ -112,9 +112,9 @@ class GeminiClient(LLMClient):
             if candidate.content:
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
-                        await context.send(ModelReasoning(content=part.text))
+                        await context.send(ModelReasoning(part.text))
                     elif part.text is not None:
-                        model_msg = ModelMessage(content=part.text)
+                        model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
                     elif part.function_call:
                         fc = part.function_call
@@ -142,7 +142,7 @@ class GeminiClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model_name,
             provider="google",
@@ -152,7 +152,7 @@ class GeminiClient(LLMClient):
     async def _process_stream(
         self,
         stream: Any,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
@@ -164,10 +164,10 @@ class GeminiClient(LLMClient):
                 if candidate.content:
                     for part in candidate.content.parts or ():
                         if part.thought and part.text:
-                            await context.send(ModelReasoning(content=part.text))
+                            await context.send(ModelReasoning(part.text))
                         elif part.text is not None:
                             full_content += part.text
-                            await context.send(ModelMessageChunk(content=part.text))
+                            await context.send(ModelMessageChunk(part.text))
                         elif part.function_call:
                             fc = part.function_call
                             pdata: dict[str, Any] = {}
@@ -192,12 +192,12 @@ class GeminiClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model_name,
             provider="google",

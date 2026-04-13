@@ -4,8 +4,6 @@
 
 """Tests for Anthropic client usage normalization (input_tokens → prompt_tokens, cache keys)."""
 
-from __future__ import annotations
-
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 

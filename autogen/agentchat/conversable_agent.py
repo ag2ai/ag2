@@ -1376,7 +1376,7 @@ class ConversableAgent(LLMAgent):
                     return recipient.last_message(sender)["content"]
                 ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
-                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
+                One example key is "summary_prompt", and value is a string of text used to prompt an LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
                 The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out."
                 Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".

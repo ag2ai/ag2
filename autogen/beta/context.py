@@ -24,7 +24,7 @@ SubId: TypeAlias = UUID
 class Stream(Protocol):
     id: StreamId
 
-    async def send(self, event: BaseEvent, context: "Context") -> None: ...
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
     def where(self, condition: ClassInfo | Condition) -> "Stream": ...
 
@@ -71,7 +71,6 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> AbstractContextManager[None]: ...
 
     def get(
@@ -81,7 +80,7 @@ class Stream(Protocol):
 
 
 @dataclass(slots=True)
-class Context:
+class ConversationContext:
     stream: Stream
     dependency_provider: "Provider | None" = None
 
@@ -92,8 +91,9 @@ class Context:
     variables: dict[str, Any] = field(default_factory=dict)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
-        async with self.stream.get(HumanMessage) as response:
-            await self.send(HumanInputRequest(content=message))
+        request_msg = HumanInputRequest(message)
+        async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
+            await self.send(request_msg)
             result: HumanMessage = await asyncio.wait_for(response, timeout)
             return result.content
 

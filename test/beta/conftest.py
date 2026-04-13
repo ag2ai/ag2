@@ -3,9 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+
+@pytest.fixture()
+def mock() -> MagicMock:
+    return MagicMock()
 
 
 @pytest.fixture()

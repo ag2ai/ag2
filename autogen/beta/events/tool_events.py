@@ -31,7 +31,7 @@ class ToolResult(Generic[ResultT]):
 class ToolCallsEvent(BaseEvent):
     """Container event holding a collection of tool calls."""
 
-    calls: list["ToolCallEvent"] = Field(default_factory=list)
+    calls: list["ToolCallEvent"] = Field(default_factory=list, kw_only=False)
 
     def __len__(self) -> int:
         return len(self.calls)
@@ -39,21 +39,11 @@ class ToolCallsEvent(BaseEvent):
     def to_api(self) -> list[dict[str, Any]]:
         return [c.to_api() for c in self.calls]
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallsEvent):
-            return NotImplemented
-        return self.calls == other.calls
-
 
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
-    results: list["ToolResultEvent[Any] | ToolErrorEvent"]
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolResultsEvent):
-            return NotImplemented
-        return self.results == other.results
+    results: list["ToolResultEvent[Any] | ToolErrorEvent"] = Field(kw_only=False)
 
 
 class ToolEvent(BaseEvent):
@@ -66,9 +56,9 @@ class ToolCallEvent(ToolEvent):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     arguments: str = "{}"
-    provider_data: dict[str, Any] = Field(default_factory=dict)
+    provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
-    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False)
+    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
     @property
     def serialized_arguments(self) -> dict[str, Any]:
@@ -81,7 +71,10 @@ class ToolCallEvent(ToolEvent):
         self._serialized_arguments = value
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(id={self.id}, name={self.name}, arguments={self.arguments})"
+        text = f"id={self.id}, name='{self.name}'"
+        if c := self.arguments:
+            text += f", arguments='{c}'"
+        return f"{self.__class__.__name__}({text})"
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -92,11 +85,6 @@ class ToolCallEvent(ToolEvent):
                 "name": self.name,
             },
         }
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ToolCallEvent):
-            return NotImplemented
-        return self.id == other.id and self.name == other.name and self.arguments == other.arguments
 
 
 class ClientToolCallEvent(ToolCallEvent):
@@ -133,7 +121,7 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
         self._content = value
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name={self.name}, content={self.content})"
+        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name='{self.name}', content={self.content})"
 
     @classmethod
     def from_call(cls, call: ToolCallEvent, result: ResultT) -> "ToolResultEvent[ResultT]":
@@ -154,6 +142,10 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
         if not isinstance(other, ToolResultEvent):
             return NotImplemented
         return self.parent_id == other.parent_id and self.name == other.name and self.content == other.content
+
+
+class BuiltinToolResultEvent(ToolResultEvent):
+    """Represents a successful builtin tool execution result."""
 
 
 class ToolErrorEvent(ToolResultEvent[None]):

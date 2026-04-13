@@ -57,13 +57,13 @@ def message_to_dict(message: dict[str, Any] | str) -> dict[str, Any]:
         return dict(message)
 
 
-def parse_oai_message(message: dict[str, Any] | str, role: str, adressee: Agent) -> dict[str, Any]:
+def parse_oai_message(message: dict[str, Any] | str, role: str, addressee: Agent) -> dict[str, Any]:
     """Parse a message into an OpenAI-compatible message format.
 
     Args:
         message: The message to parse.
         role: The role associated with the message.
-        adressee: The agent that will receive the message.
+        addressee: The agent that will receive the message.
 
     Returns:
         The parsed message in OpenAI-compatible format.
@@ -104,7 +104,7 @@ def parse_oai_message(message: dict[str, Any] | str, role: str, adressee: Agent)
 
     # Add a name field if missing
     if "name" not in oai_message:
-        oai_message["name"] = adressee.name
+        oai_message["name"] = addressee.name
 
     return oai_message
 

@@ -368,15 +368,23 @@
         "docs/beta/motivation",
         "docs/beta/agents",
         "docs/beta/structured_output",
-        "docs/beta/model_configuration",
+        {
+          "group": "Models & Providers",
+          "pages": [
+            "docs/beta/model_configuration",
+            "docs/beta/inputs/inputs"
+          ]
+        },
         "docs/beta/system_prompts",
+        "docs/beta/task_delegation",
         {
           "group": "Tools",
           "pages": [
             "docs/beta/tools/tools",
             "docs/beta/tools/toolkits",
-            "docs/beta/tools/common_toolsets",
+            "docs/beta/tools/common_toolkits",
             "docs/beta/tools/builtin_tools",
+            "docs/beta/tools/local_shell",
             "docs/beta/tools/tool_middleware",
             "docs/beta/tools/approval_required"
           ]
@@ -396,7 +404,8 @@
         {
           "group": "Advanced Features",
           "pages": [
-            "docs/beta/advanced/stream"
+            "docs/beta/advanced/stream",
+            "docs/beta/advanced/observers"
           ]
         },
         "docs/beta/ag2_compatibility",

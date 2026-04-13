@@ -2,44 +2,44 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen.beta.events import BaseEvent, Field
 
 
-def test_event_with_field():
-    class Event(BaseEvent):
-        a: str = Field()
-        b: int
+class TestFieldBasics:
+    def test_event_with_field(self):
+        class Event(BaseEvent):
+            a: str = Field()
+            b: int
 
-    assert Event.a.name == "a"
-    assert Event.b.name == "b"
+        assert Event.a.name == "a"
+        assert Event.b.name == "b"
 
-    obj = Event(a="1", b=1)
-    assert obj.a == "1"
-    assert obj.b == 1
+        obj = Event(a="1", b=1)
+        assert obj.a == "1"
+        assert obj.b == 1
 
+    def test_event_with_value_field(self):
+        class Event(BaseEvent):
+            a: str = "1"
 
-def test_event_with_value_field():
-    class Event(BaseEvent):
-        a: str = "1"
+        obj = Event()
+        assert obj.a == "1"
 
-    obj = Event()
-    assert obj.a == "1"
+    def test_event_with_default_field(self):
+        class Event(BaseEvent):
+            a: str = Field("1")
 
+        obj = Event()
+        assert obj.a == "1"
 
-def test_event_with_default_field():
-    class Event(BaseEvent):
-        a: str = Field("1")
+    def test_event_with_default_factory(self):
+        class Event(BaseEvent):
+            a: str = Field(default_factory=lambda: "1")
 
-    obj = Event()
-    assert obj.a == "1"
-
-
-def test_event_with_default_factory():
-    class Event(BaseEvent):
-        a: str = Field(default_factory=lambda: "1")
-
-    obj = Event()
-    assert obj.a == "1"
+        obj = Event()
+        assert obj.a == "1"
 
 
 class TestFieldInit:
@@ -168,3 +168,62 @@ class TestFieldCompare:
 
         assert Child(a="x", b=1) == Child(a="x", b=2)
         assert Child(a="x", b=1) != Child(a="y", b=1)
+
+
+class TestFieldPositionalArgs:
+    def test_positional_arg(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+
+        obj = Event("hello")
+        assert obj.a == "hello"
+
+    def test_positional_and_kwarg(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+            b: int
+
+        obj = Event("hello", b=1)
+        assert obj.a == "hello"
+        assert obj.b == 1
+
+    def test_multiple_positional(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+            b: int = Field(kw_only=False)
+
+        obj = Event("hello", 42)
+        assert obj.a == "hello"
+        assert obj.b == 42
+
+    def test_positional_still_accepts_kwarg(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+
+        obj = Event(a="hello")
+        assert obj.a == "hello"
+
+    def test_too_many_positional_raises(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+
+        with pytest.raises(TypeError, match="1 positional argument"):
+            Event("hello", "extra")
+
+    def test_duplicate_positional_and_kwarg_raises(self):
+        class Event(BaseEvent):
+            a: str = Field(kw_only=False)
+
+        with pytest.raises(TypeError, match="multiple values"):
+            Event("hello", a="world")
+
+    def test_inherited_positional(self):
+        class Parent(BaseEvent):
+            a: str = Field(kw_only=False)
+
+        class Child(Parent):
+            b: int
+
+        obj = Child("hello", b=1)
+        assert obj.a == "hello"
+        assert obj.b == 1

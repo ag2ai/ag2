@@ -21,6 +21,9 @@ rules:
       - pr-checks.yml
       - test-with-optional-deps.yml
       - zizmor.yml
+  artipacked:
+    ignore:
+      - build-mkdocs.yml
   use-trusted-publishing:
     ignore:
       - python-package.yml
