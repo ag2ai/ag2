@@ -188,6 +188,75 @@ class RateBlock:
         )
 
 
+# ---------------------------------------------------------------------------
+# Inbox block — Phase 3a §7.1 compliance
+# ---------------------------------------------------------------------------
+
+
+INBOX_OVERFLOW_REJECT = "reject"
+INBOX_OVERFLOW_SPOOL = "spool"
+INBOX_OVERFLOW_DROP_OLDEST = "drop_oldest"
+INBOX_OVERFLOW_DROP_NEWEST = "drop_newest"
+
+_VALID_INBOX_OVERFLOW: frozenset[str] = frozenset(
+    {
+        INBOX_OVERFLOW_REJECT,
+        INBOX_OVERFLOW_SPOOL,
+        INBOX_OVERFLOW_DROP_OLDEST,
+        INBOX_OVERFLOW_DROP_NEWEST,
+    }
+)
+
+
+@dataclass(slots=True)
+class InboxBlock:
+    """Per-actor inbox configuration.
+
+    ``max_pending`` is the ceiling on how many envelopes may sit in the
+    actor's ``hub/actors/{id}/inbox/pending/`` directory before the
+    overflow policy kicks in. ``0`` disables the check (unlimited).
+
+    ``overflow`` selects the back-pressure mode:
+
+    * ``reject`` (default) — synchronously raise :class:`InboxFullError`
+      on ``post_envelope``. The sender sees the error on its ``send``
+      frame and can retry with backoff. Matches design §13.7.
+    * ``spool`` — write to ``hub/actors/{id}/inbox/overflow/`` instead
+      of ``pending/``. Spooled envelopes are not counted against
+      ``max_pending`` and are NOT pushed via ``notify`` (the actor
+      drains them on reconnect or via an explicit admin call).
+    * ``drop_oldest`` / ``drop_newest`` — evict the oldest / newest
+      pending envelope to make room. **Ship in Phase 3b** — Phase 3a
+      stores the policy name verbatim and rejects unknown values on
+      ``from_dict``.
+
+    Phase 3a enforces ``reject`` and ``spool`` at
+    :meth:`Hub.post_envelope` pre-check time (before WAL append so the
+    delivery is atomic). ``drop_oldest`` / ``drop_newest`` currently
+    fall through to ``reject`` with a warning — authors can ship rules
+    that reference them, but the behavior won't change until Phase 3b.
+    """
+
+    max_pending: int = 0  # 0 disables
+    overflow: str = INBOX_OVERFLOW_REJECT
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"max_pending": self.max_pending, "overflow": self.overflow}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> InboxBlock:
+        overflow = str(data.get("overflow", INBOX_OVERFLOW_REJECT))
+        if overflow not in _VALID_INBOX_OVERFLOW:
+            raise ValueError(
+                f"inbox.overflow must be one of {sorted(_VALID_INBOX_OVERFLOW)}, "
+                f"got {overflow!r}"
+            )
+        return cls(
+            max_pending=int(data.get("max_pending", 0)),
+            overflow=overflow,
+        )
+
+
 @dataclass(slots=True)
 class LimitsBlock:
     max_concurrent_sessions: int = 32
@@ -196,6 +265,7 @@ class LimitsBlock:
     task_ttl_default: str = "15m"
     delegation_depth: int = 5
     rate: RateBlock = field(default_factory=RateBlock)
+    inbox: InboxBlock = field(default_factory=InboxBlock)
     # Phase 2 stores these two verbatim; per-hour and per-day window
     # enforcement lands with Phase 4 (tasks), where attribution to a
     # specific LLM call is natural.
@@ -210,6 +280,7 @@ class LimitsBlock:
             "task_ttl_default": self.task_ttl_default,
             "delegation_depth": self.delegation_depth,
             "rate": self.rate.to_dict(),
+            "inbox": self.inbox.to_dict(),
             "tokens_per_hour": self.tokens_per_hour,
             "cost_per_day_usd": self.cost_per_day_usd,
         }
@@ -223,6 +294,7 @@ class LimitsBlock:
             task_ttl_default=str(data.get("task_ttl_default", "15m")),
             delegation_depth=int(data.get("delegation_depth", 5)),
             rate=RateBlock.from_dict(data.get("rate", {})),
+            inbox=InboxBlock.from_dict(data.get("inbox", {})),
             tokens_per_hour=int(data.get("tokens_per_hour", 0)),
             cost_per_day_usd=float(data.get("cost_per_day_usd", 0.0)),
         )
