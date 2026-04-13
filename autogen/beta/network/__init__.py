@@ -1,167 +1,263 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""AG2 Network Module — agent-to-agent communication infrastructure.
+"""AG2 Beta V3 network layer.
 
-Network-specific imports (Hub, delegation, topology, channels, remote).
-Framework-core features (Actor, policies, observers, knowledge, etc.)
-are now in ``autogen.beta`` directly.
+Re-exports the public surface. Implementation is grouped by concern::
 
-Usage::
-
-    from autogen.beta import Actor, ConversationPolicy, TokenMonitor
-    from autogen.beta.network import Hub, Network, Pipeline, RateLimiter
+    autogen.beta.network
+    ├── ids.py               UUID7 helper
+    ├── errors.py            NetworkError hierarchy
+    ├── identity.py          ActorIdentity / AuthBlock
+    ├── rule.py              Rule (access / limits / transforms)
+    ├── envelope.py          Envelope + stable event type names
+    ├── session_types.py     SessionType enum + SessionMetadata
+    ├── auth.py              AuthAdapter protocol + NoAuth
+    ├── transport/           Link protocol + LocalLink
+    ├── adapters/            SessionAdapter protocol + per-type implementations
+    ├── hub/                 Hub, registry, rule storage, dispatch
+    ├── client/              HubClient, ActorClient, Session handle
+    └── policies/            SessionInboxPolicy
 """
 
-# Convenience
-# Events — re-exported from framework core for backward compatibility
-from autogen.beta.events.lifecycle import (
-    AggregationCompleted,
-    CompactionCompleted,
-    ObserverCompleted,
-    ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
-    UnknownEvent,
+from __future__ import annotations
+
+from .adapters import (
+    AdapterResult,
+    AuctionAdapter,
+    BroadcastAdapter,
+    ConsultingAdapter,
+    ConversationAdapter,
+    DiscussionAdapter,
+    NotificationAdapter,
+    SessionAdapter,
 )
-
-from .convenience import Network
-
-# Events — network-specific
+from .auth import (
+    ApiKeyAuth,
+    AuthAdapter,
+    AuthRegistry,
+    JwtAuth,
+    NoAuth,
+    default_registry,
+    dev_registry,
+)
+from .client import (
+    ActorClient,
+    HubClient,
+    HumanCliSurface,
+    HumanClient,
+    HumanScriptedSurface,
+    HumanSurface,
+    NotifyHandler,
+    Session,
+    Task,
+    human_cli_client,
+)
+from .envelope import (
+    EV_ERROR,
+    EV_SESSION_CLOSED,
+    EV_SESSION_INVITE,
+    EV_SESSION_INVITE_ACK,
+    EV_SESSION_INVITE_REJECT,
+    EV_SESSION_OPENED,
+    EV_TASK_ASSIGNED,
+    EV_TASK_CANCELLED,
+    EV_TASK_ERROR,
+    EV_TASK_EXPIRED,
+    EV_TASK_PHASE_COMPLETED,
+    EV_TASK_PHASE_ENTERED,
+    EV_TASK_PROGRESS,
+    EV_TASK_RESULT,
+    EV_TEXT,
+    TASK_EVENT_TYPES,
+    TASK_TERMINAL_EVENT_TYPES,
+    Envelope,
+)
+from .errors import (
+    AccessDeniedError,
+    AuthError,
+    DuplicateRegistrationError,
+    FrameError,
+    InboxError,
+    InboxFullError,
+    InviteRejectedError,
+    LimitExceededError,
+    LinkClosedError,
+    NetworkError,
+    RegistryError,
+    RuleViolationError,
+    SessionClosedError,
+    SessionError,
+    SessionTypeError,
+    TaskCancelledError,
+    TaskError,
+    TaskExpiredError,
+    TaskFailedError,
+    TaskStateError,
+    TimeoutError,
+    TransportError,
+    UnknownActorError,
+    UnknownSessionError,
+    UnknownTaskError,
+)
 from .events import (
-    DelegationCancelled,
-    DelegationError,
-    DelegationProgress,
-    DelegationRejected,
-    DelegationRequest,
-    DelegationResult,
-    DelegationStarted,
-    SchedulerTriggerFired,
-    TopicMessage,
-    TopicSubscription,
-    TopicUnsubscription,
+    BUILTIN_EVENT_TYPES,
+    EventRegistry,
+    EventTypeSpec,
+    UnknownEventTypeError,
 )
-
-# Hub
-from .hub import Hub, RegistrationHandle
-
-# Plugins
-from .plugins import RateLimiter, TelemetryPlugin, TopicPlugin
-
-# Network-specific policies
-from .policies import NetworkPolicy, TopicInboxPolicy, TopicOverflow
-from .policies.network import FormattedEvent
-
-# Channels & Envelopes
-from .primitives.channel import BufferedChannel, Channel, LocalChannel, PriorityChannel
-from .primitives.envelope import Envelope, EventRegistry, register_event
-
-# Infrastructure (network-specific)
-from .primitives.infra import ActorInfo, LocalLock, LocalRegistry, Lock, Registry
-
-# Priority (deferred, internal)
-from .primitives.priority import (
-    ConflictResolver,
-    DefaultPriority,
-    DefaultPriorityScheme,
-    HighestPriorityWins,
-    PriorityScheme,
+from .http import HttpServer, build_app
+from .hub import Hub, HubConfig
+from .identity import ActorIdentity, AuthBlock
+from .ids import extract_ms, new_id, uuid7
+from .policies import (
+    HUB_DEP,
+    SESSION_ID_VAR,
+    PreviousOnlyInboxPolicy,
+    SessionInboxPolicy,
 )
-
-# Remote
-from .remote import RemoteAgent, RemoteAgentReply
-
-# Desktop proxy (for AgentOS local agents)
-from .desktop_proxy import DesktopAgentReply, DesktopProxyAgent
-
-# Topology
-from .topology import (
-    BasePlugin,
-    Conditional,
-    Fanout,
-    HubContext,
-    Pipeline,
-    Plugin,
-    ProcessResult,
-    RouteDecision,
-    Topology,
+from .rule import (
+    AccessBlock,
+    InboxBlock,
+    LimitsBlock,
+    RateBlock,
+    Rule,
+    SessionTypeAccess,
+    SubscribeAccess,
+    TransformSpec,
 )
-
-
-def __getattr__(name: str) -> object:
-    if name == "HttpChannel":
-        from .channels.http import HttpChannel
-
-        return HttpChannel
-    if name == "DesktopChannel":
-        from .channels.desktop import DesktopChannel
-
-        return DesktopChannel
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
+from .session_types import (
+    Participant,
+    ParticipantRole,
+    SessionMetadata,
+    SessionState,
+    SessionType,
+)
+from .task import (
+    TERMINAL_TASK_STATES,
+    TaskMetadata,
+    TaskPhase,
+    TaskSpec,
+    TaskState,
+)
+from .transport import (
+    Link,
+    LinkClient,
+    LinkEndpoint,
+    LocalLink,
+    WsLinkClient,
+    WsLinkServer,
+)
 
 __all__ = (
-    "ActorInfo",
-    "AggregationCompleted",
-    "BasePlugin",
-    "BufferedChannel",
-    "Channel",
-    "CompactionCompleted",
-    "Conditional",
-    "ConflictResolver",
-    "DefaultPriority",
-    "DefaultPriorityScheme",
-    "DelegationCancelled",
-    "DelegationError",
-    "DelegationProgress",
-    "DelegationRejected",
-    "DelegationRequest",
-    "DelegationResult",
-    "DelegationStarted",
-    "DesktopAgentReply",
-    "DesktopChannel",  # noqa: F822
-    "DesktopProxyAgent",
+    "BUILTIN_EVENT_TYPES",
+    "EV_ERROR",
+    "EV_SESSION_CLOSED",
+    "EV_SESSION_INVITE",
+    "EV_SESSION_INVITE_ACK",
+    "EV_SESSION_INVITE_REJECT",
+    "EV_SESSION_OPENED",
+    "EV_TASK_ASSIGNED",
+    "EV_TASK_CANCELLED",
+    "EV_TASK_ERROR",
+    "EV_TASK_EXPIRED",
+    "EV_TASK_PHASE_COMPLETED",
+    "EV_TASK_PHASE_ENTERED",
+    "EV_TASK_PROGRESS",
+    "EV_TASK_RESULT",
+    "EV_TEXT",
+    "HUB_DEP",
+    "SESSION_ID_VAR",
+    "TASK_EVENT_TYPES",
+    "TASK_TERMINAL_EVENT_TYPES",
+    "TERMINAL_TASK_STATES",
+    "AccessBlock",
+    "AccessDeniedError",
+    "ActorClient",
+    "ActorIdentity",
+    "AdapterResult",
+    "ApiKeyAuth",
+    "AuctionAdapter",
+    "AuthAdapter",
+    "AuthBlock",
+    "AuthError",
+    "AuthRegistry",
+    "BroadcastAdapter",
+    "ConsultingAdapter",
+    "ConversationAdapter",
+    "DiscussionAdapter",
+    "DuplicateRegistrationError",
     "Envelope",
     "EventRegistry",
-    "Fanout",
-    "FormattedEvent",
-    "HighestPriorityWins",
-    "HttpChannel",  # noqa: F822
+    "EventTypeSpec",
+    "FrameError",
+    "HttpServer",
     "Hub",
-    "HubContext",
-    "LocalChannel",
-    "LocalLock",
-    "LocalRegistry",
-    "Lock",
-    "Network",
-    "NetworkPolicy",
-    "ObserverCompleted",
-    "ObserverStarted",
-    "Pipeline",
-    "Plugin",
-    "PriorityChannel",
-    "PriorityScheme",
-    "ProcessResult",
-    "RateLimiter",
-    "RegistrationHandle",
-    "Registry",
-    "RemoteAgent",
-    "RemoteAgentReply",
-    "RouteDecision",
-    "SchedulerTriggerFired",
-    "TaskProgress",
-    "TaskRequest",
-    "TaskResult",
-    "TelemetryPlugin",
-    "TopicInboxPolicy",
-    "TopicMessage",
-    "TopicOverflow",
-    "TopicPlugin",
-    "TopicSubscription",
-    "TopicUnsubscription",
-    "Topology",
-    "UnknownEvent",
-    "register_event",
+    "HubClient",
+    "HubConfig",
+    "HumanCliSurface",
+    "HumanClient",
+    "HumanScriptedSurface",
+    "HumanSurface",
+    "InboxBlock",
+    "InboxError",
+    "InboxFullError",
+    "InviteRejectedError",
+    "JwtAuth",
+    "LimitExceededError",
+    "LimitsBlock",
+    "Link",
+    "LinkClient",
+    "LinkClosedError",
+    "LinkEndpoint",
+    "LocalLink",
+    "NetworkError",
+    "NoAuth",
+    "NotificationAdapter",
+    "NotifyHandler",
+    "Participant",
+    "ParticipantRole",
+    "PreviousOnlyInboxPolicy",
+    "RateBlock",
+    "RegistryError",
+    "Rule",
+    "RuleViolationError",
+    "Session",
+    "SessionAdapter",
+    "SessionClosedError",
+    "SessionError",
+    "SessionInboxPolicy",
+    "SessionMetadata",
+    "SessionState",
+    "SessionType",
+    "SessionTypeAccess",
+    "SessionTypeError",
+    "SubscribeAccess",
+    "Task",
+    "TaskCancelledError",
+    "TaskError",
+    "TaskExpiredError",
+    "TaskFailedError",
+    "TaskMetadata",
+    "TaskPhase",
+    "TaskSpec",
+    "TaskState",
+    "TaskStateError",
+    "TimeoutError",
+    "TransformSpec",
+    "TransportError",
+    "UnknownActorError",
+    "UnknownEventTypeError",
+    "UnknownSessionError",
+    "UnknownTaskError",
+    "WsLinkClient",
+    "WsLinkServer",
+    "build_app",
+    "default_registry",
+    "dev_registry",
+    "extract_ms",
+    "human_cli_client",
+    "new_id",
+    "uuid7",
 )

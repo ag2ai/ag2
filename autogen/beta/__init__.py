@@ -34,12 +34,15 @@ from .events.lifecycle import (
     UnknownEvent,
 )
 from .knowledge import (
+    ChangeCallback,
+    ChangeSubscription,
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
     KnowledgeStore,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
+    NoopChangeSubscription,
     StoreBootstrap,
 )
 from .observer import BaseObserver, Observer
@@ -85,6 +88,8 @@ __all__ = (
     "BaseEvent",
     "BaseObserver",
     "BatchWatch",
+    "ChangeCallback",
+    "ChangeSubscription",
     "CompactStrategy",
     "CompactTrigger",
     "CompactionCompleted",
@@ -110,6 +115,7 @@ __all__ = (
     "MemoryKnowledgeStore",
     "MemoryStateStore",
     "MemoryStream",
+    "NoopChangeSubscription",
     "Observer",
     "ObserverAlert",
     "ObserverCompleted",
