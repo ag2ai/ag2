@@ -16,6 +16,7 @@ HUB_CONFIG = f"{HUB_ROOT}/config.json"
 
 ACTORS_ROOT = f"{HUB_ROOT}/actors"
 SESSIONS_ROOT = f"{HUB_ROOT}/sessions"
+TASKS_ROOT = f"{HUB_ROOT}/tasks"
 NAME_INDEX = f"{HUB_ROOT}/registry/by_name"
 
 
@@ -88,6 +89,29 @@ def session_metadata(session_id: str) -> str:
 
 def session_wal(session_id: str) -> str:
     return f"{session_dir(session_id)}/wal.jsonl"
+
+
+def session_tasks_dir(session_id: str) -> str:
+    """Directory of session→task back-reference pointers.
+
+    Each file is a thin ``{task_id}.ref`` pointer the hub writes on
+    :meth:`Hub.create_task` so :meth:`Session.track_tasks` can enumerate
+    a session's tasks without re-scanning the whole ``hub/tasks/`` root.
+    """
+
+    return f"{session_dir(session_id)}/tasks"
+
+
+def session_task_ref(session_id: str, task_id: str) -> str:
+    return f"{session_tasks_dir(session_id)}/{task_id}.ref"
+
+
+def task_dir(task_id: str) -> str:
+    return f"{TASKS_ROOT}/{task_id}"
+
+
+def task_metadata(task_id: str) -> str:
+    return f"{task_dir(task_id)}/metadata.json"
 
 
 def hub_config() -> str:

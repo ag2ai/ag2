@@ -50,6 +50,15 @@ from ..envelope import (
     EV_SESSION_INVITE_ACK,
     EV_SESSION_INVITE_REJECT,
     EV_SESSION_OPENED,
+    EV_TASK_ASSIGNED,
+    EV_TASK_CANCELLED,
+    EV_TASK_ERROR,
+    EV_TASK_EXPIRED,
+    EV_TASK_PHASE_COMPLETED,
+    EV_TASK_PHASE_ENTERED,
+    EV_TASK_PROGRESS,
+    EV_TASK_RESULT,
+    TASK_EVENT_TYPES,
     Envelope,
 )
 from ..errors import (
@@ -62,8 +71,10 @@ from ..errors import (
     SessionClosedError,
     SessionError,
     SessionTypeError,
+    TaskStateError,
     UnknownActorError,
     UnknownSessionError,
+    UnknownTaskError,
 )
 from ..events import EventRegistry, EventTypeSpec, UnknownEventTypeError
 from ..identity import ActorIdentity
@@ -75,6 +86,11 @@ from ..session_types import (
     SessionMetadata,
     SessionState,
     SessionType,
+)
+from ..task import (
+    TaskMetadata,
+    TaskSpec,
+    TaskState,
 )
 from ..transport.frames import (
     AcceptFrame,
@@ -279,6 +295,18 @@ class Hub:
         # fast ``max_pending`` checks in _preflight_inbox_capacity so
         # we don't stat the pending dir on every post_envelope call.
         self._inbox_pending: dict[str, int] = {}
+        # Phase 4 — network task state. ``_tasks`` is the authoritative
+        # in-memory cache of every task the hub knows about; cold
+        # restart :meth:`hydrate` rebuilds it from
+        # ``hub/tasks/*/metadata.json``. Task transitions apply both
+        # to the cache entry AND to the on-disk metadata file so
+        # recovery stays consistent.
+        self._tasks: dict[str, TaskMetadata] = {}
+        # Per-session set of non-terminal task ids, used for the
+        # session-close cascade (every active task is cancelled when
+        # its session closes) and for fast ``session.track_tasks()``
+        # lookups without rescanning the whole cache.
+        self._session_tasks: dict[str, set[str]] = {}
 
     @classmethod
     async def open(
@@ -454,6 +482,32 @@ class Hub:
             if metadata.state is SessionState.ACTIVE:
                 for p in metadata.participants:
                     self._active_sessions.setdefault(p.actor_id, set()).add(session_id)
+
+        # Phase 4 — rebuild the task cache from ``hub/tasks/*/metadata.json``.
+        # Tasks whose session has been archived are loaded but not added to
+        # the session→task index; the TTL sweeper will still expire them
+        # if the in-memory record is non-terminal. Terminal tasks stay
+        # loaded so read-only inspection works.
+        task_entries = await self._store.list(layout.TASKS_ROOT)
+        for entry in task_entries:
+            if not entry.endswith("/"):
+                continue
+            task_id = entry.rstrip("/")
+            task_raw = await self._store.read(layout.task_metadata(task_id))
+            if task_raw is None:
+                log.warning("hub.hydrate: task %s has no metadata, skipping", task_id)
+                continue
+            try:
+                task = TaskMetadata.from_json(task_raw)
+            except Exception:  # pragma: no cover — corrupt file
+                log.warning(
+                    "hub.hydrate: task %s metadata failed to parse, skipping",
+                    task_id,
+                )
+                continue
+            self._tasks[task.task_id] = task
+            if not task.is_terminal():
+                self._session_tasks.setdefault(task.session_id, set()).add(task.task_id)
 
     # ------------------------------------------------------------------
     # Registry CRUD
@@ -796,10 +850,6 @@ class Hub:
             envelope_id = await self._handle_system_envelope(metadata, envelope)
             return envelope_id, 0
 
-        # User envelopes go through the adapter.
-        prior = await self._read_user_envelopes(metadata.session_id)
-        adapter = self._adapter_for(metadata.type)
-
         # Event-type gate: a strict registry refuses unregistered
         # event types at post time so operators can enforce a closed
         # wire-format set. Permissive (default) registries accept
@@ -848,6 +898,20 @@ class Hub:
                     f"{recipient_identity.name} may not accept from {sender_identity.name}"
                 )
 
+        # Phase 4 — task-event branch. Task envelopes carry their own
+        # hub-owned state machine; they bypass ``adapter.validate_send``
+        # and ``adapter.on_accepted`` so the session-type lifecycle
+        # (consulting's 1Q1R auto-close, discussion's speaker-order
+        # rotation, etc.) stays orthogonal to task lifecycle. Access /
+        # rate / depth / inbox checks above still apply — the bypass is
+        # strictly about session-adapter delivery rules, not the
+        # network rule surface.
+        if envelope.event_type in TASK_EVENT_TYPES:
+            return await self._process_actor_task_event(metadata, envelope)
+
+        # User envelopes go through the adapter.
+        prior = await self._read_user_envelopes(metadata.session_id)
+        adapter = self._adapter_for(metadata.type)
         adapter.validate_send(metadata, envelope, prior)
 
         # Preflight the structured inbox: any recipient whose rule has
@@ -918,6 +982,7 @@ class Hub:
         self, metadata: SessionMetadata, result: AdapterResult
     ) -> None:
         changed = False
+        closing = False
         if result.next_state is not None and metadata.state is not result.next_state:
             metadata.state = result.next_state
             if result.next_state is SessionState.CLOSED:
@@ -925,10 +990,22 @@ class Hub:
                 metadata.close_reason = result.close_reason
                 for p in metadata.participants:
                     self._active_sessions[p.actor_id].discard(metadata.session_id)
+                closing = True
             changed = True
         if changed:
             await self._write_session_metadata(metadata)
-            if metadata.state is SessionState.CLOSED:
+            if closing:
+                # Phase 4 — any tasks attached to this session transition
+                # to ``cancelled`` before the SessionClosed broadcast so
+                # subscribers see a clean task-terminal → session-terminal
+                # ordering in the WAL. The cancel envelope emission
+                # happens inside the same connection loop, so the
+                # subsequent ``_broadcast_session_closed`` still runs
+                # after the task-cancel envelopes have landed.
+                await self._cancel_tasks_for_session(
+                    metadata.session_id,
+                    reason=result.close_reason or "session_closed",
+                )
                 await self._broadcast_session_closed(metadata)
 
     async def _handle_system_envelope(
@@ -1031,6 +1108,502 @@ class Hub:
         )
 
     # ------------------------------------------------------------------
+    # Phase 4 — Network tasks
+    # ------------------------------------------------------------------
+
+    async def create_task(
+        self,
+        *,
+        session_id: str,
+        requester_id: str,
+        owner_id: str,
+        spec: TaskSpec,
+        ttl_seconds: int | None = None,
+    ) -> TaskMetadata:
+        """Allocate a task inside ``session_id`` and emit the assignment.
+
+        Direct hub method — symmetric with :meth:`create_session`. Allocates
+        a UUID7 ``task_id``, writes ``hub/tasks/{task_id}/metadata.json``,
+        writes a session-side back-reference, adds the task to the in-memory
+        cache, and posts an ``ag2.task.assigned`` envelope addressed to the
+        owner. The owner's :class:`ActorClient` sees the envelope through
+        the normal notify flow and dispatches to a task handler.
+
+        Raises:
+            :class:`UnknownSessionError` if the session does not exist.
+            :class:`SessionClosedError` if the session is not ACTIVE.
+            :class:`AccessDeniedError` if ``requester_id`` or ``owner_id``
+                is not a session participant.
+            :class:`LimitExceededError` if the owner is at
+                ``rule.limits.max_concurrent_tasks``.
+        """
+
+        session_metadata = self._sessions.get(session_id)
+        if session_metadata is None:
+            raise UnknownSessionError(session_id)
+        if session_metadata.state is not SessionState.ACTIVE:
+            raise SessionClosedError(
+                f"session {session_id} is in state {session_metadata.state.value}"
+            )
+        if requester_id not in self._identities:
+            raise UnknownActorError(requester_id)
+        if owner_id not in self._identities:
+            raise UnknownActorError(owner_id)
+        if not session_metadata.has_participant(requester_id):
+            raise AccessDeniedError(
+                "task requester must be a participant in the session"
+            )
+        if not session_metadata.has_participant(owner_id):
+            raise AccessDeniedError("task owner must be a participant in the session")
+
+        owner_rule = self._rules[owner_id]
+        # max_concurrent_tasks gates the owner's non-terminal task count.
+        active_owner_tasks = sum(
+            1
+            for t in self._tasks.values()
+            if t.owner_id == owner_id and not t.is_terminal()
+        )
+        if active_owner_tasks >= owner_rule.limits.max_concurrent_tasks:
+            owner_identity = self._identities[owner_id]
+            raise LimitExceededError(
+                f"{owner_identity.name} is at "
+                f"max_concurrent_tasks={owner_rule.limits.max_concurrent_tasks}"
+            )
+
+        task_id = new_id()
+        created_at = self._clock()
+        ttl = (
+            ttl_seconds
+            if ttl_seconds is not None
+            else owner_rule.limits.task_ttl_seconds()
+        )
+        expires_at = _add_seconds(created_at, ttl)
+
+        task = TaskMetadata(
+            task_id=task_id,
+            session_id=session_id,
+            owner_id=owner_id,
+            requester_id=requester_id,
+            spec=spec,
+            state=TaskState.CREATED,
+            created_at=created_at,
+            expires_at=expires_at,
+            current_phase=None,
+        )
+
+        self._tasks[task_id] = task
+        self._session_tasks.setdefault(session_id, set()).add(task_id)
+        await self._write_task_metadata(task)
+        await self._store.write(layout.session_task_ref(session_id, task_id), task_id)
+
+        # Emit the ``ag2.task.assigned`` envelope addressed to the owner.
+        # Fan-out to session subscribers happens through the same WAL
+        # append / subs-snapshot invariant used by every other envelope.
+        assigned = Envelope(
+            session_id=session_id,
+            sender_id="hub",
+            recipient_id=owner_id,
+            event_type=EV_TASK_ASSIGNED,
+            event_data={
+                "task_id": task_id,
+                "spec": spec.to_dict(),
+                "owner_id": owner_id,
+                "requester_id": requester_id,
+                "expires_at": expires_at,
+            },
+            task_id=task_id,
+        )
+        await self._post_hub_task_envelope(session_metadata, assigned)
+        return task.copy()
+
+    def peek_task(self, task_id: str) -> TaskMetadata | None:
+        """Return the task metadata from the in-memory index or ``None``.
+
+        Non-raising lookup for callers that need a best-effort read.
+        Use :meth:`get_task` for an authoritative raising variant.
+        """
+
+        task = self._tasks.get(task_id)
+        return task.copy() if task is not None else None
+
+    async def get_task(self, task_id: str) -> TaskMetadata:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise UnknownTaskError(task_id)
+        return task.copy()
+
+    def tasks_for_session(self, session_id: str) -> list[TaskMetadata]:
+        """Return every task the hub knows about for ``session_id``.
+
+        Includes terminal tasks (for post-mortem inspection); callers that
+        only care about active tasks should filter on ``is_terminal``.
+        """
+
+        return [
+            self._tasks[t].copy()
+            for t in sorted(self._tasks)
+            if self._tasks[t].session_id == session_id
+        ]
+
+    async def cancel_task(
+        self,
+        task_id: str,
+        *,
+        requested_by: str,
+        reason: str = "",
+    ) -> TaskMetadata:
+        """Cancel ``task_id`` on behalf of ``requested_by``.
+
+        Only the task's requester (the actor that called :meth:`create_task`)
+        or the owner may cancel. Cancelling a task that is already in a
+        terminal state is a no-op and returns the current metadata.
+        """
+
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise UnknownTaskError(task_id)
+        if requested_by not in (task.requester_id, task.owner_id):
+            raise AccessDeniedError("only the task's requester or owner may cancel it")
+        if task.is_terminal():
+            return task.copy()
+
+        session_metadata = self._sessions.get(task.session_id)
+        if session_metadata is None:
+            # The session was archived out from under an active task —
+            # treat as cancelled locally without emitting an envelope
+            # so the task record still reaches a terminal state.
+            task.state = TaskState.CANCELLED
+            task.completed_at = self._clock()
+            task.error = reason or "session missing"
+            await self._write_task_metadata(task)
+            self._session_tasks.get(task.session_id, set()).discard(task_id)
+            return task.copy()
+
+        cancelled = Envelope(
+            session_id=task.session_id,
+            sender_id="hub",
+            recipient_id=None,  # broadcast to every participant
+            event_type=EV_TASK_CANCELLED,
+            event_data={
+                "task_id": task_id,
+                "requested_by": requested_by,
+                "reason": reason,
+            },
+            task_id=task_id,
+        )
+        await self._post_hub_task_envelope(session_metadata, cancelled)
+        return self._tasks[task_id].copy()
+
+    async def expire_due_tasks(self, *, now: str | None = None) -> list[str]:
+        """TTL sweeper entry point — expire tasks past their deadline.
+
+        Walks the in-memory task cache and transitions every non-terminal
+        task whose ``expires_at`` is at or before ``now`` to
+        :attr:`TaskState.EXPIRED`, emitting a broadcast ``ag2.task.expired``
+        envelope so subscribers and session participants see the transition.
+        Tasks already in a terminal state are skipped.
+
+        ``now`` defaults to ``self._clock()`` but tests may pass an explicit
+        ISO-Z string in the future to exercise the sweeper deterministically
+        without driving real time.
+        """
+
+        threshold = now or self._clock()
+        expired_ids: list[str] = []
+        # Snapshot the task ids so a concurrent cancel/result during the
+        # sweep does not mutate the dict under us.
+        for task_id in list(self._tasks):
+            task = self._tasks.get(task_id)
+            if task is None or task.is_terminal():
+                continue
+            if task.expires_at > threshold:
+                continue
+            session_metadata = self._sessions.get(task.session_id)
+            if session_metadata is None:
+                # Orphaned task — transition locally without emitting.
+                task.state = TaskState.EXPIRED
+                task.completed_at = threshold
+                await self._write_task_metadata(task)
+                self._session_tasks.get(task.session_id, set()).discard(task_id)
+                expired_ids.append(task_id)
+                continue
+            expired = Envelope(
+                session_id=task.session_id,
+                sender_id="hub",
+                recipient_id=None,  # broadcast
+                event_type=EV_TASK_EXPIRED,
+                event_data={
+                    "task_id": task_id,
+                    "expires_at": task.expires_at,
+                    "expired_at": threshold,
+                },
+                task_id=task_id,
+            )
+            await self._post_hub_task_envelope(session_metadata, expired)
+            expired_ids.append(task_id)
+        return expired_ids
+
+    async def _process_actor_task_event(
+        self, session_metadata: SessionMetadata, envelope: Envelope
+    ) -> tuple[str, int]:
+        """Process a task envelope an actor posted via ``SendFrame``.
+
+        Called from the task-event branch in :meth:`post_envelope`. Applies
+        the hub's task state machine, appends to the session WAL, delivers
+        to recipients (unicast or broadcast), fans out to subscribers, and
+        rewrites ``hub/tasks/{task_id}/metadata.json``. Returns the stamped
+        ``(envelope_id, wal_offset)`` pair like the user envelope path.
+        """
+
+        task_id = envelope.task_id
+        if task_id is None:
+            raise TaskStateError("task envelope must carry a ``task_id`` field")
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise UnknownTaskError(task_id)
+        if task.session_id != session_metadata.session_id:
+            raise TaskStateError(
+                f"task {task_id} belongs to session {task.session_id}, "
+                f"not {session_metadata.session_id}"
+            )
+
+        self._validate_actor_task_event(task, envelope)
+        self._preflight_inbox_capacity(session_metadata, envelope)
+
+        envelope.envelope_id = new_id()
+        envelope.created_at = self._clock()
+        envelope.trace_id = envelope.trace_id or envelope.envelope_id
+
+        async with self._wal_lock:
+            next_offset = await self._append_to_wal(session_metadata, envelope)
+            subs_snapshot = list(self._subscriptions.values())
+
+        if envelope.recipient_id is None:
+            await self._fanout_to_participants(session_metadata, envelope)
+        else:
+            await self._deliver(envelope)
+        await self._fanout_to_subs(
+            subs_snapshot, session_metadata, envelope, wal_offset=next_offset
+        )
+
+        await self._apply_task_event(task, envelope)
+        return envelope.envelope_id, next_offset
+
+    async def _post_hub_task_envelope(
+        self, session_metadata: SessionMetadata, envelope: Envelope
+    ) -> None:
+        """Persist and deliver a hub-emitted task envelope.
+
+        Hub-emitted task events (``ag2.task.assigned`` / ``cancelled`` /
+        ``expired``) follow the same WAL + delivery + fan-out path that
+        actor-posted envelopes do, but there is no sender-side rule check
+        because the hub is authoritative. After delivery the task state
+        transition is applied so the in-memory and on-disk state stay
+        consistent with what subscribers just saw.
+        """
+
+        if envelope.envelope_id is None:
+            envelope.envelope_id = new_id()
+        if envelope.created_at is None:
+            envelope.created_at = self._clock()
+        envelope.trace_id = envelope.trace_id or envelope.envelope_id
+
+        async with self._wal_lock:
+            next_offset = await self._append_to_wal(session_metadata, envelope)
+            subs_snapshot = list(self._subscriptions.values())
+
+        if envelope.recipient_id is None:
+            await self._fanout_to_participants(session_metadata, envelope)
+        else:
+            await self._deliver(envelope)
+        await self._fanout_to_subs(
+            subs_snapshot, session_metadata, envelope, wal_offset=next_offset
+        )
+
+        task_id = envelope.task_id
+        if task_id is not None:
+            task = self._tasks.get(task_id)
+            if task is not None:
+                await self._apply_task_event(task, envelope)
+
+    def _validate_actor_task_event(
+        self, task: TaskMetadata, envelope: Envelope
+    ) -> None:
+        """Check sender authority and state-machine legality.
+
+        Actor-posted task events are:
+
+        * ``phase_entered`` / ``phase_completed`` / ``progress`` —
+          owner-only while the task is ``created`` or ``running``.
+        * ``result`` / ``error`` — owner-only while the task is
+          ``created`` or ``running``. Transitions to a terminal state.
+        * ``assigned`` / ``cancelled`` / ``expired`` — hub-only. An
+          actor cannot post these; the hub rejects them here.
+        """
+
+        event_type = envelope.event_type
+        sender_id = envelope.sender_id
+
+        if event_type in (EV_TASK_ASSIGNED, EV_TASK_CANCELLED, EV_TASK_EXPIRED):
+            raise TaskStateError(
+                f"{event_type!r} is hub-emitted only; actors cannot post it"
+            )
+
+        if sender_id != task.owner_id:
+            raise AccessDeniedError(f"only the task owner may post {event_type!r}")
+
+        if task.is_terminal():
+            raise TaskStateError(
+                f"task {task.task_id} is already terminal "
+                f"(state={task.state.value}); "
+                f"cannot post {event_type!r}"
+            )
+
+        if event_type == EV_TASK_PHASE_ENTERED:
+            phase_id = envelope.event_data.get("phase_id")
+            if not isinstance(phase_id, str) or not phase_id:
+                raise TaskStateError(
+                    "ag2.task.phase_entered requires event_data.phase_id (non-empty string)"
+                )
+            # If the task has a declared phase plan, the phase id must
+            # match one of the declared phases. Ad-hoc phases are
+            # allowed when the task was created without a phase plan.
+            declared = task.spec.phase_ids()
+            if declared and phase_id not in declared:
+                raise TaskStateError(
+                    f"phase {phase_id!r} is not in the task's declared phase plan "
+                    f"({declared})"
+                )
+        elif event_type == EV_TASK_PHASE_COMPLETED:
+            phase_id = envelope.event_data.get("phase_id")
+            if not isinstance(phase_id, str) or not phase_id:
+                raise TaskStateError(
+                    "ag2.task.phase_completed requires event_data.phase_id (non-empty string)"
+                )
+            declared = task.spec.phase_ids()
+            if declared and phase_id not in declared:
+                raise TaskStateError(
+                    f"phase {phase_id!r} is not in the task's declared phase plan "
+                    f"({declared})"
+                )
+
+    async def _apply_task_event(self, task: TaskMetadata, envelope: Envelope) -> None:
+        """Mutate ``task`` in place based on the event type, then persist."""
+
+        event_type = envelope.event_type
+        data = envelope.event_data
+        now = self._clock()
+
+        if event_type == EV_TASK_ASSIGNED:
+            # Assignment itself does not advance state — the task stays
+            # ``created`` until the owner emits its first progress /
+            # phase / result event.
+            pass
+        elif event_type == EV_TASK_PHASE_ENTERED:
+            if task.state is TaskState.CREATED:
+                task.state = TaskState.RUNNING
+                task.started_at = now
+            phase_id = str(data.get("phase_id", ""))
+            task.current_phase = phase_id or task.current_phase
+            self._stamp_phase(task, phase_id, started_at=now)
+        elif event_type == EV_TASK_PHASE_COMPLETED:
+            phase_id = str(data.get("phase_id", ""))
+            self._stamp_phase(task, phase_id, completed_at=now)
+        elif event_type == EV_TASK_PROGRESS:
+            if task.state is TaskState.CREATED:
+                task.state = TaskState.RUNNING
+                task.started_at = now
+            task.last_progress_at = now
+            update = data.get("update")
+            if isinstance(update, dict):
+                task.progress.update(update)
+        elif event_type == EV_TASK_RESULT:
+            task.state = TaskState.COMPLETED
+            task.completed_at = now
+            task.result = data.get("value")
+            self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+        elif event_type == EV_TASK_ERROR:
+            task.state = TaskState.FAILED
+            task.completed_at = now
+            task.error = str(data.get("error", ""))
+            self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+        elif event_type == EV_TASK_CANCELLED:
+            task.state = TaskState.CANCELLED
+            task.completed_at = now
+            reason = data.get("reason")
+            if isinstance(reason, str) and reason:
+                task.error = reason
+            self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+        elif event_type == EV_TASK_EXPIRED:
+            task.state = TaskState.EXPIRED
+            task.completed_at = now
+            self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+
+        await self._write_task_metadata(task)
+
+    def _stamp_phase(
+        self,
+        task: TaskMetadata,
+        phase_id: str,
+        *,
+        started_at: str | None = None,
+        completed_at: str | None = None,
+    ) -> None:
+        """Update the matching :class:`TaskPhase` on ``task.spec.phases``.
+
+        Ad-hoc phases (phases not declared in the original spec) are
+        silently ignored — the hub only tracks timestamps on declared
+        phases. This keeps the spec dataclass immutable from the actor's
+        perspective except for the two timestamp fields.
+        """
+
+        if not phase_id:
+            return
+        for phase in task.spec.phases:
+            if phase.id == phase_id:
+                if started_at is not None:
+                    phase.started_at = started_at
+                if completed_at is not None:
+                    phase.completed_at = completed_at
+                return
+
+    async def _write_task_metadata(self, task: TaskMetadata) -> None:
+        await self._store.write(layout.task_metadata(task.task_id), task.to_json())
+
+    async def _cancel_tasks_for_session(self, session_id: str, *, reason: str) -> None:
+        """Cancel every non-terminal task in a closing session.
+
+        Invoked from :meth:`close_session` and the adapter-driven
+        close path so task cleanup cannot leak past session lifetime.
+        """
+
+        active = list(self._session_tasks.get(session_id, set()))
+        for task_id in active:
+            task = self._tasks.get(task_id)
+            if task is None or task.is_terminal():
+                continue
+            session_metadata = self._sessions.get(session_id)
+            if session_metadata is None:
+                task.state = TaskState.CANCELLED
+                task.completed_at = self._clock()
+                task.error = reason
+                await self._write_task_metadata(task)
+                continue
+            cancelled = Envelope(
+                session_id=session_id,
+                sender_id="hub",
+                recipient_id=None,
+                event_type=EV_TASK_CANCELLED,
+                event_data={
+                    "task_id": task_id,
+                    "requested_by": "hub",
+                    "reason": reason,
+                },
+                task_id=task_id,
+            )
+            await self._post_hub_task_envelope(session_metadata, cancelled)
+
+    # ------------------------------------------------------------------
     # Session queries + close
     # ------------------------------------------------------------------
 
@@ -1069,7 +1642,100 @@ class Hub:
         await self._write_session_metadata(metadata)
         for p in metadata.participants:
             self._active_sessions[p.actor_id].discard(session_id)
+        # Phase 4 — task cancel cascade before the SessionClosed broadcast.
+        # Subscribers see TaskCancelled envelopes in the WAL ahead of the
+        # terminal SessionClosed so post-mortem replay stays ordered.
+        await self._cancel_tasks_for_session(session_id, reason=reason)
         await self._broadcast_session_closed(metadata)
+
+    async def sweep_expired_sessions(self) -> list[str]:
+        """Transition every ACTIVE session whose ``expires_at`` has passed to EXPIRED.
+
+        Phase 3a Step 8: this is the worker the TTL sweeper runs on a
+        framework-core ``IntervalWatch`` callback. A dedicated
+        :class:`Scheduler` is not baked into ``Hub`` — operators own
+        the scheduler and register the callback themselves — so that
+        ``Hub`` stays network-layer only and the scheduler is a pure
+        lifecycle manager (see :mod:`autogen.beta.scheduler` and
+        Phase 3a Step 0).
+
+        Returns the list of session ids that were expired on this
+        pass so callers can log / emit metrics. Safe to call
+        concurrently with other hub operations — each expiring
+        session goes through the normal close path, which holds the
+        WAL lock while emitting the terminal ``SessionClosed``
+        broadcast.
+
+        An expired session behaves almost identically to a normally
+        closed one: its participants lose the active-slot reservation,
+        tasks are cancelled cascade, and a close broadcast fans out.
+        The only distinction is the terminal state (``EXPIRED``
+        instead of ``CLOSED``) and the ``close_reason="ttl_expired"``
+        marker so post-mortem tooling can tell a TTL death from an
+        explicit close.
+        """
+
+        now = self._clock()
+        to_expire: list[SessionMetadata] = []
+        for metadata in list(self._sessions.values()):
+            if metadata.state is not SessionState.ACTIVE:
+                continue
+            if metadata.expires_at is None:
+                continue
+            if metadata.expires_at > now:
+                continue
+            to_expire.append(metadata)
+
+        expired_ids: list[str] = []
+        for metadata in to_expire:
+            try:
+                metadata.state = SessionState.EXPIRED
+                metadata.closed_at = now
+                metadata.close_reason = "ttl_expired"
+                await self._write_session_metadata(metadata)
+                for p in metadata.participants:
+                    self._active_sessions[p.actor_id].discard(metadata.session_id)
+                await self._cancel_tasks_for_session(
+                    metadata.session_id, reason="ttl_expired"
+                )
+                await self._broadcast_session_closed(metadata)
+                expired_ids.append(metadata.session_id)
+            except Exception:  # pragma: no cover
+                log.warning(
+                    "hub: ttl sweep failed for session %s",
+                    metadata.session_id,
+                    exc_info=True,
+                )
+
+        return expired_ids
+
+    def ttl_sweep_callback(self) -> Callable[[Any, Any], Any]:
+        """Return an async callback compatible with ``Scheduler.add``.
+
+        Usage::
+
+            from autogen.beta.scheduler import Scheduler
+            from autogen.beta.watch import IntervalWatch
+
+            scheduler = Scheduler()
+            scheduler.add(IntervalWatch(30), callback=hub.ttl_sweep_callback())
+            await scheduler.start()
+
+        The callback signature matches the standalone ``Scheduler``
+        contract ``(events, ctx) -> Awaitable[None]`` — it ignores
+        its arguments and simply invokes :meth:`sweep_expired_sessions`.
+        This keeps ``Hub`` decoupled from ``Scheduler`` (the operator
+        owns both instances) while giving a one-line wiring path for
+        the common case.
+        """
+
+        async def _callback(events: Any, ctx: Any) -> None:
+            try:
+                await self.sweep_expired_sessions()
+            except Exception:  # pragma: no cover
+                log.warning("hub.ttl_sweep_callback failed", exc_info=True)
+
+        return _callback
 
     async def read_wal(self, session_id: str, *, since: int = 0) -> list[Envelope]:
         wal = await self._store.read_range(layout.session_wal(session_id), since)
@@ -1587,6 +2253,20 @@ class Hub:
                 ErrorFrame(code="session_closed", message=str(exc))
             )
             return
+        except UnknownTaskError as exc:
+            # Phase 4 — task envelope referenced a task_id the hub has
+            # never heard of (or one that has been archived). Surface
+            # it to the sender with its own error code so clients can
+            # distinguish stale task_ids from generic session errors.
+            await endpoint.send_frame(ErrorFrame(code="unknown_task", message=str(exc)))
+            return
+        except TaskStateError as exc:
+            # Phase 4 — task state-machine violation (wrong sender,
+            # terminal-state reuse, bad phase id, etc.). Distinct code
+            # so the client can raise a precise ``TaskStateError``
+            # instead of a generic ``SessionError``.
+            await endpoint.send_frame(ErrorFrame(code="task_state", message=str(exc)))
+            return
         except SessionError as exc:
             await endpoint.send_frame(
                 ErrorFrame(code="session_error", message=str(exc))
@@ -1598,9 +2278,7 @@ class Hub:
             )
             return
         except InboxFullError as exc:
-            await endpoint.send_frame(
-                ErrorFrame(code="inbox_full", message=str(exc))
-            )
+            await endpoint.send_frame(ErrorFrame(code="inbox_full", message=str(exc)))
             return
         if idempotency_key is not None:
             self._record_idempotent(
