@@ -36,6 +36,7 @@ from ..policies import HUB_DEP, SESSION_ID_VAR
 
 if TYPE_CHECKING:
     from .actor_client import ActorClient
+    from .task import Task
 
 
 log = logging.getLogger("autogen.beta.network.client.handlers")
@@ -68,6 +69,32 @@ async def handle_notification(envelope: Envelope, client: ActorClient) -> None:
         await _ask(client, envelope.content(), envelope.session_id)
     except Exception:  # pragma: no cover
         log.warning("notification handler: actor.ask raised", exc_info=True)
+
+
+async def handle_task_assigned(
+    envelope: Envelope, task: Task, client: ActorClient
+) -> None:
+    """Default Phase 4 task handler — bridge a framework-core ``Actor.ask``.
+
+    The minimal useful behavior: call ``actor.ask`` with the task's
+    description (falling back to the title), post the result through the
+    :class:`Task` handle's :meth:`Task.result`, and let the hub drive the
+    transition to ``completed``. Any exception is turned into a
+    :meth:`Task.fail` so the requester's ``task.wait()`` resolves cleanly.
+
+    Handlers that want multi-phase progress reporting, explicit partial
+    results, or structured payloads override via
+    :meth:`ActorClient.on_task("my-spec-type")`.
+    """
+
+    spec = task.metadata.spec
+    prompt = spec.description or spec.title or ""
+    try:
+        answer = await _ask(client, prompt, envelope.session_id)
+    except Exception as exc:
+        await task.fail(f"{type(exc).__name__}: {exc}")
+        return
+    await task.result(answer if answer is not None else "")
 
 
 async def _ask(client: ActorClient, content: str, session_id: str | None) -> str | None:

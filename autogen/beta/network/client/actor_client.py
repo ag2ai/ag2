@@ -36,6 +36,8 @@ from ..envelope import (
     EV_SESSION_INVITE,
     EV_SESSION_INVITE_ACK,
     EV_SESSION_OPENED,
+    EV_TASK_ASSIGNED,
+    TASK_EVENT_TYPES,
     Envelope,
 )
 from ..errors import (
@@ -47,8 +49,10 @@ from ..errors import (
     RuleViolationError,
     SessionClosedError,
     SessionError,
+    TaskStateError,
     TransportError,
     UnknownActorError,
+    UnknownTaskError,
 )
 from ..hub import Hub
 from ..identity import ActorIdentity
@@ -71,6 +75,7 @@ from ..transport.frames import (
 from ..transport.link import Link
 from . import handlers as default_handlers
 from .session import Session
+from .task import Task
 
 if TYPE_CHECKING:
     from .hub_client import HubClient
@@ -80,6 +85,7 @@ log = logging.getLogger("autogen.beta.network.client.actor_client")
 
 
 NotifyHandler = Callable[[Envelope, "ActorClient"], Awaitable[None]]
+TaskHandler = Callable[[Envelope, Task, "ActorClient"], Awaitable[None]]
 
 
 @dataclass
@@ -180,6 +186,13 @@ class ActorClient:
             EV_SESSION_INVITE_ACK: _noop,
             EV_SESSION_OPENED: _noop,
             EV_SESSION_CLOSED: _noop,
+        }
+        # Phase 4 — task handler registry. Keys are ``TaskSpec.spec_type``
+        # strings; ``"*"`` is the default fallback for tasks whose spec
+        # doesn't declare a type. Operators override via
+        # :meth:`ActorClient.on_task` exactly like session-type handlers.
+        self._task_handlers: dict[str, TaskHandler] = {
+            "*": default_handlers.handle_task_assigned,
         }
 
     # ------------------------------------------------------------------
@@ -423,6 +436,29 @@ class ActorClient:
     ) -> Callable[[NotifyHandler], NotifyHandler]:
         def register(handler: NotifyHandler) -> NotifyHandler:
             self._system_handlers[event_type] = handler
+            return handler
+
+        return register
+
+    def on_task(self, spec_type: str = "*") -> Callable[[TaskHandler], TaskHandler]:
+        """Register a task handler for a specific ``TaskSpec.spec_type``.
+
+        Usage::
+
+            @client.on_task("research")
+            async def run_research(envelope, task, client):
+                await task.phase_entered("gather")
+                result = await client.actor.ask(task.metadata.spec.description)
+                await task.result(result)
+
+        ``spec_type="*"`` overrides the default handler. Multiple
+        registrations for different spec types coexist — the
+        :meth:`_dispatch_task_assignment` path picks by exact match
+        with a ``"*"`` fallback.
+        """
+
+        def register(handler: TaskHandler) -> TaskHandler:
+            self._task_handlers[spec_type] = handler
             return handler
 
         return register
@@ -735,6 +771,21 @@ class ActorClient:
             await self._apply_post_receive_transforms(envelope)
             return
 
+        # Phase 4 — task envelopes route through the task handler
+        # registry. ``ag2.task.assigned`` dispatches to the matching
+        # :meth:`on_task` handler in a background task (so the handler
+        # can make its own outbound sends without deadlocking against
+        # the inbox loop). Every other ``ag2.task.*`` event is
+        # informational on the recipient side — the hub has already
+        # applied the state transition; the local :class:`Task`
+        # instance is refreshed lazily when the requester reads it.
+        if envelope.event_type in TASK_EVENT_TYPES:
+            if envelope.event_type == EV_TASK_ASSIGNED:
+                await self._dispatch_task_assignment(envelope)
+            await self._ack(envelope)
+            await self._apply_post_receive_transforms(envelope)
+            return
+
         # Suppress the default handler for replies to our own sends — the
         # user is driving those via ``session.ask`` or an explicit
         # subscription. Still ack so the hub's WAL records a clean receipt.
@@ -759,6 +810,87 @@ class ActorClient:
             return
         await self._ack(envelope)
         await self._apply_post_receive_transforms(envelope)
+
+    async def _dispatch_task_assignment(self, envelope: Envelope) -> None:
+        """Route an ``ag2.task.assigned`` envelope to a task handler.
+
+        Builds a local :class:`Task` handle and picks the handler by
+        ``TaskSpec.spec_type`` with a ``"*"`` fallback. The handler runs
+        in a background task (same pattern as session-type handlers) so
+        a handler that posts ``phase_entered`` / ``progress`` / ``result``
+        through ``_send_envelope`` does not deadlock against the inbox
+        loop waiting on its own AcceptFrames.
+        """
+
+        task_id = envelope.task_id
+        if task_id is None:
+            log.warning(
+                "task assignment missing task_id: envelope=%s", envelope.envelope_id
+            )
+            return
+        metadata = self._hub.peek_task(task_id)
+        if metadata is None:
+            log.warning(
+                "task assignment for unknown task_id %s (envelope=%s)",
+                task_id,
+                envelope.envelope_id,
+            )
+            return
+
+        session = self._session_for(metadata.session_id)
+        if session is None:
+            log.warning("task assignment for unknown session %s", metadata.session_id)
+            return
+
+        task = Task(session=session, metadata=metadata)
+        spec_type = metadata.spec.spec_type or "*"
+        handler = self._task_handlers.get(spec_type, self._task_handlers.get("*"))
+        if handler is None:
+            log.warning(
+                "no task handler registered for spec_type=%r and no ``*`` default",
+                spec_type,
+            )
+            return
+
+        async def _run() -> None:
+            try:
+                await handler(envelope, task, self)
+            except Exception as exc:  # pragma: no cover — exercised via tests
+                log.exception(
+                    "task handler for spec_type=%r raised: %s", spec_type, exc
+                )
+                # Surface the failure as a TaskError so the requester's
+                # ``task.wait()`` resolves instead of hanging. We post
+                # through the already-instantiated task handle so the
+                # envelope picks up the normal depth / idempotency
+                # wiring.
+                try:
+                    await task.fail(f"{type(exc).__name__}: {exc}")
+                except (TaskStateError, UnknownTaskError):
+                    # Task may already be terminal (e.g. cancelled by
+                    # the requester while the handler was still
+                    # running). Nothing to do — the hub's state is
+                    # authoritative.
+                    pass
+                except Exception:  # pragma: no cover
+                    log.exception("failed to emit TaskError after handler crash")
+
+        run_task = asyncio.get_event_loop().create_task(_run())
+        self._handler_tasks.add(run_task)
+        run_task.add_done_callback(self._handler_tasks.discard)
+
+    def _session_for(self, session_id: str) -> Session | None:
+        """Build a fresh :class:`Session` handle for ``session_id``.
+
+        Task handlers need a session object to attach their :class:`Task`
+        to; we rebuild one on demand from the hub's session cache so the
+        handler sees the same metadata the hub has.
+        """
+
+        metadata = self._hub.peek_session(session_id)
+        if metadata is None:
+            return None
+        return Session(client=self, metadata=metadata)
 
     def _session_type_for(self, session_id: str) -> str | None:
         metadata = self._hub.peek_session(session_id)
@@ -823,4 +955,8 @@ def _error_for_code(frame: ErrorFrame) -> Exception:
         return UnknownActorError(frame.message)
     if code == "inbox_full":
         return InboxFullError(frame.message)
+    if code == "unknown_task":
+        return UnknownTaskError(frame.message)
+    if code == "task_state":
+        return TaskStateError(frame.message)
     return TransportError(f"{code}: {frame.message}")

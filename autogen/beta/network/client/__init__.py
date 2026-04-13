@@ -13,13 +13,28 @@ rule transforms run in the tenant's address space rather than the hub's.
 
 from __future__ import annotations
 
-from .actor_client import ActorClient, NotifyHandler
+from .actor_client import ActorClient, NotifyHandler, TaskHandler
 from .hub_client import HubClient
+from .human import (
+    HumanClient,
+    HumanCliSurface,
+    HumanScriptedSurface,
+    HumanSurface,
+    human_cli_client,
+)
 from .session import Session
+from .task import Task
 
 __all__ = (
     "ActorClient",
     "HubClient",
+    "HumanCliSurface",
+    "HumanClient",
+    "HumanScriptedSurface",
+    "HumanSurface",
     "NotifyHandler",
     "Session",
+    "Task",
+    "TaskHandler",
+    "human_cli_client",
 )
