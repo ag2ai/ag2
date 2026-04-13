@@ -362,6 +362,7 @@ def render_gallery_html(gallery_file_path: Path) -> str:
             notebook_src = item.get("source", None)
 
             if notebook_src:
+                notebook_src = notebook_src.lstrip("/")
                 colab_href = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{notebook_src}"
                 github_href = f"https://github.com/ag2ai/ag2/blob/main/{notebook_src}"
                 badges_html = f"""
