@@ -16,6 +16,10 @@ from autogen.beta.stream import MemoryStream
 from .serializer import Serializer, deserialize, serialize
 from .storage import RedisStorage
 
+# Byte used to separate the origin instance ID from the serialized payload
+# in Redis Pub/Sub messages.  Works for both JSON and pickle payloads.
+_ORIGIN_SEP = b"\x1e"  # ASCII Record Separator
+
 
 class RedisStream(MemoryStream):
     """A full-featured stream with Redis-backed pub/sub and persistent event history.
@@ -24,8 +28,12 @@ class RedisStream(MemoryStream):
     and machines receive every event. History is persisted to Redis.
 
     Event flow:
-        send() → persist to Redis + publish to Pub/Sub channel
-        listener → receives from Pub/Sub → dispatches to local subscribers
+        send() → persist to Redis + dispatch locally + publish to Pub/Sub
+        listener → receives from Pub/Sub → skips self-originated → dispatches
+
+    Local subscribers see events immediately without a Redis roundtrip.
+    Remote listeners receive events via Pub/Sub and dispatch to their own
+    local subscribers using a captured base context for dependency injection.
 
     Args:
         redis_url: Redis connection URL.
@@ -60,6 +68,10 @@ class RedisStream(MemoryStream):
         self._listener_ready = asyncio.Event()
         self._pubsub_redis = aioredis.from_url(redis_url)
         self._publish_redis = aioredis.from_url(redis_url)
+        # Captured from the first send() call so the listener can provide
+        # a context with proper dependency_provider and dependencies to
+        # subscribers processing events from remote instances.
+        self._base_context: Context | None = None
 
     def _ensure_listener(self) -> None:
         """Start the Redis Pub/Sub listener if not already running."""
@@ -76,23 +88,50 @@ class RedisStream(MemoryStream):
             async for message in pubsub.listen():
                 if message["type"] != "message":
                     continue
-                event = deserialize(message["data"], self._serializer)
+                origin, payload = self._split_origin(message["data"])
+                # Skip events published by this instance — they were already
+                # dispatched to local subscribers in send().
+                if origin == self._instance_id:
+                    continue
+                event = deserialize(payload, self._serializer)
                 if isinstance(event, BaseEvent):
-                    await super().send(event, Context(self))
+                    ctx = self._base_context or Context(self)
+                    await super().send(event, ctx)
         except asyncio.CancelledError:
             pass
         finally:
             await pubsub.unsubscribe(self._channel)
             await pubsub.aclose()
 
+    @staticmethod
+    def _split_origin(raw: bytes) -> tuple[str | None, bytes]:
+        """Split an origin-tagged message into (origin_id, payload).
+
+        Messages are framed as ``<instance_id> <RS> <payload>``.
+        If the separator is missing the entire message is treated as payload.
+        """
+        parts = raw.split(_ORIGIN_SEP, 1)
+        if len(parts) == 2:
+            return parts[0].decode(), parts[1]
+        return None, raw
+
     async def send(self, event: BaseEvent, context: Context) -> None:
-        """Persist the event and publish to Redis for all listeners (including self)."""
+        """Persist the event, dispatch locally, and publish to Redis for remote listeners."""
         self._ensure_listener()
         await self._listener_ready.wait()
+        # Capture the first caller's context so the listener can reuse its
+        # dependency_provider and dependencies for remotely-received events.
+        if self._base_context is None:
+            self._base_context = context
         # Persist once — only the sender writes to history
         await self._redis_storage.save_event(event, context)
-        # Publish to Redis — all listeners dispatch to their local subscribers
-        await self._publish_redis.publish(self._channel, serialize(event, self._serializer))
+        # Dispatch to local subscribers immediately, avoiding a Redis roundtrip
+        await super().send(event, context)
+        # Publish to Redis with origin tag — remote listeners dispatch,
+        # local listener skips (already dispatched above).
+        payload = serialize(event, self._serializer)
+        tagged = self._instance_id.encode() + _ORIGIN_SEP + payload
+        await self._publish_redis.publish(self._channel, tagged)
 
     async def close(self) -> None:
         if self._listener_task and not self._listener_task.done():
