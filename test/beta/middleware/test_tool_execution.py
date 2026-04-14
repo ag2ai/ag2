@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context
+from autogen.beta import Actor, Context
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -64,7 +64,7 @@ class TestToolExecutionMiddleware:
         def my_tool() -> str:
             return "tool executed"
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig(
                 ToolCallEvent(name="my_tool"),
@@ -84,7 +84,7 @@ class TestToolExecutionMiddleware:
         def my_tool() -> str:
             return "ok"
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig(
                 ToolCallEvent(name="my_tool"),
@@ -127,7 +127,7 @@ class TestToolExecutionMiddleware:
 
         tracking_config = TrackingConfig(TestConfig(ToolCallEvent(name="my_tool"), "result"))
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=tracking_config,
             tools=[my_tool],
@@ -169,7 +169,7 @@ class TestToolExecutionMiddleware:
             ),
         )
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=tracking_config,
             tools=[my_tool],
@@ -202,7 +202,7 @@ class TestToolExecutionMiddleware:
         def my_tool() -> str:
             return "ok"
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig(
                 ToolCallEvent(name="my_tool"),
@@ -229,7 +229,7 @@ class TestToolMiddlewareRegistration:
             mock.tool_middleware()
             return await call_next(event, ctx)
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig(
                 ToolCallEvent(name="my_tool"),
@@ -261,7 +261,7 @@ class TestToolMiddlewareRegistration:
         def my_tool() -> str:
             return "from toolkit.tool"
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig(
                 ToolCallEvent(name="my_tool"),

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, tool
+from autogen.beta import Actor, Context, tool
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.exceptions import ToolConflictError
 from autogen.beta.middleware import ToolExecution, ToolResultType
@@ -49,7 +49,7 @@ async def test_toolkit_executes_tool(mock: MagicMock) -> None:
         ToolCallEvent(name="add", arguments=json.dumps({"a": 2, "b": 3})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     result = await agent.ask("Hi!")
 
     mock.assert_called_once_with(a=2, b=3)
@@ -76,7 +76,7 @@ async def test_toolkit_multiple_tools(mock: MagicMock) -> None:
         ToolCallEvent(name="multiply", arguments=json.dumps({"a": 4, "b": 5})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.add.assert_not_called()
@@ -103,7 +103,7 @@ async def test_toolkit_mixed_with_standalone_tool(mock: MagicMock) -> None:
         ToolCallEvent(name="standalone", arguments=json.dumps({"b": "hello"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit, standalone])
+    agent = Actor("", config=config, tools=[toolkit, standalone])
     await agent.ask("Hi!")
 
     mock.bundled.assert_not_called()
@@ -126,7 +126,7 @@ async def test_toolkit_with_context(mock: MagicMock) -> None:
         ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit], dependencies={"lang": "en"})
+    agent = Actor("", config=config, tools=[toolkit], dependencies={"lang": "en"})
     await agent.ask("Hi!")
 
     mock.assert_called_once_with("en")
@@ -145,7 +145,7 @@ async def test_toolkit_with_plain_functions(mock: MagicMock) -> None:
         ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.assert_called_once_with(a=1, b=2)
@@ -170,7 +170,7 @@ async def test_toolkit_mixed_functions_and_tools(mock: MagicMock) -> None:
         ToolCallEvent(name="plain", arguments=json.dumps({"b": "hi"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.decorated.assert_not_called()
@@ -191,7 +191,7 @@ async def test_toolkit_tool_decorator(mock: MagicMock) -> None:
         ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.assert_called_once_with("world")
@@ -211,7 +211,7 @@ async def test_toolkit_tool_decorator_with_options(mock: MagicMock) -> None:
         ToolCallEvent(name="say_hi", arguments=json.dumps({"name": "world"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.assert_called_once_with("world")
@@ -222,7 +222,7 @@ async def test_toolkit_empty() -> None:
     toolkit = Toolkit()
 
     config = TestConfig("done")
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     result = await agent.ask("Hi!")
 
     assert result.body == "done"
@@ -259,7 +259,7 @@ async def test_toolkit_middleware_applied_to_all_tools(mock: MagicMock) -> None:
         ToolCallEvent(name="multiply", arguments=json.dumps({"a": 3, "b": 4})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     assert mock.before.call_count == 2
@@ -293,7 +293,7 @@ async def test_toolkit_middleware_applied_to_decorator_tools(mock: MagicMock) ->
         ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     mock.before.assert_called_once_with("greet")
@@ -333,7 +333,7 @@ async def test_toolkit_middleware_ordering() -> None:
         ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("Hi!")
 
     assert call_order == ["toolkit_mw", "tool_mw", "tool"]

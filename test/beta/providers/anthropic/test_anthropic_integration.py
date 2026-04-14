@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.config import AnthropicConfig
 
 
@@ -22,7 +22,7 @@ def anthropic_config() -> AnthropicConfig:
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
 async def test_system_prompt(anthropic_config: AnthropicConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="french_agent",
         prompt="You must always respond in French, no matter what language the user uses.",
         config=anthropic_config,
@@ -42,7 +42,7 @@ async def test_tool_use(anthropic_config: AnthropicConfig) -> None:
         """Get the current weather for a city."""
         return f"The weather in {city} is sunny and 22°C."
 
-    agent = Agent(
+    agent = Actor(
         name="weather_agent",
         prompt="You are a weather assistant. Use the get_weather tool to answer weather questions.",
         config=anthropic_config,
@@ -58,7 +58,7 @@ async def test_tool_use(anthropic_config: AnthropicConfig) -> None:
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
 async def test_structured_output_primitive(anthropic_config: AnthropicConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="math_agent",
         prompt="You are a math assistant. Return only the numeric answer.",
         config=anthropic_config,
@@ -80,7 +80,7 @@ async def test_structured_output_dataclass(anthropic_config: AnthropicConfig) ->
         country: str
         population: int
 
-    agent = Agent(
+    agent = Actor(
         name="geo_agent",
         prompt="You are a geography assistant. Provide city information.",
         config=anthropic_config,
@@ -98,7 +98,7 @@ async def test_structured_output_dataclass(anthropic_config: AnthropicConfig) ->
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
 async def test_multi_turn(anthropic_config: AnthropicConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="memory_agent",
         prompt="You are a helpful assistant. Be concise.",
         config=anthropic_config,
@@ -121,7 +121,7 @@ async def test_multi_turn_after_empty_args_tool_call(anthropic_config: Anthropic
         """Discover available agents, optionally filtered by capability."""
         return "Available agents: researcher, writer, coder"
 
-    agent = Agent(
+    agent = Actor(
         name="hub_agent",
         prompt="You have a discover_agents tool. Use it when asked about available agents. Be concise.",
         config=anthropic_config,

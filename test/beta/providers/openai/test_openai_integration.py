@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.config import OpenAIConfig
 
 
@@ -22,7 +22,7 @@ def openai_config() -> OpenAIConfig:
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_system_prompt(openai_config: OpenAIConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="french_agent",
         prompt="You must always respond in French, no matter what language the user uses.",
         config=openai_config,
@@ -43,7 +43,7 @@ async def test_tool_use(openai_config: OpenAIConfig) -> None:
         """Get the current weather for a city."""
         return f"The weather in {city} is sunny and 22°C."
 
-    agent = Agent(
+    agent = Actor(
         name="weather_agent",
         prompt="You are a weather assistant. Use the get_weather tool to answer weather questions.",
         config=openai_config,
@@ -59,7 +59,7 @@ async def test_tool_use(openai_config: OpenAIConfig) -> None:
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_structured_output_primitive(openai_config: OpenAIConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="math_agent",
         prompt="You are a math assistant. Return only the numeric answer.",
         config=openai_config,
@@ -81,7 +81,7 @@ async def test_structured_output_dataclass(openai_config: OpenAIConfig) -> None:
         country: str
         population: int
 
-    agent = Agent(
+    agent = Actor(
         name="geo_agent",
         prompt="You are a geography assistant. Provide city information.",
         config=openai_config,
@@ -99,7 +99,7 @@ async def test_structured_output_dataclass(openai_config: OpenAIConfig) -> None:
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_multi_turn(openai_config: OpenAIConfig) -> None:
-    agent = Agent(
+    agent = Actor(
         name="memory_agent",
         prompt="You are a helpful assistant. Be concise.",
         config=openai_config,
@@ -122,7 +122,7 @@ async def test_multi_turn_after_empty_args_tool_call(openai_config: OpenAIConfig
         """Discover available agents, optionally filtered by capability."""
         return "Available agents: researcher, writer, coder"
 
-    agent = Agent(
+    agent = Actor(
         name="hub_agent",
         prompt="You have a discover_agents tool. Use it when asked about available agents. Be concise.",
         config=openai_config,

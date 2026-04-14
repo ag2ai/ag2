@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from autogen.beta import Agent, Context
+from autogen.beta import Actor, Context
 from autogen.beta.events import ToolCallEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import FilesystemToolkit
@@ -37,7 +37,13 @@ async def test_schemas(async_mock: AsyncMock) -> None:
     schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
-    assert names == {"read_file", "write_file", "update_file", "delete_file", "find_files"}
+    assert names == {
+        "read_file",
+        "write_file",
+        "update_file",
+        "delete_file",
+        "find_files",
+    }
 
 
 @pytest.mark.asyncio
@@ -64,7 +70,7 @@ async def test_read_file(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolkit])
+    agent = Actor("", config=tracking, tools=[toolkit])
     await agent.ask("read it")
 
     # Second call receives the tool result; verify the file content was read
@@ -88,7 +94,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolkit])
+    agent = Actor("", config=tracking, tools=[toolkit])
     await agent.ask("read binary")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
@@ -106,7 +112,7 @@ async def test_write_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("write it")
 
     assert (tmp_path / "out.txt").read_text() == "new content"
@@ -117,10 +123,13 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
     toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
-        ToolCallEvent(name="write_file", arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"})),
+        ToolCallEvent(
+            name="write_file",
+            arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"}),
+        ),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("write nested")
 
     assert (tmp_path / "sub" / "dir" / "file.txt").read_text() == "nested"
@@ -135,11 +144,13 @@ async def test_update_file(tmp_path: Path) -> None:
     config = TestConfig(
         ToolCallEvent(
             name="update_file",
-            arguments=json.dumps({"path": "data.txt", "old_content": "bar", "new_content": "qux"}),
+            arguments=json.dumps(
+                {"path": "data.txt", "old_content": "bar", "new_content": "qux"}
+            ),
         ),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("update it")
 
     assert (tmp_path / "data.txt").read_text() == "foo qux baz"
@@ -158,8 +169,8 @@ async def test_delete_file(tmp_path: Path) -> None:
         ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "sub/to_delete.txt"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
-    await agent.ask("delete it")
+    actor = Actor("", config=config, tools=[toolkit])
+    await actor.ask("delete it")
 
     assert not target.exists()
 
@@ -177,8 +188,8 @@ async def test_delete_directory(tmp_path: Path) -> None:
         ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "sub/"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolkit])
-    await agent.ask("delete it")
+    actor = Actor("", config=config, tools=[toolkit])
+    await actor.ask("delete it")
 
     assert not target.exists()
 
@@ -208,14 +219,20 @@ async def test_find_files(tmp_path: Path) -> None:
 
     tracking = TrackingConfig(
         TestConfig(
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "**/*.py"})),
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/*"})),
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/**"})),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "**/*.py"})
+            ),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "sub/*"})
+            ),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "sub/**"})
+            ),
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolkit.find_files(tmp_path)])
-    await agent.ask("find py files")
+    actor = Actor("", config=tracking, tools=[toolkit.find_files(tmp_path)])
+    await actor.ask("find py files")
 
     # "**/*.py" — recursive, matches .py files at any depth
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]

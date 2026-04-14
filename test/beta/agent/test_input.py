@@ -4,14 +4,14 @@
 
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.events import TextInput
 from autogen.beta.testing import TestConfig
 
 
 @pytest.mark.asyncio()
 async def test_agent_ask_accepts_text_input() -> None:
-    agent = Agent("", config=TestConfig("result"))
+    agent = Actor("", config=TestConfig("result"))
 
     reply = await agent.ask(TextInput("Hi!"))
 
@@ -20,7 +20,7 @@ async def test_agent_ask_accepts_text_input() -> None:
 
 @pytest.mark.asyncio()
 async def test_turn_ask_accepts_text_input() -> None:
-    agent = Agent("", config=TestConfig("first", "second"))
+    agent = Actor("", config=TestConfig("first", "second"))
 
     reply = await agent.ask("Hi!")
     reply = await reply.ask(TextInput("Follow up"))
