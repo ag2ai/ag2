@@ -85,9 +85,6 @@ class AGStreamInput:
     variables: dict[str, Any]
 
 
-from loguru import logger
-
-
 async def run_stream(
     command: AGStreamInput,
     agent: Agent,
@@ -231,7 +228,6 @@ async def run_stream(
                 )
 
         except Exception as e:
-            logger.error(e)
             await write_events_stream.send(
                 RunErrorEvent(
                     message=repr(e),
