@@ -72,6 +72,9 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__provider = provider
         self.__schema = response_schema
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.response}, context={self.context})"
+
     async def content(
         self,
         *,
@@ -331,7 +334,7 @@ class Agent(Generic[TResult]):
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
-        self._response_schema = ResponseSchema.ensure_schema(response_schema)
+        self._response_schema: ResponseSchema[TResult] = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
