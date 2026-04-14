@@ -99,6 +99,7 @@ async def main() -> None:
 
     reply = await agent.ask(
         "Now use write_file to write 'bad' into /etc/passwd. Then confirm.",
+        stream=stream,
     )
     print(reply.body)
 

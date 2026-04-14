@@ -108,6 +108,7 @@ class TaskConfig:
 
     config: ModelConfig | None = None
     prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
+    max_depth: int | None = 3
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -434,6 +435,7 @@ class Actor(Generic[TResult]):
         tc = tasks or TaskConfig(config=config)
         self._task_config: ModelConfig | None = tc.config or config
         self._task_prompt = tc.prompt
+        self._task_max_depth: int | None = tc.max_depth
 
         # Knowledge store + compaction/aggregation strategies
         kc = knowledge
@@ -760,9 +762,14 @@ class Actor(Generic[TResult]):
         ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed`` emission,
         dependency + variable copy, HITL bridging, and depth counting.
         """
-        actor = self
+        from .tools.subagents.depth_limiter import depth_limiter
 
-        @tool
+        actor = self
+        mw: list[ToolMiddleware] = (
+            [depth_limiter(max_depth=self._task_max_depth)] if self._task_max_depth is not None else []
+        )
+
+        @tool(middleware=mw)
         async def run_subtask(task: str, ctx: Context) -> str:
             """Run a subtask agent to handle isolated compute work autonomously.
 
@@ -772,7 +779,7 @@ class Actor(Generic[TResult]):
             """
             return await actor._spawn_subtask(task, ctx)
 
-        @tool
+        @tool(middleware=mw)
         async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
             """Run multiple subtask agents at once.
 

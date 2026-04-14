@@ -62,7 +62,7 @@ async def test_read_file(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Actor("", config=tracking, tools=[toolset])
+    agent = Actor("", config=tracking, tools=[toolkit])
     await agent.ask("read it")
 
     # Second call receives the tool result; verify the file content was read
@@ -86,7 +86,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Actor("", config=tracking, tools=[toolset])
+    agent = Actor("", config=tracking, tools=[toolkit])
     await agent.ask("read binary")
 
     tool_result_msg = tracking.mock.call_args_list[1][0][0]
@@ -105,7 +105,7 @@ async def test_write_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Actor("", config=config, tools=[toolset])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("write it")
 
     assert (tmp_path / "out.txt").read_text() == "new content"
@@ -122,7 +122,7 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Actor("", config=config, tools=[toolset])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("write nested")
 
     assert (tmp_path / "sub" / "dir" / "file.txt").read_text() == "nested"
@@ -143,7 +143,7 @@ async def test_update_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Actor("", config=config, tools=[toolset])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("update it")
 
     assert (tmp_path / "data.txt").read_text() == "foo qux baz"
@@ -162,7 +162,7 @@ async def test_delete_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Actor("", config=config, tools=[toolset])
+    agent = Actor("", config=config, tools=[toolkit])
     await agent.ask("delete it")
 
     assert not target.exists()
@@ -205,7 +205,7 @@ async def test_find_files(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Actor("", config=tracking, tools=[toolset])
+    agent = Actor("", config=tracking, tools=[toolkit])
     await agent.ask("find py files")
 
     # "**/*.py" — recursive, matches .py files at any depth
