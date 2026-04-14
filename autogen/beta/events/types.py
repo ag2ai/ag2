@@ -36,24 +36,13 @@ class ModelEvent(BaseEvent):
 
 
 class ModelReasoning(ModelEvent):
-    """Intermediate reasoning content emitted by the model.
-
-    Transient: intermediate thinking content, not part of the final response.
-    """
-
-    __transient__ = True
+    """Intermediate reasoning content emitted by the model."""
 
     content: str = Field(kw_only=False)
 
 
 class ModelMessage(ModelEvent):
-    """Single message emitted by the model.
-
-    Transient: already embedded in ``ModelResponse.message``.
-    Not persisted to durable storage by default.
-    """
-
-    __transient__ = True
+    """Single message emitted by the model."""
 
     content: str = Field(kw_only=False)
 
@@ -106,13 +95,7 @@ class ModelResponse(ModelEvent):
 
 
 class ModelMessageChunk(ModelEvent):
-    """Chunk of a streamed model message.
-
-    Transient: superseded by the final ``ModelResponse`` which carries the
-    complete content.  Not persisted to durable storage by default.
-    """
-
-    __transient__ = True
+    """Chunk of a streamed model message."""
 
     content: str = Field(kw_only=False)
 

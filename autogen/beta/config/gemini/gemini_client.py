@@ -119,9 +119,8 @@ class GeminiClient(LLMClient):
                     elif part.function_call:
                         fc = part.function_call
                         pdata: dict[str, Any] = {}
-                        thought_sig = getattr(part, "thought_signature", None)
-                        if thought_sig is not None:
-                            pdata["thought_signature"] = thought_sig
+                        if part.thought_signature is not None:
+                            pdata["thought_signature"] = part.thought_signature
                         calls.append(
                             ToolCallEvent(
                                 id=fc.id or fc.name or "",
@@ -172,9 +171,8 @@ class GeminiClient(LLMClient):
                         elif part.function_call:
                             fc = part.function_call
                             pdata: dict[str, Any] = {}
-                            thought_sig = getattr(part, "thought_signature", None)
-                            if thought_sig is not None:
-                                pdata["thought_signature"] = thought_sig
+                            if part.thought_signature is not None:
+                                pdata["thought_signature"] = part.thought_signature
                             calls.append(
                                 ToolCallEvent(
                                     id=fc.id or fc.name or "",

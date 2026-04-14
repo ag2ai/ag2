@@ -63,7 +63,7 @@ async def test_process_response_normalizes_usage():
     result = await client._process_response(response, _make_context())
 
     assert isinstance(result, ModelResponse)
-    assert result.usage == Usage(prompt_tokens=100, completion_tokens=25, total_tokens=125)
+    assert result.usage == Usage(prompt_tokens=100, completion_tokens=25)
 
 
 @pytest.mark.asyncio()
@@ -77,7 +77,6 @@ async def test_process_response_includes_cache_creation_tokens():
     assert result.usage == Usage(
         prompt_tokens=3,
         completion_tokens=10,
-        total_tokens=13,
         cache_creation_input_tokens=5058,
     )
     assert result.usage.cache_read_input_tokens is None
@@ -94,7 +93,6 @@ async def test_process_response_includes_cache_read_tokens():
     assert result.usage == Usage(
         prompt_tokens=3,
         completion_tokens=14,
-        total_tokens=17,
         cache_read_input_tokens=5043,
     )
     assert result.usage.cache_creation_input_tokens is None
@@ -108,7 +106,7 @@ async def test_process_response_no_usage():
 
     result = await client._process_response(response, _make_context())
 
-    assert result.usage == Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+    assert result.usage == Usage(prompt_tokens=0, completion_tokens=0)
 
 
 @pytest.mark.asyncio()
@@ -138,7 +136,6 @@ async def test_process_stream_normalizes_usage():
     assert result.usage == Usage(
         prompt_tokens=50,
         completion_tokens=12,
-        total_tokens=62,
         cache_read_input_tokens=4000,
     )
     assert result.usage.cache_creation_input_tokens is None

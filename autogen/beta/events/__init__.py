@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field
 from .conditions import Condition
 from .input_events import (
@@ -21,14 +20,7 @@ from .input_events import (
     VideoInput,
     VideoUrlInput,
 )
-from .lifecycle import (
-    AggregationCompleted,
-    CompactionCompleted,
-    ObserverCompleted,
-    ObserverStarted,
-    UnknownEvent,
-)
-from .task_events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
+from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -52,7 +44,6 @@ from .types import (
 )
 
 __all__ = (
-    "AggregationCompleted",
     "AudioInput",
     "AudioUrlInput",
     "BaseEvent",
@@ -62,13 +53,11 @@ __all__ = (
     "BuiltinToolCallEvent",
     "BuiltinToolResultEvent",
     "ClientToolCallEvent",
-    "CompactionCompleted",
     "Condition",
     "DocumentInput",
     "DocumentUrlInput",
     "Field",
     "FileIdInput",
-    "HaltEvent",
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
@@ -79,13 +68,8 @@ __all__ = (
     "ModelReasoning",
     "ModelRequest",
     "ModelResponse",
-    "ObserverAlert",
-    "ObserverCompleted",
-    "ObserverStarted",
-    "Severity",
     "TaskCompleted",
     "TaskFailed",
-    "TaskProgress",
     "TaskStarted",
     "TextInput",
     "ToolCallEvent",
@@ -94,7 +78,6 @@ __all__ = (
     "ToolNotFoundEvent",
     "ToolResultEvent",
     "ToolResultsEvent",
-    "UnknownEvent",
     "Usage",
     "VideoInput",
     "VideoUrlInput",

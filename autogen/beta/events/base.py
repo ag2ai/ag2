@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
-import time
 from collections.abc import Callable
 from types import EllipsisType
 from typing import Any
@@ -123,19 +122,6 @@ def _process_fields(cls: type) -> None:
     field_specifiers=(Field,),
 )
 class BaseEvent(metaclass=_ConditionMeta):
-    # Subclasses may set ``__transient__ = True`` to mark themselves as
-    # ephemeral streaming / lifecycle artifacts that should NOT be persisted
-    # to durable storage by default.  Examples: ModelMessageChunk (superseded
-    # by ModelResponse), TaskProgress (superseded by TaskCompleted), observer
-    # lifecycle bookkeeping.
-    # NOTE: no type annotation — must NOT be processed as an event Field.
-    __transient__ = False
-
-    # Auto-populated Unix timestamp (seconds since epoch) for every event.
-    # compare=False: timestamps don't affect equality checks.
-    # repr=False: keeps repr() output clean.
-    created_at: float = Field(default_factory=time.time, compare=False, repr=False)
-
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         _process_fields(cls)
@@ -197,34 +183,3 @@ class BaseEvent(metaclass=_ConditionMeta):
 
         fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden)
         return f"{self.__class__.__name__}({fields})"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize this event to a JSON-compatible dictionary."""
-        from ._serialization import event_to_dict
-
-        return event_to_dict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BaseEvent":
-        """Reconstruct an event from a serialized dictionary.
-
-        Filters input to only fields known by this class (via MRO Field
-        descriptors), then constructs via ``cls(**filtered)``.
-        """
-        from ._serialization import deserialize_payload
-
-        # Collect known field names across the MRO
-        known_fields: set[str] = set()
-        for klass in cls.__mro__:
-            for name, f in getattr(klass, "_event_fields_", {}).items():
-                known_fields.add(name)
-
-        # Deserialize nested events/special types, then filter to known fields
-        deserialized = deserialize_payload(data)
-        filtered = {k: v for k, v in deserialized.items() if k in known_fields}
-        return cls(**filtered)
-
-
-# BaseEvent's own fields (e.g. created_at) are not processed by
-# __init_subclass__ since that only fires for *sub*classes.
-_process_fields(BaseEvent)
