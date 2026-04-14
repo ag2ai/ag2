@@ -212,9 +212,20 @@ def _file_id_block_type(filename: str | None) -> str:
 def convert_messages(
     messages: Iterable[BaseEvent],
 ) -> list[dict[str, Any]]:
+    event_list = list(messages)
+
+    # Collect all tool_use IDs present in the conversation so we can
+    # drop orphaned tool_result blocks whose matching tool_use was
+    # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
+    valid_tool_ids: set[str] = set()
+    for message in event_list:
+        if isinstance(message, ModelResponse):
+            for call in message.tool_calls.calls:
+                valid_tool_ids.add(call.id)
+
     result: list[dict[str, Any]] = []
 
-    for message in messages:
+    for message in event_list:
         if isinstance(message, ModelRequest):
             content_parts: list[dict[str, Any]] = []
             for inp in message.inputs:
@@ -280,19 +291,29 @@ def convert_messages(
                     "content": r.content,
                 }
                 for r in message.results
+                if r.parent_id in valid_tool_ids
             ]
-            result.append({"role": "user", "content": tool_results})
+            if tool_results:
+                result.append({"role": "user", "content": tool_results})
 
     return result
 
 
 def normalize_usage(raw: dict[str, Any]) -> Usage:
-    """Normalize Anthropic's native usage keys to standard format."""
+    """Normalize Anthropic's native usage keys to standard format.
+
+    Anthropic returns ``input_tokens`` and ``output_tokens`` but no
+    explicit total. Compute it here so observers like ``TokenMonitor``
+    that depend on ``total_tokens`` work consistently across providers.
+    """
     cc = raw.get("cache_creation_input_tokens")
     cr = raw.get("cache_read_input_tokens")
+    prompt = float(raw.get("input_tokens", 0))
+    completion = float(raw.get("output_tokens", 0))
     return Usage(
-        prompt_tokens=float(raw.get("input_tokens", 0)),
-        completion_tokens=float(raw.get("output_tokens", 0)),
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=prompt + completion,
         cache_creation_input_tokens=float(cc) if cc else None,
         cache_read_input_tokens=float(cr) if cr else None,
     )
