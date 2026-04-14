@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, MemoryStream, tool
+from autogen.beta import Actor, Context, MemoryStream, tool
 from autogen.beta.events import ClientToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import ToolExecution, ToolResultType
 from autogen.beta.testing import TestConfig
@@ -116,7 +116,7 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
         ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
         "done",
     )
-    agent = Agent("", config=config, tools=[wrapped])
+    agent = Actor("", config=config, tools=[wrapped])
     await agent.ask("Hi!")
 
     assert call_order == ["second", "first", "tool"]

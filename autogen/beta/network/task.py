@@ -15,7 +15,7 @@ auto-close) stays orthogonal to task lifecycle.
 
 Framework-core :func:`run_subtask` / :func:`run_subtasks` (see
 ``autogen/beta/actor.py``) are deliberately unrelated: they spawn a private
-child ``Agent`` with no hub, no envelopes, and no observability. See §6.4 of
+child ``Actor`` with no hub, no envelopes, and no observability. See §6.4 of
 ``design/network_v3_redesign.md`` for the full distinction.
 """
 

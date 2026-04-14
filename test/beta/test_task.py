@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, MemoryStream, tool
+from autogen.beta import Actor, Context, MemoryStream, tool
 from autogen.beta.annotations import Context as Ctx
 from autogen.beta.annotations import Variable
 from autogen.beta.events import (
@@ -43,7 +43,7 @@ class TestRunTask:
     @pytest.mark.asyncio
     async def test_basic(self):
         config = TestConfig(ModelResponse(ModelMessage("Task done!")))
-        agent = Agent("worker", config=config)
+        agent = Actor("worker", config=config)
 
         result = await run_task(agent, "Do something", parent_context=_make_parent_context())
 
@@ -55,7 +55,7 @@ class TestRunTask:
     async def test_with_context(self):
         """Context string is appended to the objective in the prompt."""
         config = TestConfig(ModelResponse(ModelMessage("Analyzed.")))
-        agent = Agent("analyst", config=config)
+        agent = Actor("analyst", config=config)
 
         result = await run_task(
             agent, "Analyze data", parent_context=_make_parent_context(), context="Here is some data"
@@ -69,9 +69,9 @@ class TestRunTask:
 
     @pytest.mark.asyncio
     async def test_failure(self):
-        """Agent that raises an exception produces completed=False."""
+        """Actor that raises an exception produces completed=False."""
         config = TestConfig()  # no responses -> StopIteration
-        agent = Agent("broken", config=config)
+        agent = Actor("broken", config=config)
 
         result = await run_task(agent, "This will fail", parent_context=_make_parent_context())
 
@@ -83,7 +83,7 @@ class TestRunTask:
     async def test_with_custom_stream(self):
         """run_task uses the provided stream instead of creating a MemoryStream."""
         config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        agent = Agent("worker", config=config)
+        agent = Actor("worker", config=config)
 
         custom_stream = MemoryStream()
         result = await run_task(agent, "Do it", parent_context=_make_parent_context(), stream=custom_stream)
@@ -107,7 +107,7 @@ class TestRunTask:
             ToolCallEvent(name="get_db_name", arguments="{}"),
             ModelResponse(ModelMessage("Got it.")),
         )
-        agent = Agent("worker", config=config, tools=[get_db_name])
+        agent = Actor("worker", config=config, tools=[get_db_name])
 
         parent_ctx = _make_parent_context(dependencies={"db_name": "prod_db"})
         result = await run_task(agent, "Check DB", parent_context=parent_ctx)
@@ -118,7 +118,7 @@ class TestRunTask:
     async def test_default_stream(self):
         """Without a stream argument, run_task creates a MemoryStream."""
         config = TestConfig(ModelResponse(ModelMessage("OK")))
-        agent = Agent("worker", config=config)
+        agent = Actor("worker", config=config)
 
         result = await run_task(agent, "Test", parent_context=_make_parent_context())
 
@@ -133,13 +133,13 @@ class TestSpecialistDelegation:
     async def test_via_as_tool(self):
         """Coordinator delegates to a specialist via as_tool."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research findings: X is true.")))
-        researcher = Agent("researcher", config=researcher_config)
+        researcher = Actor("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Find info about X"}'),
             ModelResponse(ModelMessage("Based on research, X is true.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Delegate research tasks to the researcher agent")],
@@ -153,13 +153,13 @@ class TestSpecialistDelegation:
     async def test_via_subagent_tool(self):
         """Coordinator delegates to a specialist via subagent_tool."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research findings: X is true.")))
-        researcher = Agent("researcher", config=researcher_config)
+        researcher = Actor("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Find info about X"}'),
             ModelResponse(ModelMessage("Based on research, X is true.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[subagent_tool(researcher, description="Delegate research tasks to the researcher agent")],
@@ -173,7 +173,7 @@ class TestSpecialistDelegation:
     async def test_with_context_param(self):
         """The LLM can pass context to the sub-task via the context tool parameter."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Found data.")))
-        researcher = Agent("researcher", config=researcher_config)
+        researcher = Actor("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(
@@ -182,7 +182,7 @@ class TestSpecialistDelegation:
             ),
             ModelResponse(ModelMessage("Done.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research")],
@@ -210,13 +210,13 @@ class TestSpecialistDelegation:
             ToolCallEvent(name="lookup", arguments='{"term": "quantum"}'),
             ModelResponse(ModelMessage("Quantum means something important.")),
         )
-        researcher = Agent("researcher", config=researcher_config, tools=[lookup])
+        researcher = Actor("researcher", config=researcher_config, tools=[lookup])
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Define quantum"}'),
             ModelResponse(ModelMessage("Quantum is important.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research with lookup")],
@@ -237,17 +237,17 @@ class TestSpecialistDelegation:
     async def test_multiple_specialists(self):
         """Coordinator delegates to multiple specialists sequentially."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research done.")))
-        researcher = Agent("researcher", config=researcher_config)
+        researcher = Actor("researcher", config=researcher_config)
 
         writer_config = TestConfig(ModelResponse(ModelMessage("Article written.")))
-        writer = Agent("writer", config=writer_config)
+        writer = Actor("writer", config=writer_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Research topic"}'),
             ToolCallEvent(name="task_writer", arguments='{"objective": "Write article", "context": "Research done."}'),
             ModelResponse(ModelMessage("All done.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[
@@ -272,17 +272,17 @@ class TestSpecialistDelegation:
 
 @pytest.mark.asyncio
 async def test_self_delegation():
-    """Agent delegates to a copy of itself via as_tool."""
+    """Actor delegates to a copy of itself via as_tool."""
     inner_config = TestConfig(
         ModelResponse(ModelMessage("Sub-task A done.")),
     )
-    inner_agent = Agent("analyst", config=inner_config)
+    inner_agent = Actor("analyst", config=inner_config)
 
     outer_config = TestConfig(
         ToolCallEvent(name="self_delegate", arguments='{"objective": "Sub-task A"}'),
         ModelResponse(ModelMessage("All sub-tasks complete.")),
     )
-    agent = Agent("analyst", config=outer_config)
+    agent = Actor("analyst", config=outer_config)
     agent.add_tool(inner_agent.as_tool(description="Break work into sub-tasks", name="self_delegate"))
 
     reply = await agent.ask("Do complex analysis")
@@ -295,7 +295,7 @@ class TestLifecycleEvents:
     async def test_on_parent_stream(self):
         """TaskStarted and TaskCompleted appear on the parent stream."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Found it.")))
-        researcher = Agent("researcher", config=researcher_config)
+        researcher = Actor("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Search for Y"}'),
@@ -303,7 +303,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research agent")],
@@ -328,7 +328,7 @@ class TestLifecycleEvents:
     async def test_completed_has_stream_reference(self):
         """TaskCompleted.task_stream points to the sub-task's stream."""
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
@@ -336,7 +336,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],
@@ -355,9 +355,9 @@ class TestLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_failure_event(self):
-        """Agent that crashes produces TaskFailed on parent stream."""
+        """Actor that crashes produces TaskFailed on parent stream."""
         broken_config = TestConfig()
-        broken = Agent("broken", config=broken_config)
+        broken = Actor("broken", config=broken_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_broken", arguments='{"objective": "Do impossible thing"}'),
@@ -365,7 +365,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[broken.as_tool(description="Broken agent")],
@@ -395,13 +395,13 @@ class TestStreamFactory:
             return s
 
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task 1"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker", stream=make_stream)],
@@ -427,14 +427,14 @@ class TestStreamFactory:
             ModelResponse(ModelMessage("A done.")),
             ModelResponse(ModelMessage("B done.")),
         )
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task A"}'),
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task B"}'),
             ModelResponse(ModelMessage("Both done.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker", stream=make_stream)],
@@ -454,7 +454,7 @@ class TestStreamFactory:
     async def test_defaults_to_memory_stream(self):
         """Without stream factory, sub-tasks use MemoryStream."""
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Do it"}'),
@@ -462,7 +462,7 @@ class TestStreamFactory:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],
@@ -490,13 +490,13 @@ class TestVariablesPropagation:
             ToolCallEvent(name="read_var", arguments="{}"),
             ModelResponse(ModelMessage("Got the secret.")),
         )
-        worker = Agent("worker", config=worker_config, tools=[read_var])
+        worker = Actor("worker", config=worker_config, tools=[read_var])
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Read the secret"}'),
             ModelResponse(ModelMessage("Secret retrieved.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker with variable access")],
@@ -522,7 +522,7 @@ class TestVariablesPropagation:
             ToolCallEvent(name="mutate_var", arguments="{}"),
             ModelResponse(ModelMessage("Done.")),
         )
-        worker = Agent("worker", config=worker_config, tools=[mutate_var])
+        worker = Actor("worker", config=worker_config, tools=[mutate_var])
 
         parent_ctx = _make_parent_context(variables={"counter": 10, "existing": "yes"})
 
@@ -544,7 +544,7 @@ class TestDepthLimiter:
         """
         limiter = depth_limiter(max_depth=2)
 
-        l3 = Agent(
+        l3 = Actor(
             "l3",
             config=TestConfig(ModelResponse(ModelMessage("Should not reach."))),
         )
@@ -554,13 +554,13 @@ class TestDepthLimiter:
             ModelResponse(ModelMessage("L3 was blocked.")),
         )
         l2_tracking = TrackingConfig(l2_config)
-        l2 = Agent(
+        l2 = Actor(
             "l2",
             config=l2_tracking,
             tools=[l3.as_tool(description="L3 agent", middleware=[limiter])],
         )
 
-        l1 = Agent(
+        l1 = Actor(
             "l1",
             config=TestConfig(
                 ToolCallEvent(name="task_l2", arguments='{"objective": "Go deeper"}'),
@@ -569,7 +569,7 @@ class TestDepthLimiter:
             tools=[l2.as_tool(description="L2 agent", middleware=[limiter])],
         )
 
-        outer = Agent(
+        outer = Actor(
             "outer",
             config=TestConfig(
                 ToolCallEvent(name="task_l1", arguments='{"objective": "Start"}'),
@@ -587,7 +587,7 @@ class TestDepthLimiter:
     async def test_passes(self) -> None:
         """Below max_depth the tool executes and produces a TaskCompleted event."""
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         inner_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
@@ -595,7 +595,7 @@ class TestDepthLimiter:
         )
         tracking_config = TrackingConfig(inner_config)
 
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=tracking_config,
             tools=[worker.as_tool(description="Worker", middleware=[depth_limiter(max_depth=2)])],
@@ -618,12 +618,12 @@ class TestDepthLimiter:
         """
         limiter = depth_limiter(max_depth=3)
 
-        sub_worker = Agent(
+        sub_worker = Actor(
             "sub_worker",
             config=TestConfig(ModelResponse(ModelMessage("Sub done."))),
         )
 
-        worker_a = Agent(
+        worker_a = Actor(
             "worker_a",
             config=TestConfig(
                 ToolCallEvent(name="task_sub_worker", arguments='{"objective": "Sub-task"}'),
@@ -632,7 +632,7 @@ class TestDepthLimiter:
             tools=[sub_worker.as_tool(description="Sub-worker", middleware=[limiter])],
         )
 
-        worker_b = Agent(
+        worker_b = Actor(
             "worker_b",
             config=TestConfig(ModelResponse(ModelMessage("B done."))),
         )
@@ -650,7 +650,7 @@ class TestDepthLimiter:
         )
         tracking_config = TrackingConfig(inner_config)
 
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=tracking_config,
             tools=[
@@ -680,7 +680,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="ask_human", arguments="{}"),
             ModelResponse(ModelMessage("Human approved.")),
         )
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         @worker.tool
         async def ask_human(ctx: Ctx) -> str:
@@ -693,7 +693,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
             ModelResponse(ModelMessage("Approval obtained.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker that needs human input")],
@@ -717,7 +717,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="ask_human", arguments="{}"),
             ModelResponse(ModelMessage("Done.")),
         )
-        worker = Agent("worker", config=worker_config)
+        worker = Actor("worker", config=worker_config)
 
         @worker.tool
         async def ask_human(ctx: Ctx) -> str:
@@ -735,7 +735,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        coordinator = Agent(
+        coordinator = Actor(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],

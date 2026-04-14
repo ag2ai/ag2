@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .agent import Plugin
+from .actor import Plugin
 
 __all__ = ("Plugin",)

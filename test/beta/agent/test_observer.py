@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, Depends, Inject, Variable, observer
+from autogen.beta import Actor, Context, Depends, Inject, Variable, observer
 from autogen.beta.events import ModelRequest, ModelResponse, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -22,7 +22,7 @@ async def test_observer_fires_on_matching_event(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[observer(ModelResponse, mock)],
@@ -40,7 +40,7 @@ async def test_observer_does_not_fire_on_non_matching_event(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[observer(ToolCallEvent, mock)],
@@ -56,7 +56,7 @@ async def test_multiple_observers(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[
@@ -80,7 +80,7 @@ async def test_async_observer(
     async def track_response(event: ModelResponse) -> None:
         mock(event)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track_response],
@@ -96,7 +96,7 @@ async def test_decorator_style(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
     )
@@ -115,7 +115,7 @@ async def test_per_call_observers(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
     )
@@ -130,7 +130,7 @@ async def test_constructor_and_ask_observers_both_fire(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[observer(ModelResponse, mock.constructor)],
@@ -151,7 +151,7 @@ async def test_observer_with_context_injection(
     async def track_with_context(event: ModelResponse, ctx: Context) -> None:
         mock(event, ctx.stream.id)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track_with_context],
@@ -174,7 +174,7 @@ async def test_observer_with_inject(
     def track(event: ModelResponse, dep: Annotated[str, Inject()]) -> None:
         mock(dep)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track],
@@ -197,7 +197,7 @@ async def test_observer_with_depends(
     def track(event: ModelResponse, dep: Annotated[str, Depends(get_dep)]) -> None:
         mock(dep)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track],
@@ -217,7 +217,7 @@ async def test_observer_with_variable(
     def track(event: ModelResponse, val: Annotated[str, Variable("myvar")]) -> None:
         mock(val)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track],

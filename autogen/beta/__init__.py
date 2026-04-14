@@ -4,8 +4,7 @@
 
 from fast_depends import Depends
 
-from .actor import Actor, KnowledgeConfig, TaskConfig
-from .agent import Agent, AgentReply
+from .actor import Actor, AgentReply, KnowledgeConfig, TaskConfig
 from .aggregate import (
     AggregateStrategy,
     AggregateTrigger,
@@ -85,7 +84,6 @@ from .watch import (
 
 __all__ = (
     "Actor",
-    "Agent",
     "AgentReply",
     "AggregateStrategy",
     "AggregateTrigger",

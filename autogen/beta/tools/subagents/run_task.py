@@ -10,7 +10,7 @@ from autogen.beta.events import HumanInputRequest
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
+    from autogen.beta.actor import Actor
 
 _DEPTH_KEY = "ag:task_depth"
 
@@ -25,7 +25,7 @@ class TaskResult:
 
 
 async def run_task(
-    agent: "Agent",
+    agent: "Actor",
     objective: str,
     *,
     parent_context: Context,

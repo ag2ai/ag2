@@ -31,7 +31,7 @@ def depth_limiter(
     Returns:
         A tool middleware hook that can be passed to the ``middleware``
         parameter of :func:`subagent_tool` or
-        :meth:`~autogen.beta.agent.Agent.as_tool`.
+        :meth:`~autogen.beta.actor.Actor.as_tool`.
     """
 
     async def hook(

@@ -7,12 +7,12 @@ from typing import Any
 from autogen import ConversableAgent
 from autogen.oai.client import OpenAIWrapper
 
-from .agent import Agent, AgentReply
+from .actor import Actor, AgentReply
 from .tools.final import ClientTool
 
 
 class ConversableAdapter(ConversableAgent):
-    def __init__(self, agent: Agent) -> None:
+    def __init__(self, agent: Actor) -> None:
         super().__init__(agent.name)
 
         self.__agent = agent

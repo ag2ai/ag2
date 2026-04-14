@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context
+from autogen.beta import Actor, Context
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput
 from autogen.beta.middleware import AgentTurn, BaseMiddleware, LLMCall, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -62,7 +62,7 @@ class OrderingMiddleware(BaseMiddleware):
 class TestLLMCallMiddleware:
     @pytest.mark.asyncio()
     async def test_creation(self, mock: MagicMock) -> None:
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(MockMiddleware, mock=mock)],
@@ -75,7 +75,7 @@ class TestLLMCallMiddleware:
 
     @pytest.mark.asyncio()
     async def test_call_sequence(self, mock: MagicMock) -> None:
-        agent = Agent(
+        agent = Actor(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(OrderingMiddleware, mock=mock, position=i) for i in range(1, 4)],
@@ -103,7 +103,7 @@ class TestLLMCallMiddleware:
                     events[-1] = ModelRequest([doubled])
                 return await call_next(events, ctx)
 
-        agent = Agent(
+        agent = Actor(
             "",
             config=tracking_config,
             middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],

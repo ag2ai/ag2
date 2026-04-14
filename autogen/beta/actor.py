@@ -2,47 +2,56 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor — an autonomous agent with observers, alerts, subtask spawning, and knowledge management.
+"""Actor — the agentic unit of autogen.beta.
 
-Actor extends Agent with:
-1. Observer management — attach/detach observers that monitor the event stream
-2. Alert injection — observer alerts are delivered via AlertPolicy in the assembly chain
-3. Subtask spawning — run_subtask/run_subtasks tools for delegating isolated compute work
-4. Knowledge management — persistent knowledge, context assembly, compaction, aggregation
+An ``Actor`` runs a model loop, invokes tools, honours middleware, surfaces
+events through observers, and optionally runs the harness primitives
+(assembly policies, compaction/aggregation, knowledge store, subtask
+spawning).
 
-Works standalone (no Hub required). Optionally registers with a Hub
-for cross-actor discovery and delegation.
+A bare ``Actor(name, config=cfg)`` has zero harness middleware — it behaves
+exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
+for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
+or ``tasks=TaskConfig(...)`` for subtask spawning defaults.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from collections.abc import Callable, Iterable
-from contextlib import suppress
+import types
+import warnings
+from collections.abc import Awaitable, Callable, Iterable
+from contextlib import AsyncExitStack, ExitStack, suppress
+from dataclasses import dataclass
+from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 from uuid import uuid4
 
-from autogen.beta.agent import Agent, AgentReply, PromptType
-from autogen.beta.annotations import Context
-from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.events import BaseEvent, ModelMessageChunk, ModelResponse
-from autogen.beta.hitl import HumanHook
-from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
-from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final import tool
-from autogen.beta.tools.tool import Tool
-from autogen.beta.types import Omittable, omit
+from fast_depends import Provider
+from pydantic import ValidationError
+from typing_extensions import TypeVar as TypeVar313
 
-if TYPE_CHECKING:
-    from autogen.beta.response import ResponseProto
-
-from dataclasses import dataclass
+from autogen.beta.events import BinaryResult
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 
 from .aggregate import AggregateStrategy, AggregateTrigger
+from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .compact import CompactStrategy, CompactTrigger
+from .config import LLMClient, ModelConfig
+from .events import (
+    BaseEvent,
+    HumanInputRequest,
+    Input,
+    ModelMessageChunk,
+    ModelRequest,
+    ModelResponse,
+    ToolResultsEvent,
+)
+from .events.conditions import Condition
 from .events.lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
@@ -52,11 +61,37 @@ from .events.lifecycle import (
     TaskRequest,
     TaskResult,
 )
+from .exceptions import ConfigNotProvidedError
+from .history import History
+from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore, StoreBootstrap
+from .middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolMiddleware
 from .observer import Observer
-from .policies.conversation import ConversationPolicy
+from .observer import observer as observer_factory
+from .response import ResponseProto, ResponseSchema
+from .stream import MemoryStream, Stream
+from .tools.executor import ToolExecutor
+from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .tools.schemas import ToolSchema
+from .tools.tool import Tool
+from .types import ClassInfo, Omittable, omit
+from .utils import CONTEXT_OPTION_NAME, build_model
+
+if TYPE_CHECKING:
+    from .conversable import ConversableAdapter
+    from .tools.subagents import StreamFactory
+
 
 logger = logging.getLogger(__name__)
+
+
+TResult = TypeVar313("TResult", default=str)
+TAgent = TypeVar313("TAgent", default=str)
+T2 = TypeVar("T2")
+
+
+PromptHook: TypeAlias = Callable[..., str] | Callable[..., Awaitable[str]]
+PromptType: TypeAlias = str | PromptHook
 
 
 @dataclass
@@ -79,47 +114,273 @@ class TaskConfig:
     prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
 
 
-class Actor(Agent):
-    """An autonomous agent with observers, alerts, subtask spawning, and knowledge management.
+class AgentReply(Generic[TResult, TAgent]):
+    def __init__(
+        self,
+        response: ModelResponse,
+        *,
+        context: "Context",
+        client: "LLMClient",
+        agent: "Actor[TAgent]",
+        provider: Provider | None,
+        response_schema: ResponseProto[TResult] | None,
+    ) -> None:
+        self.response = response
+        self.context = context
+        self.__client = client
+        self.__agent = agent
+        self.__provider = provider
+        self.__schema = response_schema
 
-    Actor extends Agent. It delegates to ``super()._execute()`` rather than
-    reimplementing the event loop. Actor concerns (observers, alerts, subtasks,
-    knowledge, assembly, compaction, aggregation) are injected via additional
-    tools and middleware.
+    async def content(
+        self,
+        *,
+        retries: int | float = 0,
+    ) -> TResult | None:
+        schema = self.__schema
+        if schema is None:
+            return self.body  # type: ignore[return-value]
 
-    Parameters
-    ----------
-    name:
-        Agent display name.
-    prompt:
-        System prompt(s).
-    config:
-        LLM configuration for this actor.
-    observers:
-        Observers that monitor the event stream.
-    task_config:
-        LLM config for spawned task sub-agents. Falls back to ``config``.
-    task_prompt:
-        System prompt for task sub-agents.
-    knowledge_store:
-        Persistent knowledge store for this actor.
-    bootstrap:
-        Store bootstrapping strategy. Default: DefaultBootstrap.
-    assembly:
-        Assembly policies controlling what the LLM sees. Default: [ConversationPolicy()].
-    compact:
-        Compaction strategy for reducing stream history.
-    compact_trigger:
-        When to trigger compaction.
-    aggregate:
-        Aggregation strategy for building long-term knowledge.
-    aggregate_trigger:
-        When to trigger aggregation.
-    tools:
-        Tools available to this actor.
-    middleware:
-        Middleware factories.
+        max_retries = max(retries, 0)
+
+        current = self
+        attempt = 0
+
+        while True:
+            if current.body is None:
+                return None
+
+            attempt += 1
+            try:
+                return await schema.validate(
+                    current.body,
+                    context=current.context,
+                    provider=current.__provider,
+                )
+            except ValidationError as e:
+                if attempt > max_retries:
+                    raise e
+
+                schema_section = (
+                    f"\n\n== Schema ==\n{json.dumps(schema.json_schema)}." if schema.json_schema is not None else ""
+                )
+                current = await current.ask(
+                    "Your previous response could not be validated by schema."
+                    f"{schema_section}"
+                    "\n\nPlease try again."
+                    "\n\n== Validation Error ==\n"
+                    f"{e.json()}",
+                    response_schema=schema,
+                )
+
+    @property
+    def body(self) -> str | None:
+        """Text body of the model's response for this turn."""
+        return self.response.content
+
+    @property
+    def files(self) -> list[BinaryResult]:
+        """Images generated by the model in this turn (decoded bytes)."""
+        return self.response.files
+
+    @property
+    def history(self) -> History:
+        return self.context.stream.history
+
+    @overload
+    async def ask(
+        self,
+        *msg: str | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        *msg: str | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        *msg: str | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: None,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[str, TAgent]": ...
+
+    @overload
+    async def ask(
+        self,
+        *msg: str | Input,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[TAgent, TAgent]": ...
+
+    async def ask(
+        self,
+        *msg: str | Input,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        initial_event = ModelRequest.ensure_request(list(msg))
+
+        context = self.context
+        if dependencies:
+            context.dependencies.update(dependencies)
+        if variables:
+            context.variables.update(variables)
+        if prompt:
+            context.prompt = list(prompt)
+
+        client = config.create() if config else self.__client
+
+        return await self.__agent._execute(
+            initial_event,
+            context=context,
+            client=client,
+            hitl_hook=hitl_hook,
+            additional_tools=tools,
+            additional_middleware=middleware,
+            additional_observers=observers,
+            response_schema=response_schema,
+        )
+
+
+class Actor(Generic[TResult]):
+    """The agentic unit of autogen.beta.
+
+    An Actor runs a model loop, invokes tools, honours middleware, surfaces
+    events through observers, and optionally runs the harness primitives
+    (assembly, compaction, aggregation, knowledge store, subtask spawning).
+
+    A bare ``Actor(name, config=cfg)`` has zero harness middleware and
+    behaves exactly like a plain LLM loop. Harness features are opt-in:
+
+    * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
+      ``SlidingWindow``, ``AlertPolicy``). When non-empty,
+      ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
+    * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
+      compaction, aggregation.
+    * ``tasks=TaskConfig(...)`` — override LLM config/prompt for the auto
+      injected ``run_subtask`` / ``run_subtasks`` tools.
     """
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: type[TResult],
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | None = ...,
+        assembly: Iterable[AssemblyPolicy] = ...,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: ResponseProto[TResult],
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | None = ...,
+        assembly: Iterable[AssemblyPolicy] = ...,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: types.UnionType,
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | None = ...,
+        assembly: Iterable[AssemblyPolicy] = ...,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: None = ...,
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | None = ...,
+        assembly: Iterable[AssemblyPolicy] = ...,
+    ) -> None: ...
 
     def __init__(
         self,
@@ -127,62 +388,325 @@ class Actor(Agent):
         prompt: PromptType | Iterable[PromptType] = (),
         *,
         config: ModelConfig | None = None,
+        hitl_hook: HumanHook | None = None,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
         observers: Iterable[Observer] = (),
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        response_schema: ResponseProto[TResult] | type[TResult] | types.UnionType | None = None,
+        plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | None = None,
         assembly: Iterable[AssemblyPolicy] = (),
-        hitl_hook: HumanHook | None = None,
-        # Standard Agent params
-        tools: Iterable[Callable[..., Any] | Tool] = (),
-        middleware: Iterable[MiddlewareFactory] = (),
-        dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
-    ) -> None:
-        super().__init__(
-            name,
-            prompt,
-            config=config,
-            hitl_hook=hitl_hook,
-            tools=tools,
-            middleware=middleware,
-            observers=observers,
-            dependencies=dependencies,
-            variables=variables,
-        )
+    ):
+        self.name = name
+        self.config = config
+
+        self._agent_dependencies = dependencies or {}
+        self._agent_variables = variables or {}
+
+        self._middleware = list(middleware)
+        self._observers = list(observers)
+
+        self.dependency_provider = Provider()
+        self.tools: list[FunctionTool] = []
+        for t in tools:
+            self.add_tool(t)
+
+        self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
+        self.__tool_executor = ToolExecutor()
+
+        self._system_prompt: list[str] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
+
+        self._response_schema = ResponseSchema.ensure_schema(response_schema)
+
+        if isinstance(prompt, str) or callable(prompt):
+            prompt = [prompt]
+
+        for p in prompt:
+            if isinstance(p, str):
+                self._system_prompt.append(p)
+            else:
+                self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+        for p in plugins:
+            p.register(self)
 
         # Task spawning
         tc = tasks or TaskConfig(config=config)
         self._task_config: ModelConfig | None = tc.config or config
         self._task_prompt = tc.prompt
 
-        # Knowledge & memory
+        # Knowledge store + compaction/aggregation strategies
         kc = knowledge
         self._knowledge_store = kc.store if kc else None
         self._bootstrap = kc.bootstrap if kc else None
-        self._policies: list[AssemblyPolicy] = list(assembly) if assembly else [ConversationPolicy()]
         self._compact_strategy = kc.compact if kc else None
         self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
         self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
 
-        # Validate policy ordering
-        warnings = AssemblerMiddleware.validate_order(self._policies)
-        for w in warnings:
-            logger.warning("Assembly policy ordering: %s", w)
+        # Assembly policies (empty by default; bare Actor has no harness).
+        self._policies: list[AssemblyPolicy] = list(assembly)
+        if self._policies:
+            for w in AssemblerMiddleware.validate_order(self._policies):
+                logger.warning("Assembly policy ordering: %s", w)
 
-    # ------------------------------------------------------------------
-    # Observer management
-    # ------------------------------------------------------------------
+    def hitl_hook(self, func: HumanHook) -> HumanHook:
+        if self._hitl_hook is not None:
+            warnings.warn(
+                "You already set HITL hook, provided value overrides it",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+
+        self._hitl_hook = wrap_hitl(func)
+        return func
+
+    @overload
+    def prompt(
+        self,
+        func: None = None,
+    ) -> Callable[[PromptHook], PromptHook]: ...
+
+    @overload
+    def prompt(
+        self,
+        func: PromptHook,
+    ) -> PromptHook: ...
+
+    def prompt(
+        self,
+        func: PromptHook | None = None,
+    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
+        def wrapper(f: PromptHook) -> PromptHook:
+            self._dynamic_prompt.append(_wrap_prompt_hook(f))
+            return f
+
+        if func:
+            return wrapper(func)
+        return wrapper
+
+    @overload
+    def tool(
+        self,
+        function: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Tool: ...
+
+    @overload
+    def tool(
+        self,
+        function: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Callable[[Callable[..., Any]], Tool]: ...
+
+    def add_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
+        """Append middleware as the innermost wrapper in the chain.
+
+        The added middleware is called last on turn entry and first on turn exit,
+        executing closer to the LLM call than any middleware already registered.
+        """
+        self._middleware.append(m)
+        return self
+
+    def insert_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
+        """Insert middleware as the outermost wrapper in the chain.
+
+        The inserted middleware is called first on turn entry and last on turn exit,
+        executing before all middleware already registered on the actor.
+        """
+        self._middleware.insert(0, m)
+        return self
+
+    def add_tool(self, t: Callable[..., Any] | Tool) -> "Actor[TResult]":
+        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
+        return self
 
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling ask())."""
         self._observers.append(observer)
 
-    # ``_observers`` is inherited from Agent — Actor does not shadow it.
+    def tool(
+        self,
+        function: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
+        def make_tool(f: Callable[..., Any]) -> Tool:
+            t = tool(
+                f,
+                name=name,
+                description=description,
+                schema=schema,
+                sync_to_thread=sync_to_thread,
+                middleware=middleware,
+            )
+            self.add_tool(t)
+            return t
 
-    # ------------------------------------------------------------------
-    # Knowledge and memory tools
-    # ------------------------------------------------------------------
+        if function:
+            return make_tool(function)
+
+        return make_tool
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any],
+    ) -> Callable[..., Any]: ...
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any] | None = None,
+    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+            obs = observer_factory(condition, func)
+            self._observers.append(obs)
+            return func
+
+        if callback is not None:
+            return wrapper(callback)
+        return wrapper
+
+    @overload
+    async def ask(
+        self,
+        *msg: str | Input,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: None,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[str, TResult]": ...
+
+    @overload
+    async def ask(
+        self,
+        msg: str | Input,
+        *,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable["MiddlewareFactory"] = ...,
+        observers: Iterable[Observer] = ...,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[TResult, TResult]": ...
+
+    async def ask(
+        self,
+        *msg: str | Input,
+        stream: Stream | None = None,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable["MiddlewareFactory"] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        config = config or self.config
+        if not config:
+            raise ConfigNotProvidedError()
+        client = config.create()
+
+        stream = stream or MemoryStream()
+
+        initial_event = ModelRequest.ensure_request(msg)
+
+        context = Context(
+            stream,
+            prompt=list(prompt),
+            dependencies=self._agent_dependencies | (dependencies or {}),
+            variables=self._agent_variables | (variables or {}),
+            dependency_provider=self.dependency_provider,
+        )
+
+        if not context.prompt:
+            context.prompt.extend(self._system_prompt)
+
+            for dp in self._dynamic_prompt:
+                p = await dp(initial_event, context)
+                context.prompt.append(p)
+
+        return await self._execute(
+            initial_event,
+            context=context,
+            client=client,
+            hitl_hook=hitl_hook,
+            additional_tools=tools,
+            additional_middleware=middleware,
+            additional_observers=observers,
+            response_schema=response_schema,
+        )
 
     def _build_knowledge_tool(self) -> list[Tool]:
         """Build the knowledge tool (typed action group)."""
@@ -229,42 +753,6 @@ class Actor(Agent):
 
         return [knowledge]
 
-    def _build_memory_tool(self) -> list[Tool]:
-        """Build the memory management tool (typed action group)."""
-        actor = self
-
-        @tool
-        async def memory(action: str, ctx: Context) -> str:
-            """Manage your memory and context.
-
-            Actions:
-                compact   - Compact conversation history to free context space.
-                summarize - Aggregate current context into knowledge store.
-            """
-            if action == "compact":
-                if not actor._compact_strategy:
-                    return "Compaction not configured."
-                events = list(await ctx.stream.history.get_events())
-                compacted = await actor._compact_strategy.compact(events, ctx, actor._knowledge_store)
-                await ctx.stream.history.replace(compacted)
-                return f"Compacted: {len(events)} events -> {len(compacted)} events."
-
-            elif action == "summarize":
-                if not actor._aggregate_strategy or not actor._knowledge_store:
-                    return "Aggregation not configured."
-                events = list(await ctx.stream.history.get_events())
-                await actor._aggregate_strategy.aggregate(events, ctx, actor._knowledge_store)
-                return "Knowledge store updated."
-
-            else:
-                return f"Unknown action: {action}. Available: compact, summarize."
-
-        return [memory]
-
-    # ------------------------------------------------------------------
-    # Task spawning tools
-    # ------------------------------------------------------------------
-
     def _build_subtask_tools(self) -> list[Tool]:
         """Create run_subtask and run_subtasks tools."""
         actor = self
@@ -293,7 +781,6 @@ class Actor(Agent):
                     *(actor._run_task(t, ctx) for t in tasks),
                     return_exceptions=True,
                 )
-                # Convert exceptions to error strings so partial results are preserved
                 results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in results]
             else:
                 results = []
@@ -324,7 +811,7 @@ class Actor(Agent):
 
         chunk_sub = sat_stream.where(ModelMessageChunk).subscribe(_bridge_chunks)
 
-        task_agent = Agent(
+        task_agent = Actor(
             task_name,
             prompt=self._task_prompt,
             config=self._task_config,
@@ -347,10 +834,6 @@ class Actor(Agent):
         )
         return result_text
 
-    # ------------------------------------------------------------------
-    # Core execution override
-    # ------------------------------------------------------------------
-
     async def _execute(
         self,
         event: BaseEvent,
@@ -359,49 +842,38 @@ class Actor(Agent):
         client: LLMClient,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
-        additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_middleware: Iterable["MiddlewareFactory"] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> AgentReply:
+    ) -> "AgentReply[Any, Any]":
         additional_observers = list(additional_observers)
         subtask_tools = self._build_subtask_tools()
 
-        # Bootstrap knowledge store on first use (write sentinel first
-        # to prevent duplicate bootstrap from concurrent _execute calls)
+        # Bootstrap knowledge store on first use (write sentinel first to
+        # prevent duplicate bootstrap from concurrent _execute calls).
         if self._knowledge_store and not await self._knowledge_store.exists("/.initialized"):
             await self._knowledge_store.write("/.initialized", self.name)
             bootstrap = self._bootstrap or DefaultBootstrap()
             await bootstrap.bootstrap(self._knowledge_store, self.name)
 
-        # Build harness tools
         knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
-        memory_tools = self._build_memory_tool() if (self._compact_strategy or self._aggregate_strategy) else []
 
-        # Make knowledge store available via DI
         if self._knowledge_store:
             context.dependencies[KnowledgeStore] = self._knowledge_store
 
-        # Observer lifecycle events — Agent's ExitStack handles the actual
-        # register/unregister. Actor emits ObserverStarted/Completed so the
-        # stream has a visible lifecycle artifact for each observer.
         all_observers = list(chain(self._observers, additional_observers))
         for obs in all_observers:
             await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
-        # Build middleware chain:
-        # 1. AssemblerMiddleware (outermost) — assembles context
-        #    (AlertPolicy in the assembly chain handles observer alerts)
-        # 2. HaltCheckMiddleware — catches HaltEvent from AlertPolicy, short-circuits
-        # 3. CompactionMiddleware — triggers compaction after turns
-        # 4. AggregationMiddleware — triggers aggregation after turns
-        # 5. User-provided middleware
-        # 6. LLM client call (innermost)
-        assembler_mw = _AssemblerMiddlewareFactory(self._policies)
-        halt_mw = _HaltCheckMiddlewareFactory()
+        # Build harness middleware chain. Assembler + halt-check only wire in
+        # when the user has provided assembly policies; compaction and
+        # aggregation middleware have independent gates.
+        harness_middleware: list[MiddlewareFactory] = []
 
-        harness_middleware: list[MiddlewareFactory] = [assembler_mw, halt_mw]
+        if self._policies:
+            harness_middleware.append(_AssemblerMiddlewareFactory(self._policies))
+            harness_middleware.append(_HaltCheckMiddlewareFactory())
 
-        # Compaction middleware
         if self._compact_strategy:
             harness_middleware.append(
                 _CompactionMiddlewareFactory(
@@ -412,7 +884,6 @@ class Actor(Agent):
                 )
             )
 
-        # Aggregation middleware (for every_n_turns / every_n_events triggers)
         if self._aggregate_strategy and self._knowledge_store:
             trigger = self._aggregate_trigger
             if trigger.every_n_turns > 0 or trigger.every_n_events > 0:
@@ -426,22 +897,107 @@ class Actor(Agent):
                 )
 
         try:
-            return await super()._execute(
-                event,
-                context=context,
-                client=client,
-                hitl_hook=hitl_hook,
-                additional_tools=(list(additional_tools) + subtask_tools + knowledge_tools + memory_tools),
-                additional_middleware=harness_middleware + list(additional_middleware),
-                additional_observers=additional_observers,
-                response_schema=response_schema,
+            if response_schema is omit:
+                final_schema = self._response_schema
+            else:
+                final_schema = ResponseSchema.ensure_schema(response_schema)
+
+            all_tools: list[Tool] = list(
+                chain(
+                    self.tools,
+                    additional_tools,
+                    subtask_tools,
+                    knowledge_tools,
+                )
             )
+
+            all_schemas: list[ToolSchema] = []
+            known_tools: set[str] = set()
+            for t in all_tools:
+                schemas = await t.schemas(context)
+                all_schemas.extend(schemas)
+
+                for schema in schemas:
+                    if isinstance(schema, FunctionToolSchema):
+                        known_tools.add(schema.function.name)
+                    elif isinstance(schema, WebSearchToolSchema):
+                        known_tools.add(WEB_SEARCH_TOOL_NAME)
+
+            middleware_instances: list[BaseMiddleware] = []
+            agent_turn: AgentTurn = _execute_turn
+            llm_call: LLMCall = partial(
+                client,
+                tools=all_schemas,
+                response_schema=final_schema,
+            )
+
+            for m in reversed(
+                list(
+                    chain(
+                        self._middleware,
+                        harness_middleware,
+                        additional_middleware,
+                    )
+                )
+            ):
+                mw = m(event, context)
+                middleware_instances.append(mw)
+
+                agent_turn = partial(mw.on_turn, agent_turn)
+                llm_call = partial(mw.on_llm_call, llm_call)
+
+            async def _call_client(context: Context) -> None:
+                messages = await context.stream.history.get_events()
+                result = await llm_call(messages, context)
+                await context.send(result)
+
+            with ExitStack() as stack:
+                stack.enter_context(
+                    context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
+                )
+
+                hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+                if hitl_hook_maker is not None:
+                    stack.enter_context(
+                        context.stream.where(HumanInputRequest).sub_scope(
+                            hitl_hook_maker(middleware_instances),
+                            interrupt=True,
+                        ),
+                    )
+
+                else:
+                    stack.enter_context(
+                        context.stream.where(HumanInputRequest).sub_scope(
+                            default_hitl_hook(middleware_instances),
+                        ),
+                    )
+
+                self.__tool_executor.register(
+                    stack,
+                    context,
+                    tools=all_tools,
+                    known_tools=known_tools,
+                    middleware=middleware_instances,
+                )
+
+                for obs in all_observers:
+                    obs.register(stack, context)
+
+                message = await agent_turn(event, context)
+
+                return AgentReply(
+                    message,
+                    context=context,
+                    agent=self,
+                    client=client,
+                    provider=self.dependency_provider,
+                    response_schema=final_schema,
+                )
         finally:
             for obs in all_observers:
                 with suppress(Exception):
                     await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
 
-            # on_end aggregation
             if self._aggregate_strategy and self._knowledge_store and self._aggregate_trigger.on_end:
                 try:
                     events = list(await context.stream.history.get_events())
@@ -459,7 +1015,6 @@ class Actor(Agent):
                 except Exception:
                     logger.exception("Aggregation failed for %s", self.name)
 
-            # Persist event log
             if self._knowledge_store:
                 try:
                     events = list(await context.stream.history.get_events())
@@ -467,10 +1022,224 @@ class Actor(Agent):
                 except Exception:
                     logger.exception("Event log persistence failed for %s", self.name)
 
+    def as_tool(
+        self,
+        *,
+        description: str,
+        name: str | None = None,
+        stream: "StreamFactory | None" = None,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        from .tools.subagents import subagent_tool
 
-# ------------------------------------------------------------------
-# Internal middleware factories
-# ------------------------------------------------------------------
+        return subagent_tool(
+            self,
+            description=description,
+            name=name,
+            stream=stream,
+            middleware=middleware,
+        )
+
+    def as_conversable(self) -> "ConversableAdapter":
+        from .conversable import ConversableAdapter
+
+        return ConversableAdapter(self)
+
+
+async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
+    async with context.stream.get(ModelResponse) as result:
+        await context.send(event)
+        message: ModelResponse = await result
+
+    while message.tool_calls and not message.response_force:
+        async with context.stream.get(ModelResponse) as result:
+            await context.send(message.tool_calls)
+            message = await result
+
+    return message
+
+
+def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awaitable[str]]:
+    call_model = build_model(func)
+
+    async def wrapper(event: ModelRequest, context: Context) -> str:
+        async with AsyncExitStack() as stack:
+            r = await call_model.asolve(
+                event,
+                stack=stack,
+                cache_dependencies={},
+                dependency_provider=context.dependency_provider,
+                **{CONTEXT_OPTION_NAME: context},
+            )
+        return r
+
+    return wrapper
+
+
+class Plugin:
+    def __init__(
+        self,
+        *,
+        prompt: PromptType | Iterable[PromptType] = (),
+        hitl_hook: HumanHook | None = None,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+    ) -> None:
+        self._tools = list(tools)
+        self._middleware = list(middleware)
+        self._observers = list(observers)
+        self._dependencies = dependencies or {}
+        self._variables = variables or {}
+        self._hitl_hook = hitl_hook
+
+        self._system_prompt: list[str] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
+
+        if isinstance(prompt, str) or callable(prompt):
+            prompt = [prompt]
+        for p in prompt:
+            if isinstance(p, str):
+                self._system_prompt.append(p)
+            else:
+                self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+    def register(self, actor: "Actor[Any]") -> None:
+        """Apply this plugin's contributions to an Actor instance."""
+        for t in self._tools:
+            actor.add_tool(t)
+
+        for m in self._middleware:
+            actor.add_middleware(m)
+
+        if self._hitl_hook is not None:
+            if actor._hitl_hook is not None:
+                warnings.warn(
+                    f"Actor '{actor.name}' already has a HITL hook; the plugin's hook will be ignored.",
+                    stacklevel=2,
+                )
+            else:
+                actor._hitl_hook = wrap_hitl(self._hitl_hook)
+
+        actor._agent_dependencies = self._dependencies | actor._agent_dependencies
+        actor._agent_variables.update(self._variables)
+
+        actor._observers.extend(self._observers)
+        actor._system_prompt.extend(self._system_prompt)
+        actor._dynamic_prompt.extend(self._dynamic_prompt)
+
+    def hitl_hook(self, func: HumanHook) -> HumanHook:
+        if self._hitl_hook is not None:
+            warnings.warn(
+                "You already set HITL hook, provided value overrides it",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+        self._hitl_hook = func
+        return func
+
+    @overload
+    def prompt(
+        self,
+        func: PromptHook,
+    ) -> PromptHook: ...
+
+    @overload
+    def prompt(
+        self,
+        func: None = None,
+    ) -> Callable[[PromptHook], PromptHook]: ...
+
+    def prompt(
+        self,
+        func: PromptHook | None = None,
+    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
+        def wrapper(f: PromptHook) -> PromptHook:
+            self._dynamic_prompt.append(_wrap_prompt_hook(f))
+            return f
+
+        if func:
+            return wrapper(func)
+        return wrapper
+
+    @overload
+    def tool(
+        self,
+        function: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool: ...
+
+    @overload
+    def tool(
+        self,
+        function: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
+
+    def tool(
+        self,
+        function: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
+        def make_tool(f: Callable[..., Any]) -> FunctionTool:
+            t = tool(
+                f,
+                name=name,
+                description=description,
+                schema=schema,
+                sync_to_thread=sync_to_thread,
+                middleware=middleware,
+            )
+            self._tools.append(t)
+            return t
+
+        if function:
+            return make_tool(function)
+        return make_tool
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any],
+    ) -> Callable[..., Any]: ...
+
+    @overload
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+    def observer(
+        self,
+        condition: ClassInfo | Condition,
+        callback: Callable[..., Any] | None = None,
+    ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+            obs = observer_factory(condition, func)
+            self._observers.append(obs)
+            return func
+
+        if callback is not None:
+            return wrapper(callback)
+        return wrapper
 
 
 class _HaltCheckMiddleware(BaseMiddleware):
@@ -487,7 +1256,6 @@ class _HaltCheckMiddleware(BaseMiddleware):
         self._halted = False
         self._halt_reason = ""
 
-        # Subscribe to HaltEvent on the stream
         from .events.alert import HaltEvent
 
         async def _on_halt(evt: HaltEvent) -> None:

@@ -10,7 +10,7 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from autogen.beta import Agent, ToolResult, tool
+from autogen.beta import Actor, ToolResult, tool
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.testing import TestConfig
 
@@ -45,7 +45,7 @@ def test_agent_with_function(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    agent = Agent("", config=mock, tools=[my_tool])
+    agent = Actor("", config=mock, tools=[my_tool])
 
     assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
 
@@ -56,13 +56,13 @@ def test_agent_with_tool(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    agent = Agent("", config=mock, tools=[my_tool])
+    agent = Actor("", config=mock, tools=[my_tool])
 
     assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator(mock: MagicMock) -> None:
-    agent = Agent("", config=mock)
+    agent = Actor("", config=mock)
 
     @agent.tool
     def my_tool(a: str, b: int) -> str:
@@ -73,7 +73,7 @@ def test_agent_with_tool_decorator(mock: MagicMock) -> None:
 
 
 def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
-    agent = Agent("", config=mock)
+    agent = Actor("", config=mock)
 
     @agent.tool(name="another_name", description="another_description")
     def my_tool(a: str, b: int) -> str:
@@ -97,7 +97,7 @@ async def test_final_tool() -> None:
     def my_tool() -> ToolResult[DataModel]:
         return ToolResult({"data": "result"}, final=True)
 
-    agent = Agent(
+    agent = Actor(
         "",
         tools=[my_tool],
         config=TestConfig(ToolCallEvent(name="my_tool")),
@@ -131,7 +131,7 @@ async def test_concurrent_tool_execution() -> None:
         return "result_c"
 
     # Create an agent with multiple slow tools
-    agent = Agent(
+    agent = Actor(
         "test_agent",
         tools=[slow_tool_a, slow_tool_b, slow_tool_c],
         config=TestConfig(

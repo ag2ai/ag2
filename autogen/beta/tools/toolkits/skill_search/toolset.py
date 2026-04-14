@@ -28,14 +28,14 @@ class SkillSearchToolset(Toolkit):
     Example::
 
         import asyncio
-        from autogen.beta import Agent
+        from autogen.beta import Actor
         from autogen.beta.config import AnthropicConfig
         from autogen.beta.tools import SkillSearchToolset
 
         config = AnthropicConfig(model="claude-sonnet-4-5")
         skills = SkillSearchToolset()
 
-        agent = Agent(
+        agent = Actor(
             "coder",
             "You are a helpful coding assistant. Use skills to extend your capabilities.",
             config=config,
@@ -67,7 +67,7 @@ class SkillSearchToolset(Toolkit):
 
     Individual tools are available as attributes::
 
-        agent = Agent("a", config=config, tools=[skills.search_skills, skills.install_skill])
+        agent = Actor("a", config=config, tools=[skills.search_skills, skills.install_skill])
     """
 
     search_skills: FunctionTool

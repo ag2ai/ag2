@@ -27,10 +27,10 @@ class FilesystemToolkit(Toolkit):
         fs = FilesystemToolkit(base_path="/tmp/workspace")
 
         # use the full toolset
-        agent = Agent("a", config=config, tools=[fs])
+        agent = Actor("a", config=config, tools=[fs])
 
         # or pick individual tools
-        agent = Agent("a", config=config, tools=[fs.read_file, fs.find_files])
+        agent = Actor("a", config=config, tools=[fs.read_file, fs.find_files])
     """
 
     read_file: FunctionTool

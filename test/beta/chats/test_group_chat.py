@@ -9,15 +9,15 @@ from autogen import ConversableAgent
 from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group import AgentTarget
 from autogen.agentchat.group.patterns import DefaultPattern, RoundRobinPattern
-from autogen.beta import Agent, testing
+from autogen.beta import Actor, testing
 from autogen.testing import TestAgent
 
 
 @pytest.mark.asyncio()
 async def test_round_robin_pattern() -> None:
     # arrange agents
-    agent1 = Agent(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
-    agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
+    agent1 = Actor(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
+    agent2 = Actor(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
     original_agent = ConversableAgent("local")
 
     pattern = RoundRobinPattern(
@@ -46,8 +46,8 @@ async def test_round_robin_pattern() -> None:
 @pytest.mark.asyncio()
 async def test_handoffs() -> None:
     # arrange agents
-    agent1 = Agent(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
-    agent2 = Agent(name="agent2", config=testing.TestConfig("I shouldn't speak...")).as_conversable()
+    agent1 = Actor(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
+    agent2 = Actor(name="agent2", config=testing.TestConfig("I shouldn't speak...")).as_conversable()
     original_agent = ConversableAgent("local")
 
     pattern = DefaultPattern(

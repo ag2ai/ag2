@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, Depends, Inject, MemoryStream
+from autogen.beta import Actor, Context, Depends, Inject, MemoryStream
 from autogen.beta.events import ModelMessage, ModelResponse
 from autogen.beta.testing import TestConfig
 
@@ -34,7 +34,7 @@ async def test_sync_hook_subscriber(
         mock(c.dependencies["dep"] == dep == "1")
         mock.response(event.content)
 
-    agent = Agent("", config=test_config)
+    agent = Actor("", config=test_config)
 
     stream = MemoryStream()
     stream.where(ModelResponse).subscribe(result_sub)
@@ -56,7 +56,7 @@ async def test_async_hook_subscriber(
     ) -> None:
         mock(c.dependencies["dep"] == dep == "1")
 
-    agent = Agent("", config=test_config)
+    agent = Actor("", config=test_config)
 
     stream = MemoryStream()
     stream.where(ModelResponse).subscribe(result_sub)
@@ -80,7 +80,7 @@ async def test_hook_with_depends(
     ) -> None:
         mock(c.dependencies["dep"] == dep == "1")
 
-    agent = Agent("", config=test_config)
+    agent = Actor("", config=test_config)
 
     stream = MemoryStream()
     stream.where(ModelResponse).subscribe(result_sub, sync_to_thread=False)
@@ -101,7 +101,7 @@ async def test_hook_with_agent_dependency(
     ) -> None:
         mock(c.dependencies["dep"] == dep == "1")
 
-    agent = Agent("", config=test_config, dependencies={"dep": "1"})
+    agent = Actor("", config=test_config, dependencies={"dep": "1"})
 
     stream = MemoryStream()
     stream.where(ModelResponse).subscribe(result_sub)
@@ -124,7 +124,7 @@ async def test_hook_depends_override(mock: MagicMock, test_config: TestConfig) -
     ) -> None:
         mock(dep)
 
-    agent = Agent("", config=test_config)
+    agent = Actor("", config=test_config)
     agent.dependency_provider.override(dep1, dep2)
 
     stream = MemoryStream()

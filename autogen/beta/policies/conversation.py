@@ -33,7 +33,8 @@ CONVERSATION_TYPES = (
 class ConversationPolicy:
     """Only conversation and tool events reach the LLM.
 
-    This is the default policy. It preserves the current Agent behavior exactly.
+    Opt-in policy that re-creates plain-loop semantics: only conversation
+    and tool events reach the LLM, everything else is filtered out.
     CompactionSummary is included so compacted summaries remain visible.
     """
 

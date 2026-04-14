@@ -8,14 +8,14 @@ from dataclasses import dataclass
 import pytest
 from pydantic import BaseModel
 
-from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
+from autogen.beta import Actor, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.testing import TestConfig, TrackingConfig
 
 
 @pytest.mark.asyncio()
 class TestAgentLevelResponseSchema:
     async def test_type_response_schema(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=int)
+        agent = Actor("test", config=TestConfig('{"data": 42}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -28,7 +28,7 @@ class TestAgentLevelResponseSchema:
             x: float
             y: float
 
-        agent = Agent("test", config=TestConfig('{"x": 1.5, "y": 2.5}'), response_schema=Point)
+        agent = Actor("test", config=TestConfig('{"x": 1.5, "y": 2.5}'), response_schema=Point)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -40,7 +40,7 @@ class TestAgentLevelResponseSchema:
             name: str
             age: int
 
-        agent = Agent("test", config=TestConfig('{"name": "Alice", "age": 30}'), response_schema=User)
+        agent = Actor("test", config=TestConfig('{"name": "Alice", "age": 30}'), response_schema=User)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -51,7 +51,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_response_schema_object(self) -> None:
         schema = ResponseSchema(int, name="MyInt")
-        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=schema)
+        agent = Actor("test", config=TestConfig('{"data": 42}'), response_schema=schema)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -63,7 +63,7 @@ class TestAgentLevelResponseSchema:
         def double(content: str) -> int:
             return int(content) * 2
 
-        agent = Agent("test", config=TestConfig("21"), response_schema=double)
+        agent = Actor("test", config=TestConfig("21"), response_schema=double)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -75,7 +75,7 @@ class TestAgentLevelResponseSchema:
         async def double(content: str) -> int:
             return int(content) * 2
 
-        agent = Agent("test", config=TestConfig("21"), response_schema=double)
+        agent = Actor("test", config=TestConfig("21"), response_schema=double)
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -83,7 +83,7 @@ class TestAgentLevelResponseSchema:
         assert result == 42
 
     async def test_prompted_schema_with_type(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(int))
+        agent = Actor("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(int))
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -92,7 +92,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_prompted_schema_with_response_schema(self) -> None:
         inner = ResponseSchema(int, name="MyInt")
-        agent = Agent("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(inner))
+        agent = Actor("test", config=TestConfig('{"data": 42}'), response_schema=PromptedSchema(inner))
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -104,7 +104,7 @@ class TestAgentLevelResponseSchema:
         def double(content: str) -> int:
             return int(content) * 2
 
-        agent = Agent("test", config=TestConfig("21"), response_schema=PromptedSchema(double))
+        agent = Actor("test", config=TestConfig("21"), response_schema=PromptedSchema(double))
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -112,7 +112,7 @@ class TestAgentLevelResponseSchema:
         assert result == 42
 
     async def test_no_schema_returns_string(self) -> None:
-        agent = Agent("test", config=TestConfig("hello"))
+        agent = Actor("test", config=TestConfig("hello"))
 
         reply = await agent.ask("Hi!")
         result = await reply.content()
@@ -120,7 +120,7 @@ class TestAgentLevelResponseSchema:
         assert result == "hello"
 
     async def test_validation_error(self) -> None:
-        agent = Agent("test", config=TestConfig("not a number"), response_schema=int)
+        agent = Actor("test", config=TestConfig("not a number"), response_schema=int)
 
         reply = await agent.ask("Hi!")
 
@@ -129,7 +129,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_retry_succeeds_on_second_attempt(self) -> None:
         tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
-        agent = Agent("test", config=tracking, response_schema=int)
+        agent = Actor("test", config=tracking, response_schema=int)
 
         reply = await agent.ask("Hi!")
 
@@ -143,7 +143,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_retry_with_prompted_schema_omits_null_schema(self) -> None:
         tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
-        agent = Agent("test", config=tracking, response_schema=PromptedSchema(int))
+        agent = Actor("test", config=tracking, response_schema=PromptedSchema(int))
 
         reply = await agent.ask("Hi!")
 
@@ -155,7 +155,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_retry_exhausted_raises(self) -> None:
         tracking = TrackingConfig(TestConfig("bad", "still bad"))
-        agent = Agent("test", config=tracking, response_schema=int)
+        agent = Actor("test", config=tracking, response_schema=int)
 
         reply = await agent.ask("Hi!")
 
@@ -167,7 +167,7 @@ class TestAgentLevelResponseSchema:
 
     async def test_retries_keeps_retrying(self) -> None:
         tracking = TrackingConfig(TestConfig("bad", "bad", "bad", '{"data": 7}'))
-        agent = Agent("test", config=tracking, response_schema=int)
+        agent = Actor("test", config=tracking, response_schema=int)
 
         reply = await agent.ask("Hi!")
         result = await reply.content(retries=math.inf)
@@ -180,7 +180,7 @@ class TestAgentLevelResponseSchema:
 @pytest.mark.asyncio()
 class TestAskLevelResponseSchema:
     async def test_ask_type_override(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}'))
+        agent = Actor("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=int)
         result = await reply.content()
@@ -188,7 +188,7 @@ class TestAskLevelResponseSchema:
         assert result == 42
 
     async def test_ask_response_schema_object(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}'))
+        agent = Actor("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=ResponseSchema(int, name="MyInt"))
         result = await reply.content()
@@ -200,7 +200,7 @@ class TestAskLevelResponseSchema:
         def double(content: str) -> int:
             return int(content) * 2
 
-        agent = Agent("test", config=TestConfig("21"))
+        agent = Actor("test", config=TestConfig("21"))
 
         reply = await agent.ask("Hi!", response_schema=double)
         result = await reply.content()
@@ -208,7 +208,7 @@ class TestAskLevelResponseSchema:
         assert result == 42
 
     async def test_ask_prompted_schema_override(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}'))
+        agent = Actor("test", config=TestConfig('{"data": 42}'))
 
         reply = await agent.ask("Hi!", response_schema=PromptedSchema(int))
         result = await reply.content()
@@ -216,7 +216,7 @@ class TestAskLevelResponseSchema:
         assert result == 42
 
     async def test_ask_overrides_agent_schema(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 3.14}'), response_schema=int)
+        agent = Actor("test", config=TestConfig('{"data": 3.14}'), response_schema=int)
 
         reply = await agent.ask("Hi!", response_schema=float)
         result = await reply.content()
@@ -224,7 +224,7 @@ class TestAskLevelResponseSchema:
         assert result == 3.14
 
     async def test_ask_none_drops_schema(self) -> None:
-        agent = Agent("test", config=TestConfig("hello"), response_schema=int)
+        agent = Actor("test", config=TestConfig("hello"), response_schema=int)
 
         reply = await agent.ask("Hi!", response_schema=None)
         result = await reply.content()
@@ -232,7 +232,7 @@ class TestAskLevelResponseSchema:
         assert result == "hello"
 
     async def test_next_turn_preserves_agent_schema(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 42}', '{"data": 7}'), response_schema=int)
+        agent = Actor("test", config=TestConfig('{"data": 42}', '{"data": 7}'), response_schema=int)
 
         reply = await agent.ask("Hi!")
         assert await reply.content() == 42
@@ -241,7 +241,7 @@ class TestAskLevelResponseSchema:
         assert await next_reply.content() == 7
 
     async def test_ask_override_does_not_persist(self) -> None:
-        agent = Agent("test", config=TestConfig('{"data": 3.14}', "42"))
+        agent = Actor("test", config=TestConfig('{"data": 3.14}', "42"))
 
         reply = await agent.ask("Hi!", response_schema=float)
         assert await reply.content() == 3.14
