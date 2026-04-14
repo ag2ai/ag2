@@ -181,7 +181,7 @@ def build_call_model(
     return CallModel(
         call=call,
         model=func_model,
-        response_model=response_model,  # type: ignore[arg-type]
+        response_model=response_model,
         params=class_fields,
         cast=cast,
         use_cache=use_cache,

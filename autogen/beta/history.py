@@ -10,6 +10,21 @@ from .annotations import Context
 from .context import StreamId
 from .events import BaseEvent
 
+# Long / short-term memory (re-exported here for backward compatibility)
+from .strategies.memory import (
+    Consolidator,
+    CoreConsolidator,
+    CoreMemoryBlock,
+    CreateL2Op,
+    DeleteL2Op,
+    L1MemoryBlock,
+    L2MemoryBlock,
+    L2Operation,
+    LongShortTermMemoryStorage,
+    Summarizer,
+    UpdateL2Op,
+    parse_l2_operation,
+)
 
 class Storage(Protocol):
     async def save_event(self, event: "BaseEvent", context: "Context") -> None: ...

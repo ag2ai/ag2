@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,49 +17,60 @@ from autogen.beta.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchem
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 
 
-class TestResolveVariable:
-    def test_passthrough(self, context: Context) -> None:
-        assert resolve_variable("hello", context) == "hello"
-        assert resolve_variable(42, context) == 42
-        assert resolve_variable(None, context) is None
+def _make_context(**variables: object) -> Context:
+    return Context(stream=MagicMock(), variables=variables)
 
-    def test_from_context(self, make_context: Callable[..., Context]) -> None:
+
+class TestResolveVariable:
+    def test_passthrough(self) -> None:
+        ctx = _make_context()
+        assert resolve_variable("hello", ctx) == "hello"
+        assert resolve_variable(42, ctx) == 42
+        assert resolve_variable(None, ctx) is None
+
+    def test_from_context(self) -> None:
         loc = UserLocation(country="US")
-        ctx = make_context(user_location=loc)
+        ctx = _make_context(user_location=loc)
 
         result = resolve_variable(Variable("user_location"), ctx)
 
         assert result is loc
 
-    def test_default(self, context: Context) -> None:
+    def test_default(self) -> None:
+        ctx = _make_context()
         fallback = UserLocation(country="DE")
 
-        result = resolve_variable(Variable("user_location", default=fallback), context)
+        result = resolve_variable(Variable("user_location", default=fallback), ctx)
 
         assert result is fallback
 
-    def test_default_factory(self, context: Context) -> None:
-        result = resolve_variable(Variable("counter", default_factory=dict), context)
+    def test_default_factory(self) -> None:
+        ctx = _make_context()
+
+        result = resolve_variable(Variable("counter", default_factory=dict), ctx)
 
         assert result == {}
 
-    def test_context_takes_precedence_over_default(self, make_context: Callable[..., Context]) -> None:
-        ctx = make_context(mode="fast")
+    def test_context_takes_precedence_over_default(self) -> None:
+        ctx = _make_context(mode="fast")
+
         result = resolve_variable(Variable("mode", default="slow"), ctx)
 
         assert result == "fast"
 
-    def test_missing_raises(self, context: Context) -> None:
+    def test_missing_raises(self) -> None:
+        ctx = _make_context()
+
         with pytest.raises(KeyError, match="user_location"):
-            resolve_variable(Variable("user_location"), context)
+            resolve_variable(Variable("user_location"), ctx)
 
 
 class TestWebSearchToolVariable:
     @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+    async def test_resolved(self) -> None:
         loc = UserLocation(city="Berlin", country="DE")
-        ctx = make_context(loc=loc)
         tool = WebSearchTool(user_location=Variable("loc"))
+        ctx = _make_context(loc=loc)
 
         [schema] = await tool.schemas(ctx)
 
@@ -67,18 +78,19 @@ class TestWebSearchToolVariable:
         assert schema.user_location is loc
 
     @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_missing_raises(self) -> None:
         tool = WebSearchTool(user_location=Variable("loc"))
+        ctx = _make_context()
 
         with pytest.raises(KeyError, match="loc"):
-            await tool.schemas(context)
+            await tool.schemas(ctx)
 
 
 class TestWebFetchToolVariable:
     @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
-        ctx = make_context(limit=10)
+    async def test_resolved(self) -> None:
         tool = WebFetchTool(max_uses=Variable("limit"))
+        ctx = _make_context(limit=10)
 
         [schema] = await tool.schemas(ctx)
 
@@ -86,19 +98,20 @@ class TestWebFetchToolVariable:
         assert schema.max_uses == 10
 
     @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_missing_raises(self) -> None:
         tool = WebFetchTool(max_uses=Variable("limit"))
+        ctx = _make_context()
 
         with pytest.raises(KeyError, match="limit"):
-            await tool.schemas(context)
+            await tool.schemas(ctx)
 
 
 class TestShellToolVariable:
     @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+    async def test_resolved(self) -> None:
         env = ContainerAutoEnvironment()
-        ctx = make_context(env=env)
         tool = ShellTool(environment=Variable("env"))
+        ctx = _make_context(env=env)
 
         [schema] = await tool.schemas(ctx)
 
@@ -106,18 +119,19 @@ class TestShellToolVariable:
         assert schema.environment is env
 
     @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_missing_raises(self) -> None:
         tool = ShellTool(environment=Variable("env"))
+        ctx = _make_context()
 
         with pytest.raises(KeyError, match="env"):
-            await tool.schemas(context)
+            await tool.schemas(ctx)
 
 
 class TestImageGenerationToolVariable:
     @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
-        ctx = make_context(image_size="1536x1024")
+    async def test_resolved(self) -> None:
         tool = ImageGenerationTool(quality="high", size=Variable("image_size"))
+        ctx = _make_context(image_size="1536x1024")
 
         [schema] = await tool.schemas(ctx)
 
@@ -126,18 +140,19 @@ class TestImageGenerationToolVariable:
         assert schema.size == "1536x1024"
 
     @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_missing_raises(self) -> None:
         tool = ImageGenerationTool(partial_images=Variable("partial_images"))
+        ctx = _make_context()
 
         with pytest.raises(KeyError, match="partial_images"):
-            await tool.schemas(context)
+            await tool.schemas(ctx)
 
 
 class TestMCPServerToolVariable:
     @pytest.mark.asyncio
-    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
-        ctx = make_context(url="https://mcp.example.com/sse")
+    async def test_resolved(self) -> None:
         tool = MCPServerTool(server_url=Variable("url"), server_label="test-mcp")
+        ctx = _make_context(url="https://mcp.example.com/sse")
 
         [schema] = await tool.schemas(ctx)
 
@@ -145,8 +160,9 @@ class TestMCPServerToolVariable:
         assert schema.server_url == "https://mcp.example.com/sse"
 
     @pytest.mark.asyncio
-    async def test_missing_raises(self, context: Context) -> None:
+    async def test_missing_raises(self) -> None:
         tool = MCPServerTool(server_url=Variable("url"), server_label="test-mcp")
+        ctx = _make_context()
 
         with pytest.raises(KeyError, match="url"):
-            await tool.schemas(context)
+            await tool.schemas(ctx)

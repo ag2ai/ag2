@@ -53,27 +53,3 @@ class ConfigNotProvidedError(AG2Error):
             message
             or "No model config provided. Set config on the `Agent(config=...)` creation or pass it to call `ask(config=...)`."
         )
-
-
-class SkillError(AG2Error):
-    """Base exception for local skills loading (agentskills.io convention)."""
-
-
-class SkillNotFoundError(SkillError, KeyError):
-    """Raised when a skill cannot be found in configured paths."""
-
-
-class InvalidSkillNameError(SkillError, ValueError):
-    """Raised when a skill name is empty or malformed."""
-
-
-class InvalidSkillError(SkillError, ValueError):
-    """Raised when skill metadata violates the specification."""
-
-
-class SkillDownloadError(SkillError):
-    """Raised when a skill cannot be downloaded from the remote registry."""
-
-
-class SkillInstallError(SkillError):
-    """Raised when a downloaded skill archive cannot be extracted or validated."""

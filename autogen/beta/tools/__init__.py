@@ -13,21 +13,19 @@ from .builtin import (
     MemoryTool,
     NetworkPolicy,
     ShellTool,
-    Skill,
-    SkillsTool,
     UserLocation,
     WebFetchTool,
     WebSearchTool,
 )
 from .final import Toolkit, tool
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
-from .toolkits import FilesystemToolkit, SkillSearchToolkit, SkillsToolkit
+from .toolkits import FilesystemToolset
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
-    "FilesystemToolkit",
+    "FilesystemToolset",
     "ImageGenerationTool",
     "LocalShellEnvironment",
     "LocalShellTool",
@@ -36,10 +34,6 @@ __all__ = (
     "NetworkPolicy",
     "ShellEnvironment",
     "ShellTool",
-    "Skill",
-    "SkillSearchToolkit",
-    "SkillsTool",
-    "SkillsToolkit",
     "ToolResult",
     "Toolkit",
     "UserLocation",

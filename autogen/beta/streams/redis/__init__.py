@@ -6,8 +6,4 @@ from .serializer import Serializer
 from .storage import RedisStorage
 from .stream import RedisStream
 
-__all__ = (
-    "RedisStorage",
-    "RedisStream",
-    "Serializer",
-)
+__all__ = ("RedisStorage", "RedisStream", "Serializer")

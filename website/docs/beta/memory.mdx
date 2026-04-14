@@ -1,0 +1,110 @@
+---
+title: Long- and Short-Term Memory
+sidebarTitle: Memory
+---
+
+**AG2 Beta** includes a layered memory storage implementation, `LongShortTermMemoryStorage`, that you pass into [`MemoryStream`](/docs/beta/advanced/stream) as its **storage** backend. It implements the same async history contract as the default in-memory store (`save_event`, `get_history`, `set_history`, `drop_history`). In return you get a **pinned memory header** (summaries plus optional full core profile), a **sliding window of raw turns**, and optional **JSON persistence** for long-term blocks across process restarts.
+
+The implementation lives under `autogen.beta.strategies.memory` and is also **re-exported** from `autogen.beta.history` for a single convenient import path.
+
+## Why layered memory?
+
+Long conversations exceed typical context limits. This storage:
+
+- **Compresses** older raw turns into **L1** (short-term) blocks inside a session when token pressure exceeds a threshold, while preserving retrievable **source text** behind each summary.
+- **Consolidates** L1 into **L2** (long-term) blocks at **session end**, optionally writing them to a JSON file so the next run can reload history.
+- Maintains a **singleton core memory** profile (identity-level facts) that stays **fully visible** in context so the model does not need a tool call to see it.
+
+Together, these tiers behave like an index at the top of the transcript plus the live tail of the dialogue.
+
+## Memory tiers at a glance
+
+| Tier | Role | Shown to the model | Persists |
+|------|------|--------------------|----------|
+| **Core** | Stable user profile (name, goals, preferences, …) | Full text, always pinned | Yes (in JSON store with L2) |
+| **L2** | Cross-session topics built from L1 | IDs + abstracts in the header | Yes (`l2_store_path`) |
+| **L1** | Intra-session compression of scrolled-out turns | IDs + abstracts in the header | In-process for the session; referenced L1 can be saved with L2 |
+| **Raw** | Recent user/assistant events | Normal stream history | No (ephemeral window) |
+
+When the model needs **exact** wording, numbers, or quotes that are no longer in the raw window, it should call the provided **`memory_lookup(block_id)`** tool. L1 lookups return the **full source segment**; L2 lookups list linked L1 blocks so the model can drill down.
+
+## Wiring storage to an agent
+
+Construct storage with a model **`config`** (used by the built-in summariser and consolidators unless you override them), attach **`storage.memory_lookup_tool()`** to the agent’s tools, and pass a **`MemoryStream(storage=storage)`** into `ask`.
+
+```python linenums="1"
+from pathlib import Path
+
+from autogen.beta import Agent, MemoryStream
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.history import LongShortTermMemoryStorage
+
+config = OpenAIConfig("gpt-4o-mini")
+
+storage = LongShortTermMemoryStorage(
+    config=config,
+    l2_store_path=Path("agent_memory.json"),
+    token_threshold=10_000,
+    recent_turns=5,
+    max_l2_blocks=20,
+)
+
+agent = Agent(
+    "assistant",
+    prompt=(
+        "You are a helpful assistant with memory. "
+        "Use memory_lookup(block_id) when you need exact details from a memory block."
+    ),
+    config=config,
+    tools=[storage.memory_lookup_tool()],
+)
+
+stream = MemoryStream(storage=storage)
+reply = await agent.ask("Remember that my favourite colour is teal.", stream=stream)
+```
+
+Imports are equivalent from either namespace:
+
+```python
+from autogen.beta.history import LongShortTermMemoryStorage
+# or
+from autogen.beta.strategies.memory import LongShortTermMemoryStorage
+```
+
+## Session boundaries and persistence
+
+**L1 compression** runs **lazily** inside `get_history` when the measured raw transcript (excluding configured tool noise, by default `memory_lookup`) crosses `token_threshold`. Only the last `recent_turns` **user** turns worth of raw history are protected from that lazy path.
+
+**L2 consolidation** and **core memory** updates run when you end a logical task:
+
+- **Recommended:** wrap the task in `async with storage.session():` so `consolidate()` runs on exit and the JSON store is updated when `l2_store_path` is set.
+- **Alternative:** call `await storage.consolidate()` yourself after the last `ask` for that task.
+
+If you omit both, long-term and core memory are not advanced for that segment of work.
+
+## Customising behaviour
+
+Defaults use the same **`config`** to run small internal `Agent` turns for:
+
+- **L1/L2 abstracts** — a summariser prompt tuned to keep retrieval-relevant entities and numbers in the short text shown in the header.
+- **L2 layout** — a consolidator that returns a JSON list of **operations** (`create`, `update`, `delete`) so only changed blocks are described.
+- **Core profile** — a core consolidator that merges new session facts into the singleton block.
+
+You can replace any of these with your own async callables: `summarizer`, `consolidator`, and `core_consolidator`. The **`Consolidator`** protocol receives existing L2 blocks, new L1 blocks, and `max_l2_blocks`; return typed **`L2Operation`** objects (see `CreateL2Op`, `UpdateL2Op`, `DeleteL2Op` and `parse_l2_operation` in the module).
+
+## Parameters you will tune most often
+
+- **`token_threshold`** — raw-token budget (default tiktoken `gpt-4o` encoding) before lazy L1 compression.
+- **`recent_turns`** — how many recent **user** turns stay raw while older material can move into L1.
+- **`max_l2_blocks`** — hard cap passed to your consolidator.
+- **`l2_store_path`** — `None` for in-memory-only long-term state; otherwise a JSON file path for L2 + referenced L1 + core.
+- **`l1_ignore_tool_names`** — defaults to ignoring `memory_lookup` traffic when measuring and summarising L1 so large retrievals do not immediately re-trigger compression.
+
+## Related documentation
+
+- [Agent Communication](/docs/beta/agents) — `Agent`, `MemoryStream`, and tools.
+- [Events Streaming](/docs/beta/advanced/stream) — subscribing when using a custom stream.
+- [Middleware](/docs/beta/middleware) — trimming or observing history before model calls.
+
+!!! note
+    The built-in memory path is intended for **beta** applications where you control the store path and model usage. Review persistence location and API keys the same way you would for any file-backed agent state.
