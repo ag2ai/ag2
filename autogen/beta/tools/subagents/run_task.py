@@ -4,19 +4,27 @@
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import HumanInputRequest, Usage
+from autogen.beta.events import (
+    HumanInputRequest,
+    TaskCompleted,
+    TaskFailed,
+    TaskStarted,
+    Usage,
+)
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
+    from autogen.beta.actor import Actor
 
 _DEPTH_KEY = "ag:task_depth"
 
 
 @dataclass
 class TaskResult:
+    task_id: str
     objective: str
     result: str | None
     completed: bool
@@ -25,14 +33,30 @@ class TaskResult:
     error: Exception | None = None
 
 
+def _reply_usage(reply) -> Usage:
+    """Pull the typed Usage from an AgentReply, defaulting to an empty Usage."""
+    if reply and reply.response and reply.response.usage:
+        return reply.response.usage
+    return Usage()
+
+
 async def run_task(
-    agent: "Agent",
+    agent: "Actor",
     objective: str,
     *,
     parent_context: Context,
     context: str = "",
     stream: "Stream | None" = None,
+    emit_events: bool = True,
 ) -> TaskResult:
+    """Run ``agent`` as a sub-task and return its ``TaskResult``.
+
+    ``emit_events`` controls whether ``TaskStarted`` / ``TaskCompleted`` /
+    ``TaskFailed`` events are emitted onto ``parent_context.stream``.
+    Keep it at the default (``True``) unless the caller is itself going to
+    emit its own task lifecycle events.
+    """
+    task_id = uuid4().hex
     task_stream = stream or MemoryStream(
         storage=parent_context.stream.history.storage,
     )
@@ -40,13 +64,18 @@ async def run_task(
     if context:
         prompt = f"{objective}\n\n## Context\n{context}"
 
+    if emit_events:
+        await parent_context.send(
+            TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective)
+        )
+
     # Bridge HITL events to the parent stream so the parent's hook
     # can handle them. If the subagent has its own HITL hook, it is
     # registered as an interrupter and swallows the event first.
     if not agent._hitl_hook:
 
-        async def _bridge_hitl(event: HumanInputRequest, context: Context) -> None:
-            await parent_context.stream.send(event, context)
+        async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
+            await parent_context.stream.send(event, ctx)
 
         sub_id = task_stream.where(HumanInputRequest).subscribe(_bridge_hitl, interrupt=True)
     else:
@@ -70,16 +99,43 @@ async def run_task(
         reply.context.variables.pop(_DEPTH_KEY, None)
         parent_context.variables.update(reply.context.variables)
 
-        return TaskResult(
+        usage = _reply_usage(reply)
+
+        result = TaskResult(
+            task_id=task_id,
             objective=objective,
             result=reply.body,
             completed=True,
             stream=task_stream,
-            usage=reply.response.usage,
+            usage=usage,
         )
 
+        if emit_events:
+            await parent_context.send(
+                TaskCompleted(
+                    task_id=task_id,
+                    agent_name=agent.name,
+                    objective=objective,
+                    result=reply.body,
+                    task_stream=task_stream.id,
+                    usage=usage,
+                )
+            )
+
+        return result
+
     except Exception as e:
+        if emit_events:
+            await parent_context.send(
+                TaskFailed(
+                    task_id=task_id,
+                    agent_name=agent.name,
+                    objective=objective,
+                    error=e,
+                )
+            )
         return TaskResult(
+            task_id=task_id,
             objective=objective,
             result=None,
             completed=False,
