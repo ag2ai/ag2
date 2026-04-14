@@ -115,14 +115,10 @@ class BaseObserver(ABC):
         except Exception:
             import logging
 
-            logging.getLogger(__name__).exception(
-                "Observer '%s' process() failed", self.name
-            )
+            logging.getLogger(__name__).exception("Observer '%s' process() failed", self.name)
 
     @abstractmethod
-    async def process(
-        self, events: list[BaseEvent], ctx: Context
-    ) -> ObserverAlert | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         """Analyze events and optionally return an alert."""
         ...
 

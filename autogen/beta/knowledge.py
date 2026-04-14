@@ -126,9 +126,7 @@ class KnowledgeStore(Protocol):
         """
         ...
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         """Subscribe to change notifications at ``path``.
 
         Backends that can observe changes efficiently invoke
@@ -229,9 +227,7 @@ class MemoryKnowledgeStore:
             return ""
         return data[start:stop].decode("utf-8", errors="strict")
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         normalized = _normalize(path)
         self._subscribers.setdefault(normalized, []).append(callback)
 
@@ -252,9 +248,7 @@ class MemoryKnowledgeStore:
 
     async def _notify(self, changed_path: str) -> None:
         for subscribed_path, callbacks in list(self._subscribers.items()):
-            if changed_path == subscribed_path or changed_path.startswith(
-                subscribed_path.rstrip("/") + "/"
-            ):
+            if changed_path == subscribed_path or changed_path.startswith(subscribed_path.rstrip("/") + "/"):
                 for callback in list(callbacks):
                     await callback(changed_path)
 
@@ -416,9 +410,7 @@ class DiskKnowledgeStore:
     def _resolve(self, path: str) -> Path:
         """Map virtual path to real filesystem path."""
         normalized = _normalize(path).lstrip("/")
-        resolved = (
-            (self._root / normalized).resolve() if normalized else self._root.resolve()
-        )
+        resolved = (self._root / normalized).resolve() if normalized else self._root.resolve()
         # Prevent path traversal
         if not str(resolved).startswith(str(self._root.resolve())):
             raise ValueError(f"Path traversal blocked: {path}")
@@ -482,9 +474,7 @@ class DiskKnowledgeStore:
                 data = fh.read(span)
         return data.decode("utf-8", errors="strict")
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         """Subscribe to filesystem change notifications under ``path``.
 
         Uses the ``watchdog`` library to dispatch platform-native events
@@ -696,9 +686,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
 
         def _op() -> str | None:
-            cur = self._conn.execute(
-                "SELECT content FROM entries WHERE path = ?", (normalized,)
-            )
+            cur = self._conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
             row = cur.fetchone()
             if row is None:
                 return None
@@ -715,8 +703,7 @@ class SqliteKnowledgeStore:
 
             def _op() -> None:
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO entries (path, content, version) "
-                    "VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
                     (normalized, payload, version),
                 )
                 self._conn.commit()
@@ -750,9 +737,7 @@ class SqliteKnowledgeStore:
 
             def _op() -> None:
                 self._conn.execute("DELETE FROM entries WHERE path = ?", (normalized,))
-                self._conn.execute(
-                    "DELETE FROM entries WHERE path LIKE ?", (prefix + "%",)
-                )
+                self._conn.execute("DELETE FROM entries WHERE path LIKE ?", (prefix + "%",))
                 self._conn.commit()
 
             await self._run(_op)
@@ -762,9 +747,7 @@ class SqliteKnowledgeStore:
         prefix = normalized.rstrip("/") + "/"
 
         def _op() -> bool:
-            cur = self._conn.execute(
-                "SELECT 1 FROM entries WHERE path = ? LIMIT 1", (normalized,)
-            )
+            cur = self._conn.execute("SELECT 1 FROM entries WHERE path = ? LIMIT 1", (normalized,))
             if cur.fetchone() is not None:
                 return True
             cur = self._conn.execute(
@@ -783,16 +766,13 @@ class SqliteKnowledgeStore:
             version = self._next_version()
 
             def _op() -> int:
-                cur = self._conn.execute(
-                    "SELECT content FROM entries WHERE path = ?", (normalized,)
-                )
+                cur = self._conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
                 row = cur.fetchone()
                 existing = row[0] if row else b""
                 offset = len(existing)
                 combined = existing + payload
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO entries (path, content, version) "
-                    "VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
                     (normalized, combined, version),
                 )
                 self._conn.commit()
@@ -804,9 +784,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
 
         def _op() -> str:
-            cur = self._conn.execute(
-                "SELECT content FROM entries WHERE path = ?", (normalized,)
-            )
+            cur = self._conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
             row = cur.fetchone()
             if row is None:
                 return ""
@@ -841,9 +819,7 @@ class SqliteKnowledgeStore:
 
         return await self._run(_op)
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         watcher = _PollingChangeWatcher(
             backend=self,
             prefix=path,
@@ -896,8 +872,7 @@ class RedisKnowledgeStore:
                 from redis import asyncio as aioredis  # type: ignore[import-not-found]
             except ImportError as exc:  # pragma: no cover
                 raise ImportError(
-                    "RedisKnowledgeStore requires the 'redis' package. "
-                    "Install with: pip install redis"
+                    "RedisKnowledgeStore requires the 'redis' package. Install with: pip install redis"
                 ) from exc
             self._client = aioredis.from_url(url_or_client, decode_responses=False)
             self._owns_client = True
@@ -938,9 +913,7 @@ class RedisKnowledgeStore:
     async def write(self, path: str, content: str) -> None:
         normalized = _normalize(path)
         async with self._lock:
-            version = int(
-                await self._client.incr(f"{self._key_prefix}:__version_counter")
-            )
+            version = int(await self._client.incr(f"{self._key_prefix}:__version_counter"))
             await self._client.set(self._key(path), content.encode("utf-8"))
             await self._index_add(normalized, version)
 
@@ -985,15 +958,11 @@ class RedisKnowledgeStore:
         async with self._lock:
             existing = await self._client.get(self._key(path))
             existing_bytes = (
-                existing
-                if isinstance(existing, bytes)
-                else b"" if existing is None else str(existing).encode("utf-8")
+                existing if isinstance(existing, bytes) else b"" if existing is None else str(existing).encode("utf-8")
             )
             offset = len(existing_bytes)
             combined = existing_bytes + payload
-            version = int(
-                await self._client.incr(f"{self._key_prefix}:__version_counter")
-            )
+            version = int(await self._client.incr(f"{self._key_prefix}:__version_counter"))
             await self._client.set(self._key(path), combined)
             await self._index_add(normalized, version)
         return offset
@@ -1002,9 +971,7 @@ class RedisKnowledgeStore:
         existing = await self._client.get(self._key(path))
         if existing is None:
             return ""
-        data = (
-            existing if isinstance(existing, bytes) else str(existing).encode("utf-8")
-        )
+        data = existing if isinstance(existing, bytes) else str(existing).encode("utf-8")
         stop = len(data) if end is None else min(end, len(data))
         if start >= stop:
             return ""
@@ -1016,13 +983,9 @@ class RedisKnowledgeStore:
         if normalized in ("", "/"):
             return snapshot
         scope = normalized + "/"
-        return {
-            p: v for p, v in snapshot.items() if p == normalized or p.startswith(scope)
-        }
+        return {p: v for p, v in snapshot.items() if p == normalized or p.startswith(scope)}
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         watcher = _PollingChangeWatcher(
             backend=self,
             prefix=path,
@@ -1095,9 +1058,7 @@ class LockedKnowledgeStore:
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         return await self._store.read_range(path, start, end)
 
-    async def on_change(
-        self, path: str, callback: ChangeCallback
-    ) -> ChangeSubscription:
+    async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         return await self._store.on_change(path, callback)
 
 
@@ -1126,9 +1087,7 @@ class EventLogWriter:
         lines = self._serialize_events(events)
         await self._store.write(path, "\n".join(lines))
 
-    async def persist_dropped(
-        self, stream_id: StreamId, events: Iterable[BaseEvent]
-    ) -> None:
+    async def persist_dropped(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:
         """Write compaction-dropped events to /log/{stream_id}.dropped-{n}.jsonl.
 
         Discovers existing segments in the store to avoid overwriting.

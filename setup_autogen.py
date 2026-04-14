@@ -81,6 +81,7 @@ setuptools.setup(
         "websurfer": ["ag2[websurfer]==" + __version__],
         "cosmosdb": ["ag2[cosmosdb]==" + __version__],
         "websockets": ["ag2[websockets]==" + __version__],
+        "watchdog": ["ag2[watchdog]==" + __version__],
         "long-context": ["ag2[long-context]==" + __version__],
         "cerebras": ["ag2[cerebras]==" + __version__],
         "yepcode": ["ag2[yepcode]==" + __version__],

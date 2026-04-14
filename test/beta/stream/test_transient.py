@@ -165,15 +165,11 @@ class TestTransientNotPersisted:
             ctx,
         )
         await stream.send(
-            TaskProgress(
-                task_id="t1", agent_name="researcher", objective="research", content="step 1"
-            ),
+            TaskProgress(task_id="t1", agent_name="researcher", objective="research", content="step 1"),
             ctx,
         )
         await stream.send(
-            TaskProgress(
-                task_id="t1", agent_name="researcher", objective="research", content="step 2"
-            ),
+            TaskProgress(task_id="t1", agent_name="researcher", objective="research", content="step 2"),
             ctx,
         )
         await stream.send(
@@ -251,9 +247,7 @@ class TestPersistAll:
 
         await stream.send(ObserverStarted(name="monitor"), ctx)
         await stream.send(
-            TaskProgress(
-                task_id="t1", agent_name="researcher", objective="work", content="working"
-            ),
+            TaskProgress(task_id="t1", agent_name="researcher", objective="work", content="working"),
             ctx,
         )
 

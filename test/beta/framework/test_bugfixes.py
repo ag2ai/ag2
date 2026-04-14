@@ -35,9 +35,7 @@ class Outer:
 
 class TestNestedEventClassImport:
     def test_import_module_level_event(self) -> None:
-        cls = import_event_class(
-            f"{ModelMessage.__module__}.{ModelMessage.__qualname__}"
-        )
+        cls = import_event_class(f"{ModelMessage.__module__}.{ModelMessage.__qualname__}")
         assert cls is ModelMessage
 
     def test_import_nested_event_class(self) -> None:
@@ -122,9 +120,7 @@ class TestFunctionToolNameAccess:
             return str(x)
 
         # __name__ should not be the right access path.
-        assert not hasattr(my_cool_tool, "__name__") or not isinstance(
-            getattr(my_cool_tool, "__name__", None), str
-        )
+        assert not hasattr(my_cool_tool, "__name__") or not isinstance(getattr(my_cool_tool, "__name__", None), str)
 
         # schema.function.name is the supported access path.
         assert my_cool_tool.schema.function.name == "my_cool_tool"
