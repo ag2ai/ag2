@@ -158,6 +158,23 @@ config = OpenAIConfig(
     )
     ```
 
+### Extra Body Parameters
+
+Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIConfig` to pass these through directly to the API call.
+
+This is useful for enabling features like extended thinking on self-hosted or third-party models:
+
+```python linenums="1" hl_lines="7"
+from autogen.beta.config import OpenAIConfig
+
+# NVIDIA NIM
+nemotron = OpenAIConfig(
+    model="nvidia/nemotron-3-super-120b-a12b",
+    base_url="https://integrate.api.nvidia.com/v1",
+    extra_body={"chat_template_kwargs": {"thinking": True}},
+)
+```
+
 ## Reusing and Overriding Configurations
 
 Model configurations are **immutable**. If you need to reuse a configuration for multiple agents with slight variations (e.g., changing the model version or adjusting the temperature), use the `.copy()` method. This creates a new updated instance without mutating the original configuration.
