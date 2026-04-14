@@ -137,7 +137,7 @@ mistral = ["mistralai>=2.0.0"]
 dashscope = ["dashscope>=1.25.13"]
 
 # public distributions
-redis = ["redis"]
+redis = ["redis>=5.0,<7"]
 tracing = ["opentelemetry-sdk>=1.20"]
 
 flaml = [
@@ -277,7 +277,8 @@ graph = ["networkx", "matplotlib"]
 together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=14.0,<16"]
+websockets = ["websockets>=14.0,<17"]
+watchdog = ["watchdog>=4.0,<7"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
@@ -621,4 +622,4 @@ disallow_any_unimported = true
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif"
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher"
