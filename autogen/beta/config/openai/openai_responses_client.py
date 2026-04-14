@@ -14,7 +14,6 @@ from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
-    ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
     ResponseFunctionWebSearch,
     ResponseOutputItemAddedEvent,
@@ -236,15 +235,6 @@ class OpenAIResponsesClient(LLMClient):
                 full_content += event.delta
                 await context.send(ModelMessageChunk(event.delta))
 
-            elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
-                calls.append(
-                    ToolCallEvent(
-                        id=event.item_id,
-                        name=event.name,
-                        arguments=event.arguments,
-                    )
-                )
-
             elif isinstance(event, ResponseOutputItemAddedEvent):
                 # call image generation tool
                 if isinstance(event.item, ImageGenerationCall):
@@ -270,8 +260,18 @@ class OpenAIResponsesClient(LLMClient):
                     pass
 
             elif isinstance(event, ResponseOutputItemDoneEvent):
+                # call regular function tool
+                if isinstance(event.item, ResponseFunctionToolCall):
+                    calls.append(
+                        ToolCallEvent(
+                            id=event.item.call_id,
+                            name=event.item.name,
+                            arguments=event.item.arguments,
+                        )
+                    )
+
                 # image generation tool call result
-                if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                elif isinstance(event.item, ImageGenerationCall) and event.item.result:
                     result = BinaryResult(
                         base64.b64decode(event.item.result),
                         metadata=event.item.model_dump(exclude={"result", "status", "type"}),
