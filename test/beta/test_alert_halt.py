@@ -20,7 +20,7 @@ from typing_extensions import Self
 
 from autogen.beta import Actor, BaseObserver
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.context import Context as ContextType
+from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 from autogen.beta.policies import AlertPolicy

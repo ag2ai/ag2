@@ -16,7 +16,7 @@ Key behaviors preserved from the old system:
 
 from __future__ import annotations
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 

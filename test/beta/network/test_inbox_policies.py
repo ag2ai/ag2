@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     ActorIdentity,
@@ -41,6 +41,19 @@ from autogen.beta.network import (
 )
 from autogen.beta.network.envelope import EV_TEXT
 from autogen.beta.network.policies import HUB_DEP, SESSION_ID_VAR
+
+
+def _text(e) -> str | None:
+    """Extract first TextInput content from a ModelRequest, or event's .content."""
+    from autogen.beta.events import ModelRequest, TextInput
+    if isinstance(e, ModelRequest):
+        for inp in e.inputs:
+            if isinstance(inp, TextInput):
+                return inp.content
+        return None
+    return getattr(e, "content", None)
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -141,14 +154,14 @@ async def test_session_inbox_policy_prepends_full_wal_to_events(hub: Hub) -> Non
         )
         new_prompts, new_events = await policy.apply(
             prompts=["system"],
-            events=[ModelRequest(content="current turn")],
+            events=[ModelRequest([TextInput("current turn")])],
             context=ctx,
         )
         assert new_prompts == ["system"]
         # WAL text envelopes become ModelRequest (from Bob) or
         # ModelMessage (from Alice, since policy.self_actor_id=alice).
         contents = [
-            (type(e).__name__, getattr(e, "content", None)) for e in new_events
+            (type(e).__name__, _text(e)) for e in new_events
         ]
         assert contents == [
             ("ModelMessage", "1"),
@@ -191,7 +204,7 @@ async def test_session_inbox_policy_skips_own_messages_when_not_included(
         )
         _, new_events = await policy.apply(
             prompts=[],
-            events=[ModelRequest(content="now")],
+            events=[ModelRequest([TextInput("now")])],
             context=ctx,
         )
         # Alice's own envelope is filtered out; Bob's stays; current turn remains last.
@@ -199,7 +212,7 @@ async def test_session_inbox_policy_skips_own_messages_when_not_included(
             "ModelRequest",
             "ModelRequest",
         ]
-        assert [getattr(e, "content", None) for e in new_events] == ["theirs", "now"]
+        assert [_text(e) for e in new_events] == ["theirs", "now"]
     finally:
         await a.stop()
         await b.stop()
@@ -211,10 +224,10 @@ async def test_session_inbox_policy_noop_without_session_id(hub: Hub) -> None:
     policy = SessionInboxPolicy(self_actor_id="alice")
     ctx = _FakeContext()
     prompts, events = await policy.apply(
-        prompts=["p"], events=[ModelRequest(content="q")], context=ctx
+        prompts=["p"], events=[ModelRequest([TextInput("q")])], context=ctx
     )
     assert prompts == ["p"]
-    assert len(events) == 1 and events[0].content == "q"
+    assert len(events) == 1 and _text(events[0]) == "q"
 
 
 @pytest.mark.asyncio
@@ -222,9 +235,9 @@ async def test_session_inbox_policy_noop_without_hub(hub: Hub) -> None:
     policy = SessionInboxPolicy(self_actor_id="alice")
     ctx = _FakeContext(variables={SESSION_ID_VAR: "01-missing"})
     _, events = await policy.apply(
-        prompts=[], events=[ModelRequest(content="q")], context=ctx
+        prompts=[], events=[ModelRequest([TextInput("q")])], context=ctx
     )
-    assert [e.content for e in events] == ["q"]
+    assert [_text(e) for e in events] == ["q"]
 
 
 @pytest.mark.asyncio
@@ -245,7 +258,7 @@ async def test_session_inbox_policy_skips_system_envelopes(hub: Hub) -> None:
             dependencies={HUB_DEP: hub},
         )
         _, events = await policy.apply(
-            prompts=[], events=[ModelRequest(content="current")], context=ctx
+            prompts=[], events=[ModelRequest([TextInput("current")])], context=ctx
         )
         # Invite, invite_ack, session_opened should NOT produce events.
         # Only the text envelope + current turn remain.
@@ -253,7 +266,7 @@ async def test_session_inbox_policy_skips_system_envelopes(hub: Hub) -> None:
             "ModelMessage",
             "ModelRequest",
         ]
-        assert [getattr(e, "content", None) for e in events] == ["real", "current"]
+        assert [_text(e) for e in events] == ["real", "current"]
     finally:
         await a.stop()
         await b.stop()
@@ -294,11 +307,11 @@ async def test_previous_only_injects_last_foreign_envelope(hub: Hub) -> None:
             dependencies={HUB_DEP: hub},
         )
         _, events = await policy.apply(
-            prompts=[], events=[ModelRequest(content="current")], context=ctx
+            prompts=[], events=[ModelRequest([TextInput("current")])], context=ctx
         )
         # Only the most recent cross-actor envelope lands — A2.
         assert [type(e).__name__ for e in events] == ["ModelRequest", "ModelRequest"]
-        assert [getattr(e, "content", None) for e in events] == ["A2", "current"]
+        assert [_text(e) for e in events] == ["A2", "current"]
     finally:
         await a.stop()
         await b.stop()
@@ -315,11 +328,11 @@ async def test_previous_only_noop_when_no_prior_foreign_envelope(hub: Hub) -> No
             dependencies={HUB_DEP: hub},
         )
         _, events = await policy.apply(
-            prompts=[], events=[ModelRequest(content="current")], context=ctx
+            prompts=[], events=[ModelRequest([TextInput("current")])], context=ctx
         )
         # No prior cross-actor text envelope yet — policy is pass-through.
         assert len(events) == 1
-        assert events[0].content == "current"
+        assert _text(events[0]) == "current"
     finally:
         await a.stop()
         await b.stop()
@@ -354,10 +367,10 @@ async def test_previous_only_skips_own_envelopes(hub: Hub) -> None:
             dependencies={HUB_DEP: hub},
         )
         _, events = await policy.apply(
-            prompts=[], events=[ModelRequest(content="now")], context=ctx
+            prompts=[], events=[ModelRequest([TextInput("now")])], context=ctx
         )
         assert len(events) == 1
-        assert events[0].content == "now"
+        assert _text(events[0]) == "now"
     finally:
         await a.stop()
         await b.stop()

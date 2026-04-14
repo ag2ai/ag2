@@ -19,8 +19,8 @@ from autogen.beta.actor import (
 )
 from autogen.beta.aggregate import AggregateTrigger
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
-from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse
+from autogen.beta.context import ConversationContext as Context
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     LockedKnowledgeStore,
@@ -84,10 +84,10 @@ class TestCompactionMiddleware:
         strategy = TailWindowCompact(target=3)
 
         # Populate stream with 8 events
-        events = [ModelRequest(content=f"msg-{i}") for i in range(8)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(8)]
         await _populate_history(stream, events)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
 
         mw = _CompactionMiddleware(
             initial_event,
@@ -119,10 +119,10 @@ class TestCompactionMiddleware:
         strategy = TailWindowCompact(target=2)
 
         # Each event's str() representation is well over 10 chars
-        events = [ModelRequest(content="x" * 30) for _ in range(5)]
+        events = [ModelRequest([TextInput("x" * 30)]) for _ in range(5)]
         await _populate_history(stream, events)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _CompactionMiddleware(
             initial_event,
             ctx,
@@ -148,10 +148,10 @@ class TestCompactionMiddleware:
         trigger = CompactTrigger(max_events=100)
         strategy = TailWindowCompact(target=3)
 
-        events = [ModelRequest(content=f"msg-{i}") for i in range(5)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         await _populate_history(stream, events)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _CompactionMiddleware(
             initial_event,
             ctx,
@@ -176,7 +176,7 @@ class TestCompactionMiddleware:
         trigger = CompactTrigger(max_events=3)
         strategy = TailWindowCompact(target=2)
 
-        events = [ModelRequest(content=f"msg-{i}") for i in range(5)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         await _populate_history(stream, events)
 
         collected: list[CompactionCompleted] = []
@@ -186,7 +186,7 @@ class TestCompactionMiddleware:
 
         sub = stream.where(CompactionCompleted).subscribe(_collect)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _CompactionMiddleware(
             initial_event,
             ctx,
@@ -216,10 +216,10 @@ class TestCompactionMiddleware:
         trigger = CompactTrigger(max_events=3)
         strategy = TailWindowCompact(target=2)
 
-        events = [ModelRequest(content=f"msg-{i}") for i in range(5)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         await _populate_history(stream, events)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _CompactionMiddleware(
             initial_event,
             ctx,
@@ -260,10 +260,10 @@ class TestAggregationMiddleware:
         strategy = _FakeAggregate()
         trigger = AggregateTrigger(every_n_turns=2, on_end=False)
 
-        events = [ModelRequest(content=f"msg-{i}") for i in range(3)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(3)]
         await _populate_history(stream, events)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _AggregationMiddleware(
             initial_event,
             ctx,
@@ -301,7 +301,7 @@ class TestAggregationMiddleware:
         strategy = _FakeAggregate()
         trigger = AggregateTrigger(every_n_events=3, on_end=False)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _AggregationMiddleware(
             initial_event,
             ctx,
@@ -315,12 +315,12 @@ class TestAggregationMiddleware:
             return ModelResponse(message=ModelMessage(content="ok"))
 
         # Push 2 events — not enough
-        await _populate_history(stream, [ModelRequest(content=f"e-{i}") for i in range(2)])
+        await _populate_history(stream, [ModelRequest([TextInput(f"e-{i}")]) for i in range(2)])
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 0
 
         # Push 1 more — now 3 total, should trigger
-        await _populate_history(stream, [ModelRequest(content="e-2")])
+        await _populate_history(stream, [ModelRequest([TextInput("e-2")])])
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 1
 
@@ -333,7 +333,7 @@ class TestAggregationMiddleware:
         strategy = _FakeAggregate()
         trigger = AggregateTrigger(every_n_turns=1, on_end=False)
 
-        events = [ModelRequest(content="msg")]
+        events = [ModelRequest([TextInput("msg")])]
         await _populate_history(stream, events)
 
         collected: list[AggregationCompleted] = []
@@ -343,7 +343,7 @@ class TestAggregationMiddleware:
 
         sub = stream.where(AggregationCompleted).subscribe(_collect)
 
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
         mw = _AggregationMiddleware(
             initial_event,
             ctx,
@@ -548,7 +548,7 @@ class TestMemoryTool:
 
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         await _populate_history(stream, events)
 
         result = await fn(action="compact", ctx=ctx)
@@ -578,7 +578,7 @@ class TestMemoryTool:
 
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(3)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(3)]
         await _populate_history(stream, events)
 
         result = await fn(action="summarize", ctx=ctx)
@@ -619,7 +619,7 @@ class TestTokenBudgetPolicyTransparent:
     @pytest.mark.asyncio
     async def test_transparent_adds_note(self) -> None:
         policy = TokenBudgetPolicy(max_tokens=10, chars_per_token=1, transparent=True)
-        events = [ModelRequest(content="a" * 20), ModelRequest(content="b" * 5)]
+        events = [ModelRequest([TextInput("a" * 20)]), ModelRequest([TextInput("b" * 5)])]
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], events, ctx)
         assert len(prompts) == 1
@@ -669,7 +669,7 @@ class TestConversationSummaryAggregateStreamId:
         config.create.return_value = mock_client
 
         agg = ConversationSummaryAggregate(config)
-        events = [ModelRequest(content="hello")]
+        events = [ModelRequest([TextInput("hello")])]
         await agg.aggregate(events, ctx, store)
 
         entries = await store.list("/memory/conversations/")

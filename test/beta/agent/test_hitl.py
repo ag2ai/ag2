@@ -31,7 +31,7 @@ async def test_sync_hitl(
 
     def hitl_hook(event: HumanInputRequest) -> HumanMessage:
         mock.hitl(event.content)
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     agent = Agent(
         "",
@@ -56,7 +56,7 @@ async def test_async_hitl(
         return ""
 
     async def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     agent = Agent(
         "",
@@ -87,7 +87,7 @@ async def test_hitl_decorator(
 
     @agent.hitl_hook
     def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     await agent.ask("Hi!")
 
@@ -111,13 +111,13 @@ async def test_hitl_decorator_override(
 
     @agent.hitl_hook
     def overridden_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="wrong")
+        return HumanMessage("wrong")
 
     with pytest.warns(RuntimeWarning):
 
         @agent.hitl_hook
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
     await agent.ask("Hi!")
 

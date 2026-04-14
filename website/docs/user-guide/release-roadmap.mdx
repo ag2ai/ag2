@@ -19,9 +19,75 @@ The current stable release. All existing features and APIs continue to work as-i
 
 ## v0.12 — Deprecation notices
 
-- **Deprecation announcements.** A number of features that are no longer actively used will be marked as deprecated.
+- **Deprecation announcements.** The following features are marked as deprecated and will be removed in v0.14. This list will be actively updated throughout the feedback period.
 - **Community feedback window opens.** We want to hear from you. If a feature marked for deprecation is critical to your workflow, let us know before v0.14.
 - Beta development continues in parallel.
+
+### Deprecated agents
+
+| Agent | Alternative |
+|-------|-------------|
+| `GPTAssistantAgent` | `ConversableAgent` |
+| `LLaVAAgent` | v1.0 will contain native multimodal support on Agent |
+| `WebSurferAgent` (contrib) | `autogen.agents.experimental.WebSurferAgent` |
+| `TextAnalyzerAgent` | `ConversableAgent` with an appropriate system message |
+| `MathUserProxyAgent` | `ConversableAgent` with tool calling |
+| `SocietyOfMindAgent` | GroupChat patterns |
+| `AgentOptimizer` | `ConversableAgent` with tool calling |
+| `RetrieveAssistantAgent` | `AssistantAgent` |
+| `QdrantRetrieveUserProxyAgent` | `RetrieveUserProxyAgent` with `vector_db='qdrant'` |
+| `SwarmAgent` | `ConversableAgent` (already incorporated) |
+| `RealtimeAgent` | Relies on deprecated realtime API endpoints |
+
+### Deprecated swarm functions and aliases
+
+| Feature | Alternative |
+|---------|-------------|
+| `initiate_swarm_chat()` | `run_group_chat` |
+| `run_swarm()` | `run_group_chat` |
+| `AFTER_WORK` | `AfterWork` |
+| `ON_CONDITION` | `OnCondition` |
+
+### Deprecated capabilities and modules
+
+| Feature | Reason |
+|---------|--------|
+| `ImageGeneration` capability | Depends on deprecated `TextAnalyzerAgent` |
+| `agent_eval` module (`generate_criteria`, `quantify_criteria`, `CriticAgent`, `QuantifierAgent`, `SubCriticAgent`) | experimental evaluation framework |
+
+### Deprecated interoperability
+
+| Feature | Alternative |
+|---------|-------------|
+| `CrewAIInteroperability` | LangChain or PydanticAI interop |
+
+### Deprecated experimental tools
+
+| Tool | Alternative |
+|------|-------------|
+| `PythonCodeExecutionTool` | `autogen.beta.tools.CodeExecutionTool` |
+| `FirecrawlTool` | `Crawl4AITool` or `BrowserUseTool` |
+| `PerplexitySearchTool` | `QuickResearchTool` or `DeepResearchTool` |
+| `SearxngSearchTool` | `DuckDuckGoSearchTool` or `TavilySearchTool` |
+| `WebSearchPreviewTool` | `autogen.beta.tools.WebSearchTool` |
+
+### What is NOT being deprecated
+
+The core framework and actively maintained features continue without change:
+
+- **Core agents**: `ConversableAgent`, `AssistantAgent`, `UserProxyAgent`
+- **Group chat**: `GroupChat`, `GroupChatManager`, `run_group_chat`, and all orchestration patterns including handoffs (`AfterWork`, `OnCondition`, `OnContextCondition`)
+- **RAG**: `RetrieveUserProxyAgent`, vector database integrations (ChromaDB, Qdrant, MongoDB, Couchbase, PGVector), graph RAG (Neo4j, FalkorDB)
+- **Capabilities**: `Teachability`, `VisionCapability`, `TransformMessages`, `ToolsCapability`
+- **Experimental agents**: `WebSurferAgent` (experimental), `DeepResearchAgent`, `ReasoningAgent`, `DocAgent`, `CaptainAgent`, `A2UIAgent`, and platform agents (Discord, Slack, Telegram)
+
+### Notebooks using outdated models
+
+A number of notebooks that reference unavailable or outdated models (e.g. `gpt-3.5-turbo`, `gpt-4-vision-preview`, `gpt-4-turbo-preview`) have also been deprecated and will be removed in v0.14.
+
+### Documentation to be removed in v0.14
+
+Associated blog posts, user guide pages, and notebooks for the above deprecated features will also be removed in v0.14. Each affected page and notebook now displays a deprecation warning.
 
 ## v0.13 — Transition period
 

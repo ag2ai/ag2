@@ -36,6 +36,7 @@ from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
 from .contrib.capabilities import transform_messages
 from .conversable_agent import ConversableAgent
+from .eligibility_policy import AgentEligibilityPolicy, SelectionContext
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ class GroupChat:
                 1. an `Agent` class, it must be one of the agents in the group chat.
                 2. a string from ['auto', 'manual', 'random', 'round_robin'] to select a default method to use.
                 3. None, which would terminate the conversation gracefully.
+            When this is a Callable that returns an Agent directly, eligibility_policies are not applied to that agent.
             ```python
             def custom_speaker_selection_func(
                 last_speaker: Agent, groupchat: GroupChat
@@ -128,6 +130,13 @@ class GroupChat:
     - select_speaker_auto_model_client_cls: Custom model client class for the internal speaker select agent used during 'auto' speaker selection (optional)
     - select_speaker_auto_llm_config: LLM config for the internal speaker select agent used during 'auto' speaker selection (optional)
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
+    - eligibility_policies: list of :class:`AgentEligibilityPolicy` to filter candidate
+        agents before speaker selection. All policies must return ``True`` for an agent
+        to be considered eligible (AND semantics). Default is ``[]`` (no filtering).
+
+        Note:
+            Policies are **not** applied when ``speaker_selection_method`` is a
+            Callable that returns an :class:`Agent` directly.
     """
 
     agents: list[Agent]
@@ -165,6 +174,7 @@ class GroupChat:
     select_speaker_auto_model_client_cls: ModelClient | list[ModelClient] | None = None
     select_speaker_auto_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None
     role_for_select_speaker_messages: str | None = "system"
+    eligibility_policies: list[AgentEligibilityPolicy] = field(default_factory=list)
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
     _VALID_SPEAKER_TRANSITIONS_TYPE = ["allowed", "disallowed", None]
@@ -299,6 +309,55 @@ class GroupChat:
         # Validate select_speaker_auto_verbose
         if self.select_speaker_auto_verbose is None or not isinstance(self.select_speaker_auto_verbose, bool):
             raise ValueError("select_speaker_auto_verbose cannot be None or non-bool")
+
+        # Validate eligibility_policies
+        for i, policy in enumerate(self.eligibility_policies):
+            if not isinstance(policy, AgentEligibilityPolicy):
+                raise ValueError(
+                    f"eligibility_policies[{i}] does not implement AgentEligibilityPolicy "
+                    f"(missing is_eligible method). Got {type(policy).__name__}."
+                )
+
+    def _apply_eligibility_policies(
+        self,
+        agents: list["Agent"],
+        last_speaker: "Agent | None",
+        round_index: int,
+    ) -> list["Agent"]:
+        """Filter agents through registered eligibility policies (AND semantics).
+
+        Args:
+            agents: Current candidate agent list.
+            last_speaker: The agent that spoke last, or None for first round.
+            round_index: The current round index (number of messages so far).
+
+        Returns:
+            Filtered list of agents. All input agents if no policies registered.
+
+        Raises:
+            NoEligibleSpeakerError: If all agents are filtered out by eligibility policies.
+        """
+        # Snapshot to avoid TOCTOU if policies list is mutated during iteration
+        policies = tuple(self.eligibility_policies)
+        if not policies:
+            return agents
+
+        ctx = SelectionContext(
+            round=round_index,
+            last_speaker=last_speaker.name if last_speaker is not None else None,
+            participants=tuple(a.name for a in self.agents),
+        )
+
+        eligible = [agent for agent in agents if all(policy.is_eligible(agent, ctx) for policy in policies)]
+
+        if not eligible:
+            raise NoEligibleSpeakerError(
+                f"No eligible agents after applying eligibility policies. "
+                f"Checked {len(agents)} candidates: {[a.name for a in agents]}. "
+                f"Applied {len(policies)} policy/policies."
+            )
+
+        return eligible
 
     @property
     def agent_names(self) -> list[str]:
@@ -456,6 +515,11 @@ class GroupChat:
                     "Custom speaker selection function returned None. Terminating conversation."
                 )
             elif isinstance(selected_agent, Agent):
+                # When the Callable returns an Agent directly, the caller has explicit
+                # control over the selection -- eligibility_policies are NOT applied.
+                # This is by design: the Callable is treated as an override that bypasses
+                # the policy layer.  If the Callable returns a str instead (a method name),
+                # normal speaker selection runs and eligibility_policies DO apply.
                 if selected_agent in self.agents:
                     return selected_agent, self.agents, None
                 else:
@@ -463,7 +527,8 @@ class GroupChat:
                         f"Custom speaker selection function returned an agent {selected_agent.name} not in the group chat."
                     )
             elif isinstance(selected_agent, str):
-                # If returned a string, assume it is a speaker selection method
+                # If returned a string, assume it is a speaker selection method.
+                # Eligibility policies will apply normally in this path.
                 speaker_selection_method = selected_agent
             else:
                 raise ValueError(
@@ -498,6 +563,7 @@ class GroupChat:
                 "or use direct communication, unless repeated speaker is desired."
             )
 
+        _policies_applied = False  # track if policies already applied in func_call_filter path
         if (
             self.func_call_filter
             and self.messages
@@ -513,15 +579,26 @@ class GroupChat:
 
             # find agents with the right function_map which contains the function name
             agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
-            if len(agents) == 1:
-                # only one agent can execute the function
-                return agents[0], agents, None
-            elif not agents:
+            if agents:
+                agents = self._apply_eligibility_policies(
+                    agents,
+                    last_speaker=last_speaker,
+                    round_index=len(self.messages),
+                )
+                _policies_applied = True
+                # No early return here -- allow_repeat_speaker exclusion and
+                # transition filtering must still run (lines below).
+            else:
                 # find all the agents with function_map
                 agents = [agent for agent in self.agents if agent.function_map]
-                if len(agents) == 1:
-                    return agents[0], agents, None
-                elif not agents:
+                if agents:
+                    agents = self._apply_eligibility_policies(
+                        agents,
+                        last_speaker=last_speaker,
+                        round_index=len(self.messages),
+                    )
+                    _policies_applied = True
+                else:
                     raise ValueError(
                         f"No agent can execute the function {', '.join(funcs)}. "
                         "Please check the function_map of the agents."
@@ -547,13 +624,38 @@ class GroupChat:
                 agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
             ]
 
-        # If there is only one eligible agent, just return it to avoid the speaker selection prompt
-        if len(graph_eligible_agents) == 1:
-            return graph_eligible_agents[0], graph_eligible_agents, None
+        # Distinguish "no transition constraints" (legacy sentinel -- fallback to
+        # all agents is intentional) from "transition filtering genuinely emptied
+        # the candidate set" (should raise).  The sentinel case is when
+        # last_speaker is outside the group AND has no entry in the transition dict.
+        _no_transition_constraints = (
+            not is_last_speaker_in_group and last_speaker not in self.allowed_speaker_transitions_dict
+        )
+        if len(graph_eligible_agents) == 0 and _policies_applied and not _no_transition_constraints:
+            raise NoEligibleSpeakerError(
+                "All candidates were eliminated after eligibility policies and speaker filters "
+                "(allow_repeat_speaker or transition rules)."
+            )
 
-        # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
+        # Legacy behavior: empty graph_eligible_agents (no transition dict, or
+        # last_speaker not in group) falls back to full agent list.
         if len(graph_eligible_agents) == 0:
             graph_eligible_agents = None
+
+        # Apply eligibility policies (runtime filtering)
+        # When graph_eligible_agents is None, all agents are eligible per graph rules
+        candidates = graph_eligible_agents if graph_eligible_agents is not None else agents
+        if not _policies_applied:
+            candidates = self._apply_eligibility_policies(
+                candidates,
+                last_speaker=last_speaker,
+                round_index=len(self.messages),
+            )
+        graph_eligible_agents = candidates
+
+        # If there is only one eligible agent after policy filtering, just return it to avoid the speaker selection prompt
+        if len(graph_eligible_agents) == 1:
+            return graph_eligible_agents[0], graph_eligible_agents, None
 
         # Use the selected speaker selection method
         select_speaker_messages = None
@@ -581,7 +683,7 @@ class GroupChat:
             return selected_agent
         elif self.speaker_selection_method == "manual":
             # An agent has not been selected while in manual mode, so move to the next agent
-            return self.next_agent(last_speaker)
+            return self.next_agent(last_speaker, agents)
 
         # auto speaker selection with 2-agent chat
         return self._auto_select_speaker(last_speaker, selector, messages if messages else self.messages, agents)
@@ -593,7 +695,7 @@ class GroupChat:
             return selected_agent
         elif self.speaker_selection_method == "manual":
             # An agent has not been selected while in manual mode, so move to the next agent
-            return self.next_agent(last_speaker)
+            return self.next_agent(last_speaker, agents)
 
         # auto speaker selection with 2-agent chat
         return await self.a_auto_select_speaker(last_speaker, selector, messages if messages else self.messages, agents)
@@ -886,7 +988,7 @@ class GroupChat:
                         select_speaker_auto_verbose=self.select_speaker_auto_verbose,
                     )
                 )
-            elif no_of_mentions == 1:
+            elif no_of_mentions > 1:
                 iostream.send(
                     SpeakerAttemptFailedMultipleAgentsEvent(
                         mentions=mentions,

@@ -9,6 +9,7 @@ import pytest
 
 from autogen.beta import Agent, Context, tool
 from autogen.beta.events import ToolCallEvent
+from autogen.beta.middleware import ToolExecution, ToolResultType
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import Toolkit
 
@@ -224,3 +225,114 @@ async def test_toolkit_empty() -> None:
     result = await agent.ask("Hi!")
 
     assert result.body == "done"
+
+
+@pytest.mark.asyncio()
+async def test_toolkit_middleware_applied_to_all_tools(mock: MagicMock) -> None:
+    """Toolkit middleware wraps every tool in the set."""
+
+    async def logging_middleware(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        mock.before(event.name)
+        result = await call_next(event, context)
+        mock.after(event.name)
+        return result
+
+    @tool
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+
+    @tool
+    def multiply(a: int, b: int) -> int:
+        """Multiply two numbers."""
+        return a * b
+
+    toolkit = Toolkit(add, multiply, middleware=[logging_middleware])
+
+    config = TestConfig(
+        ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
+        ToolCallEvent(name="multiply", arguments=json.dumps({"a": 3, "b": 4})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("Hi!")
+
+    assert mock.before.call_count == 2
+    mock.before.assert_any_call("add")
+    mock.before.assert_any_call("multiply")
+    assert mock.after.call_count == 2
+
+
+@pytest.mark.asyncio()
+async def test_toolkit_middleware_applied_to_decorator_tools(mock: MagicMock) -> None:
+    """Toolkit middleware also wraps tools added via the .tool() decorator."""
+
+    async def logging_middleware(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        mock.before(event.name)
+        result = await call_next(event, context)
+        mock.after(event.name)
+        return result
+
+    toolkit = Toolkit(middleware=[logging_middleware])
+
+    @toolkit.tool
+    def greet(name: str) -> str:
+        """Greet someone."""
+        return f"hello {name}"
+
+    config = TestConfig(
+        ToolCallEvent(name="greet", arguments=json.dumps({"name": "world"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("Hi!")
+
+    mock.before.assert_called_once_with("greet")
+    mock.after.assert_called_once_with("greet")
+
+
+@pytest.mark.asyncio()
+async def test_toolkit_middleware_ordering() -> None:
+    """Per-tool middleware runs before toolkit middleware."""
+    call_order: list[str] = []
+
+    async def tool_mw(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        call_order.append("tool_mw")
+        return await call_next(event, context)
+
+    async def toolkit_mw(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        call_order.append("toolkit_mw")
+        return await call_next(event, context)
+
+    @tool(middleware=[tool_mw])
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        call_order.append("tool")
+        return a + b
+
+    toolkit = Toolkit(add, middleware=[toolkit_mw])
+
+    config = TestConfig(
+        ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("Hi!")
+
+    assert call_order == ["toolkit_mw", "tool_mw", "tool"]

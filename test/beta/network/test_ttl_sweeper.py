@@ -313,7 +313,7 @@ class TestSchedulerIntegration:
         assert callable(callback)
         # Invoking it manually with placeholder args should not raise
         # even when there are no expired sessions.
-        from autogen.beta.context import Context
+        from autogen.beta.context import ConversationContext as Context
         from autogen.beta.stream import MemoryStream
 
         ctx = Context(stream=MemoryStream())

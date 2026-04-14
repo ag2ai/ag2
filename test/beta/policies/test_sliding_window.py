@@ -5,10 +5,11 @@
 import pytest
 
 from autogen.beta import ToolResult
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
@@ -33,7 +34,7 @@ def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEven
 class TestNoTrimming:
     @pytest.mark.asyncio
     async def test_events_within_limit_are_unchanged(self, context: Context) -> None:
-        events = [ModelRequest(content="a"), ModelRequest(content="b")]
+        events = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
         policy = SlidingWindowPolicy(max_events=5)
 
         prompts, result = await policy.apply([], events, context)
@@ -43,7 +44,7 @@ class TestNoTrimming:
 
     @pytest.mark.asyncio
     async def test_events_at_exact_limit(self, context: Context) -> None:
-        events = [ModelRequest(content="a"), ModelRequest(content="b")]
+        events = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
         policy = SlidingWindowPolicy(max_events=2)
 
         _, result = await policy.apply([], events, context)
@@ -54,18 +55,18 @@ class TestNoTrimming:
 class TestTrimming:
     @pytest.mark.asyncio
     async def test_keeps_last_n_events(self, context: Context) -> None:
-        events = [ModelRequest(content=str(i)) for i in range(5)]
+        events = [ModelRequest([TextInput(str(i))]) for i in range(5)]
         policy = SlidingWindowPolicy(max_events=2)
 
         _, result = await policy.apply([], events, context)
 
         assert len(result) == 2
-        assert result[0].content == "3"
-        assert result[1].content == "4"
+        assert result[0].inputs[0].content == "3"
+        assert result[1].inputs[0].content == "4"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
-        events = [ModelRequest(content=str(i)) for i in range(5)]
+        events = [ModelRequest([TextInput(str(i))]) for i in range(5)]
         policy = SlidingWindowPolicy(max_events=2, transparent=True)
 
         prompts, result = await policy.apply(["existing"], events, context)
@@ -84,8 +85,8 @@ class TestOrphanedToolResults:
         events = [
             _tool_response("tc_1"),  # will be trimmed
             _tool_results("tc_1"),  # orphaned after trim — should be skipped
-            ModelRequest(content="next"),
-            ModelRequest(content="final"),
+            ModelRequest([TextInput("next")]),
+            ModelRequest([TextInput("final")]),
         ]
         policy = SlidingWindowPolicy(max_events=3)
 
@@ -94,7 +95,7 @@ class TestOrphanedToolResults:
         # The ToolResultsEvent should be dropped, leaving 2 events
         assert len(result) == 2
         assert isinstance(result[0], ModelRequest)
-        assert result[0].content == "next"
+        assert result[0].inputs[0].content == "next"
 
     @pytest.mark.asyncio
     async def test_multiple_leading_orphaned_tool_results_are_skipped(self, context: Context) -> None:
@@ -103,7 +104,7 @@ class TestOrphanedToolResults:
             _tool_response("tc_2"),
             _tool_results("tc_1"),
             _tool_results("tc_2"),
-            ModelRequest(content="hello"),
+            ModelRequest([TextInput("hello")]),
         ]
         policy = SlidingWindowPolicy(max_events=3)
 
@@ -117,10 +118,10 @@ class TestOrphanedToolResults:
     async def test_non_leading_tool_result_is_kept(self, context: Context) -> None:
         """ToolResultsEvent after a non-ToolResultsEvent should be preserved."""
         events = [
-            ModelRequest(content="old"),
+            ModelRequest([TextInput("old")]),
             _tool_response("tc_1"),
             _tool_results("tc_1"),
-            ModelRequest(content="new"),
+            ModelRequest([TextInput("new")]),
         ]
         policy = SlidingWindowPolicy(max_events=3)
 
@@ -137,8 +138,8 @@ class TestOrphanedToolResults:
         events = [
             _tool_response("tc_1"),
             _tool_results("tc_1"),
-            ModelRequest(content="a"),
-            ModelRequest(content="b"),
+            ModelRequest([TextInput("a")]),
+            ModelRequest([TextInput("b")]),
         ]
         policy = SlidingWindowPolicy(max_events=3, transparent=True)
 

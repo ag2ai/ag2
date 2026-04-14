@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import ExitStack
+
 import pytest
 
 from autogen.beta import BaseObserver
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
@@ -52,13 +54,14 @@ class TestBaseObserver:
             condition=TypeCondition(ObserverAlert),
         )
 
-        obs.attach(stream, ctx)
-        await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+        with ExitStack() as stack:
+            obs.register(stack, ctx)
+            await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
 
-        assert obs.process_count == 1
-        assert len(signals) == 1
-        assert signals[0].source == "test-observer"
-        assert signals[0].severity == Severity.WARNING
+            assert obs.process_count == 1
+            assert len(signals) == 1
+            assert signals[0].source == "test-observer"
+            assert signals[0].severity == Severity.WARNING
 
     @pytest.mark.asyncio
     async def test_detach_stops_processing(self) -> None:
@@ -66,8 +69,9 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = DummyObserver()
 
-        obs.attach(stream, ctx)
-        obs.detach()
+        stack = ExitStack()
+        obs.register(stack, ctx)
+        stack.close()
 
         await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
         assert obs.process_count == 0
@@ -84,10 +88,11 @@ class TestBaseObserver:
             condition=TypeCondition(ObserverAlert),
         )
 
-        obs.attach(stream, ctx)
-        await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
+        with ExitStack() as stack:
+            obs.register(stack, ctx)
+            await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
 
-        assert len(signals) == 0
+            assert len(signals) == 0
 
     @pytest.mark.asyncio
     async def test_only_matching_events(self) -> None:
@@ -95,11 +100,12 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = DummyObserver()
 
-        obs.attach(stream, ctx)
+        with ExitStack() as stack:
+            obs.register(stack, ctx)
 
-        # ModelMessage doesn't match ToolCallEvent watch
-        await stream.send(ModelMessage(content="hello"), ctx)
-        assert obs.process_count == 0
+            # ModelMessage doesn't match ToolCallEvent watch
+            await stream.send(ModelMessage(content="hello"), ctx)
+            assert obs.process_count == 0
 
-        await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
-        assert obs.process_count == 1
+            await stream.send(ToolCallEvent(name="t", arguments="{}"), ctx)
+            assert obs.process_count == 1

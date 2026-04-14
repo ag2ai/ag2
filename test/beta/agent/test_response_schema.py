@@ -11,8 +11,6 @@ from pydantic import BaseModel
 from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.testing import TestConfig, TrackingConfig
 
-# --- Agent-level response_schema ---
-
 
 @pytest.mark.asyncio()
 class TestAgentLevelResponseSchema:
@@ -141,7 +139,7 @@ class TestAgentLevelResponseSchema:
         # 1 initial ask + 1 retry
         assert tracking.mock.call_count == 2
         retry_msg = tracking.mock.call_args_list[1][0][0]
-        assert "not a number" in retry_msg.content
+        assert "not a number" in retry_msg.inputs[0].content
 
     async def test_retry_with_prompted_schema_omits_null_schema(self) -> None:
         tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
@@ -153,7 +151,7 @@ class TestAgentLevelResponseSchema:
         assert result == 42
 
         retry_msg = tracking.mock.call_args_list[1][0][0]
-        assert "null" not in retry_msg.content
+        assert "null" not in retry_msg.inputs[0].content
 
     async def test_retry_exhausted_raises(self) -> None:
         tracking = TrackingConfig(TestConfig("bad", "still bad"))
@@ -179,7 +177,6 @@ class TestAgentLevelResponseSchema:
         assert tracking.mock.call_count == 4
 
 
-# --- Ask-level response_schema ---
 @pytest.mark.asyncio()
 class TestAskLevelResponseSchema:
     async def test_ask_type_override(self) -> None:

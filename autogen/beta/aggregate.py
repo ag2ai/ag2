@@ -102,15 +102,15 @@ class ConversationSummaryAggregate:
         await store.write(f"/memory/conversations/{ts}_{stream_id}.md", summary)
 
     async def _summarize(self, events: list[BaseEvent]) -> str:
-        from autogen.beta.context import Context as Ctx
+        from autogen.beta.context import ConversationContext as Ctx
         from autogen.beta.events import ModelRequest
         from autogen.beta.stream import MemoryStream
 
         client = self._config.create()
-        prompt_event = ModelRequest(
-            content="Summarize this conversation. Include key decisions, "
+        prompt_event = ModelRequest.ensure_request([
+            "Summarize this conversation. Include key decisions, "
             "findings, outcomes, and any unfinished work:\n\n" + "\n".join(str(e) for e in events)
-        )
+        ])
         response = await client(
             [prompt_event],
             Ctx(MemoryStream()),
@@ -148,7 +148,7 @@ class WorkingMemoryAggregate:
         await store.write("/memory/working.md", updated)
 
     async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
-        from autogen.beta.context import Context as Ctx
+        from autogen.beta.context import ConversationContext as Ctx
         from autogen.beta.events import ModelRequest
         from autogen.beta.stream import MemoryStream
 
@@ -161,7 +161,7 @@ class WorkingMemoryAggregate:
             "## New Conversation\n" + "\n".join(str(e) for e in events)
         )
         response = await client(
-            [ModelRequest(content=prompt)],
+            [ModelRequest.ensure_request([prompt])],
             Ctx(MemoryStream()),
             tools=[],
             response_schema=None,

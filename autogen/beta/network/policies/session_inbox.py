@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest
 
 from ..envelope import EV_TEXT, Envelope
@@ -76,7 +76,7 @@ def _envelope_to_model_event(
         return None
     if envelope.sender_id == self_actor_id:
         return ModelMessage(content=content)
-    return ModelRequest(content=content)
+    return ModelRequest.ensure_request([content])
 
 
 @dataclass
@@ -169,7 +169,7 @@ class PreviousOnlyInboxPolicy:
                 content = env.content()
             except KeyError:
                 continue
-            previous = ModelRequest(content=content)
+            previous = ModelRequest.ensure_request([content])
 
         if previous is None:
             return prompts, events

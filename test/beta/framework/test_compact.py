@@ -7,8 +7,8 @@
 import pytest
 
 from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
-from autogen.beta.context import Context
-from autogen.beta.events import ModelRequest
+from autogen.beta.context import ConversationContext as Context
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 
@@ -17,7 +17,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_op_below_target(self) -> None:
         compact = TailWindowCompact(target=10)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(5)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 5
@@ -25,17 +25,17 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_truncates_above_target(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
-        assert result[0].content == "msg-7"
+        assert result[0].inputs[0].content == "msg-7"
 
     @pytest.mark.asyncio
     async def test_persists_dropped_to_store(self) -> None:
         store = MemoryKnowledgeStore()
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         stream = MemoryStream()
         ctx = Context(stream=stream)
         result = await compact.compact(events, ctx, store)
@@ -49,7 +49,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_persist_without_store(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3

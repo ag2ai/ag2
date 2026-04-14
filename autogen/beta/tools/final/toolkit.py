@@ -15,8 +15,13 @@ from .function_tool import FunctionParameters, FunctionTool, tool
 
 
 class Toolkit(Tool):
-    def __init__(self, *tools: Tool | Callable[..., Any]) -> None:
-        self.tools: list[Tool] = [FunctionTool.ensure_tool(t) for t in tools]
+    def __init__(
+        self,
+        *tools: Tool | Callable[..., Any],
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> None:
+        self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
+        self.tools: list[FunctionTool] = [FunctionTool.ensure_tool(t).with_middleware(*self._middleware) for t in tools]
 
     @overload
     def tool(
@@ -28,7 +33,7 @@ class Toolkit(Tool):
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool: ...
+    ) -> FunctionTool: ...
 
     @overload
     def tool(
@@ -40,7 +45,7 @@ class Toolkit(Tool):
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> Callable[[Callable[..., Any]], Tool]: ...
+    ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
     def tool(
         self,
@@ -51,8 +56,8 @@ class Toolkit(Tool):
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
-        def make_tool(f: Callable[..., Any]) -> Tool:
+    ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
+        def make_tool(f: Callable[..., Any]) -> FunctionTool:
             t = FunctionTool.ensure_tool(
                 tool(
                     f,
@@ -62,7 +67,7 @@ class Toolkit(Tool):
                     sync_to_thread=sync_to_thread,
                     middleware=middleware,
                 )
-            )
+            ).with_middleware(*self._middleware)
             self.tools.append(t)
             return t
 

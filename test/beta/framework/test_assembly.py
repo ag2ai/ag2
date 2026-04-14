@@ -8,8 +8,8 @@ import pytest
 
 from autogen.beta import AssemblerMiddleware
 from autogen.beta.compact import CompactionSummary
-from autogen.beta.context import Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse
+from autogen.beta.context import ConversationContext as Context
+from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
 from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
@@ -28,7 +28,7 @@ class TestConversationPolicy:
     async def test_filters_to_conversation_events(self) -> None:
         policy = ConversationPolicy()
         events = [
-            ModelRequest(content="hello"),
+            ModelRequest([TextInput("hello")]),
             ModelResponse(message=ModelMessage(content="hi")),
             ToolCallEvent(name="search", arguments="{}"),
             ToolResultEvent(id="1", name="search", content="result"),
@@ -43,7 +43,7 @@ class TestConversationPolicy:
     async def test_includes_compaction_summary(self) -> None:
         policy = ConversationPolicy()
         summary = CompactionSummary(summary="Earlier context...", event_count=50)
-        events = [summary, ModelRequest(content="hello")]
+        events = [summary, ModelRequest([TextInput("hello")])]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         assert summary in filtered
@@ -59,7 +59,7 @@ class TestSlidingWindowPolicy:
     @pytest.mark.asyncio
     async def test_no_trim_below_max(self) -> None:
         policy = SlidingWindowPolicy(max_events=10)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(5)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         ctx = Context(stream=MemoryStream())
         prompts, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 5
@@ -68,16 +68,16 @@ class TestSlidingWindowPolicy:
     @pytest.mark.asyncio
     async def test_trims_to_max(self) -> None:
         policy = SlidingWindowPolicy(max_events=3)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 3
-        assert filtered[0].content == "msg-7"
+        assert filtered[0].inputs[0].content == "msg-7"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_note(self) -> None:
         policy = SlidingWindowPolicy(max_events=3, transparent=True)
-        events = [ModelRequest(content=f"msg-{i}") for i in range(10)]
+        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], events, ctx)
         assert len(prompts) == 1
@@ -88,7 +88,7 @@ class TestTokenBudgetPolicy:
     @pytest.mark.asyncio
     async def test_no_trim_within_budget(self) -> None:
         policy = TokenBudgetPolicy(max_tokens=10000)
-        events = [ModelRequest(content="short")]
+        events = [ModelRequest([TextInput("short")])]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 1
@@ -96,12 +96,12 @@ class TestTokenBudgetPolicy:
     @pytest.mark.asyncio
     async def test_trims_to_budget(self) -> None:
         policy = TokenBudgetPolicy(max_tokens=10, chars_per_token=1)
-        events = [ModelRequest(content="a" * 20), ModelRequest(content="b" * 5)]
+        events = [ModelRequest([TextInput("a" * 20)]), ModelRequest([TextInput("b" * 5)])]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         # Should keep at least the last event that fits
         assert len(filtered) >= 1
-        assert filtered[-1].content == "b" * 5
+        assert filtered[-1].inputs[0].content == "b" * 5
 
 
 class TestAssemblerMiddleware:
@@ -109,13 +109,13 @@ class TestAssemblerMiddleware:
     async def test_applies_policies_in_order(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
 
         policy = ConversationPolicy()
         mw = AssemblerMiddleware(initial_event, ctx, policies=[policy])
 
         all_events = [
-            ModelRequest(content="hello"),
+            ModelRequest([TextInput("hello")]),
             ModelResponse(message=ModelMessage(content="hi")),
             ObserverAlert(source="mon", severity=Severity.WARNING, message="warn"),
         ]
@@ -137,7 +137,7 @@ class TestAssemblerMiddleware:
     async def test_restores_prompts_after_call(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream, prompt=["original"])
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
 
         class _PromptAdder:
             name = "adder"
@@ -151,7 +151,7 @@ class TestAssemblerMiddleware:
             assert "injected" in context.prompt
             return ModelResponse(message=ModelMessage(content="ok"))
 
-        await mw.on_llm_call(mock_llm_call, [ModelRequest(content="hi")], ctx)
+        await mw.on_llm_call(mock_llm_call, [ModelRequest([TextInput("hi")])], ctx)
         assert ctx.prompt == ["original"]
 
     def test_validate_order_warns_on_bad_ordering(self) -> None:
@@ -183,7 +183,7 @@ class TestAssemblerMiddleware:
     async def test_restores_prompts_on_exception(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream, prompt=["original"])
-        initial_event = ModelRequest(content="start")
+        initial_event = ModelRequest([TextInput("start")])
 
         class _PromptAdder:
             name = "adder"
@@ -197,7 +197,7 @@ class TestAssemblerMiddleware:
             raise RuntimeError("LLM failed")
 
         with pytest.raises(RuntimeError):
-            await mw.on_llm_call(failing_llm_call, [ModelRequest(content="hi")], ctx)
+            await mw.on_llm_call(failing_llm_call, [ModelRequest([TextInput("hi")])], ctx)
 
         # Prompts must be restored even after exception
         assert ctx.prompt == ["original"]
@@ -214,7 +214,7 @@ class TestEpisodicMemoryPolicy:
         ctx = Context(stream=MemoryStream())
         ctx.dependencies[KnowledgeStore] = store
 
-        prompts, events = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, events = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         assert any("Past Conversations" in p for p in prompts)
         assert any("Summary of session 1" in p for p in prompts)
         assert any("Summary of session 2" in p for p in prompts)
@@ -229,7 +229,7 @@ class TestEpisodicMemoryPolicy:
         ctx = Context(stream=MemoryStream())
         ctx.dependencies[KnowledgeStore] = store
 
-        prompts, _ = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, _ = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         # Should have the last 3 (most recent by sorted name)
         combined = " ".join(prompts)
         assert "Summary 7" in combined
@@ -241,7 +241,7 @@ class TestEpisodicMemoryPolicy:
     async def test_no_op_without_store(self) -> None:
         policy = EpisodicMemoryPolicy()
         ctx = Context(stream=MemoryStream())
-        prompts, events = await policy.apply(["existing"], [ModelRequest(content="hi")], ctx)
+        prompts, events = await policy.apply(["existing"], [ModelRequest([TextInput("hi")])], ctx)
         assert prompts == ["existing"]
 
     @pytest.mark.asyncio
@@ -250,7 +250,7 @@ class TestEpisodicMemoryPolicy:
         policy = EpisodicMemoryPolicy()
         ctx = Context(stream=MemoryStream())
         ctx.dependencies[KnowledgeStore] = store
-        prompts, _ = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, _ = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         assert prompts == []
 
 
@@ -264,7 +264,7 @@ class TestWorkingMemoryPolicy:
         ctx = Context(stream=MemoryStream())
         ctx.dependencies[KnowledgeStore] = store
 
-        prompts, _ = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, _ = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         assert any("Working Memory" in p for p in prompts)
         assert any("project X" in p for p in prompts)
 
@@ -272,7 +272,7 @@ class TestWorkingMemoryPolicy:
     async def test_no_op_without_store(self) -> None:
         policy = WorkingMemoryPolicy()
         ctx = Context(stream=MemoryStream())
-        prompts, _ = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, _ = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         assert prompts == []
 
     @pytest.mark.asyncio
@@ -281,7 +281,7 @@ class TestWorkingMemoryPolicy:
         policy = WorkingMemoryPolicy()
         ctx = Context(stream=MemoryStream())
         ctx.dependencies[KnowledgeStore] = store
-        prompts, _ = await policy.apply([], [ModelRequest(content="hi")], ctx)
+        prompts, _ = await policy.apply([], [ModelRequest([TextInput("hi")])], ctx)
         assert prompts == []
 
 

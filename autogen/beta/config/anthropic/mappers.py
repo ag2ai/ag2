@@ -2,18 +2,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResultsEvent
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import (
+    BinaryInput,
+    BinaryType,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageUrlInput,
+)
 from autogen.beta.events.types import Usage
-from autogen.beta.exceptions import UnsupportedToolError
+from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
 from autogen.beta.tools.builtin.memory import MemoryToolSchema
 from autogen.beta.tools.builtin.shell import ShellToolSchema
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
@@ -131,6 +140,11 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
         return {"type": t.version, "name": "bash"}
 
+    elif isinstance(t, SkillsToolSchema):
+        # Skills are handled via the container parameter, not the tools[] array.
+        # Use extract_skills_for_container() in the client instead.
+        raise UnsupportedToolError(t.type, "anthropic")
+
     elif isinstance(t, MCPServerToolSchema):
         # https://platform.claude.com/docs/en/docs/agents-and-tools/mcp-connector
         result = {
@@ -165,6 +179,36 @@ def extract_mcp_servers(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
     return servers
 
 
+def extract_skills_for_container(tools: Iterable[ToolSchema]) -> list[dict[str, Any]]:
+    """Extract Anthropic skills from SkillsToolSchema instances for the container parameter."""
+    skills: list[dict[str, Any]] = []
+    for t in tools:
+        if isinstance(t, SkillsToolSchema):
+            for s in t.skills:
+                entry: dict[str, Any] = {
+                    "type": "anthropic",
+                    "skill_id": s.id,
+                    "version": str(s.version) if s.version is not None else "latest",
+                }
+                skills.append(entry)
+    return skills
+
+
+_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
+
+# Anthropic content block keys that are safe to pass through from vendor_metadata.
+_ANTHROPIC_VENDOR_KEYS = frozenset({"cache_control", "citations"})
+
+
+def _file_id_block_type(filename: str | None) -> str:
+    """Infer Anthropic content block type from filename extension."""
+    if filename:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if f".{ext}" in _IMAGE_EXTENSIONS:
+            return "image"
+    return "document"
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
 ) -> list[dict[str, Any]]:
@@ -183,10 +227,48 @@ def convert_messages(
 
     for message in event_list:
         if isinstance(message, ModelRequest):
-            result.append({
-                "role": "user",
-                "content": message.content,
-            })
+            content_parts: list[dict[str, Any]] = []
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    content_parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, ImageUrlInput):
+                    content_parts.append({"type": "image", "source": {"type": "url", "url": inp.url}})
+
+                elif isinstance(inp, DocumentUrlInput):
+                    content_parts.append({"type": "document", "source": {"type": "url", "url": inp.url}})
+
+                elif isinstance(inp, FileIdInput):
+                    block_type = _file_id_block_type(inp.filename)
+                    content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
+
+                elif isinstance(inp, BinaryInput):
+                    extra = {k: v for k, v in inp.vendor_metadata.items() if k in _ANTHROPIC_VENDOR_KEYS}
+                    if inp.kind == BinaryType.IMAGE:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item: dict[str, Any] = {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+                    elif inp.kind == BinaryType.DOCUMENT:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item = {
+                            "type": "document",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+                    else:
+                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "anthropic")
+
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "anthropic")
+
+            if content_parts:
+                result.append({"role": "user", "content": content_parts})
+
         elif isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
@@ -200,6 +282,7 @@ def convert_messages(
                 })
             if content:
                 result.append({"role": "assistant", "content": content})
+
         elif isinstance(message, ToolResultsEvent):
             tool_results = [
                 {

@@ -1,5 +1,6 @@
 .agents
 .claude
+.rtk
 skills-lock.json
 
 .docusaurus/

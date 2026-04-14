@@ -5,6 +5,22 @@
 from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field
 from .conditions import Condition
+from .input_events import (
+    AudioInput,
+    AudioUrlInput,
+    BinaryInput,
+    BinaryType,
+    DocumentInput,
+    DocumentUrlInput,
+    FileIdInput,
+    ImageInput,
+    ImageUrlInput,
+    Input,
+    ModelRequest,
+    TextInput,
+    VideoInput,
+    VideoUrlInput,
+)
 from .lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
@@ -15,7 +31,10 @@ from .lifecycle import (
     TaskResult,
     UnknownEvent,
 )
+from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ClientToolCallEvent,
     ToolCallEvent,
     ToolCallsEvent,
@@ -25,26 +44,39 @@ from .tool_events import (
     ToolResultsEvent,
 )
 from .types import (
+    BinaryResult,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     Usage,
 )
 
 __all__ = (
     "AggregationCompleted",
+    "AudioInput",
+    "AudioUrlInput",
     "BaseEvent",
+    "BinaryInput",
+    "BinaryResult",
+    "BinaryType",
+    "BuiltinToolCallEvent",
+    "BuiltinToolResultEvent",
     "ClientToolCallEvent",
     "CompactionCompleted",
     "Condition",
+    "DocumentInput",
+    "DocumentUrlInput",
     "Field",
+    "FileIdInput",
     "HaltEvent",
     "HumanInputRequest",
     "HumanMessage",
+    "ImageInput",
+    "ImageUrlInput",
+    "Input",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
@@ -54,9 +86,13 @@ __all__ = (
     "ObserverCompleted",
     "ObserverStarted",
     "Severity",
+    "TaskCompleted",
+    "TaskFailed",
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
+    "TaskStarted",
+    "TextInput",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",
@@ -65,4 +101,6 @@ __all__ = (
     "ToolResultsEvent",
     "UnknownEvent",
     "Usage",
+    "VideoInput",
+    "VideoUrlInput",
 )

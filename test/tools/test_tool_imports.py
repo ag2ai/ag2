@@ -62,7 +62,7 @@ class TestToolImports:
     def test_imports_experimental_messageplatform_individual(self) -> None:
         pass
 
-    def test_experimental_mesageplatform_all_exports(self) -> None:
+    def test_experimental_messageplatform_all_exports(self) -> None:
         from autogen.tools.experimental.messageplatform import __all__ as messageplatform_all
         from autogen.tools.experimental.messageplatform.discord import __all__ as discord_all
         from autogen.tools.experimental.messageplatform.slack import __all__ as slack_all

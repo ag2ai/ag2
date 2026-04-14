@@ -21,8 +21,10 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: filter
         with:
           filters: |
@@ -81,50 +83,52 @@ jobs:
           - "google-api"
           - "wikipedia-api"
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Run tests only for py versions 3.10, 3.13
-        python-version: ["3.10", "3.13"]
+        # Run tests only for py versions 3.10, 3.14
+        python-version: ["3.10", "3.14"]
         # add more if needed
         exclude:
-          # Issues with installing retrievechat-qdrant in python 3.13
-          - python-version: "3.13"
+          # Issues with installing retrievechat-qdrant in python 3.14
+          - python-version: "3.14"
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
           - python-version: "3.10"
             optional-dependencies: "browser-use"
-          # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
+          # Skip if os is mac or windows, python version is 3.14 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat"
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-pgvector"
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-mongodb"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-pgvector"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "retrievechat-mongodb"
-          # Skip RAG tests on macOS and Windows with Python 3.13 due to issues with dependencies like PyTorch and sentence_transformers
+          # Skip RAG tests on macOS and Windows with Python 3.14 due to issues with dependencies like PyTorch and sentence_transformers
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "rag"
           - os: windows-latest
-            python-version: "3.13"
+            python-version: "3.14"
             optional-dependencies: "rag"
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
@@ -156,7 +160,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: optional-deps, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -182,13 +186,13 @@ jobs:
       - name: Fail workflow if build failed
         id: check_build_failed
         if: contains(join(needs.*.result, ','), 'failure')
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: core.setFailed('Build Failed!')
 
       - name: Fail workflow if build cancelled
         id: check_build_cancelled
         if: contains(join(needs.*.result, ','), 'cancelled')
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: core.setFailed('Build Cancelled!')

@@ -73,6 +73,3 @@ class LoopDetector(BaseObserver):
         """Reset state for a fresh session."""
         self._history.clear()
         self._flagged.clear()
-
-    def detach(self) -> None:
-        super().detach()

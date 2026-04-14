@@ -88,6 +88,3 @@ class TokenMonitor(BaseObserver):
         self._total_tokens = 0
         self._warned = False
         self._alerted = False
-
-    def detach(self) -> None:
-        super().detach()

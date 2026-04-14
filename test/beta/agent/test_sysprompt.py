@@ -32,7 +32,7 @@ class MockClient(LLMClient):
     ) -> ModelResponse:
         await ctx.send(CustomEvent())
         self.mock(ctx.prompt)
-        return ModelResponse(message=ModelMessage(content="Hi, user!"))
+        return ModelResponse(ModelMessage("Hi, user!"))
 
 
 @pytest.mark.asyncio()

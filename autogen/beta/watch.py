@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from autogen.beta.annotations import Context
-from autogen.beta.context import Context as ContextType
+from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.context import Stream, SubId
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.conditions import ClassInfo, Condition, TypeCondition

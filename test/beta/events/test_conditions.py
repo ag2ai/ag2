@@ -11,17 +11,15 @@ class TestEvent(BaseEvent):
     field: int | str | None
 
 
+class ChildEvent(TestEvent):
+    pass
+
+
 class AnotherEvent(BaseEvent):
     field: str
 
 
 class TestEventConditions:
-    def test_different_event_with_condition(self):
-        condition = TestEvent.field == "1"
-
-        assert condition(TestEvent(field="1"))
-        assert not condition(AnotherEvent(field="1"))
-
     def test_equality_condition_string(self):
         condition = TestEvent.field == "1"
 
@@ -201,3 +199,21 @@ class TestEventConditions:
         assert not condition(TestEvent(field=0))
         assert not condition(TestEvent(field=100))
         assert not condition(TestEvent(field=50))
+
+    def test_condition_matches_subclass(self):
+        condition = TestEvent.field == "1"
+
+        assert condition(TestEvent(field="1"))
+        assert condition(ChildEvent(field="1"))
+
+    def test_child_condition_does_not_match_parent(self):
+        condition = ChildEvent.field == "1"
+
+        assert condition(ChildEvent(field="1"))
+        assert not condition(TestEvent(field="1"))
+
+    def test_different_event_with_condition(self):
+        condition = TestEvent.field == "1"
+
+        assert condition(TestEvent(field="1"))
+        assert not condition(AnotherEvent(field="1"))

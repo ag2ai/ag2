@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from autogen.beta.events import ModelRequest
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     EventLogWriter,
@@ -96,14 +96,14 @@ class TestEventLogWriter:
         stream_id = uuid4()
 
         events = [
-            ModelRequest(content="hello"),
+            ModelRequest([TextInput("hello")]),
             TaskProgress(task_name="analyze", content="halfway"),
         ]
         await writer.persist(stream_id, events)
 
         loaded = await writer.load(stream_id)
         assert len(loaded) == 2
-        assert loaded[0].content == "hello"
+        assert loaded[0].inputs[0].content == "hello"
         assert loaded[1].task_name == "analyze"
         assert loaded[1].content == "halfway"
 
@@ -114,9 +114,9 @@ class TestEventLogWriter:
         stream_id = uuid4()
 
         # Simulate two compaction drops + final persist
-        dropped1 = [ModelRequest(content="old-1")]
-        dropped2 = [ModelRequest(content="old-2")]
-        final = [ModelRequest(content="recent")]
+        dropped1 = [ModelRequest([TextInput("old-1")])]
+        dropped2 = [ModelRequest([TextInput("old-2")])]
+        final = [ModelRequest([TextInput("recent")])]
 
         await writer.persist_dropped(stream_id, dropped1)
         await writer.persist_dropped(stream_id, dropped2)
@@ -125,9 +125,9 @@ class TestEventLogWriter:
         # Load should return all in order: dropped-1, dropped-2, final
         loaded = await writer.load(stream_id)
         assert len(loaded) == 3
-        assert loaded[0].content == "old-1"
-        assert loaded[1].content == "old-2"
-        assert loaded[2].content == "recent"
+        assert loaded[0].inputs[0].content == "old-1"
+        assert loaded[1].inputs[0].content == "old-2"
+        assert loaded[2].inputs[0].content == "recent"
 
     @pytest.mark.asyncio
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
@@ -141,22 +141,22 @@ class TestEventLogWriter:
 
         # First compaction — writer 1
         writer1 = EventLogWriter(store)
-        await writer1.persist_dropped(stream_id, [ModelRequest(content="batch-1")])
+        await writer1.persist_dropped(stream_id, [ModelRequest([TextInput("batch-1")])])
 
         # Second compaction — completely new writer (as TailWindowCompact creates)
         writer2 = EventLogWriter(store)
-        await writer2.persist_dropped(stream_id, [ModelRequest(content="batch-2")])
+        await writer2.persist_dropped(stream_id, [ModelRequest([TextInput("batch-2")])])
 
         # Final persist
         writer3 = EventLogWriter(store)
-        await writer3.persist(stream_id, [ModelRequest(content="final")])
+        await writer3.persist(stream_id, [ModelRequest([TextInput("final")])])
 
         # All three segments must be present and loadable
         loaded = await EventLogWriter(store).load(stream_id)
         assert len(loaded) == 3
-        assert loaded[0].content == "batch-1"
-        assert loaded[1].content == "batch-2"
-        assert loaded[2].content == "final"
+        assert loaded[0].inputs[0].content == "batch-1"
+        assert loaded[1].inputs[0].content == "batch-2"
+        assert loaded[2].inputs[0].content == "final"
 
     @pytest.mark.asyncio
     async def test_load_empty(self) -> None:

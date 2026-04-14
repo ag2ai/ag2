@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import ExitStack
+
 import pytest
 
 from autogen.beta import LoopDetector, TokenMonitor
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelResponse, ToolCallEvent
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
@@ -27,7 +29,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         # Send a response with 50 tokens — below threshold
         event = ModelResponse(usage=Usage(total_tokens=50))
@@ -48,7 +50,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
 
@@ -68,7 +70,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         # Jump straight past both thresholds
         await stream.send(ModelResponse(usage=Usage(total_tokens=250)), ctx)
@@ -99,7 +101,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         await stream.send(
             TaskResult(task="t1", task_name="task-1", result="done", usage={"total_tokens": 60}),
@@ -122,7 +124,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         await stream.send(
             TaskResult(task="t1", task_name="task-1", result="done", usage={"total_tokens": 120}),
@@ -145,7 +147,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         await stream.send(ModelResponse(usage=Usage(total_tokens=60)), ctx)
         await stream.send(
@@ -164,7 +166,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         # ModelResponse with default (empty) Usage
         await stream.send(ModelResponse(), ctx)
@@ -189,7 +191,7 @@ class TestTokenMonitor:
             condition=TypeCondition(ObserverAlert),
         )
 
-        monitor.attach(stream, ctx)
+        monitor.register(ExitStack(), ctx)
 
         await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
         await stream.send(ModelResponse(usage=Usage(total_tokens=50)), ctx)
@@ -210,7 +212,7 @@ class TestLoopDetector:
             condition=TypeCondition(ObserverAlert),
         )
 
-        detector.attach(stream, ctx)
+        detector.register(ExitStack(), ctx)
 
         # Only 2 identical calls — below threshold of 3
         await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
@@ -230,7 +232,7 @@ class TestLoopDetector:
             condition=TypeCondition(ObserverAlert),
         )
 
-        detector.attach(stream, ctx)
+        detector.register(ExitStack(), ctx)
 
         # 3 identical calls — should trigger
         for _ in range(3):
@@ -252,7 +254,7 @@ class TestLoopDetector:
             condition=TypeCondition(ObserverAlert),
         )
 
-        detector.attach(stream, ctx)
+        detector.register(ExitStack(), ctx)
 
         # Different calls — no loop
         await stream.send(ToolCallEvent(name="search", arguments="q1"), ctx)

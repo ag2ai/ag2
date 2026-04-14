@@ -40,12 +40,7 @@ class ContainerReferenceEnvironment:
     container_id: str
 
 
-@dataclass(slots=True)
-class LocalEnvironment:
-    """Commands execute in the local runtime (client-side, OpenAI)."""
-
-
-ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment | LocalEnvironment
+ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment
 
 
 @dataclass(slots=True)
@@ -75,8 +70,7 @@ class ShellTool(Tool):
 
     - **OpenAI Responses API** — maps to ``shell`` (``gpt-5.4``).
       Use ``environment`` to control where commands execute:
-      ``ContainerAutoEnvironment``, ``ContainerReferenceEnvironment``, or
-      ``LocalEnvironment``. Omit ``environment`` for OpenAI's default behaviour.
+      ``ContainerAutoEnvironment``, ``ContainerReferenceEnvironment``
 
     See:
     - https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool

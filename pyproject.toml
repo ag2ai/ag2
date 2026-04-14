@@ -63,6 +63,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -75,11 +76,11 @@ classifiers = [
 ]
 
 dependencies = [
-    "diskcache",
     "termcolor",
     "python-dotenv",
     "tiktoken",
     "pydantic>=2.6.1,<3",
+    "pyyaml>=6.0.2",
     "docker",
     "packaging",
     "httpx>=0.28.1,<1",
@@ -100,6 +101,9 @@ a2a = [
 ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]
+
+# cache backends
+diskcache = ["diskcache"]
 
 # providers
 openai = ["openai>=1.99.3,<2"]
@@ -206,9 +210,7 @@ quick-research = [
 ]
 
 browser-use = [
-    # ToDo: Restrict browser-use to a specific version
-    # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
-    "browser-use==0.1.37",
+    "browser-use>=0.3.1,<1.0",
 ]
 
 google-client = ["google-api-python-client>=2.163.0,<3.0"]
@@ -281,6 +283,7 @@ long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
+daytona = ["daytona>=0.1.0"]
 cohere = ["cohere>=5.13.5"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
@@ -289,6 +292,11 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 tavily = ["tavily-python>=0.7.4"]
+
+nlip = [
+    "nlip-sdk>=0.1.0, <1",
+    "nlip-server>=0.1.0, <1"
+]
 
 ## dev dependencies
 
@@ -362,6 +370,7 @@ types = [
 lint = [
     "ruff==0.14.14",
     "codespell==2.4.1",
+    "zizmor==1.11.0",
 ]
 
 dev = [
@@ -613,4 +622,4 @@ disallow_any_unimported = true
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,COO,EHR,ALS,crasher"
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher"

@@ -148,7 +148,6 @@ class TestEmbeddedTypes:
         assert not schema._embedded_type
 
 
-# --- Dataclass schemas ---
 class TestDataclassSchemas:
     def test_simple_dataclass(self) -> None:
         @dataclass
@@ -191,10 +190,10 @@ class TestDataclassSchemas:
         schema = ResponseSchema(Config)
 
         assert schema.name == "Config"
-        assert schema.json_schema == IsPartialDict(
-            required=["mode"],
-            properties=IsPartialDict(retries=IsPartialDict(default=3)),
-        )
+        assert schema.json_schema == IsPartialDict({
+            "required": ["mode"],
+            "properties": IsPartialDict({"retries": IsPartialDict({"default": 3})}),
+        })
 
     def test_nested_dataclass(self) -> None:
         @dataclass
@@ -211,12 +210,11 @@ class TestDataclassSchemas:
 
         assert schema.name == "Person"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(Address=IsPartialDict(type="object")),
-            "properties": IsPartialDict(address={"$ref": "#/$defs/Address"}),
+            "$defs": IsPartialDict({"Address": IsPartialDict({"type": "object"})}),
+            "properties": IsPartialDict({"address": {"$ref": "#/$defs/Address"}}),
         })
 
 
-# --- Pydantic model schemas ---
 class TestPydanticModelSchemas:
     def test_simple_model(self) -> None:
         class Item(BaseModel):
@@ -272,7 +270,7 @@ class TestPydanticModelSchemas:
 
         assert schema.name == "Shape"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(Coord=IsPartialDict(type="object")),
+            "$defs": IsPartialDict({"Coord": IsPartialDict({"type": "object"})}),
         })
 
     def test_model_with_enum_field(self) -> None:
@@ -303,14 +301,13 @@ class TestPydanticModelSchemas:
 
         schema = ResponseSchema(Bounded)
 
-        assert schema.json_schema == IsPartialDict(
-            properties=IsPartialDict(
-                value=IsPartialDict(minimum=0, maximum=100),
-            ),
-        )
+        assert schema.json_schema == IsPartialDict({
+            "properties": IsPartialDict({
+                "value": IsPartialDict({"minimum": 0, "maximum": 100}),
+            }),
+        })
 
 
-# --- Union type schemas ---
 class TestUnionSchemas:
     @pytest.mark.parametrize(
         ("type_", "expected_any_of"),
@@ -346,14 +343,13 @@ class TestUnionSchemas:
 
         assert schema.name == "Result"
         assert schema.json_schema == IsPartialDict({
-            "$defs": IsPartialDict(
-                Error=IsPartialDict(),
-                Success=IsPartialDict(),
-            ),
+            "$defs": IsPartialDict({
+                "Error": IsPartialDict({}),
+                "Success": IsPartialDict({}),
+            }),
         })
 
 
-# --- Name and description resolution ---
 class TestNameDescription:
     def test_explicit_name_overrides_title(self) -> None:
         class MyModel(BaseModel):
@@ -408,7 +404,6 @@ class TestNameDescription:
         assert "description" not in schema.json_schema
 
 
-# --- ensure_schema ---
 class TestEnsureSchema:
     def test_none_returns_none(self) -> None:
         assert ResponseSchema.ensure_schema(None) is None
@@ -456,7 +451,6 @@ class TestEnsureSchema:
         }
 
 
-# --- RawSchema ---
 class TestRawSchema:
     def test_creation(self) -> None:
         raw = ResponseSchema.from_schema(
@@ -489,7 +483,6 @@ class TestRawSchema:
         assert "can't validate" in str(w[0].message)
 
 
-# --- Validation ---
 @pytest.mark.asyncio()
 class TestValidation:
     @pytest.mark.parametrize(

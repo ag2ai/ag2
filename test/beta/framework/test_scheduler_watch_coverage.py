@@ -23,7 +23,7 @@ import asyncio
 
 import pytest
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.base import BaseEvent
 from autogen.beta.scheduler import Scheduler, WatchStatus

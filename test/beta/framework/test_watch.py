@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import (

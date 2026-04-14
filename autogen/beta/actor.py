@@ -20,6 +20,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Iterable
 from contextlib import suppress
+from itertools import chain
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -144,10 +145,10 @@ class Actor(Agent):
             hitl_hook=hitl_hook,
             tools=tools,
             middleware=middleware,
+            observers=observers,
             dependencies=dependencies,
             variables=variables,
         )
-        self._observers: list[Observer] = list(observers)
 
         # Task spawning
         tc = tasks or TaskConfig(config=config)
@@ -176,6 +177,8 @@ class Actor(Agent):
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling ask())."""
         self._observers.append(observer)
+
+    # ``_observers`` is inherited from Agent — Actor does not shadow it.
 
     # ------------------------------------------------------------------
     # Knowledge and memory tools
@@ -357,8 +360,10 @@ class Actor(Agent):
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> AgentReply:
+        additional_observers = list(additional_observers)
         subtask_tools = self._build_subtask_tools()
 
         # Bootstrap knowledge store on first use (write sentinel first
@@ -376,10 +381,12 @@ class Actor(Agent):
         if self._knowledge_store:
             context.dependencies[KnowledgeStore] = self._knowledge_store
 
-        # Attach observers
-        for obs in self._observers:
-            obs.attach(context.stream, context)
-            await context.send(ObserverStarted(name=obs.name))
+        # Observer lifecycle events — Agent's ExitStack handles the actual
+        # register/unregister. Actor emits ObserverStarted/Completed so the
+        # stream has a visible lifecycle artifact for each observer.
+        all_observers = list(chain(self._observers, additional_observers))
+        for obs in all_observers:
+            await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
         # Build middleware chain:
         # 1. AssemblerMiddleware (outermost) — assembles context
@@ -426,17 +433,13 @@ class Actor(Agent):
                 hitl_hook=hitl_hook,
                 additional_tools=(list(additional_tools) + subtask_tools + knowledge_tools + memory_tools),
                 additional_middleware=harness_middleware + list(additional_middleware),
+                additional_observers=additional_observers,
                 response_schema=response_schema,
             )
         finally:
-            for obs in self._observers:
-                try:
-                    obs.detach()
-                except Exception:
-                    logger.exception("Failed to detach observer %s", obs.name)
-                finally:
-                    with suppress(Exception):
-                        await context.send(ObserverCompleted(name=obs.name))
+            for obs in all_observers:
+                with suppress(Exception):
+                    await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
 
             # on_end aggregation
             if self._aggregate_strategy and self._knowledge_store and self._aggregate_trigger.on_end:

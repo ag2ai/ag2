@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall
 

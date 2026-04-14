@@ -13,7 +13,7 @@ Verifies that events marked ``__transient__ = True`` are:
 import pytest
 
 from autogen.beta import Context, MemoryStream
-from autogen.beta.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse
+from autogen.beta.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
 from autogen.beta.events.lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
@@ -123,7 +123,7 @@ class TestTransientNotPersisted:
         stream = MemoryStream()
         ctx = Context(stream)
 
-        await stream.send(ModelRequest(content="hi"), ctx)
+        await stream.send(ModelRequest([TextInput("hi")]), ctx)
         await stream.send(ModelMessageChunk(content="hell"), ctx)
         await stream.send(ModelMessageChunk(content="o"), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)
@@ -141,7 +141,7 @@ class TestTransientNotPersisted:
         ctx = Context(stream)
 
         await stream.send(ObserverStarted(name="loop_detector"), ctx)
-        await stream.send(ModelRequest(content="hi"), ctx)
+        await stream.send(ModelRequest([TextInput("hi")]), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)
         await stream.send(ObserverCompleted(name="loop_detector"), ctx)
 
@@ -173,7 +173,7 @@ class TestTransientNotPersisted:
         stream = MemoryStream()
         ctx = Context(stream)
 
-        await stream.send(ModelRequest(content="hi"), ctx)
+        await stream.send(ModelRequest([TextInput("hi")]), ctx)
         await stream.send(CompactionCompleted(actor="pilot", strategy="s", events_before=10, events_after=5), ctx)
         await stream.send(AggregationCompleted(actor="pilot", strategy="s", event_count=5), ctx)
 
@@ -188,7 +188,7 @@ class TestTransientNotPersisted:
         stream = MemoryStream()
         ctx = Context(stream)
 
-        await stream.send(ModelRequest(content="hi"), ctx)
+        await stream.send(ModelRequest([TextInput("hi")]), ctx)
         await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)
 
@@ -209,7 +209,7 @@ class TestPersistAll:
         stream = MemoryStream(persist_all=True)
         ctx = Context(stream)
 
-        await stream.send(ModelRequest(content="hi"), ctx)
+        await stream.send(ModelRequest([TextInput("hi")]), ctx)
         await stream.send(ModelMessageChunk(content="hell"), ctx)
         await stream.send(ModelMessageChunk(content="o"), ctx)
         await stream.send(ModelResponse(message=ModelMessage(content="hello")), ctx)

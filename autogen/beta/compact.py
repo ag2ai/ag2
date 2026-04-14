@@ -172,11 +172,11 @@ class SummarizeCompact:
         from autogen.beta.stream import MemoryStream
 
         client = self._config.create()
-        prompt_event = ModelRequest(
-            content="Summarize the following conversation history concisely, "
+        prompt_event = ModelRequest.ensure_request([
+            "Summarize the following conversation history concisely, "
             "preserving key decisions, findings, and context:\n\n" + "\n".join(str(e) for e in events)
-        )
-        from autogen.beta.context import Context as Ctx
+        ])
+        from autogen.beta.context import ConversationContext as Ctx
 
         response = await client(
             [prompt_event],

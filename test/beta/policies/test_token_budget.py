@@ -5,10 +5,11 @@
 import pytest
 
 from autogen.beta import ToolResult
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
@@ -33,7 +34,7 @@ def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEven
 class TestNoTrimming:
     @pytest.mark.asyncio
     async def test_events_within_budget_are_unchanged(self, context: Context) -> None:
-        events = [ModelRequest(content="hi")]
+        events = [ModelRequest([TextInput("hi")])]
         policy = TokenBudgetPolicy(max_tokens=100_000)
 
         prompts, result = await policy.apply([], events, context)
@@ -46,18 +47,18 @@ class TestTrimming:
     @pytest.mark.asyncio
     async def test_retains_most_recent_events(self, context: Context) -> None:
         # Use a very tight budget so only the last event fits
-        last = ModelRequest(content="z")
-        events = [ModelRequest(content="a" * 200), last]
+        last = ModelRequest([TextInput("z")])
+        events = [ModelRequest([TextInput("a" * 200)]), last]
         budget_tokens = (len(str(last)) // 4) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
 
-        assert result[-1].content == "z"
+        assert result[-1].inputs[0].content == "z"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
-        events = [ModelRequest(content="a" * 200), ModelRequest(content="b")]
+        events = [ModelRequest([TextInput("a" * 200)]), ModelRequest([TextInput("b")])]
         budget_tokens = (len(str(events[-1])) // 4) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens, transparent=True)
 
@@ -74,10 +75,10 @@ class TestOrphanedToolResults:
     @pytest.mark.asyncio
     async def test_leading_orphaned_tool_result_is_skipped(self, context: Context) -> None:
         tool_result = _tool_results("tc_1")
-        request = ModelRequest(content="next")
+        request = ModelRequest([TextInput("next")])
         # Budget enough for tool_result + request but NOT for the preceding tool_response
         events = [
-            ModelRequest(content="a" * 5000),
+            ModelRequest([TextInput("a" * 5000)]),
             _tool_response("tc_1"),
             tool_result,
             request,
@@ -98,9 +99,9 @@ class TestOrphanedToolResults:
     async def test_multiple_leading_orphaned_tool_results_are_skipped(self, context: Context) -> None:
         tr1 = _tool_results("tc_1")
         tr2 = _tool_results("tc_2")
-        request = ModelRequest(content="hello")
+        request = ModelRequest([TextInput("hello")])
         events = [
-            ModelRequest(content="a" * 5000),
+            ModelRequest([TextInput("a" * 5000)]),
             _tool_response("tc_1"),
             _tool_response("tc_2"),
             tr1,
@@ -118,9 +119,9 @@ class TestOrphanedToolResults:
     @pytest.mark.asyncio
     async def test_transparent_count_reflects_skipped_orphans(self, context: Context) -> None:
         tr = _tool_results("tc_1")
-        request = ModelRequest(content="b")
+        request = ModelRequest([TextInput("b")])
         events = [
-            ModelRequest(content="a" * 5000),
+            ModelRequest([TextInput("a" * 5000)]),
             _tool_response("tc_1"),
             tr,
             request,

@@ -72,7 +72,7 @@ class TestStreamSend:
             asyncio.create_task(listen_stream(events))
 
             await stream.send(
-                ModelMessage(content="test"),
+                ModelMessage("test"),
                 context=Context(stream),
             )
             event = ToolCallEvent(name="func1", arguments='"test"')

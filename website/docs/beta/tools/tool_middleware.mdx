@@ -64,3 +64,32 @@ agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
 
 !!! note
     Tool-scoped hooks are plain callables. They do **not** use the `Middleware(...)` factory or `BaseMiddleware`.
+
+## Adding middleware to an existing tool
+
+Use `#!python tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:
+
+```python linenums="1" hl_lines="16"
+from autogen.beta import tool
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import ToolExecution
+
+async def audit(
+    call_next: ToolExecution, event: ToolCallEvent, context: Context,
+) -> ToolResultEvent:
+    print(f"audit: {event.name}")
+    return await call_next(event, context)
+
+@tool
+def delete_record(record_id: str) -> str:
+    """Deletes a record."""
+    return f"Deleted {record_id}"
+
+audited_delete = delete_record.with_middleware(audit)
+
+# delete_record is unchanged; audited_delete runs audit → delete_record
+```
+
+## Toolkit-level middleware
+
+Pass `middleware=[...]` to a [`Toolkit`](/docs/beta/tools/toolkits) constructor to apply hooks to **all** tools in the set. Toolkit middleware is the outermost layer — it runs before any per-tool hooks. See [Toolkit middleware](/docs/beta/tools/toolkits#toolkit-middleware).

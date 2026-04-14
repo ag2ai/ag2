@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import ExitStack
 
 import pytest
 
 from autogen.beta import BaseObserver
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage
 from autogen.beta.events.alert import ObserverAlert
 from autogen.beta.stream import MemoryStream
@@ -45,14 +46,15 @@ class TestObserverExceptionHandling:
         observer = _CrashingObserver()
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        observer.attach(stream, ctx)
 
-        with caplog.at_level(logging.ERROR):
-            await stream.send(ModelMessage(content="trigger"), ctx)
-            await asyncio.sleep(0.01)
+        with ExitStack() as stack:
+            observer.register(stack, ctx)
+
+            with caplog.at_level(logging.ERROR):
+                await stream.send(ModelMessage(content="trigger"), ctx)
+                await asyncio.sleep(0.01)
 
         assert any("process() failed" in r.message for r in caplog.records)
-        observer.detach()
 
     @pytest.mark.asyncio
     async def test_observer_returns_none_no_signal(self) -> None:
@@ -78,10 +80,10 @@ class TestObserverExceptionHandling:
 
         stream.subscribe(_capture, condition=TypeCondition(ObserverAlert))
 
-        observer.attach(stream, ctx)
-        await stream.send(ModelMessage(content="test"), ctx)
-        await asyncio.sleep(0.01)
-        observer.detach()
+        with ExitStack() as stack:
+            observer.register(stack, ctx)
+            await stream.send(ModelMessage(content="test"), ctx)
+            await asyncio.sleep(0.01)
 
         assert len(signals) == 0
 

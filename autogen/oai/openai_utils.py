@@ -647,15 +647,15 @@ def detect_gpt_assistant_api_version() -> str:
     return "v1" if parse(oai_version) < parse("1.21") else "v2"
 
 
-def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) -> Any:
-    """Create a openai vector store for gpt assistant"""
+def create_gpt_vector_store(client: "OpenAI", name: str, file_ids: list[str]) -> Any:
+    """Create an OpenAI vector store for gpt assistant"""
     try:
         vector_store = client.vector_stores.create(name=name)
     except Exception as e:
         raise AttributeError(f"Failed to create vector store, please install the latest OpenAI python package: {e}")
 
     # poll the status of the file batch for completion.
-    batch = client.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=fild_ids)
+    batch = client.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=file_ids)
 
     if batch.status == "in_progress":
         time.sleep(1)
@@ -671,7 +671,7 @@ def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) ->
 def create_gpt_assistant(
     client: "OpenAI", name: str, instructions: str, model: str, assistant_config: dict[str, Any]
 ) -> "Assistant":
-    """Create a openai gpt assistant"""
+    """Create an OpenAI GPT assistant"""
     assistant_create_kwargs = {}
     gpt_assistant_api_version = detect_gpt_assistant_api_version()
     tools = assistant_config.get("tools", [])
@@ -691,7 +691,7 @@ def create_gpt_assistant(
                 tool["type"] = "file_search"
                 if file_ids is not None:
                     # create a vector store for the file search tool
-                    vs = create_gpt_vector_store(client, f"{name}-vectorestore", file_ids)
+                    vs = create_gpt_vector_store(client, f"{name}-vectorstore", file_ids)
                     tool_resources["file_search"] = {
                         "vector_store_ids": [vs.id],
                     }

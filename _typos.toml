@@ -17,6 +17,9 @@ genious = "genious"
 # Pydantic config attributes
 ser = "ser"
 
+# .iif file extension (Intuit Interchange Format)
+iif = "iif"
+
 # Medical term (Advanced Life Support)
 ALS = "ALS"
 

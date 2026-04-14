@@ -4,7 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-"""Create a OpenAI-compatible client for Gemini features.
+"""Create an OpenAI-compatible client for Gemini features.
 
 Example:
     ```python

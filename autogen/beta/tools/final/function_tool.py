@@ -66,6 +66,15 @@ class FunctionTool(Tool):
 
         self.provider: Provider | None = None
 
+    def with_middleware(self, *middleware: ToolMiddleware) -> "FunctionTool":
+        """Return a new FunctionTool with additional middleware appended.
+
+        Does not modify the original tool.
+        """
+        clone = deepcopy(self)
+        clone._tool_middleware = tuple(middleware) + self._tool_middleware
+        return clone
+
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
 

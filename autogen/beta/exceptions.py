@@ -25,6 +25,13 @@ class UnsupportedToolError(ToolExecutionError):
         super().__init__(f"Unsupported tool type `{tool_type}` for provider `{provider}`")
 
 
+class UnsupportedInputError(AG2Error):
+    """Raised when an input type is not supported by a provider."""
+
+    def __init__(self, input_type: str, provider: str):
+        super().__init__(f"Unsupported input type `{input_type}` for provider `{provider}`")
+
+
 class HumanInputNotProvidedError(AG2Error):
     """Raised when human-in-the-loop input was requested but not provided."""
 
@@ -46,3 +53,27 @@ class ConfigNotProvidedError(AG2Error):
             message
             or "No model config provided. Set config on the `Agent(config=...)` creation or pass it to call `ask(config=...)`."
         )
+
+
+class SkillError(AG2Error):
+    """Base exception for local skills loading (agentskills.io convention)."""
+
+
+class SkillNotFoundError(SkillError, KeyError):
+    """Raised when a skill cannot be found in configured paths."""
+
+
+class InvalidSkillNameError(SkillError, ValueError):
+    """Raised when a skill name is empty or malformed."""
+
+
+class InvalidSkillError(SkillError, ValueError):
+    """Raised when skill metadata violates the specification."""
+
+
+class SkillDownloadError(SkillError):
+    """Raised when a skill cannot be downloaded from the remote registry."""
+
+
+class SkillInstallError(SkillError):
+    """Raised when a downloaded skill archive cannot be extracted or validated."""

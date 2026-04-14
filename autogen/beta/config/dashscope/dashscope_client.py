@@ -11,7 +11,7 @@ import dashscope
 from dashscope.aigc.generation import AioGeneration
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -58,7 +58,7 @@ class DashScopeClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -93,7 +93,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response = await AioGeneration.call(
             model=self._model,
@@ -111,11 +111,11 @@ class DashScopeClient(LLMClient):
         # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
         # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
-            await context.send(ModelReasoning(content=reasoning))
+            await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
         if content := msg.get("content"):
-            model_msg = ModelMessage(content=content)
+            model_msg = ModelMessage(content)
             await context.send(model_msg)
 
         calls = []
@@ -138,7 +138,7 @@ class DashScopeClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model,
             provider="dashscope",
@@ -151,7 +151,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         responses = await AioGeneration.call(
             model=self._model,
@@ -189,11 +189,11 @@ class DashScopeClient(LLMClient):
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
                 # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
                 if rc := msg.get("reasoning_content"):
-                    await context.send(ModelReasoning(content=rc))
+                    await context.send(ModelReasoning(rc))
 
                 if c := msg.get("content"):
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
@@ -207,12 +207,12 @@ class DashScopeClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model,
             provider="dashscope",

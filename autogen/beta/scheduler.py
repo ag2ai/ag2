@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import uuid4
 
-from autogen.beta.context import Context as ContextType
+from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
 

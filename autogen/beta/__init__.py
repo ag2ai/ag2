@@ -21,7 +21,15 @@ from .compact import (
     SummarizeCompact,
     TailWindowCompact,
 )
-from .events import BaseEvent
+from .events import (
+    AudioInput,
+    BaseEvent,
+    BinaryInput,
+    DocumentInput,
+    ImageInput,
+    TextInput,
+    VideoInput,
+)
 from .events.alert import HaltEvent, ObserverAlert, Severity
 from .events.lifecycle import (
     AggregationCompleted,
@@ -47,7 +55,7 @@ from .knowledge import (
     SqliteKnowledgeStore,
     StoreBootstrap,
 )
-from .observer import BaseObserver, Observer
+from .observer import BaseObserver, Observer, observer
 from .observers import LoopDetector, TokenMonitor
 from .policies import (
     AlertPolicy,
@@ -87,9 +95,11 @@ __all__ = (
     "AnyOf",
     "AssemblerMiddleware",
     "AssemblyPolicy",
+    "AudioInput",
     "BaseEvent",
     "BaseObserver",
     "BatchWatch",
+    "BinaryInput",
     "ChangeCallback",
     "ChangeSubscription",
     "CompactStrategy",
@@ -104,10 +114,12 @@ __all__ = (
     "DelayWatch",
     "Depends",
     "DiskKnowledgeStore",
+    "DocumentInput",
     "EpisodicMemoryPolicy",
     "EventLogWriter",
     "EventWatch",
     "HaltEvent",
+    "ImageInput",
     "Inject",
     "IntervalWatch",
     "KnowledgeConfig",
@@ -138,16 +150,19 @@ __all__ = (
     "TaskProgress",
     "TaskRequest",
     "TaskResult",
+    "TextInput",
     "TokenBudgetPolicy",
     "TokenMonitor",
     "ToolResult",
     "UnknownEvent",
     "Variable",
+    "VideoInput",
     "Watch",
     "WatchStatus",
     "WindowWatch",
     "WorkingMemoryAggregate",
     "WorkingMemoryPolicy",
+    "observer",
     "response_schema",
     "tool",
 )

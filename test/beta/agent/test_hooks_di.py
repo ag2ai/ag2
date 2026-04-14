@@ -16,7 +16,7 @@ from autogen.beta.testing import TestConfig
 def test_config() -> TestConfig:
     return TestConfig(
         ModelResponse(
-            message=ModelMessage(content="result"),
+            message=ModelMessage("result"),
         ),
     )
 

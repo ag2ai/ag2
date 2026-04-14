@@ -15,8 +15,8 @@ from autogen.beta.aggregate import (
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
-from autogen.beta.context import Context
-from autogen.beta.events import ModelRequest
+from autogen.beta.context import ConversationContext as Context
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 
@@ -51,7 +51,7 @@ class TestConversationSummaryAggregate:
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        events = [ModelRequest(content="hello"), ModelRequest(content="world")]
+        events = [ModelRequest([TextInput("hello")]), ModelRequest([TextInput("world")])]
 
         await strategy.aggregate(events, ctx, store)
 
@@ -89,7 +89,7 @@ class TestConversationSummaryAggregate:
         store = MemoryKnowledgeStore()
         ctx = Context(stream=MemoryStream())
 
-        await strategy.aggregate([ModelRequest(content="hi")], ctx, store)
+        await strategy.aggregate([ModelRequest([TextInput("hi")])], ctx, store)
         assert strategy.last_usage == {"input_tokens": 200}
 
     @pytest.mark.asyncio
@@ -112,14 +112,14 @@ class TestConversationSummaryAggregate:
         with patch("autogen.beta.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260101T120000"
             mock_dt.side_effect = None
-            await strategy.aggregate([ModelRequest(content="first")], ctx1, store)
+            await strategy.aggregate([ModelRequest([TextInput("first")])], ctx1, store)
 
         stream2 = MemoryStream()
         ctx2 = Context(stream=stream2)
         with patch("autogen.beta.aggregate.datetime") as mock_dt:
             mock_dt.now.return_value.strftime.return_value = "20260201T120000"
             mock_dt.side_effect = None
-            await strategy.aggregate([ModelRequest(content="second")], ctx2, store)
+            await strategy.aggregate([ModelRequest([TextInput("second")])], ctx2, store)
 
         entries = await store.list("/memory/conversations/")
         assert len(entries) == 2
@@ -144,7 +144,7 @@ class TestWorkingMemoryAggregate:
         store = MemoryKnowledgeStore()
         ctx = Context(stream=MemoryStream())
 
-        await strategy.aggregate([ModelRequest(content="hi")], ctx, store)
+        await strategy.aggregate([ModelRequest([TextInput("hi")])], ctx, store)
 
         content = await store.read("/memory/working.md")
         assert content == "Updated working memory content."
@@ -165,12 +165,15 @@ class TestWorkingMemoryAggregate:
         await store.write("/memory/working.md", "Existing context about project X.")
         ctx = Context(stream=MemoryStream())
 
-        await strategy.aggregate([ModelRequest(content="update")], ctx, store)
+        await strategy.aggregate([ModelRequest([TextInput("update")])], ctx, store)
 
         # Verify the LLM was called with existing memory in the prompt
         call_args = mock_client.call_args
         prompt_event = call_args[0][0][0]
-        assert "Existing context about project X." in prompt_event.content
+        assert any(
+            isinstance(inp, TextInput) and "Existing context about project X." in inp.content
+            for inp in prompt_event.inputs
+        )
 
         content = await store.read("/memory/working.md")
         assert content == "Merged memory."
@@ -200,7 +203,7 @@ class TestWorkingMemoryAggregate:
         await store.write("/memory/working.md", "Existing content.")
         ctx = Context(stream=MemoryStream())
 
-        await strategy.aggregate([ModelRequest(content="update")], ctx, store)
+        await strategy.aggregate([ModelRequest([TextInput("update")])], ctx, store)
 
         # Should fall back to existing content when LLM returns empty
         content = await store.read("/memory/working.md")
