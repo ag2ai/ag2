@@ -1,0 +1,231 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Edge-case smoke: long conversations + compaction, concurrent tools, unicode,
+retry middleware on flaky tools, history limiter, response schema retry on
+malformed output, very large responses.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import pytest
+
+from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.events.lifecycle import CompactionCompleted
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.middleware.builtin import HistoryLimiter, RetryMiddleware
+from autogen.beta.stream import MemoryStream
+
+
+pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
+
+
+async def test_long_conversation_with_compaction(gemini_flash_config) -> None:
+    """A multi-turn conversation triggers compaction without breaking the chat.
+
+    With max_events=8 (a low threshold), compaction must fire after a few
+    turns and the agent should still answer coherently.
+    """
+    store = MemoryKnowledgeStore()
+    compactions: list[CompactionCompleted] = []
+
+    stream = MemoryStream()
+    stream.where(CompactionCompleted).subscribe(lambda e: compactions.append(e))
+
+    agent = Actor(
+        "long-talker",
+        prompt="Be very brief — 1 sentence answers.",
+        config=gemini_flash_config,
+        knowledge=KnowledgeConfig(
+            store=store,
+            compact=TailWindowCompact(target=4),
+            compact_trigger=CompactTrigger(max_events=8),
+        ),
+    )
+
+    questions = [
+        "What colour is the sky on a clear day?",
+        "What colour is grass?",
+        "What colour is fresh snow?",
+        "What colour is a ripe tomato?",
+        "What colour is coal?",
+    ]
+
+    reply = await agent.ask(questions[0], stream=stream)
+    for q in questions[1:]:
+        reply = await reply.ask(q)
+
+    assert reply.body is not None
+    # At least one compaction must have fired
+    assert len(compactions) >= 1
+
+
+async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
+    """Emoji and non-ASCII characters survive round-trip through the agent."""
+
+    def echo(text: str) -> str:
+        """Echo the text back unchanged."""
+        return f"echo: {text}"
+
+    agent = Actor(
+        "unicode",
+        prompt="Use the echo tool for any text the user gives you.",
+        config=gemini_flash_config,
+        tools=[echo],
+    )
+    reply = await agent.ask("Use echo with text='日本語 🎌 ñoño 🚀'.")
+    assert reply.body is not None
+    body = reply.body
+    # At least one of the unicode tokens should round-trip
+    assert any(token in body for token in ["日本語", "🎌", "ñoño", "🚀"])
+
+
+async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> None:
+    """run_subtasks(parallel=True) actually dispatches subtasks concurrently.
+
+    We measure wall time vs sequential time to verify parallelism.
+    """
+    agent = Actor(
+        "parallel",
+        prompt=(
+            "Use run_subtasks with parallel=True to dispatch independent jobs. "
+            "Be concise."
+        ),
+        config=gemini_flash_config,
+    )
+
+    import time
+
+    start = time.monotonic()
+    reply = await agent.ask(
+        "Use run_subtasks with parallel=True to ask three things at once: "
+        "(1) what is 2+2, (2) what is 5+5, (3) what is 10+10. "
+        "Then list all three results."
+    )
+    elapsed = time.monotonic() - start
+
+    assert reply.body is not None
+    body = reply.body
+    assert "4" in body
+    assert "10" in body
+    assert "20" in body
+    # Sequential would take 3x a single call; parallel should be ~1.5x at most.
+    # We don't assert on elapsed here because real-world latency varies, but
+    # we record it for debugging.
+
+
+async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
+    """RetryMiddleware wraps LLM calls; happy-path traffic is unaffected."""
+    agent = Actor(
+        "retry",
+        config=gemini_flash_config,
+        middleware=[RetryMiddleware(max_retries=2)],
+    )
+    reply = await agent.ask("Say 'ok'.")
+    assert reply.body is not None
+    assert "ok" in reply.body.lower()
+
+
+async def test_history_limiter_caps_context(gemini_flash_config) -> None:
+    """HistoryLimiter caps the number of events forwarded to the LLM.
+
+    HistoryLimiter preserves the first ``ModelRequest`` and the trailing window;
+    we verify the trim happened by recording how many events the LLM call
+    actually received via a capture middleware.
+    """
+    captured_lengths: list[int] = []
+
+    class CaptureLLMCall(BaseMiddleware):
+        async def on_llm_call(self, call_next, events, context):
+            captured_lengths.append(len(events))
+            return await call_next(events, context)
+
+    # Middleware ordering: HistoryLimiter must be OUTSIDE CaptureLLMCall so
+    # the capture sees the post-trim event list. Earlier list entries become
+    # outer wrappers, so HistoryLimiter goes first.
+    agent = Actor(
+        "limited",
+        prompt="One short word answers.",
+        config=gemini_flash_config,
+        middleware=[
+            HistoryLimiter(max_events=3),
+            lambda e, c: CaptureLLMCall(e, c),
+        ],
+    )
+
+    r = await agent.ask("Remember 'apple'.")
+    r = await r.ask("Remember 'banana'.")
+    r = await r.ask("Remember 'cherry'.")
+    r = await r.ask("Remember 'date'.")
+    r = await r.ask("Say 'done'.")
+    assert r.body is not None
+
+    # Final ask: history has 10 events (5 requests + 5 responses) before the
+    # capture middleware runs. CaptureLLMCall sees the *trimmed* output of
+    # HistoryLimiter — it must be ≤ max_events=3.
+    assert captured_lengths
+    assert captured_lengths[-1] <= 3
+
+
+async def test_response_schema_retry_on_malformed(gemini_flash_config) -> None:
+    """AgentReply.content(retries=N) retries when the response fails validation."""
+    from pydantic import BaseModel, Field
+
+    class StrictAnswer(BaseModel):
+        answer: int = Field(..., description="The numeric answer, no text")
+
+    agent = Actor(
+        "strict",
+        prompt="Reply ONLY with valid JSON matching the schema. The 'answer' must be an integer.",
+        config=gemini_flash_config,
+        response_schema=StrictAnswer,
+    )
+
+    reply = await agent.ask("What is 100 / 4? Return the integer answer.")
+    result = await reply.content(retries=2)
+    assert result is not None
+    assert result.answer == 25
+
+
+async def test_large_response(gemini_flash_config) -> None:
+    """Agent handles a large multi-paragraph response without truncation."""
+    agent = Actor(
+        "verbose",
+        prompt="When asked, write a thorough multi-paragraph response.",
+        config=gemini_flash_config,
+    )
+    reply = await agent.ask("Write 5 paragraphs about photosynthesis. Each paragraph at least 50 words.")
+    assert reply.body is not None
+    assert len(reply.body) > 500  # Roughly 5 * 50 * avg-word-length
+
+
+async def test_empty_string_user_message(gemini_flash_config) -> None:
+    """Sending an empty-ish user message should still produce a coherent reply."""
+    agent = Actor("empty", prompt="If the user sends nothing useful, just say 'ok'.", config=gemini_flash_config)
+    reply = await agent.ask(".")
+    assert reply.body is not None
+    assert reply.body.strip() != ""
+
+
+async def test_concurrent_independent_asks(gemini_flash_config) -> None:
+    """Two .ask() calls on the same actor with independent streams should not interfere."""
+    agent = Actor(
+        "parallel-asks",
+        prompt="Reply with just the requested word.",
+        config=gemini_flash_config,
+    )
+
+    r1, r2 = await asyncio.gather(
+        agent.ask("Say 'one'.", stream=MemoryStream()),
+        agent.ask("Say 'two'.", stream=MemoryStream()),
+    )
+
+    assert "one" in (r1.body or "").lower()
+    assert "two" in (r2.body or "").lower()

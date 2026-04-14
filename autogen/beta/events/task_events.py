@@ -21,9 +21,21 @@ class TaskStarted(TaskEvent):
     pass
 
 
+class TaskProgress(TaskEvent):
+    """Streamed progress update from a running task sub-agent.
+
+    Transient: superseded by the final ``TaskCompleted``.
+    """
+
+    __transient__ = True
+
+    content: str
+
+
 class TaskCompleted(TaskEvent):
     result: str | None
     task_stream: "StreamId"  # Stream reference for inspection
+    usage: dict = Field(default_factory=dict)
 
 
 class TaskFailed(TaskEvent):

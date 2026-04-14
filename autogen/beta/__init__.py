@@ -35,10 +35,13 @@ from .events.lifecycle import (
     CompactionCompleted,
     ObserverCompleted,
     ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
     UnknownEvent,
+)
+from .events.task_events import (
+    TaskCompleted,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
 )
 from .knowledge import (
     ChangeCallback,
@@ -144,10 +147,11 @@ __all__ = (
     "StoreBootstrap",
     "SummarizeCompact",
     "TailWindowCompact",
+    "TaskCompleted",
     "TaskConfig",
+    "TaskFailed",
     "TaskProgress",
-    "TaskRequest",
-    "TaskResult",
+    "TaskStarted",
     "TextInput",
     "TokenBudgetPolicy",
     "TokenMonitor",

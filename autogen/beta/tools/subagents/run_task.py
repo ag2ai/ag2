@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import HumanInputRequest
+from autogen.beta.events import HumanInputRequest, TaskCompleted, TaskFailed, TaskStarted
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
@@ -17,11 +18,27 @@ _DEPTH_KEY = "ag:task_depth"
 
 @dataclass
 class TaskResult:
+    task_id: str
     objective: str
     result: str | None
     completed: bool
     stream: "Stream"
+    usage: dict = field(default_factory=dict)
     error: Exception | None = None
+
+
+def _extract_usage(reply) -> dict:
+    """Pull standard usage dict from an AgentReply, tolerating None/empty."""
+    if not (reply and reply.response):
+        return {}
+    usage = reply.response.usage
+    if not usage:
+        return {}
+    return {
+        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+        "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
+        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+    }
 
 
 async def run_task(
@@ -31,7 +48,16 @@ async def run_task(
     parent_context: Context,
     context: str = "",
     stream: "Stream | None" = None,
+    emit_events: bool = True,
 ) -> TaskResult:
+    """Run ``agent`` as a sub-task and return its ``TaskResult``.
+
+    ``emit_events`` controls whether ``TaskStarted`` / ``TaskCompleted`` /
+    ``TaskFailed`` events are emitted onto ``parent_context.stream``.
+    Keep it at the default (``True``) unless the caller is itself going to
+    emit its own task lifecycle events.
+    """
+    task_id = uuid4().hex
     task_stream = stream or MemoryStream(
         storage=parent_context.stream.history.storage,
     )
@@ -39,13 +65,18 @@ async def run_task(
     if context:
         prompt = f"{objective}\n\n## Context\n{context}"
 
+    if emit_events:
+        await parent_context.send(
+            TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective)
+        )
+
     # Bridge HITL events to the parent stream so the parent's hook
     # can handle them. If the subagent has its own HITL hook, it is
     # registered as an interrupter and swallows the event first.
     if not agent._hitl_hook:
 
-        async def _bridge_hitl(event: HumanInputRequest, context: Context) -> None:
-            await parent_context.stream.send(event, context)
+        async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
+            await parent_context.stream.send(event, ctx)
 
         sub_id = task_stream.where(HumanInputRequest).subscribe(_bridge_hitl, interrupt=True)
     else:
@@ -69,15 +100,43 @@ async def run_task(
         reply.context.variables.pop(_DEPTH_KEY, None)
         parent_context.variables.update(reply.context.variables)
 
-        return TaskResult(
+        usage = _extract_usage(reply)
+
+        result = TaskResult(
+            task_id=task_id,
             objective=objective,
             result=reply.body,
             completed=True,
             stream=task_stream,
+            usage=usage,
         )
 
+        if emit_events:
+            await parent_context.send(
+                TaskCompleted(
+                    task_id=task_id,
+                    agent_name=agent.name,
+                    objective=objective,
+                    result=reply.body,
+                    task_stream=task_stream.id,
+                    usage=usage,
+                )
+            )
+
+        return result
+
     except Exception as e:
+        if emit_events:
+            await parent_context.send(
+                TaskFailed(
+                    task_id=task_id,
+                    agent_name=agent.name,
+                    objective=objective,
+                    error=e,
+                )
+            )
         return TaskResult(
+            task_id=task_id,
             objective=objective,
             result=None,
             completed=False,

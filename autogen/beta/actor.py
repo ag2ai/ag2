@@ -46,7 +46,6 @@ from .events import (
     BaseEvent,
     HumanInputRequest,
     Input,
-    ModelMessageChunk,
     ModelRequest,
     ModelResponse,
     ToolResultsEvent,
@@ -57,9 +56,6 @@ from .events.lifecycle import (
     CompactionCompleted,
     ObserverCompleted,
     ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
 )
 from .exceptions import ConfigNotProvidedError
 from .history import History
@@ -443,6 +439,8 @@ class Actor(Generic[TResult]):
         kc = knowledge
         self._knowledge_store = kc.store if kc else None
         self._bootstrap = kc.bootstrap if kc else None
+        self._bootstrap_done: bool = False
+        self._bootstrap_lock: asyncio.Lock | None = None
         self._compact_strategy = kc.compact if kc else None
         self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
@@ -754,7 +752,14 @@ class Actor(Generic[TResult]):
         return [knowledge]
 
     def _build_subtask_tools(self) -> list[Tool]:
-        """Create run_subtask and run_subtasks tools."""
+        """Create ``run_subtask`` / ``run_subtasks`` tools.
+
+        Each invocation spawns a fresh, bare ``Actor`` (configured by
+        ``TaskConfig``) and delegates via
+        :func:`~autogen.beta.tools.subagents.run_task.run_task`, which owns
+        ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed`` emission,
+        dependency + variable copy, HITL bridging, and depth counting.
+        """
         actor = self
 
         @tool
@@ -765,7 +770,7 @@ class Actor(Generic[TResult]):
             independently. The subtask agent runs with its own LLM context
             and returns the result.
             """
-            return await actor._run_task(task, ctx)
+            return await actor._spawn_subtask(task, ctx)
 
         @tool
         async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
@@ -777,16 +782,16 @@ class Actor(Generic[TResult]):
                 parallel: Run concurrently (default True) or sequentially.
             """
             if parallel:
-                results = await asyncio.gather(
-                    *(actor._run_task(t, ctx) for t in tasks),
+                raw = await asyncio.gather(
+                    *(actor._spawn_subtask(t, ctx) for t in tasks),
                     return_exceptions=True,
                 )
-                results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in results]
+                results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
             else:
                 results = []
                 for t in tasks:
                     try:
-                        results.append(await actor._run_task(t, ctx))
+                        results.append(await actor._spawn_subtask(t, ctx))
                     except Exception as e:
                         results.append(f"Error: {e}")
 
@@ -797,42 +802,26 @@ class Actor(Generic[TResult]):
 
         return [run_subtask, run_subtasks]
 
-    async def _run_task(self, task: str, ctx: Context) -> str:
-        """Run a single task sub-agent and emit lifecycle events."""
-        task_name = f"task-{uuid4().hex[:8]}"
+    async def _spawn_subtask(self, task: str, ctx: Context) -> str:
+        """Spawn a fresh bare ``Actor`` and delegate via ``run_task``.
 
-        await ctx.send(TaskRequest(task=task, task_name=task_name))
+        A new ``Actor`` is constructed on every call so sibling subtasks
+        do not accumulate state between invocations. ``run_task`` emits the
+        ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed`` lifecycle
+        events and handles dependency/variable copy and HITL bridging.
+        """
+        from .tools.subagents.run_task import run_task
 
-        sat_stream = MemoryStream()
-        parent_ctx = ctx
-
-        async def _bridge_chunks(chunk: ModelMessageChunk) -> None:
-            await parent_ctx.send(TaskProgress(task_name=task_name, content=chunk.content))
-
-        chunk_sub = sat_stream.where(ModelMessageChunk).subscribe(_bridge_chunks)
-
-        task_agent = Actor(
-            task_name,
+        bare = Actor(
+            name=f"subtask-{uuid4().hex[:8]}",
             prompt=self._task_prompt,
             config=self._task_config,
         )
-        try:
-            reply = await task_agent.ask(task, stream=sat_stream)
-        finally:
-            sat_stream.unsubscribe(chunk_sub)
 
-        result_text = reply.body or ""
-        usage = reply.response.usage if reply.response else {}
-
-        await ctx.send(
-            TaskResult(
-                task=task,
-                task_name=task_name,
-                result=result_text,
-                usage=usage,
-            )
-        )
-        return result_text
+        result = await run_task(bare, task, parent_context=ctx)
+        if not result.completed:
+            return f"Error: {result.error}"
+        return result.result or ""
 
     async def _execute(
         self,
@@ -849,12 +838,20 @@ class Actor(Generic[TResult]):
         additional_observers = list(additional_observers)
         subtask_tools = self._build_subtask_tools()
 
-        # Bootstrap knowledge store on first use (write sentinel first to
-        # prevent duplicate bootstrap from concurrent _execute calls).
-        if self._knowledge_store and not await self._knowledge_store.exists("/.initialized"):
-            await self._knowledge_store.write("/.initialized", self.name)
-            bootstrap = self._bootstrap or DefaultBootstrap()
-            await bootstrap.bootstrap(self._knowledge_store, self.name)
+        # Bootstrap the knowledge store on first use, guarded by an asyncio
+        # lock so concurrent asks on the same Actor can't double-bootstrap.
+        # The lock is created lazily so Actor can be instantiated outside an
+        # event loop (asyncio.Lock binds to the running loop on first use).
+        if self._knowledge_store and not self._bootstrap_done:
+            if self._bootstrap_lock is None:
+                self._bootstrap_lock = asyncio.Lock()
+            async with self._bootstrap_lock:
+                if not self._bootstrap_done:
+                    if not await self._knowledge_store.exists("/.initialized"):
+                        await self._knowledge_store.write("/.initialized", self.name)
+                        bootstrap = self._bootstrap or DefaultBootstrap()
+                        await bootstrap.bootstrap(self._knowledge_store, self.name)
+                    self._bootstrap_done = True
 
         knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
 
@@ -862,8 +859,6 @@ class Actor(Generic[TResult]):
             context.dependencies[KnowledgeStore] = self._knowledge_store
 
         all_observers = list(chain(self._observers, additional_observers))
-        for obs in all_observers:
-            await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
         # Build harness middleware chain. Assembler + halt-check only wire in
         # when the user has provided assembly policies; compaction and
@@ -886,7 +881,7 @@ class Actor(Generic[TResult]):
 
         if self._aggregate_strategy and self._knowledge_store:
             trigger = self._aggregate_trigger
-            if trigger.every_n_turns > 0 or trigger.every_n_events > 0:
+            if trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end:
                 harness_middleware.append(
                     _AggregationMiddlewareFactory(
                         self.name,
@@ -983,38 +978,35 @@ class Actor(Generic[TResult]):
                 for obs in all_observers:
                     obs.register(stack, context)
 
-                message = await agent_turn(event, context)
-
-                return AgentReply(
-                    message,
-                    context=context,
-                    agent=self,
-                    client=client,
-                    provider=self.dependency_provider,
-                    response_schema=final_schema,
-                )
-        finally:
-            for obs in all_observers:
-                with suppress(Exception):
-                    await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
-
-            if self._aggregate_strategy and self._knowledge_store and self._aggregate_trigger.on_end:
-                try:
-                    events = list(await context.stream.history.get_events())
-                    await self._aggregate_strategy.aggregate(events, context, self._knowledge_store)
-                    usage = getattr(self._aggregate_strategy, "last_usage", {})
+                # Observers are live — emit Started so they can see their own
+                # lifecycle event if they subscribe to it.
+                for obs in all_observers:
                     await context.send(
-                        AggregationCompleted(
-                            actor=self.name,
-                            strategy=type(self._aggregate_strategy).__name__,
-                            event_count=len(events),
-                            llm_calls=1 if usage else 0,
-                            usage=usage,
-                        )
+                        ObserverStarted(name=getattr(obs, "name", type(obs).__name__))
                     )
-                except Exception:
-                    logger.exception("Aggregation failed for %s", self.name)
 
+                try:
+                    message = await agent_turn(event, context)
+                    reply = AgentReply(
+                        message,
+                        context=context,
+                        agent=self,
+                        client=client,
+                        provider=self.dependency_provider,
+                        response_schema=final_schema,
+                    )
+                finally:
+                    # Emit Completed while observers are still registered,
+                    # so observers subscribed to their own lifecycle event
+                    # see it before the ExitStack unregisters them.
+                    for obs in all_observers:
+                        with suppress(Exception):
+                            await context.send(
+                                ObserverCompleted(name=getattr(obs, "name", type(obs).__name__))
+                            )
+
+                return reply
+        finally:
             if self._knowledge_store:
                 try:
                     events = list(await context.stream.history.get_events())
@@ -1243,12 +1235,13 @@ class Plugin:
 
 
 class _HaltCheckMiddleware(BaseMiddleware):
-    """Catches HaltEvent on the stream and short-circuits the LLM call.
+    """Catches ``HaltEvent`` on the stream and short-circuits the LLM call.
 
-    AlertPolicy emits HaltEvent when a FATAL alert is detected. This
-    middleware runs after assembly and checks if a HaltEvent was emitted
-    during the current execution. If so, it returns a synthetic "HALTED"
-    response without calling the LLM.
+    ``AlertPolicy`` emits ``HaltEvent`` when a FATAL alert is detected.
+    This middleware subscribes in ``on_turn`` (scoped to a single turn so
+    the subscription never outlives the ``_execute`` that created it) and,
+    on any subsequent ``on_llm_call``, returns a synthetic ``HALTED``
+    response instead of invoking the model.
     """
 
     def __init__(self, event: BaseEvent, context: Context) -> None:
@@ -1256,13 +1249,23 @@ class _HaltCheckMiddleware(BaseMiddleware):
         self._halted = False
         self._halt_reason = ""
 
+    async def on_turn(
+        self,
+        call_next: Callable[..., Any],
+        event: BaseEvent,
+        context: Context,
+    ) -> Any:
         from .events.alert import HaltEvent
 
         async def _on_halt(evt: HaltEvent) -> None:
             self._halted = True
             self._halt_reason = evt.reason
 
-        self._sub = context.stream.where(HaltEvent).subscribe(_on_halt)
+        sub_id = context.stream.where(HaltEvent).subscribe(_on_halt)
+        try:
+            return await call_next(event, context)
+        finally:
+            context.stream.unsubscribe(sub_id)
 
     async def on_llm_call(
         self,
@@ -1389,7 +1392,20 @@ class _CompactionMiddlewareFactory:
 
 
 class _AggregationMiddleware(BaseMiddleware):
-    """Triggers aggregation after agent turns when thresholds are exceeded."""
+    """Triggers aggregation after agent turns when thresholds are exceeded.
+
+    Counts are derived from stream history — this middleware holds no
+    state of its own. That matters because ``_execute`` builds a fresh
+    middleware instance on every ``ask()``; any per-instance counter
+    would reset between turns and make ``every_n_turns=N`` for ``N>1``
+    effectively dead.
+
+    ``every_n_turns`` counts :class:`ModelRequest` events in history
+    (one per user ask). ``every_n_events`` fires when the total history
+    count crosses a multiple of the threshold during the current turn,
+    which handles non-uniform growth (e.g. tool-heavy turns). ``on_end``
+    fires unconditionally once the turn completes.
+    """
 
     def __init__(
         self,
@@ -1406,8 +1422,6 @@ class _AggregationMiddleware(BaseMiddleware):
         self._strategy = strategy
         self._store = store
         self._trigger = trigger
-        self._turn_count = 0
-        self._last_aggregate_event_count = 0
 
     async def on_turn(
         self,
@@ -1415,33 +1429,44 @@ class _AggregationMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> Any:
-        result = await call_next(event, context)
-        self._turn_count += 1
+        count_before = len(list(await context.stream.history.get_events()))
 
-        events = list(await context.stream.history.get_events())
+        try:
+            result = await call_next(event, context)
+        finally:
+            events_after = list(await context.stream.history.get_events())
+            count_after = len(events_after)
 
-        should_aggregate = False
-        if self._trigger.every_n_turns > 0 and self._turn_count % self._trigger.every_n_turns == 0:
-            should_aggregate = True
-        if self._trigger.every_n_events > 0:
-            new_events = len(events) - self._last_aggregate_event_count
-            if new_events >= self._trigger.every_n_events:
+            should_aggregate = False
+
+            if self._trigger.on_end:
                 should_aggregate = True
 
-        if should_aggregate:
-            await self._strategy.aggregate(events, context, self._store)
-            self._last_aggregate_event_count = len(events)
+            if self._trigger.every_n_turns > 0:
+                turn_count = sum(1 for e in events_after if isinstance(e, ModelRequest))
+                if turn_count > 0 and turn_count % self._trigger.every_n_turns == 0:
+                    should_aggregate = True
 
-            usage = getattr(self._strategy, "last_usage", {})
-            await context.send(
-                AggregationCompleted(
-                    actor=self._actor_name,
-                    strategy=type(self._strategy).__name__,
-                    event_count=len(events),
-                    llm_calls=1 if usage else 0,
-                    usage=usage,
-                )
-            )
+            if self._trigger.every_n_events > 0:
+                threshold = self._trigger.every_n_events
+                if count_after // threshold > count_before // threshold:
+                    should_aggregate = True
+
+            if should_aggregate:
+                try:
+                    await self._strategy.aggregate(events_after, context, self._store)
+                    usage = getattr(self._strategy, "last_usage", {})
+                    await context.send(
+                        AggregationCompleted(
+                            actor=self._actor_name,
+                            strategy=type(self._strategy).__name__,
+                            event_count=count_after,
+                            llm_calls=1 if usage else 0,
+                            usage=usage,
+                        )
+                    )
+                except Exception:
+                    logger.exception("Aggregation failed for %s", self._actor_name)
 
         return result
 

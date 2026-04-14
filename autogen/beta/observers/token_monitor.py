@@ -5,9 +5,8 @@
 """TokenMonitor — tracks cumulative token usage and alerts when thresholds are exceeded."""
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse
+from autogen.beta.events import BaseEvent, ModelResponse, TaskCompleted
 from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.events.lifecycle import TaskResult
 from autogen.beta.observer import BaseObserver
 from autogen.beta.watch import EventWatch
 
@@ -15,8 +14,8 @@ from autogen.beta.watch import EventWatch
 class TokenMonitor(BaseObserver):
     """Tracks cumulative token usage and alerts when thresholds are exceeded.
 
-    Observes ModelResponse and TaskResult events to aggregate usage
-    across the actor and all task sub-agents.
+    Observes ``ModelResponse`` and ``TaskCompleted`` events to aggregate
+    usage across the actor and all task sub-agents.
 
     Parameters
     ----------
@@ -35,7 +34,7 @@ class TokenMonitor(BaseObserver):
         *,
         name: str = "token-monitor",
     ) -> None:
-        super().__init__(name, watch=EventWatch(ModelResponse | TaskResult))
+        super().__init__(name, watch=EventWatch(ModelResponse | TaskCompleted))
         self._warn_threshold = warn_threshold
         self._alert_threshold = alert_threshold
         self._total_tokens: int = 0
@@ -52,7 +51,7 @@ class TokenMonitor(BaseObserver):
                 usage = event.usage
                 if usage:
                     self._total_tokens += int(usage.total_tokens or 0)
-            elif isinstance(event, TaskResult):
+            elif isinstance(event, TaskCompleted):
                 usage = event.usage
                 if usage:
                     self._total_tokens += int(usage.get("total_tokens", 0))

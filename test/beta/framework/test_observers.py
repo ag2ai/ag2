@@ -8,10 +8,9 @@ import pytest
 
 from autogen.beta import LoopDetector, TokenMonitor
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelResponse, ToolCallEvent
+from autogen.beta.events import ModelResponse, TaskCompleted, ToolCallEvent
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
-from autogen.beta.events.lifecycle import TaskResult
 from autogen.beta.events.types import Usage
 from autogen.beta.stream import MemoryStream
 
@@ -89,8 +88,8 @@ class TestTokenMonitor:
         assert monitor._warned is False
 
     @pytest.mark.asyncio
-    async def test_task_result_usage_dict(self) -> None:
-        """TaskResult carries usage as a plain dict — monitor must handle it."""
+    async def test_task_completed_usage_dict(self) -> None:
+        """TaskCompleted carries usage as a plain dict — monitor must handle it."""
         stream = MemoryStream()
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
@@ -104,7 +103,14 @@ class TestTokenMonitor:
         monitor.register(ExitStack(), ctx)
 
         await stream.send(
-            TaskResult(task="t1", task_name="task-1", result="done", usage={"total_tokens": 60}),
+            TaskCompleted(
+                task_id="t1",
+                agent_name="task-1",
+                objective="x",
+                result="done",
+                task_stream=stream.id,
+                usage={"total_tokens": 60},
+            ),
             ctx,
         )
 
@@ -112,8 +118,8 @@ class TestTokenMonitor:
         assert len(signals) == 0
 
     @pytest.mark.asyncio
-    async def test_task_result_triggers_warning(self) -> None:
-        """TaskResult tokens should count toward thresholds."""
+    async def test_task_completed_triggers_warning(self) -> None:
+        """TaskCompleted tokens should count toward thresholds."""
         stream = MemoryStream()
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
@@ -127,7 +133,14 @@ class TestTokenMonitor:
         monitor.register(ExitStack(), ctx)
 
         await stream.send(
-            TaskResult(task="t1", task_name="task-1", result="done", usage={"total_tokens": 120}),
+            TaskCompleted(
+                task_id="t1",
+                agent_name="task-1",
+                objective="x",
+                result="done",
+                task_stream=stream.id,
+                usage={"total_tokens": 120},
+            ),
             ctx,
         )
 
@@ -136,7 +149,7 @@ class TestTokenMonitor:
 
     @pytest.mark.asyncio
     async def test_cumulative_across_model_and_task(self) -> None:
-        """Tokens from ModelResponse and TaskResult accumulate together."""
+        """Tokens from ModelResponse and TaskCompleted accumulate together."""
         stream = MemoryStream()
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
@@ -151,7 +164,14 @@ class TestTokenMonitor:
 
         await stream.send(ModelResponse(usage=Usage(total_tokens=60)), ctx)
         await stream.send(
-            TaskResult(task="t1", task_name="task-1", result="done", usage={"total_tokens": 50}),
+            TaskCompleted(
+                task_id="t1",
+                agent_name="task-1",
+                objective="x",
+                result="done",
+                task_stream=stream.id,
+                usage={"total_tokens": 50},
+            ),
             ctx,
         )
 
@@ -170,9 +190,15 @@ class TestTokenMonitor:
 
         # ModelResponse with default (empty) Usage
         await stream.send(ModelResponse(), ctx)
-        # TaskResult with empty dict
+        # TaskCompleted with default empty usage dict
         await stream.send(
-            TaskResult(task="t1", task_name="task-1", result="done"),
+            TaskCompleted(
+                task_id="t1",
+                agent_name="task-1",
+                objective="x",
+                result="done",
+                task_stream=stream.id,
+            ),
             ctx,
         )
 

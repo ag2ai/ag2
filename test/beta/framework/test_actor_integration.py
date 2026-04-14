@@ -253,15 +253,17 @@ class TestCompactionMiddleware:
 class TestAggregationMiddleware:
     @pytest.mark.asyncio
     async def test_triggers_every_n_turns(self) -> None:
-        """Aggregation fires every N turns."""
+        """Aggregation fires when ModelRequest count in history hits multiples of N.
+
+        The middleware is stateless — turn count is derived from history on
+        every call, so the same instance fires correctly across successive
+        on_turn invocations as long as history grows to reflect new turns.
+        """
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
         strategy = _FakeAggregate()
         trigger = AggregateTrigger(every_n_turns=2, on_end=False)
-
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(3)]
-        await _populate_history(stream, events)
 
         initial_event = ModelRequest([TextInput("start")])
         mw = _AggregationMiddleware(
@@ -274,27 +276,37 @@ class TestAggregationMiddleware:
         )
 
         async def call_next(event, context):
-            return ModelResponse(message=ModelMessage(content="ok"))
+            """Simulate a real turn: append a fresh ModelRequest + ModelResponse."""
+            existing = list(await stream.history.get_events())
+            turn_idx = sum(1 for e in existing if isinstance(e, ModelRequest)) + 1
+            mr = ModelRequest([TextInput(f"turn-{turn_idx}")])
+            resp = ModelResponse(message=ModelMessage(content="ok"))
+            await stream.history.replace(existing + [mr, resp])
+            return resp
 
-        # Turn 1 — no aggregation
+        # Turn 1: history has 1 ModelRequest → 1 % 2 != 0 → no fire
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 0
 
-        # Turn 2 — aggregation fires
+        # Turn 2: history has 2 ModelRequests → 2 % 2 == 0 → fire
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 1
 
-        # Turn 3 — no aggregation
+        # Turn 3: 3 ModelRequests → no fire
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 1
 
-        # Turn 4 — aggregation fires again
+        # Turn 4: 4 ModelRequests → fire
         await mw.on_turn(call_next, initial_event, ctx)
         assert strategy.call_count == 2
 
     @pytest.mark.asyncio
     async def test_triggers_every_n_events(self) -> None:
-        """Aggregation fires when enough new events accumulate."""
+        """Aggregation fires when total event count crosses a multiple of N.
+
+        Stateless crossing check: if the total-event count before this turn
+        and after this turn fall in different ``N``-buckets, fire.
+        """
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
@@ -311,18 +323,28 @@ class TestAggregationMiddleware:
             trigger=trigger,
         )
 
-        async def call_next(event, context):
-            return ModelResponse(message=ModelMessage(content="ok"))
+        async def call_next_add_two(event, context):
+            existing = list(await stream.history.get_events())
+            mr = ModelRequest([TextInput("u")])
+            resp = ModelResponse(message=ModelMessage(content="ok"))
+            await stream.history.replace(existing + [mr, resp])
+            return resp
 
-        # Push 2 events — not enough
-        await _populate_history(stream, [ModelRequest([TextInput(f"e-{i}")]) for i in range(2)])
-        await mw.on_turn(call_next, initial_event, ctx)
+        # Call 1: history 0 → 2. 0//3=0, 2//3=0. No crossing. No fire.
+        await mw.on_turn(call_next_add_two, initial_event, ctx)
         assert strategy.call_count == 0
 
-        # Push 1 more — now 3 total, should trigger
-        await _populate_history(stream, [ModelRequest([TextInput("e-2")])])
-        await mw.on_turn(call_next, initial_event, ctx)
+        # Call 2: 2 → 4. 2//3=0, 4//3=1. Crosses 3 → fire.
+        await mw.on_turn(call_next_add_two, initial_event, ctx)
         assert strategy.call_count == 1
+
+        # Call 3: 4 → 6. 4//3=1, 6//3=2. Crosses 6 → fire.
+        await mw.on_turn(call_next_add_two, initial_event, ctx)
+        assert strategy.call_count == 2
+
+        # Call 4: 6 → 8. 6//3=2, 8//3=2. No crossing. No fire.
+        await mw.on_turn(call_next_add_two, initial_event, ctx)
+        assert strategy.call_count == 2
 
     @pytest.mark.asyncio
     async def test_emits_aggregation_completed_event(self) -> None:

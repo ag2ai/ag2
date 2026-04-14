@@ -126,7 +126,7 @@ class BaseEvent(metaclass=_ConditionMeta):
     # Subclasses may set ``__transient__ = True`` to mark themselves as
     # ephemeral streaming / lifecycle artifacts that should NOT be persisted
     # to durable storage by default.  Examples: ModelMessageChunk (superseded
-    # by ModelResponse), TaskProgress (superseded by TaskResult), observer
+    # by ModelResponse), TaskProgress (superseded by TaskCompleted), observer
     # lifecycle bookkeeping.
     # NOTE: no type annotation — must NOT be processed as an event Field.
     __transient__ = False

@@ -19,10 +19,8 @@ from autogen.beta.events.lifecycle import (
     CompactionCompleted,
     ObserverCompleted,
     ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
 )
+from autogen.beta.events.task_events import TaskCompleted, TaskProgress, TaskStarted
 from autogen.beta.events.tool_events import ToolCallEvent
 from autogen.beta.events.types import ModelReasoning
 
@@ -46,11 +44,11 @@ class TestTransientFlag:
     def test_tool_call_event_not_transient(self):
         assert ToolCallEvent.__transient__ is False
 
-    def test_task_request_not_transient(self):
-        assert TaskRequest.__transient__ is False
+    def test_task_started_not_transient(self):
+        assert TaskStarted.__transient__ is False
 
-    def test_task_result_not_transient(self):
-        assert TaskResult.__transient__ is False
+    def test_task_completed_not_transient(self):
+        assert TaskCompleted.__transient__ is False
 
     def test_model_message_chunk_transient(self):
         assert ModelMessageChunk.__transient__ is True
@@ -103,7 +101,12 @@ class TestTransientDelivery:
         received = []
         stream.where(TaskProgress).subscribe(lambda ev: received.append(ev))
 
-        progress = TaskProgress(task_name="t1", content="working...")
+        progress = TaskProgress(
+            task_id="t1",
+            agent_name="analyzer",
+            objective="scan logs",
+            content="working...",
+        )
         await stream.send(progress, context=Context(stream))
 
         assert len(received) == 1
@@ -157,15 +160,37 @@ class TestTransientNotPersisted:
         stream = MemoryStream()
         ctx = Context(stream)
 
-        await stream.send(TaskRequest(task="research", task_name="t1"), ctx)
-        await stream.send(TaskProgress(task_name="t1", content="step 1"), ctx)
-        await stream.send(TaskProgress(task_name="t1", content="step 2"), ctx)
-        await stream.send(TaskResult(task="research", task_name="t1", result="done"), ctx)
+        await stream.send(
+            TaskStarted(task_id="t1", agent_name="researcher", objective="research"),
+            ctx,
+        )
+        await stream.send(
+            TaskProgress(
+                task_id="t1", agent_name="researcher", objective="research", content="step 1"
+            ),
+            ctx,
+        )
+        await stream.send(
+            TaskProgress(
+                task_id="t1", agent_name="researcher", objective="research", content="step 2"
+            ),
+            ctx,
+        )
+        await stream.send(
+            TaskCompleted(
+                task_id="t1",
+                agent_name="researcher",
+                objective="research",
+                result="done",
+                task_stream=stream.id,
+            ),
+            ctx,
+        )
 
         events = list(await stream.history.get_events())
         types = [type(e).__name__ for e in events]
-        assert "TaskRequest" in types
-        assert "TaskResult" in types
+        assert "TaskStarted" in types
+        assert "TaskCompleted" in types
         assert "TaskProgress" not in types
 
     @pytest.mark.asyncio
@@ -225,7 +250,12 @@ class TestPersistAll:
         ctx = Context(stream)
 
         await stream.send(ObserverStarted(name="monitor"), ctx)
-        await stream.send(TaskProgress(task_name="t1", content="working"), ctx)
+        await stream.send(
+            TaskProgress(
+                task_id="t1", agent_name="researcher", objective="work", content="working"
+            ),
+            ctx,
+        )
 
         events = list(await stream.history.get_events())
         types = [type(e).__name__ for e in events]

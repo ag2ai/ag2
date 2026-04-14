@@ -26,12 +26,9 @@ from .lifecycle import (
     CompactionCompleted,
     ObserverCompleted,
     ObserverStarted,
-    TaskProgress,
-    TaskRequest,
-    TaskResult,
     UnknownEvent,
 )
-from .task_events import TaskCompleted, TaskFailed, TaskStarted
+from .task_events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
 from .tool_events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
@@ -89,8 +86,6 @@ __all__ = (
     "TaskCompleted",
     "TaskFailed",
     "TaskProgress",
-    "TaskRequest",
-    "TaskResult",
     "TaskStarted",
     "TextInput",
     "ToolCallEvent",

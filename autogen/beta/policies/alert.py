@@ -28,6 +28,13 @@ class AlertPolicy:
     prompt text, and tracks which alerts have been delivered to avoid
     duplicates across LLM calls.
 
+    Deduplication keys on ``(source, severity, message)`` — the semantic
+    content of the alert, not the Python object identity — so dedup
+    survives history replay, compaction (which rewrites history into
+    fresh event objects), and serialization round-trips. Observers that
+    need to re-alert with identical wording can vary the ``data`` dict
+    or the ``message`` string.
+
     For FATAL alerts, emits a HaltEvent on the stream and adds a halt
     note to the prompt.
 
@@ -39,7 +46,7 @@ class AlertPolicy:
     name = "alert"
 
     def __init__(self) -> None:
-        self._delivered_ids: set[int] = set()
+        self._delivered_keys: set[tuple[str, str, str]] = set()
 
     async def apply(
         self,
@@ -50,9 +57,11 @@ class AlertPolicy:
         # Collect undelivered alerts from the event stream
         new_alerts: list[ObserverAlert] = []
         for event in events:
-            if isinstance(event, ObserverAlert) and id(event) not in self._delivered_ids:
-                new_alerts.append(event)
-                self._delivered_ids.add(id(event))
+            if isinstance(event, ObserverAlert):
+                key = (event.source, str(event.severity), event.message)
+                if key not in self._delivered_keys:
+                    new_alerts.append(event)
+                    self._delivered_keys.add(key)
 
         if not new_alerts:
             return prompts, events

@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor lifecycle events: observer, task, compaction, aggregation, and deserialization.
+"""Actor lifecycle events: observer, compaction, aggregation, and deserialization.
 
 These events are emitted by Actor (framework core) during execution. They are
 not network-specific — any Actor emits them regardless of Hub registration.
+
+Task-subagent lifecycle events live in ``autogen.beta.events.task_events``
+(``TaskStarted`` / ``TaskProgress`` / ``TaskCompleted`` / ``TaskFailed``).
 """
 
 from .base import BaseEvent, Field
@@ -29,39 +32,6 @@ class ObserverCompleted(BaseEvent):
     __transient__ = True
 
     name: str
-
-
-# ------------------------------------------------------------------
-# Task lifecycle events
-# ------------------------------------------------------------------
-
-
-class TaskRequest(BaseEvent):
-    """Emitted when the actor spawns a task sub-agent."""
-
-    task: str
-    task_name: str
-
-
-class TaskProgress(BaseEvent):
-    """Streamed progress from a running task sub-agent.
-
-    Transient: superseded by ``TaskResult``.
-    """
-
-    __transient__ = True
-
-    task_name: str
-    content: str
-
-
-class TaskResult(BaseEvent):
-    """Emitted when a task sub-agent completes its work."""
-
-    task: str
-    task_name: str
-    result: str
-    usage: dict = Field(default_factory=dict)
 
 
 # ------------------------------------------------------------------

@@ -8,13 +8,14 @@ from uuid import uuid4
 
 import pytest
 
-from autogen.beta.events import ModelRequest, TextInput
+from autogen.beta.events import ModelRequest, TaskCompleted, TextInput
+from autogen.beta.events.lifecycle import UnknownEvent
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     EventLogWriter,
     MemoryKnowledgeStore,
 )
-from autogen.beta.events.lifecycle import TaskProgress, UnknownEvent
+from autogen.beta.stream import MemoryStream
 
 
 class TestMemoryKnowledgeStore:
@@ -97,15 +98,21 @@ class TestEventLogWriter:
 
         events = [
             ModelRequest([TextInput("hello")]),
-            TaskProgress(task_name="analyze", content="halfway"),
+            TaskCompleted(
+                task_id="t1",
+                agent_name="analyzer",
+                objective="summarize",
+                result="done",
+                task_stream=MemoryStream().id,
+            ),
         ]
         await writer.persist(stream_id, events)
 
         loaded = await writer.load(stream_id)
         assert len(loaded) == 2
         assert loaded[0].inputs[0].content == "hello"
-        assert loaded[1].task_name == "analyze"
-        assert loaded[1].content == "halfway"
+        assert loaded[1].agent_name == "analyzer"
+        assert loaded[1].result == "done"
 
     @pytest.mark.asyncio
     async def test_persist_dropped_segments(self) -> None:
