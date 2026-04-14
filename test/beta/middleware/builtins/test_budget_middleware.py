@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
 from autogen.beta.events.types import Usage
 from autogen.beta.middleware.builtin.budget import (
