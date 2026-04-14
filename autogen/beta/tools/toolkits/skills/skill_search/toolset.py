@@ -8,8 +8,8 @@ from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.local_skills.tool import LocalSkillsTool
-from autogen.beta.tools.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.toolkits.skills.local_skills import SkillsToolkit
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime, SkillRuntime
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -17,7 +17,7 @@ from .extractor import format_install_result
 from .lock import SkillsLock
 
 
-class SkillSearchToolset(Toolkit):
+class SkillSearchToolkit(Toolkit):
     """Toolkit for dynamically searching and installing skills from the
     `skills.sh <https://skills.sh>`_ ecosystem.
 
@@ -30,10 +30,10 @@ class SkillSearchToolset(Toolkit):
         import asyncio
         from autogen.beta import Actor
         from autogen.beta.config import AnthropicConfig
-        from autogen.beta.tools import SkillSearchToolset
+        from autogen.beta.tools import SkillSearchToolkit
 
         config = AnthropicConfig(model="claude-sonnet-4-5")
-        skills = SkillSearchToolset()
+        skills = SkillSearchToolkit()
 
         agent = Actor(
             "coder",
@@ -52,10 +52,10 @@ class SkillSearchToolset(Toolkit):
 
     Custom configuration::
 
-        from autogen.beta.tools import SkillSearchToolset, SkillsClientConfig, LocalRuntime
+        from autogen.beta.tools import SkillSearchToolkit, SkillsClientConfig, LocalRuntime
 
-        skills = SkillSearchToolset(
-            runtime=LocalRuntime(
+        skills = SkillSearchToolkit(
+            LocalRuntime(
                 dir="./my-skills",
                 extra_paths=["./extra-skills"],
                 cleanup=True,
@@ -79,8 +79,8 @@ class SkillSearchToolset(Toolkit):
 
     def __init__(
         self,
-        *,
         runtime: SkillRuntime | None = None,
+        *,
         client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
@@ -89,7 +89,7 @@ class SkillSearchToolset(Toolkit):
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
 
-        local = LocalSkillsTool(runtime=_runtime)
+        local = SkillsToolkit(runtime=_runtime)
 
         self.search_skills = _make_search_tool(_client)
         self.install_skill = _make_install_tool(_client, lock, _runtime)

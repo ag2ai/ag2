@@ -67,7 +67,8 @@ def _make_read_file(base: Path) -> FunctionTool:
     def read_file(
         path: Annotated[str, Field(description="Relative path to the file to read.")],
         raw: bool = Field(
-            default=False, description="If true, read the file as binary and return base64-encoded content."
+            default=False,
+            description="If true, read the file as binary and return base64-encoded content.",
         ),
     ) -> str:
         target = _resolve_path(base, path)
@@ -83,9 +84,15 @@ def _make_find_files(base: Path) -> FunctionTool:
         description="Search for files matching a glob pattern. Use recursive patterns like '**/*.py' to search subdirectories."
     )
     def find_files(
-        pattern: Annotated[str, Field(description="Glob pattern to match files, e.g. '*.py' or '**/*.txt'.")],
+        pattern: Annotated[
+            str,
+            Field(
+                description="Glob pattern to match files, e.g. '*.py' or '**/*.txt'."
+            ),
+        ],
         path: str = Field(
-            default=".", description="Relative path to the directory to search from. Defaults to the base directory."
+            default=".",
+            description="Relative path to the directory to search from. Defaults to the base directory.",
         ),
     ) -> list[str]:
         target = _resolve_path(base, path)
@@ -127,8 +134,12 @@ def _make_write_file(base: Path) -> FunctionTool:
         description="Create or overwrite a file with the given content. Parent directories are created automatically."
     )
     def write_file(
-        path: Annotated[str, Field(description="Relative path to the file to create or overwrite.")],
-        content: Annotated[str, Field(description="The full content to write to the file.")],
+        path: Annotated[
+            str, Field(description="Relative path to the file to create or overwrite.")
+        ],
+        content: Annotated[
+            str, Field(description="The full content to write to the file.")
+        ],
     ) -> str:
         target = _resolve_path(base, path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -139,11 +150,17 @@ def _make_write_file(base: Path) -> FunctionTool:
 
 
 def _make_update_file(base: Path) -> FunctionTool:
-    @tool(description="Update a file by replacing the first occurrence of old_content with new_content.")
+    @tool(
+        description="Update a file by replacing the first occurrence of old_content with new_content."
+    )
     def update_file(
         path: Annotated[str, Field(description="Relative path to the file to update.")],
-        old_content: Annotated[str, Field(description="The exact text to find and replace.")],
-        new_content: Annotated[str, Field(description="The text to replace old_content with.")],
+        old_content: Annotated[
+            str, Field(description="The exact text to find and replace.")
+        ],
+        new_content: Annotated[
+            str, Field(description="The text to replace old_content with.")
+        ],
     ) -> str:
         target = _resolve_path(base, path)
         text = target.read_text()

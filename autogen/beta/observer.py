@@ -36,7 +36,12 @@ from .events.alert import ObserverAlert
 from .events.conditions import Condition, TypeCondition
 from .watch import Watch
 
-__all__ = ("BaseObserver", "Observer", "StreamObserver", "observer")
+__all__ = (
+    "BaseObserver",
+    "Observer",
+    "StreamObserver",
+    "observer",
+)
 
 
 @runtime_checkable
@@ -110,10 +115,14 @@ class BaseObserver(ABC):
         except Exception:
             import logging
 
-            logging.getLogger(__name__).exception("Observer '%s' process() failed", self.name)
+            logging.getLogger(__name__).exception(
+                "Observer '%s' process() failed", self.name
+            )
 
     @abstractmethod
-    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
+    async def process(
+        self, events: list[BaseEvent], ctx: Context
+    ) -> ObserverAlert | None:
         """Analyze events and optionally return an alert."""
         ...
 
@@ -154,9 +163,19 @@ def observer(
     cond = _ensure_condition(condition)
 
     if callback is not None:
-        return StreamObserver(condition=cond, callback=callback, interrupt=interrupt, sync_to_thread=sync_to_thread)
+        return StreamObserver(
+            condition=cond,
+            callback=callback,
+            interrupt=interrupt,
+            sync_to_thread=sync_to_thread,
+        )
 
     def decorator(func: Callable[..., Any]) -> StreamObserver:
-        return StreamObserver(condition=cond, callback=func, interrupt=interrupt, sync_to_thread=sync_to_thread)
+        return StreamObserver(
+            condition=cond,
+            callback=func,
+            interrupt=interrupt,
+            sync_to_thread=sync_to_thread,
+        )
 
     return decorator

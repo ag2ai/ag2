@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 
 from autogen.beta.exceptions import SkillInstallError
-from autogen.beta.tools.local_skills.loader import SkillLoader, parse_frontmatter
-from autogen.beta.tools.skill_types import SkillMetadata
+from autogen.beta.tools.toolkits.skills.local_skills.loader import SkillLoader, parse_frontmatter
+from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
 
 _EXCLUDE_NAMES = frozenset({".git", ".env", "__pycache__", ".DS_Store", "node_modules"})
 _MAX_FILE_BYTES = 25 * 1024 * 1024  # 25 MB

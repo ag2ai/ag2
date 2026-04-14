@@ -13,11 +13,12 @@ import pytest
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import InvalidSkillError, SkillInstallError
-from autogen.beta.tools.runtime import LocalRuntime, SkillMetadata
-from autogen.beta.tools.toolkits.skill_search import SkillSearchToolset
-from autogen.beta.tools.toolkits.skill_search.client import SkillsClient
-from autogen.beta.tools.toolkits.skill_search.extractor import extract_skill
-from autogen.beta.tools.toolkits.skill_search.lock import SkillsLock
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+from autogen.beta.tools.toolkits.skills.skill_search import SkillSearchToolkit
+from autogen.beta.tools.toolkits.skills.skill_search.client import SkillsClient
+from autogen.beta.tools.toolkits.skills.skill_search.extractor import extract_skill
+from autogen.beta.tools.toolkits.skills.skill_search.lock import SkillsLock
+from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
 
 MONOREPO_SKILL_MD = textwrap.dedent("""\
     ---
@@ -182,8 +183,8 @@ async def test_search_skills_formats_output(tmp_path: Path) -> None:
         {"skillId": "nextjs-patterns", "name": "nextjs-patterns", "installs": 5000, "source": "some-user/nextjs-skill"},
     ]
     with patch.object(SkillsClient, "search", AsyncMock(return_value=skills_data)):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.search_skills.model.call(query="react")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.search_skills.model.call(query="react")
 
     assert 'Found 2 skill(s) for "react"' in result
     assert "vercel-react-best-practices" in result
@@ -194,8 +195,8 @@ async def test_search_skills_formats_output(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_search_skills_no_results(tmp_path: Path) -> None:
     with patch.object(SkillsClient, "search", AsyncMock(return_value=[])):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.search_skills.model.call(query="xyzzy-nonexistent")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.search_skills.model.call(query="xyzzy-nonexistent")
 
     assert "No skills found" in result
 
@@ -203,8 +204,8 @@ async def test_search_skills_no_results(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_search_skills_network_error(tmp_path: Path) -> None:
     with patch.object(SkillsClient, "search", AsyncMock(side_effect=Exception("connection refused"))):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.search_skills.model.call(query="react")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.search_skills.model.call(query="react")
 
     assert "Error searching skills.sh" in result
     assert "connection refused" in result
@@ -219,8 +220,8 @@ async def test_search_skills_network_error(tmp_path: Path) -> None:
 async def test_install_skill_monorepo(tmp_path: Path) -> None:
     meta = _make_meta(tmp_path)
     with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
 
     assert "Installed: vercel-react-best-practices" in result
     assert "Description:" in result
@@ -231,8 +232,8 @@ async def test_install_skill_monorepo(tmp_path: Path) -> None:
 async def test_install_skill_standalone(tmp_path: Path) -> None:
     meta = _make_meta(tmp_path, name="last30days")
     with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "def456hash"))):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.install_skill.model.call(skill_id="mvanhorn/last30days-skill")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.install_skill.model.call(skill_id="mvanhorn/last30days-skill")
 
     assert "Installed: last30days" in result
 
@@ -243,8 +244,8 @@ async def test_install_skill_records_hash(tmp_path: Path) -> None:
     install_dir = tmp_path / "skills"
     meta = _make_meta(tmp_path)
     with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=install_dir))
-        await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=install_dir))
+        await toolkit.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
 
     lock_path = install_dir / "skills-lock.json"
     assert lock_path.exists()
@@ -257,8 +258,8 @@ async def test_install_skill_records_hash(tmp_path: Path) -> None:
 async def test_install_skill_rate_limit(tmp_path: Path) -> None:
     err = RuntimeError("GitHub rate limit exceeded. Set GITHUB_TOKEN")
     with patch.object(SkillsClient, "download_skill", AsyncMock(side_effect=err)):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.install_skill.model.call(skill_id="some/repo/skill")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.install_skill.model.call(skill_id="some/repo/skill")
 
     assert "rate limit" in result.lower()
 
@@ -267,16 +268,16 @@ async def test_install_skill_rate_limit(tmp_path: Path) -> None:
 async def test_install_skill_not_found(tmp_path: Path) -> None:
     err = RuntimeError("Skill not found: no-such/repo")
     with patch.object(SkillsClient, "download_skill", AsyncMock(side_effect=err)):
-        toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-        result = await toolset.install_skill.model.call(skill_id="no-such/repo/skill")
+        toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+        result = await toolkit.install_skill.model.call(skill_id="no-such/repo/skill")
 
     assert "not found" in result.lower()
 
 
 @pytest.mark.asyncio
 async def test_install_skill_invalid_id(tmp_path: Path) -> None:
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
-    result = await toolset.install_skill.model.call(skill_id="invalid")
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
+    result = await toolkit.install_skill.model.call(skill_id="invalid")
 
     assert "Invalid skill_id format" in result
 
@@ -293,8 +294,8 @@ async def test_remove_skill_success(tmp_path: Path) -> None:
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\n")
 
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=install_dir))
-    result = await toolset.remove_skill.model.call(name="my-skill")
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=install_dir))
+    result = await toolkit.remove_skill.model.call(name="my-skill")
 
     assert result == "Removed: my-skill"
     assert not skill_dir.exists()
@@ -313,8 +314,8 @@ async def test_remove_skill_cleans_lock_file(tmp_path: Path) -> None:
     lock_data = {"version": 1, "skills": {"my-skill": {"source": "x/y", "sourceType": "github", "computedHash": "aaa"}}}
     lock_path.write_text(json.dumps(lock_data))
 
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=install_dir))
-    await toolset.remove_skill.model.call(name="my-skill")
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=install_dir))
+    await toolkit.remove_skill.model.call(name="my-skill")
 
     updated = json.loads(lock_path.read_text())
     assert "my-skill" not in updated["skills"]
@@ -325,8 +326,8 @@ async def test_remove_skill_not_found(tmp_path: Path) -> None:
     install_dir = tmp_path / "skills"
     install_dir.mkdir()
 
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=install_dir))
-    result = await toolset.remove_skill.model.call(name="nonexistent")
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=install_dir))
+    result = await toolkit.remove_skill.model.call(name="nonexistent")
 
     assert "Cannot remove" in result
 
@@ -338,8 +339,8 @@ async def test_remove_skill_path_traversal_blocked(tmp_path: Path) -> None:
     outside = tmp_path / "secret"
     outside.mkdir()
 
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=install_dir))
-    result = await toolset.remove_skill.model.call(name="../secret")
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=install_dir))
+    result = await toolkit.remove_skill.model.call(name="../secret")
 
     assert "Cannot remove" in result
     assert outside.exists()
@@ -389,15 +390,15 @@ def test_lock_read_nonexistent(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# SkillSearchToolset — schema
+# SkillSearchToolkit — schema
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_toolset_exposes_six_tools(tmp_path: Path, context: ConversationContext) -> None:
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
+async def test_toolkit_exposes_six_tools(tmp_path: Path, context: ConversationContext) -> None:
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
 
-    schemas = list(await toolset.schemas(context))
+    schemas = list(await toolkit.schemas(context))
 
     assert len(schemas) == 6
     names = {s.function.name for s in schemas}  # type: ignore[union-attr]
@@ -405,9 +406,9 @@ async def test_toolset_exposes_six_tools(tmp_path: Path, context: ConversationCo
 
 
 @pytest.mark.asyncio
-async def test_toolset_individual_tools_accessible(tmp_path: Path, context: ConversationContext) -> None:
-    toolset = SkillSearchToolset(runtime=LocalRuntime(dir=tmp_path / "skills"))
+async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: ConversationContext) -> None:
+    toolkit = SkillSearchToolkit(runtime=LocalRuntime(dir=tmp_path / "skills"))
 
     for attr in ("search_skills", "install_skill", "remove_skill", "list_skills", "load_skill", "run_skill_script"):
-        [schema] = await getattr(toolset, attr).schemas(context)
+        [schema] = await getattr(toolkit, attr).schemas(context)
         assert schema.function.name == attr  # type: ignore[union-attr]

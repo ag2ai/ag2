@@ -25,17 +25,23 @@ async def test_path_traversal_blocked(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_schemas(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolkit()
-    schemas = list(await toolset.schemas(Context(async_mock)))
+    toolkit = FilesystemToolkit()
+    schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
-    assert names == {"read_file", "write_file", "update_file", "delete_file", "find_files"}
+    assert names == {
+        "read_file",
+        "write_file",
+        "update_file",
+        "delete_file",
+        "find_files",
+    }
 
 
 @pytest.mark.asyncio
 async def test_read_only(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolkit(read_only=True)
-    schemas = list(await toolset.schemas(Context(async_mock)))
+    toolkit = FilesystemToolkit(read_only=True)
+    schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
     assert names == {"read_file", "find_files"}
@@ -45,7 +51,7 @@ async def test_read_only(async_mock: AsyncMock) -> None:
 async def test_read_file(tmp_path: Path) -> None:
     (tmp_path / "hello.txt").write_text("hello world")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -69,7 +75,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
     binary_content = bytes(range(256))
     (tmp_path / "binary.bin").write_bytes(binary_content)
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -90,7 +96,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_file(tmp_path: Path) -> None:
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
@@ -107,10 +113,13 @@ async def test_write_file(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
-        ToolCallEvent(name="write_file", arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"})),
+        ToolCallEvent(
+            name="write_file",
+            arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"}),
+        ),
         "done",
     )
     agent = Actor("", config=config, tools=[toolset])
@@ -123,12 +132,14 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
 async def test_update_file(tmp_path: Path) -> None:
     (tmp_path / "data.txt").write_text("foo bar baz")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
             name="update_file",
-            arguments=json.dumps({"path": "data.txt", "old_content": "bar", "new_content": "qux"}),
+            arguments=json.dumps(
+                {"path": "data.txt", "old_content": "bar", "new_content": "qux"}
+            ),
         ),
         "done",
     )
@@ -143,10 +154,12 @@ async def test_delete_file(tmp_path: Path) -> None:
     target = tmp_path / "to_delete.txt"
     target.write_text("bye")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
-        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "to_delete.txt"})),
+        ToolCallEvent(
+            name="delete_file", arguments=json.dumps({"path": "to_delete.txt"})
+        ),
         "done",
     )
     agent = Actor("", config=config, tools=[toolset])
@@ -176,13 +189,19 @@ async def test_find_files(tmp_path: Path) -> None:
     # |   |-- sub2
     # |       |-- e.py
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "**/*.py"})),
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/*"})),
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/**"})),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "**/*.py"})
+            ),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "sub/*"})
+            ),
+            ToolCallEvent(
+                name="find_files", arguments=json.dumps({"pattern": "sub/**"})
+            ),
             "done",
         )
     )
@@ -191,7 +210,11 @@ async def test_find_files(tmp_path: Path) -> None:
 
     # "**/*.py" — recursive, matches .py files at any depth
     result_1 = json.loads(tracking.mock.call_args_list[1][0][0].results[0].content)
-    assert sorted(result_1) == ["a.py", str(Path("sub/c.py")), str(Path("sub/sub2/e.py"))]
+    assert sorted(result_1) == [
+        "a.py",
+        str(Path("sub/c.py")),
+        str(Path("sub/sub2/e.py")),
+    ]
 
     # "sub/*" — non-recursive, matches all files directly in sub/
     result_2 = json.loads(tracking.mock.call_args_list[2][0][0].results[0].content)
@@ -199,4 +222,8 @@ async def test_find_files(tmp_path: Path) -> None:
 
     # "sub/**" — recursive, matches all files under sub/ at any depth
     result_3 = json.loads(tracking.mock.call_args_list[3][0][0].results[0].content)
-    assert sorted(result_3) == [str(Path("sub/c.py")), str(Path("sub/d.txt")), str(Path("sub/sub2/e.py"))]
+    assert sorted(result_3) == [
+        str(Path("sub/c.py")),
+        str(Path("sub/d.txt")),
+        str(Path("sub/sub2/e.py")),
+    ]

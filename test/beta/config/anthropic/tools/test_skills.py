@@ -7,7 +7,7 @@ import pytest
 from autogen.beta.config.anthropic.mappers import extract_skills_for_container, tool_to_api
 from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import UnsupportedToolError
-from autogen.beta.tools.builtin.skills import Skill, SkillsTool
+from autogen.beta.tools import Skill, SkillsTool
 
 
 @pytest.mark.asyncio

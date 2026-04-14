@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .config import SkillsClientConfig
-from .toolset import SkillSearchToolset
+from .toolkit import SkillSearchToolkit
 
-__all__ = ("SkillSearchToolset", "SkillsClientConfig")
+__all__ = (
+    "SkillSearchToolkit",
+    "SkillsClientConfig",
+)

@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .loader import parse_frontmatter
-from .tool import LocalSkillsTool
+from .toolkit import SkillsToolkit
 
-__all__ = ("LocalSkillsTool", "parse_frontmatter")
+__all__ = ("SkillsToolkit",)
