@@ -48,11 +48,12 @@ class LocalShellTool(Tool):
         # sh = LocalShellTool(SSHEnvironment(host="server.com", user="ubuntu"))
     """
 
-    def __init__(self, environment: ShellEnvironment | PathLike[str] | str | None = None) -> None:
-        if isinstance(environment, (str, PathLike)):
-            env = LocalShellEnvironment(path=environment)
+    def __init__(self, environment: ShellEnvironment | str | PathLike[str] | None = None) -> None:
+        if environment:
+            env: ShellEnvironment = LocalShellEnvironment.ensure_env(environment)
         else:
-            env = environment if environment is not None else LocalShellEnvironment()
+            env = LocalShellEnvironment()
+
         self._tool: FunctionTool = tool(
             env.run,
             name="shell",
