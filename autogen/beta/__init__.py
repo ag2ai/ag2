@@ -43,6 +43,8 @@ from .knowledge import (
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
     NoopChangeSubscription,
+    RedisKnowledgeStore,
+    SqliteKnowledgeStore,
     StoreBootstrap,
 )
 from .observer import BaseObserver, Observer
@@ -121,11 +123,13 @@ __all__ = (
     "ObserverCompleted",
     "ObserverStarted",
     "PromptedSchema",
+    "RedisKnowledgeStore",
     "ResponseSchema",
     "Scheduler",
     "Sequence",
     "Severity",
     "SlidingWindowPolicy",
+    "SqliteKnowledgeStore",
     "StateStore",
     "StoreBootstrap",
     "SummarizeCompact",

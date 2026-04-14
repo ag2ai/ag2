@@ -57,7 +57,7 @@ from ..errors import (
 from ..hub import Hub
 from ..identity import ActorIdentity
 from ..ids import new_id
-from ..rule import Rule
+from ..rule import Rule, TransformStage
 from ..session_types import SessionMetadata, SessionType
 from ..transport.frames import (
     AcceptFrame,
@@ -67,6 +67,7 @@ from ..transport.frames import (
     HelloFrame,
     NotifyFrame,
     ReceiptFrame,
+    RuleChangedFrame,
     SendFrame,
     SubscribeFrame,
     UnsubscribeFrame,
@@ -76,6 +77,14 @@ from ..transport.link import Link
 from . import handlers as default_handlers
 from .session import Session
 from .task import Task
+from .transforms import (
+    TransformPipeline,
+    TransformRegistry,
+)
+from .transforms.protocol import TransformRejected
+from .transforms.stdlib import (
+    install_stdlib_transforms as _install_stdlib,
+)
 
 if TYPE_CHECKING:
     from .hub_client import HubClient
@@ -126,6 +135,7 @@ class ActorClient:
         hub: Hub,
         link: Link,
         hub_client: HubClient | None = None,
+        install_stdlib_transforms: bool = True,
     ) -> None:
         self._actor = actor
         self._identity = identity
@@ -139,6 +149,21 @@ class ActorClient:
         self._welcome = asyncio.Event()
         self._stopped = False
         self._handler_tasks: set[asyncio.Task[None]] = set()
+
+        # Phase 5a.1 — transforms pipeline seam. The registry holds
+        # per-client named-transform factories (installed with the
+        # built-in stdlib by default); the pipeline is compiled from
+        # ``rule.transforms`` at construction and rebuilt whenever the
+        # hub pushes a :class:`RuleChangedFrame`. The swap is atomic
+        # under ``_pipeline_lock`` so an in-flight envelope always
+        # completes against the pipeline it started on.
+        self._transform_registry: TransformRegistry = TransformRegistry()
+        if install_stdlib_transforms:
+            _install_stdlib(self._transform_registry)
+        self._pipeline: TransformPipeline = TransformPipeline.build(
+            rule, registry=self._transform_registry
+        )
+        self._pipeline_lock = asyncio.Lock()
 
         # Bounded ring of recent outbound envelope ids — used to suppress
         # the default notify handler for envelopes that are replies to our
@@ -285,6 +310,17 @@ class ActorClient:
                 await self._loop_task
             except Exception:  # pragma: no cover
                 pass
+
+        # Phase 5a.1 — drain pipeline-owned adapter state (HttpTransform
+        # pools, stateful PythonTransform instances). Safe to call
+        # after the frame loop and handler tasks are down because no
+        # further transforms will run against this pipeline.
+        try:
+            await self._pipeline.aclose()
+        except Exception:  # pragma: no cover
+            log.warning(
+                "pipeline.aclose failed for %s", self.actor_id, exc_info=True
+            )
 
     async def reconnect(self) -> None:
         """Tear down the current transport and replay subscriptions on a new one.
@@ -676,22 +712,74 @@ class ActorClient:
         self._chunks.pop(envelope_id, None)
 
     # ------------------------------------------------------------------
-    # Transforms (empty in Phase 1)
+    # Transforms (Phase 5a.1)
     # ------------------------------------------------------------------
+    #
+    # Every stage dispatches to the :class:`TransformPipeline` built
+    # from ``self._rule.transforms``. The pipeline reference is read
+    # *once* per envelope so a concurrent :meth:`_rebuild_pipeline` (via
+    # :class:`RuleChangedFrame`) cannot yank the pipeline out from
+    # under an in-flight transform. The pipeline owns adapter state
+    # (http clients, python instances) and its lifecycle is the rule
+    # version's lifecycle — rebuilding produces a fresh pipeline and
+    # drains the old one asynchronously.
 
     async def _apply_pre_send_transforms(self, envelope: Envelope) -> Envelope:
-        return envelope
+        result = await self._pipeline.run_pre_send(envelope, self)
+        if result is None:
+            raise TransformRejected(
+                "pre_send transform rejected the envelope",
+                stage=TransformStage.PRE_SEND,
+            )
+        return result
 
     async def _apply_post_send_transforms(self, envelope: Envelope) -> None:
-        return None
+        await self._pipeline.run_post_send(envelope, self)
 
     async def _apply_pre_receive_transforms(
         self, envelope: Envelope
     ) -> Envelope | None:
-        return envelope
+        return await self._pipeline.run_pre_receive(envelope, self)
 
     async def _apply_post_receive_transforms(self, envelope: Envelope) -> None:
-        return None
+        await self._pipeline.run_post_receive(envelope, self)
+
+    async def _rebuild_pipeline(self, rule: Rule) -> None:
+        """Swap in a fresh pipeline for the new rule version.
+
+        Called from :meth:`_dispatch_frame` on every
+        :class:`RuleChangedFrame`. The swap holds
+        ``self._pipeline_lock`` for the full replace-and-drain so
+        concurrent ``run_pre_send`` / ``run_pre_receive`` calls either
+        finish on the old pipeline (they read ``self._pipeline`` at
+        the start of the call) or use the new one — never a mix.
+        """
+
+        old: TransformPipeline | None = None
+        async with self._pipeline_lock:
+            new = TransformPipeline.build(rule, registry=self._transform_registry)
+            old = self._pipeline
+            self._pipeline = new
+            self._rule = rule
+        if old is not None:
+            await old.aclose()
+
+    def register_transform(self, name: str, factory: Any) -> None:
+        """Install a named-transform factory on this client's registry.
+
+        The change takes effect on the next rule-driven pipeline
+        rebuild (or on the next transform that references the name if
+        it's already in the current rule). Useful for tests and for
+        tenant-side glue that wants to add organization-specific
+        reusable logic without going through a Python dotted path.
+        """
+
+        self._transform_registry.register(name, factory)
+
+    def transform_registry_names(self) -> list[str]:
+        """Return the names currently registered on this client's registry."""
+
+        return self._transform_registry.names()
 
     # ------------------------------------------------------------------
     # Inbound frame dispatch
@@ -752,6 +840,36 @@ class ActorClient:
                 return
             if self._pending_accept is not None and not self._pending_accept.done():
                 self._pending_accept.set_result(frame)
+            return
+        if isinstance(frame, RuleChangedFrame):
+            # Phase 5a.1 — the hub just replaced our rule, either
+            # because an operator called ``set_rule`` / ``PUT
+            # /v1/actors/{id}/rule`` or because a watched store-level
+            # edit fired. Reload the rule from the hub's in-memory
+            # cache (which is already updated) and rebuild the
+            # transforms pipeline. We use the frame's ``transforms``
+            # as the authoritative payload to avoid a race against
+            # the hub cache write, and patch the ``Rule`` on self to
+            # match.
+            try:
+                new_rule = await self._hub.get_rule(self.actor_id)
+            except Exception:
+                log.warning(
+                    "rule_changed: failed to re-read rule for %s",
+                    self.actor_id,
+                    exc_info=True,
+                )
+                return
+            # Rebuild the pipeline in a background task so the inbox
+            # loop never blocks on adapter teardown (HttpTransform
+            # aclose, etc.). The swap itself is lock-serialized so
+            # multiple rule_changed frames in quick succession still
+            # observe a consistent progression.
+            task = asyncio.get_event_loop().create_task(
+                self._rebuild_pipeline(new_rule)
+            )
+            self._handler_tasks.add(task)
+            task.add_done_callback(self._handler_tasks.discard)
             return
 
     async def _on_notify(self, envelope: Envelope) -> None:

@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from .session_types import SessionType
@@ -28,6 +30,28 @@ from .session_types import SessionType
 
 def _default_session_types() -> list[str]:
     return [t.value for t in SessionType]
+
+
+class TransformStage(str, Enum):
+    """The four pipeline stages a :class:`TransformSpec` can declare.
+
+    Keeping this next to :class:`TransformSpec` (rather than inside
+    ``client/transforms/``) lets :meth:`Rule.from_dict` validate the
+    stage field without importing client-runtime code — rules parse
+    identically on the hub side and on actor-local test fixtures.
+
+    Subclassing ``str`` lets members compare equal to their literal
+    value, so existing call sites that say ``spec.stage == "pre_send"``
+    keep working after the Phase 5a.1 validation upgrade.
+    """
+
+    PRE_SEND = "pre_send"
+    POST_SEND = "post_send"
+    PRE_RECEIVE = "pre_receive"
+    POST_RECEIVE = "post_receive"
+
+
+_VALID_STAGES = frozenset(stage.value for stage in TransformStage)
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +142,55 @@ class SubscribeAccess:
         )
 
 
+# ---------------------------------------------------------------------------
+# Knowledge access policy
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class KnowledgeAccess:
+    """Read-only cross-actor access to the owning actor's KnowledgeStore.
+
+    Every actor owns a private :class:`KnowledgeStore` that is otherwise
+    invisible to every other actor. ``KnowledgeAccess`` carves out a
+    read-only slice of that store for specific peers to read via
+    ``GET /v1/actors/{id}/knowledge/{path}``:
+
+    * ``expose`` — glob patterns matched against the requested path in
+      the owning actor's store. Patterns use :mod:`fnmatch` syntax (``*``,
+      ``**``, ``?``). Defaults to the empty list — no exposure.
+    * ``readers`` — glob patterns matched against the *requesting* actor's
+      ``identity.name``. Defaults to the empty list — no reader is allowed.
+
+    A read is permitted iff **both** the requesting actor's name matches
+    some ``readers`` entry **and** the requested path matches some
+    ``expose`` entry. Empty lists deny by default, matching the V2
+    ``_exposed_paths`` side-channel replacement called out in §12.
+
+    Writes are never exposed — the endpoint only serves ``read``.
+    """
+
+    expose: list[str] = field(default_factory=list)
+    readers: list[str] = field(default_factory=list)
+
+    def allows(self, *, reader_name: str, path: str) -> bool:
+        if not self.expose or not self.readers:
+            return False
+        if not _match(reader_name, self.readers):
+            return False
+        return _match_path(path, self.expose)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"expose": list(self.expose), "readers": list(self.readers)}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> KnowledgeAccess:
+        return cls(
+            expose=list(data.get("expose", [])),
+            readers=list(data.get("readers", [])),
+        )
+
+
 @dataclass(slots=True)
 class AccessBlock:
     """Who may interact with this actor."""
@@ -126,6 +199,7 @@ class AccessBlock:
     outbound_to: list[str] = field(default_factory=lambda: ["*"])
     session_types: SessionTypeAccess = field(default_factory=SessionTypeAccess)
     subscribe: SubscribeAccess = field(default_factory=SubscribeAccess)
+    knowledge: KnowledgeAccess = field(default_factory=KnowledgeAccess)
 
     def allows_inbound(self, sender_name: str) -> bool:
         return _match(sender_name, self.inbound_from)
@@ -139,6 +213,7 @@ class AccessBlock:
             "outbound_to": list(self.outbound_to),
             "session_types": self.session_types.to_dict(),
             "subscribe": self.subscribe.to_dict(),
+            "knowledge": self.knowledge.to_dict(),
         }
 
     @classmethod
@@ -148,6 +223,7 @@ class AccessBlock:
             outbound_to=list(data.get("outbound_to", ["*"])),
             session_types=SessionTypeAccess.from_dict(data.get("session_types", {})),
             subscribe=SubscribeAccess.from_dict(data.get("subscribe", {})),
+            knowledge=KnowledgeAccess.from_dict(data.get("knowledge", {})),
         )
 
 
@@ -313,17 +389,40 @@ class LimitsBlock:
 
 @dataclass(slots=True)
 class TransformSpec:
+    """One transform declaration from a rule's ``transforms`` list.
+
+    Phase 5a.1 tightens stage validation: ``stage`` must be one of the
+    four :class:`TransformStage` values. Unknown stage strings raise
+    :class:`ValueError` at construction and at :meth:`from_dict`, so
+    a typo in a rule upload surfaces at rule-write time rather than
+    silently disabling the transform. ``apply`` stays loose
+    (``Any``) — the adapter-level shape checks happen in the pipeline
+    compiler, and unknown ``apply`` forms (``exec`` / ``ws``) log and
+    pass through so forward-compatibility with Phase 5b holds.
+    """
+
     stage: str
     apply: Any
     when: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.stage not in _VALID_STAGES:
+            raise ValueError(
+                f"TransformSpec.stage must be one of {sorted(_VALID_STAGES)}, "
+                f"got {self.stage!r}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {"stage": self.stage, "apply": self.apply, "when": dict(self.when)}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TransformSpec:
+        try:
+            stage = data["stage"]
+        except KeyError as exc:
+            raise ValueError("TransformSpec requires a 'stage' field") from exc
         return cls(
-            stage=data["stage"],
+            stage=stage,
             apply=data.get("apply"),
             when=dict(data.get("when", {})),
         )
@@ -375,6 +474,63 @@ class Rule:
 
 def _match(value: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(value, pattern) for pattern in patterns)
+
+
+def _normalize_store_path(path: str) -> str:
+    """Collapse double slashes and ensure a single leading slash."""
+
+    if not path.startswith("/"):
+        path = "/" + path
+    while "//" in path:
+        path = path.replace("//", "/")
+    return path
+
+
+def _path_glob_match(path: str, pattern: str) -> bool:
+    """Glob-match a KnowledgeStore path against one pattern.
+
+    Supported forms:
+
+    * Exact path — ``/foo/bar.txt``.
+    * Directory prefix — ``/foo/`` matches ``/foo`` and anything beneath.
+    * ``*`` — matches a single path segment (no ``/``).
+    * ``**`` — matches any number of path segments (including zero).
+    * ``?`` — matches one non-``/`` character.
+    """
+
+    if pattern.endswith("/"):
+        prefix = _normalize_store_path(pattern)
+        trimmed = prefix.rstrip("/") or "/"
+        return path == trimmed or path.startswith(prefix)
+    norm_pattern = _normalize_store_path(pattern)
+    parts: list[str] = []
+    i = 0
+    while i < len(norm_pattern):
+        c = norm_pattern[i]
+        if c == "*":
+            if i + 1 < len(norm_pattern) and norm_pattern[i + 1] == "*":
+                parts.append(".*")
+                i += 2
+            else:
+                parts.append("[^/]*")
+                i += 1
+        elif c == "?":
+            parts.append("[^/]")
+            i += 1
+        else:
+            parts.append(re.escape(c))
+            i += 1
+    regex = "^" + "".join(parts) + "$"
+    return re.match(regex, path) is not None
+
+
+def _match_path(path: str, patterns: list[str]) -> bool:
+    """Match a KnowledgeStore path against a list of glob-style patterns."""
+
+    if not patterns:
+        return False
+    norm = _normalize_store_path(path)
+    return any(_path_glob_match(norm, p) for p in patterns)
 
 
 def _session_type_value(session_type: SessionType | str) -> str:

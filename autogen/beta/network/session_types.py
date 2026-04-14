@@ -105,6 +105,10 @@ class SessionMetadata:
     parent_session_id: str | None = None
     closed_at: str | None = None
     close_reason: str | None = None
+    # Phase 3b archival. Non-null ``archived_at`` means the WAL has
+    # been moved to ``hub/archive/sessions/{id}/wal.jsonl`` and the
+    # session no longer owns an active WAL in ``hub/sessions/``.
+    archived_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +126,7 @@ class SessionMetadata:
             "parent_session_id": self.parent_session_id,
             "closed_at": self.closed_at,
             "close_reason": self.close_reason,
+            "archived_at": self.archived_at,
         }
 
     @classmethod
@@ -141,6 +146,7 @@ class SessionMetadata:
             parent_session_id=data.get("parent_session_id"),
             closed_at=data.get("closed_at"),
             close_reason=data.get("close_reason"),
+            archived_at=data.get("archived_at"),
         )
 
     def to_json(self) -> str:

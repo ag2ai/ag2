@@ -39,8 +39,17 @@ class HubClient:
         identity: ActorIdentity,
         rule: Rule | None = None,
         auth_claim: dict[str, Any] | None = None,
+        install_stdlib_transforms: bool = True,
     ) -> ActorClient:
-        """Register ``actor`` under ``identity`` and return an ``ActorClient``."""
+        """Register ``actor`` under ``identity`` and return an ``ActorClient``.
+
+        ``install_stdlib_transforms`` controls whether the Phase 5a.1
+        named-transform standard library (``redact_pii`` /
+        ``truncate_long_content`` / ``stamp_audit_header``) is
+        pre-registered on the new client's :class:`TransformRegistry`.
+        Default True — opt out for tests that need a pristine registry
+        or for deployments that want to install a custom stdlib first.
+        """
 
         stamped = await self._hub.register(identity, rule, auth_claim=auth_claim)
         client = ActorClient(
@@ -50,6 +59,7 @@ class HubClient:
             hub=self._hub,
             link=self._link,
             hub_client=self,
+            install_stdlib_transforms=install_stdlib_transforms,
         )
         await client._start()
         self._actor_clients.append(client)

@@ -101,6 +101,7 @@ from ..transport.frames import (
     HelloFrame,
     NotifyFrame,
     ReceiptFrame,
+    RuleChangedFrame,
     SendFrame,
     SubscribeFrame,
     UnsubscribeFrame,
@@ -202,6 +203,24 @@ def _add_seconds(iso_ts: str, seconds: int) -> str:
     return (base + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _iso_seconds_since(start: str, now: str) -> float:
+    """Return the number of seconds between two ISO-Z timestamps.
+
+    Used by :meth:`Hub.metrics` to compute ``uptime_s``. Clock-monotonic
+    guarantees come from the hub's injected ``clock`` — for real clocks
+    this is wall time; for deterministic tests it's whatever the fake
+    clock returns. Returns ``0.0`` if either timestamp fails to parse
+    so the metrics endpoint never crashes the hub.
+    """
+
+    try:
+        a = datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        b = datetime.strptime(now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:  # pragma: no cover
+        return 0.0
+    return (b - a).total_seconds()
+
+
 def _type_name(session_type: SessionType | str) -> str:
     """Normalize a session-type argument to its canonical string value.
 
@@ -270,6 +289,14 @@ class Hub:
         self._name_to_id: dict[str, str] = {}
         self._identities: dict[str, ActorIdentity] = {}
         self._rules: dict[str, Rule] = {}
+        # Dedupe RuleChangedFrame emissions. ``set_rule`` writes the
+        # rule to the store, which synchronously fires the on_change
+        # callback on stores that support it (MemoryKnowledgeStore
+        # today, more in Phase 3b). Both ``set_rule`` and the
+        # ``_reload_actor_rule`` listener end up calling
+        # ``_emit_rule_changed``; we compare the serialized rule
+        # against the last emission per actor and skip the duplicate.
+        self._last_emitted_rule_json: dict[str, str] = {}
         self._sessions: dict[str, SessionMetadata] = {}
         self._active_sessions: dict[str, set[str]] = {}  # actor_id → session_ids
         self._endpoints: dict[str, _EndpointSide] = {}
@@ -307,6 +334,32 @@ class Hub:
         # its session closes) and for fast ``session.track_tasks()``
         # lookups without rescanning the whole cache.
         self._session_tasks: dict[str, set[str]] = {}
+        # Phase 3b — in-memory metrics counters. Updated incrementally
+        # on every mutation so ``Hub.metrics()`` and ``/v1/admin/metrics``
+        # do not scan the audit log or the store. Rebuilt from in-memory
+        # state on demand (see :meth:`metrics`).
+        self._started_at = self._clock()
+        self._sessions_closed_total: int = 0
+        self._tasks_completed_total: int = 0
+        self._tasks_failed_total: int = 0
+        # Phase 3b — async audit log writer task queue. Populated by
+        # :meth:`_audit`; drained by a background task started on
+        # :meth:`open` / :meth:`hydrate` so auditing never blocks the
+        # hot path. See :meth:`_start_audit_writer`.
+        self._audit_queue: asyncio.Queue[dict[str, Any]] | None = None
+        self._audit_task: asyncio.Task[None] | None = None
+        # Phase 3b — on_change cache invalidation. When the store
+        # fires a change on ``hub/actors/{id}/identity.json`` or
+        # ``rule.json`` (e.g. an operator edits the file out of band
+        # or ``PUT /v1/actors/{id}/rule`` is called by a sidecar
+        # process sharing the same store), the callback drops the
+        # corresponding in-memory cache entry. Subscription handle
+        # is closed on :meth:`close`.
+        self._cache_sub = None  # type: Any
+        # Set of paths we've seen recently in a cache-invalidation
+        # callback — used to dedupe bursts of writes from the same
+        # mutation path so we do not spend the lock twice per edit.
+        self._cache_invalidation_lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod
     async def open(
@@ -342,7 +395,239 @@ class Hub:
             clock=clock,
         )
         await hub.hydrate()
+        await hub._start_audit_writer()
+        await hub._start_cache_invalidation()
         return hub
+
+    # ------------------------------------------------------------------
+    # Cache invalidation via store.on_change (Phase 3b)
+    # ------------------------------------------------------------------
+
+    async def _start_cache_invalidation(self) -> None:
+        """Subscribe to ``hub/actors/*`` changes and invalidate caches.
+
+        When an operator (or a sidecar process) rewrites
+        ``hub/actors/{id}/identity.json`` or ``hub/actors/{id}/rule.json``
+        via the shared store, the watcher's callback drops the stale
+        in-memory entry and re-reads the file. A long-running hub
+        therefore picks up out-of-band edits without a full restart.
+
+        Stores that cannot observe changes (``MemoryKnowledgeStore``
+        without active subscribers, or backends returning
+        ``NoopChangeSubscription``) silently no-op — the invalidation
+        layer is opportunistic, not required for correctness.
+
+        Scoped intentionally small: only identity + rule invalidation.
+        Cross-process subscription fan-out for session envelopes
+        stays out of Phase 3b (see §14 "Deferred"), because that
+        would conflate single-machine convenience with true
+        multi-writer coordination.
+        """
+
+        try:
+            self._cache_sub = await self._store.on_change(
+                layout.ACTORS_ROOT, self._on_actor_path_change
+            )
+        except Exception:  # pragma: no cover
+            log.warning(
+                "on_change subscription failed; cache invalidation disabled",
+                exc_info=True,
+            )
+
+    async def _stop_cache_invalidation(self) -> None:
+        """Close the on_change subscription. Idempotent."""
+
+        sub = self._cache_sub
+        self._cache_sub = None
+        if sub is None:
+            return
+        try:
+            await sub.close()
+        except Exception:  # pragma: no cover
+            log.warning("on_change close failed", exc_info=True)
+
+    async def _on_actor_path_change(self, changed_path: str) -> None:
+        """Handle a change notification for ``hub/actors/{id}/(identity|rule).json``.
+
+        Dispatches to :meth:`_reload_actor_identity` or
+        :meth:`_reload_actor_rule` depending on which file was
+        rewritten. Paths that do not match either pattern (e.g.
+        ``runtime.json``, ``inbox/pending/foo.json``, ``SKILL.md``)
+        are ignored — the caches for those either do not exist or are
+        intentionally re-read on every use.
+        """
+
+        if not changed_path.startswith(layout.ACTORS_ROOT + "/"):
+            return
+        parts = changed_path[len(layout.ACTORS_ROOT) + 1 :].split("/")
+        if len(parts) < 2:
+            return
+        actor_id = parts[0]
+        filename = parts[1]
+        async with self._cache_invalidation_lock:
+            if filename == "identity.json":
+                await self._reload_actor_identity(actor_id)
+            elif filename == "rule.json":
+                await self._reload_actor_rule(actor_id)
+
+    async def _reload_actor_identity(self, actor_id: str) -> None:
+        """Re-read the identity from the store and refresh caches.
+
+        Handles three cases:
+        * File present, same actor_id → update :attr:`_identities`
+          and the name-index (dropping any stale name pointer).
+        * File absent → drop the actor from every cache
+          (treat as unregister).
+        * Read error → log and leave the stale entry in place
+          (better to serve old data than crash).
+        """
+
+        try:
+            raw = await self._store.read(layout.actor_identity(actor_id))
+        except Exception:  # pragma: no cover
+            log.warning(
+                "cache invalidation: identity read failed for %s",
+                actor_id,
+                exc_info=True,
+            )
+            return
+        if raw is None:
+            old = self._identities.pop(actor_id, None)
+            self._rules.pop(actor_id, None)
+            self._last_emitted_rule_json.pop(actor_id, None)
+            self._active_sessions.pop(actor_id, None)
+            self._inbox_pending.pop(actor_id, None)
+            if old is not None:
+                self._name_to_id.pop(old.name, None)
+            return
+        try:
+            identity = ActorIdentity.from_json(raw)
+        except Exception:  # pragma: no cover
+            log.warning(
+                "cache invalidation: identity parse failed for %s",
+                actor_id,
+                exc_info=True,
+            )
+            return
+        skill = await self._store.read(layout.actor_skill(actor_id))
+        if skill is not None:
+            identity.skill_md = skill
+        old = self._identities.get(actor_id)
+        if old is not None and old.name != identity.name:
+            self._name_to_id.pop(old.name, None)
+        self._identities[actor_id] = identity
+        self._name_to_id[identity.name] = actor_id
+
+    async def _reload_actor_rule(self, actor_id: str) -> None:
+        """Re-read the rule from the store and refresh the cache.
+
+        Also emits :class:`RuleChangedFrame` to the actor's live
+        endpoint so out-of-band rule edits (operator tooling, another
+        process sharing the store) propagate to the client's transforms
+        pipeline. Without this the §4.3 "any write to rule.json emits
+        a RuleChanged event" contract would only hold for
+        :meth:`set_rule`.
+        """
+
+        try:
+            raw = await self._store.read(layout.actor_rule(actor_id))
+        except Exception:  # pragma: no cover
+            log.warning(
+                "cache invalidation: rule read failed for %s",
+                actor_id,
+                exc_info=True,
+            )
+            return
+        if raw is None:
+            self._rules.pop(actor_id, None)
+            return
+        try:
+            rule = Rule.from_json(raw)
+        except Exception:  # pragma: no cover
+            log.warning(
+                "cache invalidation: rule parse failed for %s",
+                actor_id,
+                exc_info=True,
+            )
+            return
+        self._rules[actor_id] = rule
+        await self._emit_rule_changed(actor_id, rule)
+
+    # ------------------------------------------------------------------
+    # Audit log writer (Phase 3b)
+    # ------------------------------------------------------------------
+
+    async def _start_audit_writer(self) -> None:
+        """Start the background audit log writer task.
+
+        Idempotent: calling twice is a no-op. The writer drains
+        :attr:`_audit_queue` and appends each entry as a single JSON
+        line to ``hub/admin/audit.jsonl`` via the store's ``append``
+        method. Failures are logged and swallowed — audit is always
+        best-effort so a store outage never refuses a mutation.
+        """
+
+        if self._audit_task is not None and not self._audit_task.done():
+            return
+        self._audit_queue = asyncio.Queue(maxsize=10000)
+        self._audit_task = asyncio.create_task(
+            self._audit_writer_loop(), name="hub-audit-writer"
+        )
+
+    async def _stop_audit_writer(self) -> None:
+        """Drain pending entries and stop the writer task.
+
+        Called by :meth:`close`. The writer wakes on a sentinel ``None``
+        entry in the queue and exits cleanly. If the task is still
+        running after a short grace period, it is cancelled.
+        """
+
+        if self._audit_task is None:
+            return
+        queue = self._audit_queue
+        if queue is not None:
+            try:
+                queue.put_nowait(None)  # type: ignore[arg-type]
+            except asyncio.QueueFull:  # pragma: no cover
+                self._audit_task.cancel()
+        try:
+            await asyncio.wait_for(self._audit_task, timeout=1.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):  # pragma: no cover
+            self._audit_task.cancel()
+        self._audit_task = None
+        self._audit_queue = None
+
+    async def _audit_writer_loop(self) -> None:
+        """Consume the audit queue and append entries to ``audit.jsonl``."""
+
+        audit_path = layout.admin_audit_log()
+        queue = self._audit_queue
+        assert queue is not None
+        while True:
+            entry = await queue.get()
+            if entry is None:
+                return
+            try:
+                line = json.dumps(entry, sort_keys=True) + "\n"
+                await self._store.append(audit_path, line)
+            except Exception:  # pragma: no cover
+                log.warning("audit write failed for %s", entry.get("action"))
+
+    async def close(self) -> None:
+        """Release hub-owned background resources.
+
+        Phase 3b starts the audit log writer and the cache
+        invalidation subscription as background resources when
+        :meth:`open` is used. ``close`` drains the audit queue,
+        stops the writer task, and closes the on_change
+        subscription for a clean asyncio teardown. Tests that
+        construct ``Hub(store)`` directly (no ``open``) never
+        start either resource and do not need to call ``close``
+        — it's a safe no-op.
+        """
+
+        await self._stop_audit_writer()
+        await self._stop_cache_invalidation()
 
     # ------------------------------------------------------------------
     # Adapter registry
@@ -482,6 +767,16 @@ class Hub:
             if metadata.state is SessionState.ACTIVE:
                 for p in metadata.participants:
                     self._active_sessions.setdefault(p.actor_id, set()).add(session_id)
+            # Phase 3b — sessions whose WAL has already been archived
+            # remain in the metadata cache (so /v1/actors/{id}/activity
+            # and /v1/sessions still surface them via
+            # ``metadata.archived_at``) but their live WAL at
+            # ``hub/sessions/{id}/wal.jsonl`` has been moved to
+            # ``hub/archive/sessions/{id}/wal.jsonl`` plus a
+            # ``summary.json`` sibling. ``read_wal`` intentionally
+            # returns an empty list for archived sessions in 3b —
+            # callers that need the archived bytes read them from
+            # the archive path directly via the store.
 
         # Phase 4 — rebuild the task cache from ``hub/tasks/*/metadata.json``.
         # Tasks whose session has been archived are loaded but not added to
@@ -564,6 +859,14 @@ class Hub:
             self._active_sessions[actor_id] = set()
             self._inbox_pending[actor_id] = 0
 
+        self._audit(
+            actor_id=actor_id,
+            action="register_actor",
+            resource_type="actor",
+            resource_id=actor_id,
+            decision="allow",
+            reason=stamped.name,
+        )
         return stamped
 
     async def unregister(self, actor_id: str) -> None:
@@ -572,6 +875,7 @@ class Hub:
             if identity is None:
                 raise UnknownActorError(actor_id)
             self._rules.pop(actor_id, None)
+            self._last_emitted_rule_json.pop(actor_id, None)
             self._active_sessions.pop(actor_id, None)
             self._name_to_id.pop(identity.name, None)
             self._inbox_pending.pop(actor_id, None)
@@ -581,6 +885,15 @@ class Hub:
         endpoint = self._endpoints.pop(actor_id, None)
         if endpoint is not None and not endpoint.closed:
             await endpoint.close()
+
+        self._audit(
+            actor_id=actor_id,
+            action="unregister_actor",
+            resource_type="actor",
+            resource_id=actor_id,
+            decision="allow",
+            reason=identity.name,
+        )
 
     async def find(self, capability: str | None = None) -> list[ActorIdentity]:
         async with self._lock:
@@ -597,6 +910,77 @@ class Hub:
         if actor_id not in self._rules:
             raise UnknownActorError(actor_id)
         return self._rules[actor_id]
+
+    async def set_rule(self, actor_id: str, rule: Rule) -> None:
+        """Replace an actor's rule and persist the new version.
+
+        Used by the Phase 3b ``PUT /v1/actors/{id}/rule`` endpoint and
+        by operator tooling that edits rules out of band. The in-memory
+        cache is updated atomically with the store write so a
+        concurrent post_envelope never sees a half-updated rule.
+        Emits an audit entry and a :class:`RuleChangedFrame` to the
+        actor's live endpoint so the client's transforms pipeline
+        reloads. Phase 5a wires the frame to actually drive
+        transform execution.
+        """
+
+        async with self._lock:
+            if actor_id not in self._identities:
+                raise UnknownActorError(actor_id)
+            await self._store.write(layout.actor_rule(actor_id), rule.to_json())
+            self._rules[actor_id] = rule
+
+        self._audit(
+            actor_id=actor_id,
+            action="update_rule",
+            resource_type="rule",
+            resource_id=actor_id,
+            decision="allow",
+            reason="",
+        )
+
+        await self._emit_rule_changed(actor_id, rule)
+
+    async def _emit_rule_changed(self, actor_id: str, rule: Rule) -> None:
+        """Push a :class:`RuleChangedFrame` to the actor's live endpoint.
+
+        Called from both :meth:`set_rule` (explicit rule replacement)
+        and :meth:`_reload_actor_rule` (FS-watcher pickup of out-of-band
+        edits) so §4.3's "any write to rule.json emits a RuleChanged
+        event" contract holds for both paths. Silently no-ops when the
+        actor has no live endpoint — offline actors see the new rule on
+        their next hello.
+
+        Deduplication: ``set_rule`` writes to the store before calling
+        this helper, and stores whose ``on_change`` fires synchronously
+        (e.g. :class:`MemoryKnowledgeStore`) will re-invoke the helper
+        via :meth:`_reload_actor_rule` inside the same call stack. We
+        track the last-emitted serialized rule per actor and skip the
+        emission when the content is byte-identical to the previous
+        one — so a single logical rule change produces exactly one
+        frame regardless of how many hub entry points observed it.
+        """
+
+        endpoint = self._endpoints.get(actor_id)
+        if endpoint is None or endpoint.closed:
+            return
+        serialized = rule.to_json()
+        if self._last_emitted_rule_json.get(actor_id) == serialized:
+            return
+        try:
+            await endpoint.send_frame(
+                RuleChangedFrame(
+                    actor_id=actor_id,
+                    transforms=[t.to_dict() for t in rule.transforms],
+                    version=rule.version,
+                )
+            )
+        except Exception:  # pragma: no cover
+            log.warning(
+                "rule_changed push failed for %s", actor_id, exc_info=True
+            )
+            return
+        self._last_emitted_rule_json[actor_id] = serialized
 
     def _resolve_actor(self, name_or_id: str) -> str:
         if name_or_id in self._identities:
@@ -788,16 +1172,40 @@ class Hub:
             updated = await asyncio.wait_for(pending.future, timeout=timeout_s)
         except asyncio.TimeoutError:
             await self._rollback_session(metadata, reason="invite_timeout")
+            self._audit(
+                actor_id=creator_id,
+                action="create_session",
+                resource_type="session",
+                resource_id=metadata.session_id,
+                decision="timeout",
+                reason="invite_timeout",
+            )
             raise InviteRejectedError(
                 f"only {len(pending.acked_ids)}/{quorum_target} invites acked "
                 "before timeout"
             )
         except InviteRejectedError:
             await self._rollback_session(metadata, reason="invite_rejected")
+            self._audit(
+                actor_id=creator_id,
+                action="create_session",
+                resource_type="session",
+                resource_id=metadata.session_id,
+                decision="rejected",
+                reason="invite_rejected",
+            )
             raise
         finally:
             self._pending_invites.pop(metadata.session_id, None)
 
+        self._audit(
+            actor_id=creator_id,
+            action="create_session",
+            resource_type="session",
+            resource_id=metadata.session_id,
+            decision="allow",
+            reason=session_type_name,
+        )
         return updated
 
     async def _rollback_session(
@@ -1522,11 +1930,13 @@ class Hub:
             task.completed_at = now
             task.result = data.get("value")
             self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+            self._tasks_completed_total += 1
         elif event_type == EV_TASK_ERROR:
             task.state = TaskState.FAILED
             task.completed_at = now
             task.error = str(data.get("error", ""))
             self._session_tasks.get(task.session_id, set()).discard(task.task_id)
+            self._tasks_failed_total += 1
         elif event_type == EV_TASK_CANCELLED:
             task.state = TaskState.CANCELLED
             task.completed_at = now
@@ -1623,6 +2033,72 @@ class Hub:
 
         return self._sessions.get(session_id)
 
+    def metrics(self) -> dict[str, Any]:
+        """Return a nested counter dict for ``GET /v1/admin/metrics``.
+
+        Computed purely from in-memory state — zero audit-log scans,
+        zero store reads. Safe to call at arbitrary Prometheus scrape
+        frequency. Phase 3b §14 says metrics **must not** derive from
+        ``audit.jsonl``; the two surfaces are intentionally
+        independent so the audit file can be rotated externally
+        without affecting the liveness view.
+
+        Shape::
+
+            {
+              "actors":   {"registered": int, "connected": int},
+              "sessions": {
+                  "active":       int,  # active + pending slots held
+                  "pending":      int,  # in-handshake
+                  "closed_total": int,  # monotonic since hub open
+              },
+              "tasks": {
+                  "running":         int,
+                  "completed_total": int,
+                  "failed_total":    int,
+              },
+              "inbox": {"pending_total": int},
+              "uptime_s": float,
+            }
+        """
+
+        active = 0
+        pending = 0
+        for meta in self._sessions.values():
+            if meta.state is SessionState.ACTIVE:
+                active += 1
+            elif meta.state is SessionState.PENDING:
+                pending += 1
+
+        running_tasks = sum(
+            1 for t in self._tasks.values() if not t.is_terminal()
+        )
+
+        pending_total = sum(self._inbox_pending.values())
+
+        connected = sum(
+            1 for ep in self._endpoints.values() if not ep.closed
+        )
+
+        return {
+            "actors": {
+                "registered": len(self._identities),
+                "connected": connected,
+            },
+            "sessions": {
+                "active": active,
+                "pending": pending,
+                "closed_total": self._sessions_closed_total,
+            },
+            "tasks": {
+                "running": running_tasks,
+                "completed_total": self._tasks_completed_total,
+                "failed_total": self._tasks_failed_total,
+            },
+            "inbox": {"pending_total": pending_total},
+            "uptime_s": _iso_seconds_since(self._started_at, self._clock()),
+        }
+
     async def close_session(
         self,
         session_id: str,
@@ -1647,6 +2123,15 @@ class Hub:
         # terminal SessionClosed so post-mortem replay stays ordered.
         await self._cancel_tasks_for_session(session_id, reason=reason)
         await self._broadcast_session_closed(metadata)
+        self._sessions_closed_total += 1
+        self._audit(
+            actor_id=requested_by,
+            action="close_session",
+            resource_type="session",
+            resource_id=session_id,
+            decision="allow",
+            reason=reason,
+        )
 
     async def sweep_expired_sessions(self) -> list[str]:
         """Transition every ACTIVE session whose ``expires_at`` has passed to EXPIRED.
@@ -1700,6 +2185,15 @@ class Hub:
                 )
                 await self._broadcast_session_closed(metadata)
                 expired_ids.append(metadata.session_id)
+                self._sessions_closed_total += 1
+                self._audit(
+                    actor_id=None,
+                    action="expire_session",
+                    resource_type="session",
+                    resource_id=metadata.session_id,
+                    decision="allow",
+                    reason="ttl_expired",
+                )
             except Exception:  # pragma: no cover
                 log.warning(
                     "hub: ttl sweep failed for session %s",
@@ -1708,6 +2202,173 @@ class Hub:
                 )
 
         return expired_ids
+
+    async def archive_closed_sessions(
+        self,
+        *,
+        age_threshold_s: float = 0.0,
+        now: str | None = None,
+    ) -> list[str]:
+        """Move closed/expired sessions older than ``age_threshold_s`` to archive.
+
+        Walks every session whose state is :attr:`SessionState.CLOSED`
+        or :attr:`SessionState.EXPIRED`, whose ``archived_at`` is still
+        ``None`` (so we never re-archive an already-archived session),
+        and whose ``closed_at`` is at least ``age_threshold_s`` older
+        than ``now``. For each match:
+
+        1. Read the session WAL via the store.
+        2. Compute a compact summary dict: envelope count, first and
+           last ``created_at``, distinct senders, close reason.
+        3. Write the summary to
+           ``hub/archive/sessions/{id}/summary.json``.
+        4. Copy the WAL bytes to
+           ``hub/archive/sessions/{id}/wal.jsonl``.
+        5. Delete the live WAL at ``hub/sessions/{id}/wal.jsonl``.
+        6. Rewrite ``hub/sessions/{id}/metadata.json`` with
+           ``archived_at = now`` so hydrate skips it on restart.
+
+        Framework-core ``CompactStrategy`` is *not* reused here
+        because its surface (``BaseEvent`` + ``Context`` + per-turn
+        token budget) is oriented at mid-stream LLM compaction, not
+        cold archival of past sessions. A deliberate simplification
+        for the OSS framework: the sweeper computes a plain-text
+        summary that any backend can serve via
+        ``GET /v1/actors/{id}/activity`` without requiring an LLM
+        call. Operators who want richer summaries subclass the hub
+        and override this method.
+
+        The sweeper is idempotent: an already-archived session is
+        skipped because ``archived_at is not None``. Active sessions
+        are never touched.
+
+        Returns the list of session ids archived on this pass.
+
+        Args:
+            age_threshold_s: Minimum seconds elapsed between
+                ``closed_at`` and ``now``. ``0.0`` archives every
+                closed session immediately — useful for tests.
+            now: Optional ISO-Z timestamp override. Defaults to
+                :attr:`self._clock()`. Tests use this to drive the
+                sweeper deterministically without sleeping.
+        """
+
+        current = now if now is not None else self._clock()
+        archived: list[str] = []
+        for metadata in list(self._sessions.values()):
+            if metadata.state not in (SessionState.CLOSED, SessionState.EXPIRED):
+                continue
+            if metadata.archived_at is not None:
+                continue
+            if metadata.closed_at is None:
+                # Should not happen — close_session always stamps
+                # closed_at — but guard against legacy data.
+                continue
+            age = _iso_seconds_since(metadata.closed_at, current)
+            if age < age_threshold_s:
+                continue
+
+            try:
+                await self._archive_single_session(metadata, now=current)
+                archived.append(metadata.session_id)
+                self._audit(
+                    actor_id=None,
+                    action="archive_session",
+                    resource_type="session",
+                    resource_id=metadata.session_id,
+                    decision="allow",
+                    reason=f"age_s={age:.1f}",
+                )
+            except Exception:  # pragma: no cover
+                log.warning(
+                    "archive sweep failed for session %s",
+                    metadata.session_id,
+                    exc_info=True,
+                )
+        return archived
+
+    async def _archive_single_session(
+        self, metadata: SessionMetadata, *, now: str
+    ) -> None:
+        """Archive one closed session. Called by :meth:`archive_closed_sessions`."""
+
+        session_id = metadata.session_id
+        wal_path = layout.session_wal(session_id)
+        archive_dir = layout.archive_session_dir(session_id)
+        archive_wal = f"{archive_dir}/wal.jsonl"
+        archive_summary = f"{archive_dir}/summary.json"
+
+        # Read the live WAL.
+        raw_wal = await self._store.read(wal_path)
+        envelope_count = 0
+        first_ts: str | None = None
+        last_ts: str | None = None
+        senders: set[str] = set()
+        if raw_wal:
+            lines = [line for line in raw_wal.split("\n") if line]
+            envelope_count = len(lines)
+            if lines:
+                try:
+                    first = Envelope.from_json(lines[0])
+                    first_ts = first.created_at
+                    senders.add(first.sender_id)
+                except Exception:  # pragma: no cover
+                    pass
+                try:
+                    last = Envelope.from_json(lines[-1])
+                    last_ts = last.created_at
+                    senders.add(last.sender_id)
+                except Exception:  # pragma: no cover
+                    pass
+                for line in lines[1:-1]:
+                    try:
+                        env = Envelope.from_json(line)
+                        senders.add(env.sender_id)
+                    except Exception:  # pragma: no cover
+                        continue
+
+        summary = {
+            "session_id": session_id,
+            "type": metadata.type,
+            "state": metadata.state.value,
+            "close_reason": metadata.close_reason,
+            "closed_at": metadata.closed_at,
+            "envelope_count": envelope_count,
+            "first_envelope_at": first_ts,
+            "last_envelope_at": last_ts,
+            "participants": [p.actor_id for p in metadata.participants],
+            "senders": sorted(senders),
+            "archived_at": now,
+        }
+        await self._store.write(archive_summary, json.dumps(summary, sort_keys=True))
+        if raw_wal:
+            await self._store.write(archive_wal, raw_wal)
+            await self._store.delete(wal_path)
+
+        metadata.archived_at = now
+        await self._write_session_metadata(metadata)
+
+    def archive_sweep_callback(
+        self, *, age_threshold_s: float = 3600.0
+    ) -> Callable[[Any, Any], Any]:
+        """Return an async Scheduler callback for periodic archival.
+
+        Usage::
+
+            scheduler = Scheduler()
+            scheduler.add(
+                IntervalWatch(60),
+                callback=hub.archive_sweep_callback(age_threshold_s=3600),
+            )
+
+        Mirrors :meth:`ttl_sweep_callback` — the operator owns the
+        scheduler and the hub contributes a plain async callable.
+        """
+
+        async def _callback(_events: Any, _ctx: Any) -> None:
+            await self.archive_closed_sessions(age_threshold_s=age_threshold_s)
+
+        return _callback
 
     def ttl_sweep_callback(self) -> Callable[[Any, Any], Any]:
         """Return an async callback compatible with ``Scheduler.add``.
@@ -1862,20 +2523,59 @@ class Hub:
 
         rule = self._rules.get(recipient_id)
         inbox = rule.limits.inbox if rule is not None else None
-        spooling = False
+
+        # Determine delivery disposition from overflow policy + capacity.
+        # "normal" writes to pending/ and bumps the counter;
+        # "spool" writes to overflow/ without bumping; "drop" writes nothing.
+        disposition = "normal"
         if inbox is not None and inbox.max_pending > 0:
             current = self._inbox_pending.get(recipient_id, 0)
             if current >= inbox.max_pending:
-                spooling = True
+                if inbox.overflow == "spool":
+                    disposition = "spool"
+                elif inbox.overflow == "drop_oldest":
+                    await self._evict_oldest_pending(recipient_id)
+                    # disposition stays "normal" — the eviction freed a slot
+                elif inbox.overflow == "drop_newest":
+                    disposition = "drop"
+                # "reject" was already raised in _preflight_inbox_capacity
 
-        if spooling:
-            path = layout.actor_inbox_overflow(recipient_id, envelope.envelope_id or "")
+        if disposition == "drop":
+            recipient_name = (
+                self._identities[recipient_id].name
+                if recipient_id in self._identities
+                else recipient_id
+            )
+            log.info(
+                "inbox drop_newest: dropped envelope %s for %s (%d/%d)",
+                envelope.envelope_id,
+                recipient_name,
+                self._inbox_pending.get(recipient_id, 0),
+                inbox.max_pending if inbox is not None else 0,
+            )
+            self._audit(
+                actor_id=recipient_id,
+                action="inbox_drop_newest",
+                resource_type="envelope",
+                resource_id=envelope.envelope_id or "",
+                decision="drop",
+                reason="inbox_full",
+                trace_id=envelope.trace_id,
+            )
+            return
+
+        if disposition == "spool":
+            path = layout.actor_inbox_overflow(
+                recipient_id, envelope.envelope_id or ""
+            )
         else:
-            path = layout.actor_inbox_pending(recipient_id, envelope.envelope_id or "")
+            path = layout.actor_inbox_pending(
+                recipient_id, envelope.envelope_id or ""
+            )
 
         await self._store.write(path, envelope.to_json())
 
-        if not spooling:
+        if disposition == "normal":
             self._inbox_pending[recipient_id] = (
                 self._inbox_pending.get(recipient_id, 0) + 1
             )
@@ -1885,6 +2585,62 @@ class Hub:
                     await endpoint.send_frame(NotifyFrame(envelope=envelope))
                 except Exception:  # pragma: no cover
                     log.warning("failed to push notify frame", exc_info=True)
+
+    async def _evict_oldest_pending(self, recipient_id: str) -> None:
+        """Evict the oldest pending envelope from a recipient's inbox.
+
+        Used by the ``drop_oldest`` overflow policy. Because envelope ids
+        are UUID7s (lexicographically time-sorted), ``sorted(...)[0]``
+        is the oldest pending envelope. Decrements the in-memory counter
+        and writes an audit entry. Safe to call when the inbox is empty —
+        in that case it is a no-op.
+        """
+
+        pending_dir = layout.actor_inbox_pending_dir(recipient_id)
+        try:
+            entries = await self._store.list(pending_dir)
+        except Exception:  # pragma: no cover
+            log.warning(
+                "drop_oldest: could not list pending/ for %s",
+                recipient_id,
+                exc_info=True,
+            )
+            return
+        file_entries = sorted(e for e in entries if not e.endswith("/"))
+        if not file_entries:
+            return
+        oldest_name = file_entries[0]
+        full_path = f"{pending_dir}/{oldest_name}"
+        try:
+            await self._store.delete(full_path)
+        except Exception:  # pragma: no cover
+            log.warning(
+                "drop_oldest: could not delete %s", full_path, exc_info=True
+            )
+            return
+        current = self._inbox_pending.get(recipient_id, 0)
+        if current > 0:
+            self._inbox_pending[recipient_id] = current - 1
+        evicted_envelope_id = oldest_name.removesuffix(".json")
+        recipient_name = (
+            self._identities[recipient_id].name
+            if recipient_id in self._identities
+            else recipient_id
+        )
+        log.info(
+            "inbox drop_oldest: evicted %s from %s",
+            evicted_envelope_id,
+            recipient_name,
+        )
+        self._audit(
+            actor_id=recipient_id,
+            action="inbox_drop_oldest",
+            resource_type="envelope",
+            resource_id=evicted_envelope_id,
+            decision="evict",
+            reason="inbox_full",
+            trace_id=None,
+        )
 
     def _recipient_ids_for(
         self, metadata: SessionMetadata, envelope: Envelope
@@ -1910,11 +2666,13 @@ class Hub:
         """Raise :class:`InboxFullError` if any recipient is ``reject``-full.
 
         Runs before the WAL append in :meth:`post_envelope` so a
-        rejected envelope leaves no trace on disk. ``spool`` overflow
-        is handled lazily in :meth:`_deliver_to` itself so partial
-        spool-mixed-with-pending deliveries are not pre-rejected here.
-        ``drop_oldest`` / ``drop_newest`` are accepted in the rule but
-        fall through to reject semantics in Phase 3a (see Phase 3b).
+        rejected envelope leaves no trace on disk. Only the ``reject``
+        mode raises synchronously; the three non-raising modes are
+        handled in :meth:`_deliver_to`:
+
+        * ``spool`` — write to ``overflow/`` without bumping the counter.
+        * ``drop_oldest`` — evict the oldest pending file, then deliver.
+        * ``drop_newest`` — silently drop the incoming envelope.
 
         System envelopes (``ag2.session.*``) bypass the check: they
         are ephemeral handshake signals that never consume an inbox
@@ -1935,8 +2693,9 @@ class Hub:
             current = self._inbox_pending.get(recipient_id, 0)
             if current < inbox.max_pending:
                 continue
-            if inbox.overflow == "spool":
-                continue  # overflow handled in _deliver_to
+            # Non-raising overflow modes fall through to _deliver_to.
+            if inbox.overflow in ("spool", "drop_oldest", "drop_newest"):
+                continue
             recipient_name = (
                 self._identities[recipient_id].name
                 if recipient_id in self._identities
@@ -2205,6 +2964,51 @@ class Hub:
             layout.actor_runtime(actor_id),
             json.dumps(runtime, sort_keys=True),
         )
+
+    def _audit(
+        self,
+        *,
+        actor_id: str | None,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        decision: str,
+        reason: str = "",
+        trace_id: str | None = None,
+    ) -> None:
+        """Queue an audit entry for background write to ``hub/admin/audit.jsonl``.
+
+        Implemented in Phase 3b task #4 as part of the audit log
+        writer. Phase 3b task #3 (``drop_oldest`` / ``drop_newest``)
+        calls into it before the writer loop is wired up — the
+        ``None`` queue short-circuit keeps those call sites
+        harmless until the writer is started. Once :meth:`open` /
+        :meth:`hydrate` allocates the queue, every call enqueues an
+        entry that the background task drains into the audit log.
+
+        Audit writes are strictly non-fatal: if the writer is not
+        started (tests that construct a :class:`Hub` directly) or
+        the store is unavailable, audit entries are dropped silently
+        so mutations are never blocked on durability of the audit
+        trail.
+        """
+
+        if self._audit_queue is None:
+            return
+        entry = {
+            "ts": self._clock(),
+            "actor_id": actor_id,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "decision": decision,
+            "reason": reason,
+            "trace_id": trace_id,
+        }
+        try:
+            self._audit_queue.put_nowait(entry)
+        except asyncio.QueueFull:  # pragma: no cover
+            log.warning("audit queue full — dropping %s entry", action)
 
     async def _handle_send(
         self,
@@ -2511,6 +3315,14 @@ class Hub:
         if frame.session_id is not None:
             metadata = self._sessions[frame.session_id]
             if not self._can_observe_session(metadata, actor_id):
+                self._audit(
+                    actor_id=actor_id,
+                    action="subscribe_session",
+                    resource_type="session",
+                    resource_id=frame.session_id,
+                    decision="deny",
+                    reason="access_denied",
+                )
                 await endpoint.send_frame(
                     ErrorFrame(
                         code="access_denied",
@@ -2519,6 +3331,14 @@ class Hub:
                     )
                 )
                 return
+            self._audit(
+                actor_id=actor_id,
+                action="subscribe_session",
+                resource_type="session",
+                resource_id=frame.session_id,
+                decision="allow",
+                reason="",
+            )
 
         sub = _Subscription(
             subscription_id=frame.subscription_id,

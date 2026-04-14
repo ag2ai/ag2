@@ -22,6 +22,7 @@ from autogen.beta.knowledge import (
     KnowledgeStore,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
+    SqliteKnowledgeStore,
 )
 
 
@@ -57,7 +58,11 @@ def _locked_mem() -> LockedKnowledgeStore:
     return LockedKnowledgeStore(MemoryKnowledgeStore(), _StubLock())
 
 
-@pytest.fixture(params=["mem", "disk", "locked_mem"])
+def _sqlite(tmp_path: Path) -> SqliteKnowledgeStore:
+    return SqliteKnowledgeStore(str(tmp_path / "store.sqlite"))
+
+
+@pytest.fixture(params=["mem", "disk", "locked_mem", "sqlite"])
 def store(request: pytest.FixtureRequest, tmp_path: Path) -> KnowledgeStore:
     kind = request.param
     if kind == "mem":
@@ -66,6 +71,8 @@ def store(request: pytest.FixtureRequest, tmp_path: Path) -> KnowledgeStore:
         return _disk(tmp_path)
     if kind == "locked_mem":
         return _locked_mem()
+    if kind == "sqlite":
+        return _sqlite(tmp_path)
     raise RuntimeError(f"unknown backend {kind}")
 
 

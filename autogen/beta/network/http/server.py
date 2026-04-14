@@ -2,21 +2,33 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``HttpServer`` — Phase 3a minimum HTTP surface on top of :class:`Hub`.
+"""``HttpServer`` — HTTP surface on top of :class:`Hub`.
 
-Seven endpoints (§9.1 3a slice):
+Phase 3a shipped the initial seven endpoints; Phase 3b added the
+remaining admin + query + knowledge-read routes and explicit 404 stubs
+for Phase 6's task endpoints so clients see a stable shape today.
 
-============================= =====  ==========================================
-Path                          Verb   Purpose
-============================= =====  ==========================================
-``/v1/actors``                POST   Register (``identity`` + optional ``rule``)
-``/v1/actors``                GET    Discover (``?capability=``)
-``/v1/actors/{id}``           GET    Describe
-``/v1/sessions``              POST   Create session (handshake initiator half)
-``/v1/sessions/{id}``         GET    Describe session
-``/v1/sessions/{id}/close``   POST   Explicit close
-``/v1/sessions/{id}/wal``     GET    Read WAL bytes from ``?since=``
-============================= =====  ==========================================
+================================================ =====  =====================================
+Path                                              Verb   Purpose
+================================================ =====  =====================================
+``/v1/actors``                                    POST   Register (``identity`` + ``rule``)
+``/v1/actors``                                    GET    Discover (``?capability=``)
+``/v1/actors/{id}``                               GET    Describe
+``/v1/actors/{id}/rule``                          PUT    Replace rule            (3b)
+``/v1/actors/{id}/activity``                      GET    Recent sessions + tasks (3b)
+``/v1/actors/{id}/knowledge/{path:path}``         GET    KnowledgeAccess read    (3b)
+``/v1/sessions``                                  POST   Create session
+``/v1/sessions``                                  GET    List with filters        (3b)
+``/v1/sessions/{id}``                             GET    Describe session
+``/v1/sessions/{id}/close``                       POST   Explicit close
+``/v1/sessions/{id}/force-close``                 POST   Admin force close        (3b)
+``/v1/sessions/{id}/wal``                         GET    Read WAL bytes
+``/v1/tasks``                                     GET    **404 stub** — Phase 6
+``/v1/tasks/{id}``                                GET    **404 stub** — Phase 6
+``/v1/tasks/{id}/cancel``                         POST   **404 stub** — Phase 6
+``/v1/admin/health``                              GET    Liveness                (3b)
+``/v1/admin/metrics``                             GET    In-memory counters      (3b)
+================================================ =====  =====================================
 
 Design principles:
 
@@ -61,7 +73,7 @@ from ..errors import (
 )
 from ..identity import ActorIdentity
 from ..rule import Rule
-from ..session_types import SessionType
+from ..session_types import SessionState, SessionType
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
@@ -303,11 +315,243 @@ def build_app(hub: Hub) -> Starlette:
             {"envelopes": [e.to_dict() for e in envelopes]},
         )
 
+    # -- PUT /v1/actors/{actor_id}/rule ---------------------------------
+
+    async def update_rule(request: Request) -> Response:
+        actor_id = request.path_params["actor_id"]
+        body = await _json_body(request)
+        if "rule" not in body:
+            raise HTTPException(
+                status_code=400, detail="request must include 'rule'"
+            )
+        try:
+            rule = Rule.from_dict(body["rule"])
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid rule: {exc}"
+            ) from exc
+        try:
+            await hub.set_rule(actor_id, rule)
+        except NetworkError as exc:
+            return _respond_error(exc)
+        return _respond({"actor_id": actor_id, "rule": rule.to_dict()})
+
+    # -- GET /v1/sessions?state=&participant=&type=&limit= -------------
+
+    async def list_sessions(request: Request) -> Response:
+        state_filter = request.query_params.get("state")
+        participant_filter = request.query_params.get("participant")
+        type_filter = request.query_params.get("type")
+        limit_raw = request.query_params.get("limit", "100")
+        try:
+            limit = max(1, int(limit_raw))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid limit: {exc}"
+            ) from exc
+
+        # Resolve participant filter to actor_id.
+        participant_id: str | None = None
+        if participant_filter:
+            try:
+                participant_id = hub._resolve_actor(participant_filter)
+            except NetworkError as exc:
+                return _respond_error(exc)
+
+        results: list[dict[str, Any]] = []
+        for metadata in hub._sessions.values():
+            if state_filter and metadata.state.value != state_filter:
+                continue
+            if type_filter and metadata.type != type_filter:
+                continue
+            if participant_id and not metadata.has_participant(participant_id):
+                continue
+            results.append(metadata.to_dict())
+            if len(results) >= limit:
+                break
+        return _respond({"sessions": results, "count": len(results)})
+
+    # -- POST /v1/sessions/{session_id}/force-close --------------------
+
+    async def force_close_session(request: Request) -> Response:
+        session_id = request.path_params["session_id"]
+        try:
+            body = await _json_body(request)
+        except HTTPException:
+            body = {}
+        reason = body.get("reason", "admin_force_close")
+        try:
+            # Force-close bypasses the participant check by passing
+            # requested_by=None. Admin tooling is assumed trusted
+            # (the HTTP front door's auth layer gates this route).
+            await hub.close_session(session_id, reason=reason, requested_by=None)
+        except NetworkError as exc:
+            return _respond_error(exc)
+        hub._audit(
+            actor_id=None,
+            action="force_close_session",
+            resource_type="session",
+            resource_id=session_id,
+            decision="allow",
+            reason=reason,
+        )
+        return _respond({"closed": True, "session_id": session_id})
+
+    # -- GET /v1/actors/{actor_id}/activity ----------------------------
+
+    async def actor_activity(request: Request) -> Response:
+        actor_id = request.path_params["actor_id"]
+        limit_raw = request.query_params.get("limit", "50")
+        try:
+            limit = max(1, int(limit_raw))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid limit: {exc}"
+            ) from exc
+        try:
+            resolved_id = hub._resolve_actor(actor_id)
+        except NetworkError as exc:
+            return _respond_error(exc)
+
+        sessions = [
+            meta.to_dict()
+            for meta in hub._sessions.values()
+            if meta.has_participant(resolved_id)
+        ][:limit]
+        tasks = [
+            t.to_dict()
+            for t in hub._tasks.values()
+            if t.owner_id == resolved_id or t.requester_id == resolved_id
+        ][:limit]
+        return _respond(
+            {
+                "actor_id": resolved_id,
+                "sessions": sessions,
+                "tasks": tasks,
+            }
+        )
+
+    # -- GET /v1/actors/{actor_id}/knowledge/{path:path} ---------------
+
+    async def read_actor_knowledge(request: Request) -> Response:
+        """Return a slice of ``actor_id``'s private KnowledgeStore.
+
+        Gated by :attr:`AccessBlock.knowledge`. The requesting actor's
+        name must be passed in the ``X-Ag2-Reader`` header. The
+        framework does not do identity authentication here beyond the
+        name check — operators who need cryptographic attribution
+        wire an auth middleware in front of the app that stamps
+        the header from a verified JWT/mTLS claim.
+        """
+
+        owner_id_or_name = request.path_params["actor_id"]
+        path = request.path_params["path"]
+        if not path.startswith("/"):
+            path = "/" + path
+
+        reader = request.headers.get("x-ag2-reader")
+        if not reader:
+            return _respond_error(
+                AccessDeniedError(
+                    "knowledge read requires X-Ag2-Reader header"
+                )
+            )
+
+        try:
+            owner_id = hub._resolve_actor(owner_id_or_name)
+        except NetworkError as exc:
+            return _respond_error(exc)
+
+        rule = hub._rules.get(owner_id)
+        if rule is None:
+            return _respond_error(UnknownActorError(owner_id_or_name))
+
+        if not rule.access.knowledge.allows(reader_name=reader, path=path):
+            hub._audit(
+                actor_id=owner_id,
+                action="read_knowledge",
+                resource_type="knowledge",
+                resource_id=path,
+                decision="deny",
+                reason=f"reader={reader}",
+            )
+            return _respond_error(
+                AccessDeniedError(
+                    f"knowledge path {path!r} not exposed to {reader!r}"
+                )
+            )
+
+        # Resolve the owning actor's knowledge. Phase 3b reads from
+        # the hub's backing store at a conventional path prefix.
+        knowledge_prefix = f"/actors/{owner_id}/knowledge"
+        target = f"{knowledge_prefix}{path}"
+        content = await hub._store.read(target)
+        if content is None:
+            hub._audit(
+                actor_id=owner_id,
+                action="read_knowledge",
+                resource_type="knowledge",
+                resource_id=path,
+                decision="allow",
+                reason=f"reader={reader};not_found",
+            )
+            return JSONResponse(
+                _error_body(UnknownSessionError(f"no such path: {path}")),
+                status_code=404,
+            )
+
+        hub._audit(
+            actor_id=owner_id,
+            action="read_knowledge",
+            resource_type="knowledge",
+            resource_id=path,
+            decision="allow",
+            reason=f"reader={reader}",
+        )
+        return _respond({"path": path, "content": content})
+
+    # -- GET /v1/admin/health -------------------------------------------
+
+    async def admin_health(request: Request) -> Response:
+        return _respond({"status": "ok", "hub_id": hub.config.hub_id})
+
+    # -- GET /v1/admin/metrics ------------------------------------------
+
+    async def admin_metrics(request: Request) -> Response:
+        return _respond(hub.metrics())
+
+    # -- /v1/tasks/* — Phase 6 stubs (explicit 404) ---------------------
+
+    async def tasks_stub(request: Request) -> Response:
+        return JSONResponse(
+            {
+                "error": "NotImplemented",
+                "message": "task HTTP endpoints land in Phase 6",
+            },
+            status_code=404,
+        )
+
     routes = [
         Route("/v1/actors", endpoint=register_actor, methods=["POST"]),
         Route("/v1/actors", endpoint=find_actors, methods=["GET"]),
         Route("/v1/actors/{actor_id}", endpoint=describe_actor, methods=["GET"]),
+        Route(
+            "/v1/actors/{actor_id}/rule",
+            endpoint=update_rule,
+            methods=["PUT"],
+        ),
+        Route(
+            "/v1/actors/{actor_id}/activity",
+            endpoint=actor_activity,
+            methods=["GET"],
+        ),
+        Route(
+            "/v1/actors/{actor_id}/knowledge/{path:path}",
+            endpoint=read_actor_knowledge,
+            methods=["GET"],
+        ),
         Route("/v1/sessions", endpoint=create_session, methods=["POST"]),
+        Route("/v1/sessions", endpoint=list_sessions, methods=["GET"]),
         Route(
             "/v1/sessions/{session_id}",
             endpoint=describe_session,
@@ -319,10 +563,24 @@ def build_app(hub: Hub) -> Starlette:
             methods=["POST"],
         ),
         Route(
+            "/v1/sessions/{session_id}/force-close",
+            endpoint=force_close_session,
+            methods=["POST"],
+        ),
+        Route(
             "/v1/sessions/{session_id}/wal",
             endpoint=read_session_wal,
             methods=["GET"],
         ),
+        Route("/v1/tasks", endpoint=tasks_stub, methods=["GET"]),
+        Route("/v1/tasks/{task_id}", endpoint=tasks_stub, methods=["GET"]),
+        Route(
+            "/v1/tasks/{task_id}/cancel",
+            endpoint=tasks_stub,
+            methods=["POST"],
+        ),
+        Route("/v1/admin/health", endpoint=admin_health, methods=["GET"]),
+        Route("/v1/admin/metrics", endpoint=admin_metrics, methods=["GET"]),
     ]
     return Starlette(routes=routes)
 

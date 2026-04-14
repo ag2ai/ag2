@@ -17,7 +17,29 @@ HUB_CONFIG = f"{HUB_ROOT}/config.json"
 ACTORS_ROOT = f"{HUB_ROOT}/actors"
 SESSIONS_ROOT = f"{HUB_ROOT}/sessions"
 TASKS_ROOT = f"{HUB_ROOT}/tasks"
+ADMIN_ROOT = f"{HUB_ROOT}/admin"
+ARCHIVE_ROOT = f"{HUB_ROOT}/archive"
 NAME_INDEX = f"{HUB_ROOT}/registry/by_name"
+
+
+def admin_audit_log() -> str:
+    """Hub audit log — one JSON object per line, appended.
+
+    Phase 3b writes one entry per registry / session / rule /
+    subscription mutation. The file is *never* rotated by the hub;
+    operators rotate it externally if growth is a concern. The
+    ``/v1/admin/metrics`` endpoint does **not** read this file — it
+    computes counters from in-memory hub state — so the file is safe
+    to rotate, truncate, or archive without affecting the hot path.
+    """
+
+    return f"{ADMIN_ROOT}/audit.jsonl"
+
+
+def archive_session_dir(session_id: str) -> str:
+    """Cold-storage location for archived closed sessions (Phase 3b)."""
+
+    return f"{ARCHIVE_ROOT}/sessions/{session_id}"
 
 
 def actor_dir(actor_id: str) -> str:

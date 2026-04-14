@@ -133,7 +133,7 @@ mistral = ["mistralai>=2.0.0"]
 dashscope = ["dashscope>=1.25.13"]
 
 # public distributions
-redis = ["redis"]
+redis = ["redis>=5.0,<7"]
 tracing = ["opentelemetry-sdk>=1.20"]
 
 flaml = [
