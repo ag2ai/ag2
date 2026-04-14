@@ -88,10 +88,20 @@ async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
 
 
 async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> None:
-    """run_subtasks(parallel=True) actually dispatches subtasks concurrently.
+    """run_subtasks(parallel=True) dispatches subtasks concurrently.
 
-    We measure wall time vs sequential time to verify parallelism.
+    Verified by inspecting ``TaskStarted.created_at`` for the three subtasks:
+    when dispatched in parallel they are kicked off within the same event-loop
+    tick, so the spread between the earliest and latest ``created_at`` must
+    be far smaller than a single LLM round trip. Sequential dispatch would
+    space them by 1+ seconds each.
     """
+    from autogen.beta.events import TaskStarted
+
+    starts: list[TaskStarted] = []
+    stream = MemoryStream()
+    stream.where(TaskStarted).subscribe(lambda e: starts.append(e))
+
     agent = Actor(
         "parallel",
         prompt=(
@@ -101,24 +111,25 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
         config=gemini_flash_config,
     )
 
-    import time
-
-    start = time.monotonic()
     reply = await agent.ask(
         "Use run_subtasks with parallel=True to ask three things at once: "
         "(1) what is 2+2, (2) what is 5+5, (3) what is 10+10. "
-        "Then list all three results."
+        "Then list all three results.",
+        stream=stream,
     )
-    elapsed = time.monotonic() - start
 
     assert reply.body is not None
     body = reply.body
     assert "4" in body
     assert "10" in body
     assert "20" in body
-    # Sequential would take 3x a single call; parallel should be ~1.5x at most.
-    # We don't assert on elapsed here because real-world latency varies, but
-    # we record it for debugging.
+    # 3 subtasks must have started
+    assert len(starts) >= 3, f"expected ≥3 TaskStarted events, got {len(starts)}"
+    times = sorted(s.created_at for s in starts[:3])
+    spread = times[-1] - times[0]
+    # Parallel dispatch happens within one event-loop iteration → spread is
+    # typically sub-millisecond; sequential would be ≥1s per LLM call.
+    assert spread < 0.5, f"subtasks were not dispatched in parallel; spread={spread:.3f}s"
 
 
 async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
@@ -174,8 +185,15 @@ async def test_history_limiter_caps_context(gemini_flash_config) -> None:
     assert captured_lengths[-1] <= 3
 
 
-async def test_response_schema_retry_on_malformed(gemini_flash_config) -> None:
-    """AgentReply.content(retries=N) retries when the response fails validation."""
+async def test_response_schema_strict_validation(gemini_flash_config) -> None:
+    """AgentReply.content() returns a validated instance for strict schemas.
+
+    NOTE: with ``temperature=0`` the model produces a valid response on the
+    first try, so this test exercises the happy path of strict-output
+    validation — *not* the retry-on-malformed recovery path. The retry
+    branch is covered by unit tests; here we assert the typed result and
+    that ``retries=0`` succeeds (proving no retry was needed).
+    """
     from pydantic import BaseModel, Field
 
     class StrictAnswer(BaseModel):
@@ -189,8 +207,8 @@ async def test_response_schema_retry_on_malformed(gemini_flash_config) -> None:
     )
 
     reply = await agent.ask("What is 100 / 4? Return the integer answer.")
-    result = await reply.content(retries=2)
-    assert result is not None
+    result = await reply.content(retries=0)
+    assert isinstance(result, StrictAnswer)
     assert result.answer == 25
 
 

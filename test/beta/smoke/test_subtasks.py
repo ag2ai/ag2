@@ -12,6 +12,8 @@ import pytest
 
 from autogen.beta import Actor, TaskConfig
 from autogen.beta.events import TaskCompleted, TaskStarted
+from autogen.beta.events.tool_events import ToolResultEvent
+from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.subagents import depth_limiter, persistent_stream
 
@@ -82,18 +84,39 @@ async def test_run_subtasks_parallel(gemini_flash_config) -> None:
 
 
 async def test_subtask_prompt_override(gemini_flash_config) -> None:
-    """TaskConfig.prompt overrides the default subtask system prompt."""
+    """TaskConfig.prompt overrides the default subtask system prompt.
+
+    Verified by injecting a unique watermark token into the override prompt
+    and asserting the subtask's TaskCompleted.result contains it. Looking at
+    the parent's ``reply.body`` would be insufficient — the parent agent may
+    strip the marker when summarising.
+    """
+    completions: list[TaskCompleted] = []
+    stream = MemoryStream()
+    stream.where(TaskCompleted).subscribe(lambda e: completions.append(e))
+
     agent = Actor(
         "two-tier",
         prompt="Use run_subtask for any factual lookup. Be concise.",
         config=gemini_flash_config,
         tasks=TaskConfig(
-            prompt="You are a fast lookup agent. Answer in one short sentence.",
+            prompt=(
+                "You are a fast lookup agent. ALWAYS begin every reply with the "
+                "literal token [WATERMARK_42]. Then answer in one short sentence."
+            ),
         ),
     )
-    reply = await agent.ask("Use run_subtask to look up: what is the boiling point of water in Celsius?")
+    reply = await agent.ask(
+        "Use run_subtask to look up: what is the boiling point of water in Celsius?",
+        stream=stream,
+    )
     assert reply.body is not None
-    assert "100" in reply.body
+    assert completions, "subtask must have completed"
+    # The override prompt forces the subtask to emit the watermark verbatim —
+    # without the override, the default subtask prompt would not include it.
+    assert any("[WATERMARK_42]" in (c.result or "") for c in completions)
+    # And the actual answer is still produced
+    assert any("100" in (c.result or "") for c in completions)
 
 
 async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
@@ -120,70 +143,87 @@ async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
 
 
 async def test_depth_limiter_prevents_recursion(gemini_flash_config) -> None:
-    """depth_limiter() caps recursive as_tool delegation depth."""
+    """depth_limiter() short-circuits delegation when depth is exceeded.
 
-    # Build A that has itself as a tool, with a max_depth=1 limiter.
+    Use ``max_depth=0`` so the very first call is blocked deterministically,
+    and assert on the ``ToolResultEvent`` the limiter emits — checking the
+    LLM's body is unreliable because it may paraphrase or ignore the error.
+    """
+    results: list[ToolResultEvent] = []
+    stream = MemoryStream()
+    stream.where(ToolResultEvent).subscribe(lambda e: results.append(e))
+
     actor = Actor(
-        "recursive",
-        prompt=(
-            "You have a task_recursive tool that re-invokes you. "
-            "If asked to recurse more than once, the tool will refuse — "
-            "explain that and stop. Be brief."
-        ),
+        "blocked",
+        prompt="Use the task_helper tool to solve any task.",
         config=gemini_flash_config,
     )
     actor.add_tool(
         actor.as_tool(
-            description="Delegate to yourself recursively.",
-            middleware=[depth_limiter(max_depth=1)],
+            name="task_helper",
+            description="Delegate work to yourself.",
+            middleware=[depth_limiter(max_depth=0)],
         )
     )
 
-    reply = await actor.ask(
-        "Call task_recursive with the objective 'recurse again' once. "
-        "Then call task_recursive again from within. Report what happens."
-    )
+    reply = await actor.ask("Use task_helper with the objective 'compute 2+2'.", stream=stream)
     assert reply.body is not None
-    # Should not crash and should produce a reply
-    assert reply.body.strip() != ""
+    assert results, "task_helper must have produced a tool result"
+    # The limiter's deterministic error string must appear in at least one
+    # tool result — this proves the middleware actually short-circuited.
+    assert any(
+        "maximum task depth" in (e.content or "")
+        for e in results
+        if e.name == "task_helper"
+    )
 
 
 async def test_persistent_stream_shares_history(gemini_flash_config) -> None:
-    """persistent_stream() reuses one stream id across as_tool calls.
+    """persistent_stream() reuses one stream id + storage across as_tool calls.
 
-    The child agent should remember context from a previous invocation
-    if persistent_stream is used.
+    The original test asserted on the parent's reply body, but the parent's
+    own conversation history leaks any fact mentioned in the prompt — the
+    body assertion would pass even if persistent_stream did nothing. This
+    version wraps the factory and asserts on the structural promise:
+
+    1. Both child invocations receive a stream with the **same id**.
+    2. Both child streams share the **same storage backend**.
+
+    Both invariants are necessary for cross-call history persistence and
+    neither holds under the default per-call StreamFactory.
     """
+    captured_streams: list[MemoryStream] = []
+    inner = persistent_stream()
+
+    def wrapped_factory(agent, ctx):
+        s = inner(agent, ctx)
+        captured_streams.append(s)
+        return s
+
     child = Actor(
         "memo",
-        prompt=(
-            "You are a notepad. Whatever the user tells you, store mentally "
-            "and recall on demand. Be terse."
-        ),
+        prompt="You are a notepad. Reply briefly to whatever the user asks.",
         config=gemini_flash_config,
     )
 
+    parent_stream = MemoryStream(storage=MemoryStorage())
     parent = Actor(
         "owner",
-        prompt=(
-            "You have a task_memo tool. Use it to store and retrieve facts. "
-            "Each call should reuse the same notepad."
-        ),
+        prompt="Use the task_memo tool when the user asks you to.",
         config=gemini_flash_config,
-        tools=[child.as_tool(description="Notepad agent.", stream=persistent_stream())],
+        tools=[child.as_tool(description="Notepad agent.", stream=wrapped_factory)],
     )
 
-    # First ask: store a fact
-    reply1 = await parent.ask(
-        "Use the task_memo tool with objective 'remember that the launch code is FOXTROT-7'. "
-        "After the tool returns, just say 'stored'."
-    )
+    reply1 = await parent.ask("Use the task_memo tool to greet Alice.", stream=parent_stream)
+    reply2 = await reply1.ask("Use the task_memo tool to greet Bob.")
     assert reply1.body is not None
-
-    # Second ask: retrieve fact (should remember if persistent_stream works)
-    reply2 = await reply1.ask(
-        "Use task_memo with objective 'recall the launch code'. "
-        "Then tell me what the launch code is."
-    )
     assert reply2.body is not None
-    assert "foxtrot" in reply2.body.lower() or "foxtrot-7" in reply2.body.lower()
+
+    # Both invocations must have run through the factory.
+    assert len(captured_streams) >= 2
+    # Same id across calls — the core promise of persistent_stream.
+    ids = {s.id for s in captured_streams}
+    assert len(ids) == 1, f"persistent_stream must reuse the same stream id, got {ids}"
+    # Same storage backend — the child can read prior history off the same store.
+    storages = [s.history.storage for s in captured_streams]
+    assert all(s is storages[0] for s in storages), "child streams must share storage"

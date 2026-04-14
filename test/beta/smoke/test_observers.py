@@ -45,8 +45,12 @@ async def test_stream_observer_decorator_sees_responses(gemini_flash_config) -> 
     assert seen[0].content is not None
 
 
-async def test_observer_sees_streamed_chunks(gemini_flash_config) -> None:
-    """@observer can subscribe to transient chunk events."""
+async def test_observer_sees_streamed_chunks(gemini_flash_streaming_config) -> None:
+    """@observer can subscribe to transient chunk events.
+
+    Uses streaming-enabled config and asserts the observer actually received
+    chunks and that they reconstruct the final body.
+    """
     chunks: list[str] = []
 
     def on_chunk(event: ModelMessageChunk) -> None:
@@ -54,12 +58,11 @@ async def test_observer_sees_streamed_chunks(gemini_flash_config) -> None:
 
     obs = observer(ModelMessageChunk, on_chunk)
 
-    agent = Actor("chunker", config=gemini_flash_config, observers=[obs])
+    agent = Actor("chunker", config=gemini_flash_streaming_config, observers=[obs])
     reply = await agent.ask("Say the single word 'ocean'.")
     assert reply.body is not None
-    # Provider-dependent: some stream, some don't. Either the chunks arrived
-    # or at minimum the final body is present.
-    assert chunks or reply.body
+    assert chunks, "streaming observer must receive at least one chunk"
+    assert "".join(chunks) == reply.body
 
 
 async def test_base_observer_event_watch_fires(gemini_flash_config) -> None:
@@ -123,17 +126,39 @@ async def test_token_monitor_builtin(gemini_flash_config) -> None:
 
 
 async def test_loop_detector_builtin(gemini_flash_config) -> None:
-    """LoopDetector runs cleanly end-to-end — low threshold shouldn't trigger on normal chat."""
-    detector = LoopDetector(window_size=3, repeat_threshold=2)
+    """LoopDetector emits an ObserverAlert when a tool is called repeatedly.
+
+    The test gives the agent a tool whose result instructs it to retry, so
+    the LLM ends up calling the same tool with identical arguments multiple
+    times in a row. With ``repeat_threshold=3`` the detector must emit a
+    'loop detected' alert.
+    """
+    detector = LoopDetector(window_size=10, repeat_threshold=3)
 
     alerts: list[ObserverAlert] = []
     stream = MemoryStream()
     stream.where(ObserverAlert).subscribe(lambda e: alerts.append(e))
 
-    agent = Actor("looper", config=gemini_flash_config, observers=[detector])
-    reply = await agent.ask("Name three distinct fruits, one per line.")
+    def get_status() -> str:
+        """Return the current system status."""
+        return "Status: pending. Call this tool again to retry."
+
+    agent = Actor(
+        "looper",
+        prompt=(
+            "You must call the get_status tool repeatedly until it returns a "
+            "non-pending status. Try at least 4 times."
+        ),
+        config=gemini_flash_config,
+        tools=[get_status],
+        observers=[detector],
+    )
+    reply = await agent.ask("Get the system status. Keep retrying until it's not pending.", stream=stream)
     assert reply.body is not None
-    # No assertion on alerts — just that the observer runs without crashing
+    # The detector must have emitted at least one loop alert
+    loop_alerts = [a for a in alerts if "loop" in a.message.lower()]
+    assert loop_alerts, f"LoopDetector did not fire; got alerts={alerts!r}"
+    assert loop_alerts[0].source == "loop-detector"
 
 
 async def test_alert_policy_fatal_halts_llm(gemini_flash_config) -> None:

@@ -223,8 +223,13 @@ async def test_multi_turn_ask_chain(provider_config) -> None:
     assert "teal" in reply3.body.lower() or "colour" in reply3.body.lower() or "color" in reply3.body.lower()
 
 
-async def test_streaming_chunks_arrive(provider_config) -> None:
-    """Observe ModelMessageChunk events during a streamed reply."""
+async def test_streaming_chunks_arrive(streaming_config) -> None:
+    """Observe ModelMessageChunk events during a streamed reply.
+
+    Uses ``streaming_config`` (streaming=True). Asserts that chunks actually
+    fired AND that joined chunks reconstruct the final body — proving the
+    chunk pipeline reached the subscriber, not just that ``ask`` succeeded.
+    """
     stream = MemoryStream()
     chunks: list[str] = []
 
@@ -232,15 +237,13 @@ async def test_streaming_chunks_arrive(provider_config) -> None:
         agent = Actor(
             "writer",
             prompt="Write a short 2-sentence haiku-like description of the ocean.",
-            config=provider_config,
+            config=streaming_config,
         )
         reply = await agent.ask("Describe the ocean.", stream=stream)
 
     assert reply.body is not None
-    # Some providers stream chunk-by-chunk; if none arrived, body should still be set
-    if chunks:
-        joined = "".join(chunks)
-        assert len(joined) > 0
+    assert chunks, "streaming=True must produce at least one ModelMessageChunk"
+    assert "".join(chunks) == reply.body
 
 
 async def test_dependency_injection_into_tool(provider_config) -> None:

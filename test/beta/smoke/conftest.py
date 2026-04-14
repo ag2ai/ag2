@@ -90,6 +90,51 @@ def gemini_flash_config() -> GeminiConfig:
         pytest.param("gemini", marks=pytest.mark.gemini),
     ]
 )
+def streaming_config(request):
+    """Parametrized streaming-enabled config for each provider.
+
+    Tests using this run once per provider with ``streaming=True``.
+    """
+    if request.param == "openai":
+        return OpenAIConfig(
+            model="gpt-5.4-nano",
+            api_key=_require("OPENAI_API_KEY"),
+            temperature=0,
+            streaming=True,
+        )
+    if request.param == "anthropic":
+        return AnthropicConfig(
+            model="claude-haiku-4-5",
+            api_key=_require("ANTHROPIC_API_KEY"),
+            temperature=0,
+            streaming=True,
+        )
+    return GeminiConfig(
+        model="gemini-3.1-flash-lite-preview",
+        api_key=_require("GEMINI_API_KEY"),
+        temperature=0,
+        streaming=True,
+    )
+
+
+@pytest.fixture()
+def gemini_flash_streaming_config() -> GeminiConfig:
+    """Streaming-enabled Gemini Flash for chunk-observer smoke tests."""
+    return GeminiConfig(
+        model="gemini-3-flash-preview",
+        api_key=_require("GEMINI_API_KEY"),
+        temperature=0,
+        streaming=True,
+    )
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("openai", marks=pytest.mark.openai),
+        pytest.param("anthropic", marks=pytest.mark.anthropic),
+        pytest.param("gemini", marks=pytest.mark.gemini),
+    ]
+)
 def provider_config(
     request,
     openai_config,

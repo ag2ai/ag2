@@ -90,25 +90,41 @@ async def test_sliding_window_trims_long_history(gemini_flash_config) -> None:
     # the sliding window drops the oldest turns — so 'elephant' should be gone.
     r4 = await r3.ask("Which three words did I ask you to remember? Be precise.")
     assert r4.body is not None
-    # 'elephant' was in the first turn and should have been evicted
     body = r4.body.lower()
-    assert "nebula" in body  # Most-recent word must survive
+    # Most-recent word must survive
+    assert "nebula" in body
+    # First-turn word must be evicted by the sliding window —
+    # this is the assertion that proves the policy actually trimmed history.
+    assert "elephant" not in body
 
 
-async def test_token_budget_policy_transparent(gemini_flash_config) -> None:
-    """TokenBudgetPolicy clamps to a token budget without modifying history.
+async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
+    """TokenBudgetPolicy with a very tight budget evicts older turns.
 
-    With a tiny budget the policy still returns *something* — it doesn't crash.
+    Build up a multi-turn history of fruits, then ask the agent to recall
+    them. With ``max_tokens=5`` the prompt sent to the LLM cannot include the
+    earlier turns, so the model cannot produce the fruit list. The control
+    (no policy) is verified separately to keep this test cheap.
     """
     agent = Actor(
         "budget",
-        prompt="Answer briefly.",
+        prompt="One-word answers.",
         config=gemini_flash_config,
-        assembly=[ConversationPolicy(), TokenBudgetPolicy(max_tokens=500)],
+        assembly=[ConversationPolicy(), TokenBudgetPolicy(max_tokens=5)],
     )
-    reply = await agent.ask("Name any fruit. Just one word.")
-    assert reply.body is not None
-    assert len(reply.body) < 200
+    r = await agent.ask("Say 'apple'.")
+    r = await r.ask("Say 'banana'.")
+    r = await r.ask("Say 'cherry'.")
+    r = await r.ask("Say 'date'.")
+    final = await r.ask("List every fruit I asked you about previously, comma separated.")
+    assert final.body is not None
+    body = final.body.lower()
+    # Tight budget must have evicted the earlier turns from the LLM's view —
+    # the model cannot list fruits it never saw.
+    earlier_fruits = ("apple", "banana", "cherry", "date")
+    assert not any(f in body for f in earlier_fruits), (
+        f"TokenBudgetPolicy(max_tokens=5) failed to trim — model recalled fruits: {body!r}"
+    )
 
 
 async def test_multiple_policies_compose(gemini_flash_config) -> None:
