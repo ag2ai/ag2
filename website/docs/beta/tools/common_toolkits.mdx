@@ -92,3 +92,166 @@ fs = FilesystemToolkit(base_path="/tmp/sandbox")
 # The agent can access /tmp/sandbox/data.txt
 # but NOT /tmp/sandbox/../../etc/passwd
 ```
+
+---
+
+## SkillsToolkit
+
+`SkillsToolkit` gives an agent access to locally installed skills following the [agentskills.io](https://agentskills.io){.external-link target="_blank"} convention. Each skill is a directory containing a `SKILL.md` instructions file and an optional `scripts/` subdirectory of runnable `.py` / `.sh` files.
+
+The toolkit uses a three-step progressive-disclosure pattern so the agent fetches only the detail it actually needs:
+
+1. **`list_skills`** — returns a lightweight catalog (name + description).
+2. **`load_skill`** — returns the full `SKILL.md` instructions for a specific skill on demand.
+3. **`run_skill_script`** — executes a script from the skill's `scripts/` directory.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillsToolkit
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillsToolkit()],
+)
+```
+
+By default `SkillsToolkit` looks for skills in `.agents/skills` relative to the current working directory.
+
+### Custom install directory
+
+Pass a `LocalRuntime` to point to a different directory:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+
+skills = SkillsToolkit(runtime=LocalRuntime("./my-skills"))
+```
+
+### Extra read-only search paths
+
+`extra_paths` adds additional directories that are scanned for skills but never written to — installed skills always go to the primary `dir`:
+
+```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+
+skills = SkillsToolkit(
+    runtime=LocalRuntime("./my-skills", extra_paths=["./shared-skills"])
+)
+```
+
+### Using individual tools
+
+Every tool is available as an attribute on the toolkit instance:
+
+```python linenums="1"
+skills = SkillsToolkit()
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[skills.list_skills, skills.load_skill],
+)
+```
+
+Available tools:
+
+| Tool | Description |
+| :--- | :--- |
+| `list_skills` | Return a catalog of installed skills with name and short description |
+| `load_skill` | Fetch the full `SKILL.md` content for a specific skill |
+| `run_skill_script` | Execute a `.py` or `.sh` script from a skill's `scripts/` directory |
+
+---
+
+## SkillSearchToolkit
+
+`SkillSearchToolkit` extends `SkillsToolkit` with three additional tools for discovering and installing skills from the [skills.sh](https://skills.sh){.external-link target="_blank"} registry. It uses the GitHub Tarball API directly — no Node.js required.
+
+```python linenums="1"
+import asyncio
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import SkillSearchToolkit
+
+agent = Agent(
+    "coder",
+    "You are a helpful coding assistant. Use skills to extend your capabilities.",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[SkillSearchToolkit()],
+)
+
+async def main() -> None:
+    reply = await agent.ask(
+        "Find and install a skill for React best practices, then tell me the top 3 rules."
+    )
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+### GitHub rate limits
+
+By default the GitHub API allows 60 unauthenticated requests per hour. Setting a `GITHUB_TOKEN` environment variable raises this to 5,000 per hour:
+
+```bash
+export GITHUB_TOKEN=ghp_...
+```
+
+You can also pass the token directly via `SkillsClientConfig`:
+
+```python linenums="1"
+from autogen.beta.tools import SkillSearchToolkit
+from autogen.beta.tools.toolkits.skills.skill_search import SkillsClientConfig
+
+skills = SkillSearchToolkit(
+    client=SkillsClientConfig(github_token="ghp_..."),
+)
+```
+
+### Custom configuration
+
+```python linenums="1"
+from autogen.beta.tools import SkillSearchToolkit
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+from autogen.beta.tools.toolkits.skills.skill_search import SkillsClientConfig
+
+skills = SkillSearchToolkit(
+    LocalRuntime(
+        dir="./my-skills",
+        extra_paths=["./extra-skills"],
+        cleanup=True,
+        timeout=30,
+        blocked=["rm -rf"],
+    ),
+    client=SkillsClientConfig(
+        github_token="ghp_...",
+        proxy="http://proxy.company.com:8080",
+    ),
+)
+```
+
+### Using individual tools
+
+```python linenums="1"
+skills = SkillSearchToolkit()
+
+agent = Agent(
+    "coder",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[skills.search_skills, skills.install_skill, skills.list_skills],
+)
+```
+
+Available tools:
+
+`SkillSearchToolkit` inherits all tools from `SkillsToolkit` and adds:
+
+| Tool | Description |
+| :--- | :--- |
+| `search_skills` | Search the skills.sh registry by keyword |
+| `install_skill` | Download and install a skill by its registry identifier |
+| `remove_skill` | Remove an installed skill by name |

@@ -25,8 +25,8 @@ async def test_path_traversal_blocked(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_schemas(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolkit()
-    schemas = list(await toolset.schemas(Context(async_mock)))
+    toolkit = FilesystemToolkit()
+    schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
     assert names == {"read_file", "write_file", "update_file", "delete_file", "find_files"}
@@ -34,8 +34,8 @@ async def test_schemas(async_mock: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_read_only(async_mock: AsyncMock) -> None:
-    toolset = FilesystemToolkit(read_only=True)
-    schemas = list(await toolset.schemas(Context(async_mock)))
+    toolkit = FilesystemToolkit(read_only=True)
+    schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
     assert names == {"read_file", "find_files"}
@@ -45,7 +45,7 @@ async def test_read_only(async_mock: AsyncMock) -> None:
 async def test_read_file(tmp_path: Path) -> None:
     (tmp_path / "hello.txt").write_text("hello world")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -56,7 +56,7 @@ async def test_read_file(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolset])
+    agent = Agent("", config=tracking, tools=[toolkit])
     await agent.ask("read it")
 
     # Second call receives the tool result; verify the file content was read
@@ -69,7 +69,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
     binary_content = bytes(range(256))
     (tmp_path / "binary.bin").write_bytes(binary_content)
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -80,7 +80,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolset])
+    agent = Agent("", config=tracking, tools=[toolkit])
     await agent.ask("read binary")
 
     tool_result_msg = tracking.mock.call_args_list[1][0][0]
@@ -90,7 +90,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_file(tmp_path: Path) -> None:
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
@@ -99,7 +99,7 @@ async def test_write_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolset])
+    agent = Agent("", config=config, tools=[toolkit])
     await agent.ask("write it")
 
     assert (tmp_path / "out.txt").read_text() == "new content"
@@ -107,13 +107,13 @@ async def test_write_file(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(name="write_file", arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolset])
+    agent = Agent("", config=config, tools=[toolkit])
     await agent.ask("write nested")
 
     assert (tmp_path / "sub" / "dir" / "file.txt").read_text() == "nested"
@@ -123,7 +123,7 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
 async def test_update_file(tmp_path: Path) -> None:
     (tmp_path / "data.txt").write_text("foo bar baz")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(
@@ -132,7 +132,7 @@ async def test_update_file(tmp_path: Path) -> None:
         ),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolset])
+    agent = Agent("", config=config, tools=[toolkit])
     await agent.ask("update it")
 
     assert (tmp_path / "data.txt").read_text() == "foo qux baz"
@@ -143,13 +143,13 @@ async def test_delete_file(tmp_path: Path) -> None:
     target = tmp_path / "to_delete.txt"
     target.write_text("bye")
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
         ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "to_delete.txt"})),
         "done",
     )
-    agent = Agent("", config=config, tools=[toolset])
+    agent = Agent("", config=config, tools=[toolkit])
     await agent.ask("delete it")
 
     assert not target.exists()
@@ -176,7 +176,7 @@ async def test_find_files(tmp_path: Path) -> None:
     # |   |-- sub2
     # |       |-- e.py
 
-    toolset = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit(base_path=tmp_path)
 
     tracking = TrackingConfig(
         TestConfig(
@@ -186,7 +186,7 @@ async def test_find_files(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolset])
+    agent = Agent("", config=tracking, tools=[toolkit])
     await agent.ask("find py files")
 
     # "**/*.py" — recursive, matches .py files at any depth

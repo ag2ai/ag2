@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.tools.skill_types import SkillMetadata
-
 from .local import LocalRuntime
 from .protocol import SkillRuntime
 
-__all__ = ("LocalRuntime", "SkillMetadata", "SkillRuntime")
+__all__ = (
+    "LocalRuntime",
+    "SkillRuntime",
+)

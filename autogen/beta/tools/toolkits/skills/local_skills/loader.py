@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.beta.tools.skill_types import SkillMetadata
+from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
 
 
 def parse_frontmatter(text: str) -> dict[str, object]:

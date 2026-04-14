@@ -69,3 +69,11 @@ class InvalidSkillNameError(SkillError, ValueError):
 
 class InvalidSkillError(SkillError, ValueError):
     """Raised when skill metadata violates the specification."""
+
+
+class SkillDownloadError(SkillError):
+    """Raised when a skill cannot be downloaded from the remote registry."""
+
+
+class SkillInstallError(SkillError):
+    """Raised when a downloaded skill archive cannot be extracted or validated."""

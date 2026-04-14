@@ -11,13 +11,10 @@ from dirty_equals import IsPartialDict
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.beta.tools.local_skills.loader import SkillLoader, parse_frontmatter
-from autogen.beta.tools.local_skills.tool import (
-    LocalSkillsTool,
-    _make_run_tool,
-)
-from autogen.beta.tools.runtime import LocalRuntime
 from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
+from autogen.beta.tools.toolkits.skills.local_skills import SkillsToolkit
+from autogen.beta.tools.toolkits.skills.local_skills.loader import SkillLoader, parse_frontmatter
+from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
 
 
 @pytest.fixture
@@ -235,7 +232,7 @@ def test_loader_invalidate_forces_rescan(skill_tree: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_tool_exposes_three_functions(skill_tree: Path, context: ConversationContext) -> None:
-    tool = LocalSkillsTool(runtime=LocalRuntime(dir=skill_tree))
+    tool = SkillsToolkit(runtime=LocalRuntime(dir=skill_tree))
 
     schemas = await tool.schemas(context)
 
@@ -246,7 +243,7 @@ async def test_tool_exposes_three_functions(skill_tree: Path, context: Conversat
 
 @pytest.mark.asyncio
 async def test_run_skill_script_schema(skill_tree: Path, context: ConversationContext) -> None:
-    run_tool = _make_run_tool(LocalRuntime(dir=skill_tree))
+    run_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).run_skill_script
 
     [schema] = await run_tool.schemas(context)
 

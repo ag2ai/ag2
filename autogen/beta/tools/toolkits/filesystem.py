@@ -26,7 +26,7 @@ class FilesystemToolkit(Toolkit):
 
         fs = FilesystemToolkit(base_path="/tmp/workspace")
 
-        # use the full toolset
+        # use the full toolkit
         agent = Agent("a", config=config, tools=[fs])
 
         # or pick individual tools
