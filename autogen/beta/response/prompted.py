@@ -36,12 +36,12 @@ class PromptedSchema(ResponseProto[T]):
     Examples:
         Using with a type directly::
 
-            agent = Agent(..., response_schema=PromptedSchema(MyModel))
+            agent = Actor(..., response_schema=PromptedSchema(MyModel))
 
         Wrapping an existing ResponseProto::
 
             schema = ResponseSchema(int | str)
-            agent = Agent(..., response_schema=PromptedSchema(schema))
+            agent = Actor(..., response_schema=PromptedSchema(schema))
     """
 
     @overload

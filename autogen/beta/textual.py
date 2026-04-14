@@ -26,14 +26,14 @@ if not _textual_import.is_successful:
             pass
 
 
-from autogen.beta import Agent, AgentReply, Context, MemoryStream
+from autogen.beta import Actor, AgentReply, Context, MemoryStream
 from autogen.beta.events import ModelMessageChunk, ModelReasoning
 
 __all__ = ("TUIAgent",)
 
 
 class TUIAgent(App):  # type: ignore[misc]
-    def __init__(self, agent: Agent):
+    def __init__(self, agent: Actor):
         super().__init__()
 
         self.stream = MemoryStream()
