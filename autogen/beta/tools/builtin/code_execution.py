@@ -16,9 +16,6 @@ from autogen.beta.tools.tool import Tool
 CODE_EXECUTION_TOOL_NAME = "code_execution"
 
 
-CODE_EXECUTION_TOOL_NAME = "code_execution"
-
-
 @dataclass(slots=True)
 class CodeExecutionToolSchema(ToolSchema):
     """Provider-neutral capability flag for code execution."""
