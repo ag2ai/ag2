@@ -105,7 +105,7 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
     """Represents a successful tool execution result."""
 
     parent_id: str
-    name: str
+    name: str | None = None
 
     result: "ToolResult[ResultT]"
     _content: str = Field(default_factory=str, init=False)

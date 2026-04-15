@@ -263,15 +263,30 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
             prompt.append(m.content)
 
         elif m.role == "assistant":
-            messages.append(events.ModelResponse(events.ModelMessage(m.content)))
+            tool_calls = [
+                events.ToolCallEvent(
+                    id=t.id,
+                    name=t.function.name,
+                    arguments=t.function.arguments,
+                )
+                for t in (m.tool_calls or ())
+            ]
+
+            messages.append(
+                events.ModelResponse(
+                    events.ModelMessage(m.content),
+                    tool_calls=events.ToolCallsEvent(tool_calls),
+                )
+            )
 
         elif m.role == "tool":
             messages.append(
-                events.ToolResultEvent(
-                    parent_id=m.id,
-                    content=m.content,
-                    result=ToolResult(content=m.content),
-                )
+                events.ToolResultsEvent([
+                    events.ToolResultEvent(
+                        parent_id=m.tool_call_id,
+                        result=ToolResult(content=m.error or m.content),
+                    )
+                ])
             )
 
     if input_buffer:
