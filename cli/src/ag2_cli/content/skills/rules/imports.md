@@ -167,14 +167,14 @@ from autogen.tools.experimental import SlackRetrieveTool, DiscordRetrieveTool, T
 
 ```python
 from autogen.agents.experimental import (
-    ReasoningAgent,       # Tree-of-thought reasoning
-    DeepResearchAgent,    # Multi-step deep research
-    WebSurferAgent,       # Web browsing agent
-    DocAgent,             # Document processing
-    WikipediaAgent,       # Wikipedia querying
-    DiscordAgent,         # Discord bot
-    SlackAgent,           # Slack bot
-    TelegramAgent,        # Telegram bot
+    ReasoningAgent,  # Tree-of-thought reasoning
+    DeepResearchAgent,  # Multi-step deep research
+    WebSurferAgent,  # Web browsing agent
+    DocAgent,  # Document processing
+    WikipediaAgent,  # Wikipedia querying
+    DiscordAgent,  # Discord bot
+    SlackAgent,  # Slack bot
+    TelegramAgent,  # Telegram bot
 )
 ```
 

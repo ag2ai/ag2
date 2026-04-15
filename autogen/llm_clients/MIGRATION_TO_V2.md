@@ -43,8 +43,8 @@ messages = client.message_retrieval(response)
 content = messages[0] if messages else ""
 
 # Reasoning/thinking tokens lost or require provider-specific parsing
-if hasattr(response, 'choices') and hasattr(response.choices[0], 'message'):
-    if hasattr(response.choices[0].message, 'reasoning'):
+if hasattr(response, "choices") and hasattr(response.choices[0], "message"):
+    if hasattr(response.choices[0].message, "reasoning"):
         reasoning = response.choices[0].message.reasoning  # Provider-specific
 ```
 
@@ -52,8 +52,8 @@ if hasattr(response, 'choices') and hasattr(response.choices[0], 'message'):
 ```python
 # V2 - Rich UnifiedResponse format
 response = client.create(params)
-content = response.text                    # Direct access
-reasoning = response.reasoning              # Rich content preserved
+content = response.text  # Direct access
+reasoning = response.reasoning  # Rich content preserved
 citations = response.get_content_by_type("citation")
 
 # Access individual messages with typed content blocks
@@ -92,10 +92,10 @@ ChatCompletion(
         Choice(
             message=Message(
                 role="assistant",
-                content="Plain text only"  # Rich content flattened
+                content="Plain text only",  # Rich content flattened
             )
         )
-    ]
+    ],
 )
 ```
 
@@ -113,6 +113,7 @@ class ModelClientV2(Protocol):
 
     def cost(self, response: UnifiedResponse) -> float: ...
     def get_usage(self, response: UnifiedResponse) -> dict[str, Any]: ...
+
     # No message_retrieval - use response.text or response.messages directly
 ```
 
@@ -128,12 +129,12 @@ UnifiedResponse(
             content=[
                 TextContent(type="text", text="Main response"),
                 ReasoningContent(type="reasoning", reasoning="Let me think..."),
-                CitationContent(type="citation", url="...", title="...", snippet="...")
-            ]
+                CitationContent(type="citation", url="...", title="...", snippet="..."),
+            ],
         )
     ],
     usage={"prompt_tokens": 10, "completion_tokens": 20},
-    cost=0.001
+    cost=0.001,
 )
 ```
 
@@ -237,16 +238,17 @@ class ConversableAgent:
 ```python
 from autogen.llm_config.client import ModelClient
 
+
 class MyProviderClient(ModelClient):
     """Inherit V1 protocol for OpenAIWrapper compatibility"""
+
     pass
 ```
 
 #### Step 2: Implement V2 create() Method
 ```python
-from autogen.llm_clients.models import (
-    UnifiedResponse, UnifiedMessage, TextContent, ReasoningContent
-)
+from autogen.llm_clients.models import UnifiedResponse, UnifiedMessage, TextContent, ReasoningContent
+
 
 def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[override]
     """Override with rich return type"""
@@ -261,24 +263,15 @@ def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[ove
 
         # Extract text content
         if choice.message.content:
-            content_blocks.append(TextContent(
-                type="text",
-                text=choice.message.content
-            ))
+            content_blocks.append(TextContent(type="text", text=choice.message.content))
 
         # Extract reasoning (provider-specific)
-        if hasattr(choice.message, 'reasoning') and choice.message.reasoning:
-            content_blocks.append(ReasoningContent(
-                type="reasoning",
-                reasoning=choice.message.reasoning
-            ))
+        if hasattr(choice.message, "reasoning") and choice.message.reasoning:
+            content_blocks.append(ReasoningContent(type="reasoning", reasoning=choice.message.reasoning))
 
         # Add more content types as needed...
 
-        messages.append(UnifiedMessage(
-            role=choice.message.role,
-            content=content_blocks
-        ))
+        messages.append(UnifiedMessage(role=choice.message.role, content=content_blocks))
 
     # 3. Create UnifiedResponse
     return UnifiedResponse(
@@ -289,9 +282,9 @@ def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[ove
         usage={
             "prompt_tokens": raw_response.usage.prompt_tokens,
             "completion_tokens": raw_response.usage.completion_tokens,
-            "total_tokens": raw_response.usage.total_tokens
+            "total_tokens": raw_response.usage.total_tokens,
         },
-        cost=self._calculate_cost(raw_response)
+        cost=self._calculate_cost(raw_response),
     )
 ```
 
@@ -313,17 +306,10 @@ def create_v1_compatible(self, params: dict[str, Any]) -> dict[str, Any]:
         "id": response.id,
         "model": response.model,
         "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": msg.role,
-                    "content": msg.get_text()
-                },
-                "finish_reason": "stop"
-            }
+            {"index": 0, "message": {"role": msg.role, "content": msg.get_text()}, "finish_reason": "stop"}
             for msg in response.messages
         ],
-        "usage": response.usage
+        "usage": response.usage,
     }
 ```
 
@@ -333,6 +319,7 @@ def cost(self, response: UnifiedResponse) -> float:
     """Extract cost from UnifiedResponse"""
     return response.cost or 0.0
 
+
 @staticmethod
 def get_usage(response: UnifiedResponse) -> dict[str, Any]:
     """Extract usage from UnifiedResponse"""
@@ -341,7 +328,7 @@ def get_usage(response: UnifiedResponse) -> dict[str, Any]:
         "completion_tokens": response.usage.get("completion_tokens", 0),
         "total_tokens": response.usage.get("total_tokens", 0),
         "cost": response.cost or 0.0,
-        "model": response.model
+        "model": response.model,
     }
 ```
 
@@ -410,9 +397,9 @@ for message in response.messages:
 response = client.create(params)
 
 # For text extraction, OpenAIWrapper detects response type
-if hasattr(response, 'text'):  # UnifiedResponse
+if hasattr(response, "text"):  # UnifiedResponse
     text = response.text
-elif hasattr(response, 'message_retrieval_function'):  # V1 with stored metadata
+elif hasattr(response, "message_retrieval_function"):  # V1 with stored metadata
     text = response.message_retrieval_function(response)
 ```
 
@@ -478,9 +465,7 @@ class GeminiStatelessClient(ModelClient):
 
         # Call Gemini API
         response = self.client.models.generate_content(
-            model=params["model"],
-            contents=contents,
-            config=self._build_generation_config(params)
+            model=params["model"], contents=contents, config=self._build_generation_config(params)
         )
 
         # Transform to UnifiedResponse
@@ -499,15 +484,11 @@ class GeminiStatelessClient(ModelClient):
                     # Handle inline images/audio
                     mime_type = part.inline_data.mime_type
                     if mime_type.startswith("image/"):
-                        content_blocks.append(ImageContent(
-                            type="image",
-                            data_uri=f"data:{mime_type};base64,{part.inline_data.data}"
-                        ))
+                        content_blocks.append(
+                            ImageContent(type="image", data_uri=f"data:{mime_type};base64,{part.inline_data.data}")
+                        )
 
-            messages.append(UnifiedMessage(
-                role=self._normalize_role(candidate.content.role),
-                content=content_blocks
-            ))
+            messages.append(UnifiedMessage(role=self._normalize_role(candidate.content.role), content=content_blocks))
 
         return UnifiedResponse(
             id=f"gemini-{uuid.uuid4()}",
@@ -517,9 +498,9 @@ class GeminiStatelessClient(ModelClient):
             usage={
                 "prompt_tokens": gemini_response.usage_metadata.prompt_token_count,
                 "completion_tokens": gemini_response.usage_metadata.candidates_token_count,
-                "total_tokens": gemini_response.usage_metadata.total_token_count
+                "total_tokens": gemini_response.usage_metadata.total_token_count,
             },
-            cost=self._calculate_cost(gemini_response)
+            cost=self._calculate_cost(gemini_response),
         )
 ```
 
@@ -543,17 +524,11 @@ class AnthropicClient(ModelClient):
             if block.type == "text":
                 content_blocks.append(TextContent(type="text", text=block.text))
             elif block.type == "thinking":
-                content_blocks.append(ReasoningContent(
-                    type="reasoning",
-                    reasoning=block.thinking
-                ))
+                content_blocks.append(ReasoningContent(type="reasoning", reasoning=block.thinking))
             elif block.type == "tool_use":
-                content_blocks.append(ToolCallContent(
-                    type="tool_call",
-                    id=block.id,
-                    name=block.name,
-                    arguments=json.dumps(block.input)
-                ))
+                content_blocks.append(
+                    ToolCallContent(type="tool_call", id=block.id, name=block.name, arguments=json.dumps(block.input))
+                )
 
         messages = [UnifiedMessage(role="assistant", content=content_blocks)]
 
@@ -565,9 +540,9 @@ class AnthropicClient(ModelClient):
             usage={
                 "prompt_tokens": anthropic_response.usage.input_tokens,
                 "completion_tokens": anthropic_response.usage.output_tokens,
-                "total_tokens": anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens
+                "total_tokens": anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens,
             },
-            cost=self._calculate_cost(anthropic_response)
+            cost=self._calculate_cost(anthropic_response),
         )
 ```
 
@@ -646,11 +621,13 @@ def test_v1_backward_compatibility():
 ```python
 def test_openai_wrapper_integration():
     """Verify V2 client works with OpenAIWrapper"""
-    config_list = [{
-        "model": "gpt-4o",
-        "api_key": "test",  # pragma: allowlist secret
-        "api_type": "openai"
-    }]
+    config_list = [
+        {
+            "model": "gpt-4o",
+            "api_key": "test",  # pragma: allowlist secret
+            "api_type": "openai",
+        }
+    ]
 
     wrapper = OpenAIWrapper(config_list=config_list)
     response = wrapper.create({"messages": [{"role": "user", "content": "Hello"}]})
@@ -666,13 +643,11 @@ def test_agent_integration():
     """Verify agents work with V2 clients"""
     agent = ConversableAgent(
         name="assistant",
-        llm_config={"model": "gpt-4o", "api_key": "test"}  # pragma: allowlist secret
+        llm_config={"model": "gpt-4o", "api_key": "test"},  # pragma: allowlist secret
     )
 
     # Agent should handle V2 responses transparently
-    reply = agent.generate_reply(
-        messages=[{"role": "user", "content": "Hello"}]
-    )
+    reply = agent.generate_reply(messages=[{"role": "user", "content": "Hello"}])
 
     assert isinstance(reply, str)
     assert reply != ""
@@ -694,17 +669,19 @@ def mock_v2_response():
                 role="assistant",
                 content=[
                     TextContent(type="text", text="Test response"),
-                    ReasoningContent(type="reasoning", reasoning="Test reasoning")
-                ]
+                    ReasoningContent(type="reasoning", reasoning="Test reasoning"),
+                ],
             )
         ],
         usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-        cost=0.001
+        cost=0.001,
     )
+
 
 @pytest.fixture
 def mock_v2_client(mock_v2_response):
     """Mock V2 client for testing"""
+
     class MockV2Client:
         def create(self, params):
             return mock_v2_response
@@ -713,7 +690,7 @@ def mock_v2_client(mock_v2_response):
             return {
                 "id": mock_v2_response.id,
                 "model": mock_v2_response.model,
-                "choices": [{"message": {"content": mock_v2_response.text}}]
+                "choices": [{"message": {"content": mock_v2_response.text}}],
             }
 
         def cost(self, response):
@@ -726,7 +703,7 @@ def mock_v2_client(mock_v2_response):
                 "completion_tokens": response.usage["completion_tokens"],
                 "total_tokens": response.usage["total_tokens"],
                 "cost": response.cost,
-                "model": response.model
+                "model": response.model,
             }
 
     return MockV2Client()
@@ -761,11 +738,7 @@ def mock_v2_client(mock_v2_response):
 ### Q: How do I migrate provider-specific features?
 **A:** Use the `extra` field in content blocks or add fields to `GenericContent`:
 ```python
-GenericContent(
-    type="custom_provider_feature",
-    custom_field="value",
-    another_field=123
-)
+GenericContent(type="custom_provider_feature", custom_field="value", another_field=123)
 ```
 
 ## Support and Feedback

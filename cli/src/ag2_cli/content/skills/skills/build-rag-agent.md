@@ -21,9 +21,7 @@ import os
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant = ConversableAgent(
     name="assistant",
@@ -36,12 +34,12 @@ rag_proxy = RetrieveUserProxyAgent(
     name="rag_proxy",
     human_input_mode="NEVER",
     retrieve_config={
-        "task": "qa",                            # "qa" for Q&A, "code" for code search
-        "docs_path": ["./docs/"],                # Path to documents
+        "task": "qa",  # "qa" for Q&A, "code" for code search
+        "docs_path": ["./docs/"],  # Path to documents
         "collection_name": "my_collection",
         "chunk_token_size": 2000,
-        "model": "gpt-4o-mini",                  # For embedding
-        "get_or_create": True,                   # Reuse existing collection
+        "model": "gpt-4o-mini",  # For embedding
+        "get_or_create": True,  # Reuse existing collection
     },
     code_execution_config=False,
 )
@@ -61,32 +59,26 @@ Requires: `pip install ag2[openai,rag]`
 ```python
 retrieve_config = {
     # Task type
-    "task": "qa",                    # "qa", "code", or "default"
-
+    "task": "qa",  # "qa", "code", or "default"
     # Document sources
     "docs_path": ["./docs/", "https://example.com/page"],  # Local dirs, files, or URLs
-
     # Chunking
-    "chunk_token_size": 2000,        # Tokens per chunk
-    "chunk_mode": "multi_lines",     # "multi_lines" or "one_line"
-    "must_break_at_empty_line": True, # Break chunks at empty lines
-
+    "chunk_token_size": 2000,  # Tokens per chunk
+    "chunk_mode": "multi_lines",  # "multi_lines" or "one_line"
+    "must_break_at_empty_line": True,  # Break chunks at empty lines
     # Collection
     "collection_name": "my_docs",
-    "get_or_create": True,           # Reuse existing collection if available
-
+    "get_or_create": True,  # Reuse existing collection if available
     # Retrieval
-    "n_results": 5,                  # Number of chunks to retrieve
-    "distance_threshold": -1,        # Max distance (-1 for no limit)
-
+    "n_results": 5,  # Number of chunks to retrieve
+    "distance_threshold": -1,  # Max distance (-1 for no limit)
     # Embedding
-    "model": "gpt-4o-mini",          # Model for embeddings
+    "model": "gpt-4o-mini",  # Model for embeddings
     "embedding_model": "all-MiniLM-L6-v2",  # Custom embedding model
-
     # Customization
-    "customized_prompt": None,       # Custom prompt template
+    "customized_prompt": None,  # Custom prompt template
     "customized_answer_prefix": "",  # Prefix for answers
-    "update_context": True,          # Update context with new retrievals
+    "update_context": True,  # Update context with new retrievals
 }
 ```
 
@@ -98,9 +90,7 @@ from autogen.agentchat import run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 rag_proxy = RetrieveUserProxyAgent(
     name="rag_proxy",

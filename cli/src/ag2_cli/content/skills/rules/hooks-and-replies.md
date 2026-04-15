@@ -109,13 +109,12 @@ agent.register_nested_chats(
 ### Early Termination
 
 ```python
-def terminate_on_keyword(
-    recipient, messages, sender, config
-) -> tuple[bool, str | None]:
+def terminate_on_keyword(recipient, messages, sender, config) -> tuple[bool, str | None]:
     last = messages[-1].get("content", "") if messages else ""
     if "TASK_COMPLETE" in last:
         return True, "Task completed successfully."
     return False, None
+
 
 agent.register_reply(trigger=ConversableAgent, reply_func=terminate_on_keyword, position=0)
 ```
@@ -127,6 +126,7 @@ def log_messages(messages: list[dict]) -> list[dict]:
     for msg in messages:
         logger.info(f"[{msg.get('role')}] {msg.get('content', '')[:100]}")
     return messages
+
 
 agent.register_hook("process_all_messages_before_reply", log_messages)
 ```

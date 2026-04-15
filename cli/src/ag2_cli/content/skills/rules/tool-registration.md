@@ -15,6 +15,7 @@ Register a function for LLM calling and execution on separate agents:
 ```python
 from autogen import ConversableAgent, UserProxyAgent
 
+
 @user_proxy.register_for_execution()
 @assistant.register_for_llm(description="Search the web for information")
 def web_search(query: Annotated[str, "The search query"]) -> str:
@@ -30,9 +31,11 @@ Create a `Tool` object without binding to an agent:
 ```python
 from autogen.tools import tool
 
+
 @tool(description="Search the web for information")
 def web_search(query: Annotated[str, "The search query"]) -> str:
     return search_api(query)
+
 
 # web_search is now a Tool instance — register later:
 web_search.register_for_llm(assistant)
@@ -122,6 +125,7 @@ Use `Annotated` with string descriptions for tool parameters:
 ```python
 from typing import Annotated
 
+
 def calculate(
     expression: Annotated[str, "A mathematical expression to evaluate"],
     precision: Annotated[int, "Number of decimal places"] = 2,
@@ -138,6 +142,7 @@ Use `ChatContext` to access conversation state inside tools:
 
 ```python
 from autogen.tools import ChatContext, Depends
+
 
 def context_aware_tool(
     query: str,

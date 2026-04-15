@@ -107,12 +107,12 @@ All patterns accept:
 
 ```python
 Pattern(
-    initial_agent=agent,             # First agent to speak
-    agents=[agent1, agent2, ...],    # All participating agents
-    user_agent=user,                 # Optional user agent
-    context_variables=ctx,           # Shared state (ContextVariables)
+    initial_agent=agent,  # First agent to speak
+    agents=[agent1, agent2, ...],  # All participating agents
+    user_agent=user,  # Optional user agent
+    context_variables=ctx,  # Shared state (ContextVariables)
     group_after_work=TerminateTarget(),  # Default action when no handoff matches
-    summary_method="last_msg",       # "last_msg" or "reflection_with_llm"
+    summary_method="last_msg",  # "last_msg" or "reflection_with_llm"
 )
 ```
 
@@ -126,8 +126,12 @@ Agents can hand off to other agents based on conditions. Handoffs are evaluated 
 
 ```python
 from autogen.agentchat.group import (
-    OnCondition, OnContextCondition, ContextVariables,
-    AgentTarget, TerminateTarget, RevertToUserTarget,
+    OnCondition,
+    OnContextCondition,
+    ContextVariables,
+    AgentTarget,
+    TerminateTarget,
+    RevertToUserTarget,
     StringLLMCondition,
 )
 
@@ -172,6 +176,7 @@ Access in tools via dependency injection:
 
 ```python
 from autogen.tools import ChatContext, Depends
+
 
 def save_finding(
     finding: Annotated[str, "A research finding"],

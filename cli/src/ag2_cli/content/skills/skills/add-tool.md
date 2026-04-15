@@ -22,6 +22,7 @@ Follow this pattern exactly:
 ```python
 from typing import Annotated
 
+
 @executor_agent.register_for_execution()
 @caller_agent.register_for_llm(description="Clear description of what this tool does")
 def tool_name(
@@ -45,6 +46,7 @@ def tool_name(
 
 ```python
 from autogen.tools import ChatContext, Depends
+
 
 @executor.register_for_execution()
 @caller.register_for_llm(description="Context-aware tool")

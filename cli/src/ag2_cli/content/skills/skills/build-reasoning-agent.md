@@ -21,9 +21,7 @@ import os
 from autogen import LLMConfig, UserProxyAgent
 from autogen.agents.experimental import ReasoningAgent
 
-llm_config = LLMConfig(
-    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # ReasoningAgent explores multiple reasoning paths using tree-of-thought
 reasoning_agent = ReasoningAgent(
@@ -31,8 +29,8 @@ reasoning_agent = ReasoningAgent(
     llm_config=llm_config,
     reason_config={
         "method": "beam_search",  # Explore multiple paths in parallel
-        "beam_size": 3,           # Number of parallel reasoning paths
-        "max_depth": 4,           # Maximum reasoning steps
+        "beam_size": 3,  # Number of parallel reasoning paths
+        "max_depth": 4,  # Maximum reasoning steps
     },
 )
 
@@ -63,9 +61,9 @@ await result.process()
 ```python
 reason_config = {
     "method": "beam_search",
-    "beam_size": 3,           # Parallel paths (default: 3)
-    "max_depth": 4,           # Max reasoning steps (default: 3)
-    "answer_approach": "pool", # "pool" combines paths, "best" picks top one
+    "beam_size": 3,  # Parallel paths (default: 3)
+    "max_depth": 4,  # Max reasoning steps (default: 3)
+    "answer_approach": "pool",  # "pool" combines paths, "best" picks top one
 }
 ```
 
@@ -74,7 +72,7 @@ reason_config = {
 ```python
 reason_config = {
     "method": "mcts",
-    "nsim": 10,               # Number of simulations (default: 3)
+    "nsim": 10,  # Number of simulations (default: 3)
     "exploration_constant": 1.41,  # UCT exploration parameter
     "max_depth": 4,
 }
@@ -86,7 +84,7 @@ reason_config = {
 reason_config = {
     "method": "lats",
     "nsim": 5,
-    "forest_size": 3,         # Number of independent trees
+    "forest_size": 3,  # Number of independent trees
     "max_depth": 4,
 }
 ```
@@ -96,9 +94,7 @@ reason_config = {
 Use a different (possibly stronger) model for grading reasoning paths:
 
 ```python
-grader_config = LLMConfig(
-    {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
-)
+grader_config = LLMConfig({"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]})
 
 reasoning_agent = ReasoningAgent(
     name="reasoner",

@@ -39,6 +39,7 @@ export RAPID_API_KEY=""
 or
 ```python
 import os
+
 os.environ["BING_API_KEY"] = ""
 os.environ["RAPID_API_KEY"] = ""
 ```

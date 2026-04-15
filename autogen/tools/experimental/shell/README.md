@@ -62,7 +62,7 @@ result = system_agent.initiate_chat(
     recipient=system_agent,
     message="List all Python files in the current directory",
     max_turns=2,
-)## Security Model
+)  ## Security Model
 ```
 
 The Shell Tool implements a **defense-in-depth** security model with multiple layers:
@@ -218,8 +218,18 @@ llm_config = LLMConfig(
         "workspace_dir": "/var/sandbox/user_workspace",  # Isolated directory
         "allowed_paths": ["**"],  # Or restrict to specific paths
         "allowed_commands": [  # Whitelist approach (most secure)
-            "ls", "cat", "grep", "find", "head", "tail",
-            "wc", "sort", "uniq", "cut", "awk", "sed"
+            "ls",
+            "cat",
+            "grep",
+            "find",
+            "head",
+            "tail",
+            "wc",
+            "sort",
+            "uniq",
+            "cut",
+            "awk",
+            "sed",
         ],
         "denied_commands": ["rm", "dd", "format", "mkfs"],  # Extra safety
     },
@@ -311,10 +321,7 @@ Multiple commands are executed sequentially. Each command's output is captured s
 
 # Commands execute one after another
 ```python
-action = {
-    "commands": ["cd /tmp", "ls -la", "pwd"],
-    "timeout_ms": 10000
-}
+action = {"commands": ["cd /tmp", "ls -la", "pwd"], "timeout_ms": 10000}
 ```
 
 ## Troubleshooting

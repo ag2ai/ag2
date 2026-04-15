@@ -23,10 +23,9 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.mcp import create_toolkit
 from autogen.mcp.mcp_client import StdioConfig
 
+
 async def main():
-    llm_config = LLMConfig(
-        {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
-    )
+    llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
 
     agent = ConversableAgent(
         name="assistant",
@@ -58,6 +57,7 @@ async def main():
         )
         await result.process()
 
+
 asyncio.run(main())
 ```
 
@@ -83,11 +83,11 @@ async with sse_config.connect() as session:
 
 ```python
 StdioConfig(
-    command="npx",                    # Command to run
-    args=["-y", "server-package"],    # Arguments
-    environment={"KEY": "value"},     # Optional env vars
-    working_dir="/path/to/dir",       # Optional working directory
-    encoding="utf-8",                 # Default
+    command="npx",  # Command to run
+    args=["-y", "server-package"],  # Arguments
+    environment={"KEY": "value"},  # Optional env vars
+    working_dir="/path/to/dir",  # Optional working directory
+    encoding="utf-8",  # Default
 )
 ```
 
@@ -96,8 +96,8 @@ StdioConfig(
 ```python
 toolkit = await create_toolkit(
     session,
-    use_mcp_tools=True,              # Import tools from MCP server
-    use_mcp_resources=True,           # Import resources from MCP server
+    use_mcp_tools=True,  # Import tools from MCP server
+    use_mcp_resources=True,  # Import resources from MCP server
     resource_download_folder="./mcp_resources",  # Where to save resources
 )
 ```
