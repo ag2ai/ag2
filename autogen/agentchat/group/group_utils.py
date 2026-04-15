@@ -479,6 +479,8 @@ def determine_next_agent(
     next_target: TransitionTarget | None = None
     if manager := getattr(last_speaker, "_group_manager", None):
         next_target = getattr(manager, "_next_target_force", None)
+        if next_target is not None:
+            delattr(manager, "_next_target_force")
 
     # 2. If the last message is a tool call, return the tool execution agent
     if "tool_calls" in groupchat.messages[-1]:
