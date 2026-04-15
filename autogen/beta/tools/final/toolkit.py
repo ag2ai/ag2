@@ -6,6 +6,8 @@ from collections.abc import Callable, Iterable
 from contextlib import ExitStack
 from typing import Any, overload
 
+from fast_depends import Provider
+
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.schemas import ToolSchema
@@ -15,13 +17,25 @@ from .function_tool import FunctionParameters, FunctionTool, tool
 
 
 class Toolkit(Tool):
+    __slots__ = (
+        "name",
+        "tools",
+        "_middleware",
+    )
+
     def __init__(
         self,
         *tools: Tool | Callable[..., Any],
+        name: str | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
-        self.tools: list[FunctionTool] = [FunctionTool.ensure_tool(t).with_middleware(*self._middleware) for t in tools]
+        self.name = name or self.__class__.__name__
+        self.tools: list[Tool] = [FunctionTool.ensure_tool(t).with_middleware(*self._middleware) for t in tools]
+
+    def set_provider(self, provider: Provider) -> None:
+        for t in self.tools:
+            t.set_provider(provider)
 
     @overload
     def tool(

@@ -117,7 +117,7 @@ class TestShellExecution:
     def _make_tool_call(self, command: str) -> ToolCallEvent:
         return ToolCallEvent(
             arguments=json.dumps({"command": command}),
-            name="shell",
+            name="run_shell_command",
         )
 
     def _make_config(self, command: str, final_reply: str = "done") -> TestConfig:
@@ -272,7 +272,7 @@ class TestShellExecution:
                         calls=[
                             ToolCallEvent(
                                 arguments=json.dumps({"command": "echo 42 > counter.txt"}),
-                                name="shell",
+                                name="run_shell_command",
                             )
                         ]
                     )
@@ -283,7 +283,7 @@ class TestShellExecution:
                         calls=[
                             ToolCallEvent(
                                 arguments=json.dumps({"command": "cat counter.txt"}),
-                                name="shell",
+                                name="run_shell_command",
                             )
                         ]
                     )

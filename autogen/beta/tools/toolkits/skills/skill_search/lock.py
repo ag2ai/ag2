@@ -4,6 +4,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 
 class SkillsLock:
@@ -12,7 +13,7 @@ class SkillsLock:
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def read(self) -> dict:
+    def read(self) -> dict[str, Any]:
         if self._path.exists():
             return json.loads(self._path.read_text(encoding="utf-8"))
         return {"version": 1, "skills": {}}

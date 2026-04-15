@@ -59,6 +59,7 @@ class SkillsToolkit(Toolkit):
             self.list_skills,
             self.load_skill,
             self.run_skill_script,
+            name="local_skills_toolkit",
             middleware=middleware,
         )
 

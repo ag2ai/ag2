@@ -13,6 +13,8 @@ from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
+CODE_EXECUTION_TOOL_NAME = "code_execution"
+
 
 CODE_EXECUTION_TOOL_NAME = "code_execution"
 
@@ -32,12 +34,18 @@ class CodeExecutionTool(Tool):
     into the correct provider-specific API format.
     """
 
+    __slots__ = (
+        "name",
+        "_schema",
+    )
+
     def __init__(
         self,
         *,
         version: Literal["code_execution_20250825"] = "code_execution_20250825",
     ) -> None:
         self._schema = CodeExecutionToolSchema(version=version)
+        self.name = CODE_EXECUTION_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         return [self._schema]
