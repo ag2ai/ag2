@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Iterable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -31,7 +31,12 @@ from anyio.streams.memory import MemoryObjectSendStream
 from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
+from autogen.beta.config import ModelConfig
+from autogen.beta.hitl import HumanHook
+from autogen.beta.middleware.base import MiddlewareFactory
+from autogen.beta.observer import Observer
 from autogen.beta.tools.final import ClientTool
+from autogen.beta.tools.tool import Tool
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -56,6 +61,13 @@ class AGUIStream:
         incoming: RunAgentInput,
         *,
         variables: dict[str, Any] | None = None,
+        prompt: Iterable[str] = (),
+        dependencies: dict[Any, Any] | None = None,
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        hitl_hook: HumanHook | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
         write_events_stream, read_events_stream = create_memory_object_stream[BaseEvent]()
@@ -66,6 +78,13 @@ class AGUIStream:
                 AGStreamInput(
                     incoming=incoming,
                     variables=variables or {},
+                    prompt=list(prompt),
+                    dependencies=dependencies,
+                    config=config,
+                    tools=list(tools),
+                    middleware=list(middleware),
+                    observers=list(observers),
+                    hitl_hook=hitl_hook,
                 ),
                 self.__agent,
                 write_events_stream,
@@ -83,6 +102,13 @@ class AGUIStream:
 class AGStreamInput:
     incoming: RunAgentInput
     variables: dict[str, Any]
+    prompt: list[str] = field(default_factory=list)
+    dependencies: dict[Any, Any] | None = None
+    config: ModelConfig | None = None
+    tools: list[Tool] = field(default_factory=list)
+    middleware: list[MiddlewareFactory] = field(default_factory=list)
+    observers: list[Observer] = field(default_factory=list)
+    hitl_hook: HumanHook | None = None
 
 
 async def run_stream(
@@ -98,7 +124,7 @@ async def run_stream(
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
-    prompt, history_messages = map_agui_messages_to_events(command)
+    extracted_prompt, history_messages = map_agui_messages_to_events(command)
 
     stream = MemoryStream()
     await stream.history.replace(history_messages)
@@ -213,9 +239,14 @@ async def run_stream(
             initial_state = (command.incoming.state or {}) | command.variables
 
             result = await agent.ask(
-                prompt=prompt,
-                tools=client_tools,
+                prompt=[*command.prompt, *extracted_prompt],
+                tools=[*client_tools, *command.tools],
                 variables=initial_state,
+                dependencies=command.dependencies,
+                config=command.config,
+                middleware=command.middleware,
+                observers=command.observers,
+                hitl_hook=command.hitl_hook,
                 stream=stream,
             )
 
