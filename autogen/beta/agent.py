@@ -16,7 +16,6 @@ from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
 from autogen.beta.events import BinaryResult
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -46,6 +45,7 @@ from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
+    from .spec import AgentSpec
     from .tools.subagents import StreamFactory
 
 
@@ -321,7 +321,7 @@ class Agent(Generic[TResult]):
         self._observers = list(observers)
 
         self.dependency_provider = Provider()
-        self.tools: list[FunctionTool] = []
+        self.tools: list[Tool] = []
         for t in tools:
             self.add_tool(t)
 
@@ -331,7 +331,7 @@ class Agent(Generic[TResult]):
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
-        self._response_schema = ResponseSchema.ensure_schema(response_schema)
+        self._response_schema: ResponseProto[TResult] | None = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
@@ -620,16 +620,18 @@ class Agent(Generic[TResult]):
         )
 
         all_schemas: list[ToolSchema] = []
-        known_tools: set[str] = set()
+        known_tool_names: set[str] = set()
         for t in all_tools:
             schemas = await t.schemas(context)
             all_schemas.extend(schemas)
 
+            # iterate over schemas to support toolkits
             for schema in schemas:
                 if isinstance(schema, FunctionToolSchema):
-                    known_tools.add(schema.function.name)
-                elif isinstance(schema, WebSearchToolSchema):
-                    known_tools.add(WEB_SEARCH_TOOL_NAME)
+                    known_tool_names.add(schema.function.name)
+                else:
+                    # fallback to tool name (built-in tools)
+                    known_tool_names.add(t.name)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
@@ -683,7 +685,7 @@ class Agent(Generic[TResult]):
                 stack,
                 context,
                 tools=all_tools,
-                known_tools=known_tools,
+                known_tools=known_tool_names,
                 middleware=middleware_instances,
             )
 
@@ -718,6 +720,12 @@ class Agent(Generic[TResult]):
             stream=stream,
             middleware=middleware,
         )
+
+    def to_spec(self) -> "AgentSpec":
+        """Serialize this agent to a JSON-safe :class:`AgentSpec`."""
+        from .spec import AgentSpec
+
+        return AgentSpec.from_agent(self)
 
     def as_conversable(self) -> "ConversableAdapter":
         from .conversable import ConversableAdapter

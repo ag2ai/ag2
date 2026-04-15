@@ -16,10 +16,14 @@ from .function_tool import FunctionToolSchema
 
 
 class ClientTool(Tool):
-    __slots__ = ("schema",)
+    __slots__ = (
+        "schema",
+        "name",
+    )
 
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.from_dict(schema)
+        self.name = self.schema.function.name
 
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]

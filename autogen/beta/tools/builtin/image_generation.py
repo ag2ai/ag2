@@ -48,7 +48,10 @@ class ImageGenerationTool(Tool):
         partial_images: Number of partial images to stream (1–3).
     """
 
-    __slots__ = "_params"
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -73,6 +76,8 @@ class ImageGenerationTool(Tool):
             self._params["output_compression"] = output_compression
         if partial_images is not None:
             self._params["partial_images"] = partial_images
+
+        self.name = IMAGE_GENERATION_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ImageGenerationToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
