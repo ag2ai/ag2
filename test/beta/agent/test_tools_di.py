@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from autogen.beta import Agent, Context, Depends, Inject
+from autogen.beta import Agent, Context, Depends, Inject, Toolkit
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -192,6 +192,32 @@ async def test_depends_override(mock: MagicMock, test_config: TestConfig) -> Non
         config=test_config,
         tools=[my_tool],
     )
+
+    agent.dependency_provider.override(dep1, dep2)
+
+    await agent.ask("Hi")
+
+    mock.assert_called_once_with("1")
+
+
+@pytest.mark.asyncio()
+async def test_depends_override_toolkit(mock: MagicMock, test_config: TestConfig) -> None:
+    def dep1():
+        raise ValueError
+
+    def dep2():
+        return "1"
+
+    def my_tool(
+        dep: Annotated[str, Depends(dep1)],
+    ) -> str:
+        mock(dep)
+        return dep
+
+    toolkit = Toolkit(my_tool)
+
+    agent = Agent("", config=test_config)
+    agent.add_tool(toolkit)
 
     agent.dependency_provider.override(dep1, dep2)
 

@@ -57,7 +57,12 @@ class FilesystemToolkit(Toolkit):
         tools = [self.read_file, self.find_files]
         if not read_only:
             tools.extend([self.write_file, self.update_file, self.delete_file])
-        super().__init__(*tools, middleware=middleware)
+
+        super().__init__(
+            *tools,
+            name="filesystem_toolkit",
+            middleware=middleware,
+        )
 
 
 def _make_read_file(base: Path) -> FunctionTool:
