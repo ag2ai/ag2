@@ -23,15 +23,13 @@ from typing import Annotated
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import run_group_chat
 from autogen.agentchat.group import (
-    OnCondition,
-    AgentTarget,
-    TerminateTarget,
-    ContextVariables,
-    StringLLMCondition,
+    OnCondition, AgentTarget, TerminateTarget, ContextVariables, StringLLMCondition,
 )
 from autogen.agentchat.group.patterns import DefaultPattern
 
-llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(
+    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
+)
 
 # Shared state across all agents
 ctx = ContextVariables(data={"status": "new", "category": ""})
@@ -76,7 +74,6 @@ triage.handoffs.add_llm_conditions([
 billing.handoffs.set_after_work(TerminateTarget())
 support.handoffs.set_after_work(TerminateTarget())
 
-
 # 4. Register tools (optional)
 @billing.register_for_execution()
 @billing.register_for_llm(description="Look up a customer's recent charges")
@@ -85,7 +82,6 @@ def lookup_charges(
 ) -> str:
     # Replace with actual DB lookup
     return "Last charge: $29.99 on 2025-03-01 (Monthly subscription)"
-
 
 # 5. Run the group chat with DefaultPattern
 result = run_group_chat(
@@ -132,7 +128,6 @@ support.handoffs.add_llm_condition(
 
 # After-work with RevertToUserTarget
 from autogen.agentchat.group import RevertToUserTarget
-
 escalation.handoffs.set_after_work(RevertToUserTarget())
 ```
 
@@ -142,12 +137,8 @@ Use `OnContextCondition` for deterministic routing based on shared state (faster
 
 ```python
 from autogen.agentchat.group import (
-    OnContextCondition,
-    ExpressionContextCondition,
-    ContextExpression,
-    ReplyResult,
+    OnContextCondition, ExpressionContextCondition, ContextExpression, ReplyResult,
 )
-
 
 # Tool that updates context and hands off
 @triage.register_for_execution()

@@ -22,7 +22,9 @@ import os
 from autogen import ConversableAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
-llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(
+    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
+)
 
 # Coder writes code
 coder = ConversableAgent(

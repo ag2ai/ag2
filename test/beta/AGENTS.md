@@ -18,9 +18,8 @@ assert result[0] == {"role": "assistant", "tool_calls": [...]}
 
 # Good — partial match with dirty-equals (always use dict syntax, not kwargs)
 from dirty_equals import IsPartialDict
-
 assert result[0] == IsPartialDict({"role": "assistant"})  # Good
-assert result[0] == IsPartialDict(role="assistant")  # Bad — use dict syntax
+assert result[0] == IsPartialDict(role="assistant")        # Bad — use dict syntax
 ```
 
 ### Imports
@@ -41,7 +40,6 @@ class TestAgent:
 
     @pytest.mark.asyncio
     async def test_defaults(self, context: Context) -> None: ...
-
 
 # Good - markers are applied to the class itself
 @pytest.mark.asyncio

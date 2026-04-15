@@ -26,7 +26,6 @@ llm_config = {"config_list": config_list, "temperature": 0.7}
 
 # New — LLMConfig class
 from autogen import LLMConfig
-
 llm_config = LLMConfig(
     {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]},
     temperature=0.7,
@@ -43,7 +42,6 @@ user_proxy = UserProxyAgent(
     name="user",
     function_map={"search": search_function},
 )
-
 
 # New — decorator or Tool class
 @user_proxy.register_for_execution()
@@ -82,7 +80,6 @@ user_proxy = UserProxyAgent(
 ```python
 # Old — GroupChat + GroupChatManager (deprecated)
 from autogen import GroupChat, GroupChatManager
-
 group_chat = GroupChat(agents=[a, b, c], messages=[], max_round=10)
 manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config)
 user.initiate_chat(manager, message="Start")
@@ -90,7 +87,6 @@ user.initiate_chat(manager, message="Start")
 # New — run_group_chat with patterns
 from autogen.agentchat import run_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-
 result = run_group_chat(
     pattern=AutoPattern(initial_agent=a, agents=[a, b, c], group_manager_args={"llm_config": llm_config}),
     messages="Start",

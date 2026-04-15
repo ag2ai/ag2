@@ -23,7 +23,9 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.group import AgentTarget, TerminateTarget
 from autogen.agentchat.group.guardrails import LLMGuardrail
 
-llm_config = LLMConfig({"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(
+    {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
+)
 
 # Create a moderator to handle violations
 moderator = ConversableAgent(
@@ -83,9 +85,9 @@ Stack multiple guardrails on an agent — they are checked in registration order
 
 ```python
 # Check PII first (fast, no LLM cost), then content quality (LLM-based)
-assistant.register_output_guardrail(pii_guardrail)  # Regex — fast
-assistant.register_output_guardrail(email_guardrail)  # Regex — fast
-assistant.register_output_guardrail(relevance_guard)  # LLM — slower but thorough
+assistant.register_output_guardrail(pii_guardrail)     # Regex — fast
+assistant.register_output_guardrail(email_guardrail)   # Regex — fast
+assistant.register_output_guardrail(relevance_guard)   # LLM — slower but thorough
 ```
 
 ## 5. Guardrails with Group Chat

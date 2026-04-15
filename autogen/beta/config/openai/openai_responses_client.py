@@ -14,7 +14,6 @@ from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omi
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
-    ResponseCodeInterpreterToolCall,
     ResponseCompletedEvent,
     ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
@@ -24,7 +23,7 @@ from openai.types.responses import (
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
-    ResponseTextDeltaEvent,
+    ResponseTextDeltaEvent, ResponseCodeInterpreterToolCall,
 )
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
@@ -46,9 +45,9 @@ from autogen.beta.events import (
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools import ToolResult
-from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import (
@@ -185,18 +184,20 @@ class OpenAIResponsesClient(LLMClient):
                     BuiltinToolCallEvent(
                         id=item.id,
                         name=CODE_EXECUTION_TOOL_NAME,
-                        arguments=json.dumps({"code": item.code}) if item.code is not None else "{}",
+                        arguments=json.dumps({"code": item.code}) if item.code is not None else "{}"
                     )
                 )
                 await context.send(
                     BuiltinToolResultEvent(
                         parent_id=item.id,
                         name=CODE_EXECUTION_TOOL_NAME,
-                        result=ToolResult({
-                            "status": item.status,
-                            "container_id": item.container_id,
-                            "outputs": [output.model_dump() for output in item.outputs] if item.outputs else [],
-                        }),
+                        result=ToolResult(
+                            {
+                                "status": item.status,
+                                "container_id": item.container_id,
+                                "outputs": [output.model_dump() for output in item.outputs] if item.outputs else [],
+                            }
+                        ),
                     )
                 )
 
@@ -281,15 +282,13 @@ class OpenAIResponsesClient(LLMClient):
 
                 # call web search tool
                 elif isinstance(event.item, ResponseFunctionWebSearch):
-                    (
-                        await context.send(
-                            BuiltinToolCallEvent(
-                                id=event.item.id,
-                                name=WEB_SEARCH_TOOL_NAME,
-                                arguments=event.item.action.model_dump_json(),
-                            )
-                        ),
-                    )
+                    await context.send(
+                        BuiltinToolCallEvent(
+                            id=event.item.id,
+                            name=WEB_SEARCH_TOOL_NAME,
+                            arguments=event.item.action.model_dump_json(),
+                        )
+                    ),
 
                 # call code execution tool
                 elif isinstance(event.item, ResponseCodeInterpreterToolCall):
@@ -340,13 +339,14 @@ class OpenAIResponsesClient(LLMClient):
                         BuiltinToolResultEvent(
                             parent_id=event.item.id,
                             name=CODE_EXECUTION_TOOL_NAME,
-                            result=ToolResult({
-                                "status": event.item.status,
-                                "container_id": event.item.container_id,
-                                "outputs": [output.model_dump() for output in event.item.outputs]
-                                if event.item.outputs
-                                else [],
-                            }),
+                            result=ToolResult(
+                                {
+                                    "status": event.item.status,
+                                    "container_id": event.item.container_id,
+                                    "outputs": [output.model_dump() for output in
+                                                event.item.outputs] if event.item.outputs else [],
+                                }
+                            ),
                         )
                     )
 

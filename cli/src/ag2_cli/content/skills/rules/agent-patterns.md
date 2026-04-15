@@ -74,7 +74,9 @@ from autogen import ConversableAgent, UpdateSystemMessage
 agent = ConversableAgent(
     name="assistant",
     llm_config=llm_config,
-    update_agent_state_before_reply=[UpdateSystemMessage("Current context: {context_var}")],
+    update_agent_state_before_reply=[
+        UpdateSystemMessage("Current context: {context_var}")
+    ],
 )
 ```
 

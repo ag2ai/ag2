@@ -76,10 +76,7 @@ When agents should explicitly route to each other:
 
 ```python
 from autogen.agentchat.group import (
-    OnCondition,
-    AgentTarget,
-    TerminateTarget,
-    StringLLMCondition,
+    OnCondition, AgentTarget, TerminateTarget, StringLLMCondition,
 )
 from autogen.agentchat.group.patterns import DefaultPattern
 
