@@ -4,6 +4,7 @@
 
 
 import base64
+import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
@@ -22,7 +23,7 @@ from openai.types.responses import (
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
-    ResponseTextDeltaEvent,
+    ResponseTextDeltaEvent, ResponseCodeInterpreterToolCall,
 )
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
@@ -46,6 +47,7 @@ from autogen.beta.response import ResponseProto
 from autogen.beta.tools import ToolResult
 from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
+from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import (
@@ -177,6 +179,28 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
+            elif isinstance(item, ResponseCodeInterpreterToolCall):
+                await context.send(
+                    BuiltinToolCallEvent(
+                        id=item.id,
+                        name=CODE_EXECUTION_TOOL_NAME,
+                        arguments=json.dumps({"code": item.code}) if item.code is not None else "{}"
+                    )
+                )
+                await context.send(
+                    BuiltinToolResultEvent(
+                        parent_id=item.id,
+                        name=CODE_EXECUTION_TOOL_NAME,
+                        result=ToolResult(
+                            {
+                                "status": item.status,
+                                "container_id": item.container_id,
+                                "outputs": [output.model_dump() for output in item.outputs] if item.outputs else [],
+                            }
+                        ),
+                    )
+                )
+
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
                     ToolCallEvent(
@@ -264,6 +288,20 @@ class OpenAIResponsesClient(LLMClient):
                             name=WEB_SEARCH_TOOL_NAME,
                             arguments=event.item.action.model_dump_json(),
                         )
+                    ),
+
+                # call code execution tool
+                elif isinstance(event.item, ResponseCodeInterpreterToolCall):
+                    await context.send(
+                        BuiltinToolCallEvent(
+                            id=event.item.id,
+                            name=CODE_EXECUTION_TOOL_NAME,
+                            arguments=json.dumps({"code": event.item.code}) if event.item.code is not None else "{}",
+                            provider_data={
+                                "status": event.item.status,
+                                "container_id": event.item.container_id,
+                            },
+                        )
                     )
 
                 else:
@@ -292,6 +330,23 @@ class OpenAIResponsesClient(LLMClient):
                             parent_id=event.item.id,
                             name=WEB_SEARCH_TOOL_NAME,
                             result=ToolResult(event.item.action.model_dump_json()),
+                        )
+                    )
+
+                # code execution tool call result
+                elif isinstance(event.item, ResponseCodeInterpreterToolCall):
+                    await context.send(
+                        BuiltinToolResultEvent(
+                            parent_id=event.item.id,
+                            name=CODE_EXECUTION_TOOL_NAME,
+                            result=ToolResult(
+                                {
+                                    "status": event.item.status,
+                                    "container_id": event.item.container_id,
+                                    "outputs": [output.model_dump() for output in
+                                                event.item.outputs] if event.item.outputs else [],
+                                }
+                            ),
                         )
                     )
 

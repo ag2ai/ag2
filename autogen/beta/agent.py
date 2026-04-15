@@ -17,6 +17,7 @@ from typing_extensions import TypeVar as TypeVar313
 
 from autogen.beta.events import BinaryResult
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
+from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME, CodeExecutionToolSchema
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -630,6 +631,8 @@ class Agent(Generic[TResult]):
                     known_tools.add(schema.function.name)
                 elif isinstance(schema, WebSearchToolSchema):
                     known_tools.add(WEB_SEARCH_TOOL_NAME)
+                elif isinstance(schema, CodeExecutionToolSchema):
+                    known_tools.add(CODE_EXECUTION_TOOL_NAME)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
