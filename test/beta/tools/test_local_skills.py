@@ -263,7 +263,6 @@ async def test_run_skill_script_schema(skill_tree: Path, context: ConversationCo
 
 
 def test_run_skill_script_executes(skill_tree: Path) -> None:
-
     scripts_dir = skill_tree / "react-best-practices" / "scripts"
     env = LocalShellEnvironment(path=scripts_dir, cleanup=False)
 

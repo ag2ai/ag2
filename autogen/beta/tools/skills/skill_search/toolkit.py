@@ -87,7 +87,8 @@ class SkillSearchToolkit(SkillsToolkit):
         else:
             _runtime = LocalRuntime()
 
-        super().__init__(_runtime, middleware=middleware)
+        # call SkillsToolkit constructor to initialize inherited tools
+        super().__init__(runtime)
 
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
@@ -96,7 +97,15 @@ class SkillSearchToolkit(SkillsToolkit):
         self.install_skill = _make_install_tool(_client, lock, _runtime)
         self.remove_skill = _make_remove_tool(_runtime, lock)
 
-        self.tools.extend([self.search_skills, self.install_skill, self.remove_skill])
+        # call Toolkit constructor
+        super(SkillsToolkit, self).__init__(
+            self.search_skills,
+            self.install_skill,
+            self.remove_skill,
+            *self.tools,
+            name="local_skills_toolkit",
+            middleware=middleware,
+        )
 
 
 def _make_search_tool(client: SkillsClient) -> FunctionTool:

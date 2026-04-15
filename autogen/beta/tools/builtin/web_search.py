@@ -38,7 +38,10 @@ class WebSearchToolSchema(ToolSchema):
 
 
 class WebSearchTool(Tool):
-    __slots__ = ("_params",)
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -63,6 +66,8 @@ class WebSearchTool(Tool):
             self._params["blocked_domains"] = blocked_domains
         if version is not None:
             self._params["web_search_version"] = version
+
+        self.name = WEB_SEARCH_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[WebSearchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}

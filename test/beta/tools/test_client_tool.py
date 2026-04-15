@@ -109,8 +109,8 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
 
     wrapped = add.with_middleware(second_mw)
 
-    assert len(add._tool_middleware) == 1
-    assert len(wrapped._tool_middleware) == 2
+    assert len(add._middleware) == 1
+    assert len(wrapped._middleware) == 2
 
     config = TestConfig(
         ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),
