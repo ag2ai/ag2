@@ -97,7 +97,6 @@ class LocalRuntime:
         shutil.rmtree(target)
 
     def shell(self, scripts_dir: Path) -> ShellEnvironment:
-
         return LocalShellEnvironment(
             path=scripts_dir,
             cleanup=False,

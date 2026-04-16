@@ -16,7 +16,7 @@ from .base import BaseEvent, Field
 class Input(BaseEvent):
     """Base class for all input events sent to the model."""
 
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, repr=False)
 
     @classmethod
     def ensure_input(cls, content: "str | Input") -> "Input":

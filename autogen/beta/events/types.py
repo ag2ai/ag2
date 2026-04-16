@@ -75,7 +75,7 @@ class ModelResponse(ModelEvent):
         return self.message.content if self.message else None
 
     def __repr__(self) -> str:
-        text = f"content={getattr(self.message, 'content', None)}"
+        text = f"content={getattr(self.message, 'content', 'None')}"
         if self.tool_calls:
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
