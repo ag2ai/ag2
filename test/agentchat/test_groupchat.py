@@ -2330,6 +2330,7 @@ def test_manager_resume_message_assignment():
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
 
 
+@pytest.mark.timeout(120)
 @pytest.mark.deepseek
 @suppress_json_decoder_error
 @run_for_optional_imports(["openai"], "deepseek")
