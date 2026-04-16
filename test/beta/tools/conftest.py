@@ -17,7 +17,6 @@ def context() -> ConversationContext:
 
 @pytest.fixture
 def make_context() -> Callable[..., ConversationContext]:
-
     def _make(**variables: object) -> ConversationContext:
         return ConversationContext(stream=MagicMock(), variables=variables)
 
