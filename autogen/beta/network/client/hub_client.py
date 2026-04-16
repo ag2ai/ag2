@@ -112,8 +112,13 @@ class HubClient:
         self._actor_clients.append(client)
         return client
 
-    async def find(self, capability: str | None = None) -> list[ActorIdentity]:
-        return await self._hub.find(capability=capability)
+    async def find(
+        self,
+        capability: str | None = None,
+        *,
+        query: str | None = None,
+    ) -> list[ActorIdentity]:
+        return await self._hub.find(capability=capability, query=query)
 
     async def describe(self, name_or_id: str) -> ActorIdentity:
         return await self._hub.describe(name_or_id)

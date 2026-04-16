@@ -895,12 +895,47 @@ class Hub:
             reason=identity.name,
         )
 
-    async def find(self, capability: str | None = None) -> list[ActorIdentity]:
+    async def find(
+        self,
+        capability: str | None = None,
+        *,
+        query: str | None = None,
+    ) -> list[ActorIdentity]:
+        """Discover registered identities by capability and/or free-text query.
+
+        ``capability`` matches an exact entry in ``identity.capabilities``.
+
+        ``query`` is a case-insensitive substring match against the
+        identity's ``name``, ``display``, ``summary``, ``domains`` (any
+        entry), and ``strengths``. Useful for the Phase 6 ``find_actors``
+        LLM verb where the model has a free-text intent but no idea
+        what capability strings the operator declared.
+
+        When both filters are supplied the result is the AND.
+        """
+
         async with self._lock:
             identities = list(self._identities.values())
-        if capability is None:
-            return identities
-        return [i for i in identities if capability in i.capabilities]
+
+        if capability is not None:
+            identities = [i for i in identities if capability in i.capabilities]
+
+        if query:
+            needle = query.casefold()
+
+            def _matches(identity: ActorIdentity) -> bool:
+                haystacks: list[str] = [
+                    identity.name or "",
+                    identity.display or "",
+                    identity.summary or "",
+                    identity.strengths or "",
+                ]
+                haystacks.extend(identity.domains or ())
+                return any(needle in h.casefold() for h in haystacks if h)
+
+            identities = [i for i in identities if _matches(i)]
+
+        return identities
 
     async def describe(self, name_or_id: str) -> ActorIdentity:
         actor_id = self._resolve_actor(name_or_id)
@@ -2033,6 +2068,45 @@ class Hub:
 
         return self._sessions.get(session_id)
 
+    async def peek_inbox(
+        self, actor_id: str, *, limit: int = 50
+    ) -> list[Envelope]:
+        """Return the actor's pending inbox envelopes.
+
+        Reads ``hub/actors/{actor_id}/inbox/pending/`` and decodes each
+        ``{envelope_id}.json`` payload into an :class:`Envelope`. The
+        list is sorted by envelope id (UUID7 lexicographic = arrival
+        order) and capped at ``limit``. Used by the Phase 6 ``listen``
+        verb in ``scope="inbox"`` mode and by operator tooling that
+        wants to introspect what a slow recipient still has to chew
+        through.
+
+        Returns an empty list if the actor has no pending entries (or
+        was never registered) — non-raising on purpose.
+        """
+
+        if actor_id not in self._identities:
+            return []
+        pending_dir = layout.actor_inbox_pending_dir(actor_id) + "/"
+        try:
+            entries = await self._store.list(pending_dir)
+        except Exception:  # pragma: no cover — store backends differ
+            log.warning("peek_inbox list failed for %s", actor_id, exc_info=True)
+            return []
+
+        json_entries = sorted(e for e in entries if e.endswith(".json"))
+        envelopes: list[Envelope] = []
+        for name in json_entries[:limit]:
+            payload = await self._store.read(f"{pending_dir}{name}")
+            if payload is None:
+                continue
+            try:
+                envelopes.append(Envelope.from_json(payload))
+            except Exception:  # pragma: no cover — corrupt entry
+                log.warning("peek_inbox decode failed for %s/%s", actor_id, name)
+                continue
+        return envelopes
+
     def metrics(self) -> dict[str, Any]:
         """Return a nested counter dict for ``GET /v1/admin/metrics``.
 
@@ -2454,6 +2528,21 @@ class Hub:
         return offset + len(payload.encode("utf-8"))
 
     async def _read_user_envelopes(self, session_id: str) -> list[Envelope]:
+        """Return the WAL slice the session adapter sees as "prior".
+
+        Excludes:
+
+        * ``ag2.session.*`` system envelopes (handshake, opened, closed)
+        * ``ag2.error`` envelopes
+        * ``ag2.task.*`` envelopes — task lifecycle is hub-owned and
+          must stay orthogonal to session-adapter delivery rules
+          (§6.2). Without this filter a consulting session that hosts
+          a single ``run_task`` would count the assigned + result
+          envelopes against the 1Q1R rule and refuse the actor's
+          subsequent text reply, breaking the design's "task envelopes
+          do not exhaust the session" invariant.
+        """
+
         raw = await self._store.read(layout.session_wal(session_id))
         if not raw:
             return []
@@ -2462,8 +2551,10 @@ class Hub:
             if not line:
                 continue
             env = Envelope.from_json(line)
-            if env.event_type.startswith("ag2.session.") or env.event_type.startswith(
-                "ag2.error"
+            if (
+                env.event_type.startswith("ag2.session.")
+                or env.event_type.startswith("ag2.error")
+                or env.event_type.startswith("ag2.task.")
             ):
                 continue
             envelopes.append(env)

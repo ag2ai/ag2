@@ -22,19 +22,29 @@ from .human import (
     HumanSurface,
     human_cli_client,
 )
+from .inject import (
+    ActorClientInject,
+    HubInject,
+    SessionInject,
+    TaskInject,
+)
 from .session import Session
 from .task import Task
 
 __all__ = (
     "ActorClient",
+    "ActorClientInject",
     "HubClient",
+    "HubInject",
     "HumanCliSurface",
     "HumanClient",
     "HumanScriptedSurface",
     "HumanSurface",
     "NotifyHandler",
     "Session",
+    "SessionInject",
     "Task",
     "TaskHandler",
+    "TaskInject",
     "human_cli_client",
 )

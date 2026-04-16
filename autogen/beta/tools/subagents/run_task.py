@@ -58,9 +58,18 @@ async def run_task(
     emit its own task lifecycle events.
     """
     task_id = uuid4().hex
-    task_stream = stream or MemoryStream(
-        storage=parent_context.stream.history.storage,
-    )
+    # Subtasks get an isolated in-memory stream. Sharing the parent's
+    # storage caused two problems: (a) the subtask's get_history()
+    # returned the parent's in-flight history including the parent's
+    # own unresolved run_subtasks tool_use, so the subtask's LLM call
+    # failed with "tool_use without matching tool_result"; (b) the
+    # subtask's own ModelRequest / ModelResponse / tool events landed
+    # in the parent's persistent stream (via contextvar-inherited
+    # lane tags), polluting the parent's conversation history for
+    # future turns. TaskStarted / TaskCompleted / TaskFailed lifecycle
+    # events are still emitted to parent_context.stream below, so
+    # observability from the parent's perspective is unchanged.
+    task_stream = stream or MemoryStream()
     prompt = objective
     if context:
         prompt = f"{objective}\n\n## Context\n{context}"

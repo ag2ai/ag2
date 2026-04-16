@@ -246,6 +246,36 @@ class ActorClient:
         return self._hub.peek_session(session_id)
 
     # ------------------------------------------------------------------
+    # Phase 6 — auto-injected LLM verb surface
+    # ------------------------------------------------------------------
+
+    def _build_network_verbs(
+        self,
+        *,
+        session: Session | None = None,
+        task: Task | None = None,
+    ) -> list[Any]:
+        """Return the auto-injected network verb tools for this turn.
+
+        The verbs live in :mod:`autogen.beta.network.client.verbs` and
+        are factored as plain ``@tool``-decorated coroutines that close
+        over this :class:`ActorClient`. ``client/handlers.py::_ask``
+        invokes this once per notify-handler dispatch and forwards the
+        list as ``tools=`` to ``actor.ask(...)``.
+
+        Phase 6 ships eight verbs (see §10.5 of the design doc):
+        ``find_actors``, ``describe_actor``, ``open_session``, ``say``,
+        ``listen``, ``run_task``, ``track_task``, ``leave``. They are
+        only attached when an :class:`ActorClient` is dispatching a
+        real notify-handler turn; standalone ``Actor.ask`` runs (no
+        hub) see no extra tools.
+        """
+
+        from .verbs import build_network_verbs
+
+        return build_network_verbs(self, session=session, task=task)
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -508,14 +538,31 @@ class ActorClient:
         session_type: SessionType | str,
         *,
         target: str | list[str],
+        intent: str | None = None,
         labels: dict[str, Any] | None = None,
     ) -> Session:
+        """Open a new session and return a :class:`Session` handle.
+
+        ``intent`` is the caller's free-text reason for opening the
+        session (typically the LLM's "why" when the call is driven by
+        the Phase 6 ``open_session`` verb). It is folded into
+        ``SessionMetadata.labels["intent"]`` so it shows up in the
+        audit log, in WAL replay tooling, and in the
+        ``GET /v1/sessions/{id}`` describe response. ``labels`` overrides
+        ``intent`` if the caller supplies both for the same key.
+        """
+
         participant_names = [target] if isinstance(target, str) else list(target)
+        merged_labels: dict[str, Any] = {}
+        if intent:
+            merged_labels["intent"] = intent
+        if labels:
+            merged_labels.update(labels)
         metadata = await self._hub.create_session(
             creator_id=self.actor_id,
             session_type=session_type,
             participant_names=participant_names,
-            labels=labels,
+            labels=merged_labels or None,
         )
         return Session(client=self, metadata=metadata)
 

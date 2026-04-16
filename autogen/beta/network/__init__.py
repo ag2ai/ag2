@@ -44,14 +44,18 @@ from .auth import (
 )
 from .client import (
     ActorClient,
+    ActorClientInject,
     HubClient,
+    HubInject,
     HumanCliSurface,
     HumanClient,
     HumanScriptedSurface,
     HumanSurface,
     NotifyHandler,
     Session,
+    SessionInject,
     Task,
+    TaskInject,
     human_cli_client,
 )
 from .client.transforms import (
@@ -124,8 +128,11 @@ from .hub import Hub, HubConfig
 from .identity import ActorIdentity, AuthBlock
 from .ids import extract_ms, new_id, uuid7
 from .policies import (
+    ACTOR_CLIENT_DEP,
     HUB_DEP,
+    SESSION_DEP,
     SESSION_ID_VAR,
+    TASK_DEP,
     PreviousOnlyInboxPolicy,
     SessionInboxPolicy,
 )
@@ -181,14 +188,18 @@ __all__ = (
     "EV_TASK_PROGRESS",
     "EV_TASK_RESULT",
     "EV_TEXT",
+    "ACTOR_CLIENT_DEP",
     "HUB_DEP",
+    "SESSION_DEP",
     "SESSION_ID_VAR",
+    "TASK_DEP",
     "TASK_EVENT_TYPES",
     "TASK_TERMINAL_EVENT_TYPES",
     "TERMINAL_TASK_STATES",
     "AccessBlock",
     "AccessDeniedError",
     "ActorClient",
+    "ActorClientInject",
     "ActorIdentity",
     "AdapterResult",
     "ApiKeyAuth",
@@ -211,6 +222,7 @@ __all__ = (
     "Hub",
     "HubClient",
     "HubConfig",
+    "HubInject",
     "HumanCliSurface",
     "HumanClient",
     "HumanScriptedSurface",
@@ -246,6 +258,7 @@ __all__ = (
     "SessionClosedError",
     "SessionError",
     "SessionInboxPolicy",
+    "SessionInject",
     "SessionMetadata",
     "SessionState",
     "SessionType",
@@ -257,6 +270,7 @@ __all__ = (
     "TaskError",
     "TaskExpiredError",
     "TaskFailedError",
+    "TaskInject",
     "TaskMetadata",
     "TaskPhase",
     "TaskSpec",

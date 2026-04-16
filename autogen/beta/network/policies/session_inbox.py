@@ -57,6 +57,20 @@ from ..envelope import EV_TEXT, Envelope
 SESSION_ID_VAR = "ag2.network.session_id"
 HUB_DEP = "ag2.network.hub"
 
+# Phase 6 — qualified DI keys for the live network handles. The
+# :class:`ActorClient` populates these in ``context.dependencies``
+# right before invoking ``actor.ask`` from a notify handler so that
+# (a) the auto-injected network verbs in
+# ``autogen/beta/network/client/verbs/`` can resolve the "current"
+# session / client / task without extra wiring, and (b) user-defined
+# tools can opt in via the pre-canned ``Annotated`` aliases in
+# ``autogen.beta.network.client.inject``. Outside a network turn the
+# keys are absent and dependent tools fall through to their declared
+# defaults (or raise ``MissingDependency`` if none).
+SESSION_DEP = "ag2.network.session"
+ACTOR_CLIENT_DEP = "ag2.network.actor_client"
+TASK_DEP = "ag2.network.task"
+
 
 def _envelope_to_model_event(
     envelope: Envelope, *, self_actor_id: str

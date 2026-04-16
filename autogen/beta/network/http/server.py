@@ -12,7 +12,7 @@ for Phase 6's task endpoints so clients see a stable shape today.
 Path                                              Verb   Purpose
 ================================================ =====  =====================================
 ``/v1/actors``                                    POST   Register (``identity`` + ``rule``)
-``/v1/actors``                                    GET    Discover (``?capability=``)
+``/v1/actors``                                    GET    Discover (``?capability=&query=``)
 ``/v1/actors/{id}``                               GET    Describe
 ``/v1/actors/{id}/rule``                          PUT    Replace rule            (3b)
 ``/v1/actors/{id}/activity``                      GET    Recent sessions + tasks (3b)
@@ -205,8 +205,9 @@ def build_app(hub: Hub) -> Starlette:
 
     async def find_actors(request: Request) -> Response:
         capability = request.query_params.get("capability")
+        query = request.query_params.get("query")
         try:
-            identities = await hub.find(capability=capability)
+            identities = await hub.find(capability=capability, query=query)
         except NetworkError as exc:
             return _respond_error(exc)
         return _respond(

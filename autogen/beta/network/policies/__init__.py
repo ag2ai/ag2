@@ -23,15 +23,21 @@ actor's LLM view:
 from __future__ import annotations
 
 from .session_inbox import (
-    PreviousOnlyInboxPolicy,
-    SessionInboxPolicy,
-    SESSION_ID_VAR,
+    ACTOR_CLIENT_DEP,
     HUB_DEP,
+    PreviousOnlyInboxPolicy,
+    SESSION_DEP,
+    SESSION_ID_VAR,
+    SessionInboxPolicy,
+    TASK_DEP,
 )
 
 __all__ = (
+    "ACTOR_CLIENT_DEP",
     "HUB_DEP",
     "PreviousOnlyInboxPolicy",
+    "SESSION_DEP",
     "SESSION_ID_VAR",
     "SessionInboxPolicy",
+    "TASK_DEP",
 )

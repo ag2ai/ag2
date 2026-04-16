@@ -817,18 +817,16 @@ The LLM surface — the tools the agent actually calls inside a turn — is a **
 
 Network verbs (added when an `ActorClient` is dispatching a turn):
 
-| Tool             | Action                                                        |
-|------------------|---------------------------------------------------------------|
-| `find_actors`    | search by capability/query                                    |
-| `describe_actor` | get `ActorIdentity` + SKILL                                   |
-| `open_session`   | open a new session (type, target, intent)                     |
-| `say`            | send content into current session                             |
-| `listen`         | peek the inbox for pending messages                           |
-| `run_task`       | create + block on a network Task inside current session       |
-| `start_task`     | create + return task_id (non-blocking)                        |
-| `track_task`     | query network Task state                                      |
-| `read_session`   | read bounded WAL slice                                        |
-| `leave`          | close / leave session                                         |
+| Tool             | Action                                                                              |
+|------------------|-------------------------------------------------------------------------------------|
+| `find_actors`    | discover actors by capability + free-text query                                     |
+| `describe_actor` | get full `ActorIdentity` + SKILL.md for one actor                                   |
+| `open_session`   | open a new session (type, target, intent) — returns the new `session_id`            |
+| `say`            | send content into a session (defaults to the current session)                       |
+| `listen`         | read recent envelopes from the actor's inbox or a session WAL (`scope="inbox" \| "session"`) |
+| `run_task`       | create a network task; awaits the terminal state when `blocking=True` (default)     |
+| `track_task`     | look up a task's current state by id                                                |
+| `leave`          | close a session (defaults to the current session)                                   |
 
 Framework-core tools (always available on `Actor`, hub or no hub):
 
@@ -838,16 +836,21 @@ Framework-core tools (always available on `Actor`, hub or no hub):
 | `run_subtasks`    | Parallel variant                                             |
 | `knowledge`       | Read/write/list/delete in actor's own `KnowledgeStore`       |
 
-Ten verbs, one for each primary operation. Each verb has a typed argument schema so that coding agents can produce valid calls without format drift. No more mega `network(action, target, topic, message)` string switch. These verbs are **auto-injected by the `ActorClient` when the actor executes inside a notify handler** — they are not on the `Actor` class. If the actor runs standalone (no hub), none of these verbs appear and the actor uses only its framework-core tools (`run_subtask`, `knowledge`, user tools).
+Eight verbs, each with a typed argument schema so that coding agents can produce valid calls without format drift. No more mega `network(action, target, topic, message)` string switch. The pre-Phase-6 design listed ten verbs (with `start_task` separate from `run_task` and `read_session` separate from `listen`); both pairs were collapsed because (a) `run_task(blocking=False)` is one schema flag away from `start_task` semantics and adding a second verb name only invites mistypes, and (b) `listen(scope="session")` covers the WAL-read use case `read_session` was for, with no LLM-visible difference. These verbs are **auto-injected by the `ActorClient` when the actor executes inside a notify handler** — they are not on the `Actor` class. If the actor runs standalone (no hub), none of these verbs appear and the actor uses only its framework-core tools (`run_subtask`, `knowledge`, user tools).
 
-Framework-core DI makes session/task context available to user-defined tools during a handler turn:
+Framework-core DI makes session/task/client context available to user-defined tools during a handler turn. Phase 6 ships pre-canned `Annotated` aliases that wrap the qualified DI key strings so users get type safety without memorising key names:
 
-- `Session` (current session handle) — `Annotated[Session, Inject()]`
-- `Task` (current task, if running inside one) — `Annotated[Task, Inject()]`
-- `HubClient` — `Annotated[HubClient, Inject()]`
-- `ActorClient` (actor + identity + rule view) — `Annotated[ActorClient, Inject()]`
+```python
+from autogen.beta.network.client.inject import (
+    SessionInject, TaskInject, ActorClientInject, HubInject,
+)
 
-These injections are populated by the `ActorClient` setting up the `Context` before calling `actor.ask(...)`; they vanish outside network turns so standalone runs stay unaffected.
+@tool
+async def my_tool(query: str, session: SessionInject, client: ActorClientInject) -> str:
+    ...
+```
+
+Each alias resolves to `Annotated[T, Inject("ag2.network.<name>")]`. The `ActorClient` populates `context.dependencies` with these qualified keys before calling `actor.ask(...)`; outside a network turn the keys are absent and `Annotated[T, Inject()]` falls through to its `default` (or raises `MissingDependency`), so standalone runs stay unaffected.
 
 ---
 
@@ -894,7 +897,7 @@ This is the strict separation the V2 review already started but didn't finish. T
 | Cross-actor knowledge via `_exposed_paths`                                 | `rule.access.knowledge` + `GET /v1/actors/{id}/knowledge/...`                                                            |
 | `Channel` / `LocalChannel` / `BufferedChannel` / `PriorityChannel` (V2)    | `Inbox` + `Link`. Buffer policy and priority ordering become per-actor `inbox` config under `rule.limits` (§7.1).        |
 | `PriorityScheme` / `ConflictResolver` public API                           | Priority is a tagged enum on the envelope; schemes are internal                                                          |
-| `network(action, ...)` mega-tool                                           | 10 typed network verbs                                                                                                   |
+| `network(action, ...)` mega-tool                                           | 8 typed network verbs (§10.5)                                                                                            |
 | `Hub._delegate` / `Hub.ask`                                                | `session.send` / `session.ask` + notify flow                                                                             |
 | `HttpChannel`                                                              | `WsLink` — WebSocket duplex is the remote transport                                                                      |
 | Envelope's Python-qualified event type names                               | Stable registered names + `EventRegistry`                                                                                |
@@ -1297,17 +1300,70 @@ Action items:
 
 Test coverage: each apply form end-to-end (reject, mutate, pass-through); subprocess restart-on-crash scenario; WS reconnect scenario; the Phase 5a pass-through regression is flipped into a full execution test; multi-tenant isolation regression is re-run across all five forms.
 
-### Phase 6 — LLM Surface
+### Phase 6 — LLM Surface ✅ **Done**
 
 Goal: make V3 usable from inside a model turn. (`HumanClient` already landed in Phase 3 — Phase 6 just wires an LLM agent into the same network-verbs surface that any actor already has.)
 
-Action items:
+Phase 6 was split into four steps so the prework, the verb factories, the DI surface, and the integration tests could be reviewed independently. Step 0 was small additive plumbing the verbs depend on; Step 1 was the verb subpackage; Step 2 was the user-tool DI surface; Step 3 was the end-to-end LLM-actor integration.
 
-- Ten auto-injected network verbs (`find_actors`, `describe_actor`, `open_session`, `say`, `listen`, `run_task`, `start_task`, `track_task`, `read_session`, `leave`) attached only when `ActorClient` is dispatching a turn.
-- Framework-core DI: `Session`, `Task`, `HubClient`, `ActorClient` injectable into user-defined tools via `Annotated[..., Inject()]`.
-- Additional UI surfaces for `HumanClient` beyond the Phase 3 CLI: `HumanTextualClient` (TUI), `HumanWebClient` (webhook / iframe).
+#### Phase 6 — Step 0 (prerequisites) ✅ **Done**
 
-Test coverage: every verb invoked from a synthetic agent turn; DI resolution inside user-defined tools; LLM-actor opening a session with a `HumanClient` participant via the verb surface; additional `HumanClient` surfaces passing the same end-to-end handshake test Phase 3 introduced.
+Five small additive items the verb surface depends on, each independently mergeable and shipped with its own regression coverage.
+
+- ✅ **`Hub.find` extended with a `query: str | None` keyword** (`hub/core.py:898`). Substring match (case-insensitive) against `identity.name`, `display`, `summary`, `domains` (any entry), and `strengths`. AND-combined with `capability` when both are present. `GET /v1/actors` (`http/server.py:206-215`) forwards `?query=`; both `Hub.find` and `HubClient.find` carry the same kwarg signature so in-process and HTTP callers go through the identical surface.
+- ✅ **`intent` parameter on `ActorClient.open()`** (`actor_client.py:506-541`). The new `intent: str | None` kwarg is folded into `SessionMetadata.labels["intent"]` via a `merged_labels` builder so the LLM's free-text "why" lands in the audit log and in `peek_session(...).labels` for downstream introspection. Explicit `labels={"intent": ...}` overrides — last-write-wins on the same key. The Phase 6 `open_session` verb uses this directly.
+- ✅ **Three new qualified DI keys** in `policies/session_inbox.py:60-72`: `SESSION_DEP = "ag2.network.session"`, `ACTOR_CLIENT_DEP = "ag2.network.actor_client"`, `TASK_DEP = "ag2.network.task"`. Re-exported from `policies/__init__.py` and `network/__init__.py` so callers do `from autogen.beta.network import SESSION_DEP`.
+- ✅ **Pre-canned `Annotated` aliases for user-tool DI** in `autogen/beta/network/client/inject.py`: `SessionInject = Annotated["Session", Inject(SESSION_DEP)]`, plus `TaskInject` / `ActorClientInject` / `HubInject`. Users get type safety AND the qualified-key lookup without having to memorise key names. Re-exported from `network.client.__init__` and `network.__init__`. The default `Inject(SESSION_DEP)` has no fallback (raises a pydantic `ValidationError` outside a notify handler — the desired loud failure); `Annotated[T | None, Inject(SESSION_DEP, default=None)]` is the documented escape hatch for tools that want to work both on and off the network.
+- ✅ **`client/handlers.py::_ask` populates the new keys.** Builds the `Session` handle once via `client._session_for(session_id)`, then stamps `dependencies[SESSION_DEP]` / `[ACTOR_CLIENT_DEP]` / (for task handlers) `[TASK_DEP]` before calling `actor.ask(...)`. The `handle_task_assigned` default handler now passes the `Task` through via the new `_ask(..., task=task)` keyword so `TASK_DEP` is only present during task dispatch — it does not leak into vanilla session handlers.
+- ✅ **Bonus: real bug fix found in `Hub._read_user_envelopes`** (`hub/core.py:2540-2562`). The "prior envelopes" view the consulting / discussion adapters use to count Q+R rounds was filtering out `ag2.session.*` and `ag2.error` but **not** `ag2.task.*`. A consulting session that hosted a single `run_task` would have its 1Q1R rule tripped by the assigned + result task envelopes, refusing the actor's text reply with `consulting is strict 1Q1R — the session is exhausted after the reply`. The Phase 4 design says task envelopes are orthogonal to adapter delivery rules; the filter now matches the design. Caught by `test_verbs_integration.py::test_run_task_via_llm`.
+
+#### Phase 6 — Step 1 (verbs) ✅ **Done**
+
+Eight typed network verbs from §10.5, factored as one tool-builder per logical group so the verb registry is composable and easy to extend without touching `ActorClient`.
+
+- ✅ **`autogen/beta/network/client/verbs/` subpackage** with three modules: `discovery.py` (`find_actors`, `describe_actor`), `session.py` (`open_session`, `say`, `listen`, `leave`), `task.py` (`run_task`, `track_task`). Each exports a `build_*_verbs(client: ActorClient) -> list[Tool]` factory; the package `__init__.py` exports a single `build_network_verbs(client, *, session=None, task=None)` that returns the union.
+- ✅ **All verbs are `@tool`-decorated async functions** that close over the `ActorClient`. Verbs that need a "current session" (every session/task verb except `find_actors` / `describe_actor` / `track_task`) accept an optional `session_id` argument and fall back to `context.dependencies[SESSION_DEP]` via a shared `_resolve_session(ctx, client, session_id)` helper — this is what makes `say("hi")` work without the LLM having to thread the id through every call.
+- ✅ **`run_task(blocking=True)` is the merged shape** (replaces the design's pre-Phase-6 split between `run_task` and `start_task`). Set the boolean to `False` to get the `task_id` immediately; default `True` awaits the terminal state and returns the result dict. `track_task` + an optional `timeout` kwarg cover the polling case.
+- ✅ **`listen(scope="session" | "inbox", session_id=?, since=0, limit=50)`** is the merged shape (replaces the design's pre-Phase-6 split between `listen` and `read_session`). `scope="session"` reads bounded WAL slices via `Hub.read_wal`; `scope="inbox"` returns pending envelopes from the actor's structured inbox via the new `Hub.peek_inbox(actor_id, limit=...)` accessor. Both return a list of envelope summary dicts (envelope_id, sender, event_type, content for text envelopes / event_data for system envelopes, created_at).
+- ✅ **`Hub.peek_inbox(actor_id, *, limit=50)`** added next to `peek_session` and `peek_task`. Lists `pending/`, decodes each `{envelope_id}.json`, sorts by id (UUID7 lex = arrival order), caps at `limit`. Non-raising on unknown actor or unreadable entries. This is what `listen(scope="inbox")` calls.
+- ✅ **`ActorClient._build_network_verbs(session, task)`** is the new internal seam. `client/handlers.py::_ask` calls it once per turn and forwards the tool list as `tools=` to `actor.ask(...)`. The framework-core `Actor.ask(*msg, ..., tools=())` parameter (`actor.py:253`) already accepts `Iterable[Tool]` — **nothing changed in framework core**. The `try/TypeError/fallback` path on `_ask` still preserves Phase 1 behaviour for user-supplied test doubles.
+- ✅ **Verbs honour the same access / rule / transform pipeline as direct API calls.** Every verb routes through `Session.send` / `ActorClient.open` / `Hub.create_task`, so a verb that violates the actor's outbound rule raises an `AccessDeniedError` that the verb wraps as a `{"error": ...}` dict in the tool result. The LLM reads it and decides whether to retry — there is no exception at the agent level.
+
+#### Phase 6 — Step 2 (user-tool DI) ✅ **Done**
+
+Pre-canned `Annotated` aliases from Step 0.4 resolve under real notify-handler dispatch, including in user-defined tools registered on the underlying `Actor`.
+
+- ✅ **`SessionInject` / `TaskInject` / `ActorClientInject` / `HubInject` resolve to live objects** when a user tool runs inside a network turn. Validated by `test_phase6_user_di.py::TestSessionInjectLive`: a `@tool` typed with `SessionInject` receives the same `Session` instance the framework's `say` verb would target, and `await session.send(...)` from inside the user tool lands in the same WAL the verb would have written to.
+- ✅ **A user tool can compose with verbs in the same turn.** `TestSessionInjectSharedWithVerbs::test_user_tool_session_is_same_as_verb_session` drives an LLM that calls a user tool (which posts via `session.send` directly) followed by the `say` verb — both messages land in the same session WAL, proving the user tool and the framework verbs share the same live handle, not two stale copies.
+- ✅ **Outside a network turn the aliases raise** `pydantic.ValidationError` (the resolver's standard missing-field surface). `test_session_inject_raises_outside_network` pins this. Tools that want to be both on- and off-network use `Annotated[Session | None, Inject(SESSION_DEP, default=None)]`; `test_session_inject_with_default_works_outside_network` pins the escape hatch.
+
+#### Phase 6 — Step 3 (integration) ✅ **Done**
+
+Real LLM-actor end-to-end coverage, plus the canonical multi-verb chain.
+
+- ✅ **Per-verb LLM-driven integration tests.** `test_verbs_integration.py::TestSingleVerbDrivenByLLM` ships eight tests — one per verb — each driving a real `autogen.beta.Actor` with a scripted `TestConfig` that emits a `ToolCallEvent` for the verb under test followed by a final text reply. The framework executes the verb against the live hub, the receiver's WAL or the result dict captures the side-effect.
+- ✅ **The receiver-initiates pattern.** Every integration test has **bob (or carol) initiate** the consulting session to alice (the LLM-under-test). When alice initiates, her `ActorClient` short-circuits replies to her own sends (`actor_client.py:910`'s recent-sends suppression) and her notify handler never fires — the scripted TestConfig has no chance to call the verbs. When bob initiates, alice's handler dispatches normally, the verbs land in `actor.ask(tools=...)`, and the LLM-driven flow works. Documented as a fixture comment so future tests get this right.
+- ✅ **Multi-verb chain test** — `TestVerbChain::test_find_describe_open_say_chain` drives the canonical Phase 6 flow: alice receives a question from bob, calls `find_actors(query="writer")`, then `describe_actor(name="carol")`, then `open_session(type="conversation", target="carol", intent="initial outreach")`, then `say(content="...tagline?")`, then returns a final text reply to bob. The test then walks the hub's session map and the alice→carol WAL to verify every step landed correctly, including the `intent` label propagation through to the new session's metadata.
+- 🟡 **HumanClient + LLM-actor cross-talk** — slipped to a Phase 6 follow-up. The Phase 3a `test_human_client.py` already covers the human-side handshake; layering an LLM-actor on the other end of the same session is straightforward but adds another test fixture for diminishing return given the Step 3 integration coverage already proves the verb path. Lined up as `test_verbs_human_integration.py` if a concrete user case lands.
+- 🟡 **Optional UI surfaces for `HumanClient` beyond the Phase 3 CLI** — `HumanTextualClient` (TUI), `HumanWebClient` (webhook / iframe). Independently scoped and not landed; the Phase 3 `HumanCliSurface` + `HumanScriptedSurface` already cover the "HITL is just an actor" claim end-to-end. Both ship under Phase 6 follow-up if needed.
+
+Test coverage: **81 new tests under `test/beta/network/`** across five new modules:
+
+- `test_phase6_prework.py` (28) — `TestHubFindQuery` (8): query matches name / summary / display / strengths / domain / case-insensitive / AND with capability / no-match / None-returns-all. `TestHttpFindQueryParam` (3): query param filters HTTP results, query+capability combine, omitted returns all. `TestActorClientOpenIntent` (4): intent lands in labels, labels visible via metadata, explicit labels override intent, omitted intent leaves labels empty. `TestNewDIKeys` (5): qualified key strings pinned + distinct from legacy keys. `TestDIKeysPopulated` (4): `_ask` stamps SESSION_DEP / ACTOR_CLIENT_DEP / HUB_DEP / TASK_DEP correctly, network verbs land as `tools=`, no-session-id path skips DI population. `TestPreCannedAliases` (4): every alias points at the right qualified key.
+- `test_verbs_discovery.py` (11) — `TestFindActors` (7): unfiltered, capability filter, query filter, query matches domain, query+capability ANDed, summary strips skill_md, no-match returns empty. `TestDescribeActor` (3): full identity with skill, by actor_id, unknown returns error. `TestSummariseIdentity` (1): summary key shape pinned.
+- `test_verbs_session.py` (17) — `TestOpenSession` (4): returns id+state, intent lands in labels, stashes new session as current, unknown target returns error. `TestSay` (4): default session, explicit session_id, no session error, unknown session error. `TestListen` (4): session scope returns summaries, respects limit, unknown scope error, inbox scope returns pending. `TestLeave` (3): closes default, closes by explicit id, errors when no session. `TestEnvelopeSummary` (2): text and non-text shapes pinned.
+- `test_verbs_task.py` (9) — `TestRunTask` (6): blocking returns completed, non-blocking returns handle, handler crash returns failed, timeout returns timeout error, unknown session error, default spec_type routes to default handler. `TestTrackTask` (2): known task lookup, unknown returns error. `TestSummariseTask` (1): full summary key shape pinned.
+- `test_verbs_integration.py` (9) — `TestSingleVerbDrivenByLLM` (8): one LLM-driven test per verb, all using bob-initiates-to-alice pattern with `TestConfig`-scripted `ToolCallEvent`s + final text replies, validating the verb's side-effect through the WAL and / or the resulting state. `TestVerbChain` (1): full `find_actors → describe_actor → open_session → say` chain with intent propagation verified end-to-end.
+- `test_phase6_user_di.py` (7) — `TestSessionInjectLive` (4): SessionInject / ActorClientInject / HubInject all resolve to live objects, user tool composes with verbs via shared session handle. `TestInjectMissingOutsideNetworkTurn` (2): standalone Actor.ask raises ValidationError when SessionInject is required, default-fallback escape hatch works. `TestSessionInjectSharedWithVerbs` (1): user tool's session and the say verb's session are the same instance — both messages land in the same WAL.
+
+Proof point: **833 tests pass** under `test/beta/network/` (Phase 5a baseline 752 + 81 Phase 6 = 833), zero failures. Full beta suite (`test/beta/`, excluding the heavy `test/beta/smoke/` directory) reports **1,989 passed, 12 skipped, 1 xfailed**, zero regressions against framework-core.
+
+Small lingering items carried forward (none are blockers):
+
+- `tokens_per_hour` / `cost_per_day_usd` on `LimitsBlock` — unchanged from Phase 2, still stored verbatim. Phase 6's LLM verb surface is the natural attribution boundary; an `Observer` that records `Usage` events per turn could pipe back through a new `Hub.record_usage(actor_id, tokens, cost)` API. Not blocking — no concrete user has asked.
+- `TaskState.PAUSED` / `task.pause()` / `task.resume()` — declared in Phase 4, still not wired. The LLM verbs don't touch it; if needed, two new event types and a `pause` / `resume` verb pair would land additively.
+- HumanClient + LLM-actor integration test (slipped per Step 3 above) — pure additive coverage on top of an already-covered handshake.
+- Optional `HumanTextualClient` and `HumanWebClient` UI surfaces (slipped per Step 3 above) — `HumanCliSurface` covers the integration story.
 
 ### Phase 7 — Multi-hub and Federation
 

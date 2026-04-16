@@ -182,18 +182,28 @@ class TestSpecialistDelegation:
             ),
             ModelResponse(ModelMessage("Done.")),
         )
+
+        # Subtask streams are isolated (not persisted to parent storage),
+        # so capture the subtask stream via a factory to verify the
+        # context string made it into the subtask's ModelRequest.
+        captured: list[MemoryStream] = []
+
+        def factory(_agent, _ctx):
+            s = MemoryStream()
+            captured.append(s)
+            return s
+
         coordinator = Actor(
             "coordinator",
             config=coordinator_config,
-            tools=[researcher.as_tool(description="Research")],
+            tools=[researcher.as_tool(description="Research", stream=factory)],
         )
 
         parent_stream = MemoryStream()
         await coordinator.ask("Research X", stream=parent_stream)
 
-        events = list(await parent_stream.history.get_events())
-        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
+        assert len(captured) == 1
+        sub_events = list(await captured[0].history.get_events())
         request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
         assert "Focus on recent papers" in request.inputs[0].content
 
@@ -216,10 +226,21 @@ class TestSpecialistDelegation:
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Define quantum"}'),
             ModelResponse(ModelMessage("Quantum is important.")),
         )
+
+        # Capture the subtask stream so we can verify the subtask used
+        # its own tools — subtask events no longer land in parent
+        # storage after the isolation fix in run_task.py.
+        captured: list[MemoryStream] = []
+
+        def factory(_agent, _ctx):
+            s = MemoryStream()
+            captured.append(s)
+            return s
+
         coordinator = Actor(
             "coordinator",
             config=coordinator_config,
-            tools=[researcher.as_tool(description="Research with lookup")],
+            tools=[researcher.as_tool(description="Research with lookup", stream=factory)],
         )
 
         parent_stream = MemoryStream()
@@ -227,9 +248,8 @@ class TestSpecialistDelegation:
 
         assert reply.body == "Quantum is important."
 
-        events = list(await parent_stream.history.get_events())
-        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
+        assert len(captured) == 1
+        sub_events = list(await captured[0].history.get_events())
         tool_calls = [e for e in sub_events if isinstance(e, ToolCallEvent)]
         assert any(tc.name == "lookup" for tc in tool_calls)
 
@@ -326,7 +346,12 @@ class TestLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_completed_has_stream_reference(self):
-        """TaskCompleted.task_stream points to the sub-task's stream."""
+        """TaskCompleted.task_stream points to the sub-task's stream.
+
+        Subtasks have isolated in-memory streams (not persisted to the
+        parent storage), so we verify via a captured factory rather
+        than trying to load from parent storage.
+        """
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
         worker = Actor("worker", config=worker_config)
 
@@ -335,11 +360,18 @@ class TestLifecycleEvents:
             ModelResponse(ModelMessage("OK.")),
         )
 
+        captured: list[MemoryStream] = []
+
+        def factory(_agent, _ctx):
+            s = MemoryStream()
+            captured.append(s)
+            return s
+
         parent_stream = MemoryStream()
         coordinator = Actor(
             "coordinator",
             config=coordinator_config,
-            tools=[worker.as_tool(description="Worker")],
+            tools=[worker.as_tool(description="Worker", stream=factory)],
         )
 
         await coordinator.ask("Go", stream=parent_stream)
@@ -348,7 +380,10 @@ class TestLifecycleEvents:
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
 
         assert completed.task_stream is not None
-        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
+        assert len(captured) == 1
+        # The referenced stream id matches the captured subtask stream
+        assert completed.task_stream == captured[0].id
+        sub_events = list(await captured[0].history.get_events())
         assert len(sub_events) > 0
         assert any(isinstance(e, ModelRequest) for e in sub_events)
         assert any(isinstance(e, ModelResponse) for e in sub_events)
@@ -452,7 +487,13 @@ class TestStreamFactory:
 
     @pytest.mark.asyncio
     async def test_defaults_to_memory_stream(self):
-        """Without stream factory, sub-tasks use MemoryStream."""
+        """Without stream factory, sub-tasks use an isolated MemoryStream.
+
+        The isolation is intentional: subtasks should not share storage
+        with the parent to prevent their in-flight histories from
+        contaminating each other (e.g., subtask loading parent's
+        unresolved tool_use and vice versa).
+        """
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
         worker = Actor("worker", config=worker_config)
 
@@ -472,9 +513,12 @@ class TestStreamFactory:
 
         events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
+        # Verify a task_stream id was assigned (the subtask did run to
+        # completion). The subtask's events live in an in-memory stream
+        # not accessible through the parent's storage — that's by
+        # design, so we don't assert anything about their retrieval.
         assert completed.task_stream is not None
-        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
-        assert len(sub_events) > 0
+        assert completed.result == "Done."
 
 
 class TestVariablesPropagation:
