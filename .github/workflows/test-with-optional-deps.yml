@@ -141,9 +141,10 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Install playwright
-        if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
+        if: matrix.optional-dependencies == 'crawl4ai'
+        shell: bash
         run: |
-          playwright install
+          python -m playwright install
       - name: Test import all submodules
         shell: bash
         run: |

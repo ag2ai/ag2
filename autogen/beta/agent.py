@@ -502,8 +502,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -519,8 +518,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -536,8 +534,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,

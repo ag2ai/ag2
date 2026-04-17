@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import atexit
+import os
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -10,12 +11,14 @@ from pathlib import Path
 
 from autogen.beta.tools.shell.environment.base import ShellEnvironment
 from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
-from autogen.beta.tools.toolkits.skills.local_skills.loader import SkillLoader
-from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.local_skills.loader import SkillLoader
+from autogen.beta.tools.skills.skill_types import SkillMetadata
+
+from .protocol import SkillRuntime
 
 
 @dataclass
-class LocalRuntime:
+class LocalRuntime(SkillRuntime):
     """Local filesystem storage and subprocess execution.
 
     Args:
@@ -44,12 +47,12 @@ class LocalRuntime:
         LocalRuntime("./my-skills", extra_paths=["./shared-skills"])
     """
 
-    dir: str | Path | None = None
+    dir: str | os.PathLike[str] | None = None
     cleanup: bool = False
     timeout: float = 60
     max_output: int = 100_000
     blocked: list[str] = field(default_factory=list)
-    extra_paths: Sequence[str | Path] | None = None
+    extra_paths: Sequence[str | os.PathLike[str]] | None = None
 
     def __post_init__(self) -> None:
         self._install_dir = Path(self.dir) if self.dir is not None else Path(".agents/skills")
@@ -78,6 +81,12 @@ class LocalRuntime:
 
     def invalidate(self) -> None:
         self._loader.invalidate()
+
+    @classmethod
+    def ensure_runtime(cls, runtime: SkillRuntime | str | os.PathLike[str]) -> SkillRuntime:
+        if isinstance(runtime, SkillRuntime):
+            return runtime
+        return cls(dir=runtime)
 
     def ensure_storage(self) -> None:
         self._install_dir.mkdir(parents=True, exist_ok=True)

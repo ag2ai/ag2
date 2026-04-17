@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 import shlex
 import stat
 from collections.abc import Iterable
@@ -13,7 +14,7 @@ from pydantic import Field
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
 
 
 class SkillsToolkit(Toolkit):
@@ -45,11 +46,14 @@ class SkillsToolkit(Toolkit):
 
     def __init__(
         self,
-        runtime: SkillRuntime | None = None,
+        runtime: SkillRuntime | str | os.PathLike[str] | None = None,
         *,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
+        if runtime is not None:
+            _runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
+        else:
+            _runtime = LocalRuntime()
 
         self.list_skills = _make_list_tool(_runtime)
         self.load_skill = _make_load_tool(_runtime)

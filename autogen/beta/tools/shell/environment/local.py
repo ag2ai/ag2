@@ -69,7 +69,7 @@ class LocalShellEnvironment(ShellEnvironment):
 
     def __init__(
         self,
-        path: str | Path | None = None,
+        path: str | os.PathLike[str] | None = None,
         *,
         cleanup: bool | None = None,
         allowed: list[str] | None = None,
@@ -101,6 +101,12 @@ class LocalShellEnvironment(ShellEnvironment):
         self._env = env
         self._timeout = timeout
         self._max_output = max_output
+
+    @classmethod
+    def ensure_env(cls, env: ShellEnvironment | str | os.PathLike[str]) -> ShellEnvironment:
+        if isinstance(env, ShellEnvironment):
+            return env
+        return cls(env)
 
     @property
     def workdir(self) -> Path:
