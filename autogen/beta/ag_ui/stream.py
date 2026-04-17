@@ -283,7 +283,18 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
     input_buffer = []
     for m in command.incoming.messages:
         if m.role == "user":
-            input_buffer.append(events.TextInput(m.content))
+            content = m.content
+            if isinstance(content, str):
+                input_buffer.append(events.TextInput(content))
+                continue
+
+            for c in content:
+                if c.type == "text":
+                    input_buffer.append(events.TextInput(c.text))
+                else:
+                    # TODO: support binary inputs
+                    raise ValueError("unsupported input type")
+
             continue
 
         if input_buffer:

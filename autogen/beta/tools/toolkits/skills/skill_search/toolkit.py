@@ -76,14 +76,14 @@ class SkillSearchToolkit(SkillsToolkit):
 
     def __init__(
         self,
-        *,
         runtime: SkillRuntime | None = None,
+        *,
         client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
 
-        super().__init__(runtime)
+        super().__init__(runtime, middleware=middleware)
 
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
