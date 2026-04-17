@@ -12,7 +12,8 @@ from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools import LocalShellEnvironment, LocalShellTool
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
 from autogen.beta.tools.shell.environment.base import check_ignore, matches
 
 
@@ -101,12 +102,12 @@ class TestLocalShellToolConstruction:
 
     def test_explicit_path_created(self, tmp_path: Path) -> None:
         target = tmp_path / "workspace"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=target))
+        shell = LocalShellTool(environment=target)
         assert shell.workdir == target
         assert target.exists()
 
     def test_workdir_is_readonly_property(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = LocalShellTool(environment=tmp_path)
         with pytest.raises(AttributeError):
             shell.workdir = tmp_path  # type: ignore[misc]
 

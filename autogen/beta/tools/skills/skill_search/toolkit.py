@@ -2,14 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections.abc import Iterable
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.toolkits.skills.local_skills import SkillsToolkit
-from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.skills.local_skills import SkillsToolkit
+from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -55,7 +56,7 @@ class SkillSearchToolkit(SkillsToolkit):
         from autogen.beta.tools import SkillSearchToolkit, SkillsClientConfig, LocalRuntime
 
         skills = SkillSearchToolkit(
-            LocalRuntime(
+            runtime=LocalRuntime(
                 dir="./my-skills",
                 extra_paths=["./extra-skills"],
                 cleanup=True,
@@ -73,28 +74,30 @@ class SkillSearchToolkit(SkillsToolkit):
     search_skills: FunctionTool
     install_skill: FunctionTool
     remove_skill: FunctionTool
-    list_skills: FunctionTool
-    load_skill: FunctionTool
-    run_skill_script: FunctionTool
 
     def __init__(
         self,
-        runtime: SkillRuntime | None = None,
+        runtime: SkillRuntime | str | os.PathLike[str] | None = None,
         *,
         client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
+        if runtime is not None:
+            _runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
+        else:
+            _runtime = LocalRuntime()
+
+        # call SkillsToolkit constructor to initialize inherited tools
+        super().__init__(runtime)
 
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
-
-        super().__init__(runtime)
 
         self.search_skills = _make_search_tool(_client)
         self.install_skill = _make_install_tool(_client, lock, _runtime)
         self.remove_skill = _make_remove_tool(_runtime, lock)
 
+        # call Toolkit constructor
         super(SkillsToolkit, self).__init__(
             self.search_skills,
             self.install_skill,

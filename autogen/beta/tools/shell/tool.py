@@ -50,16 +50,16 @@ class LocalShellTool(Tool):
 
     def __init__(
         self,
-        environment: ShellEnvironment | PathLike[str] | str | None = None,
+        environment: ShellEnvironment | str | PathLike[str] | None = None,
         name: str = "run_shell_command",
         *,
         description: str = "Execute a shell command in the working directory: {workdir}",
         middleware: Iterable["ToolMiddleware"] = (),
     ) -> None:
-        if isinstance(environment, (str, PathLike)):
-            env = LocalShellEnvironment(path=environment)
+        if environment:
+            env: ShellEnvironment = LocalShellEnvironment.ensure_env(environment)
         else:
-            env = environment if environment is not None else LocalShellEnvironment()
+            env = LocalShellEnvironment()
 
         self._tool: FunctionTool = tool(
             env.run,
