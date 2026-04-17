@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections.abc import Iterable
 from contextlib import ExitStack
-from os import PathLike
 from pathlib import Path
 
 from autogen.beta.annotations import Context
@@ -50,7 +50,7 @@ class LocalShellTool(Tool):
 
     def __init__(
         self,
-        environment: ShellEnvironment | str | PathLike[str] | None = None,
+        environment: ShellEnvironment | str | os.PathLike[str] | None = None,
         name: str = "run_shell_command",
         *,
         description: str = "Execute a shell command in the working directory: {workdir}",
