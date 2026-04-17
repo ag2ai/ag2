@@ -2,13 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 import re
 from pathlib import Path
 
 import yaml
 
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.skill_types import SkillMetadata
 
 
 def parse_frontmatter(text: str) -> dict[str, object]:
@@ -50,11 +51,12 @@ class SkillLoader:
 
     _SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-    def __init__(self, *paths: str | Path, strict: bool = True) -> None:
-        if paths:
-            self._paths = [Path(p) for p in paths]
-        else:
-            self._paths = list(self.DEFAULT_PATHS)
+    def __init__(
+        self,
+        *paths: str | os.PathLike[str],
+        strict: bool = True,
+    ) -> None:
+        self._paths = [Path(p) for p in (paths or self.DEFAULT_PATHS)]
         self._strict = strict
         self._cache: dict[str, SkillMetadata] | None = None
 
