@@ -243,7 +243,7 @@ async def test_tool_exposes_three_functions(skill_tree: Path, context: Conversat
 
 @pytest.mark.asyncio
 async def test_run_skill_script_schema(skill_tree: Path, context: ConversationContext) -> None:
-    run_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).run_skill_script
+    run_tool = SkillsToolkit(LocalRuntime(dir=skill_tree)).run_skill_script()
 
     [schema] = await run_tool.schemas(context)
 
