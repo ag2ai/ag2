@@ -10,7 +10,7 @@ import pytest
 from fast_depends import Depends
 from pydantic import BaseModel
 
-from autogen.beta import Context, events, tool
+from autogen.beta import Agent, Context, TextInput, ToolResult, events, testing, tool
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
+async def test_return_model(async_mock: AsyncMock) -> None:
     class Result(BaseModel):
         a: str
 
@@ -91,7 +91,21 @@ async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None:
+async def test_return_result(async_mock: AsyncMock) -> None:
+    @tool
+    def my_func() -> ToolResult:
+        return ToolResult("Hi!")
+
+    result = await my_func(
+        events.ToolCallEvent(name="my_func"),
+        context=Context(async_mock),
+    )
+
+    assert result.content == '"Hi!"'
+
+
+@pytest.mark.asyncio
+async def test_tool_with_depends(async_mock: AsyncMock) -> None:
     def dep(a: str) -> str:
         return a * 2
 
@@ -111,7 +125,7 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
 
 
 @pytest.mark.asyncio
-async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
+async def test_tool_get_context(async_mock: AsyncMock) -> None:
     @tool
     def my_func(a: str, context: Context) -> str:
         return "".join(context.prompt)
@@ -128,7 +142,7 @@ async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: MagicMock) -> None:
+async def test_tool_get_context_by_random_name(async_mock: AsyncMock) -> None:
     @tool
     def my_func(a: str, c: Context) -> str:
         return "".join(c.prompt)
@@ -142,3 +156,24 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: Magi
     )
 
     assert result.content == '"1"'
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="TODO: Refactor ToolResultEvent")
+async def test_tool_return_input() -> None:
+    @tool
+    def my_func() -> TextInput:
+        return TextInput("Hi!")
+
+    tracking = testing.TrackingConfig(
+        testing.TestConfig(
+            events.ToolCallEvent(name="my_func"),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[my_func])
+    await agent.ask("Call my func")
+
+    tool_result_msg: events.ToolResultEvent = tracking.mock.call_args_list[1][0][0].results[0]
+    print(tool_result_msg)
+    assert tool_result_msg.content == '"Hi!"'

@@ -46,6 +46,8 @@ class ModelMessage(ModelEvent):
 
     content: str = Field(kw_only=False)
 
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
 
 @dataclass(frozen=True, slots=True)
 class BinaryResult:
@@ -71,11 +73,20 @@ class ModelResponse(ModelEvent):
     finish_reason: str | None = Field(default=None, compare=False)
 
     @property
+    def metadata(self) -> dict[str, Any]:
+        return self.message.metadata if self.message else {}
+
+    @property
     def content(self) -> str | None:
         return self.message.content if self.message else None
 
     def __repr__(self) -> str:
-        text = f"content={getattr(self.message, 'content', 'None')}"
+        if self.message:
+            text = f"content={self.message.content}"
+            if self.message.metadata:
+                text += f", metadata={self.message.metadata}"
+        else:
+            text = "content=None"
         if self.tool_calls:
             text += f", tool_calls={self.tool_calls}"
         if self.usage:

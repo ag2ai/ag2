@@ -13,14 +13,22 @@ from autogen.beta import Agent, Context
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import FilesystemToolkit
+from autogen.beta.tools.toolkits.filesystem import _resolve_path
 
 
-@pytest.mark.asyncio
-async def test_path_traversal_blocked(tmp_path: Path) -> None:
-    from autogen.beta.tools.toolkits.filesystem import _resolve_path
-
+def test_path_traversal_blocked(tmp_path: Path) -> None:
     with pytest.raises(PermissionError, match="escapes base directory"):
         _resolve_path(tmp_path, "../../etc/passwd")
+
+
+def test_absolute_path_blocked(tmp_path: Path) -> None:
+    with pytest.raises(PermissionError, match="escapes base directory"):
+        _resolve_path(tmp_path, "/etc/passwd")
+
+
+def test_allow_only_dir() -> None:
+    with pytest.raises(ValueError, match="is not a directory"):
+        FilesystemToolkit("file.txt")
 
 
 @pytest.mark.asyncio
@@ -140,13 +148,34 @@ async def test_update_file(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_delete_file(tmp_path: Path) -> None:
-    target = tmp_path / "to_delete.txt"
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    target = sub / "to_delete.txt"
     target.write_text("bye")
 
     toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
-        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "to_delete.txt"})),
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "sub/to_delete.txt"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
+
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_delete_directory(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    target = sub / "to_delete.txt"
+    target.write_text("bye")
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "sub/"})),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])
@@ -176,7 +205,7 @@ async def test_find_files(tmp_path: Path) -> None:
     # |   |-- sub2
     # |       |-- e.py
 
-    toolkit = FilesystemToolkit(base_path=tmp_path)
+    toolkit = FilesystemToolkit()
 
     tracking = TrackingConfig(
         TestConfig(
@@ -186,7 +215,7 @@ async def test_find_files(tmp_path: Path) -> None:
             "done",
         )
     )
-    agent = Agent("", config=tracking, tools=[toolkit])
+    agent = Agent("", config=tracking, tools=[toolkit.find_files(tmp_path)])
     await agent.ask("find py files")
 
     # "**/*.py" — recursive, matches .py files at any depth

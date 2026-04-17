@@ -7,11 +7,11 @@ from dirty_equals import IsPartialDict
 
 from autogen.beta.config.ollama.mappers import convert_messages
 from autogen.beta.events import (
-    AudioUrlInput,
+    AudioInput,
     BinaryInput,
-    DocumentUrlInput,
+    DocumentInput,
     FileIdInput,
-    ImageUrlInput,
+    ImageInput,
     ModelRequest,
     ModelResponse,
 )
@@ -49,13 +49,18 @@ class TestConvertMessagesEmptyArguments:
 
 
 def test_audio_url_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*ollama"):
-        convert_messages([], [ModelRequest([AudioUrlInput(url="https://example.com/audio.wav")])])
+    with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
+        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])])
 
 
 def test_image_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="ImageUrlInput.*ollama"):
-        convert_messages([], [ModelRequest([ImageUrlInput(url="https://example.com/img.png")])])
+    with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
+        convert_messages([], [ModelRequest([ImageInput(url="https://example.com/img.png")])])
+
+
+def test_document_url_input_raises() -> None:
+    with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
+        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])])
 
 
 def test_file_id_input_raises() -> None:
@@ -66,8 +71,3 @@ def test_file_id_input_raises() -> None:
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*ollama"):
         convert_messages([], [ModelRequest([BinaryInput(data=b"data", media_type="image/png")])])
-
-
-def test_document_url_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*ollama"):
-        convert_messages([], [ModelRequest([DocumentUrlInput(url="https://example.com/doc.pdf")])])
