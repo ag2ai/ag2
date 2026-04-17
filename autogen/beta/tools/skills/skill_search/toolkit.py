@@ -4,10 +4,13 @@
 
 import os
 from collections.abc import Iterable
+from typing import Annotated
+
+from pydantic import Field
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
-from autogen.beta.tools.final import tool
+from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.skills.local_skills import SkillsToolkit
 from autogen.beta.tools.skills.runtime import LocalRuntime, SkillRuntime
@@ -66,14 +69,12 @@ class SkillSearchToolkit(SkillsToolkit):
             client=SkillsClientConfig(github_token="ghp_...", proxy="http://proxy:8080"),
         )
 
-    Individual tools are available as attributes::
+    Individual tools are available as methods::
 
-        agent = Agent("a", config=config, tools=[skills.search_skills, skills.install_skill])
+        agent = Agent("a", config=config, tools=[skills.search_skills(), skills.install_skill()])
     """
 
-    search_skills: FunctionTool
-    install_skill: FunctionTool
-    remove_skill: FunctionTool
+    __slots__ = ("_client", "_lock")
 
     def __init__(
         self,
@@ -83,116 +84,136 @@ class SkillSearchToolkit(SkillsToolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         if runtime is not None:
-            _runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
+            self._runtime: SkillRuntime = LocalRuntime.ensure_runtime(runtime)
         else:
-            _runtime = LocalRuntime()
+            self._runtime = LocalRuntime()
 
-        # call SkillsToolkit constructor to initialize inherited tools
-        super().__init__(runtime)
+        self._client = SkillsClient(client)
+        self._lock = SkillsLock(self._runtime.lock_dir / "skills-lock.json")
 
-        _client = SkillsClient(client)
-        lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
-
-        self.search_skills = _make_search_tool(_client)
-        self.install_skill = _make_install_tool(_client, lock, _runtime)
-        self.remove_skill = _make_remove_tool(_runtime, lock)
-
-        # call Toolkit constructor
-        super(SkillsToolkit, self).__init__(
-            self.search_skills,
-            self.install_skill,
-            self.remove_skill,
-            *self.tools,
+        Toolkit.__init__(
+            self,
+            self.list_skills(),
+            self.load_skill(),
+            self.run_skill_script(),
+            self.search_skills(),
+            self.install_skill(),
+            self.remove_skill(),
             name="local_skills_toolkit",
             middleware=middleware,
         )
 
+    def search_skills(
+        self,
+        *,
+        name: str = "search_skills",
+        description: str = "Search for skills on skills.sh. Returns a formatted list of matching skills with ready-to-use install commands.",
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        client = self._client
 
-def _make_search_tool(client: SkillsClient) -> FunctionTool:
-    @tool
-    async def search_skills(query: str, limit: int = 10) -> str:
-        """Search for skills on skills.sh.
+        @tool(name=name, description=description, middleware=middleware)
+        async def _search_skills(
+            query: Annotated[
+                str,
+                Field(description='Search query (e.g. "react performance").'),
+            ],
+            limit: int = Field(
+                default=10,
+                description="Maximum number of results to return.",
+            ),
+        ) -> str:
+            try:
+                skills = await client.search(query, limit)
+            except Exception as e:
+                return f"Error searching skills.sh: {e}"
 
-        Returns a formatted list of matching skills with ready-to-use install commands.
+            if not skills:
+                return f'No skills found for "{query}".'
 
-        Args:
-            query: Search query (e.g. ``"react performance"``).
-            limit: Maximum number of results to return (default: 10).
-        """
-        try:
-            skills = await client.search(query, limit)
-        except Exception as e:
-            return f"Error searching skills.sh: {e}"
+            lines: list[str] = [f'Found {len(skills)} skill(s) for "{query}":\n']
+            for i, s in enumerate(skills, 1):
+                skill_name = s.get("name") or s.get("skillId") or "unknown"
+                installs: int = s.get("installs", 0)
+                skill_id_val: str = s.get("skillId") or ""
+                source: str = s.get("source") or ""
+                install_id = f"{source}/{skill_id_val}" if skill_id_val and source else source or skill_id_val
+                lines.append(f"{i}. {skill_name} ({installs:,} installs)")
+                lines.append(f'   \u2192 install_skill("{install_id}")')
+                lines.append("")
+            return "\n".join(lines)
 
-        if not skills:
-            return f'No skills found for "{query}".'
+        return _search_skills
 
-        lines: list[str] = [f'Found {len(skills)} skill(s) for "{query}":\n']
-        for i, s in enumerate(skills, 1):
-            name = s.get("name") or s.get("skillId") or "unknown"
-            installs: int = s.get("installs", 0)
-            skill_id_val: str = s.get("skillId") or ""
-            source: str = s.get("source") or ""
-            install_id = f"{source}/{skill_id_val}" if skill_id_val and source else source or skill_id_val
-            lines.append(f"{i}. {name} ({installs:,} installs)")
-            lines.append(f'   \u2192 install_skill("{install_id}")')
-            lines.append("")
-        return "\n".join(lines)
+    def install_skill(
+        self,
+        *,
+        name: str = "install_skill",
+        description: str = "Download and install a skill from skills.sh.",
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        client = self._client
+        lock = self._lock
+        runtime = self._runtime
 
-    return search_skills
+        @tool(name=name, description=description, middleware=middleware)
+        async def _install_skill(
+            skill_id: Annotated[
+                str,
+                Field(
+                    description=(
+                        "The skill identifier from search results, e.g.: "
+                        '"vercel-labs/agent-skills/react-best-practices" (monorepo), '
+                        '"mvanhorn/last30days-skill" (standalone repo).'
+                    )
+                ),
+            ],
+        ) -> str:
+            parts = skill_id.split("/")
+            if len(parts) >= 3:
+                source, sid = f"{parts[0]}/{parts[1]}", "/".join(parts[2:])
+            elif len(parts) == 2:
+                source, sid = skill_id, ""
+            else:
+                return f"Invalid skill_id format: {skill_id!r}. Expected 'owner/repo/skill-name' or 'owner/repo'."
 
+            try:
+                runtime.ensure_storage()
+                meta, computed_hash = await client.download_skill(source, sid, runtime)
+                lock.record(meta.name, source, computed_hash)
+                runtime.invalidate()
+                install_dir = runtime.lock_dir
+                return format_install_result(meta, install_dir)
+            except (SkillDownloadError, SkillInstallError) as e:
+                return str(e)
+            except Exception as e:
+                return f"Error installing skill: {e}"
 
-def _make_install_tool(
-    client: SkillsClient,
-    lock: SkillsLock,
-    runtime: SkillRuntime,
-) -> FunctionTool:
-    @tool
-    async def install_skill(skill_id: str) -> str:
-        """Download and install a skill from skills.sh.
+        return _install_skill
 
-        Args:
-            skill_id: The skill identifier from search results, e.g.:
-                      ``"vercel-labs/agent-skills/react-best-practices"`` (monorepo),
-                      ``"mvanhorn/last30days-skill"`` (standalone repo).
-        """
-        parts = skill_id.split("/")
-        if len(parts) >= 3:
-            source, sid = f"{parts[0]}/{parts[1]}", "/".join(parts[2:])
-        elif len(parts) == 2:
-            source, sid = skill_id, ""
-        else:
-            return f"Invalid skill_id format: {skill_id!r}. Expected 'owner/repo/skill-name' or 'owner/repo'."
+    def remove_skill(
+        self,
+        *,
+        name: str = "remove_skill",
+        description: str = "Remove an installed skill by name.",
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> FunctionTool:
+        lock = self._lock
+        runtime = self._runtime
 
-        try:
-            runtime.ensure_storage()
-            meta, computed_hash = await client.download_skill(source, sid, runtime)
-            lock.record(meta.name, source, computed_hash)
+        @tool(name=name, description=description, middleware=middleware)
+        def _remove_skill(
+            name: Annotated[
+                str,
+                Field(description="Skill name as returned by list_skills()."),
+            ],
+        ) -> str:
+            try:
+                runtime.remove(name)
+            except (ValueError, FileNotFoundError) as e:
+                return str(e)
+            lock.remove(name)
             runtime.invalidate()
-            install_dir = runtime.lock_dir
-            return format_install_result(meta, install_dir)
-        except (SkillDownloadError, SkillInstallError) as e:
-            return str(e)
-        except Exception as e:
-            return f"Error installing skill: {e}"
+            return f"Removed: {name}"
 
-    return install_skill
-
-
-def _make_remove_tool(runtime: SkillRuntime, lock: SkillsLock) -> FunctionTool:
-    @tool
-    def remove_skill(name: str) -> str:
-        """Remove an installed skill by name.
-
-        Args:
-            name: Skill name as returned by list_skills().
-        """
-        try:
-            runtime.remove(name)
-        except (ValueError, FileNotFoundError) as e:
-            return str(e)
-        lock.remove(name)
-        runtime.invalidate()
-        return f"Removed: {name}"
-
-    return remove_skill
+        return _remove_skill

@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from pathlib import Path
+
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
@@ -172,8 +174,8 @@ class TestBuiltinTools:
 
 
 class TestToolkit:
-    def test_round_trip(self) -> None:
-        fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+    def test_round_trip(self, tmp_path: Path) -> None:
+        fs = FilesystemToolkit(base_path=tmp_path, read_only=True)
         agent = Agent(name="bot", tools=[add, fs])
         spec = AgentSpec.from_agent(agent)
 
@@ -182,9 +184,9 @@ class TestToolkit:
         restored = spec.to_agent(available_tools=[add, fs])
         assert [t.name for t in restored.tools] == [t.name for t in agent.tools]
 
-    def test_unpack_inner_tools(self) -> None:
+    def test_unpack_inner_tools(self, tmp_path: Path) -> None:
         ws = WebSearchTool()
-        fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+        fs = FilesystemToolkit(base_path=tmp_path, read_only=True)
 
         spec = AgentSpec(
             name="bot",

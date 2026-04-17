@@ -53,7 +53,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 agent = Agent(
     "reader",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[fs.read_file, fs.find_files],
+    tools=[fs.read_file(), fs.find_files()],
 )
 ```
 
@@ -157,7 +157,7 @@ skills = SkillsToolkit()
 agent = Agent(
     "assistant",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[skills.list_skills, skills.load_skill],
+    tools=[skills.list_skills(), skills.load_skill()],
 )
 ```
 
@@ -245,7 +245,11 @@ skills = SkillSearchToolkit()
 agent = Agent(
     "coder",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[skills.search_skills, skills.install_skill, skills.list_skills],
+    tools=[
+        skills.search_skills(),
+        skills.install_skill(),
+        skills.list_skills(),
+    ],
 )
 ```
 

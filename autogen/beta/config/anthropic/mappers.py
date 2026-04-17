@@ -11,9 +11,8 @@ from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInpu
 from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
-    DocumentUrlInput,
     FileIdInput,
-    ImageUrlInput,
+    UrlInput,
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
@@ -215,50 +214,7 @@ def convert_messages(
     result: list[dict[str, Any]] = []
 
     for message in messages:
-        if isinstance(message, ModelRequest):
-            content_parts: list[dict[str, Any]] = []
-            for inp in message.inputs:
-                if isinstance(inp, TextInput):
-                    content_parts.append({"type": "text", "text": inp.content})
-
-                elif isinstance(inp, ImageUrlInput):
-                    content_parts.append({"type": "image", "source": {"type": "url", "url": inp.url}})
-
-                elif isinstance(inp, DocumentUrlInput):
-                    content_parts.append({"type": "document", "source": {"type": "url", "url": inp.url}})
-
-                elif isinstance(inp, FileIdInput):
-                    block_type = _file_id_block_type(inp.filename)
-                    content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
-
-                elif isinstance(inp, BinaryInput):
-                    extra = {k: v for k, v in inp.vendor_metadata.items() if k in _ANTHROPIC_VENDOR_KEYS}
-                    if inp.kind == BinaryType.IMAGE:
-                        b64 = base64.b64encode(inp.data).decode()
-                        item: dict[str, Any] = {
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
-                            **extra,
-                        }
-                        content_parts.append(item)
-                    elif inp.kind == BinaryType.DOCUMENT:
-                        b64 = base64.b64encode(inp.data).decode()
-                        item = {
-                            "type": "document",
-                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
-                            **extra,
-                        }
-                        content_parts.append(item)
-                    else:
-                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "anthropic")
-
-                else:
-                    raise UnsupportedInputError(type(inp).__name__, "anthropic")
-
-            if content_parts:
-                result.append({"role": "user", "content": content_parts})
-
-        elif isinstance(message, ModelResponse):
+        if isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
                 content.append({"type": "text", "text": message.message.content})
@@ -282,6 +238,55 @@ def convert_messages(
                 for r in message.results
             ]
             result.append({"role": "user", "content": tool_results})
+
+        elif isinstance(message, ModelRequest):
+            content_parts: list[dict[str, Any]] = []
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    content_parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, FileIdInput):
+                    block_type = _file_id_block_type(inp.filename)
+                    content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
+
+                elif isinstance(inp, UrlInput):
+                    if inp.kind is BinaryType.IMAGE:
+                        content_parts.append({"type": "image", "source": {"type": "url", "url": inp.url}})
+
+                    elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                        content_parts.append({"type": "document", "source": {"type": "url", "url": inp.url}})
+
+                    else:
+                        raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "anthropic")
+
+                elif isinstance(inp, BinaryInput):
+                    extra = {k: v for k, v in inp.vendor_metadata.items() if k in _ANTHROPIC_VENDOR_KEYS}
+                    if inp.kind is BinaryType.IMAGE:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item: dict[str, Any] = {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+
+                    elif inp.kind is BinaryType.DOCUMENT:
+                        b64 = base64.b64encode(inp.data).decode()
+                        item = {
+                            "type": "document",
+                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
+                            **extra,
+                        }
+                        content_parts.append(item)
+
+                    else:
+                        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "anthropic")
+
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "anthropic")
+
+            if content_parts:
+                result.append({"role": "user", "content": content_parts})
 
     return result
 

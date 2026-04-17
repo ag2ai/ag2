@@ -68,6 +68,9 @@ class ConversableAdapter(ConversableAgent):
 
         result = r.response.to_api() | {"name": self.name}
 
+        if (target := r.response.metadata.get("target")) and (manager := getattr(self, "_group_manager", None)):
+            setattr(manager, "_next_target_force", target)
+
         return True, result
 
     def update_tool_signature(

@@ -81,14 +81,15 @@ class Stream(Protocol):
 
 @dataclass(slots=True)
 class ConversationContext:
-    stream: Stream
-    dependency_provider: "Provider | None" = None
+    stream: Stream = field(repr=False)
+    dependency_provider: "Provider | None" = field(default=None, repr=False)
 
-    prompt: list[str] = field(default_factory=list)
-
-    dependencies: dict[Any, Any] = field(default_factory=dict)
     # store Context Variables as separated serializable field
     variables: dict[str, Any] = field(default_factory=dict)
+
+    dependencies: dict[Any, Any] = field(default_factory=dict)
+
+    prompt: list[str] = field(default_factory=list)
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         request_msg = HumanInputRequest(message)
