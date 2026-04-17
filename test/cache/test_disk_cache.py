@@ -12,8 +12,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.cache.disk_cache import DiskCache
+from autogen.import_utils import skip_on_missing_imports
 
 
+@skip_on_missing_imports(["diskcache"], "diskcache")
 class TestDiskCache:
     @pytest.fixture(autouse=True)
     def setUp(self):

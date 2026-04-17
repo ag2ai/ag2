@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib.util
 import os
 import tempfile
 import time
@@ -17,7 +18,13 @@ from autogen.import_utils import run_for_optional_imports
 from test.credentials import Credentials
 from test.utils import suppress_gemini_resource_exhausted
 
+_SKIP_WITHOUT_DISKCACHE = pytest.mark.skipif(
+    importlib.util.find_spec("diskcache") is None,
+    reason="diskcache package is not installed; Cache.disk falls back to InMemoryCache",
+)
 
+
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_legacy_disk_cache(credentials_openai_mini: Credentials):
@@ -96,6 +103,7 @@ def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials)
     _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_disk_cache(credentials_openai_mini: Credentials):
