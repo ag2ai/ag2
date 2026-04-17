@@ -471,8 +471,16 @@ def determine_next_agent(
     # 6. Resolve and return the After Work condition -> agent / wrapped agent / TerminateTarget / StayTarget / RevertToUserTarget / GroupManagerTarget / etc.
 
     # 1. If it's the first response, return the initial agent
+    manager = getattr(last_speaker, "_group_manager", None)
+
     if use_initial_agent:
         return initial_agent
+
+    next_target: TransitionTarget | None = None
+    if manager := getattr(last_speaker, "_group_manager", None):
+        next_target = getattr(manager, "_next_target_force", None)
+        if next_target is not None:
+            delattr(manager, "_next_target_force")
 
     # 2. If the last message is a tool call, return the tool execution agent
     if "tool_calls" in groupchat.messages[-1]:
@@ -480,11 +488,12 @@ def determine_next_agent(
 
     # 3. If the Tool Executor has determined a next target, return that
     if tool_executor.has_next_target():
-        next_agent = tool_executor.get_next_target()
+        next_target = tool_executor.get_next_target()
         tool_executor.clear_next_target()
 
-        if next_agent.can_resolve_for_speaker_selection():
-            return next_agent.resolve(groupchat, last_speaker, user_agent).get_speaker_selection_result(groupchat)
+    if next_target:
+        if next_target.can_resolve_for_speaker_selection():
+            return next_target.resolve(groupchat, last_speaker, user_agent).get_speaker_selection_result(groupchat)
         else:
             raise ValueError(
                 "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
