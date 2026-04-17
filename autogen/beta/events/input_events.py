@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections.abc import Iterable
 from enum import Enum
-from os import PathLike
 from pathlib import Path
 from typing import Any, overload
 
@@ -91,7 +91,7 @@ def ImageInput(*, data: bytes, media_type: ImageMediaType) -> BinaryInput: ...
 
 
 @overload
-def ImageInput(*, path: str | PathLike[str], media_type: ImageMediaType | None = None) -> BinaryInput: ...
+def ImageInput(*, path: str | os.PathLike[str], media_type: ImageMediaType | None = None) -> BinaryInput: ...
 
 
 def ImageInput(  # noqa: N802
@@ -101,7 +101,7 @@ def ImageInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: ImageMediaType | None = None,
-    path: str | PathLike[str] | None = None,
+    path: str | os.PathLike[str] | None = None,
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating image input events.
 
@@ -162,7 +162,7 @@ def DocumentInput(*, data: bytes, media_type: DocumentMediaType) -> BinaryInput:
 
 
 @overload
-def DocumentInput(*, path: str | PathLike[str], media_type: DocumentMediaType | None = None) -> BinaryInput: ...
+def DocumentInput(*, path: str | os.PathLike[str], media_type: DocumentMediaType | None = None) -> BinaryInput: ...
 
 
 def DocumentInput(  # noqa: N802
@@ -172,7 +172,7 @@ def DocumentInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: DocumentMediaType | None = None,
-    path: str | PathLike[str] | None = None,
+    path: str | os.PathLike[str] | None = None,
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating document input events.
 
@@ -233,7 +233,7 @@ def AudioInput(*, data: bytes, media_type: AudioMediaType) -> BinaryInput: ...
 
 
 @overload
-def AudioInput(*, path: str | PathLike[str], media_type: AudioMediaType | None = None) -> BinaryInput: ...
+def AudioInput(*, path: str | os.PathLike[str], media_type: AudioMediaType | None = None) -> BinaryInput: ...
 
 
 def AudioInput(  # noqa: N802
@@ -243,7 +243,7 @@ def AudioInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: AudioMediaType | None = None,
-    path: str | PathLike[str] | None = None,
+    path: str | os.PathLike[str] | None = None,
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating audio input events.
 
@@ -304,7 +304,7 @@ def VideoInput(*, data: bytes, media_type: VideoMediaType) -> BinaryInput: ...
 
 
 @overload
-def VideoInput(*, path: str | PathLike[str], media_type: VideoMediaType | None = None) -> BinaryInput: ...
+def VideoInput(*, path: str | os.PathLike[str], media_type: VideoMediaType | None = None) -> BinaryInput: ...
 
 
 def VideoInput(  # noqa: N802
@@ -314,7 +314,7 @@ def VideoInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: VideoMediaType | None = None,
-    path: str | PathLike[str] | None = None,
+    path: str | os.PathLike[str] | None = None,
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating video input events.
 
