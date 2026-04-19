@@ -8,7 +8,6 @@ It defines data models for responses and a tool for executing web and conversati
 
 import json
 import os
-import warnings
 from typing import Any
 
 import requests
@@ -128,12 +127,6 @@ class PerplexitySearchTool(Tool):
             ValueError: If the API key is missing, the model is empty, max_tokens is not positive,
                         or if search_domain_filter is not a list when provided.
         """
-        warnings.warn(
-            "PerplexitySearchTool is deprecated and will be removed in v0.14. "
-            "Use QuickResearchTool or DeepResearchTool instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
         self._validate_tool_config(model, self.api_key, max_tokens, search_domain_filter)
         self.url = "https://api.perplexity.ai/chat/completions"
