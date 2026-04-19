@@ -1,0 +1,107 @@
+---
+title: MCP Servers
+sidebarTitle: MCP
+---
+
+# MCP
+
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io/){.external-link target="_blank"} is a protocol introduced by Anthropic that aims to standardize how tools and prompts are exposed to LLMs.
+It can be thought of as a superset of regular [Tools](/docs/beta/tools/tools), created to solve two problems:
+
+1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
+2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
+
+## Two ways to connect an MCP server
+
+Autogen supports both ways MCP servers are typically wired into an agent:
+
+- **Client-side connection** — Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider.
+- **Provider-side connection** — the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
+
+| | `MCPServer` (client-side) | `MCPServerTool` (provider-side) |
+|---|---|---|
+| Who connects to the MCP server | Autogen | LLM provider |
+| Who executes tool calls | Autogen | LLM provider |
+| Works with any LLM provider | Yes | No — provider must support MCP passthrough |
+| Credentials leave your infra | No | Yes — forwarded to the LLM provider |
+| Custom middleware on tool calls | Yes | No |
+| Lifecycle / connection pooling | Handled by Autogen | Handled by provider |
+
+!!! tip
+    Pick `MCPServer` when you want provider-agnostic behavior, local control over tool execution, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
+
+## Client-side: `MCPServer`
+
+`MCPServer` is a [Toolkit](/docs/beta/tools/toolkits) — it discovers the remote server's tools lazily and exposes each one as a regular function tool to the agent.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPServer
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[MCPServer("https://my-mcp-url.example.com")],
+)
+```
+
+Most real-world MCP servers require authentication. Use `MCPServerConfig` for typed configuration:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPServer, MCPServerConfig
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[
+        MCPServer(
+            MCPServerConfig(
+                server_url="https://my-mcp-url.example.com",
+                authorization_token="XXXXXX",
+            )
+        )
+    ],
+)
+```
+
+`MCPServerConfig` also accepts `headers`, `connection_timeout`, `allowed_tools`, `blocked_tools`, and a `server_label` for logging. Any of these fields can be a `Variable` if the value is only known at runtime.
+
+### Multiple servers
+
+`MCPServer` is just a toolkit, so you can register as many as you need:
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPServer
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[
+        MCPServer("https://my-mcp-url.example.com"),
+        MCPServer("https://my-mcp-url2.example.com"),
+        MCPServer("https://my-mcp-url3.example.com"),
+    ],
+)
+```
+
+## Provider-side: `MCPServerTool`
+
+`MCPServerTool` does not open a connection — it ships the server URL and credentials to the LLM provider as part of the request. The provider is then responsible for connecting to the MCP server and dispatching tool calls.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.tools import MCPServerTool
+
+agent_with_mcp = Agent(
+    name="Weather bot",
+    tools=[
+        MCPServerTool(
+            server_url="https://my-mcp-url.example.com",
+            server_label="weather",
+            authorization_token="XXXXXX",
+        ),
+    ],
+)
+```
+
+!!! warning
+    With provider-side connections, your MCP credentials are sent to the LLM provider on every request. Only use this path with providers and servers you trust with those credentials.
