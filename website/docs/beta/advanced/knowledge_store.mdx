@@ -1,0 +1,175 @@
+---
+title: Knowledge Store
+sidebarTitle: Knowledge Store
+---
+
+A **`KnowledgeStore`** is a virtual, path-based key-value store with filesystem-like semantics. It gives agents a durable place to persist conversation logs, artifacts, working memory, and any other content that should outlive a single `#!python agent.ask()` call.
+
+All implementations share the same protocol, so you can swap an in-memory store for a SQLite file or Redis instance without changing callers.
+
+## The protocol
+
+The `KnowledgeStore` protocol (importable from `#!python autogen.beta`) defines the full API every implementation satisfies:
+
+```python linenums="1"
+from typing import Protocol
+
+class KnowledgeStore(Protocol):
+    async def read(self, path: str) -> str | None: ...
+    async def write(self, path: str, content: str) -> None: ...
+    async def list(self, path: str = "/") -> list[str]: ...
+    async def delete(self, path: str) -> None: ...
+    async def exists(self, path: str) -> bool: ...
+
+    async def append(self, path: str, content: str) -> int: ...
+    async def read_range(self, path: str, start: int, end: int | None = None) -> str: ...
+
+    async def on_change(self, path: str, callback) -> ChangeSubscription: ...
+```
+
+Paths follow Unix conventions: absolute (`/dir/subdir/file.txt`), directories are implicit, and `list()` returns immediate children with `/` suffixes for directories.
+
+The `append` / `read_range` pair supports WAL-style workloads: `append` returns the byte offset, which you can later hand to `read_range` to retrieve just the newly written slice.
+
+## Choosing an implementation
+
+| Implementation | Use when |
+|---|---|
+| `MemoryKnowledgeStore` | Tests, ephemeral sessions, or when persistence isn't needed |
+| `SqliteKnowledgeStore` | Single-process durability on disk — the pragmatic default |
+| `DiskKnowledgeStore` | Files need to be human-readable on disk (artifacts, logs) |
+| `RedisKnowledgeStore` | Multi-process or cross-host sharing |
+| `LockedKnowledgeStore` | Wraps another store to serialize concurrent writers |
+
+## Basic usage
+
+### Memory store — fastest, non-persistent
+
+```python linenums="1"
+from autogen.beta import MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+
+await store.write("/artifacts/report.md", "# Q3 Summary\n...")
+print(await store.read("/artifacts/report.md"))
+print(await store.list("/"))  # ['artifacts/']
+```
+
+### Sqlite store — persistent across process restarts
+
+```python linenums="1"
+from autogen.beta import SqliteKnowledgeStore
+
+store = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
+await store.write("/config/model.txt", "claude-opus-4-7")
+
+# In a later run, the same DB:
+store2 = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
+print(await store2.read("/config/model.txt"))  # "claude-opus-4-7"
+```
+
+### Disk store — files on the filesystem
+
+```python linenums="1"
+from autogen.beta import DiskKnowledgeStore
+
+store = DiskKnowledgeStore("/var/agents/alice/knowledge/")
+await store.write("/artifacts/data.json", '{"ok": true}')
+# produces /var/agents/alice/knowledge/artifacts/data.json
+```
+
+## Append and `read_range`
+
+These two methods support WAL-style event logs, turn-by-turn transcripts, and any append-only workload where you want to retrieve only new content.
+
+```python linenums="1"
+off1 = await store.append("/log/events.jsonl", '{"t": 1}\n')
+off2 = await store.append("/log/events.jsonl", '{"t": 2}\n')
+
+# Read everything appended in the second write
+new_slice = await store.read_range("/log/events.jsonl", off1)
+print(new_slice)  # '{"t": 2}\n'
+```
+
+!!! warning
+    `read_range` returns UTF-8 text but operates on **byte offsets**. If you append multi-byte characters, align offsets to character boundaries yourself.
+
+## Change subscriptions
+
+Callers can react to writes via `on_change`. Backends that observe changes efficiently (`DiskKnowledgeStore` using `watchdog`) call the callback directly. Backends that cannot (`MemoryKnowledgeStore`, `SqliteKnowledgeStore`) return a `NoopChangeSubscription` — the caller is expected to poll.
+
+```python linenums="1"
+async def on_log_change(path: str) -> None:
+    print(f"{path} changed")
+
+sub = await store.on_change("/log/", on_log_change)
+# ... later:
+await sub.cancel()
+```
+
+## DefaultBootstrap
+
+`DefaultBootstrap` populates a store with a standard layout and `SKILL.md` files that explain each directory to an LLM reader. It's designed to be called once per actor:
+
+```python linenums="1"
+from autogen.beta import DefaultBootstrap, MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+await DefaultBootstrap().bootstrap(store, actor_name="alice")
+
+print(await store.list("/"))
+# ['SKILL.md', 'artifacts/', 'log/', 'memory/']
+```
+
+Resulting layout:
+
+| Path | Purpose |
+|---|---|
+| `/SKILL.md` | Top-level store description |
+| `/log/` | Conversation logs (auto-populated by `EventLogWriter`) |
+| `/artifacts/` | User files, downloads, reference material |
+| `/memory/` | Working memory and conversation summaries |
+
+Implement your own `StoreBootstrap` if you need a different layout.
+
+## EventLogWriter — persist stream history
+
+`EventLogWriter` serializes a Stream's events to a `KnowledgeStore` as JSONL, and can reconstruct them later. Useful for replay, audit, or multi-run aggregation.
+
+```python linenums="1"
+from autogen.beta import Agent, EventLogWriter, MemoryKnowledgeStore, MemoryStream
+from autogen.beta.config import OpenAIConfig
+
+stream = MemoryStream()
+agent = Agent("assistant", config=OpenAIConfig(model="gpt-5"))
+await agent.ask("Hello!", stream=stream)
+
+# Persist all events from this stream
+store = MemoryKnowledgeStore()
+writer = EventLogWriter(store)
+events = list(await stream.history.get_events())
+await writer.persist(stream.id, events)
+
+# Reload later
+loaded = await writer.load(stream.id)  # -> list[BaseEvent]
+```
+
+Persisted events land at `/log/{stream_id}.jsonl`. Events of types that cannot be deserialized (e.g. a removed class) come back as `UnknownEvent` — no data is lost.
+
+!!! tip
+    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent actor state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`.
+
+## LockedKnowledgeStore — serialize writers
+
+`LockedKnowledgeStore` wraps any `KnowledgeStore` to serialize concurrent writes. It delegates locking to a user-provided object implementing `#!python acquire(name, ttl)` / `#!python release(name)` — typically a distributed lock (Redis, database advisory locks, etc.) so multiple processes sharing the same store can coordinate.
+
+```python linenums="1"
+from autogen.beta import LockedKnowledgeStore, SqliteKnowledgeStore
+
+inner = SqliteKnowledgeStore("/var/agents/shared.db")
+store = LockedKnowledgeStore(inner, lock=your_distributed_lock)
+# ... hand `store` to every agent that shares the DB
+```
+
+!!! note
+    Reads are not locked (safe for concurrent access on all backends). Only `write`, `delete`, and `append` acquire the lock. Lock keys are of the form `store:write:{path}`.
