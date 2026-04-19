@@ -315,6 +315,7 @@ test = [
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
     "pandas==2.3.3",
+    "respx>=0.22.0",
     "fastapi==0.116.1",
     "mcp>=1.11.0",
     # test utilities
