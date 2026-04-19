@@ -68,7 +68,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
                 types.FunctionDeclaration(
                     name=t.function.name,
                     description=t.function.description,
-                    parameters=_ensure_object_schema(t.function.parameters),
+                    parameters_json_schema=_ensure_object_schema(t.function.parameters),
                 )
             )
 

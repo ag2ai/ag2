@@ -46,7 +46,7 @@ async def test_mixed_with_function_tool(context: Context) -> None:
                 types.FunctionDeclaration(
                     name=func_schema.function.name,
                     description=func_schema.function.description,
-                    parameters=func_schema.function.parameters,
+                    parameters_json_schema=func_schema.function.parameters,
                 )
             ]
         ),
