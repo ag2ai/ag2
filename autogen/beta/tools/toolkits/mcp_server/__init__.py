@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .filesystem import FilesystemToolkit
-from .mcp_server import MCPServer, MCPServerConfig
+from .connection import MCPConnection
+from .toolkit import MCPServer
+from .types import MCPServerConfig
 
 __all__ = (
-    "FilesystemToolkit",
+    "MCPConnection",
     "MCPServer",
     "MCPServerConfig",
 )
