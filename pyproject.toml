@@ -81,7 +81,6 @@ dependencies = [
     "tiktoken",
     "pydantic>=2.6.1,<3",
     "pyyaml>=6.0.2",
-    "docker",
     "packaging",
     "httpx>=0.28.1,<1",
     "anyio>=4.0.0,<5.0.0",
@@ -147,12 +146,16 @@ flaml = [
     "numpy>=1.24.0,<2.0.0; python_version<'3.13'", # numpy 1.24+ for older Python versions
 ]
 
+# code execution backends
+docker = ["docker>=6.0.0"]
+
 jupyter-executor = [
     "jupyter-kernel-gateway",
     "websocket-client",
     "requests",
     "jupyter-client>=8.6.0",
     "ipykernel>=6.29.0",
+    "ag2[docker]",
 ]
 
 retrievechat = [
@@ -281,7 +284,7 @@ websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
-remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
+remyx = ["remyxai>=0.2.0", "ag2[docker]"]
 daytona = ["daytona>=0.1.0"]
 cohere = ["cohere>=5.13.5"]
 
@@ -311,6 +314,7 @@ test-core = [
 
 test = [
     "ag2[test-core]",
+    "ag2[docker]",
     "ipykernel==7.1.0",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
@@ -325,6 +329,7 @@ docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    "ag2[docker]",  # Docker-backed executors (autogen.coding.DockerCommandLineCodeExecutor, autogen.coding.jupyter.DockerJupyterServer)
     # Beta optional dependencies
     "ag2[openai]",                  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[anthropic]",               # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
