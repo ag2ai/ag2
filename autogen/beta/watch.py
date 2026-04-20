@@ -103,9 +103,9 @@ class CadenceWatch(_BaseWatch):
 
     Example::
 
-        CadenceWatch(n=10)                              # count-only batch
-        CadenceWatch(max_wait=60)                       # time-only window
-        CadenceWatch(n=10, max_wait=60)                 # size OR time
+        CadenceWatch(n=10)  # count-only batch
+        CadenceWatch(max_wait=60)  # time-only window
+        CadenceWatch(n=10, max_wait=60)  # size OR time
         CadenceWatch(n=5, condition=ModelResponse)
     """
 
