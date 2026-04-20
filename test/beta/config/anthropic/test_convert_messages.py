@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import logging
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -19,11 +20,13 @@ from autogen.beta.events import (
     FileIdInput,
     ImageInput,
     ImageUrlInput,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
@@ -42,40 +45,47 @@ def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
     )
 
 
+def _matching_tool_result(content: str = "ok") -> ToolResultsEvent:
+    """Companion ToolResultsEvent so the tool_use above isn't dropped as an orphan."""
+    return ToolResultsEvent(
+        results=[
+            ToolResultEvent(
+                parent_id="tc_1",
+                name="list_items",
+                result=ToolResult(content=content),
+            )
+        ],
+    )
+
+
 class TestConvertMessagesEmptyArguments:
     """json.loads must not crash on empty or None tool call arguments."""
 
     @pytest.mark.parametrize("arguments", ["", None])
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
         response = _model_response_with_tool_call(arguments)
-        result = convert_messages([response])
+        result = convert_messages([response, _matching_tool_result()])
 
-        assert result == [
-            IsPartialDict({
-                "role": "assistant",
-                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "role": "assistant",
+            "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
+        })
 
     def test_valid_arguments_are_preserved(self) -> None:
         response = _model_response_with_tool_call('{"category": "books"}')
-        result = convert_messages([response])
+        result = convert_messages([response, _matching_tool_result()])
 
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
+        })
 
     def test_empty_object_arguments(self) -> None:
         response = _model_response_with_tool_call("{}")
-        result = convert_messages([response])
+        result = convert_messages([response, _matching_tool_result()])
 
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "content": [IsPartialDict({"type": "tool_use", "input": {}})],
+        })
 
 
 def test_full_sequence_with_empty_args() -> None:
@@ -410,4 +420,223 @@ class TestOrphanedToolResults:
                 "role": "user",
                 "content": [IsPartialDict({"type": "tool_result", "tool_use_id": "tc_1"})],
             }),
+        ]
+
+
+class TestOrphanedToolUse:
+    """tool_use blocks with no matching tool_result must be dropped; an
+    Anthropic request with orphan tool_use is rejected with "messages.N:
+    tool_use ids were found without tool_result blocks immediately after".
+    """
+
+    def test_orphan_tool_use_is_dropped(self) -> None:
+        """Assistant tool_use without any ToolResultsEvent → drop it."""
+        events = [
+            ModelRequest([TextInput("hello")]),
+            _model_response_with_tool_call("{}"),
+        ]
+        result = convert_messages(events)
+
+        # Assistant message is completely omitted (only tool_use, no text)
+        assert result == [
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({"type": "text", "text": "hello"})],
+            })
+        ]
+
+    def test_orphan_tool_use_preserves_assistant_text(self) -> None:
+        """If the assistant has text alongside an orphan tool_use, keep the text."""
+        events = [
+            ModelRequest([TextInput("hi")]),
+            ModelResponse(
+                message=ModelMessage(content="Let me check that."),
+                tool_calls=ToolCallsEvent(
+                    calls=[ToolCallEvent(id="tc_1", name="lookup", arguments="{}")],
+                ),
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({"role": "user"}),
+            IsPartialDict({
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Let me check that."}],
+            }),
+        ]
+
+    def test_orphan_tool_use_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Dropping an orphan tool_use should leave a debugging breadcrumb."""
+        events = [_model_response_with_tool_call("{}")]
+        with caplog.at_level(logging.WARNING, logger="autogen.beta.config.anthropic.mappers"):
+            convert_messages(events)
+
+        assert any("orphan tool_use" in rec.message for rec in caplog.records)
+        assert any("tc_1" in rec.message for rec in caplog.records)
+
+    def test_resolved_tool_use_is_not_dropped(self) -> None:
+        """Sanity check: tool_use with a matching tool_result passes through."""
+        events = [
+            _model_response_with_tool_call("{}"),
+            ToolResultsEvent(
+                results=[
+                    ToolResultEvent(
+                        parent_id="tc_1",
+                        name="list_items",
+                        result=ToolResult(content="ok"),
+                    )
+                ],
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({
+                "role": "assistant",
+                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1"})],
+            }),
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({"type": "tool_result", "tool_use_id": "tc_1"})],
+            }),
+        ]
+
+    def test_mixed_resolved_and_orphan_tool_uses(self) -> None:
+        """With two tool_use calls, drop only the one without a matching result."""
+        events = [
+            ModelResponse(
+                message=None,
+                tool_calls=ToolCallsEvent(
+                    calls=[
+                        ToolCallEvent(id="tc_1", name="resolved", arguments="{}"),
+                        ToolCallEvent(id="tc_2", name="orphan", arguments="{}"),
+                    ],
+                ),
+            ),
+            ToolResultsEvent(
+                results=[
+                    ToolResultEvent(
+                        parent_id="tc_1",
+                        name="resolved",
+                        result=ToolResult(content="ok"),
+                    )
+                ],
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({
+                "role": "assistant",
+                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1"})],
+            }),
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({"type": "tool_result", "tool_use_id": "tc_1"})],
+            }),
+        ]
+
+
+class TestIndividualToolResultFallback:
+    """If the ``ToolResultsEvent`` wrapper fails to persist (e.g., a turn
+    crash on a shared stream), loose ``ToolResultEvent`` /
+    ``ToolErrorEvent`` entries should still resolve their parent tool_use.
+    """
+
+    def test_individual_tool_result_resolves_tool_use(self) -> None:
+        events = [
+            _model_response_with_tool_call("{}"),
+            ToolResultEvent(
+                parent_id="tc_1",
+                name="list_items",
+                result=ToolResult(content="fallback-result"),
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({
+                "role": "assistant",
+                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1"})],
+            }),
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({
+                    "type": "tool_result",
+                    "tool_use_id": "tc_1",
+                })],
+            }),
+        ]
+        # ToolResult wraps content as JSON — assert the value is present.
+        assert "fallback-result" in result[1]["content"][0]["content"]
+
+    def test_individual_tool_error_resolves_tool_use(self) -> None:
+        events = [
+            _model_response_with_tool_call("{}"),
+            ToolErrorEvent(
+                parent_id="tc_1",
+                name="list_items",
+                error=ValueError("boom"),
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({"role": "assistant"}),
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({
+                    "type": "tool_result",
+                    "tool_use_id": "tc_1",
+                })],
+            }),
+        ]
+
+    def test_wrapper_takes_precedence_over_individual(self) -> None:
+        """If both ToolResultsEvent and its individual events are present
+        in the stream (the race-survivor scenario), we must not double-emit.
+        """
+        events = [
+            _model_response_with_tool_call("{}"),
+            ToolResultsEvent(
+                results=[
+                    ToolResultEvent(
+                        parent_id="tc_1",
+                        name="list_items",
+                        result=ToolResult(content="wrapped"),
+                    )
+                ],
+            ),
+            ToolResultEvent(
+                parent_id="tc_1",
+                name="list_items",
+                result=ToolResult(content="loose"),
+            ),
+        ]
+        result = convert_messages(events)
+
+        tool_result_msgs = [m for m in result if m["role"] == "user"]
+        assert len(tool_result_msgs) == 1
+        # Wrapped result was emitted; loose event was skipped (no double-emit).
+        assert "wrapped" in tool_result_msgs[0]["content"][0]["content"]
+        assert "loose" not in tool_result_msgs[0]["content"][0]["content"]
+
+    def test_individual_event_without_parent_in_stream_is_skipped(self) -> None:
+        """Loose tool_result with no matching tool_use is filtered (mirror of orphan tool_result)."""
+        events = [
+            ModelRequest([TextInput("hi")]),
+            ToolResultEvent(
+                parent_id="ghost_id",
+                name="nope",
+                result=ToolResult(content="stale"),
+            ),
+        ]
+        result = convert_messages(events)
+
+        assert result == [
+            IsPartialDict({
+                "role": "user",
+                "content": [IsPartialDict({"type": "text", "text": "hi"})],
+            })
         ]
