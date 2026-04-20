@@ -46,6 +46,7 @@ setuptools.setup(
         "redis": ["ag2[redis]==" + __version__],
         "tracing": ["ag2[tracing]==" + __version__],
         "flaml": ["ag2[flaml]==" + __version__],
+        "docker": ["ag2[docker]==" + __version__],
         "jupyter-executor": ["ag2[jupyter-executor]==" + __version__],
         "retrievechat": ["ag2[retrievechat]==" + __version__],
         "retrievechat-pgvector": ["ag2[retrievechat-pgvector]==" + __version__],
