@@ -138,7 +138,7 @@ dashscope = ["dashscope>=1.25.13"]
 
 # public distributions
 redis = ["redis"]
-tracing = ["opentelemetry-sdk>=1.20"]
+tracing = ["opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
 
 flaml = [
     "flaml",
