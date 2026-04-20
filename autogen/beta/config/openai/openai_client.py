@@ -63,6 +63,7 @@ class CreateOptions(TypedDict, total=False):
     stream: bool
     stream_options: dict[str, Any] | Omit
     reasoning_effort: ReasoningEffort | None | Omit
+    extra_body: dict[str, Any] | None
 
 
 class OpenAIClient(LLMClient):

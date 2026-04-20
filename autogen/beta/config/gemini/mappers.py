@@ -11,11 +11,8 @@ from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
-    AudioUrlInput,
     BinaryInput,
-    DocumentUrlInput,
-    ImageUrlInput,
-    VideoUrlInput,
+    UrlInput,
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
@@ -173,27 +170,7 @@ def convert_messages(
     result: list[types.Content] = []
 
     for message in messages:
-        if isinstance(message, ModelRequest):
-            parts: list[types.Part] = []
-            for inp in message.inputs:
-                if isinstance(inp, TextInput):
-                    parts.append(types.Part.from_text(text=inp.content))
-                elif isinstance(inp, (ImageUrlInput, AudioUrlInput, DocumentUrlInput, VideoUrlInput)):
-                    mime = _mime_from_url(inp.url)
-                    if mime is not None:
-                        parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
-                    else:
-                        parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
-                elif isinstance(inp, BinaryInput):
-                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
-                    _apply_vendor_metadata(part, inp.vendor_metadata)
-                    parts.append(part)
-                else:
-                    raise UnsupportedInputError(type(inp).__name__, "gemini")
-            if parts:
-                result.append(types.Content(role="user", parts=parts))
-
-        elif isinstance(message, ModelResponse):
+        if isinstance(message, ModelResponse):
             parts: list[types.Part] = []
             if message.message:
                 parts.append(types.Part.from_text(text=message.message.content))
@@ -218,6 +195,30 @@ def convert_messages(
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
+
+        elif isinstance(message, ModelRequest):
+            parts: list[types.Part] = []
+            for inp in message.inputs:
+                if isinstance(inp, TextInput):
+                    parts.append(types.Part.from_text(text=inp.content))
+
+                elif isinstance(inp, UrlInput):
+                    mime = _mime_from_url(inp.url)
+                    if mime is not None:
+                        parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
+                    else:
+                        parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+
+                elif isinstance(inp, BinaryInput):
+                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
+                    _apply_vendor_metadata(part, inp.vendor_metadata)
+                    parts.append(part)
+
+                else:
+                    raise UnsupportedInputError(type(inp).__name__, "gemini")
+
+            if parts:
+                result.append(types.Content(role="user", parts=parts))
 
     return result
 

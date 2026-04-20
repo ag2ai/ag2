@@ -12,7 +12,10 @@ from autogen.beta.types import ClassInfo
 from .annotations import Context
 from .events.conditions import Condition, TypeCondition
 
-__all__ = ("Observer", "observer")
+__all__ = (
+    "Observer",
+    "observer",
+)
 
 
 @runtime_checkable

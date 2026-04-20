@@ -7,6 +7,7 @@
 # !/usr/bin/env python3 -m pytest
 
 import copy
+import importlib.util
 import inspect
 import os
 import shutil
@@ -41,6 +42,11 @@ except ImportError:
 
 
 from test.credentials import Credentials
+
+_SKIP_WITHOUT_DISKCACHE = pytest.mark.skipif(
+    importlib.util.find_spec("diskcache") is None,
+    reason="diskcache package is not installed; Cache.disk falls back to InMemoryCache",
+)
 
 
 class MockModelClient:
@@ -384,6 +390,7 @@ def test_usage_summary(credentials_azure_gpt_4_1_mini: Credentials):
     assert client.total_usage_summary is None, "total_usage_summary should be None"
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports(["openai"], "openai")
 def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
     chat_completion = ChatCompletion(**{
@@ -440,6 +447,7 @@ def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_legacy_cache(credentials_openai_mini: Credentials):
@@ -504,6 +512,7 @@ def test_legacy_cache(credentials_openai_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports(["openai"], "openai")
 def test_no_default_cache(credentials_openai_mini: Credentials):
     # Prompt to use for testing.
@@ -548,6 +557,7 @@ def test_no_default_cache(credentials_openai_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
+@_SKIP_WITHOUT_DISKCACHE
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_cache(credentials_openai_mini: Credentials):
