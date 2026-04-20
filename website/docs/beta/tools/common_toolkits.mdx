@@ -53,7 +53,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 agent = Agent(
     "reader",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[fs.read_file, fs.find_files],
+    tools=[fs.read_file(), fs.find_files()],
 )
 ```
 
@@ -125,9 +125,11 @@ Pass a `LocalRuntime` to point to a different directory:
 
 ```python linenums="1"
 from autogen.beta.tools import SkillsToolkit
-from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+from autogen.beta.tools.skills import LocalRuntime
 
 skills = SkillsToolkit(runtime=LocalRuntime("./my-skills"))
+# or just a path string
+skills = SkillsToolkit(runtime="./my-skills")
 ```
 
 ### Extra read-only search paths
@@ -136,7 +138,7 @@ skills = SkillsToolkit(runtime=LocalRuntime("./my-skills"))
 
 ```python linenums="1"
 from autogen.beta.tools import SkillsToolkit
-from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
+from autogen.beta.tools.skills import LocalRuntime
 
 skills = SkillsToolkit(
     runtime=LocalRuntime("./my-skills", extra_paths=["./shared-skills"])
@@ -148,12 +150,14 @@ skills = SkillsToolkit(
 Every tool is available as an attribute on the toolkit instance:
 
 ```python linenums="1"
+from autogen.beta.tools import SkillsToolkit
+
 skills = SkillsToolkit()
 
 agent = Agent(
     "assistant",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[skills.list_skills, skills.load_skill],
+    tools=[skills.list_skills(), skills.load_skill()],
 )
 ```
 
@@ -205,7 +209,7 @@ You can also pass the token directly via `SkillsClientConfig`:
 
 ```python linenums="1"
 from autogen.beta.tools import SkillSearchToolkit
-from autogen.beta.tools.toolkits.skills.skill_search import SkillsClientConfig
+from autogen.beta.tools.skills import SkillsClientConfig
 
 skills = SkillSearchToolkit(
     client=SkillsClientConfig(github_token="ghp_..."),
@@ -216,8 +220,7 @@ skills = SkillSearchToolkit(
 
 ```python linenums="1"
 from autogen.beta.tools import SkillSearchToolkit
-from autogen.beta.tools.toolkits.skills.runtime import LocalRuntime
-from autogen.beta.tools.toolkits.skills.skill_search import SkillsClientConfig
+from autogen.beta.tools.skills import LocalRuntime, SkillsClientConfig
 
 skills = SkillSearchToolkit(
     LocalRuntime(
@@ -242,7 +245,11 @@ skills = SkillSearchToolkit()
 agent = Agent(
     "coder",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[skills.search_skills, skills.install_skill, skills.list_skills],
+    tools=[
+        skills.search_skills(),
+        skills.install_skill(),
+        skills.list_skills(),
+    ],
 )
 ```
 

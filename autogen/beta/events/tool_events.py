@@ -20,6 +20,7 @@ ResultT = TypeVar313("ResultT", default=Any)
 class ToolResult(Generic[ResultT]):
     content: ResultT = None
     final: bool = field(default=False, kw_only=True)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def ensure_result(cls, data: Any) -> "ToolResult":
@@ -105,7 +106,7 @@ class ToolResultEvent(ToolEvent, Generic[ResultT]):
     """Represents a successful tool execution result."""
 
     parent_id: str
-    name: str
+    name: str | None = None
 
     result: "ToolResult[ResultT]"
     _content: str = Field(default_factory=str, init=False)

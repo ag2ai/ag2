@@ -10,13 +10,11 @@ from dirty_equals import IsPartialDict
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
 from autogen.beta.events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
-    DocumentUrlInput,
+    DocumentInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     ModelRequest,
     TextInput,
 )
@@ -40,7 +38,7 @@ class TestTextInput:
         result = convert_messages(
             [],
             [
-                ModelRequest([TextInput("describe this"), ImageUrlInput(url=image_url)]),
+                ModelRequest([TextInput("describe this"), ImageInput(url=image_url)]),
             ],
         )
 
@@ -58,7 +56,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMAGE_URL)])])
 
         assert result[1] == {
             "role": "user",
@@ -66,7 +64,7 @@ class TestImageUrlInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])])
 
         assert result == [
             {
@@ -108,12 +106,12 @@ class TestAudioUrlInput:
     AUDIO_URL = "https://example.com/audio.wav"
 
     def test_completions_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-completions"):
-            convert_messages([], [ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-completions"):
+            convert_messages([], [ModelRequest([AudioInput(url=self.AUDIO_URL)])])
 
     def test_responses_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-responses"):
-            events_to_responses_input([ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-responses"):
+            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])])
 
 
 class TestAudioBinaryInput:
@@ -206,11 +204,11 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/document.pdf"
 
     def test_completions_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*openai-completions"):
-            convert_messages([], [ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*document.*openai-completions"):
+            convert_messages([], [ModelRequest([DocumentInput(url=self.DOC_URL)])])
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])])
 
         assert result == [
             {
