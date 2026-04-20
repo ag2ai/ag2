@@ -1,0 +1,245 @@
+---
+title: Assembly
+sidebarTitle: Assembly
+---
+
+**Assembly** is the step that shapes what the LLM actually sees on each turn. An `AssemblerMiddleware` runs an ordered chain of `AssemblyPolicy` instances, each one transforming `(prompts, events)` before they reach the model.
+
+Use it to inject persistent context (working memory, past conversations, observer alerts) and to cap the history footprint (sliding window, token budget) — without touching the event stream itself.
+
+## Why assembly
+
+Everything that happens during an agent's run — model requests/responses, tool calls, observer alerts, lifecycle events — lands on the [Stream](/docs/beta/advanced/stream). But not all of that is useful to send to the next LLM call, and some useful context (e.g. a summary of a prior conversation) lives outside the stream entirely.
+
+Assembly is the seam where you:
+
+- **Inject** information from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) or from [Observer alerts](/docs/beta/advanced/observers) into the prompt.
+- **Filter** the event list down to what the model should see.
+- **Reduce** the history to fit a window or token budget.
+
+Each of those jobs is an `AssemblyPolicy`. The `AssemblerMiddleware` chains them.
+
+## AssemblyPolicy protocol
+
+Every policy implements the same shape:
+
+```python linenums="1"
+from typing import Protocol
+from autogen.beta import Context
+from autogen.beta.events import BaseEvent
+
+class AssemblyPolicy(Protocol):
+    name: str
+
+    async def apply(
+        self,
+        prompts: list[str],
+        events: list[BaseEvent],
+        context: Context,
+    ) -> tuple[list[str], list[BaseEvent]]:
+        ...
+```
+
+A policy receives the current `prompts` and `events`, returns modified copies. Policies compose left-to-right: each one sees the output of the previous. They must be pure — side-effect-free, idempotent where possible, and they must not emit events onto the stream (with one exception: `AlertPolicy` emits `HaltEvent` on FATAL, documented below).
+
+## AssemblerMiddleware
+
+Wire the chain onto an Agent by constructing an `AssemblerMiddleware` with your policy list:
+
+```python linenums="1" hl_lines="11-15"
+from autogen.beta import (
+    Agent,
+    AssemblerMiddleware,
+    AlertPolicy,
+    WorkingMemoryPolicy,
+    SlidingWindowPolicy,
+)
+from autogen.beta.config import OpenAIConfig
+
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig(model="gpt-5"),
+    middleware=[
+        lambda event, ctx: AssemblerMiddleware(
+            event,
+            ctx,
+            policies=[
+                WorkingMemoryPolicy(),
+                AlertPolicy(),
+                SlidingWindowPolicy(max_events=50),
+            ],
+        ),
+    ],
+)
+```
+
+`AssemblerMiddleware` sits at the outermost position in the middleware chain, before any user-provided middleware or the LLM client itself. Inside each turn it:
+
+1. Builds the `prompts` / `events` pair from the current context.
+2. Runs every policy in order, piping the output of each into the next.
+3. Temporarily swaps `context.prompt` for the assembled version while the LLM call runs.
+4. Restores the original prompt afterward.
+
+## Ordering matters
+
+Assembly policies split into two kinds:
+
+| Kind | Purpose | Examples |
+|---|---|---|
+| **Injection** | Add context to `prompts` | `AlertPolicy`, `WorkingMemoryPolicy`, `EpisodicMemoryPolicy` |
+| **Reduction** | Trim `events` | `SlidingWindowPolicy`, `TokenBudgetPolicy`, `ConversationPolicy` |
+
+The rule: **injection before reduction**. If a reducer runs first, the injections it should have included in its budget don't exist yet.
+
+`AssemblerMiddleware.validate_order()` catches known bad orderings and returns a list of warnings:
+
+```python linenums="1" hl_lines="6-9"
+from autogen.beta import AssemblerMiddleware, AlertPolicy, SlidingWindowPolicy
+
+policies = [
+    SlidingWindowPolicy(max_events=20),  # reduction first — wrong
+    AlertPolicy(),
+]
+warnings = AssemblerMiddleware.validate_order(policies)
+for w in warnings:
+    print(w)
+```
+
+## Built-in policies
+
+All six built-ins are importable from `#!python autogen.beta`.
+
+### ConversationPolicy
+
+Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`). Drops alerts, lifecycle events, observer output — anything the LLM does not need to see.
+
+```python linenums="1"
+from autogen.beta import ConversationPolicy
+
+policy = ConversationPolicy()
+```
+
+Takes no arguments. Effectively an allowlist — add a new event type to the stream and it is filtered out by default.
+
+### SlidingWindowPolicy
+
+Keeps only the last `max_events` events. Skips leading orphaned `ToolResultsEvent` entries so the window never starts on an unmatched tool result.
+
+```python linenums="1"
+from autogen.beta import SlidingWindowPolicy
+
+policy = SlidingWindowPolicy(max_events=50, transparent=True)
+```
+
+Set `transparent=True` to append a prompt note like `"[sliding_window] Showing last 50 of 123 events."` — useful while tuning.
+
+### TokenBudgetPolicy
+
+Keeps the newest events that fit in an estimated token budget. Estimation is `#!python len(str(event)) / chars_per_token` — cheap, not perfectly accurate. Use it as a safety net, not an exact meter.
+
+```python linenums="1"
+from autogen.beta import TokenBudgetPolicy
+
+policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=True)
+```
+
+### AlertPolicy
+
+Delivers [ObserverAlerts](/docs/beta/advanced/observers) to the model. Each new alert is formatted into the prompt once (deduplicated on `(source, severity, message)`), and **FATAL** alerts additionally emit a `HaltEvent` onto the stream so the surrounding loop can short-circuit.
+
+```python linenums="1"
+from autogen.beta import AlertPolicy
+
+policy = AlertPolicy()
+```
+
+Takes no arguments. Dedup state lives on the instance — give each Agent its own `AlertPolicy`.
+
+!!! note
+    `AlertPolicy` is what bridges the [Observer](/docs/beta/advanced/observers) system into the LLM. Without it, `ObserverAlert` events sit on the stream but never reach the model. Place it after other injection policies and before reduction policies.
+
+### WorkingMemoryPolicy
+
+Reads `/memory/working.md` from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) and injects it into the prompt. Working memory is the actor's persistent state — written between conversations by an aggregation strategy and read on every turn.
+
+```python linenums="1" hl_lines="7-12"
+from autogen.beta import AssemblerMiddleware, WorkingMemoryPolicy
+from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+await store.write("/memory/working.md", "- user prefers metric\n- timezone: Australia/Melbourne")
+
+agent = Agent(
+    "assistant",
+    config=config,
+    dependencies={KnowledgeStore: store},
+    middleware=[lambda e, c: AssemblerMiddleware(e, c, policies=[WorkingMemoryPolicy()])],
+)
+```
+
+The policy looks up the store by type (`#!python context.dependencies.get(KnowledgeStore)`) — if no store is registered, it's a no-op.
+
+### EpisodicMemoryPolicy
+
+Reads the most recent summaries under `/memory/conversations/` and injects them. The companion reader for `ConversationSummaryAggregate`, which writes timestamped summary files to that path after each conversation.
+
+```python linenums="1"
+from autogen.beta import EpisodicMemoryPolicy
+
+policy = EpisodicMemoryPolicy(max_episodes=5, transparent=True)
+```
+
+Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op otherwise.
+
+## A realistic chain
+
+Typical production ordering — injections first, then `AlertPolicy`, then reduce:
+
+```python linenums="1" hl_lines="8-14"
+from autogen.beta import (
+    AssemblerMiddleware,
+    AlertPolicy,
+    EpisodicMemoryPolicy,
+    SlidingWindowPolicy,
+    WorkingMemoryPolicy,
+)
+
+policies = [
+    WorkingMemoryPolicy(),            # inject persistent state
+    EpisodicMemoryPolicy(max_episodes=3),  # inject past conversations
+    AlertPolicy(),                    # inject observer alerts
+    SlidingWindowPolicy(max_events=80),  # cap turn history
+]
+AssemblerMiddleware.validate_order(policies)  # returns [] — good order
+```
+
+## Writing a custom policy
+
+Any object with a `name` and an `async apply(...)` method satisfies the protocol. Use it for domain-specific injection (project docs, RAG hits, on-call runbooks) or custom filtering:
+
+```python linenums="1" hl_lines="7 9 15"
+from autogen.beta import Context
+from autogen.beta.events import BaseEvent
+
+
+class RunbookPolicy:
+    """Inject the on-call runbook as system context."""
+
+    name = "runbook"
+
+    def __init__(self, runbook: str) -> None:
+        self._runbook = runbook
+
+    async def apply(
+        self,
+        prompts: list[str],
+        events: list[BaseEvent],
+        context: Context,
+    ) -> tuple[list[str], list[BaseEvent]]:
+        return prompts + [f"## On-call Runbook\n\n{self._runbook}"], events
+```
+
+Drop it into the policy list alongside the built-ins.
+
+!!! tip
+    Custom policies are a better fit than [Middleware](/docs/beta/middleware) when you only need to shape the prompt or filter events — not to wrap the LLM call itself. Middleware is for retry, timeout, logging, rate limiting; policies are for context assembly.

@@ -1,0 +1,172 @@
+---
+title: Compaction
+sidebarTitle: Compaction
+---
+
+**Compaction** reduces a stream's event history to respect runtime constraints — event count or token budget. It is the constraint-respecting counterpart to [Aggregation](/docs/beta/advanced/aggregation).
+
+> Compaction removes. Aggregation creates. They are separate concerns.
+
+## When to use it
+
+Long-running conversations accumulate events faster than the model's context window can absorb. Use compaction to cap the size of history that flows into the next LLM call.
+
+| Symptom | Use |
+|---|---|
+| History getting close to provider token limit | `TailWindowCompact` or `SummarizeCompact` |
+| Need to keep recent events and forget old ones cheaply | `TailWindowCompact` |
+| Want a short summary of old events to preserve context | `SummarizeCompact` |
+
+## CompactStrategy protocol
+
+Every strategy implements the same shape:
+
+```python linenums="1"
+from typing import Protocol
+from autogen.beta import Context
+from autogen.beta.events import BaseEvent
+from autogen.beta.knowledge import KnowledgeStore
+
+
+class CompactStrategy(Protocol):
+    async def compact(
+        self,
+        events: list[BaseEvent],
+        context: Context,
+        store: KnowledgeStore | None,
+    ) -> list[BaseEvent]:
+        ...
+```
+
+Returns a new event list that **replaces** the current history. Strategies must preserve the causal ordering of retained events — no reshuffling.
+
+## CompactTrigger
+
+A dataclass describing when compaction should fire. Any configured threshold that is exceeded triggers compaction.
+
+```python linenums="1"
+from autogen.beta.compact import CompactTrigger
+
+trigger = CompactTrigger(
+    max_events=200,           # fire when history exceeds 200 events
+    max_tokens=32_000,        # fire when estimated tokens exceed 32k
+    chars_per_token=4,        # estimation constant (default 4)
+)
+```
+
+Leaving a field at `0` disables that threshold. `CompactTrigger()` alone does nothing — you must opt into at least one condition.
+
+`CompactTrigger` is a plain data object — it records when you want compaction to fire, but does not fire it. Strategies are invoked explicitly via `#!python await strategy.compact(...)`.
+
+## Built-in strategies
+
+Both built-ins are importable from `#!python autogen.beta.compact`.
+
+### TailWindowCompact
+
+Keeps the last N events, drops the rest. Zero LLM cost. Suitable when old context has diminishing value and recency is what matters.
+
+```python linenums="1" hl_lines="6 9"
+from autogen.beta.compact import TailWindowCompact
+from autogen.beta.knowledge import MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+compact = TailWindowCompact(target=50)
+
+retained = await compact.compact(events, ctx, store)
+# retained is the last 50 events; older ones are dropped
+# (and persisted to /log/{stream_id}.dropped-{n}.jsonl if store is passed)
+```
+
+Passing a `KnowledgeStore` is optional. If provided, dropped events are persisted to `/log/` as a numbered segment — see the [KnowledgeStore docs](/docs/beta/advanced/knowledge_store) — so they can be replayed later via `EventLogWriter.load()`. If omitted, dropped events are discarded.
+
+### SummarizeCompact
+
+Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` event at the head of retained history. Use when you want to keep some sense of the old conversation instead of just forgetting it.
+
+```python linenums="1" hl_lines="8-12"
+from autogen.beta.compact import SummarizeCompact
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+compact = SummarizeCompact(
+    target=50,
+    config=OpenAIConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
+)
+
+retained = await compact.compact(events, ctx, store)
+# retained[0] is a CompactionSummary event; retained[1:] are the last 50 originals
+```
+
+The summarization model is independent from the agent's main model — pick a smaller / cheaper one. Token usage is recorded on the strategy instance as `#!python strategy.last_usage`.
+
+## CompactionSummary
+
+The synthetic event inserted by `SummarizeCompact` at the head of history.
+
+```python linenums="1"
+from autogen.beta.compact import CompactionSummary
+
+summary = CompactionSummary(
+    summary="User asked about gardening and sourdough; decisions made about ...",
+    event_count=42,
+)
+```
+
+`CompactionSummary` is on the allowlist of [`ConversationPolicy`](/docs/beta/advanced/assembly#conversationpolicy), so it passes through the assembly chain and reaches the LLM as context — without requiring special handling elsewhere.
+
+## Driving compaction
+
+Pattern for invoking a strategy against a `CompactTrigger`:
+
+```python linenums="1" hl_lines="11-13"
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+
+trigger = CompactTrigger(max_events=200)
+compact = TailWindowCompact(target=100)
+
+async def after_turn(events, ctx, store):
+    """Call this after each LLM turn."""
+    should = (
+        trigger.max_events and len(events) > trigger.max_events
+    )
+    if should:
+        events = await compact.compact(events, ctx, store)
+    return events
+```
+
+For the token-based threshold, estimate with `#!python sum(len(str(e)) for e in events) / trigger.chars_per_token`.
+
+## Writing a custom strategy
+
+Any object with an `async compact(events, ctx, store)` method satisfies the protocol. A couple of ideas:
+
+- **Drop tool noise.** Keep `ModelRequest` / `ModelResponse`, drop `ToolCallEvent` / `ToolResultEvent` older than some boundary.
+- **Priority retention.** Score events (e.g. keep every `ModelResponse` but decimate `ToolCallEvent`s).
+- **Segmented summarization.** Run `SummarizeCompact` in chunks to produce multiple `CompactionSummary` events over time rather than one big one.
+
+```python linenums="1"
+from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
+from autogen.beta.knowledge import KnowledgeStore
+
+
+class DropOldToolEvents:
+    """Keep conversation events; drop tool events older than the last K."""
+
+    def __init__(self, keep_last_k: int = 20) -> None:
+        self._k = keep_last_k
+
+    async def compact(
+        self,
+        events: list[BaseEvent],
+        context,
+        store: KnowledgeStore | None,
+    ) -> list[BaseEvent]:
+        tool_types = (ToolCallEvent, ToolResultEvent)
+        tool_indices = [i for i, e in enumerate(events) if isinstance(e, tool_types)]
+        if len(tool_indices) <= self._k:
+            return events
+        drop_set = set(tool_indices[: -self._k])
+        return [e for i, e in enumerate(events) if i not in drop_set]
+```
