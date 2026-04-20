@@ -125,11 +125,36 @@ flowchart LR
 
 The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined in `#!python autogen.beta.knowledge`. Both sides of each pair use those constants so the producer/consumer contract is held together by types, not magic strings.
 
-## Driving aggregation
+## Wiring onto an Actor
 
-Pattern for invoking a strategy against an `AggregateTrigger`:
+Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/actor#knowledgeconfig). The Actor wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
 
-```python linenums="1" hl_lines="10-14"
+```python linenums="1" hl_lines="11-15"
+from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+summarizer_config = OpenAIConfig(model="gpt-5-mini")  # cheap model for summaries
+actor = Actor(
+    "assistant",
+    config=OpenAIConfig(model="gpt-5"),
+    knowledge=KnowledgeConfig(
+        store=store,
+        aggregate=ConversationSummaryAggregate(config=summarizer_config),
+        aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
+    ),
+)
+```
+
+Each completed aggregation emits an `AggregationCompleted` lifecycle event with `strategy` / `usage` fields for observability.
+
+## Driving a strategy directly
+
+If you're not using `Actor` (custom harness, tests, one-off scripts), call `#!python await strategy.aggregate(...)` yourself:
+
+```python linenums="1"
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig
 

@@ -1,0 +1,221 @@
+---
+title: Actor
+sidebarTitle: Actor
+---
+
+An **Actor** is the agentic unit of the beta module. It runs a model loop, honours middleware and observers, and optionally wires the harness primitives — [assembly](/docs/beta/advanced/assembly), [compaction](/docs/beta/advanced/compaction), [aggregation](/docs/beta/advanced/aggregation), [knowledge store](/docs/beta/advanced/knowledge_store), and subtask delegation — through two configuration dataclasses: `KnowledgeConfig` and `TaskConfig`.
+
+A bare `Actor` has zero harness middleware — it behaves exactly like a plain LLM loop. Harness features are opt-in.
+
+## Minimal Actor
+
+```python linenums="1"
+from autogen.beta import Actor, tool
+from autogen.beta.config import OpenAIConfig
+
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two integers."""
+    return a + b
+
+
+actor = Actor(
+    "math",
+    prompt="You are a helpful calculator.",
+    config=OpenAIConfig(model="gpt-5"),
+    tools=[add],
+)
+
+reply = await actor.ask("what is 2 + 3?")
+print(reply.body)
+```
+
+This is the shape the old `Agent` class had. `Actor` is the rename; all of tools, observers, middleware, prompt hooks, dependencies, and variables work exactly as before.
+
+## Constructor
+
+```python linenums="1"
+Actor(
+    name: str,
+    prompt: str | Callable | Iterable = (),
+    *,
+    config: ModelConfig | None = None,
+    tools: Iterable = (),
+    middleware: Iterable = (),
+    observers: Iterable = (),
+    dependencies: dict | None = None,
+    variables: dict | None = None,
+    response_schema: ResponseProto | type | None = None,
+    hitl_hook: HumanHook | None = None,
+    plugins: Iterable[Plugin] = (),
+    assembly: Iterable[AssemblyPolicy] = (),
+    knowledge: KnowledgeConfig | None = None,
+    tasks: TaskConfig | None = None,
+)
+```
+
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are unchanged from the old Agent class. The three new harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below.
+
+## `assembly=` — context policies
+
+A list of [`AssemblyPolicy`](/docs/beta/advanced/assembly) instances. When non-empty, the Actor wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
+
+```python linenums="1" hl_lines="10-14"
+from autogen.beta import (
+    Actor,
+    AlertPolicy,
+    SlidingWindowPolicy,
+    WorkingMemoryPolicy,
+)
+
+actor = Actor(
+    "assistant",
+    config=config,
+    assembly=[
+        WorkingMemoryPolicy(),                # inject /memory/working.md
+        AlertPolicy(),                         # deliver ObserverAlerts, halt on FATAL
+        SlidingWindowPolicy(max_events=50),   # cap history footprint
+    ],
+)
+```
+
+Order matters — see the [ordering rule in the assembly doc](/docs/beta/advanced/assembly#ordering-matters). `AssemblerMiddleware.validate_order()` will flag known problematic compositions.
+
+## `knowledge=` — KnowledgeConfig
+
+Groups everything that involves the [`KnowledgeStore`](/docs/beta/advanced/knowledge_store): the store itself, optional bootstrap, and optional compaction + aggregation strategies.
+
+```python linenums="1"
+from dataclasses import dataclass
+
+@dataclass
+class KnowledgeConfig:
+    store: KnowledgeStore
+    compact: CompactStrategy | None = None
+    compact_trigger: CompactTrigger | None = None
+    aggregate: AggregateStrategy | None = None
+    aggregate_trigger: AggregateTrigger | None = None
+    bootstrap: StoreBootstrap | None = None
+```
+
+| Field | What it does |
+|---|---|
+| `store` | Registered in `#!python context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it; also given to `EventLogWriter` for stream persistence. |
+| `compact` / `compact_trigger` | Wires a compaction middleware that fires [`compact()`](/docs/beta/advanced/compaction) between turns when the trigger thresholds are exceeded. |
+| `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/beta/advanced/aggregation) on the configured cadence. |
+| `bootstrap` | Runs once on first use to seed the store (e.g. `DefaultBootstrap` writes SKILL.md files). |
+
+```python linenums="1" hl_lines="12-18"
+from autogen.beta import Actor, KnowledgeConfig, WorkingMemoryPolicy
+from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.knowledge import DiskKnowledgeStore
+from pathlib import Path
+
+store = DiskKnowledgeStore(Path("./knowledge"))
+
+actor = Actor(
+    "assistant",
+    config=main_config,
+    knowledge=KnowledgeConfig(
+        store=store,
+        compact=TailWindowCompact(target=100),
+        compact_trigger=CompactTrigger(max_events=200),
+        aggregate=ConversationSummaryAggregate(config=summarizer_config),
+        aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
+    ),
+    assembly=[WorkingMemoryPolicy()],
+)
+```
+
+The compaction and aggregation middleware are opt-in per field: passing `compact=` without `compact_trigger=` still works (a default `CompactTrigger()` with all thresholds disabled is used). Omit a strategy entirely and the corresponding middleware is not wired.
+
+## `tasks=` — TaskConfig
+
+Defaults for sub-tasks spawned via `Actor.as_tool()` or the subagent tool family.
+
+```python linenums="1"
+from dataclasses import dataclass
+
+@dataclass
+class TaskConfig:
+    config: ModelConfig | None = None
+    prompt: str = (
+        "You are a task agent. Complete the assigned task thoroughly and "
+        "concisely. Return only the result."
+    )
+    max_depth: int | None = 3
+```
+
+| Field | What it does |
+|---|---|
+| `config` | The `ModelConfig` used for sub-task Actors when they don't specify their own. Falls back to the parent Actor's `config`. |
+| `prompt` | Default system prompt for sub-task Actors. |
+| `max_depth` | Cap on recursive sub-task nesting. Prevents runaway A → B → A → B delegation chains. `None` disables the cap. |
+
+```python linenums="1" hl_lines="8-12"
+from autogen.beta import Actor, TaskConfig
+
+actor = Actor(
+    "orchestrator",
+    config=main_config,
+    tools=[...],
+    tasks=TaskConfig(
+        config=worker_config,           # cheaper model for sub-tasks
+        prompt="You are a focused worker; one step only.",
+        max_depth=2,
+    ),
+)
+```
+
+## Actor.as_tool()
+
+Expose any Actor as a `FunctionTool` so another Actor can invoke it like any other tool:
+
+```python linenums="1" hl_lines="10 13"
+child = Actor(
+    "researcher",
+    prompt="Answer the objective concisely.",
+    config=main_config,
+)
+
+parent = Actor(
+    "lead",
+    config=main_config,
+    tools=[child.as_tool(description="Delegate fact-finding to a researcher.")],
+)
+
+reply = await parent.ask("Find out where Melbourne is.")
+```
+
+`as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. Sub-task depth is tracked automatically and capped by `TaskConfig.max_depth` on the parent.
+
+## Turn lifecycle
+
+Each `await actor.ask(...)` runs through the middleware chain in this order (outermost → innermost):
+
+```
+1. AssemblerMiddleware              (if assembly=[...])
+2. _HaltCheckMiddleware             (if assembly=[...] — watches for HaltEvent)
+3. _CompactionMiddleware            (if knowledge.compact configured)
+4. _AggregationMiddleware           (if knowledge.aggregate configured)
+5. User-provided middleware         (retry, rate-limit, logging, …)
+6. LLM client                       (innermost)
+```
+
+The internal harness middleware (`_AssemblerMiddleware`, `_HaltCheckMiddleware`, `_CompactionMiddleware`, `_AggregationMiddleware`) are assembled conditionally — you only pay for what you turn on.
+
+Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](/docs/beta/advanced/observers) or a stream subscriber.
+
+## Actor vs Agent
+
+For users familiar with the old `Agent` class: `Actor` is the rename, with the additional `assembly=`, `knowledge=`, and `tasks=` parameters. All other construction, tool registration, middleware, and observer patterns are unchanged.
+
+| | Old `Agent` | New `Actor` |
+|---|---|---|
+| Harness wiring | Manual (custom middleware) | `assembly=` / `knowledge=` / `tasks=` |
+| Sub-task defaults | Manual | `TaskConfig` |
+| `AgentSpec` round-trip | `from_agent` / `to_agent` | `from_actor` / `to_actor` (class name `AgentSpec` preserved) |
+
+The class `Agent` no longer exists; any import that references it needs to be updated to `Actor`.

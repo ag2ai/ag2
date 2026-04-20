@@ -116,21 +116,42 @@ summary = CompactionSummary(
 
 `CompactionSummary` is on the allowlist of [`ConversationPolicy`](/docs/beta/advanced/assembly#conversationpolicy), so it passes through the assembly chain and reaches the LLM as context — without requiring special handling elsewhere.
 
-## Driving compaction
+## Wiring onto an Actor
 
-Pattern for invoking a strategy against a `CompactTrigger`:
+Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/actor#knowledgeconfig). The Actor wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
-```python linenums="1" hl_lines="11-13"
+```python linenums="1" hl_lines="10-14"
+from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+
+store = MemoryKnowledgeStore()
+actor = Actor(
+    "assistant",
+    config=OpenAIConfig(model="gpt-5"),
+    knowledge=KnowledgeConfig(
+        store=store,
+        compact=TailWindowCompact(target=100),
+        compact_trigger=CompactTrigger(max_events=200),
+    ),
+)
+```
+
+Each completed turn emits a [`CompactionCompleted`](/docs/beta/advanced/observers) lifecycle event when compaction runs, with `events_before` / `events_after` / `usage` fields — subscribe to it to surface compaction activity in logs or metrics.
+
+## Driving a strategy directly
+
+If you're not using `Actor` (custom harness, tests, one-off scripts), call `#!python await strategy.compact(...)` yourself:
+
+```python linenums="1"
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 
 trigger = CompactTrigger(max_events=200)
 compact = TailWindowCompact(target=100)
 
 async def after_turn(events, ctx, store):
-    """Call this after each LLM turn."""
-    should = (
-        trigger.max_events and len(events) > trigger.max_events
-    )
+    should = trigger.max_events and len(events) > trigger.max_events
     if should:
         events = await compact.compact(events, ctx, store)
     return events

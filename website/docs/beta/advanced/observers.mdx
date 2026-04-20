@@ -2,7 +2,7 @@
 title: Observers
 ---
 
-Observers let you attach lightweight, read-only event listeners directly to an Agent. Under the hood, each observer is a regular [Stream subscriber](/docs/beta/advanced/stream) — but you register it on the Agent instead of managing the stream yourself.
+Observers let you attach lightweight, read-only event listeners directly to an Actor. Under the hood, each observer is a regular [Stream subscriber](/docs/beta/advanced/stream) — but you register it on the Actor instead of managing the stream yourself.
 
 Use observers when you want to monitor agent behavior (logging, metrics, debugging) without writing a full [Middleware](/docs/beta/middleware) class.
 
@@ -21,12 +21,12 @@ async def log_response(event: ModelResponse) -> None:
 
 ## Registering Observers
 
-### On the Agent constructor
+### On the Actor constructor
 
 Pass observers when creating the agent. These observers are active for every `#!python agent.ask()` call:
 
 ```python linenums="1" hl_lines="12"
-from autogen.beta import Agent, observer
+from autogen.beta import Actor, observer
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.events import ModelResponse, ToolCallEvent
 
@@ -34,7 +34,7 @@ from autogen.beta.events import ModelResponse, ToolCallEvent
 def on_response(event: ModelResponse) -> None:
     print(f"Response: {event.content}")
 
-agent = Agent(
+actor = Actor(
     "assistant",
     config=OpenAIConfig("gpt-4o-mini"),
     observers=[on_response],
@@ -48,9 +48,9 @@ reply = await agent.ask("Hello!")
 Use `#!python @agent.observer()` to register an observer after agent creation. This mirrors the `#!python @agent.tool()` and `#!python @agent.prompt()` patterns:
 
 ```python linenums="1" hl_lines="8-10"
-from autogen.beta import Agent
+from autogen.beta import Actor
 
-agent = Agent(
+actor = Actor(
     "assistant",
     config=OpenAIConfig("gpt-4o-mini"),
 )
@@ -74,9 +74,9 @@ reply = await agent.ask(
 Constructor-level and per-call observers can be combined — both will fire:
 
 ```python linenums="1" hl_lines="6 12"
-from autogen.beta import Agent
+from autogen.beta import Actor
 
-agent = Agent(
+actor = Actor(
     "assistant",
     config=config,
     observers=[observer(ModelResponse, log_to_file)],
@@ -114,7 +114,7 @@ def on_search(event: ToolCallEvent) -> None:
 
 ## Dependency Injection
 
-Observer callbacks support the same dependency injection features as [Agent Tools](/docs/beta/tools/tools/) and [stream subscribers](/docs/beta/advanced/stream/) — `Context`, `Inject`, `Depends`, and `Variable`:
+Observer callbacks support the same dependency injection features as [Actor Tools](/docs/beta/tools/tools/) and [stream subscribers](/docs/beta/advanced/stream/) — `Context`, `Inject`, `Depends`, and `Variable`:
 
 ```python linenums="1" hl_lines="5"
 from autogen.beta import Context, observer
@@ -146,7 +146,7 @@ def intercept(event: ModelResponse) -> ModelResponse:
 
 | Feature | Observer | Middleware | Stream Subscriber |
 |---|---|---|---|
-| Registration | On Agent | On Agent | On Stream |
+| Registration | On Actor | On Actor | On Stream |
 | Lifecycle | Scoped to execution | Scoped to execution | Manual |
 | Boilerplate | Minimal — one function | Class with factory | Low — one function |
 | Can modify events | Only with `interrupt=True` | Yes (wraps execution) | Only with `interrupt=True` |
@@ -178,10 +178,10 @@ Two ready-to-use `BaseObserver` subclasses ship with AG2 Beta:
 Detects repetitive tool-call patterns. Maintains a sliding window of recent tool calls and emits a `WARNING` alert when `repeat_threshold` consecutive identical calls (same tool name and arguments) are observed.
 
 ```python linenums="1"
-from autogen.beta import Agent, LoopDetector
+from autogen.beta import Actor, LoopDetector
 from autogen.beta.config import OpenAIConfig
 
-agent = Agent(
+actor = Actor(
     "poller",
     config=OpenAIConfig(model="gpt-5"),
     observers=[LoopDetector(window_size=10, repeat_threshold=3)],
@@ -193,10 +193,10 @@ agent = Agent(
 Tracks cumulative token usage across `ModelResponse` and `TaskCompleted` events. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python linenums="1"
-from autogen.beta import Agent, TokenMonitor
+from autogen.beta import Actor, TokenMonitor
 from autogen.beta.config import OpenAIConfig
 
-agent = Agent(
+actor = Actor(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
     observers=[TokenMonitor(warn_threshold=50_000, alert_threshold=100_000)],
@@ -254,10 +254,10 @@ class AvgCompletionObserver(BaseObserver):
 Register it like any other observer:
 
 ```python linenums="1"
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.config import OpenAIConfig
 
-agent = Agent(
+actor = Actor(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
     observers=[AvgCompletionObserver(window=5)],

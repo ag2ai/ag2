@@ -8,17 +8,17 @@ The **Stream** in **AG2 Beta** is a central event bus that facilitates communica
 
 The Stream manages the flow of messages, actions, and tool calls, allowing for decoupled and scalable architectures. You interact with the Stream by publishing events to it and subscribing to specific events you want to listen to.
 
-## Passing a custom stream to an Agent
+## Passing a custom stream to an Actor
 
 By default, agents create a `MemoryStream` instance internally for each conversation.
 
 However, you can pass a custom stream to an agent when calling its `ask` method. This allows you to set up subscribers on the stream before the conversation starts, letting you observe or intercept the agent's internal events.
 
 ```python linenums="1"
-from autogen.beta import Agent, MemoryStream
+from autogen.beta import Actor, MemoryStream
 from autogen.beta.events import ModelRequest, ModelResponse
 
-agent = Agent("my_agent")
+actor = Actor("my_agent")
 
 my_stream = MemoryStream()
 
@@ -36,7 +36,7 @@ response = await agent.ask("Hello!", stream=my_stream)
 You can listen to events flowing through the stream using the `subscribe` method. To filter which events you receive, you can use the `where` method.
 
 !!! note
-    All event subscribers and interrupters support the same powerful execution context capabilities as [Agent Tools](/docs/beta/tools).
+    All event subscribers and interrupters support the same powerful execution context capabilities as [Actor Tools](/docs/beta/tools).
 
     By type-hinting the `Context` object (or using `Depends`, `Inject`, `Variable`), your subscribers can access injected dependencies, interact with human-in-the-loop flows, or access conversation variables.
 
@@ -184,13 +184,13 @@ pip install "ag2[redis]"
 ### Basic Usage
 
 ```python linenums="1" hl_lines="2 5"
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.streams.redis import RedisStream
 from autogen.beta.config import OpenAIConfig
 
 stream = RedisStream("redis://localhost:6379")
 
-agent = Agent(
+actor = Actor(
     "assistant",
     prompt="You are a helpful assistant.",
     config=OpenAIConfig("gpt-4o-mini"),

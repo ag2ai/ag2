@@ -137,11 +137,11 @@ Implement your own `StoreBootstrap` if you need a different layout.
 `EventLogWriter` serializes a Stream's events to a `KnowledgeStore` as JSONL, and can reconstruct them later. Useful for replay, audit, or multi-run aggregation.
 
 ```python linenums="1"
-from autogen.beta import Agent, EventLogWriter, MemoryKnowledgeStore, MemoryStream
+from autogen.beta import Actor, EventLogWriter, MemoryKnowledgeStore, MemoryStream
 from autogen.beta.config import OpenAIConfig
 
 stream = MemoryStream()
-agent = Agent("assistant", config=OpenAIConfig(model="gpt-5"))
+actor = Actor("assistant", config=OpenAIConfig(model="gpt-5"))
 await agent.ask("Hello!", stream=stream)
 
 # Persist all events from this stream
