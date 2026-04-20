@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
-from autogen.beta.knowledge import KnowledgeStore
+from autogen.beta.knowledge import CONVERSATIONS_PREFIX, KnowledgeStore
 
 
 class EpisodicMemoryPolicy:
@@ -34,7 +34,7 @@ class EpisodicMemoryPolicy:
         if not store:
             return prompts, events
 
-        entries = await store.list("/memory/conversations/")
+        entries = await store.list(CONVERSATIONS_PREFIX)
         if not entries:
             return prompts, events
 
@@ -42,7 +42,7 @@ class EpisodicMemoryPolicy:
         recent = entries[-self._max :]
         summaries: list[str] = []
         for entry in recent:
-            content = await store.read(f"/memory/conversations/{entry}")
+            content = await store.read(f"{CONVERSATIONS_PREFIX}{entry}")
             if content:
                 summaries.append(content)
 

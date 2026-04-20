@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
-from autogen.beta.knowledge import KnowledgeStore
+from autogen.beta.knowledge import WORKING_MEMORY_PATH, KnowledgeStore
 
 
 class WorkingMemoryPolicy:
@@ -31,7 +31,7 @@ class WorkingMemoryPolicy:
         if not store:
             return prompts, events
 
-        content = await store.read("/memory/working.md")
+        content = await store.read(WORKING_MEMORY_PATH)
         if content:
             prompts = prompts + [f"## Working Memory\n\n{content}"]
 

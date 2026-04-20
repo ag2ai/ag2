@@ -5,6 +5,7 @@
 from typing import Protocol, runtime_checkable
 
 from .base import KnowledgeStore
+from .constants import LOG_PREFIX
 
 
 @runtime_checkable
@@ -35,7 +36,7 @@ class DefaultBootstrap:
         )
 
         await store.write(
-            "/log/SKILL.md",
+            f"{LOG_PREFIX}SKILL.md",
             "Conversation logs. Each file is a JSONL record of one conversation's events. "
             "Auto-populated by the framework after each conversation.",
         )

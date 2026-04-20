@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from autogen.beta.events import BaseEvent
 
+from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH
+
 if TYPE_CHECKING:
     from autogen.beta.annotations import Context
     from autogen.beta.config import ModelConfig
@@ -99,7 +101,7 @@ class ConversationSummaryAggregate:
         summary = await self._summarize(events)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         stream_id = str(context.stream.id)
-        await store.write(f"/memory/conversations/{ts}_{stream_id}.md", summary)
+        await store.write(f"{CONVERSATIONS_PREFIX}{ts}_{stream_id}.md", summary)
 
     async def _summarize(self, events: list[BaseEvent]) -> str:
         from autogen.beta.context import ConversationContext as Ctx
@@ -143,9 +145,9 @@ class WorkingMemoryAggregate:
     ) -> None:
         if not events:
             return
-        existing = await store.read("/memory/working.md") or ""
+        existing = await store.read(WORKING_MEMORY_PATH) or ""
         updated = await self._merge(existing, events)
-        await store.write("/memory/working.md", updated)
+        await store.write(WORKING_MEMORY_PATH, updated)
 
     async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
         from autogen.beta.context import ConversationContext as Ctx
