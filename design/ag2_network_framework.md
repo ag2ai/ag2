@@ -117,8 +117,7 @@ class Watch(Protocol):
 | Watch | Behavior | Replaces |
 |-------|----------|----------|
 | `EventWatch(condition)` | Fire immediately on matching event | `OnEvent` trigger |
-| `BatchWatch(n, condition)` | Buffer N matching events, fire with batch | `EveryNEvents` trigger |
-| `WindowWatch(seconds, condition)` | Collect events in time window, fire with batch | New |
+| `CadenceWatch(n?, max_wait?, condition?)` | Buffer until N events or `max_wait` seconds elapse (either or both); fire with batch | `EveryNEvents` trigger + timed window |
 | `IntervalWatch(seconds)` | Fire periodically | Scheduler `_CronEntry` |
 | `DelayWatch(seconds)` | Fire once after delay | Scheduler `_OnceEntry` |
 | `CronWatch(expression)` | Fire on cron schedule (e.g. `"0 9 * * MON"`) | New |
@@ -1444,7 +1443,7 @@ from autogen.beta import (
     Agent, Actor, KnowledgeConfig, TaskConfig,
 
     # Primitives
-    Watch, EventWatch, BatchWatch, WindowWatch, IntervalWatch, DelayWatch, CronWatch,
+    Watch, EventWatch, CadenceWatch, IntervalWatch, DelayWatch, CronWatch,
     AllOf, AnyOf, Sequence,
     ObserverAlert, Severity, HaltEvent,
     KnowledgeStore, MemoryKnowledgeStore,
@@ -1655,7 +1654,7 @@ All layers implemented and tested (575 tests passing). The framework restructuri
 |-------|------|--------|
 | **Phase 1: Primitives** | Watch (7 types + 3 composites), Signal (4 policies), Priority, Envelope (wire format), Channel (3 types), Harness (middleware bridge), Infra (4 protocols) | **Done** |
 | **Phase 2: Building Blocks** | Actor, Observer, Hub (with RegistrationHandle, serve(), state_store/priority_scheme/conflict_resolver), Scheduler, events, TokenMonitor, LoopDetector | **Done** |
-| **Phase 3: Composition** | Plugin protocol, RouteDecision, Topology (Pipeline/Fanout/Conditional), WindowWatch, CronWatch, RateLimiter, TelemetryPlugin | **Done** |
+| **Phase 3: Composition** | Plugin protocol, RouteDecision, Topology (Pipeline/Fanout/Conditional), CadenceWatch, CronWatch, RateLimiter, TelemetryPlugin | **Done** |
 | **HttpChannel** | Cross-process HTTP transport with at-least-once delivery, retry, health endpoint | **Done** |
 | **Network** | Convenience class (Hub + Scheduler) with async context manager support | **Done** |
 | **Distributed Delegation** | RemoteAgent, Hub.serve(), Hub.connect() — cross-server agent communication over HTTP | **Done** |

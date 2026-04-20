@@ -64,7 +64,7 @@ Implementations may converge — e.g., a single backing store class could implem
 
 Each of these was investigated and confirmed to provide unique value:
 
-**Watch vs Stream.subscribe** — Watch adds timer-based triggers (IntervalWatch, DelayWatch, CronWatch), batching (BatchWatch, WindowWatch), and composition (AllOf, AnyOf, Sequence). Stream.subscribe is low-level fire-and-forget. EventWatch is the simplest member of the Watch family — it's a thin wrapper over subscribe, but exists to share the Watch interface with timer/batch watches. Correct layering: subscribe is the primitive, Watch is the abstraction.
+**Watch vs Stream.subscribe** — Watch adds timer-based triggers (IntervalWatch, DelayWatch, CronWatch), batching (CadenceWatch — size and/or time triggered), and composition (AllOf, AnyOf, Sequence). Stream.subscribe is low-level fire-and-forget. EventWatch is the simplest member of the Watch family — it's a thin wrapper over subscribe, but exists to share the Watch interface with timer/batch watches. Correct layering: subscribe is the primitive, Watch is the abstraction.
 
 **Channel vs Stream** — Channel is the envelope delivery layer (addressing, backpressure, priority, remote transport). Stream is the event observation layer (history, filtering, dependency injection). Channel moves envelopes between agents. Stream records what happened. Hub uses both: Channel to route, Stream to observe. Not redundant.
 

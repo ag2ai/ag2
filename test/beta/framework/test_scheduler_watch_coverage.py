@@ -10,7 +10,7 @@ Covers gaps identified during review:
 - stop() idempotency
 - cancel() on an armed watch mid-flight
 - Sequence with > 2 watches
-- WindowWatch spanning multiple flush cycles
+- CadenceWatch time trigger spanning multiple flush cycles
 - CronWatch arm + fire cycle
 
 Note: the V2 network tests (EventWatch + Hub reactive delegation, Bug 1
@@ -29,11 +29,11 @@ from autogen.beta.events.base import BaseEvent
 from autogen.beta.scheduler import Scheduler, WatchStatus
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import (
+    CadenceWatch,
     CronWatch,
     EventWatch,
     IntervalWatch,
     Sequence,
-    WindowWatch,
 )
 
 # ---------------------------------------------------------------------------
@@ -232,11 +232,11 @@ class TestSequenceThreeSteps:
 
 
 # ---------------------------------------------------------------------------
-# WindowWatch spanning multiple flush cycles
+# CadenceWatch time trigger spanning multiple flush cycles
 # ---------------------------------------------------------------------------
 
 
-class TestWindowWatchMultipleWindows:
+class TestCadenceWatchMultipleWindows:
     @pytest.mark.asyncio
     async def test_two_separate_windows(self) -> None:
         """Events in separate time windows produce separate batches."""
@@ -247,22 +247,18 @@ class TestWindowWatchMultipleWindows:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = WindowWatch(0.1, condition=ToolCallEvent)
+        watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
-        # First window
         await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
         await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
 
-        # Wait for first window to flush
         await asyncio.sleep(0.2)
         assert len(batches) == 1
         assert len(batches[0]) == 2
 
-        # Second window
         await stream.send(ToolCallEvent(name="t3", arguments="{}"), ctx)
 
-        # Wait for second window to flush
         await asyncio.sleep(0.2)
         assert len(batches) == 2
         assert len(batches[1]) == 1

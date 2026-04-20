@@ -23,7 +23,7 @@ from autogen.beta.events.lifecycle import ObserverCompleted, ObserverStarted
 from autogen.beta.observers import LoopDetector, TokenMonitor
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
-from autogen.beta.watch import BatchWatch, EventWatch
+from autogen.beta.watch import EventWatch
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]

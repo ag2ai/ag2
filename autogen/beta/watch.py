@@ -93,37 +93,90 @@ class EventWatch(_BaseWatch):
         self._armed = True
 
 
-class BatchWatch(_BaseWatch):
-    """Buffer N matching events, then fire with the entire batch.
+class CadenceWatch(_BaseWatch):
+    """Fire when ``n`` matching events have been buffered or ``max_wait`` seconds
+    have elapsed since the first buffered event — whichever comes first.
+
+    At least one of ``n`` or ``max_wait`` must be set. Supplying both produces
+    a size-or-time batch. Only ``n`` gives a pure count batch; only ``max_wait``
+    gives a pure time window.
 
     Example::
 
-        BatchWatch(10, condition=ModelResponse)
+        CadenceWatch(n=10)                              # count-only batch
+        CadenceWatch(max_wait=60)                       # time-only window
+        CadenceWatch(n=10, max_wait=60)                 # size OR time
+        CadenceWatch(n=5, condition=ModelResponse)
     """
 
-    def __init__(self, n: int, condition: ClassInfo | Condition | None = None) -> None:
+    def __init__(
+        self,
+        n: int | None = None,
+        max_wait: float | None = None,
+        *,
+        condition: ClassInfo | Condition | None = None,
+    ) -> None:
+        if n is None and max_wait is None:
+            raise ValueError("CadenceWatch requires at least one of 'n' or 'max_wait'")
+        if n is not None and n <= 0:
+            raise ValueError(f"CadenceWatch 'n' must be positive, got {n}")
+        if max_wait is not None and max_wait <= 0:
+            raise ValueError(f"CadenceWatch 'max_wait' must be positive, got {max_wait}")
         super().__init__()
         self._n = n
+        self._max_wait = max_wait
         self._condition: Condition | None = None
         if condition is not None:
             self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
         self._buffer: list[BaseEvent] = []
+        self._timer_task: asyncio.Task[Any] | None = None
+        self._callback: WatchCallback | None = None
 
     def arm(self, stream: Stream, callback: WatchCallback) -> None:
+        self._stream = stream
+        self._callback = callback
+
         async def _handler(event: BaseEvent, ctx: Context) -> None:
             self._buffer.append(event)
-            if len(self._buffer) >= self._n:
-                batch = self._buffer[:]
-                self._buffer.clear()
-                await callback(batch, ctx)
 
-        self._stream = stream
+            if self._n is not None and len(self._buffer) >= self._n:
+                self._cancel_timer()
+                await self._fire(ctx)
+                return
+
+            if self._max_wait is not None and (self._timer_task is None or self._timer_task.done()):
+                self._timer_task = asyncio.ensure_future(self._wait_and_fire(stream))
+
         self._sub_id = stream.subscribe(_handler, condition=self._condition)
         self._armed = True
 
-    def disarm(self) -> None:
-        super().disarm()
+    async def _wait_and_fire(self, stream: Stream) -> None:
+        assert self._max_wait is not None
+        try:
+            await asyncio.sleep(self._max_wait)
+        except asyncio.CancelledError:
+            return
+        if self._buffer and self._callback is not None:
+            ctx = ContextType(stream=stream)
+            await self._fire(ctx)
+
+    async def _fire(self, ctx: Context) -> None:
+        if not self._buffer or self._callback is None:
+            return
+        batch = self._buffer[:]
         self._buffer.clear()
+        await self._callback(batch, ctx)
+
+    def _cancel_timer(self) -> None:
+        if self._timer_task is not None:
+            self._timer_task.cancel()
+            self._timer_task = None
+
+    def disarm(self) -> None:
+        self._cancel_timer()
+        self._buffer.clear()
+        self._callback = None
+        super().disarm()
 
 
 class IntervalWatch(_BaseWatch):
@@ -367,63 +420,6 @@ class Sequence(_BaseWatch):
 # ---------------------------------------------------------------------------
 # Advanced watches
 # ---------------------------------------------------------------------------
-
-
-class WindowWatch(_BaseWatch):
-    """Collect events in a time window, then fire with the batch.
-
-    Events matching the condition are buffered. After ``seconds`` elapse
-    since the first buffered event, the callback fires with all collected
-    events and the buffer resets.
-
-    Example::
-
-        WindowWatch(60, condition=ModelResponse)  # Batch responses over 60s
-    """
-
-    def __init__(self, seconds: float, condition: ClassInfo | Condition | None = None) -> None:
-        super().__init__()
-        self._seconds = seconds
-        self._condition: Condition | None = None
-        if condition is not None:
-            self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
-        self._buffer: list[BaseEvent] = []
-        self._timer_task: asyncio.Task[Any] | None = None
-        self._callback: WatchCallback | None = None
-        self._stream: Stream | None = None
-
-    def arm(self, stream: Stream, callback: WatchCallback) -> None:
-        self._stream = stream
-        self._callback = callback
-
-        async def _handler(event: BaseEvent, ctx: Context) -> None:
-            self._buffer.append(event)
-            # Start timer on first event in window
-            if self._timer_task is None or self._timer_task.done():
-                self._timer_task = asyncio.ensure_future(self._flush(stream))
-
-        self._sub_id = stream.subscribe(_handler, condition=self._condition)
-        self._armed = True
-
-    async def _flush(self, stream: Stream) -> None:
-        await asyncio.sleep(self._seconds)
-        if self._buffer and self._callback is not None:
-            batch = self._buffer[:]
-            self._buffer.clear()
-            ctx = ContextType(stream=stream)
-            await self._callback(batch, ctx)
-
-    def disarm(self) -> None:
-        if self._timer_task is not None:
-            self._timer_task.cancel()
-            self._timer_task = None
-        self._buffer.clear()
-        self._callback = None
-        if self._stream is not None and self._sub_id is not None:
-            self._stream.unsubscribe(self._sub_id)
-        self._sub_id = None
-        self._stream = None
-        self._armed = False
 
 
 class CronWatch(_BaseWatch):
