@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
-from google import genai
+import google.genai as genai
 from google.genai import types
 
 from autogen.beta.config.client import LLMClient

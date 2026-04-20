@@ -5,6 +5,20 @@ description = "AG2 CLI — build, run, test, and deploy multi-agent applications
 license = "Apache-2.0"
 requires-python = ">=3.10"
 readme = "README.md"
+keywords = ["ai", "agent", "ag2", "cli", "multi-agent", "agentic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = [
     "typer[all]>=0.12",
     "rich>=13.0",
@@ -21,6 +35,13 @@ dev = [
 
 [project.scripts]
 ag2 = "ag2_cli.app:app"
+
+[project.urls]
+Homepage = "https://ag2.ai/"
+Documentation = "https://docs.ag2.ai"
+Source = "https://github.com/ag2ai/ag2/tree/main/cli"
+Tracker = "https://github.com/ag2ai/ag2/issues"
+Discord = "https://discord.gg/pAbnFJrkgZ"
 
 [build-system]
 requires = ["hatchling"]

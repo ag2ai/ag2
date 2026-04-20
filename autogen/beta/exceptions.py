@@ -7,6 +7,15 @@ class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
 
 
+class ToolResolutionError(AG2Error):
+    """Raised when one or more tools in an AgentSpec cannot be resolved from the available tools pool."""
+
+    def __init__(self, missing: list[str], available: list[str]) -> None:
+        self.missing = missing
+        self.available = available
+        super().__init__(f"Could not resolve tool(s): {missing}. Available: {sorted(available)}")
+
+
 class ToolExecutionError(AG2Error):
     """Base exception for tool-related errors."""
 

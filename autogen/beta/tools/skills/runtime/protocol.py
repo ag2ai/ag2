@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.tools.shell.environment.base import ShellEnvironment
-from autogen.beta.tools.toolkits.skills.skill_types import SkillMetadata
+from autogen.beta.tools.skills.skill_types import SkillMetadata
 
 
 @runtime_checkable

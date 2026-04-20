@@ -20,8 +20,9 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
-from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
-from .toolkits import FilesystemToolkit, SkillSearchToolkit, SkillsToolkit
+from .shell import LocalShellTool
+from .skills import SkillSearchToolkit, SkillsToolkit
+from .toolkits import FilesystemToolkit
 
 __all__ = (
     "CodeExecutionTool",
@@ -29,12 +30,10 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "FilesystemToolkit",
     "ImageGenerationTool",
-    "LocalShellEnvironment",
     "LocalShellTool",
     "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
-    "ShellEnvironment",
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",

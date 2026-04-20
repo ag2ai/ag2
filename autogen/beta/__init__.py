@@ -41,8 +41,9 @@ from .knowledge import (
 from .observer import BaseObserver, Observer, observer
 from .observers import LoopDetector, TokenMonitor
 from .response import PromptedSchema, ResponseSchema, response_schema
+from .spec import AgentSpec
 from .stream import MemoryStream
-from .tools import ToolResult, tool
+from .tools import ToolResult, Toolkit, tool
 from .watch import (
     AllOf,
     AnyOf,
@@ -59,6 +60,7 @@ from .watch import (
 __all__ = (
     "Agent",
     "AgentReply",
+    "AgentSpec",
     "AggregationCompleted",
     "AllOf",
     "AnyOf",
@@ -107,6 +109,7 @@ __all__ = (
     "TextInput",
     "TokenMonitor",
     "ToolResult",
+    "Toolkit",
     "UnknownEvent",
     "Variable",
     "VideoInput",

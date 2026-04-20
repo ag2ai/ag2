@@ -7,19 +7,16 @@ from .base import BaseEvent, Field
 from .conditions import Condition
 from .input_events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
     DocumentInput,
-    DocumentUrlInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     Input,
     ModelRequest,
     TextInput,
+    UrlInput,
     VideoInput,
-    VideoUrlInput,
 )
 from .lifecycle import (
     AggregationCompleted,
@@ -54,7 +51,6 @@ from .types import (
 __all__ = (
     "AggregationCompleted",
     "AudioInput",
-    "AudioUrlInput",
     "BaseEvent",
     "BinaryInput",
     "BinaryResult",
@@ -65,14 +61,12 @@ __all__ = (
     "CompactionCompleted",
     "Condition",
     "DocumentInput",
-    "DocumentUrlInput",
     "Field",
     "FileIdInput",
     "HaltEvent",
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
-    "ImageUrlInput",
     "Input",
     "ModelMessage",
     "ModelMessageChunk",
@@ -95,7 +89,7 @@ __all__ = (
     "ToolResultEvent",
     "ToolResultsEvent",
     "UnknownEvent",
+    "UrlInput",
     "Usage",
     "VideoInput",
-    "VideoUrlInput",
 )

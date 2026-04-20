@@ -73,6 +73,7 @@ def test_build(builder: AgentBuilder, credentials_all: Credentials):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
+@pytest.mark.timeout(120)
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb", "huggingface_hub"], "autobuild")
 @run_for_optional_imports(["openai"], "openai")

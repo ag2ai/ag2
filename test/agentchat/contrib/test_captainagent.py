@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 
+import pytest
+
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -14,6 +16,7 @@ with optional_import_block() as result:
     import huggingface_hub  # noqa: F401
 
 
+@pytest.mark.timeout(120)
 @run_for_optional_imports("openai", "openai")
 def test_captain_agent_from_scratch(credentials_all: Credentials):
     config_list = credentials_all.config_list
