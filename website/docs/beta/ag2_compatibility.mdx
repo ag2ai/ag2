@@ -115,6 +115,56 @@ result = await a_run_group_chat(
 await result.process()
 ```
 
+## Tool-driven handoffs
+
+Beta agent tools can trigger a handoff directly from inside a tool by returning a `ToolResult` with a `target` in its `metadata`. When a `ConversableAdapter` detects this, it forwards the target to the group manager, which routes execution to the specified agent on the next turn. See the [AG2 handoffs guide](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs) for the full list of available targets.
+
+Use `final=True` alongside the target to end the agent's turn immediately after the tool runs, without invoking the LLM again for a follow-up reply.
+
+```python linenums="1" hl_lines="19-20 27-32"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import a_run_group_chat
+from autogen.agentchat.group import AgentTarget
+from autogen.agentchat.group.patterns import RoundRobinPattern
+from autogen.beta import Agent, ToolResult, config
+
+model_config = config.OpenAIConfig(model="gpt-4o")
+
+reviewer = Agent("reviewer", config=model_config).as_conversable()
+writer = Agent("writer", config=model_config).as_conversable()
+
+router = Agent("router", config=model_config)
+
+@router.tool
+def submit_for_review(content: str) -> ToolResult[str]:
+    """Submit the draft content for review."""
+    return ToolResult(
+        f"Draft submitted: {content}",
+        metadata={"target": AgentTarget(reviewer)},
+        final=True,
+    )
+
+conversable_agent = ConversableAgent("coordinator", llm_config=LLMConfig({"model": "gpt-4o"}))
+
+pattern = RoundRobinPattern(
+    initial_agent=conversable_agent,
+    agents=[
+        conversable_agent,
+        router.as_conversable(),
+        writer,
+        reviewer,
+    ],
+)
+
+result = await a_run_group_chat(
+    pattern=pattern,
+    messages="Write and review a short summary.",
+    max_rounds=6,
+)
+
+await result.process()
+```
+
 ## Group chats (autopattern)
 
 You can build dynamic [group chats](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction) using `AutoPattern`, where multiple beta agents and standard agents participate in a shared environment.

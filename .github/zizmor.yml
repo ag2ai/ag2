@@ -27,3 +27,4 @@ rules:
   use-trusted-publishing:
     ignore:
       - python-package.yml
+      - cli-package.yml

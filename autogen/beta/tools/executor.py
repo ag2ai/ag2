@@ -62,7 +62,10 @@ class ToolExecutor:
                     if result.final:
                         await context.send(
                             ModelResponse(
-                                message=ModelMessage(ev.content),
+                                message=ModelMessage(
+                                    ev.content,
+                                    metadata=result.metadata,
+                                ),
                                 response_force=True,
                             )
                         )
