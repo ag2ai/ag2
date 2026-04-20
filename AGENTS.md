@@ -1,5 +1,9 @@
 # AG2 Beta Development Guidelines
 
+## Common rules
+
+- Do not use `from __future__ import annotations` in new code.
+
 ## Package Structure
 
 `autogen/beta/` is a protocol-driven async agent framework. Key modules:

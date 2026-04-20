@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta.events import BinaryInput, DocumentInput, DocumentUrlInput, FileIdInput
+from autogen.beta.events import BinaryInput, DocumentInput, FileIdInput, UrlInput
 
 
 def test_url_returns_document_url_input() -> None:
     result = DocumentInput("https://example.com/doc.pdf")
 
-    assert isinstance(result, DocumentUrlInput)
+    assert isinstance(result, UrlInput)
     assert result.url == "https://example.com/doc.pdf"
 
 

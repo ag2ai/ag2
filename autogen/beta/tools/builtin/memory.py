@@ -12,12 +12,14 @@ from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
+MEMORY_TOOL_NAME = "memory"
+
 
 @dataclass(slots=True)
 class MemoryToolSchema(ToolSchema):
     """Provider-neutral capability flag for the memory tool."""
 
-    type: str = field(default="memory", init=False)
+    type: str = field(default=MEMORY_TOOL_NAME, init=False)
     version: Literal["memory_20250818"] = "memory_20250818"
 
 
@@ -33,12 +35,18 @@ class MemoryTool(Tool):
     See: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
     """
 
+    __slots__ = (
+        "_schema",
+        "name",
+    )
+
     def __init__(
         self,
         *,
         version: Literal["memory_20250818"] = "memory_20250818",
     ) -> None:
         self._schema = MemoryToolSchema(version=version)
+        self.name = MEMORY_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         return [self._schema]

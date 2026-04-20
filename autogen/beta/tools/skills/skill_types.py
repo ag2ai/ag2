@@ -5,8 +5,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-__all__ = ("SkillMetadata",)
-
 
 @dataclass
 class SkillMetadata:

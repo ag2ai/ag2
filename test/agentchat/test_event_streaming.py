@@ -240,6 +240,7 @@ async def test_group_chat_async(credentials_openai_mini: Credentials):
     assert isinstance(await response.cost, Cost)
 
 
+@pytest.mark.timeout(120)
 @run_for_optional_imports("openai", "openai")
 def test_swarm_sync(credentials_openai_mini: Credentials):
     llm_config = credentials_openai_mini.llm_config
@@ -293,6 +294,7 @@ def test_swarm_sync(credentials_openai_mini: Credentials):
     assert isinstance(response.cost, Cost)
 
 
+@pytest.mark.timeout(120)
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_swarm_async(credentials_openai_mini: Credentials):
@@ -426,7 +428,7 @@ def test_sequential_sync(credentials_openai_mini: Credentials):
         assert isinstance(response.cost, Cost)
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(120)
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_sequential_async(credentials_openai_mini: Credentials):
