@@ -14,10 +14,11 @@ Use a Watch when a simple `stream.subscribe(...)` is not enough — i.e. when yo
 | You need | Use |
 |---|---|
 | Run a callback on every matching event | `#!python stream.subscribe(fn, condition=...)` (no Watch needed) |
-| Fire every N events | `BatchWatch(N, condition)` |
+| Fire every N events | `CadenceWatch(n=N, condition=...)` |
+| Collect events over a time window | `CadenceWatch(max_wait=seconds, condition=...)` |
+| Fire on "N events OR T seconds, whichever first" | `CadenceWatch(n=N, max_wait=seconds, condition=...)` |
 | Fire once after a delay | `DelayWatch(seconds)` |
 | Fire on a schedule | `IntervalWatch(seconds)` or `CronWatch(expr)` |
-| Collect events over a time window | `WindowWatch(seconds, condition)` |
 | Wait for two separate events in any order | `AllOf(w1, w2)` |
 | Wait for an ordered sequence | `Sequence(w1, w2, ...)` |
 | Fire on the earliest of several triggers | `AnyOf(w1, w2, ...)` |
@@ -48,7 +49,7 @@ from autogen.beta.events import BaseEvent
 async def callback(events: list[BaseEvent], ctx: Context) -> None: ...
 ```
 
-For event-driven watches (`EventWatch`, `BatchWatch`, `WindowWatch`, `Sequence`), `events` contains the matched events. For time-driven watches (`DelayWatch`, `IntervalWatch`, `CronWatch`), `events` is empty — the trigger is the timer itself.
+For event-driven watches (`EventWatch`, `CadenceWatch`, `Sequence`), `events` contains the matched events. For time-driven watches (`DelayWatch`, `IntervalWatch`, `CronWatch`), `events` is empty — the trigger is the timer itself.
 
 ## Event-driven Watches
 
@@ -78,38 +79,28 @@ from autogen.beta.events import ToolCallEvent
 watch = EventWatch(ToolCallEvent.name == "search")
 ```
 
-### BatchWatch
+### CadenceWatch
 
-Buffers N matching events, then fires once with the whole batch.
+Buffers matching events and fires once the buffer reaches **size** `n`, once **time** `max_wait` seconds have elapsed since the first buffered event, or whichever comes first when both are set. At least one of `n` and `max_wait` is required.
 
 ```python linenums="1"
-from autogen.beta import BatchWatch
+from autogen.beta import CadenceWatch
 from autogen.beta.events import ModelResponse
 
-# Fire every 5 model responses
-watch = BatchWatch(5, condition=ModelResponse)
+# Count-only: fire every 5 model responses
+batch = CadenceWatch(n=5, condition=ModelResponse)
+
+# Time-only: flush the buffer once a minute, whenever there's something in it
+window = CadenceWatch(max_wait=60.0, condition=ModelResponse)
+
+# Size OR time: fire at 5 events OR 60 seconds after the first event, whichever first
+hybrid = CadenceWatch(n=5, max_wait=60.0, condition=ModelResponse)
 
 async def summarize(events, ctx):
     print(f"Batched {len(events)} responses")
 ```
 
-Any unfilled buffer at disarm-time is discarded.
-
-### WindowWatch
-
-Collects events over a sliding time window, then flushes the batch.
-
-```python linenums="1"
-from autogen.beta import WindowWatch
-from autogen.beta.events import ModelResponse
-
-watch = WindowWatch(60.0, condition=ModelResponse)
-
-async def hourly_digest(events, ctx):
-    print(f"{len(events)} responses in the last minute")
-```
-
-The timer starts on the **first** event in a window — a quiet stream produces no firings.
+The timer starts on the **first** buffered event in a cadence — a quiet stream produces no firings. Any unfilled buffer at disarm-time is discarded.
 
 ## Time-driven Watches
 
