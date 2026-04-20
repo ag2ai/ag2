@@ -12,7 +12,7 @@ from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import (
     AllOf,
     AnyOf,
-    BatchWatch,
+    CadenceWatch,
     DelayWatch,
     EventWatch,
     IntervalWatch,
@@ -88,7 +88,7 @@ class TestEventWatch:
         assert len(received) == 0
 
 
-class TestBatchWatch:
+class TestCadenceWatch:
     @pytest.mark.asyncio
     async def test_fires_after_n_events(self) -> None:
         stream = MemoryStream()
@@ -98,7 +98,7 @@ class TestBatchWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = BatchWatch(3, condition=ToolCallEvent)
+        watch = CadenceWatch(n=3, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
         for i in range(5):
@@ -117,7 +117,7 @@ class TestBatchWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = BatchWatch(2)
+        watch = CadenceWatch(n=2)
         watch.arm(stream, callback)
 
         for i in range(4):
@@ -134,12 +134,151 @@ class TestBatchWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = BatchWatch(5)
+        watch = CadenceWatch(n=5)
         watch.arm(stream, callback)
 
         await stream.send(ModelMessage(content="m1"), ctx)
         watch.disarm()
         assert len(batches) == 0
+
+    @pytest.mark.asyncio
+    async def test_fires_on_timeout(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
+        watch.arm(stream, callback)
+
+        await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
+        await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
+
+        await asyncio.sleep(0.2)
+
+        assert len(batches) == 1
+        assert len(batches[0]) == 2
+
+    @pytest.mark.asyncio
+    async def test_n_wins_when_reached_before_timeout(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(n=2, max_wait=1.0)
+        watch.arm(stream, callback)
+
+        await stream.send(ModelMessage(content="m1"), ctx)
+        await stream.send(ModelMessage(content="m2"), ctx)
+
+        # Count trigger fires immediately; no need to wait for timeout
+        assert len(batches) == 1
+        assert len(batches[0]) == 2
+
+    @pytest.mark.asyncio
+    async def test_timeout_wins_when_n_not_reached(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(n=10, max_wait=0.1)
+        watch.arm(stream, callback)
+
+        await stream.send(ModelMessage(content="m1"), ctx)
+        await asyncio.sleep(0.2)
+
+        assert len(batches) == 1
+        assert len(batches[0]) == 1
+
+    def test_requires_at_least_one_trigger(self) -> None:
+        with pytest.raises(ValueError, match="at least one of 'n' or 'max_wait'"):
+            CadenceWatch()
+
+    def test_rejects_non_positive_n(self) -> None:
+        with pytest.raises(ValueError, match="'n' must be positive"):
+            CadenceWatch(n=0)
+
+    def test_rejects_non_positive_max_wait(self) -> None:
+        with pytest.raises(ValueError, match="'max_wait' must be positive"):
+            CadenceWatch(max_wait=0)
+
+    @pytest.mark.asyncio
+    async def test_count_trigger_cancels_pending_timer(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(n=2, max_wait=0.2)
+        watch.arm(stream, callback)
+
+        # Count trigger fires
+        await stream.send(ModelMessage(content="m1"), ctx)
+        await stream.send(ModelMessage(content="m2"), ctx)
+        assert len(batches) == 1
+
+        # Wait past max_wait; cancelled timer must not fire a phantom batch
+        await asyncio.sleep(0.3)
+        assert len(batches) == 1
+
+    @pytest.mark.asyncio
+    async def test_timer_restarts_after_count_flush(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(n=2, max_wait=0.1)
+        watch.arm(stream, callback)
+
+        # Count-trigger the first batch
+        await stream.send(ModelMessage(content="m1"), ctx)
+        await stream.send(ModelMessage(content="m2"), ctx)
+        assert len(batches) == 1
+
+        # A single follow-up event should start a fresh timer and flush on timeout
+        await stream.send(ModelMessage(content="m3"), ctx)
+        await asyncio.sleep(0.2)
+
+        assert len(batches) == 2
+        assert len(batches[1]) == 1
+
+    @pytest.mark.asyncio
+    async def test_count_fires_after_timer_flush(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        batches: list = []
+
+        async def callback(events, _ctx):
+            batches.append(events)
+
+        watch = CadenceWatch(n=3, max_wait=0.1)
+        watch.arm(stream, callback)
+
+        # Timer-trigger the first batch with a single event
+        await stream.send(ModelMessage(content="m1"), ctx)
+        await asyncio.sleep(0.2)
+        assert len(batches) == 1
+        assert len(batches[0]) == 1
+
+        # Count trigger must still work on the next batch
+        for i in range(3):
+            await stream.send(ModelMessage(content=f"x{i}"), ctx)
+
+        assert len(batches) == 2
+        assert len(batches[1]) == 3
 
 
 class TestIntervalWatch:

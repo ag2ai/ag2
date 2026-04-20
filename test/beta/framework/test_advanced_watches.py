@@ -9,10 +9,10 @@ import pytest
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.stream import MemoryStream
-from autogen.beta.watch import CronWatch, WindowWatch
+from autogen.beta.watch import CadenceWatch, CronWatch
 
 
-class TestWindowWatch:
+class TestCadenceWatchTimeTrigger:
     @pytest.mark.asyncio
     async def test_collects_events_in_window(self) -> None:
         stream = MemoryStream()
@@ -22,14 +22,12 @@ class TestWindowWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = WindowWatch(0.1, condition=ToolCallEvent)
+        watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
-        # Send events within the window
         await stream.send(ToolCallEvent(name="t1", arguments="{}"), ctx)
         await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
 
-        # Wait for window to flush
         await asyncio.sleep(0.2)
 
         assert len(batches) == 1
@@ -44,10 +42,9 @@ class TestWindowWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = WindowWatch(0.1, condition=ToolCallEvent)
+        watch = CadenceWatch(max_wait=0.1, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
-        # ModelMessage doesn't match
         await stream.send(ModelMessage(content="hello"), ctx)
         await asyncio.sleep(0.2)
 
@@ -62,7 +59,7 @@ class TestWindowWatch:
         async def callback(events, _ctx):
             batches.append(events)
 
-        watch = WindowWatch(0.1)
+        watch = CadenceWatch(max_wait=0.1)
         watch.arm(stream, callback)
 
         await stream.send(ModelMessage(content="hello"), ctx)
@@ -72,13 +69,12 @@ class TestWindowWatch:
         assert len(batches) == 0
 
     def test_disarm_resets_armed_flag(self) -> None:
-        """WindowWatch.disarm() must set is_armed to False."""
         stream = MemoryStream()
 
         async def callback(events, ctx):
             pass
 
-        watch = WindowWatch(1.0)
+        watch = CadenceWatch(max_wait=1.0)
         watch.arm(stream, callback)
         assert watch.is_armed
 
