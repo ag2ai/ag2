@@ -189,7 +189,20 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result.append(r.to_api())
+                parts: list[dict[str, Any]] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append({"type": "text", "text": part.content})
+                    elif isinstance(part, DataInput):
+                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "openai-completions")
+
+            # Simple string content for a single plain-text turn (most common case)
+            if len(parts) == 1 and parts[0]["type"] == "text":
+                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts[0]["text"]})
+            else:
+                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts})
 
         elif isinstance(message, ModelRequest):
             parts: list[dict[str, Any]] = []
