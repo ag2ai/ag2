@@ -1,11 +1,11 @@
 ---
-title: Common Toolkits
-sidebarTitle: Common Toolkits
+title: Common Tools
+sidebarTitle: Common Tools
 ---
 
-# Common Toolkits
+# Common Tools
 
-AG2 ships with ready-made toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+AG2 ships with ready-made tools and toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
 
 ## FilesystemToolkit
 
@@ -262,3 +262,134 @@ Available tools:
 | `search_skills` | Search the skills.sh registry by keyword |
 | `install_skill` | Download and install a skill by its registry identifier |
 | `remove_skill` | Remove an installed skill by name |
+
+---
+
+## DuckDuckSearchTool
+
+`DuckDuckSearchTool` gives an agent the ability to search the web using DuckDuckGo. No API key is required.
+
+!!! note
+    Requires the `ddgs` extra: `pip install ag2[ddgs]`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import DuckDuckSearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[DuckDuckSearchTool()],
+)
+```
+
+### Configuration
+
+```python linenums="1"
+tool = DuckDuckSearchTool(
+    max_results=10,       # default: 5
+    region="uk-en",       # default: "us-en"
+    safesearch="strict",  # default: "moderate" — options: "on", "moderate", "off"
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## TavilySearchTool
+
+`TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.
+
+!!! note
+    Requires the `tavily` extra and an API key: `pip install ag2[tavily]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import TavilySearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, Tavily reads the `TAVILY_API_KEY` environment variable automatically.
+
+### Configuration
+
+```python linenums="1"
+tool = TavilySearchTool(
+    max_results=5,
+    search_depth="advanced",   # "basic" | "advanced" | "fast" | "ultra-fast"
+    topic="news",              # "general" | "news" | "finance"
+    include_answer=True,       # add an LLM-generated summary to the response
+    include_raw_content=True,  # include full page text alongside the snippet
+    include_images=True,       # include image URLs in the response
+    time_range="week",         # "day" | "week" | "month" | "year"
+    include_domains=["reuters.com", "bbc.com"],
+    exclude_domains=["example.com"],
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## LocalShellTool
+
+`LocalShellTool` gives an agent the ability to run shell commands in a local subprocess. By default it creates a temporary working directory that is cleaned up on process exit.
+
+!!! warning
+    `LocalShellTool` executes arbitrary shell commands. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import LocalShellTool
+
+agent = Agent(
+    "engineer",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[LocalShellTool("/tmp/my_project")],
+)
+```
+
+Passing a path string creates a `LocalShellEnvironment` in that directory. Passing nothing creates a temporary directory.
+
+### Restricting commands
+
+Use `LocalShellEnvironment` directly to control what the agent can run:
+
+```python linenums="1"
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
+
+# Allow only specific commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    allowed=["git", "python", "pip"],
+))
+
+# Block dangerous commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    blocked=["rm -rf", "curl", "wget"],
+))
+
+# Read-only mode — agent can inspect but not modify
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    readonly=True,
+))
+
+# Hide sensitive files from the agent
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    ignore=["**/.env", "*.key", "secrets/**"],
+))
+```
