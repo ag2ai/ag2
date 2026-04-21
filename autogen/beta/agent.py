@@ -135,7 +135,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | SendableMessage | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -150,7 +150,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | SendableMessage | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -165,7 +165,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | SendableMessage | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -180,7 +180,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | SendableMessage | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -193,7 +193,7 @@ class AgentReply(Generic[TResult, TAgent]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         prompt: Iterable[str] = (),
@@ -336,7 +336,7 @@ class Agent(Generic[TResult]):
             self.add_tool(t)
 
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
-        self.__tool_executor = ToolExecutor()
+        self.__tool_executor = ToolExecutor(self._serializer)
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
@@ -493,7 +493,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -509,7 +509,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -525,7 +525,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -541,7 +541,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -555,7 +555,7 @@ class Agent(Generic[TResult]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,

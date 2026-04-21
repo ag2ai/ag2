@@ -94,7 +94,7 @@ async def test_final_tool() -> None:
     class DataModel(BaseModel):
         data: str
 
-    def my_tool() -> ToolResult[DataModel]:
+    def my_tool() -> ToolResult:
         return ToolResult({"data": "result"}, final=True)
 
     agent = Agent(

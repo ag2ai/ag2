@@ -191,10 +191,19 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             parts_list: list[types.Part] = []
             for r in message.results:
+                result_parts: list[str] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        result_parts.append(part.content)
+                    elif isinstance(part, DataInput):
+                        result_parts.append(serializer.encode(part.data).decode())
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "gemini")
+                response_text = result_parts[0] if len(result_parts) == 1 else "\n".join(result_parts)
                 parts_list.append(
                     types.Part.from_function_response(
-                        name=r.name if hasattr(r, "name") else "",
-                        response={"result": r.content},
+                        name=r.name or "",
+                        response={"result": response_text},
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))

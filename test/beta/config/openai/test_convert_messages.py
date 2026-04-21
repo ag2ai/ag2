@@ -29,7 +29,7 @@ class TestTextInput:
         assert result[1] == {"role": "user", "content": "hello"}
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([TextInput("hello")])])
+        result = events_to_responses_input([ModelRequest([TextInput("hello")])], SerializerCls)
 
         assert result == [{"role": "user", "content": [{"type": "input_text", "text": "hello"}]}]
 
@@ -66,7 +66,7 @@ class TestImageUrlInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])])
+        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
 
         assert result == [
             {
@@ -84,7 +84,7 @@ class TestFileIdInput:
             convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
+        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
         assert result == [
             {
@@ -94,7 +94,9 @@ class TestFileIdInput:
         ]
 
     def test_responses_with_filename(self) -> None:
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
+        result = events_to_responses_input(
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+        )
 
         assert result == [
             {
@@ -113,7 +115,7 @@ class TestAudioUrlInput:
 
     def test_responses_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-responses"):
-            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])])
+            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
 
 
 class TestAudioBinaryInput:
@@ -178,9 +180,10 @@ class TestBinaryInput:
         })
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([
-            ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
-        ])
+        result = events_to_responses_input(
+            [ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
+            SerializerCls,
+        )
 
         expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
@@ -199,6 +202,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
+            SerializerCls,
         )
 
         assert result == [
@@ -217,7 +221,7 @@ class TestDocumentUrlInput:
             convert_messages([], [ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])])
+        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
         assert result == [
             {

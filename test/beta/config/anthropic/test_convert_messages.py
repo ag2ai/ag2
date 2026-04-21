@@ -85,7 +85,7 @@ def test_full_sequence_with_empty_args() -> None:
                 ToolResultEvent(
                     parent_id="tc_1",
                     name="list_items",
-                    result=ToolResult(content="apple, banana"),
+                    result=ToolResult("apple, banana"),
                 )
             ],
         ),

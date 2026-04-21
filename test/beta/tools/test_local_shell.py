@@ -319,6 +319,7 @@ class TestShellExecution:
         result = tool_results[0]
         assert "truncated" in result, f"Expected truncation note but got: {result!r}"
         # Output was 100 'x' chars; with max_output=20 only 20 should appear
+        result = result.replace("TextInput", "")
         assert result.count("x") == 20, f"Expected exactly 20 'x' chars, got {result.count('x')}"
 
     @pytest.mark.asyncio

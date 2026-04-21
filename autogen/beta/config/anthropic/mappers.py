@@ -233,14 +233,22 @@ def convert_messages(
                 result.append({"role": "assistant", "content": content})
 
         elif isinstance(message, ToolResultsEvent):
-            tool_results = [
-                {
+            tool_results = []
+            for r in message.results:
+                parts: list[dict[str, Any]] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append({"type": "text", "text": part.content})
+                    elif isinstance(part, DataInput):
+                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "anthropic")
+                tool_content: str | list[dict[str, Any]] = parts[0]["text"] if len(parts) == 1 else parts
+                tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": r.parent_id,
-                    "content": r.content,
-                }
-                for r in message.results
-            ]
+                    "content": tool_content,
+                })
             result.append({"role": "user", "content": tool_results})
 
         elif isinstance(message, ModelRequest):

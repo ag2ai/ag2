@@ -22,7 +22,7 @@ class ToolResult:
 
     def __init__(
         self,
-        *parts: str | SendableMessage | Input,
+        *parts: SendableMessage | Input,
         final: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -31,7 +31,7 @@ class ToolResult:
         self.metadata = metadata or {}
 
     @classmethod
-    def ensure_result(cls, data: "ToolResult | str | SendableMessage | Input") -> "ToolResult":
+    def ensure_result(cls, data: "ToolResult | SendableMessage | Input") -> "ToolResult":
         if isinstance(data, ToolResult):
             return data
         return cls(data)
@@ -52,7 +52,7 @@ class ToolCallsEvent(BaseEvent):
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
-    results: list["ToolResultEvent | ToolErrorEvent"] = Field(kw_only=False)
+    results: list["ToolResultEvent"] = Field(kw_only=False)
 
 
 class ToolEvent(BaseEvent):

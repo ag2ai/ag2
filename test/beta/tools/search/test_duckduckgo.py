@@ -7,11 +7,11 @@ from dataclasses import asdict
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsJson, IsPartialDict
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("ddgs")
 final_reply: str = "done"
-from autogen.beta import Agent, Variable
+from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.events.types import ModelResponse
@@ -84,7 +84,7 @@ class TestSearchExecution:
 
         # assert tool result
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
             asdict(
                 SearchResponse(
                     query="AG2 framework",
@@ -118,8 +118,8 @@ class TestSearchExecution:
         # act
         await agent.ask("search")
 
-        #
-        assert tool_results_event.results[0].content == IsJson(
+        # assert tool result
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
             asdict(
                 SearchResponse(
                     query="nonexistent query",

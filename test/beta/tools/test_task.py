@@ -18,6 +18,7 @@ from autogen.beta.events import (
     ModelResponse,
     TaskCompleted,
     TaskStarted,
+    ToolResultsEvent,
 )
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
@@ -580,8 +581,8 @@ class TestDepthLimiter:
 
         await outer.ask("Go")
 
-        tool_results = l2_tracking.mock.call_args_list[1].args[0]
-        assert "maximum task depth" in tool_results.results[0].content
+        tool_results: ToolResultsEvent = l2_tracking.mock.call_args_list[1].args[0]
+        assert "maximum task depth" in tool_results.results[0].result.parts[0].content
 
     @pytest.mark.asyncio
     async def test_passes(self) -> None:
@@ -662,9 +663,9 @@ class TestDepthLimiter:
         parent_stream = MemoryStream()
         await coordinator.ask("Go", stream=parent_stream)
 
-        tool_results = tracking_config.mock.call_args_list[1].args[0]
-        assert "A done." in tool_results.results[0].content
-        assert "B done." in tool_results.results[1].content
+        tool_results: ToolResultsEvent = tracking_config.mock.call_args_list[1].args[0]
+        assert "A done." in tool_results.results[0].result.parts[0].content
+        assert "B done." in tool_results.results[1].result.parts[0].content
 
         events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)]

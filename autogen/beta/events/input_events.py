@@ -26,7 +26,7 @@ class Input(BaseEvent):
     metadata: dict[str, Any] = Field(default_factory=dict, repr=False)
 
     @classmethod
-    def ensure_input(cls, content: "str | SendableMessage | Input") -> "Input":
+    def ensure_input(cls, content: "SendableMessage | Input") -> "Input":
         if isinstance(content, Input):
             return content
         elif isinstance(content, str):

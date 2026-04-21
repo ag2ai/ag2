@@ -11,6 +11,7 @@ from fast_depends import Depends
 from pydantic import BaseModel
 
 from autogen.beta import Agent, Context, TextInput, ToolResult, events, testing, tool
+from autogen.beta.events import DataInput
 
 
 @pytest.mark.asyncio
@@ -28,7 +29,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.content == '"tool executed"'
+    assert result.result.parts[0].content == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -47,7 +48,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
         context=Context(async_mock),
     )
 
-    assert result.content == '"tool executed"'
+    assert result.result.parts[0].content == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -66,7 +67,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.content == '"tool executed"'
+    assert result.result.parts[0].content == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -87,7 +88,8 @@ async def test_return_model(async_mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.content == '{"a":"1"}'
+    assert isinstance(result.result.parts[0], DataInput)
+    assert result.result.parts[0].data == Result(a="1")
 
 
 @pytest.mark.asyncio
@@ -101,7 +103,7 @@ async def test_return_result(async_mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.content == '"Hi!"'
+    assert result.result.parts[0].content == "Hi!"
 
 
 @pytest.mark.asyncio
@@ -121,7 +123,7 @@ async def test_tool_with_depends(async_mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.content == '"111"'
+    assert result.result.parts[0].content == "111"
 
 
 @pytest.mark.asyncio
@@ -138,7 +140,7 @@ async def test_tool_get_context(async_mock: AsyncMock) -> None:
         context=Context(async_mock, prompt=["1"]),
     )
 
-    assert result.content == '"1"'
+    assert result.result.parts[0].content == "1"
 
 
 @pytest.mark.asyncio
@@ -155,11 +157,10 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock) -> None:
         context=Context(async_mock, prompt=["1"]),
     )
 
-    assert result.content == '"1"'
+    assert result.result.parts[0].content == "1"
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="TODO: Refactor ToolResultEvent")
 async def test_tool_return_input() -> None:
     @tool
     def my_func() -> TextInput:
@@ -175,5 +176,4 @@ async def test_tool_return_input() -> None:
     await agent.ask("Call my func")
 
     tool_result_msg: events.ToolResultEvent = tracking.mock.call_args_list[1][0][0].results[0]
-    print(tool_result_msg)
-    assert tool_result_msg.content == '"Hi!"'
+    assert tool_result_msg.result.parts[0] == TextInput("Hi!")
