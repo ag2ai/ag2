@@ -68,12 +68,14 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
@@ -194,11 +196,13 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
 ???+ info "Complete Code Example"
 
     ```python
-    from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
-    from autogen.agentchat.group.patterns import AutoPattern
-    from dotenv import load_dotenv
     import os
+    import pprint
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import run_group_chat_iter
+    from autogen.agentchat.group.patterns import AutoPattern
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
@@ -325,12 +329,14 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
@@ -421,12 +427,14 @@ pattern = RandomPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
@@ -518,12 +526,14 @@ pattern = ManualPattern(
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})

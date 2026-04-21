@@ -296,14 +296,16 @@ This design allows you to build sophisticated routing logic that adapts to your 
 Let's enhance our triage system with context variables to maintain session state and provide personalized support:
 
 ```python
+import os
+import pprint
 from typing import Annotated
 from datetime import datetime
 from autogen import ConversableAgent, LLMConfig, UpdateSystemMessage
+from autogen.agentchat import run_group_chat_iter
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
 from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
-import os
 load_dotenv()
 
 # Initialize context variables

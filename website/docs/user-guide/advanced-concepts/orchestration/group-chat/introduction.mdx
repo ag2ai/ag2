@@ -40,11 +40,13 @@ These agents collaborate to assist the user with a tech-related query. We use th
 We start by importing necessary modules and setting up the language model configuration.
 
 ```python
-from autogen import ConversableAgent, LLMConfig
-from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
-from autogen.agentchat.group.patterns import AutoPattern
-from dotenv import load_dotenv
 import os
+import pprint
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat_iter
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+from dotenv import load_dotenv
 load_dotenv()
 
 llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
@@ -146,11 +148,13 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 ???+ info "Complete Code Example"
 
     ```python
-    from autogen import ConversableAgent, LLMConfig
-    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
-    from autogen.agentchat.group.patterns import AutoPattern
-    from dotenv import load_dotenv
     import os
+    import pprint
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import run_group_chat_iter
+    from autogen.agentchat.group.patterns import AutoPattern
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+    from dotenv import load_dotenv
     load_dotenv()
 
     llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})

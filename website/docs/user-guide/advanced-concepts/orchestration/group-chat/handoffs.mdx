@@ -225,8 +225,11 @@ This example demonstrates how a real-world support system might use handoffs to 
 
 First, let's create our context variables and agents:
 ```python
+import os
+import pprint
 from typing import Annotated
 from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat_iter
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import (
     ContextVariables, ReplyResult, AgentTarget,
@@ -236,7 +239,6 @@ from autogen.agentchat.group import (
 )
 from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
-import os
 load_dotenv()
 
 # Initialize context variables for our support system
@@ -568,8 +570,11 @@ By combining different handoff types, we've created a support system that can:
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from typing import Annotated
     from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import AutoPattern
     from autogen.agentchat.group import (
         ContextVariables, ReplyResult, AgentTarget,
@@ -579,7 +584,6 @@ By combining different handoff types, we've created a support system that can:
     )
     from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     # Initialize context variables for our support system
