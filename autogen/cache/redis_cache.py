@@ -4,9 +4,22 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import json
+import os
 import pickle
+import warnings
 from types import TracebackType
 from typing import Any
+
+# Pickle payloads retrieved from Redis allow RCE for any actor with Redis write
+# access (the default production cache path).  JSON is the safe default.
+# Set AG2_ALLOW_PICKLE_CACHE_READ=1 only to migrate existing caches; new
+# writes always use JSON regardless of this flag.
+_PICKLE_CACHE_READ_ENABLED: bool = os.environ.get("AG2_ALLOW_PICKLE_CACHE_READ") == "1"
+
+# Version prefix byte to distinguish formats at read time.
+_FORMAT_JSON: bytes = b"\x01"
+_FORMAT_PICKLE: bytes = b"\x00"
 
 from typing_extensions import Self
 
@@ -60,6 +73,44 @@ class RedisCache(AbstractCache):
         """
         return f"autogen:{self.seed}:{key}"
 
+    @staticmethod
+    def _serialize(value: Any) -> bytes:
+        """Serialize value to JSON bytes with a version prefix.
+
+        All new writes use JSON (_FORMAT_JSON prefix).
+        """
+        payload = json.dumps(value).encode()
+        return _FORMAT_JSON + payload
+
+    @staticmethod
+    def _deserialize(raw: bytes) -> Any:
+        """Deserialize a versioned payload.
+
+        Format:
+          b'\\x01' + json-bytes  -- JSON (current)
+          b'\\x00' + pickle-bytes -- legacy pickle (read-only, behind env var)
+        """
+        if not raw:
+            raise ValueError("Empty cache payload")
+        prefix, body = raw[:1], raw[1:]
+        if prefix == _FORMAT_JSON:
+            return json.loads(body)
+        if prefix == _FORMAT_PICKLE:
+            # Legacy pickle path: only allowed with explicit opt-in env var.
+            if not _PICKLE_CACHE_READ_ENABLED:
+                raise ValueError(
+                    "Refusing to deserialize pickle cache payload. "
+                    "Set AG2_ALLOW_PICKLE_CACHE_READ=1 to read legacy caches. "
+                    "See docs/cache-migration.md"
+                )
+            warnings.warn(
+                "Reading a legacy pickle-serialized cache entry. Re-write the entry (cache.set) to migrate to JSON.",
+                DeprecationWarning,
+                stacklevel=4,
+            )
+            return pickle.loads(body)  # noqa: S301
+        raise ValueError(f"Unknown cache payload format prefix: {prefix!r}")
+
     def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the Redis cache.
 
@@ -74,7 +125,7 @@ class RedisCache(AbstractCache):
         result = self.cache.get(self._prefixed_key(key))
         if result is None:
             return default
-        return pickle.loads(result)
+        return self._deserialize(result)
 
     def set(self, key: str, value: Any) -> None:
         """Set an item in the Redis cache.
@@ -84,9 +135,9 @@ class RedisCache(AbstractCache):
             value: The value to be stored in the cache.
 
         Notes:
-            The value is serialized using pickle before being stored in Redis.
+            Values are serialized using JSON with a version prefix.
         """
-        serialized_value = pickle.dumps(value)
+        serialized_value = self._serialize(value)
         self.cache.set(self._prefixed_key(key), serialized_value)
 
     def close(self) -> None:

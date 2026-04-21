@@ -6,8 +6,22 @@
 # SPDX-License-Identifier: MIT
 # Install Azure Cosmos DB SDK if not already
 
+import json
+import os
 import pickle
+import warnings
 from typing import Any, Optional, TypedDict
+
+# Pickle payloads stored in Cosmos DB can be replaced by a malicious actor with
+# database write access, triggering RCE on read.  JSON is the safe default.
+# Set AG2_ALLOW_PICKLE_CACHE_READ=1 only to migrate existing pickle-serialized
+# caches; all new writes always use JSON regardless of this flag.
+_PICKLE_CACHE_READ_ENABLED: bool = os.environ.get("AG2_ALLOW_PICKLE_CACHE_READ") == "1"
+
+# Version prefix stored as the first byte of the serialized payload to
+# distinguish JSON (b'\x01') from pickle (b'\x00') at read time.
+_FORMAT_JSON: bytes = b"\x01"
+_FORMAT_PICKLE: bytes = b"\x00"
 
 from ..import_utils import optional_import_block, require_optional_import
 from .abstract_cache_base import AbstractCache
@@ -81,6 +95,45 @@ class CosmosDBCache(AbstractCache):
         config = {"client": client, "database_id": database_id, "container_id": container_id}
         return cls(str(seed), config)
 
+    @staticmethod
+    def _serialize(value: Any) -> bytes:
+        """Serialize value to JSON bytes with a version prefix.
+
+        All new writes use JSON (_FORMAT_JSON prefix).  Pickle is never written
+        by this method; read-back pickle compat is handled in _deserialize.
+        """
+        payload = json.dumps(value).encode()
+        return _FORMAT_JSON + payload
+
+    @staticmethod
+    def _deserialize(raw: bytes) -> Any:
+        """Deserialize a versioned payload.
+
+        Format:
+          b'\\x01' + json-bytes  -- JSON (current)
+          b'\\x00' + pickle-bytes -- legacy pickle (read-only, behind env var)
+        """
+        if not raw:
+            raise ValueError("Empty cache payload")
+        prefix, body = raw[:1], raw[1:]
+        if prefix == _FORMAT_JSON:
+            return json.loads(body)
+        if prefix == _FORMAT_PICKLE:
+            # Legacy pickle path: only allowed with explicit opt-in env var.
+            if not _PICKLE_CACHE_READ_ENABLED:
+                raise ValueError(
+                    "Refusing to deserialize pickle cache payload. "
+                    "Set AG2_ALLOW_PICKLE_CACHE_READ=1 to read legacy caches. "
+                    "See docs/cache-migration.md"
+                )
+            warnings.warn(
+                "Reading a legacy pickle-serialized cache entry. Re-write the entry (cache.set) to migrate to JSON.",
+                DeprecationWarning,
+                stacklevel=4,
+            )
+            return pickle.loads(body)  # noqa: S301
+        raise ValueError(f"Unknown cache payload format prefix: {prefix!r}")
+
     def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the Cosmos DB cache.
 
@@ -93,12 +146,10 @@ class CosmosDBCache(AbstractCache):
         """
         try:
             response = self.container.read_item(item=key, partition_key=str(self.seed))
-            return pickle.loads(response["data"])
+            return self._deserialize(response["data"])
         except CosmosResourceNotFoundError:
             return default
         except Exception as e:
-            # Log the exception or rethrow after logging if needed
-            # Consider logging or handling the error appropriately here
             raise e
 
     def set(self, key: str, value: Any) -> None:
@@ -109,14 +160,13 @@ class CosmosDBCache(AbstractCache):
             value: The value to be stored in the cache.
 
         Notes:
-            The value is serialized using pickle before being stored.
+            Values are serialized using JSON with a version prefix.
         """
         try:
-            serialized_value = pickle.dumps(value)
+            serialized_value = self._serialize(value)
             item = {"id": key, "partitionKey": str(self.seed), "data": serialized_value}
             self.container.upsert_item(item)
         except Exception as e:
-            # Log or handle exception
             raise e
 
     def close(self) -> None:
