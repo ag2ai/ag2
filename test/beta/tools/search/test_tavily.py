@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import asdict
 from unittest.mock import MagicMock
 
 import pytest
@@ -89,26 +88,24 @@ class TestSearchExecution:
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         assert tool_results_event.results[0].result.parts[0] == DataInput(
-            asdict(
-                SearchResponse(
-                    query="AG2 framework",
-                    results=[
-                        SearchResult(
-                            title="AG2 Framework",
-                            url="https://ag2.ai",
-                            content="AG2 is an agent framework.",
-                            score=0.95,
-                        ),
-                        SearchResult(
-                            title="GitHub - AG2",
-                            url="https://github.com/ag2ai/ag2",
-                            content="Open source repo.",
-                            score=0.82,
-                        ),
-                    ],
-                    answer="AG2 is an open-source multi-agent framework.",
-                    images=["https://ag2.ai/img.png"],
-                )
+            SearchResponse(
+                query="AG2 framework",
+                results=[
+                    SearchResult(
+                        title="AG2 Framework",
+                        url="https://ag2.ai",
+                        content="AG2 is an agent framework.",
+                        score=0.95,
+                    ),
+                    SearchResult(
+                        title="GitHub - AG2",
+                        url="https://github.com/ag2ai/ag2",
+                        content="Open source repo.",
+                        score=0.82,
+                    ),
+                ],
+                answer="AG2 is an open-source multi-agent framework.",
+                images=["https://ag2.ai/img.png"],
             )
         )
 
@@ -126,11 +123,9 @@ class TestSearchExecution:
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         assert tool_results_event.results[0].result.parts[0] == DataInput(
-            asdict(
-                SearchResponse(
-                    query="nothing",
-                    results=[],
-                )
+            SearchResponse(
+                query="nothing",
+                results=[],
             )
         )
 
