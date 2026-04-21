@@ -392,6 +392,8 @@ dev = [
 # Beta groups
 optionals = [
     "ag2[redis]",
+    # search tools
+    "ag2[tavily,ddgs]",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
