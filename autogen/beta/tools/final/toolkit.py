@@ -53,6 +53,15 @@ class Toolkit(Tool):
 
         self._tools[t.name] = t
 
+    def __or__(self, other: Any) -> "Toolkit":
+        if isinstance(other, Toolkit):
+            tools = self._tools | other._tools
+        else:
+            tool = FunctionTool.ensure_tool(other)
+            tools = self._tools | {tool.name: tool}
+
+        return Toolkit(*tools.values(), name=self.name, middleware=self._middleware)
+
     @overload
     def tool(
         self,
