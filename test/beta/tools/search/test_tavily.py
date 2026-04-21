@@ -3,17 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from dataclasses import asdict
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import IsJson, IsPartialDict
 
-from autogen.beta import Agent, MemoryStream
+pytest.importorskip("tavily")
+
+from autogen.beta import Agent, Variable
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
+from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.events.types import ModelResponse
-from autogen.beta.testing import TestConfig
-from autogen.beta.tools.search import SearchResponse, SearchResult, TavilySearchTool
+from autogen.beta.testing import TestConfig, TrackingConfig
+from autogen.beta.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
 
 SAMPLE_RAW = {
     "query": "AG2 framework",
@@ -40,20 +43,14 @@ SAMPLE_RAW = {
 }
 
 
-def _make_config(query: str, tool_name: str = "tavily_search", final_reply: str = "done") -> TestConfig:
+def _make_config(query: str, final_reply: str = "done", tool_name: str = "tavily_search") -> TestConfig:
     call = ToolCallEvent(arguments=json.dumps({"query": query}), name=tool_name)
     return TestConfig(ModelResponse(tool_calls=ToolCallsEvent([call])), final_reply)
 
 
-def _collect_results(stream: MemoryStream) -> list[SearchResponse]:
-    results: list[SearchResponse] = []
-    stream.where(ToolResultEvent).subscribe(lambda e: results.append(e.result.content))
-    return results
-
-
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_defaults(self, context: ConversationContext) -> None:
+    async def test_default_schema(self, context: ConversationContext) -> None:
         tavily = TavilySearchTool(client=MagicMock())
 
         [schema] = await tavily.schemas(context)
@@ -64,72 +61,85 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_name_and_description(self, context: ConversationContext) -> None:
+    async def test_custom_schema(self, context: ConversationContext) -> None:
         tavily = TavilySearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await tavily.schemas(context)
 
         assert schema.function.name == "my_search"
         assert schema.function.description == "Custom search tool."
+        assert schema.function.parameters == IsPartialDict({
+            "required": ["query"],
+            "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
+        })
 
 
 @pytest.mark.asyncio
 class TestSearchExecution:
-    async def test_search_returns_structured_results(self) -> None:
-        mock_client = MagicMock()
-        mock_client.search.return_value = SAMPLE_RAW
+    async def test_search_returns_structured_results(self, mock: MagicMock) -> None:
+        # arrange tool
+        mock.search.return_value = SAMPLE_RAW
+        tavily = TavilySearchTool(client=mock)
 
-        tavily = TavilySearchTool(client=mock_client)
-        agent = Agent("a", config=_make_config("AG2 framework"), tools=[tavily])
-        stream = MemoryStream()
-        results = _collect_results(stream)
+        # arrange agent
+        config = TrackingConfig(_make_config("AG2 framework"))
+        agent = Agent("a", config=config, tools=[tavily])
 
-        await agent.ask("search", stream=stream)
+        # act
+        await agent.ask("search")
 
-        assert results == [
-            SearchResponse(
-                query="AG2 framework",
-                results=[
-                    SearchResult(
-                        title="AG2 Framework",
-                        url="https://ag2.ai",
-                        snippet="AG2 is an agent framework.",
-                        score=0.95,
-                        raw_content="# AG2\nFull text",
-                        favicon="https://ag2.ai/favicon.ico",
-                    ),
-                    SearchResult(
-                        title="GitHub - AG2",
-                        url="https://github.com/ag2ai/ag2",
-                        snippet="Open source repo.",
-                        score=0.82,
-                    ),
-                ],
-                answer="AG2 is an open-source multi-agent framework.",
-                images=["https://ag2.ai/img.png"],
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].content == IsJson(
+            asdict(
+                SearchResponse(
+                    query="AG2 framework",
+                    results=[
+                        SearchResult(
+                            title="AG2 Framework",
+                            url="https://ag2.ai",
+                            content="AG2 is an agent framework.",
+                            score=0.95,
+                        ),
+                        SearchResult(
+                            title="GitHub - AG2",
+                            url="https://github.com/ag2ai/ag2",
+                            content="Open source repo.",
+                            score=0.82,
+                        ),
+                    ],
+                    answer="AG2 is an open-source multi-agent framework.",
+                    images=["https://ag2.ai/img.png"],
+                )
             )
-        ]
-        mock_client.search.assert_called_once_with("AG2 framework")
+        )
 
-    async def test_search_empty_results(self) -> None:
-        mock_client = MagicMock()
-        mock_client.search.return_value = {"query": "nothing", "results": []}
+    async def test_search_empty_results(self, mock: MagicMock) -> None:
+        # arrange tool
+        mock.search.return_value = {"query": "nothing", "results": []}
+        tavily = TavilySearchTool(client=mock)
 
-        tavily = TavilySearchTool(client=mock_client)
-        agent = Agent("a", config=_make_config("nothing"), tools=[tavily])
-        stream = MemoryStream()
-        results = _collect_results(stream)
+        # arrange agent
+        config = TrackingConfig(_make_config("nothing"))
+        agent = Agent("a", config=config, tools=[tavily])
 
-        await agent.ask("search", stream=stream)
+        # act
+        await agent.ask("search")
 
-        assert results == [SearchResponse(query="nothing", results=[])]
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].content == IsJson(
+            asdict(
+                SearchResponse(
+                    query="nothing",
+                    results=[],
+                )
+            )
+        )
 
-    async def test_all_params_forwarded_to_client(self) -> None:
-        mock_client = MagicMock()
-        mock_client.search.return_value = {"query": "q", "results": []}
+    async def test_all_params_forwarded_to_client(self, mock: MagicMock) -> None:
+        mock.search.return_value = {"query": "q", "results": []}
 
         tavily = TavilySearchTool(
-            client=mock_client,
+            client=mock,
             max_results=3,
             search_depth="advanced",
             topic="news",
@@ -149,7 +159,7 @@ class TestSearchExecution:
 
         await agent.ask("search")
 
-        mock_client.search.assert_called_once_with(
+        mock.search.assert_called_once_with(
             "q",
             max_results=3,
             search_depth="advanced",
@@ -167,50 +177,74 @@ class TestSearchExecution:
             include_favicon=True,
         )
 
-    async def test_none_params_omitted(self) -> None:
+    async def test_none_params_omitted(self, mock: MagicMock) -> None:
         # All optional params default to None and must not be forwarded to the SDK
         # so Tavily applies its own server-side defaults.
-        mock_client = MagicMock()
-        mock_client.search.return_value = {"query": "q", "results": []}
+        mock.search.return_value = {"query": "q", "results": []}
 
-        tavily = TavilySearchTool(client=mock_client)
+        tavily = TavilySearchTool(client=mock)
         agent = Agent("a", config=_make_config("q"), tools=[tavily])
 
         await agent.ask("search")
 
-        mock_client.search.assert_called_once_with("q")
+        mock.search.assert_called_once_with("q")
 
-    async def test_custom_tool_name_routes_correctly(self) -> None:
-        mock_client = MagicMock()
-        mock_client.search.return_value = SAMPLE_RAW
+    async def test_custom_tool_name_in_agent(self, mock: MagicMock) -> None:
+        # arrange tool
+        mock.search.return_value = {"query": "q", "results": []}
+        ddg = TavilySearchTool(client=mock, name="web_search")
 
-        tavily = TavilySearchTool(client=mock_client, name="web_search")
-        agent = Agent("a", config=_make_config("AG2 framework", tool_name="web_search"), tools=[tavily])
-        stream = MemoryStream()
-        results = _collect_results(stream)
+        # arrange agent
+        config = TrackingConfig(_make_config("AG2 framework", tool_name="web_search"))
+        agent = Agent("a", config=config, tools=[ddg])
 
-        await agent.ask("search", stream=stream)
+        # act
+        await agent.ask("search")
 
-        assert results == [
-            SearchResponse(
-                query="AG2 framework",
-                results=[
-                    SearchResult(
-                        title="AG2 Framework",
-                        url="https://ag2.ai",
-                        snippet="AG2 is an agent framework.",
-                        score=0.95,
-                        raw_content="# AG2\nFull text",
-                        favicon="https://ag2.ai/favicon.ico",
-                    ),
-                    SearchResult(
-                        title="GitHub - AG2",
-                        url="https://github.com/ag2ai/ag2",
-                        snippet="Open source repo.",
-                        score=0.82,
-                    ),
-                ],
-                answer="AG2 is an open-source multi-agent framework.",
-                images=["https://ag2.ai/img.png"],
-            )
-        ]
+        # assert tool called
+        mock.search.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestTavilykSearchToolVariable:
+    async def test_resolved(self, mock: MagicMock) -> None:
+        # arrange tool
+        mock.search.return_value = SAMPLE_RAW
+        tavily = TavilySearchTool(
+            client=mock,
+            search_depth=Variable("user_depth"),
+            topic=Variable(),
+        )
+
+        # arrange agent
+        agent = Agent(
+            "a",
+            config=_make_config("test query"),
+            tools=[tavily],
+            variables={
+                "user_depth": "basic",
+                "topic": "general",
+            },
+        )
+
+        # act
+        await agent.ask("search")
+
+        # assert variables resolved
+        mock.search.assert_called_once_with(
+            "test query",
+            search_depth="basic",
+            topic="general",
+        )
+
+    async def test_missing_raises(self, mock: MagicMock) -> None:
+        mock.search.return_value = SAMPLE_RAW
+        tavily = TavilySearchTool(
+            client=mock,
+            topic=Variable(),
+        )
+
+        agent = Agent("a", config=_make_config("test query"), tools=[tavily])
+
+        with pytest.raises(KeyError, match="topic"):
+            await agent.ask("search")

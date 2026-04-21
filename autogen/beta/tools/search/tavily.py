@@ -5,7 +5,7 @@
 from collections.abc import Iterable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import Field
 from tavily import TavilyClient
@@ -13,8 +13,7 @@ from tavily import TavilyClient
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
-from autogen.beta.tools.final import tool
-from autogen.beta.tools.final.function_tool import FunctionTool
+from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
 from autogen.beta.tools.tool import Tool
 
 SearchDepth: TypeAlias = Literal["basic", "advanced", "fast", "ultra-fast"]
@@ -28,10 +27,8 @@ IncludeRawContent: TypeAlias = bool | Literal["markdown", "text"]
 class SearchResult:
     title: str
     url: str
-    snippet: str
+    content: str
     score: float | None = None
-    raw_content: str | None = None
-    favicon: str | None = None
 
 
 @dataclass(slots=True)
@@ -74,12 +71,17 @@ class TavilySearchTool(Tool):
     ) -> None:
         _client = client if client is not None else TavilyClient(api_key=api_key)
 
+        @tool(
+            name=name,
+            description=description,
+            middleware=middleware,
+        )
         def tavily_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
         ) -> SearchResponse:
             """Search the web using Tavily and return structured results."""
-            params: dict = {
+            params: dict[str, Any] = {
                 "max_results": resolve_variable(max_results, ctx, param_name="max_results"),
                 "search_depth": resolve_variable(search_depth, ctx, param_name="search_depth"),
                 "topic": resolve_variable(topic, ctx, param_name="topic"),
@@ -103,10 +105,8 @@ class TavilySearchTool(Tool):
                 SearchResult(
                     title=r.get("title", ""),
                     url=r.get("url", ""),
-                    snippet=r.get("content", ""),
+                    content=r.get("content", ""),
                     score=r.get("score"),
-                    raw_content=r.get("raw_content"),
-                    favicon=r.get("favicon"),
                 )
                 for r in (raw.get("results") or [])
             ]
@@ -117,15 +117,10 @@ class TavilySearchTool(Tool):
                 images=list(raw.get("images") or []),
             )
 
-        self._tool: FunctionTool = tool(
-            tavily_search,
-            name=name,
-            description=description,
-            middleware=middleware,
-        )
+        self._tool = tavily_search
         self.name = name
 
-    async def schemas(self, context: Context) -> list:
+    async def schemas(self, context: Context) -> list[FunctionToolSchema]:
         return await self._tool.schemas(context)
 
     def register(

@@ -13,15 +13,15 @@ from pydantic import Field
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
-from autogen.beta.tools.final import tool
+from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
 from autogen.beta.tools.tool import Tool
 
 
 @dataclass(slots=True)
 class SearchResult:
     title: str
-    url: str
-    snippet: str
+    href: str
+    body: str
 
 
 @dataclass(slots=True)
@@ -72,13 +72,13 @@ class DuckDuckSearchTool(Tool):
                 safesearch=resolved_safesearch,
                 max_results=resolved_max,
             )
-            items = [SearchResult(title=r["title"], url=r["href"], snippet=r["body"]) for r in (raw or [])]
+            items = [SearchResult(title=r["title"], href=r["href"], body=r["body"]) for r in (raw or [])]
             return SearchResponse(query=query, results=items)
 
         self._tool = duckduckgo_search
         self.name = name
 
-    async def schemas(self, context: Context) -> list:
+    async def schemas(self, context: Context) -> list[FunctionToolSchema]:
         return await self._tool.schemas(context)
 
     def register(
