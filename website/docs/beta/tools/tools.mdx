@@ -245,19 +245,108 @@ async def my_tool(context: Context) -> str:
 
 For more detailed information on specific context features, see [Dependency Injection](/docs/beta/context/inject/), [Context Variables](/docs/beta/context/variables/), [Depends](/docs/beta/depends/), [Human-in-the-loop](/docs/beta/context/human_in_the_loop/).
 
+## Returning Rich Tool Results
+
+By default, returning a plain `str` from a tool is the simplest option — the framework wraps it in a `TextInput` automatically. When you need more control over the returned content, you can use typed `Input` classes or compose multiple outputs with `ToolResult`.
+
+### Input Types
+
+The framework provides typed input classes for text, structured data, images, audio, video, documents, and raw binary payloads. See [Multimodal Inputs](/docs/beta/inputs/inputs) for the full reference including provider support and factory variants.
+
+Return any input type directly from a tool function just like you would a string:
+
+```python linenums="1"
+from autogen.beta import DataInput, TextInput, tool
+
+@tool
+def get_status(task_id: str) -> TextInput:
+    """Returns a human-readable status update."""
+    return TextInput(f"Task {task_id} is in progress.")
+
+@tool
+def get_user_profile(user_id: str) -> DataInput:
+    """Returns a structured user profile."""
+    return DataInput({"id": user_id, "name": "Alice", "role": "admin"})
+```
+
+### Returning Images and Binary Data
+
+Use `ImageInput` when a tool needs to hand an image back to the model for further reasoning. The factory accepts a URL, a local file path, a pre-uploaded file ID, or raw bytes:
+
+```python linenums="1"
+from autogen.beta import ImageInput, ToolResult, tool
+
+@tool
+def fetch_chart(chart_id: str) -> ImageInput:
+    """Fetches a chart image by ID and returns it for visual analysis."""
+    url = f"https://charts.example.com/{chart_id}.png"
+    return ImageInput(url)
+
+@tool
+def capture_screenshot(page: str) -> ImageInput:
+    """Takes a screenshot of a page and returns it."""
+    import subprocess
+    raw = subprocess.check_output(["screenshot-cli", page])
+    return ImageInput(data=raw, media_type="image/png")
+```
+
+When you have raw bytes of an arbitrary format, use `BinaryInput` directly and set the media type explicitly:
+
+```python linenums="1"
+from autogen.beta import BinaryInput, ToolResult, tool
+
+@tool
+def export_pdf(report_id: str) -> ToolResult:
+    """Exports a report as a PDF and returns it alongside a summary."""
+    pdf_bytes = _render_pdf(report_id)
+    return ToolResult(
+        f"Report {report_id} exported successfully.",
+        BinaryInput(pdf_bytes, media_type="application/pdf"),
+    )
+```
+
+!!! note
+    Not all LLM providers support every media type. Check your provider's documentation for the list of accepted MIME types and file formats. The framework passes the binary payload through as-is; format validation is the provider's responsibility.
+
+### Returning Multiple Inputs
+
+Use `ToolResult` to combine multiple inputs into a single tool response. Each positional argument becomes a separate part the model receives:
+
+```python linenums="1"
+from autogen.beta import ImageInput, ToolResult, tool
+
+@tool
+def analyze_product(product_id: str) -> ToolResult:
+    """Returns a product image alongside its structured metadata."""
+    return ToolResult(
+        ImageInput(f"https://cdn.example.com/products/{product_id}.jpg"),
+        {"id": product_id, "name": "Widget Pro", "stock": 42},
+    )
+```
+
 ## Returning a Final Tool Result
 
 By default, a tool result is sent back to the model so the agent can decide what to say next.
 When the tool itself already knows the exact final answer, you can return `ToolResult(..., final=True)` to end the turn immediately without another model round-trip.
 
+`ToolResult` accepts any `str` or `Input` as its first positional argument:
+
 ```python linenums="1"
-from autogen.beta import ToolResult, tool
+from autogen.beta import Agent, DataInput, TextInput, ToolResult, tool
 
 @tool
-def handoff_to_human(ticket_id: str) -> ToolResult[str]:
+def handoff_to_human(ticket_id: str) -> ToolResult:
     """Escalates a request and returns the final user-facing message."""
     return ToolResult(
-        content=f"Ticket {ticket_id} was escalated to a human agent.",
+        f"Ticket {ticket_id} was escalated to a human agent.",
+        final=True,
+    )
+
+@tool
+def get_exchange_rate(currency: str) -> ToolResult:
+    """Returns the current exchange rate as structured data."""
+    return ToolResult(
+        DataInput({"currency": currency, "rate": 1.23, "base": "USD"}),
         final=True,
     )
 
@@ -268,6 +357,9 @@ reply = await agent.ask("I need help with my ticket #123456.")
 print(reply.body)
 # Output: "Ticket 123456 was escalated to a human agent."
 ```
+
+!!! note
+    A `ToolResult` with `final=True` must contain **exactly one** part — either a `TextInput` or a `DataInput`. The content is returned as-is: `TextInput` produces the text directly, `DataInput` is JSON-serialized.
 
 This is especially useful for tools that:
 
