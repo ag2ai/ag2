@@ -198,6 +198,23 @@ class TestReturnInput:
             DataInput({"b": "2"}),
         ]
 
+    async def test_return_mixed_parts(self, config: testing.TrackingConfig) -> None:
+        @tool
+        def my_func() -> ToolResult:
+            return ToolResult(
+                TextInput("Hi!"),
+                {"b": "2"},
+            )
+
+        agent = Agent("", config=config, tools=[my_func])
+        await agent.ask("Call my func")
+
+        tool_result_msg: events.ToolResultEvent = config.mock.call_args_list[1][0][0].results[0]
+        assert tool_result_msg.result.parts == [
+            TextInput("Hi!"),
+            DataInput({"b": "2"}),
+        ]
+
     async def test_text_input(self, config: testing.TrackingConfig) -> None:
         @tool
         def my_func() -> ToolResult:
