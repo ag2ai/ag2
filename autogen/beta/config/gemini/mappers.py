@@ -7,11 +7,13 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
     BinaryInput,
+    DataInput,
     UrlInput,
 )
 from autogen.beta.events.types import Usage
@@ -166,6 +168,7 @@ def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
 
 def convert_messages(
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[types.Content]:
     result: list[types.Content] = []
 
@@ -198,9 +201,12 @@ def convert_messages(
 
         elif isinstance(message, ModelRequest):
             parts: list[types.Part] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append(types.Part.from_text(text=inp.content))
+
+                elif isinstance(inp, DataInput):
+                    parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     mime = _mime_from_url(inp.url)

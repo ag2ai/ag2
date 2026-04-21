@@ -8,6 +8,7 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import google.genai as genai
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
 from autogen.beta.config.client import LLMClient
@@ -61,8 +62,9 @@ class GeminiClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
-        contents = convert_messages(messages)
+        contents = convert_messages(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))

@@ -5,7 +5,10 @@
 from collections.abc import Iterable
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import DataInput
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -48,14 +51,17 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
 
     for message in messages:
         if isinstance(message, ModelRequest):
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     result.append(inp.to_api())
+                elif isinstance(inp, DataInput):
+                    result.append({"role": "user", "content": serializer.encode(inp.data).decode()})
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "dashscope")
 

@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 
 import dashscope
 from dashscope.aigc.generation import AioGeneration
+from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
@@ -62,13 +63,14 @@ class DashScopeClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        ds_messages = convert_messages(prompt, messages)
+        ds_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {

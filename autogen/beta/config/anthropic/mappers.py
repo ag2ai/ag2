@@ -7,10 +7,13 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
+    DataInput,
     FileIdInput,
     UrlInput,
 )
@@ -210,6 +213,7 @@ def _file_id_block_type(filename: str | None) -> str:
 
 def convert_messages(
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
 
@@ -241,9 +245,12 @@ def convert_messages(
 
         elif isinstance(message, ModelRequest):
             content_parts: list[dict[str, Any]] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     content_parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, DataInput):
+                    content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
                     block_type = _file_id_block_type(inp.filename)

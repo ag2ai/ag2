@@ -12,6 +12,8 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -40,7 +42,7 @@ from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
-from .types import ClassInfo, Omittable, omit
+from .types import ClassInfo, Omittable, SendableMessage, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -133,7 +135,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: str | SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -148,7 +150,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: str | SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -163,7 +165,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: str | SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -178,7 +180,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: str | SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -322,6 +324,11 @@ class Agent(Generic[TResult]):
 
         self._middleware = list(middleware)
         self._observers = list(observers)
+
+        self._serializer: SerializerProto = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
+        )
 
         self.dependency_provider = Provider()
         self.tools: list[Tool] = []
@@ -639,6 +646,7 @@ class Agent(Generic[TResult]):
             client,
             tools=all_schemas,
             response_schema=final_schema,
+            serializer=self._serializer,
         )
 
         for m in reversed(

@@ -155,7 +155,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                     inp.to_api()
                     for event in events
                     if isinstance(event, ModelRequest)
-                    for inp in event.inputs
+                    for inp in event.parts
                     if isinstance(inp, TextInput)
                 ])
                 span.set_attribute("gen_ai.input.messages", input_messages)

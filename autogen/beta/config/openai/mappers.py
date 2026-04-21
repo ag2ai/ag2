@@ -6,6 +6,7 @@ import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
@@ -13,6 +14,7 @@ from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
     BinaryType,
+    DataInput,
     FileIdInput,
     ModelRequest,
     ModelResponse,
@@ -138,7 +140,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                 })
 
         elif isinstance(message, ModelRequest):
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     result.append({"role": "user", "content": [{"type": "input_text", "text": inp.content}]})
 
@@ -176,6 +178,7 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, str]]:
     # legacy prompt message format
     result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
@@ -190,9 +193,12 @@ def convert_messages(
 
         elif isinstance(message, ModelRequest):
             parts: list[dict[str, Any]] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, DataInput):
+                    parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind is BinaryType.IMAGE:
