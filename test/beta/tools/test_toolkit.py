@@ -9,6 +9,7 @@ import pytest
 
 from autogen.beta import Agent, Context, tool
 from autogen.beta.events import ToolCallEvent
+from autogen.beta.exceptions import ToolConflictError
 from autogen.beta.middleware import ToolExecution, ToolResultType
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import Toolkit
@@ -336,3 +337,25 @@ async def test_toolkit_middleware_ordering() -> None:
     await agent.ask("Hi!")
 
     assert call_order == ["toolkit_mw", "tool_mw", "tool"]
+
+
+def test_tool_name_conflict() -> None:
+    def add(a: int, b: int) -> int:
+        pass
+
+    with pytest.raises(ToolConflictError, match="add"):
+        Toolkit(add, add)
+
+    toolkit = Toolkit(add)
+    with pytest.raises(ToolConflictError, match="add"):
+        toolkit.tool(add)
+
+
+def test_unsafe_override() -> None:
+    def add(a: int, b: int) -> int:
+        pass
+
+    toolkit = Toolkit(add)
+    toolkit._add_tool(add, unsafe=True)
+
+    assert len(toolkit.tools) == 1

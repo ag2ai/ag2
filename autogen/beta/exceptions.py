@@ -9,6 +9,11 @@ class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
 
 
+class ToolConflictError(AG2Error):
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(f"Could not add tool: `{tool_name}`. Tool with such name already registered.")
+
+
 class ToolResolutionError(AG2Error):
     """Raised when one or more tools in an AgentSpec cannot be resolved from the available tools pool."""
 
