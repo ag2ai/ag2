@@ -174,10 +174,10 @@ We first need to write the `test` function that creates a very long chat history
 def test(assistant: autogen.ConversableAgent, user_proxy: autogen.UserProxyAgent):
     for _ in range(1000):
         # define a fake, very long messages
-        assitant_msg = {"role": "assistant", "content": "test " * 1000}
+        assistant_msg = {"role": "assistant", "content": "test " * 1000}
         user_msg = {"role": "user", "content": ""}
 
-        assistant.send(assitant_msg, user_proxy, request_reply=False, silent=True)
+        assistant.send(assistant_msg, user_proxy, request_reply=False, silent=True)
         user_proxy.send(user_msg, assistant, request_reply=False, silent=True)
 
     try:

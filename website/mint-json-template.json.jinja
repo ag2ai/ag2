@@ -70,6 +70,10 @@
       "url": "docs/use-cases"
     },
     {
+      "name": "Beta",
+      "url": "docs/beta"
+    },
+    {
       "name": "User Stories",
       "url": "docs/user-stories"
     },
@@ -102,6 +106,8 @@
       "group": "User Guide",
       "pages": [
         "docs/user-guide/basic-concepts/installing-ag2",
+        "docs/user-guide/basic-concepts/overview",
+        "docs/user-guide/release-roadmap",
         {
           "group": "Basic Concepts",
           "pages": [
@@ -262,6 +268,7 @@
                 "docs/user-guide/reference-agents/docagent/docagent-performance"
               ]
             },
+            "docs/user-guide/reference-agents/a2uiagent",
             "docs/user-guide/reference-agents/reasoningagent",
             "docs/user-guide/reference-agents/deepresearchagent",
             "docs/user-guide/reference-agents/websurferagent",
@@ -297,8 +304,11 @@
             },
             "docs/user-guide/reference-tools/crawl4ai",
             "docs/user-guide/reference-tools/deep-research",
+            "docs/user-guide/reference-tools/quick-research",
             "docs/user-guide/reference-tools/firecrawl",
-            "docs/user-guide/reference-tools/searxng-search"
+            "docs/user-guide/reference-tools/searxng-search",
+            "docs/user-guide/reference-tools/tavily-search",
+            "docs/user-guide/reference-tools/tinyfish"
           ]
         },
         {
@@ -306,13 +316,17 @@
           "pages": [
             "docs/user-guide/a2a/index",
             "docs/user-guide/a2a/server",
-            "docs/user-guide/a2a/client"
+            "docs/user-guide/a2a/client",
+            "docs/user-guide/a2a/a2ui"
           ]
         },
         {
           "group": "AG-UI",
           "pages": [
-            "docs/user-guide/ag-ui/index"
+            "docs/user-guide/ag-ui/index",
+            "docs/user-guide/ag-ui/copilotkit-quickstart",
+            "docs/user-guide/ag-ui/backend-deepdive",
+            "docs/user-guide/ag-ui/a2ui"
           ]
         },
         {
@@ -330,7 +344,80 @@
             "docs/user-guide/deployments/deploy-an-agent-to-vertexai"
           ]
         },
+        {
+          "group": "CLI",
+          "pages": [
+            "docs/user-guide/cli/index",
+            "docs/user-guide/cli/run",
+            "docs/user-guide/cli/create",
+            "docs/user-guide/cli/serve",
+            "docs/user-guide/cli/test",
+            "docs/user-guide/cli/install",
+            "docs/user-guide/cli/replay",
+            "docs/user-guide/cli/arena",
+            "docs/user-guide/cli/proxy",
+            "docs/user-guide/cli/publish"
+          ]
+        },
             "docs/user-guide/FAQ"
+      ]
+    },
+    {
+      "group": "Beta",
+      "pages": [
+        "docs/beta/motivation",
+        "docs/beta/agents",
+        "docs/beta/structured_output",
+        {
+          "group": "Models & Providers",
+          "pages": [
+            "docs/beta/model_configuration",
+            "docs/beta/inputs/inputs"
+          ]
+        },
+        "docs/beta/system_prompts",
+        "docs/beta/task_delegation",
+        {
+          "group": "Tools",
+          "pages": [
+            "docs/beta/tools/tools",
+            "docs/beta/tools/toolkits",
+            "docs/beta/tools/common_toolkits",
+            "docs/beta/tools/builtin_tools",
+            "docs/beta/tools/local_shell",
+            "docs/beta/tools/tool_middleware",
+            "docs/beta/tools/approval_required"
+          ]
+        },
+        {
+          "group": "Context Features",
+          "pages": [
+            "docs/beta/context/variables",
+            "docs/beta/context/inject",
+            "docs/beta/context/human_in_the_loop"
+          ]
+        },
+        "docs/beta/depends",
+        "docs/beta/middleware",
+        "docs/beta/telemetry",
+        "docs/beta/testing",
+        {
+          "group": "Advanced Features",
+          "pages": [
+            "docs/beta/advanced/stream",
+            "docs/beta/advanced/observers"
+          ]
+        },
+        {
+          "group": "AG-UI",
+          "pages": [
+            "docs/beta/ag-ui/index",
+            "docs/beta/ag-ui/copilotkit-quickstart",
+            "docs/beta/ag-ui/backend-deepdive"
+          ]
+        },
+        "docs/beta/ag2_compatibility",
+        "docs/beta/roadmap"
       ]
     },
     {
@@ -367,6 +454,7 @@
       "pages": [
         "docs/ecosystem/agentops",
         "docs/ecosystem/azure_cosmos_db",
+        "docs/ecosystem/bindu",
         "docs/ecosystem/composio",
         "docs/ecosystem/databricks",
         "docs/ecosystem/llamaindex",

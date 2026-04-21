@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-if __name__ == "__main__":
-    from autogen._website.generate_api_references import main
+from mkdocs._website.generate_api_references import main
 
+if __name__ == "__main__":
     main()

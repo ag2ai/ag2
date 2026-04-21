@@ -1,9 +1,10 @@
 ---
-title: Together AI
+title: Together AI API Guide | Multi-Agent Framework
 sidebarTitle: Together AI
+description: "How to use Together AI models with AG2. Configuration and examples for building multi-agent systems with open-source models on Together AI."
 ---
 
-[Together.AI](https://www.together.ai/) is a cloud based platform serving many open-weight LLMs such as Google's Gemma, Meta's Llama 2/3, Qwen, Mistral.AI's Mistral/Mixtral, and NousResearch's Hermes models.
+[Together.AI](https://www.together.ai/) is a cloud based platform serving many open-weight LLMs such as Google's Gemma, Meta's Llama 3, Qwen, Mistral.AI's Mistral/Mixtral, and NousResearch's Hermes models.
 
 Although AG2 can be used with Together.AI's API directly by changing the `base_url` to their url, it does not cater for some differences between messaging and it is recommended to use the Together.AI Client class as shown in this notebook.
 
@@ -11,7 +12,7 @@ You will need a Together.AI account and create an API key. [See their website fo
 
 ## Features
 
-When using this client class, messages are tailored to accommodate the specific requirements of Together.AI's API and provide native support for function/tool calling, token usage, and accurate costs (as of June 2024).
+When using this client class, messages are tailored to accommodate the specific requirements of Together.AI's API and provide native support for function/tool calling, token usage, and accurate costs.
 
 ## Getting started
 
@@ -40,22 +41,17 @@ See the sample `OAI_CONFIG_LIST` below showing how the Together.AI client class 
 ```python
 [
     {
-        "model": "google/gemma-7b-it",
+        "model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
         "api_key": "your Together.AI API Key goes here",
         "api_type": "together"
     },
     {
-        "model": "codellama/CodeLlama-70b-Instruct-hf",
+        "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
         "api_key": "your Together.AI API Key goes here",
         "api_type": "together"
     },
     {
-        "model": "meta-llama/Llama-2-13b-chat-hf",
-        "api_key": "your Together.AI API Key goes here",
-        "api_type": "together"
-    },
-    {
-        "model": "Qwen/Qwen2-72B-Instruct",
+        "model": "Qwen/Qwen2.5-72B-Instruct-Turbo",
         "api_key": "your Together.AI API Key goes here",
         "api_type": "together"
     }
@@ -92,7 +88,7 @@ Example:
 ```python
 [
     {
-        "model": "microsoft/phi-2",
+        "model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
         "api_key": "your Together.AI API Key goes here",
         "api_type": "together",
         "max_tokens": 1000,
@@ -113,7 +109,7 @@ Example:
 
 In this example, we run a two-agent chat with an AssistantAgent (primarily a coding agent) to generate code to count the number of prime numbers between 1 and 10,000 and then it will be executed.
 
-We'll use Mistral's Mixtral-8x7B instruct model which is suitable for coding.
+We'll use Mistral's Mixtral 8x7B instruct model which is suitable for coding.
 
 ```python
 import os
@@ -238,7 +234,7 @@ Here we are using `if_all_run`, indicating that we want to hide the tools if all
 
 ```python
 llm_config = LLMConfig({
-    # Let's choose Meta's CodeLlama 34b instruct model which supports function calling through the Together.AI API
+    # Let's choose Mistral's Mixtral 8x7B instruct model which supports function calling through the Together.AI API
     "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
     "api_key": os.environ.get("TOGETHER_API_KEY"),
     "api_type": "together",

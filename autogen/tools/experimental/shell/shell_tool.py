@@ -4,6 +4,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -162,8 +163,11 @@ class ShellExecutor:
         Raises:
             ValueError: If command violates security restrictions
         """
-        # Extract command name (first word)
-        cmd_parts = cmd.strip().split()
+        # Extract command name using shlex so quoted arguments are handled correctly
+        try:
+            cmd_parts = shlex.split(cmd.strip())
+        except ValueError as e:
+            raise ValueError(f"Invalid command syntax: {e}") from e
         if not cmd_parts:
             raise ValueError("Empty command is not allowed")
 
@@ -217,10 +221,11 @@ class ShellExecutor:
 
         t = timeout or self.default_timeout
 
-        # Execute in the restricted working directory
+        # Execute in the restricted working directory.
+        # shell=False + shlex.split prevents shell metacharacter injection.
         p = subprocess.Popen(
-            cmd,
-            shell=True,
+            shlex.split(cmd),
+            shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

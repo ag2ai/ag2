@@ -2,17 +2,41 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[metadata]
-license_file = "LICENSE"
-description_file = "README.md"
+[tool.hatch.version]
+path = "autogen/version.py"
+
+[tool.hatch.build]
+skip-excluded-dirs = true
+exclude = ["/test", "/notebook"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["autogen"]
+only-include = [
+    "autogen",
+    # need for generation of MCP Servers from OpenAPI specification
+    "templates",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["test", "notebook"]
+
+[tool.hatch.build.targets.wheel.sources]
+"autogen" = "autogen"
+
+[project.urls]
+Homepage = "https://ag2.ai/"
+Documentation = "https://docs.ag2.ai"
+Tracker = "https://github.com/ag2ai/ag2/issues"
+Source = "https://github.com/ag2ai/ag2"
+Discord = "https://discord.gg/pAbnFJrkgZ"
 
 [project]
 name = "ag2"
 description = "A programming framework for agentic AI"
 readme = "README.md"
-authors = [
-    {name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai"}
-]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai" }]
 
 keywords = [
     "ai",
@@ -21,7 +45,7 @@ keywords = [
     "ag2",
     "ag2.ai",
     "ag2ai",
-    "agentic"
+    "agentic",
 ]
 
 requires-python = ">=3.10"
@@ -39,6 +63,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -46,22 +71,29 @@ classifiers = [
     "Topic :: Software Development",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
+    "Framework :: Pydantic",
+    "Framework :: Pydantic :: 2",
 ]
 
 dependencies = [
-    "diskcache",
     "termcolor",
     "python-dotenv",
     "tiktoken",
     "pydantic>=2.6.1,<3",
+    "pyyaml>=6.0.2",
     "docker",
     "packaging",
-#    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
-    "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends
+    "anyio>=4.0.0,<5.0.0",
+    # for beta tools
+    "fast-depends[pydantic]>=3.0.8,<4.0.0",
 ]
 
 [project.optional-dependencies]
+a2ui = [
+    "jsonschema>=4.0.0,<5",
+]
+
 a2a = [
     "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
@@ -70,22 +102,49 @@ ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]
 
+# cache backends
+diskcache = ["diskcache"]
+
+# providers
+openai = ["openai>=1.99.3,<2"]
+openai-realtime = ["ag2[openai]", "openai[realtime]"]
+
+deepseek = ["ag2[openai]"]
+
+anthropic = ["anthropic[vertex]>=0.79.0,<1"]
+
+gemini = [
+    "google-api-core",
+    # Version bounds: local types in gemini_types.py are tested for subset compatibility
+    # with the SDK (local can have extra fields for forward compatibility).
+    # See test/oai/test_gemini_types.py for compatibility tests.
+    "google-genai>=1.20.0,<2.0",
+    "google-cloud-aiplatform",
+    "google-auth",
+    "pillow",
+    "jsonschema",
+]
+gemini-realtime = ["ag2[gemini]", "ag2[websockets]"]
+
+groq = ["groq>=0.9.0"]
+
+ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
+
+bedrock = ["boto3>=1.34.149"]
+
+mistral = ["mistralai>=2.0.0,<3.0.0"]
+
+dashscope = ["dashscope>=1.25.13"]
+
+# public distributions
+redis = ["redis"]
+tracing = ["opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
+
 flaml = [
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
-    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
-]
-
-# public distributions
-
-openai = [
-    "openai>=1.99.3",
-]
-
-openai-realtime = [
-    "ag2[openai]",
-    "openai[realtime]",
+    "numpy>=2.1; python_version>='3.13'",          # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'", # numpy 1.24+ for older Python versions
 ]
 
 jupyter-executor = [
@@ -113,28 +172,13 @@ retrievechat-pgvector = [
     "psycopg>=3.1.18; platform_system=='Linux'",
 ]
 
-retrievechat-mongodb = [
-    "ag2[retrievechat]",
-    "pymongo>=4.0.0",
-    "numpy",
-]
+retrievechat-mongodb = ["ag2[retrievechat]", "pymongo>=4.0.0", "numpy"]
 
-retrievechat-qdrant = [
-    "ag2[retrievechat]",
-    "qdrant_client",
-    "fastembed>=0.3.1",
-]
+retrievechat-qdrant = ["ag2[retrievechat]", "qdrant_client", "fastembed>=0.3.1"]
 
-retrievechat-couchbase = [
-    "ag2[retrievechat]",
-    "couchbase>=4.3.0",
-    "numpy",
-]
+retrievechat-couchbase = ["ag2[retrievechat]", "couchbase>=4.3.0", "numpy"]
 
-graph-rag-falkor-db = [
-    "graphrag_sdk==0.8.2",
-    "falkordb>=1.0.10",
-]
+graph-rag-falkor-db = ["graphrag_sdk==0.8.2", "falkordb>=1.0.10"]
 
 rag = [
     "docling>=2.15.1,<3",
@@ -153,19 +197,23 @@ rag = [
 ]
 
 
-crawl4ai = [
+crawl4ai = ["crawl4ai>=0.5.0,<0.9"]
+
+tinyfish = ["tinyfish>=0.2.3"]
+
+quick-research = [
+    "tavily-python>=0.7.4",
     "crawl4ai>=0.5.0,<0.9",
+    "tiktoken",
+    "tldextract",
+    "beautifulsoup4",
 ]
 
 browser-use = [
-    # ToDo: Restrict browser-use to a specific version
-    # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
-    "browser-use==0.1.37",
+    "browser-use>=0.3.1,<1.0",
 ]
 
-google-client = [
-    "google-api-python-client>=2.163.0,<3.0",
-]
+google-client = ["google-api-python-client>=2.163.0,<3.0"]
 
 google-api = [
     "ag2[google-client]",
@@ -173,13 +221,9 @@ google-api = [
     "google-auth-oauthlib>=1.2.1,<2.0",
 ]
 
-google-search = [
-    "ag2[google-client]",
-]
+google-search = ["ag2[google-client]"]
 
-wikipedia = [
-    "wikipedia-api>=0.8.1, <1.0"
-]
+wikipedia = ["wikipedia-api>=0.8.1, <1.0"]
 
 neo4j = [
     "docx2txt==0.9",
@@ -191,11 +235,7 @@ neo4j = [
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
-twilio = [
-    "fastapi>=0.115.0,<1",
-    "uvicorn>=0.30.6,<1",
-    "twilio>=9.3.2"
-]
+twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
@@ -205,7 +245,7 @@ mcp = [
 mcp-proxy-gen = [
     "fastapi-code-generator>=0.5.4",
     "fastapi>=0.112,<1",
-    "requests",  # do not pin it
+    "requests",                      # do not pin it
     "typer",
     "PyYAML",
 ]
@@ -219,14 +259,12 @@ interop-crewai = [
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai>=1.0.12", "fasta2a"]
-interop =[
-    "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
-]
+interop = ["ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"]
 
 autobuild = [
     "chromadb>=1.3.0,<1.4",
     "sentence_transformers>=5.2.2,<=6",
-    "huggingface-hub"
+    "huggingface-hub",
 ]
 
 blendsearch = ["flaml[blendsearch]"]
@@ -235,48 +273,17 @@ captainagent = ["ag2[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
-gemini = [
-    "google-api-core",
-    # Version bounds: local types in gemini_types.py are tested for subset compatibility
-    # with the SDK (local can have extra fields for forward compatibility).
-    # See test/oai/test_gemini_types.py for compatibility tests.
-    "google-genai>=1.20.0,<2.0",
-    "google-cloud-aiplatform",
-    "google-auth",
-    "pillow",
-    "jsonschema",
-]
-
-gemini-realtime = [
-    "ag2[gemini]",
-    "ag2[websockets]",
-]
 
 together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
-redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
 websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
-anthropic = ["anthropic[vertex]>=0.79.0"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
-yepcode = [
-    "yepcode-run>=1.6.1",
-    "python-dotenv",
-]
+yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
-mistral = ["mistralai>=1.0.1"]
-groq = ["groq>=0.9.0"]
+daytona = ["daytona>=0.1.0"]
 cohere = ["cohere>=5.13.5"]
-ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
-bedrock = ["boto3>=1.34.149"]
-deepseek = ["ag2[openai]"]
-
-tracing = [
-    "opentelemetry-api>=1.20",
-    "opentelemetry-sdk>=1.20",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
-]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
@@ -285,29 +292,46 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 tavily = ["tavily-python>=0.7.4"]
 
+nlip = [
+    "nlip-sdk>=0.1.0, <1",
+    "nlip-server>=0.1.0, <1"
+]
+
 ## dev dependencies
 
 # test dependencies
+test-core = [
+    "pytest==9.0.2",
+    "pytest-asyncio==1.3.0",
+    "pytest-cov==6.3.0",
+    "pytest-timeout>=2.4.0,<3",
+    "dirty-equals>=0.11,<0.12",
+    "freezegun>=1.5.5,<2",
+]
+
 test = [
+    "ag2[test-core]",
     "ipykernel==7.1.0",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
-    "pandas==2.3.2",
+    "pandas==2.3.3",
     "fastapi==0.116.1",
     "mcp>=1.11.0",
     # test utilities
-    "pytest==8.4.2",
-    "pytest-cov==6.3.0",
-    "pytest-asyncio==1.1.0",
-    "dirty-equals==0.9.0",
-    "freezegun==1.5.5",
     "aiofiles>=24.1.0,<26.0.0",
 ]
 
 docs = [
-    "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
-    "ag2[tracing]",  # Tracing is exposed in the public API by the optional `autogen.opentelemetry` module
-    "ag2[ag-ui]",  # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
+    "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    # Beta optional dependencies
+    "ag2[openai]",                  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[anthropic]",               # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[gemini]",                  # Gemini is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[ollama]",                  # Ollama is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[dashscope]",               # DashScope is exposed in the public API by the optional `autogen.beta.config` module
+    "ag2[redis]",                   # Redis is exposed in the public API by the optional `autogen.beta.streams` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
@@ -317,11 +341,11 @@ docs = [
     "mike==2.1.3",
     "typer==0.17.4",
     "mkdocs-minify-plugin==0.8.0",
-    "mkdocs-macros-plugin==1.3.9",  # includes with variables
-    "mkdocs-glightbox==0.5.1",  # img zoom
-    "mkdocs-redirects==1.2.2",  # required for handling redirects natively
-    "pillow",  # required for mkdocs-glightbo
-    "cairosvg",  # required for mkdocs-glightbo
+    "mkdocs-macros-plugin==1.3.9",                      # includes with variables
+    "mkdocs-glightbox==0.5.1",                          # img zoom
+    "mkdocs-redirects==1.2.2",                          # required for handling redirects natively
+    "pillow",                                           # required for mkdocs-glightbo
+    "cairosvg",                                         # required for mkdocs-glightbo
     "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
@@ -338,58 +362,56 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
+    "types-aiofiles",
     "ag2[test, openai, a2a, ag-ui]",
 ]
 
 lint = [
-    "ruff==0.12.12",
+    "ruff==0.14.14",
     "codespell==2.4.1",
-    "pyupgrade-directories==0.3.0",
+    "zizmor==1.11.0",
 ]
 
 dev = [
     "toml==0.10.2",
     "ag2[lint,test,types,docs]",
-    "pre-commit==4.3.0",
+    "prek==0.3.8",
     "detect-secrets==1.5.0",
     "uv==0.8.15",
 ]
 
-
-[project.urls]
-Homepage = "https://ag2.ai/"
-Documentation = "https://docs.ag2.ai"
-Tracker = "https://github.com/ag2ai/ag2/issues"
-Source = "https://github.com/ag2ai/ag2"
-Discord = "https://discord.gg/pAbnFJrkgZ"
-
-
-[tool.hatch.version]
-path = "autogen/version.py"
-
-[tool.hatch.build]
-skip-excluded-dirs = true
-exclude = ["/test", "/notebook"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["autogen"]
-only-include = [
-    "autogen",
-    # need for generation of MCP Servers from OpenAPI specification
-    "templates",
+[dependency-groups]
+# Beta groups
+optionals = [
+    "ag2[redis]",
+    # providers
+    "ag2[openai]",
+    "ag2[anthropic]",
+    "ag2[gemini]",
+    "ag2[ollama]",
+    "ag2[dashscope]",
 ]
 
-[tool.hatch.build.targets.sdist]
-exclude = ["test", "notebook"]
+testing = [
+    "ag2[test-core]",
+]
 
-[tool.hatch.build.targets.wheel.sources]
-"autogen" = "autogen"
+lint = [
+    "ag2[lint]",
+]
+
+dev = [
+    {include-group = "optionals"},
+    {include-group = "lint"},
+    {include-group = "testing"},
+    "prek==0.3.8",
+    "detect-secrets==1.5.0",
+]
 
 [tool.pytest.ini_options]
-addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
-testpaths = [
-    "test",
-]
+addopts = '-m "not conda"'
+timeout = 45
+testpaths = ["test"]
 
 markers = [
     "conda: test related to conda forge distribution",
@@ -432,12 +454,6 @@ markers = [
     "tracing",
 ]
 
-[tool.black]
-# https://github.com/psf/black
-line-length = 120
-exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
-
-
 [tool.ruff]
 fix = true
 line-length = 120
@@ -464,24 +480,24 @@ preview = true
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
 select = [
-    "E",     # pycodestyle errors     https://docs.astral.sh/ruff/rules/#error-e
-    "W",     # pycodestyle warnings   https://docs.astral.sh/ruff/rules/#warning-w
-    "C90",   # mccabe                 https://docs.astral.sh/ruff/rules/#mccabe-c90
-    "N",     # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
-#    "D",     # pydocstyle             https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "E",   # pycodestyle errors     https://docs.astral.sh/ruff/rules/#error-e
+    "W",   # pycodestyle warnings   https://docs.astral.sh/ruff/rules/#warning-w
+    "C90", # mccabe                 https://docs.astral.sh/ruff/rules/#mccabe-c90
+    "N",   # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
+    #    "D",     # pydocstyle             https://docs.astral.sh/ruff/rules/#pydocstyle-d
     "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
     "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
     "ASYNC", # flake8-async           https://docs.astral.sh/ruff/rules/#flake8-async-async
     "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
-#    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
-    "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
-#    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
-    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
-#    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
-#    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
-#    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
-#    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
-#    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
+    #    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
+    "Q", # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
+    #    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
+    "SIM", # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+    #    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
+    #    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
+    #    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
+    #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
+    #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
     "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
     "D417",   # undocumented-param     https://docs.astral.sh/ruff/rules/undocumented-param/
@@ -493,9 +509,10 @@ ignore = [
     "C901",
     "E402",
     "E721",
+    "E501",     # line too long, handled by formatter later
+    "C901",     # too complex
     "ASYNC109",
-    "E501",  # line too long, handled by formatter later
-    "C901",  # too complex
+    "ASYNC240",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -524,8 +541,9 @@ convention = "google"
 python_version = "3.10"
 
 files = [
+    "test/mypy",
     "autogen/agentchat/agent.py",
-#    "autogen/agentchat/conversable_agent.py",
+    #    "autogen/agentchat/conversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -547,7 +565,6 @@ files = [
     "autogen/oai/oai_models",
     "autogen/oai/openai_utils.py",
     "autogen/tools",
-    "autogen/_website",
     "autogen/a2a",
     "autogen/testing",
     "website/*.py",
@@ -558,7 +575,7 @@ files = [
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",
-#    "test/fast_depends",
+    #    "test/fast_depends",
     "test/interop",
     "test/io",
     "test/oai/test_oai_models.py",
@@ -569,7 +586,6 @@ files = [
     "test/test_import_utils.py",
     "test/test_import.py",
     "test/tools",
-    "test/website",
 ]
 
 exclude = [
@@ -605,4 +621,4 @@ disallow_any_unimported = true
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch"
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif"

@@ -139,6 +139,56 @@ executor = CodeExecutorFactory.create({
 
 Example notebook: [YepCode Executor](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
 
+## Daytona Sandbox Code Executor
+
+To use [Daytona's](https://www.daytona.io) sandboxed code execution, install AG2 with the `daytona` option:
+
+```bash
+pip install "ag2[daytona]"
+```
+
+Daytona provides secure, isolated cloud sandboxes for running LLM-generated code with support for Python, Bash, JavaScript, and TypeScript. Get your API key from [app.daytona.io](https://app.daytona.io/dashboard/keys).
+
+To use the Daytona executor:
+
+```python
+from autogen.coding import DaytonaCodeExecutor
+from autogen import ConversableAgent
+
+# Set your API key as environment variable
+# export DAYTONA_API_KEY=your_api_key
+
+with DaytonaCodeExecutor(timeout=60) as executor:
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        code_execution_config={"executor": executor},
+        human_input_mode="NEVER",
+    )
+```
+
+Named Daytona snapshots are supported and take priority over `image`:
+
+```python
+executor = DaytonaCodeExecutor(snapshot="my-data-science-snapshot", timeout=60)
+```
+
+Custom Docker images are also supported — pass a plain image string or build one declaratively via the Daytona `Image` object:
+
+```python
+from daytona import Image
+from autogen.coding import DaytonaCodeExecutor
+
+# Plain image string
+executor = DaytonaCodeExecutor(image="python:3.12-slim", timeout=60)
+
+# Declarative image build with pre-installed packages
+custom_image = Image.base("python:3.12-slim").pip_install("pandas", "numpy")
+executor = DaytonaCodeExecutor(image=custom_image, timeout=120)
+```
+
+Example notebook: [Daytona Executor](/docs/use-cases/notebooks/notebooks/agentchat_daytona_executor)
+
 ## retrievechat
 
 `ag2` supports retrieval-augmented generation tasks such as question answering and code generation with RAG agents. Please install with the [retrievechat] option to use it with ChromaDB.

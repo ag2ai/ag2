@@ -62,7 +62,7 @@ if openai_result.is_successful:
     ERROR: ImportError | None = None
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
-    ERROR = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
+    ERROR = ImportError("Please install openai>=1 to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
 
     # OpenAI = object
     # AzureOpenAI = object
@@ -111,10 +111,10 @@ else:
     anthropic_import_exception = ImportError("anthropic not found")
 
 with optional_import_block() as mistral_result:
-    from mistralai.models import (  # noqa
+    from mistralai.client.errors.httpvalidationerror import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
-        SDKError as mistral_SDKError,
     )
+    from mistralai.client.errors.sdkerror import SDKError as mistral_SDKError  # noqa
 
     from .mistral import MistralAIClient
 
@@ -254,6 +254,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     verbosity: Literal["low", "medium", "high"] | None
     extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
 
@@ -274,6 +275,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     extra_body: dict[str, Any] | None = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
+    extra_headers: dict[str, str] | None = (
+        None  # For VLLM and other OpenAI-compatible servers - See: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers
+    )
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None = None
     max_completion_tokens: int | None = None
@@ -289,6 +293,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
+    extra_headers: dict[str, str] | None
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
@@ -300,6 +305,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     tool_choice: Literal["none", "auto", "required"] | None = None
     user: str | None = None
+    extra_headers: dict[str, str] | None = None
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
@@ -310,7 +316,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+class DeepSeekEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["deepseek"]
 
     base_url: HttpUrl
@@ -853,7 +859,9 @@ class OpenAIWrapper:
         extra_kwargs.pop("routing_method", None)
 
         if config_list:
-            config_list = [config.copy() for config in config_list]  # make a copy before modifying
+            config_list = [
+                config.model_dump() if hasattr(config, "model_dump") else config.copy() for config in config_list
+            ]  # make a copy before modifying
             for config_item in config_list:
                 self._register_default_client(config_item, openai_config)
                 # Construct current_config_extra_kwargs using the cleaned extra_kwargs
@@ -953,7 +961,7 @@ class OpenAIWrapper:
         after removing extra kwargs.
 
         For Azure models/deployment names there's a convenience modification of model removing dots in
-        the it's value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
+        its value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
         "gpt-35-turbo" and define model "gpt-3.5-turbo" in the config the function will remove the dot
         from the name and create a client that connects to "gpt-35-turbo" Azure deployment.
         """
@@ -1479,8 +1487,13 @@ class OpenAIWrapper:
         if tool_calls_chunk:
             if full_tool_call is None:
                 full_tool_call = {}
-            for field in ["index", "id", "type"]:
+            for field in ["index", "id"]:
                 completion_tokens += OpenAIWrapper._update_dict_from_chunk(tool_calls_chunk, full_tool_call, field)
+            # "type" is a fixed identifier (e.g. "function"), not a streamed
+            # delta — set it directly so repeated chunks don't concatenate it
+            # into "functionfunction..." (gh-2058)
+            if tool_calls_chunk.type:
+                full_tool_call["type"] = tool_calls_chunk.type
 
             if hasattr(tool_calls_chunk, "function") and tool_calls_chunk.function:
                 if "function" not in full_tool_call:

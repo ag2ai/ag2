@@ -4,7 +4,7 @@ description: "Add distributed tracing across services with AG2's A2A protocol an
 sidebarTitle: Tracing Remote Agents
 ---
 
-When agents run as separate services using the <a href="https://google.github.io/A2A/" className="external-link" target="_blank" rel="noopener noreferrer">A2A (Agent-to-Agent) protocol</a>, a single user request can fan out across multiple processes and machines.
+When agents run as separate services using the <a href="https://a2a-protocol.org/" className="external-link" target="_blank" rel="noopener noreferrer">A2A (Agent-to-Agent) protocol</a>, a single user request can fan out across multiple processes and machines.
 Without distributed tracing, debugging these interactions means correlating logs from each service by hand.
 
 AG2's tracing integration solves this by propagating <a href="https://www.w3.org/TR/trace-context/" className="external-link" target="_blank" rel="noopener noreferrer">W3C Trace Context</a> headers across A2A HTTP calls, so every span -- client-side and server-side -- shares a single trace ID and appears in one unified trace view.
@@ -190,7 +190,7 @@ When `instrument_agent` instruments an `A2aRemoteAgent`, the `invoke_agent` span
 | `gen_ai.agent.remote` | bool | `true` | Indicates this is a remote agent call |
 | `server.address` | string | Agent URL | The URL of the A2A server (e.g. `http://localhost:18123/`) |
 
-These are in addition to the standard agent span attributes (`gen_ai.operation.name`, `gen_ai.agent.name`, `ag2.span.type`). See the [Semantic Attributes](/docs/user-guide/tracing#semantic-attributes) section for the full list.
+These are in addition to the standard agent span attributes (`gen_ai.operation.name`, `gen_ai.agent.name`, `ag2.span.type`). See the [Semantic Attributes](/docs/user-guide/tracing/opentelemetry#semantic-attributes) section for the full list.
 
 ## Group Chat with Remote Agents
 

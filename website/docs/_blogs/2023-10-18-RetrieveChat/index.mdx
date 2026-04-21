@@ -4,6 +4,9 @@ authors: [thinkall]
 tags: [RAG]
 ---
 
+!!! warning "Deprecated"
+    `RetrieveAssistantAgent` is deprecated as of v0.12 and will be removed in v0.14. Use `AssistantAgent` instead. References to `RetrieveAssistantAgent` in this blog post will be updated or removed in v0.14.
+
 *Last update: August 14, 2024; AutoGen version: v0.2.35*
 
 ![RAG Architecture](img/retrievechat-arch.png)
@@ -188,14 +191,14 @@ For example, you can use all the text splitters in langchain.
 ```python
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-recur_spliter = RecursiveCharacterTextSplitter(separators=["\n", "\r", "\t"])
+recur_splitter = RecursiveCharacterTextSplitter(separators=["\n", "\r", "\t"])
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",
     retrieve_config={
         "task": "qa",
         "docs_path": "https://raw.githubusercontent.com/microsoft/autogen/main/README.md",
-        "custom_text_split_function": recur_spliter.split_text,
+        "custom_text_split_function": recur_splitter.split_text,
     },
 )
 ```
