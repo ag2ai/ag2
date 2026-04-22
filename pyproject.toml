@@ -464,6 +464,7 @@ markers = [
     "commsagent-telegram",
     "lmm",
     "tracing",
+    "ag_ui",
 ]
 
 [tool.ruff]

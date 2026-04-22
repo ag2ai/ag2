@@ -26,6 +26,7 @@ except ImportError:
 
 pytestmark = [
     pytest.mark.asyncio,
+    pytest.mark.ag_ui,
     pytest.mark.skipif(not starlette, reason="starlette not installed"),
 ]
 
