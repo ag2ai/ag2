@@ -40,3 +40,14 @@ class TestNormalizeUsage:
     def test_no_cache_key_when_zero(self):
         result = normalize_usage(_make_metadata(cached=0))
         assert result.cache_read_input_tokens is None
+
+    def test_handles_none_token_counts_on_streaming_chunks(self):
+        """Vertex streaming emits UsageMetadata with None fields before the
+        final chunk. Those fields must not crash ``float(...)``."""
+        result = normalize_usage(_make_metadata(prompt=None, candidates=None, total=None))
+        assert result == Usage()
+        assert bool(result) is False
+
+    def test_handles_partial_token_counts(self):
+        result = normalize_usage(_make_metadata(prompt=50, candidates=None, total=None))
+        assert result == Usage(prompt_tokens=50)
