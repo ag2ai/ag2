@@ -7,6 +7,7 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
+from fast_depends.library.serializer import SerializerProto
 from ollama import AsyncClient
 
 from autogen.beta.config.client import LLMClient
@@ -60,13 +61,14 @@ class OllamaClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        ollama_messages = convert_messages(prompt, messages)
+        ollama_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {}

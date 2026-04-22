@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
+from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import Toolkit, tool
@@ -58,7 +58,7 @@ class TestToolExecutionMiddleware:
             ) -> ToolResultEvent:
                 self.mock.enter(event.name)
                 r = await call_next(event, ctx)
-                self.mock.exit(r.content)
+                self.mock.exit(r.result.parts[0].content)
                 return r
 
         def my_tool() -> str:
@@ -77,7 +77,7 @@ class TestToolExecutionMiddleware:
         await agent.ask("Hi!")
 
         mock.enter.assert_called_once_with("my_tool")
-        mock.exit.assert_called_once_with('"tool executed"')
+        mock.exit.assert_called_once_with("tool executed")
 
     @pytest.mark.asyncio()
     async def test_call_sequence(self, mock: MagicMock) -> None:
@@ -138,8 +138,8 @@ class TestToolExecutionMiddleware:
 
         mock.exit.assert_called_once_with("ValueError('tool execution error')")
 
-        tool_results_event = tracking_config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == '"tool executed"'
+        tool_results_event: ToolResultsEvent = tracking_config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0].content == "tool executed"
 
     @pytest.mark.asyncio()
     async def test_mutates_arguments_and_result(self) -> None:
@@ -152,7 +152,7 @@ class TestToolExecutionMiddleware:
             ) -> ToolResultEvent:
                 event.serialized_arguments["x"] += 1
                 result = await call_next(event, ctx)
-                result.result.content += "!"
+                result.result.parts[0].content += "!"
                 return result
 
         recorded_args = MagicMock()
@@ -181,7 +181,7 @@ class TestToolExecutionMiddleware:
         recorded_args.assert_called_once_with(4)
 
         tool_results_event = tracking_config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == '"4!!!"'
+        assert tool_results_event.results[0].result.parts[0].content == "4!!!"
 
     @pytest.mark.asyncio()
     async def test_tool_local_then_agent_middleware_order(self, mock: MagicMock) -> None:

@@ -7,10 +7,13 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
+    DataInput,
     FileIdInput,
     UrlInput,
 )
@@ -210,6 +213,7 @@ def _file_id_block_type(filename: str | None) -> str:
 
 def convert_messages(
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
 
@@ -229,21 +233,32 @@ def convert_messages(
                 result.append({"role": "assistant", "content": content})
 
         elif isinstance(message, ToolResultsEvent):
-            tool_results = [
-                {
+            tool_results = []
+            for r in message.results:
+                parts: list[dict[str, Any]] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append({"type": "text", "text": part.content})
+                    elif isinstance(part, DataInput):
+                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "anthropic")
+                tool_content: str | list[dict[str, Any]] = parts[0]["text"] if len(parts) == 1 else parts
+                tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": r.parent_id,
-                    "content": r.content,
-                }
-                for r in message.results
-            ]
+                    "content": tool_content,
+                })
             result.append({"role": "user", "content": tool_results})
 
         elif isinstance(message, ModelRequest):
             content_parts: list[dict[str, Any]] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     content_parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, DataInput):
+                    content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
                     block_type = _file_id_block_type(inp.filename)

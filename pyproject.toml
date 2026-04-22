@@ -294,7 +294,7 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 ddgs = ["ddgs>=9.0.0,<10"]
-tavily = ["tavily-python>=0.7.4"]
+tavily = ["tavily-python>=0.7.4,<0.8"]
 
 nlip = [
     "nlip-sdk>=0.1.0, <1",
@@ -392,6 +392,8 @@ dev = [
 # Beta groups
 optionals = [
     "ag2[redis]",
+    # search tools
+    "ag2[tavily,ddgs]",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
