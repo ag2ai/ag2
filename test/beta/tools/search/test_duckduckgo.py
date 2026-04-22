@@ -3,15 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import asdict
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsJson, IsPartialDict
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("ddgs")
 final_reply: str = "done"
-from autogen.beta import Agent, Variable
+from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.events.types import ModelResponse
@@ -84,17 +83,13 @@ class TestSearchExecution:
 
         # assert tool result
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                SearchResponse(
-                    query="AG2 framework",
-                    results=[
-                        SearchResult(title="AG2 Framework", href="https://ag2.ai", body="AG2 is an agent framework."),
-                        SearchResult(
-                            title="GitHub - AG2", href="https://github.com/ag2ai/ag2", body="Open source repo."
-                        ),
-                    ],
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SearchResponse(
+                query="AG2 framework",
+                results=[
+                    SearchResult(title="AG2 Framework", href="https://ag2.ai", body="AG2 is an agent framework."),
+                    SearchResult(title="GitHub - AG2", href="https://github.com/ag2ai/ag2", body="Open source repo."),
+                ],
             )
         )
 
@@ -112,19 +107,10 @@ class TestSearchExecution:
 
         # assert tool result
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        config = TrackingConfig(_make_config("AG2 framework"))
-        agent = Agent("a", config=config, tools=[ddg])
-
-        # act
-        await agent.ask("search")
-
-        #
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                SearchResponse(
-                    query="nonexistent query",
-                    results=[],
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SearchResponse(
+                query="nonexistent query",
+                results=[],
             )
         )
 

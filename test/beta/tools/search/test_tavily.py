@@ -3,18 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import asdict
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsJson, IsPartialDict
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("tavily")
 
-from autogen.beta import Agent, Variable
+from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.beta.events.types import ModelResponse
+from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
 
@@ -89,27 +87,25 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                SearchResponse(
-                    query="AG2 framework",
-                    results=[
-                        SearchResult(
-                            title="AG2 Framework",
-                            url="https://ag2.ai",
-                            content="AG2 is an agent framework.",
-                            score=0.95,
-                        ),
-                        SearchResult(
-                            title="GitHub - AG2",
-                            url="https://github.com/ag2ai/ag2",
-                            content="Open source repo.",
-                            score=0.82,
-                        ),
-                    ],
-                    answer="AG2 is an open-source multi-agent framework.",
-                    images=["https://ag2.ai/img.png"],
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SearchResponse(
+                query="AG2 framework",
+                results=[
+                    SearchResult(
+                        title="AG2 Framework",
+                        url="https://ag2.ai",
+                        content="AG2 is an agent framework.",
+                        score=0.95,
+                    ),
+                    SearchResult(
+                        title="GitHub - AG2",
+                        url="https://github.com/ag2ai/ag2",
+                        content="Open source repo.",
+                        score=0.82,
+                    ),
+                ],
+                answer="AG2 is an open-source multi-agent framework.",
+                images=["https://ag2.ai/img.png"],
             )
         )
 
@@ -126,12 +122,10 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                SearchResponse(
-                    query="nothing",
-                    results=[],
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            SearchResponse(
+                query="nothing",
+                results=[],
             )
         )
 

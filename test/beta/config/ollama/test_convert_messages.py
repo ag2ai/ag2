@@ -4,6 +4,7 @@
 
 import pytest
 from dirty_equals import IsPartialDict
+from fast_depends.use import SerializerCls
 
 from autogen.beta.config.ollama.mappers import convert_messages
 from autogen.beta.events import (
@@ -33,7 +34,7 @@ class TestConvertMessagesEmptyArguments:
 
     @pytest.mark.parametrize("arguments", ["", None])
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        result = convert_messages([], [_model_response_with_tool_call(arguments)])
+        result = convert_messages([], [_model_response_with_tool_call(arguments)], SerializerCls)
 
         assert result[0] == IsPartialDict({
             "role": "assistant",
@@ -41,7 +42,7 @@ class TestConvertMessagesEmptyArguments:
         })
 
     def test_valid_arguments_are_preserved(self) -> None:
-        result = convert_messages([], [_model_response_with_tool_call('{"category": "books"}')])
+        result = convert_messages([], [_model_response_with_tool_call('{"category": "books"}')], SerializerCls)
 
         assert result[0] == IsPartialDict({
             "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {"category": "books"}})})],
@@ -50,24 +51,24 @@ class TestConvertMessagesEmptyArguments:
 
 def test_audio_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])])
+        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])], SerializerCls)
 
 
 def test_image_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([ImageInput(url="https://example.com/img.png")])])
+        convert_messages([], [ModelRequest([ImageInput(url="https://example.com/img.png")])], SerializerCls)
 
 
 def test_document_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])])
+        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])], SerializerCls)
 
 
 def test_file_id_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput.*ollama"):
-        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])])
+        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)
 
 
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*ollama"):
-        convert_messages([], [ModelRequest([BinaryInput(data=b"data", media_type="image/png")])])
+        convert_messages([], [ModelRequest([BinaryInput(data=b"data", media_type="image/png")])], SerializerCls)

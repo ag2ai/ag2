@@ -6,6 +6,7 @@ import base64
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
@@ -13,6 +14,7 @@ from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
     BinaryType,
+    DataInput,
     FileIdInput,
     ModelRequest,
     ModelResponse,
@@ -108,7 +110,10 @@ def response_proto_to_text_config(
     return {"format": fmt}
 
 
-def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
+def events_to_responses_input(
+    messages: Sequence[BaseEvent],
+    serializer: SerializerProto,
+) -> list[dict[str, Any]]:
     """Convert a sequence of events to Responses API input items."""
     result: list[dict[str, Any]] = []
 
@@ -131,14 +136,23 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
+                parts: list[str] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append(part.content)
+                    elif isinstance(part, DataInput):
+                        parts.append(serializer.encode(part.data).decode())
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "openai-responses")
+                output = parts[0] if len(parts) == 1 else "\n".join(parts)
                 result.append({
                     "type": "function_call_output",
                     "call_id": r.parent_id,
-                    "output": r.content,
+                    "output": output,
                 })
 
         elif isinstance(message, ModelRequest):
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     result.append({"role": "user", "content": [{"type": "input_text", "text": inp.content}]})
 
@@ -176,9 +190,10 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
-) -> list[dict[str, str]]:
+    serializer: SerializerProto,
+) -> list[dict[str, Any]]:
     # legacy prompt message format
-    result: list[dict[str, str]] = [{"content": "\n".join(system_prompt), "role": "system"}]
+    result: list[dict[str, Any]] = [{"content": "\n".join(system_prompt), "role": "system"}]
 
     for message in messages:
         if isinstance(message, ModelResponse):
@@ -186,13 +201,29 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result.append(r.to_api())
+                parts: list[dict[str, Any]] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append({"type": "text", "text": part.content})
+                    elif isinstance(part, DataInput):
+                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "openai-completions")
+
+                # Simple string content for a single plain-text turn (most common case)
+                if len(parts) == 1 and parts[0]["type"] == "text":
+                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts[0]["text"]})
+                else:
+                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts})
 
         elif isinstance(message, ModelRequest):
             parts: list[dict[str, Any]] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append({"type": "text", "text": inp.content})
+
+                elif isinstance(inp, DataInput):
+                    parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind is BinaryType.IMAGE:
