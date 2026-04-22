@@ -5,6 +5,7 @@
 from dataclasses import dataclass, replace
 from typing import TypedDict
 
+import google.auth
 from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
@@ -15,6 +16,10 @@ from .gemini_client import CreateConfig, GeminiClient
 class GeminiConfigOverrides(TypedDict, total=False):
     model: str
     api_key: str | None
+    vertexai: bool | None
+    credentials: google.auth.credentials.Credentials | str | None
+    project: str | None
+    location: str | None
     temperature: float | None
     top_p: float | None
     top_k: int | None
@@ -31,6 +36,10 @@ class GeminiConfigOverrides(TypedDict, total=False):
 class GeminiConfig(ModelConfig):
     model: str
     api_key: str | None = None
+    vertexai: bool | None = None
+    credentials: google.auth.credentials.Credentials | str | None = None
+    project: str | None = None
+    location: str | None = None
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
@@ -68,6 +77,10 @@ class GeminiConfig(ModelConfig):
         return GeminiClient(
             model=self.model,
             api_key=self.api_key,
+            vertexai=self.vertexai,
+            credentials=self.credentials,
+            project=self.project,
+            location=self.location,
             streaming=self.streaming,
             create_config=config,
             cached_content=self.cached_content,

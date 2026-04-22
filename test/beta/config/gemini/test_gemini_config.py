@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from unittest.mock import MagicMock, patch
+
+from google.oauth2 import service_account
+
 from autogen.beta.config import GeminiConfig
 from autogen.beta.config.gemini import GeminiClient
 
@@ -49,3 +53,53 @@ def test_defaults() -> None:
 def test_max_output_tokens_can_be_set() -> None:
     config = GeminiConfig(model="gemini-2.0-flash", max_output_tokens=8192)
     assert config.max_output_tokens == 8192
+
+
+@patch("autogen.beta.config.gemini.gemini_client.genai.Client")
+@patch("autogen.beta.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+def test_credentials_string_loads_service_account_file(mock_from_file, mock_client) -> None:
+    loaded = MagicMock(spec=service_account.Credentials)
+    mock_from_file.return_value = loaded
+
+    GeminiConfig(
+        model="gemini-2.5-flash",
+        vertexai=True,
+        project="proj",
+        location="us-central1",
+        credentials="/fake/key.json",
+    ).create()
+
+    mock_from_file.assert_called_once_with(
+        "/fake/key.json",
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    _, kwargs = mock_client.call_args
+    assert kwargs["credentials"] is loaded
+
+
+@patch("autogen.beta.config.gemini.gemini_client.genai.Client")
+@patch("autogen.beta.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client) -> None:
+    creds = MagicMock(spec=service_account.Credentials)
+
+    GeminiConfig(
+        model="gemini-2.5-flash",
+        vertexai=True,
+        project="proj",
+        location="us-central1",
+        credentials=creds,
+    ).create()
+
+    mock_from_file.assert_not_called()
+    _, kwargs = mock_client.call_args
+    assert kwargs["credentials"] is creds
+
+
+@patch("autogen.beta.config.gemini.gemini_client.genai.Client")
+@patch("autogen.beta.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
+def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
+    GeminiConfig(model="gemini-2.5-flash", api_key="key").create()
+
+    mock_from_file.assert_not_called()
+    _, kwargs = mock_client.call_args
+    assert kwargs["credentials"] is None
