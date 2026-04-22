@@ -395,7 +395,7 @@ dev = [
 optionals = [
     "ag2[redis]",
     # search tools
-    "ag2[tavily,ddgs]",
+    "ag2[tavily,ddgs,exa]",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
