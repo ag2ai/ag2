@@ -3,16 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import asdict
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsJson, IsPartialDict
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("exa_py")
 
-from autogen.beta import Agent, Variable
+from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.events.types import ModelResponse
@@ -112,30 +111,28 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                ExaSearchResponse(
-                    query="AG2 framework",
-                    results=[
-                        ExaSearchResult(
-                            title="AG2 Framework",
-                            url="https://ag2.ai",
-                            score=0.95,
-                            published_date="2024-01-01",
-                            author="ag2ai",
-                            text=None,
-                        ),
-                        ExaSearchResult(
-                            title="GitHub - AG2",
-                            url="https://github.com/ag2ai/ag2",
-                            score=0.82,
-                            published_date="2024-01-01",
-                            author="ag2ai",
-                            text=None,
-                        ),
-                    ],
-                    autoprompt_string=None,
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            ExaSearchResponse(
+                query="AG2 framework",
+                results=[
+                    ExaSearchResult(
+                        title="AG2 Framework",
+                        url="https://ag2.ai",
+                        score=0.95,
+                        published_date="2024-01-01",
+                        author="ag2ai",
+                        text=None,
+                    ),
+                    ExaSearchResult(
+                        title="GitHub - AG2",
+                        url="https://github.com/ag2ai/ag2",
+                        score=0.82,
+                        published_date="2024-01-01",
+                        author="ag2ai",
+                        text=None,
+                    ),
+                ],
+                autoprompt_string=None,
             )
         )
 
@@ -149,7 +146,9 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(asdict(ExaSearchResponse(query="nothing", results=[])))
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            ExaSearchResponse(query="nothing", results=[])
+        )
 
     async def test_none_params_omitted(self, mock: MagicMock) -> None:
         mock.search.return_value = _response([])
@@ -305,15 +304,13 @@ class TestGetContents:
         mock.get_contents.assert_called_once_with(["https://ag2.ai"], text=True)
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson([
-            asdict(
-                ExaContentResult(
-                    url="https://ag2.ai",
-                    title="AG2",
-                    text="full text",
-                    author="ag2ai",
-                    published_date="2024-01-01",
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput([
+            ExaContentResult(
+                url="https://ag2.ai",
+                title="AG2",
+                text="full text",
+                author="ag2ai",
+                published_date="2024-01-01",
             )
         ])
 
@@ -337,15 +334,13 @@ class TestAnswer:
         mock.answer.assert_called_once_with("What is AG2?", text=True)
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].content == IsJson(
-            asdict(
-                ExaAnswerResult(
-                    answer="AG2 is an open-source multi-agent framework.",
-                    citations=[
-                        ExaAnswerCitation(url="https://ag2.ai", title="AG2", text="About AG2"),
-                        ExaAnswerCitation(url="https://github.com/ag2ai/ag2", title="GitHub", text="Source code"),
-                    ],
-                )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            ExaAnswerResult(
+                answer="AG2 is an open-source multi-agent framework.",
+                citations=[
+                    ExaAnswerCitation(url="https://ag2.ai", title="AG2", text="About AG2"),
+                    ExaAnswerCitation(url="https://github.com/ag2ai/ag2", title="GitHub", text="Source code"),
+                ],
             )
         )
 
