@@ -241,9 +241,6 @@ def convert_messages(
 def normalize_usage(metadata: Any) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
-    def _to_float(value: Any) -> float | None:
-        return float(value) if value is not None else None
-
     cache_read = _to_float(metadata.cached_content_token_count) or None
     return Usage(
         prompt_tokens=_to_float(metadata.prompt_token_count),
@@ -251,3 +248,6 @@ def normalize_usage(metadata: Any) -> Usage:
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
     )
+
+def _to_float(value: Any) -> float | None:
+    return float(value) if value is not None else None
