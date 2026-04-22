@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -32,11 +33,43 @@ from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
+from autogen.beta.events.input_events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer
 from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
+
+
+def _stringify_tool_result(result: ToolResult) -> str:
+    """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
+
+    AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool
+    results are now structured lists of ``Input`` parts (text, data, binary,
+    urls, file-ids). Collapse them here so any kind of tool return still
+    surfaces in the stream.
+    """
+    chunks: list[str] = []
+    for part in result.parts:
+        if isinstance(part, TextInput):
+            chunks.append(part.content)
+        elif isinstance(part, DataInput):
+            try:
+                chunks.append(json.dumps(to_jsonable_python(part.data), default=str))
+            except Exception:  # noqa: BLE001
+                chunks.append(str(part.data))
+        elif isinstance(part, UrlInput):
+            chunks.append(part.url)
+        elif isinstance(part, FileIdInput):
+            chunks.append(f"[file:{part.file_id}]")
+        elif isinstance(part, BinaryInput):
+            chunks.append(f"[binary:{part.media_type} {len(part.data)}B]")
+        else:
+            chunks.append(repr(part))
+    if len(chunks) == 1:
+        return chunks[0]
+    return "\n".join(chunks)
+
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -168,7 +201,7 @@ async def run_stream(
             await write_events_stream.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
-                    content=event.content,
+                    content=_stringify_tool_result(event.result),
                     message_id=str(uuid4()),
                     timestamp=_get_timestamp(),
                     role="tool",
