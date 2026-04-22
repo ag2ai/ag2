@@ -249,5 +249,6 @@ def normalize_usage(metadata: Any) -> Usage:
         cache_read_input_tokens=cache_read,
     )
 
+
 def _to_float(value: Any) -> float | None:
     return float(value) if value is not None else None
