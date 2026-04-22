@@ -5,6 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+import base64
 import os
 import warnings
 from typing import Any
@@ -1504,6 +1505,97 @@ class TestGeminiClient:
         assert isinstance(part, Part)
         # thought_signature should be None (not set, which is fine for non-Gemini-3 models)
         assert part.thought_signature is None
+
+    def test_thought_signature_captured_from_vertex_part_via_to_dict(self, gemini_client):
+        """Vertex ``Part`` does not expose ``thought_signature`` as a direct attribute —
+        it is only surfaced via ``part.to_dict()`` as a base64 string."""
+
+        # Fake a Vertex-shaped part: no thought_signature attribute, but to_dict() exposes it.
+        original = b"vertex_sig_value"
+        vertex_part = MagicMock(spec=["function_call", "to_dict"])
+        vertex_part.function_call = MagicMock(name="get_weather", args={"location": "Melbourne"})
+        vertex_part.function_call.name = "get_weather"
+        vertex_part.function_call.args = {"location": "Melbourne"}
+        vertex_part.to_dict.return_value = {
+            "function_call": {"name": "get_weather", "args": {"location": "Melbourne"}},
+            "thought_signature": base64.b64encode(original).decode("ascii"),
+        }
+
+        tool_calls: list = []
+        gemini_client._process_parts([vertex_part], tool_calls)
+
+        assert len(tool_calls) == 1
+        tc = tool_calls[0]
+        assert tc.id in gemini_client.tool_call_thought_signatures
+        assert gemini_client.tool_call_thought_signatures[tc.id] == original
+        assert base64.b64decode(tc.thought_signature) == original
+
+    def test_thought_signature_replayed_on_vertex_same_agent(self, gemini_client_with_credentials):
+        """Vertex branch must attach thought_signature from the per-instance dict.
+
+        Without this, Gemini 3 thinking models on Vertex reject the replayed
+        function call with `400 INVALID_ARGUMENT ... missing a thought_signature`.
+        """
+        import base64
+
+        client = gemini_client_with_credentials
+        tool_call_id = "vertex_tool_same_agent"
+        test_signature = b"vertex_sig_bytes"
+        client.tool_call_thought_signatures[tool_call_id] = test_signature
+        client.tool_call_function_map[tool_call_id] = "lookup"
+
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "lookup", "arguments": '{"q": "widget"}'},
+                    "type": "function",
+                }
+            ],
+        }
+
+        parts, part_type = client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        assert len(parts) == 1
+        raw = parts[0].to_dict()
+        fc = raw.get("function_call") or raw.get("functionCall")
+        assert fc and fc["name"] == "lookup"
+        sig_b64 = raw.get("thought_signature") or raw.get("thoughtSignature")
+        assert sig_b64 is not None
+        assert base64.b64decode(sig_b64) == test_signature
+
+    def test_thought_signature_replayed_on_vertex_cross_agent(self, gemini_client_with_credentials):
+        """Vertex branch must honour the base64 signature carried on the tool_call dict
+        (cross-agent handoff case — the receiving client has an empty instance dict)."""
+        import base64
+
+        client = gemini_client_with_credentials
+        # Deliberately leave instance dict empty to simulate a different agent's client
+        assert client.tool_call_thought_signatures == {}
+
+        original_bytes = b"cross_agent_sig"
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "xid",
+                    "function": {"name": "lookup", "arguments": "{}"},
+                    "type": "function",
+                    "thought_signature": base64.b64encode(original_bytes).decode("ascii"),
+                }
+            ],
+        }
+
+        parts, _ = client._oai_content_to_gemini_content(message)
+
+        raw = parts[0].to_dict()
+        sig_b64 = raw.get("thought_signature") or raw.get("thoughtSignature")
+        assert sig_b64 is not None
+        assert base64.b64decode(sig_b64) == original_bytes
 
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.calculate_gemini_cost")
