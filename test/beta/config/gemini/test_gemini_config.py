@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from google.oauth2 import service_account
 
-from autogen.beta.config import GeminiConfig
+from autogen.beta.config import GeminiConfig, VertexAIConfig
 from autogen.beta.config.gemini import GeminiClient
 
 
@@ -42,6 +42,13 @@ def test_create_returns_gemini_client() -> None:
     assert isinstance(client, GeminiClient)
 
 
+def test_vertex_config_create_returns_gemini_client() -> None:
+    config = VertexAIConfig(model="gemini-2.5-pro", project="proj", location="us-central1")
+    client = config.create()
+
+    assert isinstance(client, GeminiClient)
+
+
 def test_defaults() -> None:
     config = GeminiConfig(model="gemini-2.0-flash")
     assert config.streaming is False
@@ -50,9 +57,44 @@ def test_defaults() -> None:
     assert config.api_key is None
 
 
+def test_vertex_config_defaults() -> None:
+    config = VertexAIConfig(model="gemini-2.5-pro")
+    assert config.streaming is False
+    assert config.project is None
+    assert config.location is None
+    assert config.credentials is None
+
+
 def test_max_output_tokens_can_be_set() -> None:
     config = GeminiConfig(model="gemini-2.0-flash", max_output_tokens=8192)
     assert config.max_output_tokens == 8192
+
+
+@patch("autogen.beta.config.gemini.gemini_client.genai.Client")
+def test_gemini_config_forces_vertexai_false(mock_client) -> None:
+    GeminiConfig(model="gemini-2.5-flash", api_key="key").create()
+
+    _, kwargs = mock_client.call_args
+    assert kwargs["vertexai"] is False
+    assert kwargs["api_key"] == "key"
+    assert kwargs["project"] is None
+    assert kwargs["location"] is None
+    assert kwargs["credentials"] is None
+
+
+@patch("autogen.beta.config.gemini.gemini_client.genai.Client")
+def test_vertex_config_forces_vertexai_true(mock_client) -> None:
+    VertexAIConfig(
+        model="gemini-2.5-pro",
+        project="proj",
+        location="us-central1",
+    ).create()
+
+    _, kwargs = mock_client.call_args
+    assert kwargs["vertexai"] is True
+    assert kwargs["project"] == "proj"
+    assert kwargs["location"] == "us-central1"
+    assert kwargs["api_key"] is None
 
 
 @patch("autogen.beta.config.gemini.gemini_client.genai.Client")
@@ -61,9 +103,8 @@ def test_credentials_string_loads_service_account_file(mock_from_file, mock_clie
     loaded = MagicMock(spec=service_account.Credentials)
     mock_from_file.return_value = loaded
 
-    GeminiConfig(
+    VertexAIConfig(
         model="gemini-2.5-flash",
-        vertexai=True,
         project="proj",
         location="us-central1",
         credentials="/fake/key.json",
@@ -82,9 +123,8 @@ def test_credentials_string_loads_service_account_file(mock_from_file, mock_clie
 def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client) -> None:
     creds = MagicMock(spec=service_account.Credentials)
 
-    GeminiConfig(
+    VertexAIConfig(
         model="gemini-2.5-flash",
-        vertexai=True,
         project="proj",
         location="us-central1",
         credentials=creds,
@@ -98,7 +138,7 @@ def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client
 @patch("autogen.beta.config.gemini.gemini_client.genai.Client")
 @patch("autogen.beta.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
 def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
-    GeminiConfig(model="gemini-2.5-flash", api_key="key").create()
+    VertexAIConfig(model="gemini-2.5-flash", project="proj", location="us-central1").create()
 
     mock_from_file.assert_not_called()
     _, kwargs = mock_client.call_args

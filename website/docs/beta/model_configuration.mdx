@@ -17,6 +17,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
+| **[Gemini on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)** | `VertexAIConfig` | `pip install "ag2[gemini]"` |
 | **[Ollama](https://docs.ollama.com/api/introduction)** | `OllamaConfig` | `pip install "ag2[ollama]"` |
 | **[DashScope](https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen)** | `DashScopeConfig` | `pip install "ag2[dashscope]"` |
 
@@ -129,18 +130,17 @@ config = OpenAIConfig(model="gpt-5")
 
 ### Google Vertex AI (Gemini)
 
-`GeminiConfig` supports both the public **Gemini Developer API** (via `api_key`) and **Vertex AI** on Google Cloud.
+For Gemini on **Vertex AI** (Google Cloud), use the dedicated `VertexAIConfig` class. `GeminiConfig` covers the public Developer API (`api_key`); `VertexAIConfig` covers the Vertex path (GCP `project`, `location`, and Google-issued credentials).
 
-To use Vertex AI, set `vertexai=True` and supply your GCP `project` and `location`. Authentication then accepts any of the following:
+Authentication accepts any of the following:
 
 <Tabs>
   <Tab title="Service account key file">
-```python linenums="1" hl_lines="7"
-from autogen.beta.config import GeminiConfig
+```python linenums="1" hl_lines="6"
+from autogen.beta.config import VertexAIConfig
 
-config = GeminiConfig(
+config = VertexAIConfig(
     model="gemini-3-flash-preview",
-    vertexai=True,
     project="my-gcp-project",
     location="us-central1",
     credentials="/path/to/service-account-key.json",
@@ -154,14 +154,13 @@ The service account needs the **Vertex AI User** (`roles/aiplatform.user`) IAM r
 
   <Tab title="Application Default Credentials">
 ```python linenums="1"
-from autogen.beta.config import GeminiConfig
+from autogen.beta.config import VertexAIConfig
 
 # Run `gcloud auth application-default login` first, or ensure
 # GOOGLE_APPLICATION_CREDENTIALS points to a key file. With nothing
 # passed to `credentials`, google-genai resolves ADC automatically.
-config = GeminiConfig(
+config = VertexAIConfig(
     model="gemini-3-flash-preview",
-    vertexai=True,
     project="my-gcp-project",
     location="us-central1",
 )
@@ -171,15 +170,14 @@ config = GeminiConfig(
   <Tab title="Pre-built Credentials object">
 ```python linenums="1" hl_lines="4-6"
 import google.auth
-from autogen.beta.config import GeminiConfig
+from autogen.beta.config import VertexAIConfig
 
 creds, _ = google.auth.default(
     scopes=["https://www.googleapis.com/auth/cloud-platform"],
 )
 
-config = GeminiConfig(
+config = VertexAIConfig(
     model="gemini-3-flash-preview",
-    vertexai=True,
     project="my-gcp-project",
     location="us-central1",
     credentials=creds,
@@ -194,29 +192,27 @@ Use this path for impersonated credentials, workload identity, or any other `goo
 
 Instead of passing parameters explicitly, the underlying `google-genai` SDK resolves any field left unset from the following environment variables:
 
-| Environment variable | Equivalent parameter | Notes |
-| :--- | :--- | :--- |
-| `GOOGLE_API_KEY` | `api_key` | Developer API (non-Vertex). Takes precedence over `GEMINI_API_KEY` if both are set. |
-| `GEMINI_API_KEY` | `api_key` | Developer API (non-Vertex). |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `vertexai` | Set to `true` / `1` to enable Vertex mode without passing `vertexai=True`. |
-| `GOOGLE_CLOUD_PROJECT` | `project` | GCP project ID for Vertex. |
-| `GOOGLE_CLOUD_LOCATION` | `location` | GCP region (or `global`) for Vertex. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | `credentials` | Path to a service-account JSON key file, read via ADC. |
+| Environment variable | Used by | Equivalent parameter | Notes |
+| :--- | :--- | :--- | :--- |
+| `GOOGLE_API_KEY` | `GeminiConfig` | `api_key` | Takes precedence over `GEMINI_API_KEY` if both are set. |
+| `GEMINI_API_KEY` | `GeminiConfig` | `api_key` | Developer API key. |
+| `GOOGLE_CLOUD_PROJECT` | `VertexAIConfig` | `project` | GCP project ID. |
+| `GOOGLE_CLOUD_LOCATION` | `VertexAIConfig` | `location` | GCP region (or `global`). |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `VertexAIConfig` | `credentials` | Path to a service-account JSON key file, read via ADC. |
 
-With all four Vertex variables set in the environment, configuration collapses to just the model name:
+With the three Vertex variables set in the environment, configuration collapses to just the model name:
 
 ```bash
-export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=my-gcp-project
 export GOOGLE_CLOUD_LOCATION=us-central1
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 ```
 
 ```python linenums="1"
-from autogen.beta.config import GeminiConfig
+from autogen.beta.config import VertexAIConfig
 
 # All Vertex auth parameters resolved from the environment.
-config = GeminiConfig(model="gemini-3-flash-preview")
+config = VertexAIConfig(model="gemini-3-flash-preview")
 ```
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)

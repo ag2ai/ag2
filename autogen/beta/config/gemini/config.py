@@ -13,13 +13,8 @@ from autogen.beta.config.config import ModelConfig
 from .gemini_client import CreateConfig, GeminiClient
 
 
-class GeminiConfigOverrides(TypedDict, total=False):
+class GeminiBaseConfigOverrides(TypedDict, total=False):
     model: str
-    api_key: str | None
-    vertexai: bool | None
-    credentials: google.auth.credentials.Credentials | str | None
-    project: str | None
-    location: str | None
     temperature: float | None
     top_p: float | None
     top_k: int | None
@@ -32,14 +27,19 @@ class GeminiConfigOverrides(TypedDict, total=False):
     cached_content: str | None
 
 
+class GeminiConfigOverrides(GeminiBaseConfigOverrides, total=False):
+    api_key: str | None
+
+
+class VertexAIConfigOverrides(GeminiBaseConfigOverrides, total=False):
+    credentials: google.auth.credentials.Credentials | str | None
+    project: str | None
+    location: str | None
+
+
 @dataclass(slots=True)
-class GeminiConfig(ModelConfig):
+class GeminiBaseConfig:
     model: str
-    api_key: str | None = None
-    vertexai: bool | None = None
-    credentials: google.auth.credentials.Credentials | str | None = None
-    project: str | None = None
-    location: str | None = None
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
@@ -51,10 +51,7 @@ class GeminiConfig(ModelConfig):
     seed: int | None = None
     cached_content: str | None = None
 
-    def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
-        return replace(self, **overrides)
-
-    def create(self) -> GeminiClient:
+    def _build_create_config(self) -> CreateConfig:
         config = CreateConfig()
 
         if self.temperature is not None:
@@ -74,14 +71,44 @@ class GeminiConfig(ModelConfig):
         if self.seed is not None:
             config["seed"] = self.seed
 
+        return config
+
+
+@dataclass(slots=True)
+class GeminiConfig(GeminiBaseConfig, ModelConfig):
+    api_key: str | None = None
+
+    def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> GeminiClient:
         return GeminiClient(
             model=self.model,
             api_key=self.api_key,
-            vertexai=self.vertexai,
+            vertexai=False,
+            streaming=self.streaming,
+            create_config=self._build_create_config(),
+            cached_content=self.cached_content,
+        )
+
+
+@dataclass(slots=True)
+class VertexAIConfig(GeminiBaseConfig, ModelConfig):
+    credentials: google.auth.credentials.Credentials | str | None = None
+    project: str | None = None
+    location: str | None = None
+
+    def copy(self, /, **overrides: Unpack[VertexAIConfigOverrides]) -> "VertexAIConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> GeminiClient:
+        return GeminiClient(
+            model=self.model,
+            vertexai=True,
             credentials=self.credentials,
             project=self.project,
             location=self.location,
             streaming=self.streaming,
-            create_config=config,
+            create_config=self._build_create_config(),
             cached_content=self.cached_content,
         )
