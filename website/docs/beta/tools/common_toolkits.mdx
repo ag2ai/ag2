@@ -1,11 +1,11 @@
 ---
-title: Common Toolkits
-sidebarTitle: Common Toolkits
+title: Common Tools
+sidebarTitle: Common Tools
 ---
 
-# Common Toolkits
+# Common Tools
 
-AG2 ships with ready-made toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
+AG2 ships with ready-made tools and toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/beta/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
 
 ## FilesystemToolkit
 
@@ -262,3 +262,220 @@ Available tools:
 | `search_skills` | Search the skills.sh registry by keyword |
 | `install_skill` | Download and install a skill by its registry identifier |
 | `remove_skill` | Remove an installed skill by name |
+
+---
+
+## DuckDuckSearchTool
+
+`DuckDuckSearchTool` gives an agent the ability to search the web using DuckDuckGo. No API key is required.
+
+!!! note
+    Requires the `ddgs` extra: `pip install ag2[ddgs]`
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import DuckDuckSearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[DuckDuckSearchTool()],
+)
+```
+
+### Configuration
+
+```python linenums="1"
+tool = DuckDuckSearchTool(
+    max_results=10,       # default: 5
+    region="uk-en",       # default: "us-en"
+    safesearch="strict",  # default: "moderate" — options: "on", "moderate", "off"
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## ExaToolkit
+
+`ExaToolkit` gives an agent four related tools powered by the [Exa](https://exa.ai){.external-link target="_blank"} neural search engine: web search, find-similar, content retrieval, and AI-powered answers — all sharing a single client.
+
+!!! note
+    Requires the `exa` extra and an API key: `pip install ag2[exa]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import ExaToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[ExaToolkit(api_key=os.environ["EXA_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Exa SDK reads `EXA_API_KEY` from the environment automatically.
+
+### Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `exa_search` | Neural web search with filters (domains, dates, type, category) |
+| `exa_find_similar` | Find pages similar to a given URL |
+| `exa_get_contents` | Fetch full text content for specific URLs |
+| `exa_answer` | Get an AI-generated answer with citations |
+
+### Shared defaults
+
+`num_results` and `max_characters` on the constructor are applied to the default `exa_search` and `exa_find_similar` tools:
+
+```python linenums="1"
+toolkit = ExaToolkit(
+    api_key=...,
+    num_results=10,         # applies to search & find_similar
+    max_characters=2000,    # per-result text cap for search; None = metadata-only
+)
+```
+
+### Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.find_similar()`, `toolkit.get_contents()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = ExaToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(), toolkit.answer()],
+)
+```
+
+### Per-tool configuration
+
+Per-call parameters (filters, domains, dates, `num_results`, `max_characters`, etc.) live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = ExaToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    num_results=5,
+    max_characters=2000,           # triggers search_and_contents for full text
+    search_type="neural",          # "neural" | "keyword" | "hybrid" | "auto" | "fast" | "deep"
+    category="research paper",     # e.g. "news", "github", "pdf", ...
+    include_domains=["arxiv.org"],
+    exclude_domains=["medium.com"],
+    start_published_date="2024-01-01",
+    end_published_date="2024-12-31",
+    use_autoprompt=True,
+    livecrawl="always",            # "never" | "fallback" | "always" | "preferred"
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool, toolkit.answer()])
+```
+
+When `max_characters` is set, `exa_search` calls Exa's `search_and_contents` endpoint so each result carries `text`. When `max_characters` is `None`, only metadata is returned (cheaper and faster).
+
+All runtime parameters accept `Variable` for deferred context resolution.
+
+---
+
+## TavilySearchTool
+
+`TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.
+
+!!! note
+    Requires the `tavily` extra and an API key: `pip install ag2[tavily]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import TavilySearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, Tavily reads the `TAVILY_API_KEY` environment variable automatically.
+
+### Configuration
+
+```python linenums="1"
+tool = TavilySearchTool(
+    max_results=5,
+    search_depth="advanced",   # "basic" | "advanced" | "fast" | "ultra-fast"
+    topic="news",              # "general" | "news" | "finance"
+    include_answer=True,       # add an LLM-generated summary to the response
+    include_raw_content=True,  # include full page text alongside the snippet
+    include_images=True,       # include image URLs in the response
+    time_range="week",         # "day" | "week" | "month" | "year"
+    include_domains=["reuters.com", "bbc.com"],
+    exclude_domains=["example.com"],
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
+## LocalShellTool
+
+`LocalShellTool` gives an agent the ability to run shell commands in a local subprocess. By default it creates a temporary working directory that is cleaned up on process exit.
+
+!!! warning
+    `LocalShellTool` executes arbitrary shell commands. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import LocalShellTool
+
+agent = Agent(
+    "engineer",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[LocalShellTool("/tmp/my_project")],
+)
+```
+
+Passing a path string creates a `LocalShellEnvironment` in that directory. Passing nothing creates a temporary directory.
+
+### Restricting commands
+
+Use `LocalShellEnvironment` directly to control what the agent can run:
+
+```python linenums="1"
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
+
+# Allow only specific commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    allowed=["git", "python", "pip"],
+))
+
+# Block dangerous commands
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    blocked=["rm -rf", "curl", "wget"],
+))
+
+# Read-only mode — agent can inspect but not modify
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    readonly=True,
+))
+
+# Hide sensitive files from the agent
+sh = LocalShellTool(LocalShellEnvironment(
+    path="/tmp/my_project",
+    ignore=["**/.env", "*.key", "secrets/**"],
+))
+```

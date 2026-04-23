@@ -65,7 +65,7 @@ async def test_tool_agent_handoff(mock: MagicMock) -> None:
     agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
     agent3 = Agent(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
 
-    def some_tool() -> ToolResult[str]:
+    def some_tool() -> ToolResult:
         mock()
         return ToolResult(
             "Tool result",
@@ -101,7 +101,7 @@ async def test_tool_agent_handoff(mock: MagicMock) -> None:
     assert result.chat_history == [
         IsPartialDict({"content": "Hi all!"}),
         IsPartialDict({"content": "Hi, I am local agent!", "name": "local"}),
-        IsPartialDict({"content": '"Tool result"', "name": "agent1"}),
+        IsPartialDict({"content": "Tool result", "name": "agent1"}),
         IsPartialDict({"content": "Hi, I am agent three!", "name": "agent3"}),
     ]
 
@@ -111,7 +111,7 @@ async def test_user_target_handoff(mock: MagicMock, monkeypatch: pytest.MonkeyPa
     agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
     agent3 = Agent(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
 
-    def some_tool() -> ToolResult[str]:
+    def some_tool() -> ToolResult:
         mock()
         return ToolResult(
             "Tool result",
@@ -149,6 +149,6 @@ async def test_user_target_handoff(mock: MagicMock, monkeypatch: pytest.MonkeyPa
     assert result.chat_history == [
         IsPartialDict({"content": "Hi all!"}),
         IsPartialDict({"content": "Hi, I am local agent!", "name": "local"}),
-        IsPartialDict({"content": '"Tool result"', "name": "agent1"}),
+        IsPartialDict({"content": "Tool result", "name": "agent1"}),
         IsPartialDict({"content": "Hi, I am agent three!", "name": "agent3"}),
     ]

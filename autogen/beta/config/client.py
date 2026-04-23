@@ -5,6 +5,8 @@
 from collections.abc import Iterable, Sequence
 from typing import Protocol, runtime_checkable
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.response import ResponseProto
@@ -20,4 +22,5 @@ class LLMClient(Protocol):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse: ...

@@ -98,8 +98,8 @@ class TestLLMCallMiddleware:
                 ctx: Context,
             ) -> ModelResponse:
                 last = events[-1]
-                if isinstance(last, ModelRequest) and isinstance(last.inputs[0], TextInput):
-                    doubled = TextInput(last.inputs[0].content * 2)
+                if isinstance(last, ModelRequest) and isinstance(last.parts[0], TextInput):
+                    doubled = TextInput(last.parts[0].content * 2)
                     events[-1] = ModelRequest([doubled])
                 return await call_next(events, ctx)
 

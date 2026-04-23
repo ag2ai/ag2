@@ -7,11 +7,13 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
     BinaryInput,
+    DataInput,
     UrlInput,
 )
 from autogen.beta.events.types import Usage
@@ -166,6 +168,7 @@ def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
 
 def convert_messages(
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[types.Content]:
     result: list[types.Content] = []
 
@@ -188,19 +191,31 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             parts_list: list[types.Part] = []
             for r in message.results:
+                result_parts: list[str] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        result_parts.append(part.content)
+                    elif isinstance(part, DataInput):
+                        result_parts.append(serializer.encode(part.data).decode())
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "gemini")
+                response_text = result_parts[0] if len(result_parts) == 1 else "\n".join(result_parts)
                 parts_list.append(
                     types.Part.from_function_response(
-                        name=r.name if hasattr(r, "name") else "",
-                        response={"result": r.content},
+                        name=r.name or "",
+                        response={"result": response_text},
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
 
         elif isinstance(message, ModelRequest):
             parts: list[types.Part] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append(types.Part.from_text(text=inp.content))
+
+                elif isinstance(inp, DataInput):
+                    parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     mime = _mime_from_url(inp.url)
@@ -225,12 +240,15 @@ def convert_messages(
 
 def normalize_usage(metadata: Any) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
-    cache_read: float | None = None
-    if metadata.cached_content_token_count:
-        cache_read = float(metadata.cached_content_token_count)
+
+    cache_read = _to_float(metadata.cached_content_token_count) or None
     return Usage(
-        prompt_tokens=float(metadata.prompt_token_count),
-        completion_tokens=float(metadata.candidates_token_count),
-        total_tokens=float(metadata.total_token_count),
+        prompt_tokens=_to_float(metadata.prompt_token_count),
+        completion_tokens=_to_float(metadata.candidates_token_count),
+        total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
     )
+
+
+def _to_float(value: Any) -> float | None:
+    return float(value) if value is not None else None

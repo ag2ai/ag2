@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from base64 import b64decode
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from ag_ui.core import (
     RunFinishedEvent,
     RunStartedEvent,
     StateSnapshotEvent,
+    StepFinishedEvent,
+    StepStartedEvent,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
@@ -28,15 +31,19 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectSendStream
+from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
+from autogen.beta.events.input_events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer
 from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
+
+from .events import AGUIEvent
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -125,6 +132,10 @@ async def run_stream(
         client_tools_names.add(tool.name)
 
     extracted_prompt, history_messages = map_agui_messages_to_events(command)
+    if extracted_prompt:
+        command.prompt.extend(extracted_prompt)
+    if client_tools:
+        command.tools.extend(client_tools)
 
     stream = MemoryStream()
     await stream.history.replace(history_messages)
@@ -135,53 +146,7 @@ async def run_stream(
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
         nonlocal streaming_msg_id
 
-        if isinstance(event, events.ClientToolCallEvent):
-            await write_events_stream.send(
-                ToolCallChunkEvent(
-                    tool_call_id=event.id,
-                    tool_call_name=event.name,
-                    delta=event.arguments,
-                    timestamp=_get_timestamp(),
-                )
-            )
-
-        elif isinstance(event, events.ToolCallEvent):
-            if event.name in client_tools_names:
-                return
-
-            await write_events_stream.send(
-                ToolCallStartEvent(
-                    tool_call_id=event.id,
-                    tool_call_name=event.name,
-                    timestamp=_get_timestamp(),
-                )
-            )
-            await write_events_stream.send(
-                ToolCallArgsEvent(
-                    tool_call_id=event.id,
-                    delta=event.arguments,
-                    timestamp=_get_timestamp(),
-                )
-            )
-
-        elif isinstance(event, events.ToolResultEvent):
-            await write_events_stream.send(
-                ToolCallResultEvent(
-                    tool_call_id=event.parent_id,
-                    content=event.content,
-                    message_id=str(uuid4()),
-                    timestamp=_get_timestamp(),
-                    role="tool",
-                )
-            )
-            await write_events_stream.send(
-                ToolCallEndEvent(
-                    tool_call_id=event.parent_id,
-                    timestamp=_get_timestamp(),
-                )
-            )
-
-        elif isinstance(event, events.ModelMessageChunk):
+        if isinstance(event, events.ModelMessageChunk):
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
                 await write_events_stream.send(
@@ -218,6 +183,68 @@ async def run_stream(
                     )
                 )
 
+        elif isinstance(event, events.ClientToolCallEvent):
+            await write_events_stream.send(
+                ToolCallChunkEvent(
+                    tool_call_id=event.id,
+                    tool_call_name=event.name,
+                    delta=event.arguments,
+                    timestamp=_get_timestamp(),
+                )
+            )
+
+        elif isinstance(event, events.ToolCallEvent):
+            if event.name in client_tools_names:
+                return
+
+            await write_events_stream.send(
+                ToolCallStartEvent(
+                    tool_call_id=event.id,
+                    tool_call_name=event.name,
+                    timestamp=_get_timestamp(),
+                )
+            )
+            await write_events_stream.send(
+                ToolCallArgsEvent(
+                    tool_call_id=event.id,
+                    delta=event.arguments,
+                    timestamp=_get_timestamp(),
+                )
+            )
+
+        elif isinstance(event, events.ToolResultEvent):
+            text_parts = []
+            for p in event.result.parts:
+                if isinstance(p, events.TextInput):
+                    text_parts.append(p.content)
+                elif isinstance(p, events.DataInput):
+                    text_parts.append(agent._serializer.encode(p.data).decode())
+
+            await write_events_stream.send(
+                ToolCallResultEvent(
+                    tool_call_id=event.parent_id,
+                    content=_stringify_tool_result(event.result, agent._serializer),
+                    message_id=str(uuid4()),
+                    timestamp=_get_timestamp(),
+                    role="tool",
+                )
+            )
+            await write_events_stream.send(
+                ToolCallEndEvent(
+                    tool_call_id=event.parent_id,
+                    timestamp=_get_timestamp(),
+                )
+            )
+
+        elif isinstance(event, events.TaskStarted):
+            await write_events_stream.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
+
+        elif isinstance(event, events.TaskCompleted):
+            await write_events_stream.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
+
+        elif isinstance(event, AGUIEvent):
+            await write_events_stream.send(event.event)
+
     async with write_events_stream:
         try:
             await write_events_stream.send(
@@ -228,7 +255,8 @@ async def run_stream(
                 )
             )
 
-            if vars := _encode_context(command.variables):
+            initial_vars = agent._agent_variables | command.variables
+            if vars := _encode_context(initial_vars):
                 await write_events_stream.send(
                     StateSnapshotEvent(
                         snapshot=vars,
@@ -236,11 +264,11 @@ async def run_stream(
                     )
                 )
 
-            initial_state = (command.incoming.state or {}) | command.variables
+            initial_state = (command.incoming.state or {}) | initial_vars
 
             result = await agent.ask(
-                prompt=[*command.prompt, *extracted_prompt],
-                tools=[*client_tools, *command.tools],
+                prompt=command.prompt,
+                tools=command.tools,
                 variables=initial_state,
                 dependencies=command.dependencies,
                 config=command.config,
@@ -291,9 +319,30 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
             for c in content:
                 if c.type == "text":
                     input_buffer.append(events.TextInput(c.text))
-                else:
-                    # TODO: support binary inputs
-                    raise ValueError("unsupported input type")
+
+                elif c.url:
+                    input_buffer.append(
+                        events.UrlInput(
+                            c.url,
+                            kind=events.BinaryType.BINARY,
+                        )
+                    )
+
+                elif c.id:
+                    input_buffer.append(
+                        events.FileIdInput(
+                            c.id,
+                            filename=c.filename,
+                        )
+                    )
+
+                elif c.data:
+                    input_buffer.append(
+                        events.BinaryInput(
+                            b64decode(c.data),
+                            media_type=c.mime_type,
+                        )
+                    )
 
             continue
 
@@ -326,7 +375,7 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
                 events.ToolResultsEvent([
                     events.ToolResultEvent(
                         parent_id=m.tool_call_id,
-                        result=ToolResult(content=m.error or m.content),
+                        result=ToolResult([m.error or m.content]),
                     )
                 ])
             )
@@ -335,6 +384,33 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
         messages.append(events.ModelRequest(input_buffer))
 
     return prompt, messages
+
+
+def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
+    """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
+
+    AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool
+    results are now structured lists of ``Input`` parts (text, data, binary,
+    urls, file-ids). Collapse them here so any kind of tool return still
+    surfaces in the stream.
+    """
+    chunks: list[str] = []
+    for part in result.parts:
+        if isinstance(part, TextInput):
+            chunks.append(part.content)
+        elif isinstance(part, DataInput):
+            chunks.append(serializer.encode(part.data).decode())
+        elif isinstance(part, UrlInput):
+            chunks.append(part.url)
+        elif isinstance(part, FileIdInput):
+            chunks.append(f"[file:{part.file_id}]")
+        elif isinstance(part, BinaryInput):
+            chunks.append(f"[binary:{part.media_type} {len(part.data)}B]")
+        else:
+            chunks.append(repr(part))
+    if len(chunks) == 1:
+        return chunks[0]
+    return "\n".join(chunks)
 
 
 def _get_timestamp() -> int:

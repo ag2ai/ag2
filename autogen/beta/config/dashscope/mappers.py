@@ -5,7 +5,10 @@
 from collections.abc import Iterable
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events.input_events import DataInput
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -48,14 +51,17 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
 
     for message in messages:
         if isinstance(message, ModelRequest):
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     result.append(inp.to_api())
+                elif isinstance(inp, DataInput):
+                    result.append({"role": "user", "content": serializer.encode(inp.data).decode()})
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "dashscope")
 
@@ -64,6 +70,15 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result.append(r.to_api())
+                parts: list[dict[str, Any]] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        parts.append({"type": "text", "text": part.content})
+                    elif isinstance(part, DataInput):
+                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "dashscope")
+                content = parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts
+                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": content})
 
     return result

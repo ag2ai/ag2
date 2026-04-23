@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context, Depends, Inject, Variable, observer
-from autogen.beta.events import ModelRequest, ModelResponse, ToolCallEvent
+from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolCallEvent
 from autogen.beta.testing import TestConfig
 
 
@@ -72,7 +72,7 @@ async def test_multiple_observers(
 
 
 @pytest.mark.asyncio()
-async def test_async_observer(
+async def test_async_decorated(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
@@ -92,7 +92,27 @@ async def test_async_observer(
 
 
 @pytest.mark.asyncio()
-async def test_decorator_style(
+async def test_decorate_any_event(
+    mock: MagicMock,
+    test_config: TestConfig,
+) -> None:
+    @observer()
+    async def track_response(event: BaseEvent) -> None:
+        mock(event)
+
+    agent = Agent(
+        "",
+        config=test_config,
+        observers=[track_response],
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called()
+
+
+@pytest.mark.asyncio()
+async def test_agent_decorator_style(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
@@ -108,6 +128,25 @@ async def test_decorator_style(
     await agent.ask("Hi!")
 
     mock.assert_called_once()
+
+
+@pytest.mark.asyncio()
+async def test_agent_decorator_style_any_event(
+    mock: MagicMock,
+    test_config: TestConfig,
+) -> None:
+    agent = Agent(
+        "",
+        config=test_config,
+    )
+
+    @agent.observer()
+    def log_response(event: BaseEvent) -> None:
+        mock(event)
+
+    await agent.ask("Hi!")
+
+    mock.assert_called()
 
 
 @pytest.mark.asyncio()

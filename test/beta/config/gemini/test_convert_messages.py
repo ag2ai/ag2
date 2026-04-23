@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from fast_depends.use import SerializerCls
 
 from autogen.beta.config.gemini.mappers import convert_messages
 from autogen.beta.events import (
@@ -34,7 +35,7 @@ class TestConvertMessagesEmptyArguments:
 
     @pytest.mark.parametrize("arguments", ["", None])
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        result = convert_messages([_model_response_with_tool_call(arguments)])
+        result = convert_messages([_model_response_with_tool_call(arguments)], SerializerCls)
 
         assert len(result) == 1
         part = result[0].parts[0]
@@ -42,7 +43,7 @@ class TestConvertMessagesEmptyArguments:
         assert part.function_call.args == {}
 
     def test_valid_arguments_are_preserved(self) -> None:
-        result = convert_messages([_model_response_with_tool_call('{"category": "books"}')])
+        result = convert_messages([_model_response_with_tool_call('{"category": "books"}')], SerializerCls)
 
         part = result[0].parts[0]
         assert part.function_call.args == {"category": "books"}
@@ -52,7 +53,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([ImageInput(url=self.IMAGE_URL)])])
+        result = convert_messages([ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
 
         assert len(result) == 1
         assert result[0].role == "user"
@@ -65,7 +66,9 @@ class TestImageBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
     def test_converts_to_part_from_bytes(self) -> None:
-        result = convert_messages([ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])])
+        result = convert_messages(
+            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], SerializerCls
+        )
 
         assert len(result) == 1
         part = result[0].parts[0]
@@ -77,7 +80,7 @@ class TestAudioUrlInput:
     AUDIO_URL = "https://example.com/audio.wav"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([AudioInput(url=self.AUDIO_URL)])])
+        result = convert_messages([ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
 
         assert len(result) == 1
         part = result[0].parts[0]
@@ -89,7 +92,9 @@ class TestAudioBinaryInput:
     SAMPLE_BYTES = b"\x00\x01\x02audio"
 
     def test_converts_to_part_from_bytes(self) -> None:
-        result = convert_messages([ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])])
+        result = convert_messages(
+            [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.data == self.SAMPLE_BYTES
@@ -100,7 +105,7 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/doc.pdf"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([DocumentInput(url=self.DOC_URL)])])
+        result = convert_messages([ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == self.DOC_URL
@@ -111,7 +116,9 @@ class TestDocumentBinaryInput:
     SAMPLE_BYTES = b"%PDF-1.4"
 
     def test_converts_to_part_from_bytes(self) -> None:
-        result = convert_messages([ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])])
+        result = convert_messages(
+            [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.data == self.SAMPLE_BYTES
@@ -122,7 +129,7 @@ class TestVideoUrlInput:
     VIDEO_URL = "https://example.com/clip.mp4"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([VideoInput(url=self.VIDEO_URL)])])
+        result = convert_messages([ModelRequest([VideoInput(url=self.VIDEO_URL)])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == self.VIDEO_URL
@@ -130,7 +137,7 @@ class TestVideoUrlInput:
 
     def test_youtube_url_has_no_mime_type(self) -> None:
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        result = convert_messages([ModelRequest([VideoInput(url=url)])])
+        result = convert_messages([ModelRequest([VideoInput(url=url)])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == url
@@ -141,7 +148,9 @@ class TestVideoBinaryInput:
     SAMPLE_BYTES = b"\x00\x00\x00\x1cftypisom"
 
     def test_converts_to_part_from_bytes(self) -> None:
-        result = convert_messages([ModelRequest([VideoInput(data=self.SAMPLE_BYTES, media_type="video/mp4")])])
+        result = convert_messages(
+            [ModelRequest([VideoInput(data=self.SAMPLE_BYTES, media_type="video/mp4")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.data == self.SAMPLE_BYTES
@@ -157,7 +166,7 @@ class TestVendorMetadata:
             media_type="image/png",
             vendor_metadata={"media_resolution": "MEDIA_RESOLUTION_LOW"},
         )
-        result = convert_messages([ModelRequest([inp])])
+        result = convert_messages([ModelRequest([inp])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.media_resolution is not None
@@ -168,7 +177,7 @@ class TestVendorMetadata:
             media_type="video/mp4",
             vendor_metadata={"video_metadata": {"fps": 5, "start_offset": "10s", "end_offset": "30s"}},
         )
-        result = convert_messages([ModelRequest([inp])])
+        result = convert_messages([ModelRequest([inp])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.video_metadata is not None
@@ -182,14 +191,14 @@ class TestVendorMetadata:
             media_type="image/png",
             vendor_metadata={"display_name": "my_photo.png"},
         )
-        result = convert_messages([ModelRequest([inp])])
+        result = convert_messages([ModelRequest([inp])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.inline_data.display_name == "my_photo.png"
 
     def test_empty_metadata_is_noop(self) -> None:
         inp = BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")
-        result = convert_messages([ModelRequest([inp])])
+        result = convert_messages([ModelRequest([inp])], SerializerCls)
 
         part = result[0].parts[0]
         assert part.inline_data.data == self.SAMPLE_BYTES
@@ -199,19 +208,25 @@ class TestAudioFormatVariants:
     SAMPLE_BYTES = b"\x00\x01\x02audio"
 
     def test_wav(self) -> None:
-        result = convert_messages([ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])])
+        result = convert_messages(
+            [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.mime_type == "audio/wav"
 
     def test_mp3(self) -> None:
-        result = convert_messages([ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])])
+        result = convert_messages(
+            [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.mime_type == "audio/mpeg"
 
     def test_ogg(self) -> None:
-        result = convert_messages([ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/ogg")])])
+        result = convert_messages(
+            [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/ogg")])], SerializerCls
+        )
 
         part = result[0].parts[0]
         assert part.inline_data.mime_type == "audio/ogg"
@@ -219,13 +234,16 @@ class TestAudioFormatVariants:
 
 class TestMultipleInputs:
     def test_multiple_inputs_grouped_into_one_content(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                TextInput("Describe these images."),
-                ImageInput(url="https://example.com/a.png"),
-                ImageInput(url="https://example.com/b.jpg"),
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    TextInput("Describe these images."),
+                    ImageInput(url="https://example.com/a.png"),
+                    ImageInput(url="https://example.com/b.jpg"),
+                ])
+            ],
+            SerializerCls,
+        )
 
         assert len(result) == 1
         assert result[0].role == "user"
@@ -235,12 +253,15 @@ class TestMultipleInputs:
         assert result[0].parts[2].file_data.file_uri == "https://example.com/b.jpg"
 
     def test_mixed_text_and_binary(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                TextInput("What is in this image?"),
-                ImageInput(data=b"\x89PNG", media_type="image/png"),
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    TextInput("What is in this image?"),
+                    ImageInput(data=b"\x89PNG", media_type="image/png"),
+                ])
+            ],
+            SerializerCls,
+        )
 
         assert len(result) == 1
         assert len(result[0].parts) == 2
@@ -250,4 +271,4 @@ class TestMultipleInputs:
 
 def test_file_id_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
-        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])])
+        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)

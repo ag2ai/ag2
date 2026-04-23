@@ -116,7 +116,7 @@ class TestEventLogWriter:
 
         loaded = await writer.load(stream_id)
         assert len(loaded) == 2
-        assert loaded[0].inputs[0].content == "hello"
+        assert loaded[0].parts[0].content == "hello"
         assert loaded[1].agent_name == "analyzer"
         assert loaded[1].result == "done"
 
@@ -138,9 +138,9 @@ class TestEventLogWriter:
         # Load should return all in order: dropped-1, dropped-2, final
         loaded = await writer.load(stream_id)
         assert len(loaded) == 3
-        assert loaded[0].inputs[0].content == "old-1"
-        assert loaded[1].inputs[0].content == "old-2"
-        assert loaded[2].inputs[0].content == "recent"
+        assert loaded[0].parts[0].content == "old-1"
+        assert loaded[1].parts[0].content == "old-2"
+        assert loaded[2].parts[0].content == "recent"
 
     @pytest.mark.asyncio
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
@@ -167,9 +167,9 @@ class TestEventLogWriter:
         # All three segments must be present and loadable
         loaded = await EventLogWriter(store).load(stream_id)
         assert len(loaded) == 3
-        assert loaded[0].inputs[0].content == "batch-1"
-        assert loaded[1].inputs[0].content == "batch-2"
-        assert loaded[2].inputs[0].content == "final"
+        assert loaded[0].parts[0].content == "batch-1"
+        assert loaded[1].parts[0].content == "batch-2"
+        assert loaded[2].parts[0].content == "final"
 
     @pytest.mark.asyncio
     async def test_load_empty(self) -> None:

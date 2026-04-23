@@ -2,24 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import Mock
-
-
-def _missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
-    def _raise_helpful_import_error(*args: object, **kwargs: object) -> None:
-        raise ImportError(
-            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
-        ) from error
-
-    return Mock(side_effect=_raise_helpful_import_error)
-
+from autogen.beta.exceptions import missing_optional_dependency
 
 try:
     from .redis import RedisStorage, RedisStream, Serializer
 except ImportError as e:
-    RedisStorage = _missing_optional_dependency("RedisStorage", "redis", e)
-    RedisStream = _missing_optional_dependency("RedisStream", "redis", e)
-    Serializer = _missing_optional_dependency("Serializer", "redis", e)
+    RedisStorage = missing_optional_dependency("RedisStorage", "redis", e)
+    RedisStream = missing_optional_dependency("RedisStream", "redis", e)
+    Serializer = missing_optional_dependency("Serializer", "redis", e)
 
 __all__ = (
     "RedisStorage",
