@@ -63,7 +63,7 @@ class ToolCallEvent(ToolEvent):
     """Represents a single tool invocation requested by the model."""
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str
+    name: str = Field(kw_only=False)
     arguments: str = "{}"
     provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
@@ -96,11 +96,15 @@ class ToolCallEvent(ToolEvent):
         }
 
 
-class ClientToolCallEvent(ToolCallEvent):
+class ClientToolCallEvent(ToolEvent):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = Field(kw_only=False)
+    arguments: str = "{}"
+
     @classmethod
     def from_call(cls, call: ToolCallEvent) -> "ClientToolCallEvent":
         return cls(
-            parent_id=call.id,
+            id=call.id,
             name=call.name,
             arguments=call.arguments,
         )
