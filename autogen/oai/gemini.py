@@ -445,11 +445,22 @@ class GeminiClient:
                     )
 
                     # Embed thought_signature in the tool call so it survives cross-agent routing
-                    # (required for Gemini 3 thinking models in group chat)
-                    # Base64-encode bytes so the dict stays JSON-serializable for other providers
-                    if hasattr(part, "thought_signature") and part.thought_signature:
-                        tool_call_entry.thought_signature = base64.b64encode(part.thought_signature).decode("ascii")
-                        self.tool_call_thought_signatures[tool_call_id] = part.thought_signature
+                    sig_bytes: bytes | None = None
+                    raw_attr = getattr(part, "thought_signature", None)
+                    if isinstance(raw_attr, bytes) and raw_attr:
+                        sig_bytes = raw_attr
+                    elif isinstance(raw_attr, str) and raw_attr:
+                        sig_bytes = base64.b64decode(raw_attr)
+                    elif hasattr(part, "to_dict"):
+                        raw_dict = part.to_dict().get("thought_signature")
+                        if isinstance(raw_dict, bytes) and raw_dict:
+                            sig_bytes = raw_dict
+                        elif isinstance(raw_dict, str) and raw_dict:
+                            sig_bytes = base64.b64decode(raw_dict)
+
+                    if sig_bytes:
+                        tool_call_entry.thought_signature = base64.b64encode(sig_bytes).decode("ascii")
+                        self.tool_call_thought_signatures[tool_call_id] = sig_bytes
 
                     autogen_tool_calls.append(tool_call_entry)
 
@@ -615,32 +626,33 @@ class GeminiClient:
                 function_name = tool_call["function"]["name"]
                 self.tool_call_function_map[function_id] = function_name
 
-                if self.use_vertexai:
-                    rst.append(
-                        VertexAIPart.from_dict({
-                            "functionCall": {
-                                "name": function_name,
-                                "args": json.loads(tool_call["function"]["arguments"]),
-                            }
-                        })
-                    )
+                # thought_signature preservation
+                thought_sig_raw = tool_call.get("thought_signature")
+                if isinstance(thought_sig_raw, str) and thought_sig_raw:
+                    thought_sig_bytes: bytes | None = base64.b64decode(thought_sig_raw)
+                elif isinstance(thought_sig_raw, bytes) and thought_sig_raw:
+                    thought_sig_bytes = thought_sig_raw
                 else:
-                    # Include thought_signature if available (required for Gemini 3 models)
-                    # Check message-level first (cross-agent), then instance dict (same-agent)
-                    thought_sig_raw = tool_call.get("thought_signature")
-                    if thought_sig_raw and isinstance(thought_sig_raw, str):
-                        thought_sig = base64.b64decode(thought_sig_raw)
-                    elif thought_sig_raw and isinstance(thought_sig_raw, bytes):
-                        thought_sig = thought_sig_raw
-                    else:
-                        thought_sig = self.tool_call_thought_signatures.get(function_id)
+                    thought_sig_bytes = self.tool_call_thought_signatures.get(function_id)
+
+                if self.use_vertexai:
+                    fc_dict: dict[str, Any] = {
+                        "functionCall": {
+                            "name": function_name,
+                            "args": json.loads(tool_call["function"]["arguments"]),
+                        }
+                    }
+                    if thought_sig_bytes:
+                        fc_dict["thoughtSignature"] = base64.b64encode(thought_sig_bytes).decode("ascii")
+                    rst.append(VertexAIPart.from_dict(fc_dict))
+                else:
                     rst.append(
                         Part(
                             function_call=FunctionCall(
                                 name=function_name,
                                 args=json.loads(tool_call["function"]["arguments"]),
                             ),
-                            thought_signature=thought_sig,
+                            thought_signature=thought_sig_bytes,
                         )
                     )
 

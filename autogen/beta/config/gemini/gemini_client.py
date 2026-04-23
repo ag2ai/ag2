@@ -7,9 +7,11 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
+import google.auth
 import google.genai as genai
 from fast_depends.library.serializer import SerializerProto
 from google.genai import types
+from google.oauth2 import service_account
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
@@ -45,11 +47,23 @@ class GeminiClient(LLMClient):
         self,
         model: str,
         api_key: str | None = None,
+        vertexai: bool | None = None,
+        credentials: google.auth.credentials.Credentials | str | None = None,
+        project: str | None = None,
+        location: str | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
         cached_content: str | None = None,
     ) -> None:
-        self._client = genai.Client(api_key=api_key)
+        if isinstance(credentials, str):
+            # String indicates a json credentials file, load into credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        self._client = genai.Client(
+            vertexai=vertexai, api_key=api_key, credentials=credentials, project=project, location=location
+        )
         self._model_name = model
         self._streaming = streaming
         self._create_config = create_config or {}

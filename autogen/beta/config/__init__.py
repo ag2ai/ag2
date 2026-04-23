@@ -37,9 +37,10 @@ except ImportError as e:
     DashScopeConfig = _missing_optional_dependency_config("DashScopeConfig", "dashscope", e)  # type: ignore[misc]
 
 try:
-    from .gemini import GeminiConfig
+    from .gemini import GeminiConfig, VertexAIConfig
 except ImportError as e:
     GeminiConfig = _missing_optional_dependency_config("GeminiConfig", "gemini", e)  # type: ignore[misc]
+    VertexAIConfig = _missing_optional_dependency_config("VertexAIConfig", "gemini", e)  # type: ignore[misc]
 
 try:
     from .ollama import OllamaConfig
@@ -58,4 +59,5 @@ __all__ = (
     "OllamaConfig",
     "OpenAIConfig",
     "OpenAIResponsesConfig",
+    "VertexAIConfig",
 )

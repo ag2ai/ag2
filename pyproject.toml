@@ -295,6 +295,7 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 ddgs = ["ddgs>=9.0.0,<10"]
 tavily = ["tavily-python>=0.7.4,<0.8"]
+exa = ["exa-py>=2.0.0,<3"]
 
 nlip = [
     "nlip-sdk>=0.1.0, <1",
@@ -339,6 +340,7 @@ docs = [
     "ag2[dashscope]",               # DashScope is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[redis]",                   # Redis is exposed in the public API by the optional `autogen.beta.streams` module
     "ag2[tavily]",                  # Tavily search is exposed in the public API by the optional `autogen.beta.tools.search` module
+    "ag2[exa]",                     # Exa search is exposed in the public API by the optional `autogen.beta.tools.search` module
     "ag2[ddgs]",                    # DuckDuckGo search is exposed in the public API by the optional `autogen.beta.tools.search` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
@@ -393,7 +395,7 @@ dev = [
 optionals = [
     "ag2[redis]",
     # search tools
-    "ag2[tavily,ddgs]",
+    "ag2[tavily,ddgs,exa]",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
