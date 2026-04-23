@@ -394,6 +394,8 @@ dev = [
 # Beta groups
 optionals = [
     "ag2[redis]",
+    "ag2[ag-ui]",
+    "ag2[tracing]",
     # search tools
     "ag2[tavily,ddgs,exa]",
     # providers

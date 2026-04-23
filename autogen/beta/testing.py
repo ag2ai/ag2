@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -21,7 +21,7 @@ __all__ = (
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
         self.events = iter(events)
 
     async def __call__(
@@ -37,7 +37,13 @@ class TestClient(LLMClient):
         next_msg = next(self.events)
 
         if isinstance(next_msg, str):
-            next_msg = ModelResponse(ModelMessage(next_msg))
+            message = ModelMessage(next_msg)
+            await context.send(message)
+            next_msg = ModelResponse(message)
+
+        elif isinstance(next_msg, Iterable):
+            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(next_msg)))
+
         elif isinstance(next_msg, ToolCallEvent):
             next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
 
@@ -74,7 +80,7 @@ class TrackingConfig(ModelConfig):
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
         self.events = events
 
     def copy(self) -> Self:

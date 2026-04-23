@@ -109,7 +109,9 @@ async def _execute_call(
     context: Context, call: ToolCallEvent
 ) -> ToolErrorEvent | ToolResultEvent | ClientToolCallEvent:
     async with context.stream.get(
-        (ToolErrorEvent.parent_id == call.id) | (ToolResultEvent.parent_id == call.id) | ClientToolCallEvent
+        (ToolErrorEvent.parent_id == call.id)
+        | (ToolResultEvent.parent_id == call.id)
+        | (ClientToolCallEvent.id == call.id)
     ) as result:
         await context.send(call)
         return await result

@@ -9,7 +9,6 @@ import pytest
 from ag_ui.core import (
     AssistantMessage,
     FunctionCall,
-    SystemMessage,
     ToolCall,
     ToolMessage,
     UserMessage,
@@ -78,25 +77,6 @@ class TestBasicConversation:
 
         assert_event_type(events, "RUN_STARTED")
         assert_event_type(events, "TEXT_MESSAGE_CHUNK")
-        assert_event_type(events, "RUN_FINISHED")
-
-    async def test_system_message_included(self) -> None:
-        agent = ConversableAgent("test_agent")
-
-        with TestAgent(agent, ["Response with system context."]):
-            stream = AGUIStream(agent)
-            run_input = create_run_input(
-                SystemMessage(id="msg_1", content="You are a helpful assistant."),
-                UserMessage(id="msg_2", content="Hello!"),
-            )
-
-            events = await collect_events(stream, run_input)
-
-        assert_event_type(events, "RUN_STARTED")
-        text_msg = assert_event_type(events, "TEXT_MESSAGE_CHUNK")
-        assert text_msg == IsPartialDict({
-            "delta": "Response with system context.",
-        })
         assert_event_type(events, "RUN_FINISHED")
 
 

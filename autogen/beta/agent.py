@@ -466,19 +466,20 @@ class Agent(Generic[TResult]):
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
-        callback: Callable[..., Any],
-    ) -> Callable[..., Any]: ...
+        condition: ClassInfo | Condition | None = None,
+        callback: None = None,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+        condition: ClassInfo | Condition | None = None,
+        callback: Callable[..., Any] = ...,
+    ) -> Callable[..., Any]: ...
 
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:

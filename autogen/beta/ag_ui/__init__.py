@@ -8,9 +8,11 @@ except ImportError as e:
     raise ImportError("ag-ui-protocol is not installed. Please install it with:\npip install ag2[ag-ui]") from e
 
 
+from .events import AGUIEvent
 from .stream import AGUIStream
 
 __all__ = (
+    "AGUIEvent",
     "AGUIStream",
     "RunAgentInput",
 )

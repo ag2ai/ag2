@@ -63,7 +63,7 @@ def get_pil_image(image_file: Union[str, "Image.Image"]) -> "Image.Image":
 
     if image_file.startswith("http://") or image_file.startswith("https://"):
         # A URL file
-        response = requests.get(image_file)
+        response = requests.get(image_file, timeout=30)
         content = BytesIO(response.content)
         image = Image.open(content)
     # Match base64-encoded image URIs for supported formats: jpg, jpeg, png, gif, bmp, webp

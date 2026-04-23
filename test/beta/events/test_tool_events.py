@@ -18,7 +18,7 @@ class TestClientToolCallEventFromCall:
     def test_parent_id_matches_original_id(self) -> None:
         original = ToolCallEvent(name="search", arguments='{"q": "test"}')
         client_call = ClientToolCallEvent.from_call(original)
-        assert client_call.parent_id == original.id
+        assert client_call.id == original.id
 
     def test_name_and_arguments_preserved(self) -> None:
         original = ToolCallEvent(name="calc", arguments='{"x": 1}')
