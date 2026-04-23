@@ -31,6 +31,7 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectSendStream
+from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
@@ -384,8 +385,8 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
 
     return prompt, messages
 
-  
-def _stringify_tool_result(result: ToolResult, serializer: "Serializer") -> str:
+
+def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
     """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
 
     AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool

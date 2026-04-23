@@ -29,7 +29,7 @@ from test.ag_ui.utils import (
     get_weather_tool,
 )
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.ag_ui]
+pytestmark = pytest.mark.asyncio
 
 
 class TestBasicConversation:
