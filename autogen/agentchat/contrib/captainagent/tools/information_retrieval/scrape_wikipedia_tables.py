@@ -15,7 +15,7 @@ def scrape_wikipedia_tables(url: str, header_keyword: str):
     import requests
     from bs4 import BeautifulSoup
 
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     response.raise_for_status()
     soup = BeautifulSoup(response.content, "html.parser")
     headers = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
