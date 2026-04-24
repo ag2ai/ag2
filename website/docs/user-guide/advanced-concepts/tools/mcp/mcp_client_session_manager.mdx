@@ -134,7 +134,7 @@ async def query_mcp_server(server_name: str, query: str) -> str:
 # Register the tool with your agent
 agent = ConversableAgent(
     name="researcher",
-    llm_config=LLMConfig(config_list={"model": "gpt-4o", "api_type": "openai"}),
+    llm_config=LLMConfig({"model": "gpt-4o", "api_type": "openai"}),
 )
 agent.register_for_llm(description="Query MCP servers: ArxivServer or WikipediaServer")(query_mcp_server)
 ```

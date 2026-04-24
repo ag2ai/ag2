@@ -1,10 +1,10 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-"""Create a OpenAI-compatible client for Gemini features.
+"""Create an OpenAI-compatible client for Gemini features.
 
 Example:
     ```python
@@ -57,7 +57,9 @@ import requests
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
+from ..events.client_events import StreamEvent
 from ..import_utils import optional_import_block, require_optional_import
+from ..io.base import IOStream
 from ..json_utils import resolve_json_references
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
@@ -315,13 +317,6 @@ class GeminiClient:
         else:
             safety_settings = params.get("safety_settings", [])
 
-        if stream:
-            warnings.warn(
-                "Streaming is not supported for Gemini yet, and it will have no effect. Please set stream=False.",
-                UserWarning,
-            )
-            stream = False
-
         if n_response > 1:
             warnings.warn("Gemini only supports `n=1` for now. We only generate one response.", UserWarning)
 
@@ -372,12 +367,22 @@ class GeminiClient:
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
-            response = chat.send_message(message=gemini_messages[-1].parts)
+            if stream:
+                response = chat.send_message_stream(message=gemini_messages[-1].parts)
+            else:
+                response = chat.send_message(message=gemini_messages[-1].parts)
 
-        # Extract text and tools from response
-        ans = ""
-        random_id = random.randint(0, 10000)
-        prev_function_calls = []
+        if stream:
+            return self._process_streaming_response(response, model_name, self.use_vertexai, autogen_tool_calls)
+        else:
+            return self._process_non_streaming_response(response, model_name, autogen_tool_calls)
+
+    def _extract_parts_from_response(self, response: Any) -> tuple[list[Any], str | None]:
+        """Extract parts from a single response, handling error cases.
+
+        Returns:
+            Tuple of (parts, error_finish_reason).
+        """
         error_finish_reason = None
 
         if isinstance(response, GenerateContentResponse):
@@ -386,21 +391,19 @@ class GeminiClient:
                     f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
                 )
 
-            # Look at https://cloud.google.com/vertex-ai/generative-ai/docs/reference/python/latest/vertexai.generative_models.FinishReason
             if response.candidates[0].finish_reason and response.candidates[0].finish_reason == FinishReason.RECITATION:
-                recitation_part = Part(text="Unsuccessful Finish Reason: RECITATION")
-                parts = [recitation_part]
-                error_finish_reason = "content_filter"  # As per available finish_reason in Choice
+                parts = [Part(text="Unsuccessful Finish Reason: RECITATION")]
+                error_finish_reason = "content_filter"
             elif not response.candidates[0].content or not response.candidates[0].content.parts:
-                error_part = Part(
-                    text=f"Unsuccessful Finish Reason: ({str(response.candidates[0].finish_reason)}) NO CONTENT RETURNED"
-                )
-                parts = [error_part]
-                error_finish_reason = "content_filter"  # No other option in Choice in chat_completion.py
+                parts = [
+                    Part(
+                        text=f"Unsuccessful Finish Reason: ({str(response.candidates[0].finish_reason)}) NO CONTENT RETURNED"
+                    )
+                ]
+                error_finish_reason = "content_filter"
             else:
                 parts = response.candidates[0].content.parts
-        elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
-            # google.generativeai also raises an error len(candidates) != 1:
+        elif isinstance(response, VertexAIGenerationResponse):
             if len(response.candidates) != 1:
                 raise ValueError(
                     f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
@@ -409,38 +412,78 @@ class GeminiClient:
         else:
             raise ValueError(f"Unexpected response type: {type(response)}")
 
+        return parts, error_finish_reason
+
+    def _process_parts(
+        self, parts: list[Any], autogen_tool_calls: list, iostream: IOStream | None = None
+    ) -> tuple[str, list, list, str | None]:
+        """Process parts extracting text and function calls.
+
+        Args:
+            parts: Response parts to process.
+            autogen_tool_calls: List to accumulate tool calls into.
+            iostream: If provided, emit StreamEvent for text parts.
+
+        Returns:
+            Tuple of (text, autogen_tool_calls, prev_function_calls, None).
+        """
+        ans = ""
+        random_id = random.randint(0, 10000)
+        prev_function_calls = []
+
         for part in parts:
-            # Function calls
             if fn_call := part.function_call:
-                # If we have a repeated function call, ignore it
                 if fn_call not in prev_function_calls:
                     tool_call_id = str(random_id)
-                    autogen_tool_calls.append(
-                        ChatCompletionMessageToolCall(
-                            id=tool_call_id,
-                            function={
-                                "name": fn_call.name,
-                                "arguments": (
-                                    json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""
-                                ),
-                            },
-                            type="function",
-                        )
+                    tool_call_entry = ChatCompletionMessageToolCall(
+                        id=tool_call_id,
+                        function={
+                            "name": fn_call.name,
+                            "arguments": (json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""),
+                        },
+                        type="function",
                     )
 
-                    # Store thought_signature if present (required for Gemini 3 models)
-                    if hasattr(part, "thought_signature") and part.thought_signature:
-                        self.tool_call_thought_signatures[tool_call_id] = part.thought_signature
+                    # Embed thought_signature in the tool call so it survives cross-agent routing
+                    sig_bytes: bytes | None = None
+                    raw_attr = getattr(part, "thought_signature", None)
+                    if isinstance(raw_attr, bytes) and raw_attr:
+                        sig_bytes = raw_attr
+                    elif isinstance(raw_attr, str) and raw_attr:
+                        sig_bytes = base64.b64decode(raw_attr)
+                    elif hasattr(part, "to_dict"):
+                        raw_dict = part.to_dict().get("thought_signature")
+                        if isinstance(raw_dict, bytes) and raw_dict:
+                            sig_bytes = raw_dict
+                        elif isinstance(raw_dict, str) and raw_dict:
+                            sig_bytes = base64.b64decode(raw_dict)
+
+                    if sig_bytes:
+                        tool_call_entry.thought_signature = base64.b64encode(sig_bytes).decode("ascii")
+                        self.tool_call_thought_signatures[tool_call_id] = sig_bytes
+
+                    autogen_tool_calls.append(tool_call_entry)
 
                     prev_function_calls.append(fn_call)
                     random_id += 1
 
-            # Plain text content
             elif text := part.text:
+                if iostream is not None:
+                    iostream.send(StreamEvent(content=text))
                 ans += text
 
-        # If we have function calls, ignore the text
-        # as it can be Gemini guessing the function response
+        return ans, autogen_tool_calls, prev_function_calls, None
+
+    def _build_chat_completion(
+        self,
+        ans: str,
+        autogen_tool_calls: list,
+        error_finish_reason: str | None,
+        prompt_tokens: int,
+        completion_tokens: int,
+        model_name: str,
+    ) -> ChatCompletion:
+        """Build a ChatCompletion from accumulated response data."""
         if len(autogen_tool_calls) != 0:
             ans = ""
         else:
@@ -453,7 +496,6 @@ class GeminiClient:
             except ValueError as e:
                 ans = str(e)
 
-        # 3. convert output
         message = ChatCompletionMessage(
             role="assistant", content=ans, function_call=None, tool_calls=autogen_tool_calls
         )
@@ -469,12 +511,7 @@ class GeminiClient:
             )
         ]
 
-        prompt_tokens = response.usage_metadata.prompt_token_count
-        completion_tokens = (
-            response.usage_metadata.candidates_token_count if response.usage_metadata.candidates_token_count else 0
-        )
-
-        response_oai = ChatCompletion(
+        return ChatCompletion(
             id=str(random.randint(0, 1000)),
             model=model_name,
             created=int(time.time()),
@@ -488,7 +525,60 @@ class GeminiClient:
             cost=calculate_gemini_cost(self.use_vertexai, prompt_tokens, completion_tokens, model_name),
         )
 
-        return response_oai
+    def _process_non_streaming_response(
+        self, response: Any, model_name: str, autogen_tool_calls: list
+    ) -> ChatCompletion:
+        """Process a non-streaming response into a ChatCompletion."""
+        parts, error_finish_reason = self._extract_parts_from_response(response)
+        ans, autogen_tool_calls, _, _ = self._process_parts(parts, autogen_tool_calls)
+
+        prompt_tokens = response.usage_metadata.prompt_token_count
+        completion_tokens = (
+            response.usage_metadata.candidates_token_count if response.usage_metadata.candidates_token_count else 0
+        )
+
+        return self._build_chat_completion(
+            ans, autogen_tool_calls, error_finish_reason, prompt_tokens, completion_tokens, model_name
+        )
+
+    def _process_streaming_response(
+        self, response_stream: Any, model_name: str, use_vertexai: bool, autogen_tool_calls: list
+    ) -> ChatCompletion:
+        """Process a streaming response, emitting StreamEvents and accumulating into a ChatCompletion."""
+        iostream = IOStream.get_default()
+        ans = ""
+        prompt_tokens = 0
+        completion_tokens = 0
+        error_finish_reason = None
+        all_prev_function_calls = []
+
+        for chunk in response_stream:
+            try:
+                chunk_parts, chunk_error = self._extract_parts_from_response(chunk)
+            except ValueError:
+                # Some chunks may have no candidates (e.g., usage-only chunks)
+                chunk_parts = []
+                chunk_error = None
+
+            if chunk_error:
+                error_finish_reason = chunk_error
+
+            chunk_text, autogen_tool_calls, prev_fns, _ = self._process_parts(
+                chunk_parts, autogen_tool_calls, iostream=iostream
+            )
+            ans += chunk_text
+            all_prev_function_calls.extend(prev_fns)
+
+            # Extract usage metadata from each chunk (last chunk typically has final counts)
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                if chunk.usage_metadata.prompt_token_count:
+                    prompt_tokens = chunk.usage_metadata.prompt_token_count
+                if chunk.usage_metadata.candidates_token_count:
+                    completion_tokens = chunk.usage_metadata.candidates_token_count
+
+        return self._build_chat_completion(
+            ans, autogen_tool_calls, error_finish_reason, prompt_tokens, completion_tokens, model_name
+        )
 
     def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction if provided."""
@@ -536,29 +626,48 @@ class GeminiClient:
                 function_name = tool_call["function"]["name"]
                 self.tool_call_function_map[function_id] = function_name
 
-                if self.use_vertexai:
-                    rst.append(
-                        VertexAIPart.from_dict({
-                            "functionCall": {
-                                "name": function_name,
-                                "args": json.loads(tool_call["function"]["arguments"]),
-                            }
-                        })
-                    )
+                # thought_signature preservation
+                thought_sig_raw = tool_call.get("thought_signature")
+                if isinstance(thought_sig_raw, str) and thought_sig_raw:
+                    thought_sig_bytes: bytes | None = base64.b64decode(thought_sig_raw)
+                elif isinstance(thought_sig_raw, bytes) and thought_sig_raw:
+                    thought_sig_bytes = thought_sig_raw
                 else:
-                    # Include thought_signature if available (required for Gemini 3 models)
-                    thought_sig = self.tool_call_thought_signatures.get(function_id)
+                    thought_sig_bytes = self.tool_call_thought_signatures.get(function_id)
+
+                if self.use_vertexai:
+                    fc_dict: dict[str, Any] = {
+                        "functionCall": {
+                            "name": function_name,
+                            "args": json.loads(tool_call["function"]["arguments"]),
+                        }
+                    }
+                    if thought_sig_bytes:
+                        fc_dict["thoughtSignature"] = base64.b64encode(thought_sig_bytes).decode("ascii")
+                    rst.append(VertexAIPart.from_dict(fc_dict))
+                else:
                     rst.append(
                         Part(
                             function_call=FunctionCall(
                                 name=function_name,
                                 args=json.loads(tool_call["function"]["arguments"]),
                             ),
-                            thought_signature=thought_sig,
+                            thought_signature=thought_sig_bytes,
                         )
                     )
 
             return rst, "tool_call"
+
+        elif "content" not in message:
+            # Message has no 'content' key (e.g. a DataPart converted to a
+            # chat message).  Serialize whatever data is present as text so
+            # the conversation history stays intact.
+            fallback = json.dumps({k: v for k, v in message.items() if k != "role"}) or "empty"
+            if self.use_vertexai:
+                rst.append(VertexAIPart.from_text(fallback))
+            else:
+                rst.append(Part(text=fallback))
+            return rst, "text"
 
         elif isinstance(message["content"], str):
             content = message["content"]
@@ -980,147 +1089,41 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
         # Cost per million
         return cost_per_mil_input * input_tokens / 1e6 + cost_per_mil_output * output_tokens / 1e6
 
-    def total_cost_k(cost_per_k_input: float, cost_per_k_output: float) -> float:
-        # Cost per thousand
-        return cost_per_k_input * input_tokens / 1e3 + cost_per_k_output * output_tokens / 1e3
-
     model_name = model_name.lower()
-    up_to_128k = input_tokens <= 128000
     up_to_200k = input_tokens <= 200000
 
-    if use_vertexai:
-        # Vertex AI pricing - based on Text input
-        # https://cloud.google.com/vertex-ai/generative-ai/pricing
+    # Pricing is the same for both Vertex AI and non-Vertex AI (Google AI Studio)
+    # for these text-based models. VertexAI may differ for audio/image modalities.
+    # https://ai.google.dev/gemini-api/docs/pricing
+    # https://cloud.google.com/vertex-ai/generative-ai/pricing
 
-        if model_name == "gemini-3-pro-preview":
-            if up_to_200k:
-                return total_cost_mil(2.0, 12)
-            else:
-                return total_cost_mil(4.0, 18)
-
-        elif (
-            model_name == "gemini-2.5-pro"
-            or "gemini-2.5-pro-preview-06-05" in model_name
-            or "gemini-2.5-pro-preview-05-06" in model_name
-            or "gemini-2.5-pro-preview-03-25" in model_name
-        ):
-            if up_to_200k:
-                return total_cost_mil(1.25, 10)
-            else:
-                return total_cost_mil(2.5, 15)
-
-        elif model_name == "gemini-3-flash-preview":
-            return total_cost_mil(0.5, 3.0)
-
-        elif "gemini-2.5-flash" in model_name:
-            return total_cost_mil(0.3, 2.5)
-
-        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
-            return total_cost_mil(0.15, 0.6)  # NON-THINKING OUTPUT PRICE, $3 FOR THINKING!
-
-        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
-            return total_cost_mil(0.1, 0.4)
-
-        elif "gemini-2.0-flash-lite" in model_name:
-            return total_cost_mil(0.075, 0.3)
-
-        elif "gemini-2.0-flash" in model_name:
-            return total_cost_mil(0.15, 0.6)
-
-        elif "gemini-1.5-flash" in model_name:
-            if up_to_128k:
-                return total_cost_k(0.00001875, 0.000075)
-            else:
-                return total_cost_k(0.0000375, 0.00015)
-
-        elif "gemini-1.5-pro" in model_name:
-            if up_to_128k:
-                return total_cost_k(0.0003125, 0.00125)
-            else:
-                return total_cost_k(0.000625, 0.0025)
-
-        elif "gemini-1.0-pro" in model_name:
-            return total_cost_k(0.000125, 0.00001875)
-
+    if "gemini-3.1-pro" in model_name:
+        if up_to_200k:
+            return total_cost_mil(2.0, 12)
         else:
-            warnings.warn(
-                f"Cost calculation is not implemented for model {model_name}. Cost will be calculated zero.",
-                UserWarning,
-            )
-            return 0
+            return total_cost_mil(4.0, 18)
+
+    elif "gemini-3.1-flash-lite" in model_name:
+        return total_cost_mil(0.25, 1.5)
+
+    elif "gemini-3-flash" in model_name:
+        return total_cost_mil(0.5, 3.0)
+
+    elif "gemini-2.5-pro" in model_name:
+        if up_to_200k:
+            return total_cost_mil(1.25, 10)
+        else:
+            return total_cost_mil(2.5, 15)
+
+    elif "gemini-2.5-flash-lite" in model_name:
+        return total_cost_mil(0.1, 0.4)
+
+    elif "gemini-2.5-flash" in model_name:
+        return total_cost_mil(0.3, 2.5)
 
     else:
-        # Non-Vertex AI pricing
-
-        if model_name == "gemini-3-pro-preview":
-            if up_to_200k:
-                return total_cost_mil(2.0, 12)
-            else:
-                return total_cost_mil(4.0, 18)
-
-        elif (
-            model_name == "gemini-2.5-pro"
-            or "gemini-2.5-pro-preview-06-05" in model_name
-            or "gemini-2.5-pro-preview-05-06" in model_name
-            or "gemini-2.5-pro-preview-03-25" in model_name
-        ):
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
-            if up_to_200k:
-                return total_cost_mil(1.25, 10)
-            else:
-                return total_cost_mil(2.5, 15)
-
-        elif model_name == "gemini-3-flash-preview":
-            return total_cost_mil(0.5, 3.0)
-
-        elif "gemini-2.5-flash" in model_name:
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
-            return total_cost_mil(0.3, 2.5)
-
-        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
-            return total_cost_mil(0.15, 0.6)
-
-        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite
-            return total_cost_mil(0.1, 0.4)
-
-        elif "gemini-2.0-flash-lite" in model_name:
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
-            return total_cost_mil(0.075, 0.3)
-
-        elif "gemini-2.0-flash" in model_name:
-            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash
-            return total_cost_mil(0.1, 0.4)
-
-        elif "gemini-1.5-flash-8b" in model_name:
-            # https://ai.google.dev/pricing#1_5flash-8B
-            if up_to_128k:
-                return total_cost_mil(0.0375, 0.15)
-            else:
-                return total_cost_mil(0.075, 0.3)
-
-        elif "gemini-1.5-flash" in model_name:
-            # https://ai.google.dev/pricing#1_5flash
-            if up_to_128k:
-                return total_cost_mil(0.075, 0.3)
-            else:
-                return total_cost_mil(0.15, 0.6)
-
-        elif "gemini-1.5-pro" in model_name:
-            # https://ai.google.dev/pricing#1_5pro
-            if up_to_128k:
-                return total_cost_mil(1.25, 5.0)
-            else:
-                return total_cost_mil(2.50, 10.0)
-
-        elif "gemini-1.0-pro" in model_name:
-            # https://ai.google.dev/pricing#1_5pro
-            return total_cost_mil(0.50, 1.5)
-
-        else:
-            warnings.warn(
-                f"Cost calculation is not implemented for model {model_name}. Cost will be calculated zero.",
-                UserWarning,
-            )
-            return 0
+        warnings.warn(
+            f"Cost calculation is not implemented for model {model_name}. Cost will be calculated zero.",
+            UserWarning,
+        )
+        return 0

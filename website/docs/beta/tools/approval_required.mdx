@@ -1,0 +1,70 @@
+---
+title: "Approval Required"
+sidebarTitle: "Approval Required Tools"
+---
+
+# Approval Required
+
+`#!python approval_required()` is a built-in [tool middleware](/docs/beta/tools/tool_middleware) that gates tool execution on **human approval**. When the agent tries to call a tool decorated with this middleware, the user is prompted to approve or deny the call before it runs.
+
+This is useful for tools that perform **irreversible**, **expensive**, or **sensitive** actions — sending emails, modifying databases, executing payments, or deleting resources.
+
+## Quick start
+
+```python linenums="1" hl_lines="5 8 18"
+import asyncio
+
+from autogen.beta import Agent, tool
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.middleware import approval_required
+
+@tool(
+    middleware=[approval_required()],
+)
+def delete_account(user_id: str) -> str:
+    """Deletes a user account by ID permanently."""
+    return f"Account {user_id} deleted."
+
+agent = Agent(
+    "assistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[delete_account],
+    hitl_hook=lambda event: input(event.content),
+)
+
+async def main() -> None:
+    reply = await agent.ask("Delete the account for user abc-123.")
+    print(await reply.content())
+
+asyncio.run(main())
+```
+
+When the agent calls `delete_account`, the user sees:
+
+```
+Agent tries to call tool:
+`delete_account`, {"user_id": "abc-123"}
+Please approve or deny this request.
+Y/N?
+```
+
+Typing **y** lets the tool run. Any other input denies it — the agent receives the denied message and can adjust.
+
+!!! note
+    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. If no `hitl_hook` is configured, `#!python context.input()` will raise an error at runtime. Read more about [Human in the Loop](/docs/beta/context/human_in_the_loop) to learn how to configure a HITL hook.
+
+## Customizing the prompt
+
+Override the `message` parameter to tailor the approval prompt:
+
+```python linenums="1" hl_lines="2-5"
+@tool(
+    middleware=[approval_required(
+        message="⚠️ The agent wants to run `{tool_name}` with {tool_arguments}. Allow? (y/n)",
+        denied_message="Operation blocked by user.",
+    )],
+)
+def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email to the given address."""
+    return f"Email sent to {to}."
+```

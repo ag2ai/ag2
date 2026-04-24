@@ -1,0 +1,111 @@
+---
+title: Prompt Management
+sidebarTitle: Prompt Management
+---
+
+# Prompt Management
+
+## System Prompts
+
+Agents can be initialized with a static system prompt. You can provide a single string or a list of strings:
+
+```python linenums="1" hl_lines="6 12-15"
+from autogen.beta import Agent
+
+# Single string prompt
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful agent!"
+)
+
+# List of strings prompt
+agent2 = Agent(
+    "assistant2",
+    prompt=[
+        "You are an expert in Python.",
+        "Be concise."
+    ]
+)
+```
+
+## Dynamic Prompts
+
+### On conversation startup
+
+System prompts can be generated dynamically when a conversation starts. This is useful when the prompt depends on external state or initial context. You can achieve this by using the `@my_agent.prompt` decorator or passing a synchronous or asynchronous function.
+
+Dynamic prompt functions support the same powerful execution context capabilities as Agent Tools. For more detailed information on specific context features, see [Dependency Injection](/docs/beta/context/inject), [Context Variables](/docs/beta/context/variables), and [Human-in-the-loop](/docs/beta/context/human_in_the_loop).
+
+Dynamic prompts are evaluated only once at the beginning of the conversation, and their results are appended to the static prompts and reused for subsequent turns.
+
+```python linenums="1" hl_lines="5-11"
+from autogen.beta import Agent, Context
+
+agent = Agent("assistant")
+
+@agent.prompt
+async def dynamic_sysprompt(ctx: Context) -> str:
+    # Generate prompt dynamically based on the initial event or context
+    return (
+        "You are a helpful agent. "
+        f"The current context is {ctx.variables}."
+    )
+```
+
+Alternatively, you can pass a callable directly to the `prompt` parameter, or mix static strings and callables in a list:
+
+```python linenums="1" hl_lines="8"
+from autogen.beta import Agent
+
+def get_sysprompt() -> str:
+    # Returns a string for the prompt, evaluated at the beginning of the conversation
+    return "This is dynamically generated."
+
+agent = Agent(
+    "assistant",
+    prompt=["Static prompt part.", get_sysprompt]
+)
+```
+
+### On each conversation turn
+
+While dynamic prompt hooks are evaluated once per conversation, you might need to update the prompt dynamically on each turn. You can do this by mutating the `prompt` list within the `Context` directly between calls to `reply.ask()`.
+
+```python linenums="1" hl_lines="5"
+# Initial conversation turn
+reply = await agent.ask("Hi, agent!")
+
+# Change the prompt for the next turn
+reply.context.prompt = ["You are now a funny agent!"]
+await reply.ask("Tell me a joke")
+```
+
+You can also completely override the agent's default prompt for a specific run or turn by passing the `prompt` parameter directly to `ask()`:
+
+```python linenums="1" hl_lines="4"
+# Overrides the default prompt for this conversation
+reply = await agent.ask(
+    "Hi!",
+    prompt=["Temporary prompt for this run"]
+)
+```
+
+## Prompt updates
+
+For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](/docs/beta/advanced/stream) documentation for more details on this advanced feature.
+
+```python linenums="1" hl_lines="11"
+from autogen.beta import Agent, Context, MemoryStream
+from autogen.beta.events import ModelRequest
+
+agent = Agent("assistant", prompt="You are a helpful assistant.")
+stream = MemoryStream()
+
+@stream.where(ModelRequest).subscribe()
+async def mutate_prompt(event: ModelRequest, context: Context) -> None:
+    # Update the prompt dynamically when a ModelRequest is triggered
+    if "joke" in event.content.lower():
+        context.prompt = ["You are now a comedian."]
+
+await agent.ask("Tell me a joke", stream=stream)
+```

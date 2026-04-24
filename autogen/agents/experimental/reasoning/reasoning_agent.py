@@ -78,7 +78,7 @@ Option 4: <Thinking 4>
 ...
 """
 
-EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, to advance the thinking process. Keep your answers as consise as possible. Never suggest the next step."
+EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, to advance the thinking process. Keep your answers as concise as possible. Never suggest the next step."
 
 
 @export_module("autogen.agents.experimental")
@@ -262,10 +262,10 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
         """Recursively find all leaf nodes."""
         if not node.children:
             return [node]
-        leafs = []
+        leaves = []
         for child in node.children:
-            leafs.extend(_find_leaf_nodes(child))
-        return leafs
+            leaves.extend(_find_leaf_nodes(child))
+        return leaves
 
     # Step 1: Find all leaf nodes
     leaf_nodes = _find_leaf_nodes(root)
@@ -274,10 +274,10 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     max_value = max(leaf_nodes, key=lambda x: x.value).value
 
     # Step 3: Collect all leaf nodes with the highest score
-    best_leafs = [leaf for leaf in leaf_nodes if leaf.value == max_value]
+    best_leaves = [leaf for leaf in leaf_nodes if leaf.value == max_value]
 
     # Step 4: Collect trajectories for all the best leaf nodes
-    best_trajectories = [{"instruction": instruction, "response": leaf.trajectory[idx:]} for leaf in best_leafs]
+    best_trajectories = [{"instruction": instruction, "response": leaf.trajectory[idx:]} for leaf in best_leaves]
 
     return best_trajectories
 
@@ -914,13 +914,13 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
-        prev_leafs: list[ThinkNode] = [root]
+        prev_leaves: list[ThinkNode] = [root]
         final_answers: set[ThinkNode] = set()  # store the final answers
 
-        while prev_leafs and len(final_answers) < self._beam_size:
-            new_leafs: list[ThinkNode] = []
-            new_leafs_per_beam: list[list[ThinkNode]] = []  # used for batch grading
-            for node in prev_leafs:
+        while prev_leaves and len(final_answers) < self._beam_size:
+            new_leaves: list[ThinkNode] = []
+            new_leaves_per_beam: list[list[ThinkNode]] = []  # used for batch grading
+            for node in prev_leaves:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
                     if node.value is None:
@@ -928,34 +928,34 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     final_answers.add(node)
                     continue
 
-                expansion_leafs = self._expand(node)
-                new_leafs += expansion_leafs
-                new_leafs_per_beam.append(expansion_leafs)
+                expansion_leaves = self._expand(node)
+                new_leaves += expansion_leaves
+                new_leaves_per_beam.append(expansion_leaves)
 
-            prev_leafs = new_leafs
+            prev_leaves = new_leaves
 
-            if len(prev_leafs) + len(final_answers) > self._beam_size:
+            if len(prev_leaves) + len(final_answers) > self._beam_size:
                 if len(final_answers) >= self._beam_size:
-                    prev_leafs = []  # stop searching, max beam size reached
+                    prev_leaves = []  # stop searching, max beam size reached
                     break
 
                 # Rate
                 if self._batch_grading:
-                    for beam_nodes in new_leafs_per_beam:
+                    for beam_nodes in new_leaves_per_beam:
                         rewards = self.rate_batch_nodes(beam_nodes, ground_truth)
                         for node, reward in zip(beam_nodes, rewards):
                             node.value = reward
                 else:
-                    for node in prev_leafs:
+                    for node in prev_leaves:
                         node.value = self.rate_node(node, ground_truth)
                 # Beam search: keep top beam_size leaf nodes
-                prev_leafs = sorted(prev_leafs, key=lambda x: x.value if x.value else 0, reverse=True)[
+                prev_leaves = sorted(prev_leaves, key=lambda x: x.value if x.value else 0, reverse=True)[
                     : self._beam_size - len(final_answers)
                 ]
 
                 # Execute
                 if self._interim_execution:
-                    for node in prev_leafs:
+                    for node in prev_leaves:
                         node.output = self.execute_node(node)
 
         assert final_answers, "No final answers found."

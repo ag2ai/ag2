@@ -151,6 +151,7 @@ class A2aRemoteAgent(ConversableAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
+        extra_parts: list[Any] | None = None,
     ) -> tuple[bool, dict[str, Any] | None]:
         if messages is None:
             messages = self._oai_messages[sender]
@@ -175,6 +176,7 @@ class A2aRemoteAgent(ConversableAgent):
                         client_tools=self.__llm_config.get("tools", []),
                     ),
                     context_id=context_id,
+                    extra_parts=extra_parts,
                 )
 
                 if self._agent_card.capabilities.streaming:
@@ -219,17 +221,24 @@ class A2aRemoteAgent(ConversableAgent):
                     messages.append({"content": user_input, "role": "user"})
                     continue
 
-                if sender and reply.context:
+                if reply.context:
                     self.context_variables.update(reply.context)
-                    sender.context_variables.update(reply.context)
+                    if sender:
+                        sender.context_variables.update(reply.context)
 
                 return True, reply.messages[-1]
+
+    def _get_requested_extensions(self) -> list[str] | None:
+        """Get extension URIs to request from the agent card capabilities."""
+        if not self._agent_card or not self._agent_card.capabilities.extensions:
+            return None
+        return [ext.uri for ext in self._agent_card.capabilities.extensions]
 
     async def _ask_streaming(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
         started_task: Task | None = None
         completed = False
         try:
-            async for event in client.send_message(message):
+            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
                 if not isinstance(event, Message):
                     started_task = event[0]
                 yield event
@@ -251,16 +260,16 @@ class A2aRemoteAgent(ConversableAgent):
                     f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}"
                 )
 
-            connection_attemps = 1
-            while not completed and connection_attemps < self._max_reconnects:
+            connection_attempts = 1
+            while not completed and connection_attempts < self._max_reconnects:
                 try:
                     async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
                         yield event
                         completed = _is_event_completed(event)
 
                 except (httpx.ConnectError, A2AClientHTTPError) as e:
-                    connection_attemps += 1
-                    if connection_attemps >= self._max_reconnects:
+                    connection_attempts += 1
+                    if connection_attempts >= self._max_reconnects:
                         if not self._agent_card:
                             raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
                         raise A2aClientError(
@@ -271,7 +280,7 @@ class A2aRemoteAgent(ConversableAgent):
         started_task: Task | None = None
         completed = False
         try:
-            async for event in client.send_message(message):
+            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
                 if not isinstance(event, Message):
                     started_task = event[0]
                 yield event
@@ -294,15 +303,15 @@ class A2aRemoteAgent(ConversableAgent):
                     f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}"
                 )
 
-            connection_attemps = 1
-            while not completed and connection_attemps < self._max_reconnects:
+            connection_attempts = 1
+            while not completed and connection_attempts < self._max_reconnects:
                 try:
                     task = await client.get_task(TaskQueryParams(id=started_task.id))
                     completed = _is_task_completed(task)
 
                 except (httpx.ConnectError, A2AClientHTTPError) as e:
-                    connection_attemps += 1
-                    if connection_attemps >= self._max_reconnects:
+                    connection_attempts += 1
+                    if connection_attempts >= self._max_reconnects:
                         if not self._agent_card:
                             raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
                         raise A2aClientError(

@@ -999,13 +999,14 @@ class ConversableAgent(LLMAgent):
                 return None
             if n_conversations == 1:
                 for conversation in self._oai_messages.values():
-                    return conversation[-1]
+                    return conversation[-1] if conversation else None
             raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
         if agent not in self._oai_messages:
             raise KeyError(
                 f"The agent '{agent.name}' is not present in any conversation. No history available for this agent."
             )
-        return self._oai_messages[agent][-1]
+        messages = self._oai_messages[agent]
+        return messages[-1] if messages else None
 
     @property
     def use_docker(self) -> bool | str | None:
@@ -1375,7 +1376,7 @@ class ConversableAgent(LLMAgent):
                     return recipient.last_message(sender)["content"]
                 ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
-                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
+                One example key is "summary_prompt", and value is a string of text used to prompt an LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
                 The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out."
                 Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".
@@ -4353,10 +4354,13 @@ class ConversableAgent(LLMAgent):
         if executor_kwargs is None:
             executor_kwargs = {}
         if "is_termination_msg" not in executor_kwargs:
-            executor_kwargs["is_termination_msg"] = lambda x: "TERMINATE" in (
-                content_str(x.get("content"))
-                if isinstance(x.get("content"), (str, list)) or x.get("content") is None
-                else str(x.get("content"))
+            executor_kwargs["is_termination_msg"] = lambda x: (
+                "TERMINATE"
+                in (
+                    content_str(x.get("content"))
+                    if isinstance(x.get("content"), (str, list)) or x.get("content") is None
+                    else str(x.get("content"))
+                )
             )
 
         try:

@@ -19,10 +19,13 @@ CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
 
 RESULT_ARTIFACT_NAME = "result"
 
+from autogen.a2a.constants import A2UI_MIME_TYPE
+
 
 def request_message_to_a2a(
     request_message: RequestMessage,
     context_id: str,
+    extra_parts: list[Part] | None = None,
 ) -> Message:
     metadata: dict[str, Any] = {}
     if request_message.client_tools:
@@ -30,9 +33,13 @@ def request_message_to_a2a(
     if request_message.context:
         metadata[CONTEXT_KEY] = request_message.context
 
+    parts = [message_to_part(message) for message in request_message.messages]
+    if extra_parts:
+        parts.extend(extra_parts)
+
     return Message(
         role=Role.user,
-        parts=[message_to_part(message) for message in request_message.messages],
+        parts=parts,
         message_id=uuid4().hex,
         context_id=context_id,
         metadata=metadata,
@@ -89,8 +96,50 @@ def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> Res
     if not artifact.parts:
         return None
 
+    # Check if there are any data parts mixed with text parts
+    has_data = any(isinstance(p.root, DataPart) for p in artifact.parts)
+
+    if not has_data:
+        # Text-only (metadata like name, role)
+        return ResponseMessage(
+            messages=[message_from_part(p) for p in artifact.parts],
+            context=(artifact.metadata or {}).get(CONTEXT_KEY),
+        )
+
+    # Check if any data parts are A2UI — if so, merge text + data into single dict
+    has_a2ui = any(
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == A2UI_MIME_TYPE
+        for p in artifact.parts
+    )
+
+    text_content: list[str] = []
+    data_messages: list[dict[str, Any]] = []
+    for p in artifact.parts:
+        if isinstance(p.root, TextPart):
+            text_content.append(p.root.text)
+        else:
+            data_messages.append(message_from_part(p))
+
+    if has_a2ui:
+        # Merge text + A2UI data into a single dict so client gets both
+        combined: dict[str, Any] = {}
+        if text_content:
+            combined["content"] = "\n".join(text_content)
+        for dm in data_messages:
+            combined.update(dm)
+        return ResponseMessage(
+            messages=[combined],
+            context=(artifact.metadata or {}).get(CONTEXT_KEY),
+        )
+
+    # Non-A2UI: keep text and data as separate messages
+    messages: list[dict[str, Any]] = []
+    if text_content:
+        messages.append({"content": "\n".join(text_content)})
+    messages.extend(data_messages)
+
     return ResponseMessage(
-        messages=[message_from_part(p) for p in artifact.parts],
+        messages=messages,
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
     )
 
@@ -117,19 +166,29 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
         else:
             raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
 
-    tpn = len(text_parts)
-    if dpn := len(data_parts):
-        if dpn > 1:
-            raise NotImplementedError("Multiple data parts are not supported")
+    has_a2ui = any(
+        isinstance(p.root, DataPart) and p.root.metadata and p.root.metadata.get("mimeType") == A2UI_MIME_TYPE
+        for p in data_parts
+    )
 
-        if tpn:
-            raise NotImplementedError("Data parts and text parts are not supported together")
+    messages: list[dict[str, Any]] = []
 
-        messages = [message_from_part(data_parts[0])]
-    elif tpn == 1:
-        messages = [message_from_part(text_parts[0])]
+    if has_a2ui:
+        # Merge text + A2UI data into a single dict
+        combined: dict[str, Any] = {}
+        if text_parts:
+            combined["content"] = "\n".join(cast(TextPart, t.root).text for t in text_parts)
+        for dp in data_parts:
+            combined.update(message_from_part(dp))
+        messages.append(combined)
     else:
-        messages = [{"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)}]
+        # Non-A2UI: keep text and data as separate messages
+        if len(text_parts) == 1:
+            messages.append(message_from_part(text_parts[0]))
+        elif len(text_parts) > 1:
+            messages.append({"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)})
+        for dp in data_parts:
+            messages.append(message_from_part(dp))
 
     return ResponseMessage(
         messages=messages,
@@ -222,7 +281,8 @@ def message_from_part(part: Part) -> dict[str, Any]:
         ):
             return data
 
-        return root.data
+        # Preserve DataPart data as-is (structured dict)
+        return dict(root.data)
 
     else:
         raise NotImplementedError(f"Unsupported part type: {type(part.root)}")

@@ -57,6 +57,10 @@ Next we will see how to define each agent.
 **Student Agent**
 
 ```python
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+
+essay = get_essay_content()  # Retrieve the essay content from its source
+
 system_message = f"""You are an agent representing a student. You have access to the following essay content: {essay}.
 
     Your task is to answer questions about the essay strictly based on information found in the essay content.
@@ -86,6 +90,8 @@ system_message = f"""You are an agent representing a student. You have access to
 **Examiner Agent:**
 
 ```python
+questions = get_examination_questions()  # Retrieve the list of questions for the examiner
+
 examiner = ConversableAgent(
     name="Examiner",
     system_message=f"""I am an examiner who will cross examine an agent representing a student.
@@ -126,6 +132,9 @@ examiner = ConversableAgent(
 **Evaluator Agent:**
 
 ```python
+evaluation_criteria = get_evaluation_criteria()  # Retrieve the evaluation criteria
+scoring_rubric = get_scoring_rubric()  # Retrieve the scoring rubric
+
 evaluator = ConversableAgent(
     name="Evaluator",
     system_message=f"""You are an agent who evaluates a student essays based on an examination conducted between an examiner and a representative agent on behalf of a student.

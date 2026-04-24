@@ -7,7 +7,7 @@ sidebarTitle: OpenTelemetry Tracing
 AG2 provides built-in <a href="https://opentelemetry.io/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry</a> instrumentation for multi-agent workflows.
 The tracing module follows the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry GenAI Semantic Conventions</a> for agent spans, giving you structured observability into conversations, LLM calls, tool executions, code execution, and human-in-the-loop interactions.
 
-Because AG2 uses standard OpenTelemetry, traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Axiom, and many others.
+Because AG2 uses standard OpenTelemetry, traces can be exported to **any compatible backend** -- Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, Axiom, and many others.
 
 ## Installation
 
@@ -361,6 +361,41 @@ exporter = OTLPSpanExporter(
 ```
 
 Consult your vendor's documentation for the exact endpoint and authentication details. Popular options include <a href="https://docs.datadoghq.com/opentelemetry/" className="external-link" target="_blank" rel="noopener noreferrer">Datadog</a>, <a href="https://docs.honeycomb.io/send-data/opentelemetry/" className="external-link" target="_blank" rel="noopener noreferrer">Honeycomb</a>, and <a href="https://grafana.com/products/cloud/" className="external-link" target="_blank" rel="noopener noreferrer">Grafana Cloud</a>.
+
+### Langfuse
+
+<a href="https://langfuse.com" className="external-link" target="_blank" rel="noopener noreferrer">Langfuse</a> is an open-source LLM engineering platform with native support for OpenTelemetry GenAI traces. It provides purpose-built visualization for multi-agent workflows including token usage, cost tracking, and message rendering. Langfuse is available as a cloud service or can be self-hosted.
+
+Langfuse accepts OTLP traces over HTTP with Basic authentication:
+
+```python title="langfuse_setup.py"
+import base64
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."
+LANGFUSE_SECRET_KEY = "sk-lf-..."
+LANGFUSE_HOST = "https://cloud.langfuse.com"  # or your self-hosted URL
+
+auth = base64.b64encode(
+    f"{LANGFUSE_PUBLIC_KEY}:{LANGFUSE_SECRET_KEY}".encode()
+).decode()
+
+resource = Resource.create(attributes={"service.name": "my-ag2-service"})
+tracer_provider = TracerProvider(resource=resource)
+
+exporter = OTLPSpanExporter(
+    endpoint=f"{LANGFUSE_HOST}/api/public/otel/v1/traces",
+    headers={"Authorization": f"Basic {auth}"},
+)
+tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(tracer_provider)
+```
+
+See the <a href="https://langfuse.com/docs/integrations/frameworks/ag2" className="external-link" target="_blank" rel="noopener noreferrer">Langfuse AG2 integration guide</a> for a full walkthrough including tool use and group chat examples.
 
 ## Local Development Stack
 
