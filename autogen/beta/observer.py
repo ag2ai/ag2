@@ -21,8 +21,7 @@ Both shapes satisfy the same :class:`Observer` protocol so the Actor
 can register either kind via a single ``register(stack, ctx)`` call.
 """
 
-from __future__ import annotations
-
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from contextlib import ExitStack
@@ -116,8 +115,6 @@ class BaseObserver(ABC):
             if alert is not None:
                 await ctx.send(alert)
         except Exception:
-            import logging
-
             logging.getLogger(__name__).exception("Observer '%s' process() failed", self.name)
 
     @abstractmethod

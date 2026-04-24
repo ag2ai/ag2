@@ -8,8 +8,6 @@ ObserverAlert replaces the old Signal event type. Severity and HaltEvent
 are framework-core concepts used by observers and AlertPolicy.
 """
 
-from __future__ import annotations
-
 from enum import Enum
 
 from autogen.beta.events.base import BaseEvent, Field

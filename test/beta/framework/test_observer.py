@@ -6,11 +6,11 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen.beta import BaseObserver
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ToolCallEvent
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.observer import BaseObserver
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 

@@ -9,12 +9,15 @@ semantics. It is the universal trigger for event monitoring, time-based
 scheduling, and composite conditions.
 """
 
-from __future__ import annotations
-
 import asyncio
+import datetime
+import functools
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
+
+_logger = logging.getLogger(__name__)
 
 from autogen.beta.annotations import Context
 from autogen.beta.context import ConversationContext as ContextType
@@ -83,14 +86,17 @@ class EventWatch(_BaseWatch):
         if not isinstance(condition, Condition):
             condition = TypeCondition(condition)
         self._condition = condition
+        self._callback: WatchCallback | None = None
 
     def arm(self, stream: Stream, callback: WatchCallback) -> None:
-        async def _handler(event: BaseEvent, ctx: Context) -> None:
-            await callback([event], ctx)
-
+        self._callback = callback
         self._stream = stream
-        self._sub_id = stream.subscribe(_handler, condition=self._condition)
+        self._sub_id = stream.subscribe(self._handle_event, condition=self._condition)
         self._armed = True
+
+    async def _handle_event(self, event: BaseEvent, ctx: Context) -> None:
+        if self._callback is not None:
+            await self._callback([event], ctx)
 
 
 class CadenceWatch(_BaseWatch):
@@ -135,20 +141,18 @@ class CadenceWatch(_BaseWatch):
     def arm(self, stream: Stream, callback: WatchCallback) -> None:
         self._stream = stream
         self._callback = callback
-
-        async def _handler(event: BaseEvent, ctx: Context) -> None:
-            self._buffer.append(event)
-
-            if self._n is not None and len(self._buffer) >= self._n:
-                self._cancel_timer()
-                await self._fire(ctx)
-                return
-
-            if self._max_wait is not None and (self._timer_task is None or self._timer_task.done()):
-                self._timer_task = asyncio.ensure_future(self._wait_and_fire(stream))
-
-        self._sub_id = stream.subscribe(_handler, condition=self._condition)
+        self._sub_id = stream.subscribe(self._handle_cadence_event, condition=self._condition)
         self._armed = True
+
+    async def _handle_cadence_event(self, event: BaseEvent, ctx: Context) -> None:
+        self._buffer.append(event)
+        if self._n is not None and len(self._buffer) >= self._n:
+            self._cancel_timer()
+            await self._fire(ctx)
+            return
+        if self._max_wait is not None and (self._timer_task is None or self._timer_task.done()):
+            assert self._stream is not None
+            self._timer_task = asyncio.ensure_future(self._wait_and_fire(self._stream))
 
     async def _wait_and_fire(self, stream: Stream) -> None:
         assert self._max_wait is not None
@@ -201,9 +205,6 @@ class IntervalWatch(_BaseWatch):
         self._task = asyncio.ensure_future(self._run(stream))
 
     async def _run(self, stream: Stream) -> None:
-        import logging
-
-        _logger = logging.getLogger(__name__)
         while True:
             await asyncio.sleep(self._seconds)
             if self._callback is not None:
@@ -240,9 +241,6 @@ class DelayWatch(_BaseWatch):
         self._task = asyncio.ensure_future(self._run(stream, callback))
 
     async def _run(self, stream: Stream, callback: WatchCallback) -> None:
-        import logging
-
-        _logger = logging.getLogger(__name__)
         try:
             await asyncio.sleep(self._seconds)
             ctx = ContextType(stream=stream)
@@ -289,24 +287,19 @@ class AllOf(_BaseWatch):
         self._fired.clear()
         self._event_buffer.clear()
         self._armed = True
-
         for w in self._watches:
-            w.arm(stream, self._make_handler(w.id))
+            w.arm(stream, functools.partial(self._handle_sub_watch, w.id))
 
-    def _make_handler(self, watch_id: str) -> WatchCallback:
-        async def _handler(events: list[BaseEvent], ctx: Context) -> None:
-            self._fired.add(watch_id)
-            self._event_buffer[watch_id] = events
-            if len(self._fired) == len(self._watches) and self._callback is not None:
-                # Collect events from all sub-watches
-                combined: list[BaseEvent] = []
-                for w in self._watches:
-                    combined.extend(self._event_buffer.get(w.id, []))
-                self._fired.clear()
-                self._event_buffer.clear()
-                await self._callback(combined, ctx)
-
-        return _handler
+    async def _handle_sub_watch(self, watch_id: str, events: list[BaseEvent], ctx: Context) -> None:
+        self._fired.add(watch_id)
+        self._event_buffer[watch_id] = events
+        if len(self._fired) == len(self._watches) and self._callback is not None:
+            combined: list[BaseEvent] = []
+            for w in self._watches:
+                combined.extend(self._event_buffer.get(w.id, []))
+            self._fired.clear()
+            self._event_buffer.clear()
+            await self._callback(combined, ctx)
 
     def disarm(self) -> None:
         for w in self._watches:
@@ -337,13 +330,12 @@ class AnyOf(_BaseWatch):
         self._stream = stream
         self._callback = callback
         self._armed = True
-
-        async def _handler(events: list[BaseEvent], ctx: Context) -> None:
-            if self._callback is not None:
-                await self._callback(events, ctx)
-
         for w in self._watches:
-            w.arm(stream, _handler)
+            w.arm(stream, self._handle_any)
+
+    async def _handle_any(self, events: list[BaseEvent], ctx: Context) -> None:
+        if self._callback is not None:
+            await self._callback(events, ctx)
 
     def disarm(self) -> None:
         for w in self._watches:
@@ -421,6 +413,27 @@ class Sequence(_BaseWatch):
 # Advanced watches
 # ---------------------------------------------------------------------------
 
+_DOW_NAMES = {"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
+
+
+def _parse_cron_field(spec: str, min_val: int, max_val: int, *, allow_names: bool = False) -> set[int]:
+    values: set[int] = set()
+    for part in spec.split(","):
+        if part == "*":
+            values.update(range(min_val, max_val + 1))
+        elif "/" in part:
+            base, step = part.split("/")
+            start = min_val if base == "*" else int(base)
+            values.update(range(start, max_val + 1, int(step)))
+        elif "-" in part:
+            lo, hi = part.split("-")
+            values.update(range(int(lo), int(hi) + 1))
+        elif allow_names and part.upper() in _DOW_NAMES:
+            values.add(_DOW_NAMES[part.upper()])
+        else:
+            values.add(int(part))
+    return values
+
 
 class CronWatch(_BaseWatch):
     """Fire on a cron schedule expression.
@@ -447,11 +460,6 @@ class CronWatch(_BaseWatch):
         self._task = asyncio.ensure_future(self._run(stream))
 
     async def _run(self, stream: Stream) -> None:
-        import datetime
-        import logging
-
-        _logger = logging.getLogger(__name__)
-
         while True:
             now = datetime.datetime.now()
             next_fire = self._next_fire_time(now)
@@ -471,39 +479,17 @@ class CronWatch(_BaseWatch):
         Simple implementation: parses the 5 fields and finds the next
         matching minute from ``now``.
         """
-        import datetime
-
         fields = self._expression.split()
         if len(fields) != 5:
             raise ValueError(f"Invalid cron expression: {self._expression!r} (need 5 fields)")
 
         minute_spec, hour_spec, dom_spec, month_spec, dow_spec = fields
 
-        _dow_names = {"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
-
-        def _parse_field(spec: str, min_val: int, max_val: int, *, allow_names: bool = False) -> set[int]:
-            values: set[int] = set()
-            for part in spec.split(","):
-                if part == "*":
-                    values.update(range(min_val, max_val + 1))
-                elif "/" in part:
-                    base, step = part.split("/")
-                    start = min_val if base == "*" else int(base)
-                    values.update(range(start, max_val + 1, int(step)))
-                elif "-" in part:
-                    lo, hi = part.split("-")
-                    values.update(range(int(lo), int(hi) + 1))
-                elif allow_names and part.upper() in _dow_names:
-                    values.add(_dow_names[part.upper()])
-                else:
-                    values.add(int(part))
-            return values
-
-        minutes = _parse_field(minute_spec, 0, 59)
-        hours = _parse_field(hour_spec, 0, 23)
-        doms = _parse_field(dom_spec, 1, 31)
-        months = _parse_field(month_spec, 1, 12)
-        dow_set = {v % 7 for v in _parse_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
+        minutes = _parse_cron_field(minute_spec, 0, 59)
+        hours = _parse_cron_field(hour_spec, 0, 23)
+        doms = _parse_cron_field(dom_spec, 1, 31)
+        months = _parse_cron_field(month_spec, 1, 12)
+        dow_set = {v % 7 for v in _parse_cron_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
 
         # Search forward from now + 1 minute
         candidate = now.replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)

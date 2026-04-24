@@ -10,7 +10,13 @@ from typing import Any
 
 from typing_extensions import dataclass_transform
 
+from ._serialization import deserialize_payload, event_to_dict
 from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq
+
+try:
+    import annotationlib as _annotationlib
+except ImportError:
+    _annotationlib = None  # type: ignore[assignment]
 
 
 class Field:
@@ -75,6 +81,10 @@ class Field:
 class _ConditionMeta(type):
     """Metaclass providing class-level condition operators (|, or_, not_)."""
 
+    def __init__(cls, name: str, bases: tuple[type, ...], namespace: dict[str, Any], **kwargs: Any) -> None:
+        super().__init__(name, bases, namespace, **kwargs)
+        _process_fields(cls)
+
     def __or__(cls, other: Any) -> Any:
         return TypeCondition(cls).or_(other)
 
@@ -91,12 +101,9 @@ def _process_fields(cls: type) -> None:
 
     # Get annotations in a Python 3.14+ compatible way (PEP 649: lazy annotation evaluation
     # means __annotations__ is no longer eagerly populated in the class namespace dict).
-    try:
-        # Python 3.14+
-        import annotationlib  # pyright: ignore[reportMissingImports]
-
-        annotations = annotationlib.get_annotations(cls, format=annotationlib.Format.FORWARDREF)
-    except ImportError:
+    if _annotationlib is not None:
+        annotations = _annotationlib.get_annotations(cls, format=_annotationlib.Format.FORWARDREF)
+    else:
         annotations = vars(cls).get("__annotations__", {})
 
     own_namespace = vars(cls)
@@ -135,10 +142,6 @@ class BaseEvent(metaclass=_ConditionMeta):
     # compare=False: timestamps don't affect equality checks.
     # repr=False: keeps repr() output clean.
     created_at: float = Field(default_factory=time.time, compare=False, repr=False)
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        _process_fields(cls)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         # MRO walk: map positional args and collect defaults.
@@ -200,8 +203,6 @@ class BaseEvent(metaclass=_ConditionMeta):
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize this event to a JSON-compatible dictionary."""
-        from ._serialization import event_to_dict
-
         return event_to_dict(self)
 
     @classmethod
@@ -211,8 +212,6 @@ class BaseEvent(metaclass=_ConditionMeta):
         Filters input to only fields known by this class (via MRO Field
         descriptors), then constructs via ``cls(**filtered)``.
         """
-        from ._serialization import deserialize_payload
-
         # Collect known field names across the MRO
         known_fields: set[str] = set()
         for klass in cls.__mro__:
@@ -223,8 +222,3 @@ class BaseEvent(metaclass=_ConditionMeta):
         deserialized = deserialize_payload(data)
         filtered = {k: v for k, v in deserialized.items() if k in known_fields}
         return cls(**filtered)
-
-
-# BaseEvent's own fields (e.g. created_at) are not processed by
-# __init_subclass__ since that only fires for *sub*classes.
-_process_fields(BaseEvent)

@@ -6,12 +6,12 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen.beta import LoopDetector, TokenMonitor
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelResponse, TaskCompleted, ToolCallEvent
 from autogen.beta.events.alert import ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.events.types import Usage
+from autogen.beta.observers import LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 
 

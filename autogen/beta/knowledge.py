@@ -14,23 +14,37 @@ Filesystem semantics are used because:
 3. Any backend (memory, disk, S3, Redis) can implement path-based key-value
 """
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import json
+import shutil
+import sqlite3
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
+from autogen.beta.events import BaseEvent
 from autogen.beta.events._serialization import (
     import_event_class,
     qualified_name,
 )
+from autogen.beta.events.lifecycle import UnknownEvent
 
-if TYPE_CHECKING:
-    from autogen.beta.events import BaseEvent
+try:
+    from watchdog.observers import Observer as _WatchdogObserver  # type: ignore[import-not-found]
+    from watchdog.observers.polling import PollingObserver as _WatchdogPollingObserver  # type: ignore[import-not-found]
+
+    _WATCHDOG_AVAILABLE = True
+except ImportError:
+    _WatchdogObserver = None  # type: ignore[assignment,misc]
+    _WatchdogPollingObserver = None  # type: ignore[assignment,misc]
+    _WATCHDOG_AVAILABLE = False
+
+try:
+    from redis import asyncio as _aioredis  # type: ignore[import-not-found]
+except ImportError:
+    _aioredis = None  # type: ignore[assignment]
 
 
 ChangeCallback = Callable[[str], Awaitable[None]]
@@ -153,6 +167,24 @@ def _normalize(path: str) -> str:
     return path
 
 
+class _MemoryChangeSubscription:
+    """Subscription handle for :class:`MemoryKnowledgeStore`."""
+
+    def __init__(self, subscribers: dict[str, list[ChangeCallback]], key: str, callback: ChangeCallback) -> None:
+        self._subscribers = subscribers
+        self._key = key
+        self._callback = callback
+
+    async def close(self) -> None:
+        bucket = self._subscribers.get(self._key)
+        if not bucket:
+            return
+        with contextlib.suppress(ValueError):
+            bucket.remove(self._callback)
+        if not bucket:
+            self._subscribers.pop(self._key, None)
+
+
 class MemoryKnowledgeStore:
     """In-memory KnowledgeStore. Development default.
 
@@ -230,21 +262,7 @@ class MemoryKnowledgeStore:
     async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         normalized = _normalize(path)
         self._subscribers.setdefault(normalized, []).append(callback)
-
-        subscribers = self._subscribers
-        key = normalized
-
-        class _Sub:
-            async def close(self) -> None:
-                bucket = subscribers.get(key)
-                if not bucket:
-                    return
-                with contextlib.suppress(ValueError):
-                    bucket.remove(callback)
-                if not bucket:
-                    subscribers.pop(key, None)
-
-        return _Sub()
+        return _MemoryChangeSubscription(self._subscribers, normalized, callback)
 
     async def _notify(self, changed_path: str) -> None:
         for subscribed_path, callbacks in list(self._subscribers.items()):
@@ -444,8 +462,6 @@ class DiskKnowledgeStore:
         if target.is_file():
             target.unlink()
         elif target.is_dir():
-            import shutil
-
             shutil.rmtree(target)
 
     async def exists(self, path: str) -> bool:
@@ -492,10 +508,7 @@ class DiskKnowledgeStore:
         write" is legal.
         """
 
-        try:
-            from watchdog.observers import Observer  # type: ignore[import-not-found]
-            from watchdog.observers.polling import PollingObserver  # type: ignore[import-not-found]
-        except ImportError:
+        if not _WATCHDOG_AVAILABLE:
             return NoopChangeSubscription()
 
         virtual_path = _normalize(path)
@@ -516,13 +529,13 @@ class DiskKnowledgeStore:
 
         observer: Any
         try:
-            observer = Observer()
+            observer = _WatchdogObserver()
             observer.schedule(handler, str(physical_target), recursive=True)
             observer.start()
         except Exception:
             # Native backend unavailable (e.g. inside a container with no
             # inotify caps). Fall back to polling — slower but correct.
-            observer = PollingObserver()
+            observer = _WatchdogPollingObserver()
             observer.schedule(handler, str(physical_target), recursive=True)
             observer.start()
 
@@ -650,8 +663,6 @@ class SqliteKnowledgeStore:
         *,
         poll_interval_s: float = 0.5,
     ) -> None:
-        import sqlite3  # stdlib — no optional install needed.
-
         self._db_path = path
         self._poll_interval_s = poll_interval_s
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -868,13 +879,9 @@ class RedisKnowledgeStore:
         poll_interval_s: float = 0.5,
     ) -> None:
         if isinstance(url_or_client, str):
-            try:
-                from redis import asyncio as aioredis  # type: ignore[import-not-found]
-            except ImportError as exc:  # pragma: no cover
-                raise ImportError(
-                    "RedisKnowledgeStore requires the 'redis' package. Install with: pip install redis"
-                ) from exc
-            self._client = aioredis.from_url(url_or_client, decode_responses=False)
+            if _aioredis is None:  # pragma: no cover
+                raise ImportError("RedisKnowledgeStore requires the 'redis' package. Install with: pip install redis")
+            self._client = _aioredis.from_url(url_or_client, decode_responses=False)
             self._owns_client = True
         else:
             self._client = url_or_client
@@ -1136,9 +1143,6 @@ class EventLogWriter:
         return lines
 
     async def _load_file(self, path: str) -> list[BaseEvent]:
-
-        from .events.lifecycle import UnknownEvent
-
         content = await self._store.read(path)
         if not content:
             return []
