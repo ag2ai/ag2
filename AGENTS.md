@@ -2,9 +2,68 @@
 
 ## Common rules
 
-- Never use `from __future__ import annotations`.
-- All imports must be at the top of the test file. Never place imports inside individual functions until user asks for it.
-- Never create global objects. Do not use any functions in global scope.
+- Do not use `from __future__ import annotations`.
+- Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
+- For filesystem paths, use `pathlib.Path` internally. Public signatures should accept `str | os.PathLike[str]`.
+- Top-level imports from `autogen.beta.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
+  Good: `autogen.beta.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
+  Bad: `autogen.beta.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
+- Do not use function-level imports unless the user explicitly allows it.
+  ```python
+  # === BAD - import inside function ===
+  def execute_tool():
+      from .tool import Tool
+      ...
+
+  # === GOOD - top-level import ===
+  from .tool import Tool
+
+  def execute_tool():
+      ...
+  ```
+- Do not create nested functions inside runtime execution paths.
+  ```python
+  # === BAD - function will be created each call ===
+  def execute_tool():
+      def _inner_function():
+          pass
+
+      _inner_function()
+
+  # === GOOD - function created once, executed each call ===
+  def execute_tool():
+      _inner_function()
+
+  def _inner_function():
+      pass
+
+  # === GOOD - decorator executed import time, so we can use closure functions here ===
+  def decorator(func):
+      def wrapper():
+          return func()
+      return wrapper
+  ```
+- Do not perform side effects in initialization methods. Apply side effects only at runtime.
+  ```python
+  # === BAD - create directory in initial method ===
+  class KnowledgeStore:
+      def __init__(self, path: str | os.PathLike[str]) -> None:
+          self.path = Path(path)
+          # side effect - directory creation
+          self.path.parent.mkdir(parents=True, exist_ok=True)
+
+      def run(self) -> None:
+          ...
+
+  # === GOOD - create directory in runtime method ===
+  class KnowledgeStore:
+      def __init__(self, path: str | os.PathLike[str]) -> None:
+          self.path = Path(path)
+
+      def run(self) -> None:
+          self.path.parent.mkdir(parents=True, exist_ok=True)
+          ...
+  ```
 
 ## Package Structure
 
