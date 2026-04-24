@@ -59,7 +59,7 @@ class TestBaseObserver:
             assert obs.process_count == 1
             assert len(signals) == 1
             assert signals[0].source == "test-observer"
-            assert signals[0].severity == Severity.WARNING
+            assert signals[0].severity is Severity.WARNING
 
     async def test_detach_stops_processing(self) -> None:
         stream = MemoryStream()

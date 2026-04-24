@@ -44,7 +44,7 @@ class TestTokenMonitor:
         await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
 
         assert len(signals) == 1
-        assert signals[0].severity == Severity.WARNING
+        assert signals[0].severity is Severity.WARNING
         assert "token-monitor" in signals[0].source
 
     async def test_critical_at_threshold(self) -> None:
@@ -62,7 +62,7 @@ class TestTokenMonitor:
 
         # Should emit CRITICAL (not WARNING since critical is checked first)
         assert len(signals) == 1
-        assert signals[0].severity == Severity.CRITICAL
+        assert signals[0].severity is Severity.CRITICAL
 
     async def test_reset_clears_counter_and_allows_rewarning(self) -> None:
         stream = MemoryStream()
@@ -135,7 +135,7 @@ class TestTokenMonitor:
         )
 
         assert len(signals) == 1
-        assert signals[0].severity == Severity.WARNING
+        assert signals[0].severity is Severity.WARNING
 
     async def test_cumulative_across_model_and_task(self) -> None:
         """Tokens from ModelResponse and TaskCompleted accumulate together."""
@@ -163,7 +163,7 @@ class TestTokenMonitor:
 
         assert monitor.total_tokens == 110
         assert len(signals) == 1
-        assert signals[0].severity == Severity.WARNING
+        assert signals[0].severity is Severity.WARNING
 
     async def test_empty_usage_ignored(self) -> None:
         """Events with no usage data should not affect counters."""
@@ -239,7 +239,7 @@ class TestLoopDetector:
             await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
 
         assert len(signals) == 1
-        assert signals[0].severity == Severity.WARNING
+        assert signals[0].severity is Severity.WARNING
         assert "loop" in signals[0].message.lower()
 
     async def test_different_calls_no_signal(self) -> None:
