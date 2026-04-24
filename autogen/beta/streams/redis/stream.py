@@ -68,8 +68,8 @@ class RedisStream(MemoryStream):
         self._listener_ready = asyncio.Event()
         self._pubsub_redis = aioredis.from_url(redis_url)
         self._publish_redis = aioredis.from_url(redis_url)
-        # Captured from the first send() call so the listener can provide
-        # a context with proper dependency_provider and dependencies to
+        # Captured on first send() call so the listener can provide
+        # proper dependency_provider context and dependencies to
         # subscribers processing events from remote instances.
         self._base_context: Context | None = None
 
@@ -119,8 +119,6 @@ class RedisStream(MemoryStream):
         """Persist the event, dispatch locally, and publish to Redis for remote listeners."""
         self._ensure_listener()
         await self._listener_ready.wait()
-        # Capture the first caller's context so the listener can reuse its
-        # dependency_provider and dependencies for remotely-received events.
         if self._base_context is None:
             self._base_context = context
         # Persist once — only the sender writes to history
