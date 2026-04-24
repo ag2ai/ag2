@@ -15,6 +15,7 @@ from .events import (
     TextInput,
     VideoInput,
 )
+from .files import FilesAPI
 from .middleware import Middleware
 from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
@@ -32,6 +33,7 @@ __all__ = (
     "DataInput",
     "Depends",
     "DocumentInput",
+    "FilesAPI",
     "ImageInput",
     "Inject",
     "MemoryStream",

@@ -9,17 +9,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
+
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
-
-try:
-    from watchdog.observers import Observer as _WatchdogObserver  # type: ignore[import-not-found]
-    from watchdog.observers.polling import PollingObserver as _WatchdogPollingObserver  # type: ignore[import-not-found]
-
-    _WATCHDOG_AVAILABLE = True
-except ImportError:
-    _WatchdogObserver = None  # type: ignore[assignment,misc]
-    _WatchdogPollingObserver = None  # type: ignore[assignment,misc]
-    _WATCHDOG_AVAILABLE = False
 
 
 class _DiskChangeHandler:
@@ -223,8 +216,6 @@ class DiskKnowledgeStore:
         backend cannot be initialized, and to :class:`NoopChangeSubscription`
         if ``watchdog`` is not installed at all.
         """
-        if not _WATCHDOG_AVAILABLE:
-            return NoopChangeSubscription()
 
         virtual_path = _normalize(path)
         physical_target = self._resolve(virtual_path)
@@ -244,11 +235,11 @@ class DiskKnowledgeStore:
 
         observer: Any
         try:
-            observer = _WatchdogObserver()
+            observer = Observer()
             observer.schedule(handler, str(physical_target), recursive=True)
             observer.start()
         except Exception:
-            observer = _WatchdogPollingObserver()
+            observer = PollingObserver()
             observer.schedule(handler, str(physical_target), recursive=True)
             observer.start()
 

@@ -23,6 +23,7 @@ from autogen.beta.events import (
     Usage,
 )
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -215,24 +216,29 @@ def _file_id_block_type(filename: str | None) -> str:
     return "document"
 
 
+def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
+    """True if any message (user turn or tool result) references a file_id.
+
+    Used by the client to auto-inject the `files-api-2025-04-14` beta header.
+    """
+    for msg in messages:
+        if isinstance(msg, ModelRequest):
+            if any(isinstance(p, FileIdInput) for p in msg.parts):
+                return True
+        elif isinstance(msg, ToolResultsEvent):
+            for r in msg.results:
+                if any(isinstance(p, FileIdInput) for p in r.result.parts):
+                    return True
+    return False
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
-    event_list = list(messages)
-
-    # Collect all tool_use IDs present in the conversation so we can
-    # drop orphaned tool_result blocks whose matching tool_use was
-    # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
-    valid_tool_ids: set[str] = set()
-    for message in event_list:
-        if isinstance(message, ModelResponse):
-            for call in message.tool_calls.calls:
-                valid_tool_ids.add(call.id)
-
     result: list[dict[str, Any]] = []
 
-    for message in event_list:
+    for message in messages:
         if isinstance(message, ModelResponse):
             content: list[dict[str, Any]] = []
             if message.message:
@@ -250,24 +256,53 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             tool_results = []
             for r in message.results:
-                if r.parent_id not in valid_tool_ids:
-                    continue
                 parts: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):
                         parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    elif isinstance(part, BinaryInput):
+                        if part.kind is BinaryType.IMAGE:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        elif part.kind is BinaryType.DOCUMENT:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "document",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        else:
+                            raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, UrlInput):
+                        if part.kind is BinaryType.IMAGE:
+                            parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
+                        elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                            parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
+                        else:
+                            raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, FileIdInput):
+                        block_type = _file_id_block_type(part.filename)
+                        parts.append({
+                            "type": block_type,
+                            "source": {"type": "file", "file_id": part.file_id},
+                        })
                     else:
                         raise UnsupportedInputError(type(part).__name__, "anthropic")
-                tool_content: str | list[dict[str, Any]] = parts[0]["text"] if len(parts) == 1 else parts
+
+                if len(parts) == 1 and (part := parts[0])["type"] == "text":
+                    tool_content: str | list[dict[str, Any]] = part["text"]
+                else:
+                    tool_content = parts
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": r.parent_id,
                     "content": tool_content,
                 })
-            if tool_results:
-                result.append({"role": "user", "content": tool_results})
+            result.append({"role": "user", "content": tool_results})
 
         elif isinstance(message, ModelRequest):
             content_parts: list[dict[str, Any]] = []
@@ -279,6 +314,12 @@ def convert_messages(
                     content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
+                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
+                            "anthropic",
+                        )
+
                     block_type = _file_id_block_type(inp.filename)
                     content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
 
@@ -319,7 +360,11 @@ def convert_messages(
                     raise UnsupportedInputError(type(inp).__name__, "anthropic")
 
             if content_parts:
-                result.append({"role": "user", "content": content_parts})
+                if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
+                    content: str | list[dict[str, Any]] = part["text"]
+                else:
+                    content = content_parts
+                result.append({"role": "user", "content": content})
 
     return result
 

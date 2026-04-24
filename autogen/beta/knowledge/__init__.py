@@ -14,6 +14,8 @@ Filesystem semantics are used because:
 3. Any backend (memory, disk, S3, Redis) can implement path-based key-value
 """
 
+from autogen.beta.exceptions import missing_optional_dependency
+
 from .base import (
     ChangeCallback,
     ChangeSubscription,
@@ -21,12 +23,16 @@ from .base import (
     NoopChangeSubscription,
 )
 from .bootstrap import DefaultBootstrap, StoreBootstrap
-from .disk import DiskKnowledgeStore
 from .locked import LockedKnowledgeStore
 from .log import EventLogWriter
 from .memory import MemoryKnowledgeStore
 from .redis import RedisKnowledgeStore
 from .sqlite import SqliteKnowledgeStore
+
+try:
+    from .disk import DiskKnowledgeStore
+except ImportError as e:
+    DiskKnowledgeStore = missing_optional_dependency("DiskKnowledgeStore", "watchdog", e)  # type: ignore[misc]
 
 __all__ = [
     "ChangeCallback",

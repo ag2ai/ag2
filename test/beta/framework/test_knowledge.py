@@ -12,6 +12,8 @@ from uuid import uuid4
 
 import pytest
 
+pytest.importorskip("watchdog")
+
 from autogen.beta.events import ModelRequest, TaskCompleted, TextInput, UnknownEvent
 from autogen.beta.knowledge import (
     DefaultBootstrap,
