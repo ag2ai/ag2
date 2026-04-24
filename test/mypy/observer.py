@@ -24,7 +24,7 @@ async def check_any_event_observer() -> None:
     def on_response(event: ModelResponse) -> None:
         pass
 
-    Agent(
+    Actor(
         "test",
         config=TestConfig(),
         observers=[on_response],
@@ -68,7 +68,7 @@ async def check_agent_observer_decorator() -> None:
 
 
 async def check_any_event_agent_observer_decorator() -> None:
-    agent = Agent("test", config=TestConfig())
+    agent = Actor("test", config=TestConfig())
 
     @agent.observer()
     def on_response(event: ModelResponse) -> None:
