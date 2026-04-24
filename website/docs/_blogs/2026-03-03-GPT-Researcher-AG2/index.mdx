@@ -1,12 +1,7 @@
 ---
 title: "Deep Web Research with AG2 and GPT Researcher"
 authors: [marklysze]
-tags:
-    - Research
-    - Multi-Agent
-    - GPT Researcher
-    - Tools
-    - AG-UI
+tags: [Research, Multi-Agent, GPT Researcher, Tools, AG-UI]
 date: 2026-03-03
 slug: GPT-Researcher-AG2
 ---
@@ -27,7 +22,7 @@ This post walks through the [build-with-ag2](https://github.com/ag2ai/build-with
 
 ![Research pipeline — eight agents in two rows with HITL feedback loop](img/pipeline.webp)
 
-The example uses AG2's `DefaultPattern` to run eight agents in sequence. Each is a separate `ConversableAgent` with its own system message and dedicated tool function. When a tool returns, it explicitly hands off to the next agent via `AgentNameTarget` -- the same pattern described in AG2's [pipeline cookbook](https://docs.ag2.ai/latest/docs/user-guide/agentchat/group-chat/sequential-chats):
+The example uses AG2's `DefaultPattern` to run eight agents in sequence. Each is a separate `ConversableAgent` with its own system message and dedicated tool function. When a tool returns, it explicitly hands off to the next agent via `AgentNameTarget` -- the same pattern described in AG2's [pipeline cookbook](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/pattern-cookbook/pipeline):
 
 1. **Chief Editor** (`init_research`) — receives the query, creates a `GPTResearcher` instance
 2. **Editor** (`plan_sections`) — outlines 3-5 report sections

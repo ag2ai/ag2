@@ -1,0 +1,15 @@
+**REQUIRED PROPERTIES:** You MUST include ALL required properties for every component, even if they are inside a template or will be bound to data.
+- For 'Text', you MUST provide 'text'. If dynamic, use { "path": "..." }.
+- For 'Image', you MUST provide 'url'. If dynamic, use { "path": "..." }.
+- For 'Button', you MUST provide 'child' (a ComponentId referencing a Text component for the label) and 'action'. Do NOT use 'text' or 'label' directly on Button.
+- For 'TextField', 'CheckBox', etc., you MUST provide 'label'.
+- For 'Card', you MUST provide 'child' (a single ComponentId). To show multiple elements, wrap them in a Column/Row and pass that container's ID.
+
+**ACTION FORMAT:** Button actions MUST use one of these exact formats:
+- Server event: {"event": {"name": "actionName", "context": {...}}}
+- Client function: {"functionCall": {"name": "funcName", "args": {...}}}
+Do NOT use {"type": "..."} or any other format for actions.
+
+**COMPONENT REFERENCES:** Components are referenced by string IDs, NOT inline objects.
+- Layout components (Column, Row) use 'children' (array of IDs): {"id": "col1", "component": "Column", "children": ["a", "b"]}
+- Single-child components (Card, Button) use 'child' (single ID): {"id": "card1", "component": "Card", "child": "col1"}

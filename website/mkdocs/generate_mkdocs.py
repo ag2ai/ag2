@@ -5,6 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 if __name__ == "__main__":
-    from autogen._website.generate_mkdocs import main
+    from _website.generate_mkdocs import main
 
     main()

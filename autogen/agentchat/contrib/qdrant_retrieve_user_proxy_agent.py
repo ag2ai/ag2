@@ -8,6 +8,8 @@ import warnings
 from collections.abc import Callable
 from typing import Any, Literal, Optional
 
+from typing_extensions import deprecated
+
 from ...import_utils import optional_import_block, require_optional_import
 from ...retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
 from ..contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
@@ -25,6 +27,10 @@ with optional_import_block():
     from qdrant_client.fastembed_common import QueryResponse
 
 
+@deprecated(
+    "QdrantRetrieveUserProxyAgent is deprecated and will be removed in v0.14. "
+    "Please use RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`."
+)
 @require_optional_import(["fastembed", "qdrant_client"], "retrievechat-qdrant")
 class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
     def __init__(
@@ -100,7 +106,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
 
         """
         warnings.warn(
-            "The QdrantRetrieveUserProxyAgent is deprecated. Please use the RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`.",
+            "QdrantRetrieveUserProxyAgent is deprecated and will be removed in v0.14. Please use RetrieveUserProxyAgent instead, set `vector_db` to `qdrant`.",
             DeprecationWarning,
             stacklevel=2,
         )

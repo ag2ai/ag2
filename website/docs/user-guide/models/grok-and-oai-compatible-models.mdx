@@ -1,7 +1,7 @@
 ---
 title: Grok API and OpenAI-Compatible Models Guide | Multi-Agent Framework
 sidebarTitle: Grok & OpenAI-API-Compatible
-description: "Step-by-step guide to using the Grok API and other OpenAI-compatible APIs with AG2. Includes configuration, code examples, and setup for any OpenAI-compatible endpoint."
+description: "Configure xAI Grok and other OpenAI-compatible APIs with AG2. Covers available models, function calling, web search, and setup for any OpenAI-compatible endpoint."
 ---
 
 [Grok](https://x.ai/) is a family of AI models developed by xAI. Since Grok follows OpenAI's API specification, it works seamlessly with AG2's existing OpenAI client infrastructure — no extra dependencies needed.
@@ -60,7 +60,7 @@ from autogen import LLMConfig
 # Basic Grok configuration
 llm_config = LLMConfig(
     {
-        "model": "grok-4-1-fast-reasoning",
+        "model": "grok-4-1-fast-non-reasoning",
         "api_type": "openai",  # Grok is OpenAI-compatible
         "base_url": "https://api.x.ai/v1",
         "api_key": os.environ.get("XAI_API_KEY"),
@@ -76,7 +76,7 @@ Grok offers real-time web search (`web_search`) and X/Twitter search (`x_search`
 ```python
 llm_config = LLMConfig(
     {
-        "model": "grok-4-1-fast-reasoning",
+        "model": "grok-4-1-fast-non-reasoning",
         "api_type": "responses",
         "base_url": "https://api.x.ai/v1",
         "api_key": os.environ.get("XAI_API_KEY"),
@@ -104,7 +104,7 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 grok_config = LLMConfig(
     {
-        "model": "grok-4-1-fast-reasoning",
+        "model": "grok-4-1-fast-non-reasoning",
         "api_type": "openai",
         "base_url": "https://api.x.ai/v1",
         "api_key": os.getenv("XAI_API_KEY"),
@@ -148,24 +148,10 @@ import os
 from typing import Annotated
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-def get_weather(city: Annotated[str, "The city name"]) -> str:
-    """Get current weather for a city."""
-    # Mock function - in production, call a real weather API
-    return f"The current weather in {city} is sunny with a temperature of 22°C."
-
-def calculate_math(expression: Annotated[str, "Mathematical expression to evaluate"]) -> str:
-    """Calculate a mathematical expression safely."""
-    try:
-        # Simple evaluation - use a safer parser in production
-        result = eval(expression.replace("^", "**"))
-        return f"The result of {expression} is {result}"
-    except:
-        return f"Could not evaluate the expression: {expression}"
-
 # Configure Grok for function calling
 function_config = LLMConfig(
     {
-        "model": "grok-4-1-fast-reasoning",
+        "model": "grok-4-1-fast-non-reasoning",
         "api_key": os.getenv("XAI_API_KEY"),
         "base_url": "https://api.x.ai/v1",
         "api_type": "openai",
@@ -179,7 +165,6 @@ function_assistant = AssistantAgent(
     name="grok_function_assistant",
     system_message="You are a helpful assistant that can call functions to get weather information and perform calculations. Use the available tools when appropriate.",
     llm_config=function_config,
-    functions=[get_weather, calculate_math],  #  CORRECT: Functions go here
 )
 
 user_proxy = UserProxyAgent(
@@ -188,6 +173,23 @@ user_proxy = UserProxyAgent(
     max_consecutive_auto_reply=3,
     is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
 )
+
+# Define and register functions using the decorator pattern
+@user_proxy.register_for_execution()
+@function_assistant.register_for_llm(description="Get current weather for a city.")
+def get_weather(city: Annotated[str, "The city name"]) -> str:
+    # Mock function - in production, call a real weather API
+    return f"The current weather in {city} is sunny with a temperature of 22 degrees C."
+
+@user_proxy.register_for_execution()
+@function_assistant.register_for_llm(description="Calculate a mathematical expression safely.")
+def calculate_math(expression: Annotated[str, "Mathematical expression to evaluate"]) -> str:
+    try:
+        # Simple evaluation - use a safer parser in production
+        result = eval(expression.replace("^", "**"))
+        return f"The result of {expression} is {result}"
+    except:
+        return f"Could not evaluate the expression: {expression}"
 
 # Test function calling
 user_proxy.initiate_chat(
@@ -208,7 +210,7 @@ You can control how Grok uses functions with the `tool_choice` parameter:
 ```python
 # Automatic function calling (default)
 llm_config = LLMConfig({
-    "model": "grok-4-1-fast-reasoning",
+    "model": "grok-4-1-fast-non-reasoning",
     "api_type": "openai",
     "base_url": "https://api.x.ai/v1",
     "api_key": os.environ.get("XAI_API_KEY"),
@@ -234,7 +236,7 @@ Grok supports calling multiple functions simultaneously, which is enabled by def
 
 ```python
 llm_config = LLMConfig({
-    "model": "grok-4-1-fast-reasoning",
+    "model": "grok-4-1-fast-non-reasoning",
     # ... other config
     "parallel_tool_calls": True,  # Enable parallel function calls (default)
 })
@@ -253,7 +255,7 @@ llm_config = LLMConfig({
 - Use `extra_headers` for custom HTTP headers required by your server (e.g., authentication tokens, routing headers for [VLLM](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-http-headers) or other OpenAI-compatible servers)
 
 ### 3. Function Registration
-- Register functions with `ConversableAgent.functions`, not `LLMConfig.tools`
+- Register functions with `@agent.register_for_llm()` and `@proxy.register_for_execution()` decorators
 - Use type annotations and docstrings for better function calling performance
 - Consider using the decorator pattern for complex registration scenarios
 
@@ -272,7 +274,7 @@ llm_config = LLMConfig({
 
 **TypeError: Object of type function is not JSON serializable**
 - **Cause:** Passing function objects to `LLMConfig.tools`
-- **Solution:** Use `ConversableAgent.functions` instead
+- **Solution:** Use `@agent.register_for_llm()` and `@proxy.register_for_execution()` decorators instead
 
 **Model not found warnings**
 - **Cause:** AG2 doesn't recognize the model name for cost calculation

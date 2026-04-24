@@ -118,12 +118,12 @@ class TestSearxngSearchTool:
         assert len(results) >= 0
 
     @pytest.mark.skip("Integration test - requires live SearxNG instance and credentials")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_agent_integration(self, credentials_openai_mini: Credentials) -> None:
         search_tool = SearxngSearchTool()
         assistant = AssistantAgent(
             name="assistant",
             system_message="You are a helpful assistant. Use the searxng_search tool when needed.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
+            llm_config=credentials_openai_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
         response = assistant.run(

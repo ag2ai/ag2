@@ -2,13 +2,15 @@
 title: Installing AG2
 ---
 
+AG2 is an open-source framework for building AI agents and multi-agent workflows. Let's get it installed.
+
 AG2 is available on PyPI as <a href="https://pypi.org/project/ag2" target="_blank">`ag2`</a>. You can install it using `pip`, the Python package manager.
 
 <Tip>
 We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
 </Tip>
 
-Run the following command to install AG2:
+AG2 requires **Python version >= 3.10, < 3.14**. Run the following command to install AG2:
 
 ```bash
 pip install "ag2[openai]"
@@ -26,9 +28,7 @@ AG2 supports multiple AI model providers through **optional dependency groups**.
 ```bash
 pip install "ag2[openai]"
 pip install "ag2[gemini]"
-pip install "ag2[yepcode]"
 pip install "ag2[anthropic,cohere,mistral]"
-pip install "ag2[yepcode,openai]"
 ```
 
 !!! tip "MacOS Tip"
@@ -39,19 +39,27 @@ pip install "ag2[yepcode,openai]"
     pip install "ag2[openai]"
     ```
 
+### Verify Your Installation
+
+Confirm AG2 is installed correctly:
+
+```bash
+python -c "import autogen; print('AG2', autogen.__version__, 'installed successfully')"
+```
+
+You should see something like `AG2 x.x.x installed successfully` with your installed version number.
+
 ### Upgrading from `autogen` or `ag2`
 
 
-If you’ve been using `autogen` or `ag2`, upgrading is simple — no need to reinstall from scratch. `autogen` and `ag2` are aliases for the same PyPI package.
+If you've been using `autogen` or `ag2`, upgrading is simple — no need to reinstall from scratch. `autogen` and `ag2` are aliases for the same PyPI package.
 
-👉 To upgrade, run:
-
-```bash
-pip install -U "autogen[openai]"
-```
-
-or
+To upgrade, run:
 
 ```bash
 pip install -U "ag2[openai]"
 ```
+
+### Next Step
+
+You're all set! Head to the [Quick Start](/docs/quick-start) to build your first agent in 3 minutes.
