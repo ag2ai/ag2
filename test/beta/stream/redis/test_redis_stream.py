@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 from collections import defaultdict
 from unittest.mock import patch
 from uuid import uuid4
@@ -365,3 +366,25 @@ class TestRedisStream:
         assert len(received_a) == 1
         assert len(received_b) == 1
         assert len(received_c) == 1
+
+    async def test_local_dispatch_survives_listener_failure(self, redis_stream):
+        """Local subscribers keep receiving events after the pub/sub listener dies."""
+        stream = redis_stream()
+        received = []
+        stream.subscribe(lambda ev: received.append(ev))
+        stream._ensure_listener()
+        await stream._listener_ready.wait()
+
+        stream._listener_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stream._listener_task
+        dead_task = stream._listener_task
+        # Block auto-restart so the next send() must rely on local dispatch.
+        stream._ensure_listener = lambda: None
+
+        await stream.send(ToolCallEvent(name="post_crash", arguments=""), context=Context(stream))
+        await asyncio.sleep(0.05)
+
+        assert len(received) == 1
+        assert received[0].name == "post_crash"
+        assert stream._listener_task is dead_task and dead_task.done()
