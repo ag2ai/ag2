@@ -388,7 +388,7 @@ dev = [
     "ag2[lint,test,types,docs]",
     "prek==0.3.8",
     "detect-secrets==1.5.0",
-    "uv==0.8.15",
+    "uv==0.11.6",
 ]
 
 [dependency-groups]
