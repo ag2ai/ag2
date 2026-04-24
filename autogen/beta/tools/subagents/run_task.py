@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import HumanInputRequest
+from autogen.beta.events import HumanInputRequest, Usage
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
@@ -21,6 +21,7 @@ class TaskResult:
     result: str | None
     completed: bool
     stream: "Stream"
+    usage: Usage
     error: Exception | None = None
 
 
@@ -74,6 +75,7 @@ async def run_task(
             result=reply.body,
             completed=True,
             stream=task_stream,
+            usage=reply.response.usage,
         )
 
     except Exception as e:
@@ -83,6 +85,7 @@ async def run_task(
             completed=False,
             stream=task_stream,
             error=e,
+            usage=Usage(),
         )
 
     finally:

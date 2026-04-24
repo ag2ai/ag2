@@ -67,6 +67,7 @@ def subagent_tool(
                     objective=objective,
                     result=result.result,
                     task_stream=result.stream.id,
+                    usage=result.usage,
                 )
             )
 

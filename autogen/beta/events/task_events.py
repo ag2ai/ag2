@@ -6,6 +6,7 @@ import traceback
 from typing import TYPE_CHECKING
 
 from .base import BaseEvent, Field
+from .types import Usage
 
 if TYPE_CHECKING:
     from autogen.beta.context import StreamId
@@ -35,7 +36,7 @@ class TaskProgress(TaskEvent):
 class TaskCompleted(TaskEvent):
     result: str | None
     task_stream: "StreamId"  # Stream reference for inspection
-    usage: dict = Field(default_factory=dict)
+    usage: Usage = Field(default_factory=Usage)
 
 
 class TaskFailed(TaskEvent):

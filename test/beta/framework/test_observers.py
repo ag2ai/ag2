@@ -85,8 +85,8 @@ class TestTokenMonitor:
         await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
         assert len(signals) == 2
 
-    async def test_task_completed_usage_dict(self) -> None:
-        """TaskCompleted carries usage as a plain dict — monitor must handle it."""
+    async def test_task_completed_usage(self) -> None:
+        """TaskCompleted carries a Usage object — monitor must handle it."""
         stream = MemoryStream()
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
@@ -103,7 +103,7 @@ class TestTokenMonitor:
                 objective="x",
                 result="done",
                 task_stream=stream.id,
-                usage={"total_tokens": 60},
+                usage=Usage(total_tokens=60),
             ),
             ctx,
         )
@@ -129,7 +129,7 @@ class TestTokenMonitor:
                 objective="x",
                 result="done",
                 task_stream=stream.id,
-                usage={"total_tokens": 120},
+                usage=Usage(total_tokens=120),
             ),
             ctx,
         )
@@ -156,7 +156,7 @@ class TestTokenMonitor:
                 objective="x",
                 result="done",
                 task_stream=stream.id,
-                usage={"total_tokens": 50},
+                usage=Usage(total_tokens=50),
             ),
             ctx,
         )
@@ -175,7 +175,7 @@ class TestTokenMonitor:
 
         # ModelResponse with default (empty) Usage
         await stream.send(ModelResponse(), ctx)
-        # TaskCompleted with default empty usage dict
+        # TaskCompleted with default empty Usage
         await stream.send(
             TaskCompleted(
                 task_id="t1",
