@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Get User Permission
         id: checkAccess
-        uses: actions-cool/check-user-permission@v2
+        uses: actions-cool/check-user-permission@c21884f3dda18dafc2f8b402fe807ccc9ec1aa5e # v2.4.0
         with:
           require: write
           username: ${{ github.triggering_actor }}
@@ -41,20 +41,23 @@ jobs:
       - name: Check User Permission
         if: steps.checkAccess.outputs.require-result == 'false'
         run: |
-          echo "${{ github.triggering_actor }} does not have permissions on this repo."
-          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
-          echo "Job originally triggered by ${{ github.actor }}"
+          echo "${GITHUB_TRIGGERING_ACTOR} does not have permissions on this repo."
+          echo "Current permission level is ${STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION}"
+          echo "Job originally triggered by ${GITHUB_ACTOR}"
           exit 1
+        env:
+          STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION: ${{ steps.checkAccess.outputs.user-permission }}
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v6
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
@@ -73,7 +76,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -90,7 +93,7 @@ jobs:
     steps:
       - name: Get User Permission
         id: checkAccess
-        uses: actions-cool/check-user-permission@v2
+        uses: actions-cool/check-user-permission@c21884f3dda18dafc2f8b402fe807ccc9ec1aa5e # v2.4.0
         with:
           require: write
           username: ${{ github.triggering_actor }}
@@ -99,20 +102,23 @@ jobs:
       - name: Check User Permission
         if: steps.checkAccess.outputs.require-result == 'false'
         run: |
-          echo "${{ github.triggering_actor }} does not have permissions on this repo."
-          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
-          echo "Job originally triggered by ${{ github.actor }}"
+          echo "${GITHUB_TRIGGERING_ACTOR} does not have permissions on this repo."
+          echo "Current permission level is ${STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION}"
+          echo "Job originally triggered by ${GITHUB_ACTOR}"
           exit 1
+        env:
+          STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION: ${{ steps.checkAccess.outputs.user-permission }}
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v6
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
@@ -137,7 +143,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: autobuild, captainagent, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -154,7 +160,7 @@ jobs:
     steps:
       - name: Get User Permission
         id: checkAccess
-        uses: actions-cool/check-user-permission@v2
+        uses: actions-cool/check-user-permission@c21884f3dda18dafc2f8b402fe807ccc9ec1aa5e # v2.4.0
         with:
           require: write
           username: ${{ github.triggering_actor }}
@@ -163,20 +169,23 @@ jobs:
       - name: Check User Permission
         if: steps.checkAccess.outputs.require-result == 'false'
         run: |
-          echo "${{ github.triggering_actor }} does not have permissions on this repo."
-          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
-          echo "Job originally triggered by ${{ github.actor }}"
+          echo "${GITHUB_TRIGGERING_ACTOR} does not have permissions on this repo."
+          echo "Current permission level is ${STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION}"
+          echo "Job originally triggered by ${GITHUB_ACTOR}"
           exit 1
+        env:
+          STEPS_CHECKACCESS_OUTPUTS_USER_PERMISSION: ${{ steps.checkAccess.outputs.user-permission }}
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v6
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
@@ -192,7 +201,7 @@ jobs:
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./coverage.xml
           flags: lmm, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -218,7 +227,7 @@ jobs:
 
     steps:
       - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1 # nosemgrep
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
         with:
           # allowed-failures: docs, linters
           # allowed-skips: non-voting-flaky-job

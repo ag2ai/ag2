@@ -7,18 +7,18 @@ https://github.com/squidfunk/mkdocs-material/blob/master/src/templates/assets/st
 @import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap');
 
 :root {
-    --md-primary-fg-color: #4b9cd6;
+    --md-primary-fg-color: #2b6cb0;
     --md-primary-bg-color: #FFF;
-    --md-primary-fg-color--light: #4b9cd6;
-    --md-primary-fg-color--dark: #4b9cd6;
+    --md-primary-fg-color--light: #2b6cb0;
+    --md-primary-fg-color--dark: #2b6cb0;
     --md-primary-text-color--light: #000000;
     --md-primary-text-color--dark: #FFF;
 }
 
 [data-md-color-accent=indigo] {
-    --md-accent-fg-color: #4b9cd6;
-    --md-accent-fg-color--transparent: #4b9cd61A;
-    --md-typeset-a-color: #4b9cd6;
+    --md-accent-fg-color: #2b6cb0;
+    --md-accent-fg-color--transparent: #2b6cb01A;
+    --md-typeset-a-color: #2b6cb0;
 }
 
 [data-md-color-scheme=slate] {
@@ -529,7 +529,7 @@ p.hero-subtitle {
 }
 
 .examples-gallery-container .card-description {
-    color: #727272;
+    color: #595959;
     display: -webkit-box;
     line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -576,7 +576,7 @@ p.hero-subtitle {
     padding: 0 12px;
     border-radius: 12px;
     font-size: 0.7rem;
-    color: #666;
+    color: #595959;
     cursor: pointer;
     transition: background-color 0.2s;
     margin: 0.35rem 0.1rem 0 0;

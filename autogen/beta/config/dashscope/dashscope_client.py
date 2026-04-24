@@ -1,8 +1,6 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-
-from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
@@ -11,9 +9,10 @@ from typing import Any, TypedDict
 
 import dashscope
 from dashscope.aigc.generation import AioGeneration
+from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -22,6 +21,7 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
@@ -59,17 +59,18 @@ class DashScopeClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
         else:
             prompt = context.prompt
 
-        ds_messages = convert_messages(prompt, messages)
+        ds_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
         kwargs: dict[str, Any] = {
@@ -94,7 +95,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         response = await AioGeneration.call(
             model=self._model,
@@ -112,11 +113,11 @@ class DashScopeClient(LLMClient):
         # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
         # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
-            await context.send(ModelReasoning(content=reasoning))
+            await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
         if content := msg.get("content"):
-            model_msg = ModelMessage(content=content)
+            model_msg = ModelMessage(content)
             await context.send(model_msg)
 
         calls = []
@@ -130,17 +131,17 @@ class DashScopeClient(LLMClient):
                 )
             )
 
-        usage = response.usage or {}
-        usage_dict = {
-            "prompt_tokens": usage.get("input_tokens", 0),
-            "completion_tokens": usage.get("output_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-        }
+        u = response.usage or {}
+        usage = Usage(
+            prompt_tokens=float(u.get("input_tokens", 0)),
+            completion_tokens=float(u.get("output_tokens", 0)),
+            total_tokens=float(u.get("total_tokens", 0)),
+        )
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=self._model,
             provider="dashscope",
             finish_reason=choice.get("finish_reason")
@@ -152,7 +153,7 @@ class DashScopeClient(LLMClient):
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         responses = await AioGeneration.call(
             model=self._model,
@@ -164,7 +165,7 @@ class DashScopeClient(LLMClient):
         )
 
         full_content: str = ""
-        usage_dict: dict[str, Any] = {}
+        usage = Usage()
         calls: list[ToolCallEvent] = []
         finish_reason: str | None = None
 
@@ -173,12 +174,12 @@ class DashScopeClient(LLMClient):
                 raise RuntimeError(f"DashScope error: {chunk.code} - {chunk.message}")
 
             if chunk.usage:
-                usage = chunk.usage
-                usage_dict = {
-                    "prompt_tokens": usage.get("input_tokens", 0),
-                    "completion_tokens": usage.get("output_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                }
+                u = chunk.usage
+                usage = Usage(
+                    prompt_tokens=float(u.get("input_tokens", 0)),
+                    completion_tokens=float(u.get("output_tokens", 0)),
+                    total_tokens=float(u.get("total_tokens", 0)),
+                )
 
             for choice in chunk.output.choices:
                 fr = choice.get("finish_reason") if hasattr(choice, "get") else getattr(choice, "finish_reason", None)
@@ -190,11 +191,11 @@ class DashScopeClient(LLMClient):
                 # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
                 # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
                 if rc := msg.get("reasoning_content"):
-                    await context.send(ModelReasoning(content=rc))
+                    await context.send(ModelReasoning(rc))
 
                 if c := msg.get("content"):
                     full_content += c
-                    await context.send(ModelMessageChunk(content=c))
+                    await context.send(ModelMessageChunk(c))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]
@@ -208,13 +209,13 @@ class DashScopeClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
-            usage=usage_dict,
+            tool_calls=ToolCallsEvent(calls),
+            usage=usage,
             model=self._model,
             provider="dashscope",
             finish_reason=finish_reason,

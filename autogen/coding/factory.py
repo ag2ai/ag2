@@ -63,5 +63,15 @@ class CodeExecutorFactory:
 
             return RemyxCodeExecutor(**code_execution_config.get("remyx", {}))
 
+        elif executor == "daytona":
+            try:
+                from .daytona_code_executor import DaytonaCodeExecutor
+            except ImportError as e:
+                raise ImportError(
+                    "Missing dependencies for DaytonaCodeExecutor. Please install with: pip install ag2[daytona]"
+                ) from e
+
+            return DaytonaCodeExecutor(**code_execution_config.get("daytona", {}))
+
         else:
             raise ValueError(f"Unknown code executor {executor}")

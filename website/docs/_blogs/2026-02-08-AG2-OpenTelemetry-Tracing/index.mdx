@@ -298,7 +298,7 @@ conversation chat_manager                 # run_chat (GroupChatManager)
 
 ## Distributed Tracing with A2A
 
-When agents run as separate services using the [A2A (Agent-to-Agent) protocol](https://google.github.io/A2A/), AG2 propagates [W3C Trace Context](https://www.w3.org/TR/trace-context/) headers across HTTP calls so that client-side and server-side spans share a single trace ID.
+When agents run as separate services using the [A2A (Agent-to-Agent) protocol](https://a2a-protocol.org/), AG2 propagates [W3C Trace Context](https://www.w3.org/TR/trace-context/) headers across HTTP calls so that client-side and server-side spans share a single trace ID.
 
 ![A2A Distributed Trace Diagram](img/a2a-trace-diagram.svg)
 

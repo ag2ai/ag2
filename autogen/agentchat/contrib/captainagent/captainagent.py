@@ -117,7 +117,7 @@ Note that the previous experts will forget everything after you obtain the respo
 
 # Some useful instructions
 - You only have one tool called "seek_experts_help".
-- Provide a answer yourself after "seek_experts_help".
+- Provide an answer yourself after "seek_experts_help".
 - You should suggest python code in a python coding block (```python...```). If you need to get the value of a variable, you must use the print statement.
 - When using code, you must indicate the script type in the code block.
 - Do not suggest incomplete code which requires users to modify.
@@ -497,7 +497,8 @@ Collect information from the general task, follow the suggestions from manager t
         # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
-            summary_model.create(
+            summary_model
+            .create(
                 messages=[
                     {
                         "role": "user",

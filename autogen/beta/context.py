@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -24,7 +24,7 @@ SubId: TypeAlias = UUID
 class Stream(Protocol):
     id: StreamId
 
-    async def send(self, event: BaseEvent, context: "Context") -> None: ...
+    async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
     def where(self, condition: ClassInfo | Condition) -> "Stream": ...
 
@@ -71,7 +71,6 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-        condition: Condition | None = None,
     ) -> AbstractContextManager[None]: ...
 
     def get(
@@ -81,19 +80,21 @@ class Stream(Protocol):
 
 
 @dataclass(slots=True)
-class Context:
-    stream: Stream
-    dependency_provider: "Provider | None" = None
+class ConversationContext:
+    stream: Stream = field(repr=False)
+    dependency_provider: "Provider | None" = field(default=None, repr=False)
 
-    prompt: list[str] = field(default_factory=list)
-
-    dependencies: dict[Any, Any] = field(default_factory=dict)
     # store Context Variables as separated serializable field
     variables: dict[str, Any] = field(default_factory=dict)
 
+    dependencies: dict[Any, Any] = field(default_factory=dict)
+
+    prompt: list[str] = field(default_factory=list)
+
     async def input(self, message: str, timeout: float | None = None) -> str:
-        async with self.stream.get(HumanMessage) as response:
-            await self.send(HumanInputRequest(content=message))
+        request_msg = HumanInputRequest(message)
+        async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
+            await self.send(request_msg)
             result: HumanMessage = await asyncio.wait_for(response, timeout)
             return result.content
 
