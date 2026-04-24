@@ -5,10 +5,10 @@
 """TokenMonitor — tracks cumulative token usage and alerts when thresholds are exceeded."""
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse, TaskCompleted
-from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.observer import BaseObserver
+from autogen.beta.events import BaseEvent, ModelResponse, ObserverAlert, Severity, TaskCompleted
 from autogen.beta.watch import EventWatch
+
+from .observer import BaseObserver
 
 
 class TokenMonitor(BaseObserver):

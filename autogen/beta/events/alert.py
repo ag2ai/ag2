@@ -10,7 +10,7 @@ are framework-core concepts used by observers and AlertPolicy.
 
 from enum import Enum
 
-from autogen.beta.events.base import BaseEvent, Field
+from .base import BaseEvent, Field
 
 
 class Severity(str, Enum):

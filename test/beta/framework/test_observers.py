@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelResponse, ObserverAlert, Severity, TaskCompleted, ToolCallEvent, Usage
-from autogen.beta.observers import LoopDetector, TokenMonitor
+from autogen.beta.observer import LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 
 

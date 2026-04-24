@@ -10,13 +10,17 @@ from urllib.parse import urlparse
 from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import (
+from autogen.beta.events import (
+    BaseEvent,
     BinaryInput,
     DataInput,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolResultsEvent,
     UrlInput,
+    Usage,
 )
-from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema

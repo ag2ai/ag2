@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 
 from autogen.beta import Agent, MemoryStream
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
-from autogen.beta.events.types import ModelResponse
+from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalShellTool
 from autogen.beta.tools.shell import LocalShellEnvironment

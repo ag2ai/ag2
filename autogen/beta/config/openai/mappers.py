@@ -21,8 +21,8 @@ from autogen.beta.events import (
     TextInput,
     ToolResultsEvent,
     UrlInput,
+    Usage,
 )
-from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema

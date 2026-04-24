@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.events.tool_events import ToolResult
+from autogen.beta.events import ToolResult
 
 from .builtin import (
     CodeExecutionTool,

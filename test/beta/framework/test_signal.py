@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.events import HaltEvent, ObserverAlert, Severity
 
 
 class TestObserverAlertCreation:

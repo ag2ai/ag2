@@ -36,7 +36,7 @@ from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
-from autogen.beta.events.input_events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
+from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer

@@ -7,10 +7,10 @@
 from collections import deque
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ToolCallEvent
-from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.observer import BaseObserver
+from autogen.beta.events import BaseEvent, ObserverAlert, Severity, ToolCallEvent
 from autogen.beta.watch import EventWatch
+
+from .observer import BaseObserver
 
 
 class LoopDetector(BaseObserver):

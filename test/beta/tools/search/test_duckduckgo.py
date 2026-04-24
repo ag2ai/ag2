@@ -12,8 +12,7 @@ pytest.importorskip("ddgs")
 final_reply: str = "done"
 from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from autogen.beta.events.types import ModelResponse
+from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.duckduckgo import DuckDuckSearchTool, SearchResponse, SearchResult
 

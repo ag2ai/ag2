@@ -15,8 +15,9 @@ from autogen.beta.events import (
     ImageInput,
     ModelRequest,
     ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
-from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
 
 

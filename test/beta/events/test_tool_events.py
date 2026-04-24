@@ -5,7 +5,7 @@
 import json
 from unittest.mock import patch
 
-from autogen.beta.events.tool_events import (
+from autogen.beta.events import (
     ClientToolCallEvent,
     ToolCallEvent,
     ToolErrorEvent,

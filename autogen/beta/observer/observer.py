@@ -28,13 +28,11 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any, Protocol, overload, runtime_checkable
 
+from autogen.beta.annotations import Context
+from autogen.beta.events import BaseEvent, ObserverAlert
+from autogen.beta.events.conditions import Condition, TypeCondition
 from autogen.beta.types import ClassInfo
-
-from .annotations import Context
-from .events import BaseEvent
-from .events.alert import ObserverAlert
-from .events.conditions import Condition, TypeCondition
-from .watch import Watch
+from autogen.beta.watch import Watch
 
 __all__ = (
     "BaseObserver",
@@ -52,8 +50,8 @@ class Observer(Protocol):
 
 
 @dataclass(slots=True, kw_only=True)
-class StreamObserver:
-    """Lightweight ``condition → callback`` stream subscription.
+class SimpleObserver:
+    """Lightweight ``callback`` stream subscription.
 
     Produced by :func:`observer`. Enters a ``sub_scope`` on the filtered
     stream; the ``ExitStack`` cleans up the subscription when the actor
@@ -62,14 +60,34 @@ class StreamObserver:
     """
 
     callback: Callable[..., Any]
-    condition: Condition | None = None
     interrupt: bool = False
     sync_to_thread: bool = True
 
     def register(self, stack: ExitStack, context: Context) -> None:
-        stream = context.stream.where(self.condition) if self.condition is not None else context.stream
         stack.enter_context(
-            stream.sub_scope(
+            context.stream.sub_scope(
+                self.callback,
+                interrupt=self.interrupt,
+                sync_to_thread=self.sync_to_thread,
+            )
+        )
+
+
+@dataclass(slots=True, kw_only=True)
+class StreamObserver(SimpleObserver):
+    """Lightweight ``condition → callback`` stream subscription.
+
+    Produced by :func:`observer`. Enters a ``sub_scope`` on the filtered
+    stream; the ``ExitStack`` cleans up the subscription when the actor
+    finishes. When ``condition`` is ``None`` the observer fires on every
+    event.
+    """
+
+    condition: Condition
+
+    def register(self, stack: ExitStack, context: Context) -> None:
+        stack.enter_context(
+            context.stream.where(self.condition).sub_scope(
                 self.callback,
                 interrupt=self.interrupt,
                 sync_to_thread=self.sync_to_thread,
@@ -158,6 +176,12 @@ def observer(
         cond = TypeCondition(condition)
 
     def decorator(func: Callable[..., Any]) -> StreamObserver:
+        if cond is None:
+            return SimpleObserver(
+                callback=func,
+                interrupt=interrupt,
+                sync_to_thread=sync_to_thread,
+            )
         return StreamObserver(
             condition=cond,
             callback=func,

@@ -95,12 +95,12 @@ Top-level modules:
 - `autogen.beta.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
 - `autogen.beta.testing` - Testing utilities
 - `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
-- `autogen.beta.observers` - Reusable observer implementations
+- `autogen.beta.observer` - Reusable observer implementations
 
 Advanced modules:
 - `autogen.beta.events` - Event types for the agent loop
 - `autogen.beta.streams` - Persistent stream backends (e.g. Redis)
-- `autogen.beta.watch` - Structured output validation
+- `autogen.beta.watch` - Watch system for triggering observers
 - `autogen.beta.knowledge` - Knowledge management
 
 ### Re-export rules

@@ -17,13 +17,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
-_logger = logging.getLogger(__name__)
-
 from autogen.beta.annotations import Context
 from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.context import Stream, SubId
 from autogen.beta.events import BaseEvent
-from autogen.beta.events.conditions import ClassInfo, Condition, TypeCondition
+from autogen.beta.events.conditions import Condition, TypeCondition
+from autogen.beta.types import ClassInfo
+
+logger = logging.getLogger(__name__)
 
 WatchCallback = Callable[[list[BaseEvent], Context], Awaitable[None]]
 
@@ -212,7 +213,7 @@ class IntervalWatch(_BaseWatch):
                     ctx = ContextType(stream=stream)
                     await self._callback([], ctx)
                 except Exception:
-                    _logger.exception("IntervalWatch %s callback failed", self._id)
+                    logger.exception("IntervalWatch %s callback failed", self._id)
 
     def disarm(self) -> None:
         if self._task is not None:
@@ -246,7 +247,7 @@ class DelayWatch(_BaseWatch):
             ctx = ContextType(stream=stream)
             await callback([], ctx)
         except Exception:
-            _logger.exception("DelayWatch %s callback failed", self._id)
+            logger.exception("DelayWatch %s callback failed", self._id)
         finally:
             # Auto-disarm after firing once (or on error)
             self.disarm()
@@ -471,7 +472,7 @@ class CronWatch(_BaseWatch):
                     ctx = ContextType(stream=stream)
                     await self._callback([], ctx)
                 except Exception:
-                    _logger.exception("CronWatch %s callback failed", self._id)
+                    logger.exception("CronWatch %s callback failed", self._id)
 
     def _next_fire_time(self, now: Any) -> Any:
         """Calculate next fire time from cron expression.

@@ -20,7 +20,7 @@ import pytest
 from autogen.beta import tool
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, Usage
 from autogen.beta.events._serialization import import_event_class
-from autogen.beta.observers import TokenMonitor
+from autogen.beta.observer import TokenMonitor
 
 
 class Outer:

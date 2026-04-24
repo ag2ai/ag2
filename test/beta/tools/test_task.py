@@ -7,9 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Agent, Context, MemoryStream, tool
-from autogen.beta.annotations import Context as Ctx
-from autogen.beta.annotations import Variable
+from autogen.beta import Agent, Context, MemoryStream, Variable, tool
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,
@@ -17,11 +15,12 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TaskCompleted,
+    TaskFailed,
     TaskStarted,
+    ToolCallEvent,
+    ToolCallsEvent,
     ToolResultsEvent,
 )
-from autogen.beta.events.task_events import TaskFailed
-from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.subagents import depth_limiter, subagent_tool
 from autogen.beta.tools.subagents.run_task import run_task
@@ -100,7 +99,7 @@ class TestRunTask:
         """Dependencies are passed through to the agent."""
 
         @tool
-        def get_db_name(ctx: Ctx) -> str:
+        def get_db_name(ctx: Context) -> str:
             """Get the database name from dependencies."""
             return ctx.dependencies.get("db_name", "unknown")
 
@@ -482,7 +481,7 @@ class TestVariablesPropagation:
     @pytest.mark.asyncio
     async def test_propagates_variables(self, mock: MagicMock) -> None:
         @tool
-        def read_var(secret: Annotated[str, Variable("secret")], ctx: Ctx) -> str:
+        def read_var(secret: Annotated[str, Variable("secret")], ctx: Context) -> str:
             """Read a variable from context."""
             mock(secret)
             return ctx.variables["secret"]
@@ -513,7 +512,7 @@ class TestVariablesPropagation:
         because run_task syncs variables back after completion."""
 
         @tool
-        def mutate_var(ctx: Ctx) -> str:
+        def mutate_var(ctx: Context) -> str:
             """Add a new variable and update an existing one."""
             ctx.variables["new_key"] = "new_value"
             ctx.variables["counter"] = ctx.variables["counter"] + 1
@@ -684,7 +683,7 @@ class TestHitlPropagation:
         worker = Agent("worker", config=worker_config)
 
         @worker.tool
-        async def ask_human(ctx: Ctx) -> str:
+        async def ask_human(ctx: Context) -> str:
             """Tool that asks for human input."""
             answer = await ctx.input("Need approval", timeout=1.0)
             mock.tool_got(answer)
@@ -721,7 +720,7 @@ class TestHitlPropagation:
         worker = Agent("worker", config=worker_config)
 
         @worker.tool
-        async def ask_human(ctx: Ctx) -> str:
+        async def ask_human(ctx: Context) -> str:
             """Tool that asks for human input."""
             answer = await ctx.input("Need approval", timeout=1.0)
             mock.tool_got(answer)

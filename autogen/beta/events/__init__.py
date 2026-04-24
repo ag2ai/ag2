@@ -35,6 +35,7 @@ from .tool_events import (
     ToolCallsEvent,
     ToolErrorEvent,
     ToolNotFoundEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
 )
@@ -88,6 +89,7 @@ __all__ = (
     "ToolCallsEvent",
     "ToolErrorEvent",
     "ToolNotFoundEvent",
+    "ToolResult",
     "ToolResultEvent",
     "ToolResultsEvent",
     "UnknownEvent",
