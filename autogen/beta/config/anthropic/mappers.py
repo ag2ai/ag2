@@ -287,8 +287,18 @@ def convert_messages(
     result: list[dict[str, Any]] = []
     # Track tool_use_ids we've emitted tool_result blocks for, so the
     # individual-ToolResultEvent fallback below doesn't double-emit when
-    # both the wrapper and the leaves are present.
+    # both the wrapper and the leaves are present. Pre-populate from any
+    # ToolResultsEvent wrappers we'll encounter — individuals arrive in
+    # event_list BEFORE the wrapper that aggregates them, so without this
+    # pre-scan the fallback branch would emit first and the wrapper would
+    # emit again, yielding duplicate tool_result blocks for the same
+    # tool_use_id.
     emitted_result_ids: set[str] = set()
+    for message in event_list:
+        if isinstance(message, ToolResultsEvent):
+            for r in message.results:
+                if r.parent_id in valid_tool_ids:
+                    emitted_result_ids.add(r.parent_id)
 
     for message in messages:
         if isinstance(message, ModelResponse):
