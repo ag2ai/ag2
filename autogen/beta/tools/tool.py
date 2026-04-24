@@ -2,9 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from abc import ABC
 from collections.abc import Iterable
 from contextlib import ExitStack
-from typing import Protocol, runtime_checkable
+
+from fast_depends import Provider
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
@@ -12,8 +14,12 @@ from autogen.beta.middleware import BaseMiddleware
 from .schemas import ToolSchema
 
 
-@runtime_checkable
-class Tool(Protocol):
+class Tool(ABC):
+    name: str
+
+    def set_provider(self, provider: Provider) -> None:
+        pass
+
     async def schemas(self, context: "Context") -> Iterable[ToolSchema]: ...
 
     def register(

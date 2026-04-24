@@ -6,17 +6,16 @@ import base64
 
 import pytest
 from dirty_equals import IsPartialDict
+from fast_depends.use import SerializerCls
 
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
 from autogen.beta.events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
-    DocumentUrlInput,
+    DocumentInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     ModelRequest,
     TextInput,
 )
@@ -25,12 +24,12 @@ from autogen.beta.exceptions import UnsupportedInputError
 
 class TestTextInput:
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([TextInput("hello")])])
+        result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
 
         assert result[1] == {"role": "user", "content": "hello"}
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([TextInput("hello")])])
+        result = events_to_responses_input([ModelRequest([TextInput("hello")])], SerializerCls)
 
         assert result == [{"role": "user", "content": [{"type": "input_text", "text": "hello"}]}]
 
@@ -40,8 +39,9 @@ class TestTextInput:
         result = convert_messages(
             [],
             [
-                ModelRequest([TextInput("describe this"), ImageUrlInput(url=image_url)]),
+                ModelRequest([TextInput("describe this"), ImageInput(url=image_url)]),
             ],
+            SerializerCls,
         )
 
         assert len(result) == 2  # system + one user message
@@ -58,7 +58,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
 
         assert result[1] == {
             "role": "user",
@@ -66,7 +66,7 @@ class TestImageUrlInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
 
         assert result == [
             {
@@ -81,10 +81,10 @@ class TestFileIdInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="FileIdInput.*openai-completions"):
-            convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
+            convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
+        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
         assert result == [
             {
@@ -94,7 +94,9 @@ class TestFileIdInput:
         ]
 
     def test_responses_with_filename(self) -> None:
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
+        result = events_to_responses_input(
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+        )
 
         assert result == [
             {
@@ -108,19 +110,21 @@ class TestAudioUrlInput:
     AUDIO_URL = "https://example.com/audio.wav"
 
     def test_completions_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-completions"):
-            convert_messages([], [ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-completions"):
+            convert_messages([], [ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
 
     def test_responses_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*openai-responses"):
-            events_to_responses_input([ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-responses"):
+            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
 
 
 class TestAudioBinaryInput:
     SAMPLE_BYTES = b"\x00\x01\x02audio"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])])
+        result = convert_messages(
+            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])], SerializerCls
+        )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -129,7 +133,9 @@ class TestAudioBinaryInput:
         }
 
     def test_completions_mp3(self) -> None:
-        result = convert_messages([], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])])
+        result = convert_messages(
+            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])], SerializerCls
+        )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result[1] == {
@@ -142,7 +148,9 @@ class TestBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])])
+        result = convert_messages(
+            [], [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], SerializerCls
+        )
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result[1] == {
@@ -163,6 +171,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
+            SerializerCls,
         )
 
         assert result[1] == IsPartialDict({
@@ -171,9 +180,10 @@ class TestBinaryInput:
         })
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([
-            ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])
-        ])
+        result = events_to_responses_input(
+            [ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
+            SerializerCls,
+        )
 
         expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
@@ -192,6 +202,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
+            SerializerCls,
         )
 
         assert result == [
@@ -206,11 +217,11 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/document.pdf"
 
     def test_completions_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="DocumentUrlInput.*openai-completions"):
-            convert_messages([], [ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*document.*openai-completions"):
+            convert_messages([], [ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
         assert result == [
             {

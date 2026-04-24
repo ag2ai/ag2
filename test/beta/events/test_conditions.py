@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, Field
 
 
 class TestEvent(BaseEvent):
     __test__ = False
 
-    field: int | str | None
+    field: int | str | None = Field()
 
 
 class ChildEvent(TestEvent):

@@ -16,10 +16,14 @@ from .function_tool import FunctionToolSchema
 
 
 class ClientTool(Tool):
-    __slots__ = ("schema",)
+    __slots__ = (
+        "schema",
+        "name",
+    )
 
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.from_dict(schema)
+        self.name = self.schema.function.name
 
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
@@ -40,9 +44,7 @@ class ClientTool(Tool):
             await context.send(result)
 
         stack.enter_context(
-            context.stream.where(
-                (ToolCallEvent.name == self.schema.function.name) & ClientToolCallEvent.not_()
-            ).sub_scope(execute),
+            context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute),
         )
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ClientToolCallEvent":

@@ -6,19 +6,17 @@ from .base import BaseEvent, Field
 from .conditions import Condition
 from .input_events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
+    DataInput,
     DocumentInput,
-    DocumentUrlInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     Input,
     ModelRequest,
     TextInput,
+    UrlInput,
     VideoInput,
-    VideoUrlInput,
 )
 from .task_events import TaskCompleted, TaskFailed, TaskStarted
 from .tool_events import (
@@ -45,7 +43,6 @@ from .types import (
 
 __all__ = (
     "AudioInput",
-    "AudioUrlInput",
     "BaseEvent",
     "BinaryInput",
     "BinaryResult",
@@ -54,14 +51,13 @@ __all__ = (
     "BuiltinToolResultEvent",
     "ClientToolCallEvent",
     "Condition",
+    "DataInput",
     "DocumentInput",
-    "DocumentUrlInput",
     "Field",
     "FileIdInput",
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
-    "ImageUrlInput",
     "Input",
     "ModelMessage",
     "ModelMessageChunk",
@@ -78,7 +74,7 @@ __all__ = (
     "ToolNotFoundEvent",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "UrlInput",
     "Usage",
     "VideoInput",
-    "VideoUrlInput",
 )

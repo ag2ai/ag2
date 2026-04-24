@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections.abc import Iterable
 from contextlib import ExitStack
-from os import PathLike
 from pathlib import Path
 
 from autogen.beta.annotations import Context
-from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.tool import Tool
@@ -48,17 +48,28 @@ class LocalShellTool(Tool):
         # sh = LocalShellTool(SSHEnvironment(host="server.com", user="ubuntu"))
     """
 
-    def __init__(self, environment: ShellEnvironment | PathLike[str] | str | None = None) -> None:
-        if isinstance(environment, (str, PathLike)):
-            env = LocalShellEnvironment(path=environment)
+    def __init__(
+        self,
+        environment: ShellEnvironment | str | os.PathLike[str] | None = None,
+        name: str = "run_shell_command",
+        *,
+        description: str = "Execute a shell command in the working directory: {workdir}",
+        middleware: Iterable["ToolMiddleware"] = (),
+    ) -> None:
+        if environment:
+            env: ShellEnvironment = LocalShellEnvironment.ensure_env(environment)
         else:
-            env = environment if environment is not None else LocalShellEnvironment()
+            env = LocalShellEnvironment()
+
         self._tool: FunctionTool = tool(
             env.run,
-            name="shell",
-            description=f"Execute a shell command in the working directory: {env.workdir}",
+            name=name,
+            description=description.format(workdir=env.workdir),
+            middleware=middleware,
         )
+
         self._workdir = env.workdir
+        self.name = name
 
     @property
     def workdir(self) -> Path:

@@ -15,6 +15,7 @@ from anthropic.types import (
     ThinkingBlock,
     ToolUseBlock,
 )
+from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
@@ -86,8 +87,9 @@ class AnthropicClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
-        anthropic_messages = convert_messages(messages)
+        anthropic_messages = convert_messages(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))

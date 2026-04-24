@@ -35,7 +35,7 @@ def perform_web_search(query, count=10, offset=0):
     }
 
     # Send the API request
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=30)
     response.raise_for_status()
 
     # Process the search results

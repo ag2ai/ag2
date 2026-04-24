@@ -9,6 +9,7 @@ import pytest
 
 from autogen.beta import Agent, Context, tool
 from autogen.beta.events import ToolCallEvent
+from autogen.beta.exceptions import ToolConflictError
 from autogen.beta.middleware import ToolExecution, ToolResultType
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import Toolkit
@@ -336,3 +337,57 @@ async def test_toolkit_middleware_ordering() -> None:
     await agent.ask("Hi!")
 
     assert call_order == ["toolkit_mw", "tool_mw", "tool"]
+
+
+def test_tool_name_conflict() -> None:
+    def add(a: int, b: int) -> int:
+        pass
+
+    with pytest.raises(ToolConflictError, match="add"):
+        Toolkit(add, add)
+
+    toolkit = Toolkit(add)
+    with pytest.raises(ToolConflictError, match="add"):
+        toolkit.tool(add)
+
+
+def test_unsafe_override() -> None:
+    def add(a: int, b: int) -> int:
+        pass
+
+    toolkit = Toolkit(add)
+    toolkit._add_tool(add, unsafe=True)
+
+    assert len(toolkit.tools) == 1
+
+
+class TestMerger:
+    def test_merge_toolkits(self) -> None:
+        def add1(a: int, b: int) -> int:
+            pass
+
+        def add2(a: int, b: int) -> int:
+            pass
+
+        toolkit = Toolkit(add1) | Toolkit(add2)
+
+        assert [t.name for t in toolkit.tools] == ["add1", "add2"]
+
+    def test_merge_toolkit_and_tool(self) -> None:
+        def add1(a: int, b: int) -> int:
+            pass
+
+        def add2(a: int, b: int) -> int:
+            pass
+
+        toolkit = Toolkit(add1) | add2
+
+        assert [t.name for t in toolkit.tools] == ["add1", "add2"]
+
+    def test_merged_toolkit_overrides_tool(self) -> None:
+        def add1(a: int, b: int) -> int:
+            pass
+
+        toolkit = Toolkit(add1) | add1
+
+        assert [t.name for t in toolkit.tools] == ["add1"]

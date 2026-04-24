@@ -6,19 +6,17 @@ import base64
 
 import pytest
 from dirty_equals import IsPartialDict
+from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
     DocumentInput,
-    DocumentUrlInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -27,7 +25,6 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
-    VideoUrlInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
 
@@ -48,7 +45,7 @@ class TestConvertMessagesEmptyArguments:
     @pytest.mark.parametrize("arguments", ["", None])
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
         response = _model_response_with_tool_call(arguments)
-        result = convert_messages([response])
+        result = convert_messages([response], SerializerCls)
 
         assert result == [
             IsPartialDict({
@@ -59,7 +56,7 @@ class TestConvertMessagesEmptyArguments:
 
     def test_valid_arguments_are_preserved(self) -> None:
         response = _model_response_with_tool_call('{"category": "books"}')
-        result = convert_messages([response])
+        result = convert_messages([response], SerializerCls)
 
         assert result == [
             IsPartialDict({
@@ -69,7 +66,7 @@ class TestConvertMessagesEmptyArguments:
 
     def test_empty_object_arguments(self) -> None:
         response = _model_response_with_tool_call("{}")
-        result = convert_messages([response])
+        result = convert_messages([response], SerializerCls)
 
         assert result == [
             IsPartialDict({
@@ -88,12 +85,12 @@ def test_full_sequence_with_empty_args() -> None:
                 ToolResultEvent(
                     parent_id="tc_1",
                     name="list_items",
-                    result=ToolResult(content="apple, banana"),
+                    result=ToolResult("apple, banana"),
                 )
             ],
         ),
     ]
-    result = convert_messages(events)
+    result = convert_messages(events, SerializerCls)
 
     assert result[0] == IsPartialDict({"role": "user"})
     assert result[1] == IsPartialDict({
@@ -110,7 +107,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_converts_to_image_url_block(self) -> None:
-        result = convert_messages([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = convert_messages([ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
 
         assert result == [
             {
@@ -124,7 +121,9 @@ class TestImageBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
     def test_converts_to_image_base64_block(self) -> None:
-        result = convert_messages([ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])])
+        result = convert_messages(
+            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], SerializerCls
+        )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result == [
@@ -140,16 +139,19 @@ class TestImageBinaryInput:
         ]
 
     def test_vendor_metadata_cache_control_merges(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                BinaryInput(
-                    data=self.SAMPLE_BYTES,
-                    media_type="image/png",
-                    vendor_metadata={"cache_control": {"type": "ephemeral"}},
-                    kind=BinaryType.IMAGE,
-                )
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="image/png",
+                        vendor_metadata={"cache_control": {"type": "ephemeral"}},
+                        kind=BinaryType.IMAGE,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
 
         assert result == [
             IsPartialDict({
@@ -159,16 +161,19 @@ class TestImageBinaryInput:
         ]
 
     def test_vendor_metadata_filename_filtered_out(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                BinaryInput(
-                    data=self.SAMPLE_BYTES,
-                    media_type="image/png",
-                    vendor_metadata={"filename": "photo.png"},
-                    kind=BinaryType.IMAGE,
-                )
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="image/png",
+                        vendor_metadata={"filename": "photo.png"},
+                        kind=BinaryType.IMAGE,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
 
         content = result[0]["content"][0]
         assert "filename" not in content
@@ -178,7 +183,7 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/doc.pdf"
 
     def test_converts_to_document_url_block(self) -> None:
-        result = convert_messages([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        result = convert_messages([ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
 
         assert result == [
             {
@@ -192,7 +197,9 @@ class TestDocumentBinaryInput:
     SAMPLE_BYTES = b"%PDF-1.4"
 
     def test_converts_to_document_base64_block(self) -> None:
-        result = convert_messages([ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])])
+        result = convert_messages(
+            [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])], SerializerCls
+        )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
         assert result == [
@@ -208,16 +215,19 @@ class TestDocumentBinaryInput:
         ]
 
     def test_vendor_metadata_merges(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                BinaryInput(
-                    data=self.SAMPLE_BYTES,
-                    media_type="application/pdf",
-                    vendor_metadata={"cache_control": {"type": "ephemeral"}},
-                    kind=BinaryType.DOCUMENT,
-                )
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="application/pdf",
+                        vendor_metadata={"cache_control": {"type": "ephemeral"}},
+                        kind=BinaryType.DOCUMENT,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
 
         assert result == [
             IsPartialDict({
@@ -231,7 +241,7 @@ class TestFileIdInput:
     FILE_ID = "file_011CNha8iCJcU1wXNR6q4V8w"
 
     def test_no_filename_defaults_to_document(self) -> None:
-        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID)])])
+        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
         assert result == [
             {
@@ -241,7 +251,9 @@ class TestFileIdInput:
         ]
 
     def test_image_filename_uses_image_block(self) -> None:
-        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="photo.jpg")])])
+        result = convert_messages(
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="photo.jpg")])], SerializerCls
+        )
 
         assert result == [
             {
@@ -251,7 +263,9 @@ class TestFileIdInput:
         ]
 
     def test_pdf_filename_uses_document_block(self) -> None:
-        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
+        result = convert_messages(
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+        )
 
         assert result == [
             {
@@ -263,13 +277,16 @@ class TestFileIdInput:
 
 class TestMultipleInputs:
     def test_multiple_inputs_grouped_into_one_message(self) -> None:
-        result = convert_messages([
-            ModelRequest([
-                TextInput("Describe these images."),
-                ImageUrlInput(url="https://example.com/a.png"),
-                ImageUrlInput(url="https://example.com/b.jpg"),
-            ])
-        ])
+        result = convert_messages(
+            [
+                ModelRequest([
+                    TextInput("Describe these images."),
+                    ImageInput(url="https://example.com/a.png"),
+                    ImageInput(url="https://example.com/b.jpg"),
+                ])
+            ],
+            SerializerCls,
+        )
 
         assert len(result) == 1
         assert result[0]["role"] == "user"
@@ -281,23 +298,28 @@ class TestMultipleInputs:
 
 class TestUnsupportedInputs:
     def test_audio_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*anthropic"):
-            convert_messages([ModelRequest([AudioUrlInput(url="https://example.com/audio.wav")])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*anthropic"):
+            convert_messages([ModelRequest([AudioInput(url="https://example.com/audio.wav")])], SerializerCls)
 
     def test_video_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="VideoUrlInput.*anthropic"):
-            convert_messages([ModelRequest([VideoUrlInput(url="https://example.com/video.mp4")])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*video.*anthropic"):
+            convert_messages([ModelRequest([VideoInput(url="https://example.com/video.mp4")])], SerializerCls)
 
     def test_audio_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
-            convert_messages([ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])])
+            convert_messages([ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])], SerializerCls)
 
     def test_video_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*video.*anthropic"):
-            convert_messages([ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])])
+            convert_messages([ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])], SerializerCls)
 
     def test_generic_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*binary.*anthropic"):
-            convert_messages([
-                ModelRequest([BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)])
-            ])
+            convert_messages(
+                [
+                    ModelRequest([
+                        BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)
+                    ])
+                ],
+                SerializerCls,
+            )

@@ -82,6 +82,7 @@ jobs:
           - "websockets"
           - "google-api"
           - "wikipedia-api"
+          - "ag-ui"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.10, 3.14
         python-version: ["3.10", "3.14"]
@@ -141,9 +142,10 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Install playwright
-        if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
+        if: matrix.optional-dependencies == 'crawl4ai'
+        shell: bash
         run: |
-          playwright install
+          python -m playwright install
       - name: Test import all submodules
         shell: bash
         run: |

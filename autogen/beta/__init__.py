@@ -6,18 +6,21 @@ from fast_depends import Depends
 
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
-from .events import AudioInput, BinaryInput, DocumentInput, ImageInput, TextInput, VideoInput
+from .events import AudioInput, BinaryInput, DataInput, DocumentInput, ImageInput, TextInput, VideoInput
 from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
+from .spec import AgentSpec
 from .stream import MemoryStream
-from .tools import ToolResult, tool
+from .tools import ToolResult, Toolkit, tool
 
 __all__ = (
     "Agent",
     "AgentReply",
+    "AgentSpec",
     "AudioInput",
     "BinaryInput",
     "Context",
+    "DataInput",
     "Depends",
     "DocumentInput",
     "ImageInput",
@@ -27,6 +30,7 @@ __all__ = (
     "ResponseSchema",
     "TextInput",
     "ToolResult",
+    "Toolkit",
     "Variable",
     "VideoInput",
     "observer",

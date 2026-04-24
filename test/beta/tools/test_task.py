@@ -18,6 +18,7 @@ from autogen.beta.events import (
     ModelResponse,
     TaskCompleted,
     TaskStarted,
+    ToolResultsEvent,
 )
 from autogen.beta.events.task_events import TaskFailed
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
@@ -64,8 +65,8 @@ class TestRunTask:
         assert result.completed is True
         events = list(await result.stream.history.get_events())
         request = [e for e in events if isinstance(e, ModelRequest)][0]
-        assert "## Context" in request.inputs[0].content
-        assert "Here is some data" in request.inputs[0].content
+        assert "## Context" in request.parts[0].content
+        assert "Here is some data" in request.parts[0].content
 
     @pytest.mark.asyncio
     async def test_failure(self):
@@ -195,7 +196,7 @@ class TestSpecialistDelegation:
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
-        assert "Focus on recent papers" in request.inputs[0].content
+        assert "Focus on recent papers" in request.parts[0].content
 
     @pytest.mark.asyncio
     async def test_with_tools(self):
@@ -447,8 +448,8 @@ class TestStreamFactory:
         events_b = list(await streams_created[1].history.get_events())
         requests_a = [e for e in events_a if isinstance(e, ModelRequest)]
         requests_b = [e for e in events_b if isinstance(e, ModelRequest)]
-        assert "Task A" in requests_a[0].inputs[0].content
-        assert "Task B" in requests_b[0].inputs[0].content
+        assert "Task A" in requests_a[0].parts[0].content
+        assert "Task B" in requests_b[0].parts[0].content
 
     @pytest.mark.asyncio
     async def test_defaults_to_memory_stream(self):
@@ -580,8 +581,8 @@ class TestDepthLimiter:
 
         await outer.ask("Go")
 
-        tool_results = l2_tracking.mock.call_args_list[1].args[0]
-        assert "maximum task depth" in tool_results.results[0].content
+        tool_results: ToolResultsEvent = l2_tracking.mock.call_args_list[1].args[0]
+        assert "maximum task depth" in tool_results.results[0].result.parts[0].content
 
     @pytest.mark.asyncio
     async def test_passes(self) -> None:
@@ -662,9 +663,9 @@ class TestDepthLimiter:
         parent_stream = MemoryStream()
         await coordinator.ask("Go", stream=parent_stream)
 
-        tool_results = tracking_config.mock.call_args_list[1].args[0]
-        assert "A done." in tool_results.results[0].content
-        assert "B done." in tool_results.results[1].content
+        tool_results: ToolResultsEvent = tracking_config.mock.call_args_list[1].args[0]
+        assert "A done." in tool_results.results[0].result.parts[0].content
+        assert "B done." in tool_results.results[1].result.parts[0].content
 
         events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)]

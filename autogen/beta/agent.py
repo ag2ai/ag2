@@ -12,11 +12,12 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
 from autogen.beta.events import BinaryResult
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -41,11 +42,12 @@ from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
-from .types import ClassInfo, Omittable, omit
+from .types import ClassInfo, Omittable, SendableMessage, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
+    from .spec import AgentSpec
     from .tools.subagents import StreamFactory
 
 
@@ -71,6 +73,9 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__agent = agent
         self.__provider = provider
         self.__schema = response_schema
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.response}, context={self.context})"
 
     async def content(
         self,
@@ -130,7 +135,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -145,7 +150,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -160,7 +165,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -175,7 +180,7 @@ class AgentReply(Generic[TResult, TAgent]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         prompt: Iterable[str] = ...,
@@ -188,7 +193,7 @@ class AgentReply(Generic[TResult, TAgent]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         prompt: Iterable[str] = (),
@@ -320,18 +325,23 @@ class Agent(Generic[TResult]):
         self._middleware = list(middleware)
         self._observers = list(observers)
 
+        self._serializer: SerializerProto = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
+        )
+
         self.dependency_provider = Provider()
-        self.tools: list[FunctionTool] = []
+        self.tools: list[Tool] = []
         for t in tools:
             self.add_tool(t)
 
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
-        self.__tool_executor = ToolExecutor()
+        self.__tool_executor = ToolExecutor(self._serializer)
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
-        self._response_schema = ResponseSchema.ensure_schema(response_schema)
+        self._response_schema: ResponseProto[TResult] | None = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
@@ -456,19 +466,20 @@ class Agent(Generic[TResult]):
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
-        callback: Callable[..., Any],
-    ) -> Callable[..., Any]: ...
+        condition: ClassInfo | Condition | None = None,
+        callback: None = None,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+        condition: ClassInfo | Condition | None = None,
+        callback: Callable[..., Any] = ...,
+    ) -> Callable[..., Any]: ...
 
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -483,7 +494,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -499,8 +510,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -516,8 +526,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -533,8 +542,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -548,7 +556,7 @@ class Agent(Generic[TResult]):
 
     async def ask(
         self,
-        *msg: str | Input,
+        *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -620,16 +628,18 @@ class Agent(Generic[TResult]):
         )
 
         all_schemas: list[ToolSchema] = []
-        known_tools: set[str] = set()
+        known_tool_names: set[str] = set()
         for t in all_tools:
             schemas = await t.schemas(context)
             all_schemas.extend(schemas)
 
+            # iterate over schemas to support toolkits
             for schema in schemas:
                 if isinstance(schema, FunctionToolSchema):
-                    known_tools.add(schema.function.name)
-                elif isinstance(schema, WebSearchToolSchema):
-                    known_tools.add(WEB_SEARCH_TOOL_NAME)
+                    known_tool_names.add(schema.function.name)
+                else:
+                    # fallback to tool name (built-in tools)
+                    known_tool_names.add(t.name)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
@@ -637,6 +647,7 @@ class Agent(Generic[TResult]):
             client,
             tools=all_schemas,
             response_schema=final_schema,
+            serializer=self._serializer,
         )
 
         for m in reversed(
@@ -683,7 +694,7 @@ class Agent(Generic[TResult]):
                 stack,
                 context,
                 tools=all_tools,
-                known_tools=known_tools,
+                known_tools=known_tool_names,
                 middleware=middleware_instances,
             )
 
@@ -718,6 +729,12 @@ class Agent(Generic[TResult]):
             stream=stream,
             middleware=middleware,
         )
+
+    def to_spec(self) -> "AgentSpec":
+        """Serialize this agent to a JSON-safe :class:`AgentSpec`."""
+        from .spec import AgentSpec
+
+        return AgentSpec.from_agent(self)
 
     def as_conversable(self) -> "ConversableAdapter":
         from .conversable import ConversableAdapter
