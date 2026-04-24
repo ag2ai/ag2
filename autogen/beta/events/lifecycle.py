@@ -13,10 +13,6 @@ Task-subagent lifecycle events live in ``autogen.beta.events.task_events``
 
 from .base import BaseEvent, Field
 
-# ------------------------------------------------------------------
-# Observer lifecycle events
-# ------------------------------------------------------------------
-
 
 class ObserverStarted(BaseEvent):
     """Emitted when an observer attaches to the actor's stream."""
@@ -32,11 +28,6 @@ class ObserverCompleted(BaseEvent):
     __transient__ = True
 
     name: str
-
-
-# ------------------------------------------------------------------
-# Knowledge lifecycle events
-# ------------------------------------------------------------------
 
 
 class CompactionCompleted(BaseEvent):
@@ -62,11 +53,6 @@ class AggregationCompleted(BaseEvent):
     event_count: int
     llm_calls: int = 0
     usage: dict = Field(default_factory=dict)
-
-
-# ------------------------------------------------------------------
-# Deserialization fallback
-# ------------------------------------------------------------------
 
 
 class UnknownEvent(BaseEvent):

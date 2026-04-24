@@ -259,11 +259,6 @@ class DelayWatch(_BaseWatch):
         super().disarm()
 
 
-# ---------------------------------------------------------------------------
-# Composite watches
-# ---------------------------------------------------------------------------
-
-
 class AllOf(_BaseWatch):
     """Fire when ALL sub-watches have fired at least once.
 
@@ -409,10 +404,6 @@ class Sequence(_BaseWatch):
         self._callback = None
         super().disarm()
 
-
-# ---------------------------------------------------------------------------
-# Advanced watches
-# ---------------------------------------------------------------------------
 
 _DOW_NAMES = {"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6}
 
