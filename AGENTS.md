@@ -102,6 +102,7 @@ Advanced modules:
 - `autogen.beta.streams` - Persistent stream backends (e.g. Redis)
 - `autogen.beta.watch` - Watch system for triggering observers
 - `autogen.beta.knowledge` - Knowledge management
+- `autogen.beta.plugin` - Plugin system
 
 ### Re-export rules
 

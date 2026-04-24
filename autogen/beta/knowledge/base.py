@@ -4,10 +4,8 @@
 
 from collections.abc import Awaitable, Callable
 from typing import Protocol, runtime_checkable
-from uuid import UUID
 
 ChangeCallback = Callable[[str], Awaitable[None]]
-StreamId = UUID
 
 
 class ChangeSubscription(Protocol):

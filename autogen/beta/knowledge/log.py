@@ -5,10 +5,11 @@
 import json
 from collections.abc import Iterable
 
+from autogen.beta.context import StreamId
 from autogen.beta.events import BaseEvent, UnknownEvent
 from autogen.beta.events._serialization import import_event_class, qualified_name
 
-from .base import KnowledgeStore, StreamId
+from .base import KnowledgeStore
 
 
 class EventLogWriter:

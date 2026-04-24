@@ -19,7 +19,6 @@ from .base import (
     ChangeSubscription,
     KnowledgeStore,
     NoopChangeSubscription,
-    StreamId,
 )
 from .bootstrap import DefaultBootstrap, StoreBootstrap
 from .disk import DiskKnowledgeStore
@@ -42,5 +41,4 @@ __all__ = [
     "RedisKnowledgeStore",
     "SqliteKnowledgeStore",
     "StoreBootstrap",
-    "StreamId",
 ]
