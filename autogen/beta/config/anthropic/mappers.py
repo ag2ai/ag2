@@ -310,9 +310,12 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format."""
     cc = raw.get("cache_creation_input_tokens")
     cr = raw.get("cache_read_input_tokens")
+    prompt = float(raw.get("input_tokens", 0))
+    completion = float(raw.get("output_tokens", 0))
     return Usage(
-        prompt_tokens=float(raw.get("input_tokens", 0)),
-        completion_tokens=float(raw.get("output_tokens", 0)),
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=prompt + completion,
         cache_creation_input_tokens=float(cc) if cc else None,
         cache_read_input_tokens=float(cr) if cr else None,
     )
