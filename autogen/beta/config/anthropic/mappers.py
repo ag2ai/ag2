@@ -321,12 +321,7 @@ def convert_messages(
 
 
 def normalize_usage(raw: dict[str, Any]) -> Usage:
-    """Normalize Anthropic's native usage keys to standard format.
-
-    Anthropic returns ``input_tokens`` and ``output_tokens`` but no
-    explicit total. Compute it here so observers like ``TokenMonitor``
-    that depend on ``total_tokens`` work consistently across providers.
-    """
+    """Normalize Anthropic's native usage keys to standard format."""
     cc = raw.get("cache_creation_input_tokens")
     cr = raw.get("cache_read_input_tokens")
     prompt = float(raw.get("input_tokens", 0))
