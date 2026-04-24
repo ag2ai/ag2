@@ -52,6 +52,9 @@ When `beam_size=1`, ReasoningAgent behaves similarly to Chain-of-Thought (CoT) o
 
 For example:
 ```python
+from autogen import LLMConfig
+from autogen.agents.experimental import ReasoningAgent
+
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 # Create a reasoning agent with beam size 1 (O1-style)
 reason_agent = ReasoningAgent(
@@ -76,6 +79,7 @@ Here's a simple example of using ReasoningAgent:
 import os
 from autogen import (
     AssistantAgent,
+    LLMConfig,
     UserProxyAgent,
 )
 from autogen.agents.experimental import (

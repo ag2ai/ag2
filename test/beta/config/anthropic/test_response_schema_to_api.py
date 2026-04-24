@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -29,39 +29,36 @@ def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
     }
 
 
-class TestResponseProtoToOutputConfigNone:
-    def test_none_returns_none(self) -> None:
-        assert response_proto_to_output_config(None) is None
+def test_response_proto_to_output_config_none_returns_none() -> None:
+    assert response_proto_to_output_config(None) is None
 
 
-class TestPrimitiveSchemas:
-    @pytest.mark.parametrize(
-        ("type_", "name", "expected_inner_schema"),
-        [
-            pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
-            pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
-            pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
-        ],
-    )
-    def test_primitive_type(
-        self,
-        type_: type,
-        name: str,
-        expected_inner_schema: dict,  # type: ignore[type-arg]
-    ) -> None:
-        schema = ResponseSchema(type_, name=name)
+@pytest.mark.parametrize(
+    ("type_", "name", "expected_inner_schema"),
+    [
+        pytest.param(int, "IntSchema", {"type": "integer"}, id="int"),
+        pytest.param(float, "FloatSchema", {"type": "number"}, id="float"),
+        pytest.param(bool, "BoolSchema", {"type": "boolean"}, id="bool"),
+    ],
+)
+def test_primitive_schemas_primitive_type(
+    type_: type,
+    name: str,
+    expected_inner_schema: dict,  # type: ignore[type-arg]
+) -> None:
+    schema = ResponseSchema(type_, name=name)
 
-        result = response_proto_to_output_config(schema)
+    result = response_proto_to_output_config(schema)
 
-        assert result == {
-            "format": {
-                "type": "json_schema",
-                "schema": IsPartialDict(
-                    **_embedded_data_schema(expected_inner_schema),
-                    title="ResponseSchema",
-                ),
-            },
-        }
+    assert result == {
+        "format": {
+            "type": "json_schema",
+            "schema": IsPartialDict({
+                **_embedded_data_schema(expected_inner_schema),
+                "title": "ResponseSchema",
+            }),
+        },
+    }
 
 
 class TestDataclassSchemas:
@@ -78,14 +75,14 @@ class TestDataclassSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    type="object",
-                    additionalProperties=False,
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        age=IsPartialDict(type="integer"),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "age": IsPartialDict({"type": "integer"}),
+                    }),
+                }),
             },
         }
 
@@ -100,8 +97,9 @@ class TestDataclassSchemas:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["type"] == "json_schema"
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"type": "json_schema"}),
+        })
 
 
 class TestPydanticModelSchemas:
@@ -117,14 +115,14 @@ class TestPydanticModelSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    type="object",
-                    additionalProperties=False,
-                    properties=IsPartialDict(
-                        name=IsPartialDict(type="string"),
-                        price=IsPartialDict(type="number"),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": IsPartialDict({
+                        "name": IsPartialDict({"type": "string"}),
+                        "price": IsPartialDict({"type": "number"}),
+                    }),
+                }),
             },
         }
 
@@ -139,11 +137,11 @@ class TestPydanticModelSchemas:
         assert result == {
             "format": {
                 "type": "json_schema",
-                "schema": IsPartialDict(
-                    properties=IsPartialDict(
-                        value=IsPartialDict(minimum=0, maximum=100),
-                    ),
-                ),
+                "schema": IsPartialDict({
+                    "properties": IsPartialDict({
+                        "value": IsPartialDict({"minimum": 0, "maximum": 100}),
+                    }),
+                }),
             },
         }
 
@@ -154,21 +152,19 @@ class TestUnionSchemas:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        fmt_schema = result["format"]["schema"]
         # Union is embedded in {"data": ...} object
-        assert fmt_schema["type"] == "object"
-        assert fmt_schema["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
     def test_tuple_of_types(self) -> None:
         schema = ResponseSchema((int, float), name="Number")
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        fmt_schema = result["format"]["schema"]
-        assert fmt_schema["type"] == "object"
-        assert fmt_schema["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
 
 class TestAdditionalPropertiesFalse:
@@ -182,8 +178,9 @@ class TestAdditionalPropertiesFalse:
         schema = ResponseSchema(Simple)
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["schema"]["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"additionalProperties": False})}),
+        })
 
     def test_added_to_nested_objects(self) -> None:
         class Inner(BaseModel):
@@ -215,9 +212,9 @@ class TestAdditionalPropertiesFalse:
         schema = ResponseSchema(int, name="IntSchema")
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["schema"]["type"] == "object"
-        assert result["format"]["schema"]["additionalProperties"] is False
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"schema": IsPartialDict({"type": "object", "additionalProperties": False})}),
+        })
 
 
 class TestDescriptionHandling:
@@ -231,8 +228,9 @@ class TestDescriptionHandling:
 
         result = response_proto_to_output_config(schema)
 
-        assert result is not None
-        assert result["format"]["type"] == "json_schema"
+        assert result == IsPartialDict({
+            "format": IsPartialDict({"type": "json_schema"}),
+        })
 
     def test_description_not_passed_to_api(self) -> None:
         """Anthropic output_config format does not include name or description."""
@@ -279,13 +277,12 @@ class TestRawSchema:
         }
 
 
-class TestNoJsonSchema:
-    def test_no_schema_returns_none(self) -> None:
-        class FakeProto:
-            name = "test"
-            description = None
-            json_schema = None
-            system_prompt = None
+def test_no_json_schema_returns_none() -> None:
+    class FakeProto:
+        name = "test"
+        description = None
+        json_schema = None
+        system_prompt = None
 
-        result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
-        assert result is None
+    result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
+    assert result is None

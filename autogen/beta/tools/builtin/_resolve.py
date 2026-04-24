@@ -1,16 +1,16 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
 
 from autogen.beta.annotations import Variable
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 
 
 def resolve_variable(
     value: Any,
-    context: Context,
+    context: ConversationContext,
     *,
     param_name: str = "",
 ) -> Any:

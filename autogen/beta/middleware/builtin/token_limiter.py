@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -21,7 +21,7 @@ class TokenLimiter(MiddlewareFactory):
             raise ValueError("max_tokens must be greater than 0")
         if chars_per_token < 1:
             raise ValueError("chars_per_token must be greater than 0")
-        self._max_chars = max_tokens // chars_per_token
+        self._max_chars = max_tokens * chars_per_token
 
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware":
         return _TokenLimiter(event, context, self._max_chars)

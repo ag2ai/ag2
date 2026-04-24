@@ -1,19 +1,20 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-
-from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
-from google import genai
+import google.auth
+import google.genai as genai
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
+from google.oauth2 import service_account
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -22,11 +23,12 @@ from autogen.beta.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_system_instruction, build_tools, convert_messages, response_proto_to_config
+from .mappers import build_system_instruction, build_tools, convert_messages, normalize_usage, response_proto_to_config
 
 
 class CreateConfig(TypedDict, total=False):
@@ -45,23 +47,38 @@ class GeminiClient(LLMClient):
         self,
         model: str,
         api_key: str | None = None,
+        vertexai: bool | None = None,
+        credentials: google.auth.credentials.Credentials | str | None = None,
+        project: str | None = None,
+        location: str | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
+        cached_content: str | None = None,
     ) -> None:
-        self._client = genai.Client(api_key=api_key)
+        if isinstance(credentials, str):
+            # String indicates a json credentials file, load into credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        self._client = genai.Client(
+            vertexai=vertexai, api_key=api_key, credentials=credentials, project=project, location=location
+        )
         self._model_name = model
         self._streaming = streaming
         self._create_config = create_config or {}
+        self._cached_content = cached_content
 
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
-        contents = convert_messages(messages)
+        contents = convert_messages(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -71,12 +88,17 @@ class GeminiClient(LLMClient):
         system_instruction = build_system_instruction(prompt)
         gemini_tools = build_tools(list(tools))
 
+        cache_kwargs: dict[str, Any] = {}
+        if self._cached_content:
+            cache_kwargs["cached_content"] = self._cached_content
+
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
             **response_proto_to_config(response_schema),
             **self._create_config,
+            **cache_kwargs,
         )
 
         if self._streaming:
@@ -97,7 +119,7 @@ class GeminiClient(LLMClient):
     async def _process_response(
         self,
         response: types.GenerateContentResponse,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
@@ -106,9 +128,9 @@ class GeminiClient(LLMClient):
             if candidate.content:
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
-                        await context.send(ModelReasoning(content=part.text))
+                        await context.send(ModelReasoning(part.text))
                     elif part.text is not None:
-                        model_msg = ModelMessage(content=part.text)
+                        model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
                     elif part.function_call:
                         fc = part.function_call
@@ -124,13 +146,9 @@ class GeminiClient(LLMClient):
                             )
                         )
 
-        usage = {}
+        usage = Usage()
         if response.usage_metadata:
-            usage = {
-                "prompt_token_count": response.usage_metadata.prompt_token_count,
-                "candidates_token_count": response.usage_metadata.candidates_token_count,
-                "total_token_count": response.usage_metadata.total_token_count,
-            }
+            usage = normalize_usage(response.usage_metadata)
 
         finish_reason = None
         if response.candidates:
@@ -140,7 +158,7 @@ class GeminiClient(LLMClient):
 
         return ModelResponse(
             message=model_msg,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model_name,
             provider="google",
@@ -150,11 +168,11 @@ class GeminiClient(LLMClient):
     async def _process_stream(
         self,
         stream: Any,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
-        usage: dict[str, Any] = {}
+        usage = Usage()
         finish_reason: str | None = None
 
         async for chunk in stream:
@@ -162,10 +180,10 @@ class GeminiClient(LLMClient):
                 if candidate.content:
                     for part in candidate.content.parts or ():
                         if part.thought and part.text:
-                            await context.send(ModelReasoning(content=part.text))
+                            await context.send(ModelReasoning(part.text))
                         elif part.text is not None:
                             full_content += part.text
-                            await context.send(ModelMessageChunk(content=part.text))
+                            await context.send(ModelMessageChunk(part.text))
                         elif part.function_call:
                             fc = part.function_call
                             pdata: dict[str, Any] = {}
@@ -181,11 +199,7 @@ class GeminiClient(LLMClient):
                             )
 
             if chunk.usage_metadata:
-                usage = {
-                    "prompt_token_count": chunk.usage_metadata.prompt_token_count,
-                    "candidates_token_count": chunk.usage_metadata.candidates_token_count,
-                    "total_token_count": chunk.usage_metadata.total_token_count,
-                }
+                usage = normalize_usage(chunk.usage_metadata)
 
             if chunk.candidates:
                 fr = chunk.candidates[0].finish_reason
@@ -194,12 +208,12 @@ class GeminiClient(LLMClient):
 
         message: ModelMessage | None = None
         if full_content:
-            message = ModelMessage(content=full_content)
+            message = ModelMessage(full_content)
             await context.send(message)
 
         return ModelResponse(
             message=message,
-            tool_calls=ToolCallsEvent(calls=calls),
+            tool_calls=ToolCallsEvent(calls),
             usage=usage,
             model=self._model_name,
             provider="google",

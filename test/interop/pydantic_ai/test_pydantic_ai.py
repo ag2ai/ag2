@@ -22,7 +22,7 @@ from test.credentials import Credentials
 
 
 @pytest.mark.interop
-class TestPydanticAIInteroperabilityWithotContext:
+class TestPydanticAIInteroperabilityWithoutContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         def roll_dice() -> str:

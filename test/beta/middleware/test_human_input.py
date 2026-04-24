@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -43,29 +43,6 @@ class MockHumanInputMiddleware(BaseMiddleware):
         return result
 
 
-@pytest.mark.asyncio()
-async def test_human_input_middleware(mock: MagicMock, test_config: TestConfig) -> None:
-    async def my_tool(ctx: Context) -> str:
-        await ctx.input("Say smth", timeout=1.0)
-        return ""
-
-    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
-
-    agent = Agent(
-        "",
-        config=test_config,
-        tools=[my_tool],
-        hitl_hook=hitl_hook,
-        middleware=[Middleware(MockHumanInputMiddleware, mock=mock)],
-    )
-
-    await agent.ask("Hi!")
-
-    mock.enter.assert_called_once_with("Say smth")
-    mock.exit.assert_called_once_with("answer")
-
-
 class OrderingHumanInputMiddleware(BaseMiddleware):
     def __init__(
         self,
@@ -90,124 +67,222 @@ class OrderingHumanInputMiddleware(BaseMiddleware):
         return result
 
 
-@pytest.mark.asyncio()
-async def test_human_input_middleware_call_sequence(mock: MagicMock, test_config: TestConfig) -> None:
-    async def my_tool(ctx: Context) -> str:
-        await ctx.input("Say smth", timeout=1.0)
-        return ""
+class TestHumanInputMiddleware:
+    @pytest.mark.asyncio()
+    async def test_basic(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            await ctx.input("Say smth", timeout=1.0)
+            return ""
 
-    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            return HumanMessage("answer")
 
-    agent = Agent(
-        "",
-        config=test_config,
-        tools=[my_tool],
-        hitl_hook=hitl_hook,
-        middleware=[Middleware(OrderingHumanInputMiddleware, mock=mock, position=i) for i in range(1, 4)],
-    )
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[Middleware(MockHumanInputMiddleware, mock=mock)],
+        )
 
-    await agent.ask("Hi!")
+        await agent.ask("Hi!")
 
-    assert [c.args[0] for c in mock.enter.call_args_list] == [1, 2, 3]
-    assert [c.args[0] for c in mock.exit.call_args_list] == [3, 2, 1]
+        mock.enter.assert_called_once_with("Say smth")
+        mock.exit.assert_called_once_with("answer")
+
+    @pytest.mark.asyncio()
+    async def test_call_sequence(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            await ctx.input("Say smth", timeout=1.0)
+            return ""
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            return HumanMessage("answer")
+
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[Middleware(OrderingHumanInputMiddleware, mock=mock, position=i) for i in range(1, 4)],
+        )
+
+        await agent.ask("Hi!")
+
+        assert [c.args[0] for c in mock.enter.call_args_list] == [1, 2, 3]
+        assert [c.args[0] for c in mock.exit.call_args_list] == [3, 2, 1]
+
+    @pytest.mark.asyncio()
+    async def test_mutates_request(self, mock: MagicMock, test_config: TestConfig) -> None:
+        class MutatingMiddleware(BaseMiddleware):
+            async def on_human_input(
+                self,
+                call_next: HumanInputHook,
+                event: HumanInputRequest,
+                ctx: Context,
+            ) -> HumanMessage:
+                event = HumanInputRequest(id=event.id, content=event.content + "!")
+                return await call_next(event, ctx)
+
+        async def my_tool(ctx: Context) -> str:
+            await ctx.input("Say smth", timeout=1.0)
+            return ""
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            mock.hitl(event.content)
+            return HumanMessage("answer")
+
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.hitl.assert_called_once_with("Say smth!!!")
+
+    @pytest.mark.asyncio()
+    async def test_mutates_response(self, mock: MagicMock, test_config: TestConfig) -> None:
+        class MutatingMiddleware(BaseMiddleware):
+            async def on_human_input(
+                self,
+                call_next: HumanInputHook,
+                event: HumanInputRequest,
+                ctx: Context,
+            ) -> HumanMessage:
+                result = await call_next(event, ctx)
+                return HumanMessage.ensure_message(result.content + "!", parent_id=result.parent_id)
+
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            return HumanMessage("answer")
+
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.assert_called_once_with("answer!!!")
+
+    @pytest.mark.asyncio()
+    async def test_short_circuits(self, mock: MagicMock, test_config: TestConfig) -> None:
+        class ShortCircuitMiddleware(BaseMiddleware):
+            async def on_human_input(
+                self,
+                call_next: HumanInputHook,
+                event: HumanInputRequest,
+                ctx: Context,
+            ) -> HumanMessage:
+                mock.intercepted(event.content)
+                return HumanMessage.ensure_message("intercepted", parent_id=event.id)
+
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
+
+        def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+            mock.hitl()
+            return HumanMessage("answer")
+
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+            middleware=[Middleware(ShortCircuitMiddleware)],
+        )
+
+        await agent.ask("Hi!")
+
+        mock.intercepted.assert_called_once_with("Say smth")
+        mock.hitl.assert_not_called()
+        mock.assert_called_once_with("intercepted")
 
 
-@pytest.mark.asyncio()
-async def test_human_input_middleware_mutates_request(mock: MagicMock, test_config: TestConfig) -> None:
-    class MutatingMiddleware(BaseMiddleware):
-        async def on_human_input(
-            self,
-            call_next: HumanInputHook,
-            event: HumanInputRequest,
-            ctx: Context,
-        ) -> HumanMessage:
-            event = HumanInputRequest(content=event.content + "!")
-            return await call_next(event, ctx)
+class TestHumanInputHook:
+    @pytest.mark.asyncio()
+    async def test_returns_raw_string(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
 
-    async def my_tool(ctx: Context) -> str:
-        await ctx.input("Say smth", timeout=1.0)
-        return ""
+        def hitl_hook(event: HumanInputRequest) -> str:
+            return "raw answer"
 
-    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        mock.hitl(event.content)
-        return HumanMessage(content="answer")
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+        )
 
-    agent = Agent(
-        "",
-        config=test_config,
-        tools=[my_tool],
-        hitl_hook=hitl_hook,
-        middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
-    )
+        await agent.ask("Hi!")
 
-    await agent.ask("Hi!")
+        mock.assert_called_once_with("raw answer")
 
-    mock.hitl.assert_called_once_with("Say smth!!!")
+    @pytest.mark.asyncio()
+    async def test_returns_raw_string_async(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
 
+        async def hitl_hook(event: HumanInputRequest) -> str:
+            return "async raw answer"
 
-@pytest.mark.asyncio()
-async def test_human_input_middleware_mutates_response(mock: MagicMock, test_config: TestConfig) -> None:
-    class MutatingMiddleware(BaseMiddleware):
-        async def on_human_input(
-            self,
-            call_next: HumanInputHook,
-            event: HumanInputRequest,
-            ctx: Context,
-        ) -> HumanMessage:
-            result = await call_next(event, ctx)
-            return HumanMessage(content=result.content + "!")
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=hitl_hook,
+        )
 
-    async def my_tool(ctx: Context) -> str:
-        mock(await ctx.input("Say smth", timeout=1.0))
-        return ""
+        await agent.ask("Hi!")
 
-    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        mock.assert_called_once_with("async raw answer")
 
-    agent = Agent(
-        "",
-        config=test_config,
-        tools=[my_tool],
-        hitl_hook=hitl_hook,
-        middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
-    )
+    @pytest.mark.asyncio()
+    async def test_passed_at_ask(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
 
-    await agent.ask("Hi!")
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+        )
 
-    mock.assert_called_once_with("answer!!!")
+        await agent.ask("Hi!", hitl_hook=lambda event: "ask-level answer")
 
+        mock.assert_called_once_with("ask-level answer")
 
-@pytest.mark.asyncio()
-async def test_human_input_middleware_short_circuits(mock: MagicMock, test_config: TestConfig) -> None:
-    class ShortCircuitMiddleware(BaseMiddleware):
-        async def on_human_input(
-            self,
-            call_next: HumanInputHook,
-            event: HumanInputRequest,
-            ctx: Context,
-        ) -> HumanMessage:
-            mock.intercepted(event.content)
-            return HumanMessage(content="intercepted")
+    @pytest.mark.asyncio()
+    async def test_at_ask_overrides_agent(self, mock: MagicMock, test_config: TestConfig) -> None:
+        async def my_tool(ctx: Context) -> str:
+            mock(await ctx.input("Say smth", timeout=1.0))
+            return ""
 
-    async def my_tool(ctx: Context) -> str:
-        mock(await ctx.input("Say smth", timeout=1.0))
-        return ""
+        def agent_hook(event: HumanInputRequest) -> str:
+            return "agent-level"
 
-    def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        mock.hitl()
-        return HumanMessage(content="answer")
+        agent = Agent(
+            "",
+            config=test_config,
+            tools=[my_tool],
+            hitl_hook=agent_hook,
+        )
 
-    agent = Agent(
-        "",
-        config=test_config,
-        tools=[my_tool],
-        hitl_hook=hitl_hook,
-        middleware=[Middleware(ShortCircuitMiddleware)],
-    )
+        await agent.ask("Hi!", hitl_hook=lambda event: "ask-level")
 
-    await agent.ask("Hi!")
-
-    mock.intercepted.assert_called_once_with("Say smth")
-    mock.hitl.assert_not_called()
-    mock.assert_called_once_with("intercepted")
+        mock.assert_called_once_with("ask-level")

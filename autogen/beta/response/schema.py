@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -72,20 +72,27 @@ class ResponseSchema(ResponseProto[T]):
     @classmethod
     def ensure_schema(
         cls,
-        obj: "ResponseProto[T] | type[T] | ClassInfo",
+        obj: "None",
+    ) -> "None": ...
+
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: "ResponseProto[T]",
     ) -> "ResponseSchema[T]": ...
 
     @overload
     @classmethod
     def ensure_schema(
         cls,
-        obj: "None",
-    ) -> "None": ...
+        obj: "type[T]",
+    ) -> "ResponseSchema[T]": ...
 
     @classmethod
     def ensure_schema(
         cls,
-        obj: "ResponseProto[T] | type[T] | ClassInfo | None",
+        obj: "ResponseProto[T] | ClassInfo | None",
     ) -> "ResponseProto[T] | None":
         if obj is None:
             return None
@@ -144,14 +151,6 @@ class RawSchema(ResponseProto[str]):
             stacklevel=2,
         )
         return response
-
-
-@overload
-def make_adapter(types: type[T], *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]: ...
-
-
-@overload
-def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]: ...
 
 
 def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:

@@ -378,7 +378,7 @@ class BedrockClient:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
 
         self._model_id = params.get("model")
-        assert self._model_id, "Please provide the 'model` in the config_list to use Amazon Bedrock"
+        assert self._model_id, "Please provide the 'model' in the config_list to use Amazon Bedrock"
         # Parameters vary based on the model used.
         # As we won't cater for all models and parameters, it's the developer's
         # responsibility to implement the parameters and they will only be

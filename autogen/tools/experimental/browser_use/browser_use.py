@@ -13,8 +13,7 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 with optional_import_block():
-    from browser_use import Agent, Controller
-    from browser_use.browser.browser import Browser, BrowserConfig
+    from browser_use import Agent, BrowserProfile, BrowserSession, Controller
 
     from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
 
@@ -79,7 +78,7 @@ class BrowserUseTool(Tool):
         self,
         *,
         llm_config: LLMConfig | dict[str, Any] | None = None,
-        browser: Optional["Browser"] = None,
+        browser: Optional["BrowserSession"] = None,
         agent_kwargs: dict[str, Any] | None = None,
         browser_config: dict[str, Any] | None = None,
     ):
@@ -87,7 +86,7 @@ class BrowserUseTool(Tool):
 
         Args:
             llm_config: The LLM configuration. If None, the current LLMConfig from context is used.
-            browser: The browser to use. If defined, browser_config must be None
+            browser: The browser session to use. If defined, browser_config must be None
             agent_kwargs: Additional keyword arguments to pass to the Agent
             browser_config: The browser configuration to use. If defined, browser must be None
         """
@@ -105,7 +104,7 @@ class BrowserUseTool(Tool):
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
             llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
-            browser: Annotated[Browser | None, Depends(on(browser))],
+            browser: Annotated[BrowserSession | None, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
             browser_config: Annotated[dict[str, Any], Depends(on(browser_config))],
         ) -> BrowserUseResult:
@@ -114,8 +113,8 @@ class BrowserUseTool(Tool):
             if browser is None:
                 # set default value for headless
                 headless = browser_config.pop("headless", True)
-                browser_config = BrowserConfig(headless=headless, **browser_config)
-                browser = Browser(config=browser_config)
+                browser_profile = BrowserProfile(headless=headless, **browser_config)
+                browser = BrowserSession(browser_profile=browser_profile)
             # set default value for generate_gif
             if "generate_gif" not in agent_kwargs:
                 agent_kwargs["generate_gif"] = False

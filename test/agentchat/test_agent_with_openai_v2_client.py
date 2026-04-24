@@ -62,9 +62,9 @@ def _create_test_v2_config(credentials: Credentials) -> dict[str, Any]:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_simple_chat(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_simple_chat(credentials_openai_mini: Credentials) -> None:
     """Test basic chat using V2 client with real API."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = AssistantAgent(
         name="assistant",
@@ -89,9 +89,9 @@ def test_v2_client_simple_chat(credentials_gpt_4o_mini: Credentials) -> None:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_with_vision_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_with_vision_multimodal(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with vision/multimodal content using formal image input format."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     vision_assistant = AssistantAgent(
         name="vision_bot",
@@ -129,9 +129,9 @@ def test_v2_client_with_vision_multimodal(credentials_gpt_4o_mini: Credentials) 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_multi_turn_conversation(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_multi_turn_conversation(credentials_openai_mini: Credentials) -> None:
     """Test multi-turn conversation maintains context with V2 client."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = AssistantAgent(
         name="assistant", llm_config=llm_config, system_message="You are helpful assistant. Be brief."
@@ -158,9 +158,9 @@ def test_v2_client_multi_turn_conversation(credentials_gpt_4o_mini: Credentials)
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_with_system_message(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_with_system_message(credentials_openai_mini: Credentials) -> None:
     """Test V2 client respects system message configuration."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = AssistantAgent(
         name="math_tutor",
@@ -180,9 +180,9 @@ def test_v2_client_with_system_message(credentials_gpt_4o_mini: Credentials) -> 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_cost_tracking(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_cost_tracking(credentials_openai_mini: Credentials) -> None:
     """Test that V2 client provides accurate cost tracking."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
@@ -199,9 +199,9 @@ def test_v2_client_cost_tracking(credentials_gpt_4o_mini: Credentials) -> None:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_group_chat(credentials_openai_mini: Credentials) -> None:
     """Test V2 client works in group chat scenarios."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create specialized agents with V2 client
     analyst = ConversableAgent(
@@ -242,9 +242,9 @@ def test_v2_client_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_run_interface(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_run_interface(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with ConversableAgent::run() interface."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = ConversableAgent(
         name="runner",
@@ -273,9 +273,9 @@ def test_v2_client_run_interface(credentials_gpt_4o_mini: Credentials) -> None:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_content_str_compatibility(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_content_str_compatibility(credentials_openai_mini: Credentials) -> None:
     """Test that V2 client responses work with content_str utility."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = ConversableAgent(name="assistant", llm_config=llm_config, human_input_mode="NEVER")
 
@@ -299,9 +299,9 @@ def test_v2_client_content_str_compatibility(credentials_gpt_4o_mini: Credential
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_vs_standard_comparison(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_vs_standard_comparison(credentials_openai_mini: Credentials) -> None:
     """Compare V2 client with standard client - both should work."""
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
 
     # Standard client config
     standard_config = {
@@ -317,7 +317,7 @@ def test_v2_client_vs_standard_comparison(credentials_gpt_4o_mini: Credentials) 
     standard_assistant = AssistantAgent(name="standard", llm_config=standard_config, system_message="Be concise.")
 
     # V2 client config
-    v2_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    v2_config = _create_test_v2_config(credentials_openai_mini)
     v2_assistant = AssistantAgent(name="v2_bot", llm_config=v2_config, system_message="Be concise.")
 
     user_proxy = UserProxyAgent(
@@ -345,9 +345,9 @@ def test_v2_client_vs_standard_comparison(credentials_gpt_4o_mini: Credentials) 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_error_handling_invalid_model(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_error_handling_invalid_model(credentials_openai_mini: Credentials) -> None:
     """Test V2 client error handling with invalid model."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     # Override with invalid model for error testing
     llm_config["config_list"][0]["model"] = "invalid-model-xyz-12345"
 
@@ -362,9 +362,9 @@ def test_v2_client_error_handling_invalid_model(credentials_gpt_4o_mini: Credent
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_sequential_chats(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_sequential_chats(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with sequential chats and carryover."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     user_proxy = UserProxyAgent(
         name="manager", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
@@ -401,9 +401,9 @@ def test_v2_client_sequential_chats(credentials_gpt_4o_mini: Credentials) -> Non
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_backwards_compatibility(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_backwards_compatibility(credentials_openai_mini: Credentials) -> None:
     """Test V2 client maintains backwards compatibility with string/dict messages."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     assistant = ConversableAgent(name="compat_bot", llm_config=llm_config, human_input_mode="NEVER")
 
@@ -429,9 +429,9 @@ def test_v2_client_backwards_compatibility(credentials_gpt_4o_mini: Credentials)
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_multimodal_with_multiple_images(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with multiple images in one request using Base64 encoding."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     vision_assistant = AssistantAgent(name="vision_bot", llm_config=llm_config)
 
@@ -439,7 +439,7 @@ def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Cred
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Two simple Base64 encoded images (1x1 pixel red and blue PNGs)
+    # Two simple Base64 encoded images (1x1 pixel red and blue PNG)
     # Red 1x1 pixel PNG
     base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
     # Blue 1x1 pixel PNG
@@ -464,9 +464,9 @@ def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Cred
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_with_group_pattern(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_with_group_pattern(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with DefaultPattern group orchestration."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create specialized agents with V2 client
     analyst = ConversableAgent(
@@ -513,9 +513,9 @@ def test_v2_client_with_group_pattern(credentials_gpt_4o_mini: Credentials) -> N
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_pattern_with_vision(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with DefaultPattern and vision/multimodal content."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create vision-capable agents
     image_describer = ConversableAgent(
@@ -577,14 +577,14 @@ def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_run_group_chat_basic(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_run_group_chat_basic(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with run_group_chat interface for basic text messages.
 
     Note: run_group_chat uses threading internally - the conversation happens in a
     background thread and sends events to the iostream. The process() method should
     block until the thread completes and all events are received.
     """
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create specialized agents with V2 client
     analyst = ConversableAgent(
@@ -653,9 +653,9 @@ def test_v2_client_run_group_chat_basic(credentials_gpt_4o_mini: Credentials) ->
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_run_group_chat_multimodal(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with run_group_chat and multimodal content (images)."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create vision-capable agents
     image_analyst = ConversableAgent(
@@ -743,9 +743,9 @@ def test_v2_client_run_group_chat_multimodal(credentials_gpt_4o_mini: Credential
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_run_group_chat_content_preservation(credentials_openai_mini: Credentials) -> None:
     """Test that run_group_chat preserves multimodal content structure throughout conversation."""
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
 
     # Create agents
     agent1 = ConversableAgent(
@@ -846,7 +846,7 @@ def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_pydantic_simple(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_pydantic_simple(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with Pydantic structured output in agent chat."""
     try:
         from pydantic import BaseModel
@@ -862,7 +862,7 @@ def test_v2_client_structured_output_pydantic_simple(credentials_gpt_4o_mini: Cr
         confidence: float
 
     # Create V2 config with Pydantic response_format
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -898,7 +898,7 @@ def test_v2_client_structured_output_pydantic_simple(credentials_gpt_4o_mini: Cr
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_pydantic_complex(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_pydantic_complex(credentials_openai_mini: Credentials) -> None:
     """Test V2 client with complex Pydantic structured output."""
     try:
         from pydantic import BaseModel
@@ -914,7 +914,7 @@ def test_v2_client_structured_output_pydantic_complex(credentials_gpt_4o_mini: C
         steps: str
         difficulty: str
 
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -949,7 +949,7 @@ def test_v2_client_structured_output_pydantic_complex(credentials_gpt_4o_mini: C
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_multi_turn(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_multi_turn(credentials_openai_mini: Credentials) -> None:
     """Test V2 client structured output in multi-turn conversation."""
     try:
         from pydantic import BaseModel
@@ -963,7 +963,7 @@ def test_v2_client_structured_output_multi_turn(credentials_gpt_4o_mini: Credent
         is_true: bool
         explanation: str
 
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -998,7 +998,7 @@ def test_v2_client_structured_output_multi_turn(credentials_gpt_4o_mini: Credent
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_group_chat(credentials_openai_mini: Credentials) -> None:
     """Test V2 client structured output in group chat scenario."""
     try:
         from pydantic import BaseModel
@@ -1012,7 +1012,7 @@ def test_v2_client_structured_output_group_chat(credentials_gpt_4o_mini: Credent
         summary: str
         key_points: str
 
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -1062,7 +1062,7 @@ def test_v2_client_structured_output_group_chat(credentials_gpt_4o_mini: Credent
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_pattern_based(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_pattern_based(credentials_openai_mini: Credentials) -> None:
     """Test V2 client structured output with pattern-based group chat."""
     try:
         from pydantic import BaseModel
@@ -1076,7 +1076,7 @@ def test_v2_client_structured_output_pattern_based(credentials_gpt_4o_mini: Cred
         findings: str
         recommendation: str
 
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -1126,7 +1126,7 @@ def test_v2_client_structured_output_pattern_based(credentials_gpt_4o_mini: Cred
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_structured_output_override_in_params(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_structured_output_override_in_params(credentials_openai_mini: Credentials) -> None:
     """Test that response_format in agent params overrides client default."""
     try:
         from pydantic import BaseModel
@@ -1141,7 +1141,7 @@ def test_v2_client_structured_output_override_in_params(credentials_gpt_4o_mini:
         value: int
 
     # Create config with default response_format
-    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+    base_config = credentials_openai_mini.llm_config._model.config_list[0]
     llm_config = {
         "config_list": [
             {
@@ -1183,7 +1183,7 @@ def test_v2_client_structured_output_override_in_params(credentials_gpt_4o_mini:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_tool_calling_two_agent(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_tool_calling_two_agent(credentials_openai_mini: Credentials) -> None:
     """Test tool calling in two-agent conversation with V2 client using new registration pattern."""
     from typing import Annotated
 
@@ -1218,7 +1218,7 @@ def test_v2_client_tool_calling_two_agent(credentials_gpt_4o_mini: Credentials) 
         return a * b
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create assistant with tools using new pattern (functions parameter)
@@ -1269,7 +1269,7 @@ def test_v2_client_tool_calling_two_agent(credentials_gpt_4o_mini: Credentials) 
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_tool_calling_group_chat(credentials_openai_mini: Credentials) -> None:
     """Test tool calling in group chat with V2 client using AutoPattern."""
     from typing import Annotated
 
@@ -1302,7 +1302,7 @@ def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials)
         return f"The time in {timezone} is 3:45 PM"
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create agents with tools using functions= parameter
@@ -1357,7 +1357,7 @@ def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials)
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_function_call_legacy(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_function_call_legacy(credentials_openai_mini: Credentials) -> None:
     """Test legacy function_call format still works with V2 client."""
 
     def calculate_sum(numbers: list[int]) -> int:
@@ -1372,7 +1372,7 @@ def test_v2_client_function_call_legacy(credentials_gpt_4o_mini: Credentials) ->
         return sum(numbers)
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create agents
@@ -1410,11 +1410,11 @@ def test_v2_client_function_call_legacy(credentials_gpt_4o_mini: Credentials) ->
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_multimodal_image_two_agent(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_multimodal_image_two_agent(credentials_openai_mini: Credentials) -> None:
     """Test image/vision capabilities in two-agent conversation with V2 client."""
 
     # Create V2 config with vision model
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create vision-capable assistant
@@ -1453,11 +1453,11 @@ def test_v2_client_multimodal_image_two_agent(credentials_gpt_4o_mini: Credentia
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_multimodal_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_multimodal_group_chat(credentials_openai_mini: Credentials) -> None:
     """Test multimodal content in group chat with V2 client."""
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create vision agents
@@ -1771,7 +1771,7 @@ def test_v2_client_reasoning_no_tools(credentials_o4_mini: Credentials) -> None:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_combined_structured_output_and_tools(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_combined_structured_output_and_tools(credentials_openai_mini: Credentials) -> None:
     """Test structured output with tool calling (separate turns).
 
     Note: OpenAI does not support combining Pydantic response_format with tools in a single call.
@@ -1802,7 +1802,7 @@ def test_v2_client_combined_structured_output_and_tools(credentials_gpt_4o_mini:
         return eval(expression, {"__builtins__": {}})
 
     # Create V2 config WITHOUT structured output first (for tool calling)
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     assistant = AssistantAgent(
@@ -1834,7 +1834,7 @@ def test_v2_client_combined_structured_output_and_tools(credentials_gpt_4o_mini:
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_multimodal_with_tools(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_multimodal_with_tools(credentials_openai_mini: Credentials) -> None:
     """Test combining multimodal input with tool calling."""
 
     def analyze_color(color_name: str) -> str:
@@ -1849,7 +1849,7 @@ def test_v2_client_multimodal_with_tools(credentials_gpt_4o_mini: Credentials) -
         return f"The color {color_name} is often associated with creativity and energy."
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     assistant = AssistantAgent(
@@ -1894,7 +1894,7 @@ def test_v2_client_multimodal_with_tools(credentials_gpt_4o_mini: Credentials) -
 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_auto_pattern_with_tools(credentials_gpt_4o_mini: Credentials) -> None:
+def test_v2_client_auto_pattern_with_tools(credentials_openai_mini: Credentials) -> None:
     """Test AutoPattern (LLM-based agent selection) with tool calling using new registration pattern."""
     from typing import Annotated
 
@@ -1944,7 +1944,7 @@ def test_v2_client_auto_pattern_with_tools(credentials_gpt_4o_mini: Credentials)
         }
 
     # Create V2 config
-    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+    llm_config = _create_test_v2_config(credentials_openai_mini)
     llm_config["temperature"] = 0
 
     # Create specialized agents with tools using new pattern

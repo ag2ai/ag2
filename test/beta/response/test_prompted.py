@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -11,8 +11,6 @@ from pydantic import BaseModel
 
 from autogen.beta import PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.response import ResponseProto
-
-# --- Construction ---
 
 
 class TestPromptedSchemaFromType:
@@ -73,9 +71,6 @@ class TestPromptedSchemaFromResponseProto:
         assert schema.json_schema is None
 
 
-# --- System prompt ---
-
-
 class TestSystemPrompt:
     def test_contains_json_schema(self) -> None:
         @dataclass
@@ -119,9 +114,6 @@ class TestSystemPrompt:
 
         schema = PromptedSchema(NoSchemaProto())
         assert schema.system_prompt is None
-
-
-# --- Validation ---
 
 
 @pytest.mark.asyncio

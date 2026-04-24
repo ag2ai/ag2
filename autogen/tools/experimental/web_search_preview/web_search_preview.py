@@ -6,6 +6,7 @@
 import copy
 import logging
 import os
+import warnings
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
@@ -48,6 +49,12 @@ class WebSearchPreviewTool(Tool):
             text_format: The format of the text to be returned. This should be a subclass of `BaseModel`.
                 The default is `None`, which means the text will be returned as a string.
         """
+        warnings.warn(
+            "WebSearchPreviewTool is deprecated and will be removed in v0.14. "
+            "Use autogen.beta.tools.WebSearchTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.web_search_tool_param = WebSearchToolParam(
             type="web_search_preview",  # type: ignore[typeddict-item]
             search_context_size=search_context_size,

@@ -94,7 +94,7 @@ async def test_handoffs() -> None:
     # act
     with (
         TestAgent(remote_agent1, ["Hi, I am remote agent one!"]),
-        TestAgent(remote_agent2, ["I shouldn't speack..."]),
+        TestAgent(remote_agent2, ["I shouldn't speak..."]),
         TestAgent(local_agent, ["Hi, I am local agent!", "Hi remote!"]),
     ):
         result, _, _ = await a_initiate_group_chat(
