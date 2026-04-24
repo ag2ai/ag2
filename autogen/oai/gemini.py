@@ -106,7 +106,11 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiEntryDict(LLMConfigEntryDict, total=False):
-    api_type: Literal["google"]
+    # "google" targets the AI Studio endpoint; "google_vertex" targets the
+    # Vertex AI endpoint. Both map through the same Gemini config entry —
+    # the langchain factory + any Google-side routing dispatches on the
+    # string value.
+    api_type: Literal["google", "google_vertex"]
 
     project_id: str | None
     location: str | None
@@ -120,7 +124,9 @@ class GeminiEntryDict(LLMConfigEntryDict, total=False):
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["google"] = "google"
+    # "google" = AI Studio (generativelanguage.googleapis.com);
+    # "google_vertex" = Vertex AI (aiplatform.googleapis.com).
+    api_type: Literal["google", "google_vertex"] = "google"
     project_id: str | None = None
     location: str | None = None
     # google_application_credentials points to the path of the JSON Keyfile
