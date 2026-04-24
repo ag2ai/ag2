@@ -83,18 +83,18 @@ def test_step(credentials_all: Credentials):
     user_proxy.initiate_chat(assistant, message=problem)
     optimizer.record_one_conversation(assistant.chat_messages_for_summary(user_proxy), is_satisfied=True)
 
-    register_for_llm, register_for_exector = optimizer.step()
+    register_for_llm, register_for_executor = optimizer.step()
 
     print("-------------------------------------")
     print("register_for_llm:")
     print(register_for_llm)
-    print("register_for_exector")
-    print(register_for_exector)
+    print("register_for_executor")
+    print(register_for_executor)
 
     for item in register_for_llm:
         assistant.update_function_signature(**item)
-    if len(register_for_exector.keys()) > 0:
-        user_proxy.register_function(function_map=register_for_exector)
+    if len(register_for_executor.keys()) > 0:
+        user_proxy.register_function(function_map=register_for_executor)
 
     print("-------------------------------------")
     print("Updated assistant.llm_config:")

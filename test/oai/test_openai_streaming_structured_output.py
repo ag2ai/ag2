@@ -427,13 +427,13 @@ class TestStreamingStructuredOutputIntegration:
     """
 
     @pytest.mark.openai
-    def test_streaming_with_structured_output_pydantic(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_streaming_with_structured_output_pydantic(self, credentials_openai_mini: Credentials) -> None:
         """Test that streaming with Pydantic structured output works correctly.
 
         When stream=True and response_format is a Pydantic model, streaming should
         be automatically disabled internally and a valid structured response returned.
         """
-        config_list = credentials_gpt_4o_mini.config_list
+        config_list = credentials_openai_mini.config_list
 
         # Add stream=True and response_format to config
         for config in config_list:
@@ -458,13 +458,13 @@ class TestStreamingStructuredOutputIntegration:
         assert 0 <= parsed.confidence <= 1
 
     @pytest.mark.openai
-    def test_streaming_with_structured_output_json_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_streaming_with_structured_output_json_schema(self, credentials_openai_mini: Credentials) -> None:
         """Test that streaming with JSON schema structured output works correctly.
 
         When stream=True and response_format is a JSON schema dict, streaming should
         be automatically disabled internally and a valid JSON response returned.
         """
-        config_list = credentials_gpt_4o_mini.config_list
+        config_list = credentials_openai_mini.config_list
 
         # Use Pydantic's model_json_schema() for the JSON schema format
         # This matches the pattern used in test_structured_output.py
@@ -494,13 +494,13 @@ class TestStreamingStructuredOutputIntegration:
         assert isinstance(parsed["confidence"], (int, float))
 
     @pytest.mark.openai
-    def test_streaming_without_structured_output_captures_usage(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_streaming_without_structured_output_captures_usage(self, credentials_openai_mini: Credentials) -> None:
         """Test that streaming without structured output correctly captures usage metrics.
 
         When stream=True without response_format, streaming should work normally
         and usage metrics should be captured from the final chunk.
         """
-        config_list = credentials_gpt_4o_mini.config_list
+        config_list = credentials_openai_mini.config_list
 
         # Add stream=True without response_format
         for config in config_list:

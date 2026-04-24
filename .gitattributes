@@ -27,7 +27,7 @@
 *.sh              text eol=lf
 .husky/*          text eol=lf
 *.sql             text
-*.styl            text
+*.style            text
 *.tag             text
 *.ts              text
 *.tsx             text

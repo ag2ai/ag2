@@ -62,7 +62,7 @@ if openai_result.is_successful:
     ERROR: ImportError | None = None
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
-    ERROR = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
+    ERROR = ImportError("Please install openai>=1 to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
 
     # OpenAI = object
     # AzureOpenAI = object
@@ -316,7 +316,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+class DeepSeekEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["deepseek"]
 
     base_url: HttpUrl
@@ -961,7 +961,7 @@ class OpenAIWrapper:
         after removing extra kwargs.
 
         For Azure models/deployment names there's a convenience modification of model removing dots in
-        the it's value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
+        its value (Azure deployment names can't have dots). I.e. if you have Azure deployment name
         "gpt-35-turbo" and define model "gpt-3.5-turbo" in the config the function will remove the dot
         from the name and create a client that connects to "gpt-35-turbo" Azure deployment.
         """

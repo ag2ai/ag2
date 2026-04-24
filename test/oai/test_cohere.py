@@ -59,7 +59,7 @@ def test_initialization_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 @run_for_optional_imports(["cohere"], "cohere")
-def test_intialization(cohere_client: CohereClient) -> None:
+def test_initialization(cohere_client: CohereClient) -> None:
     assert cohere_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,27 +9,7 @@ from autogen.beta.events.tool_events import (
     ClientToolCallEvent,
     ToolCallEvent,
     ToolErrorEvent,
-    ToolResult,
 )
-
-
-class TestToolCallEventProviderData:
-    """provider_data must default to dict, not list."""
-
-    def test_default_is_dict(self) -> None:
-        tc = ToolCallEvent(name="search")
-        assert isinstance(tc.provider_data, dict)
-
-    def test_dict_operations_work(self) -> None:
-        tc = ToolCallEvent(name="search")
-        tc.provider_data["key"] = "value"
-        assert tc.provider_data.get("key") == "value"
-
-    def test_each_instance_gets_own_dict(self) -> None:
-        tc1 = ToolCallEvent(name="a")
-        tc2 = ToolCallEvent(name="b")
-        tc1.provider_data["x"] = 1
-        assert "x" not in tc2.provider_data
 
 
 class TestClientToolCallEventFromCall:
@@ -38,7 +18,7 @@ class TestClientToolCallEventFromCall:
     def test_parent_id_matches_original_id(self) -> None:
         original = ToolCallEvent(name="search", arguments='{"q": "test"}')
         client_call = ClientToolCallEvent.from_call(original)
-        assert client_call.parent_id == original.id
+        assert client_call.id == original.id
 
     def test_name_and_arguments_preserved(self) -> None:
         original = ToolCallEvent(name="calc", arguments='{"x": 1}')
@@ -48,35 +28,27 @@ class TestClientToolCallEventFromCall:
 
 
 class TestToolErrorEventContent:
-    """content must capture the traceback from self.error, not sys.exc_info()."""
+    """Traceback must be stored in result.parts[0] via from_call."""
 
     def test_content_contains_original_error(self) -> None:
+        call = ToolCallEvent(name="test_tool")
         try:
             raise ValueError("test error message")
         except Exception as e:
-            event = ToolErrorEvent(
-                parent_id="call-123",
-                name="test_tool",
-                error=e,
-                result=ToolResult(),
-            )
+            event = ToolErrorEvent.from_call(call, e)
 
-        # Access content OUTSIDE the except block
-        assert "ValueError" in event.content
-        assert "test error message" in event.content
+        traceback_text = event.result.parts[0].content  # type: ignore[union-attr]
+        assert "ValueError" in traceback_text
+        assert "test error message" in traceback_text
 
     def test_content_does_not_return_none_type(self) -> None:
+        call = ToolCallEvent(name="t")
         try:
             raise RuntimeError("something broke")
         except Exception as e:
-            event = ToolErrorEvent(
-                parent_id="x",
-                name="t",
-                error=e,
-                result=ToolResult(),
-            )
+            event = ToolErrorEvent.from_call(call, e)
 
-        assert "NoneType" not in event.content
+        assert "NoneType" not in event.result.parts[0].content  # type: ignore[union-attr]
 
 
 class TestSerializedArgumentsCache:
@@ -85,10 +57,10 @@ class TestSerializedArgumentsCache:
     def test_empty_dict_is_cached(self) -> None:
         tc = ToolCallEvent(name="tool", arguments="{}")
         with patch.object(json, "loads", wraps=json.loads) as mock_loads:
-            _ = tc.serialized_arguments
-            _ = tc.serialized_arguments
+            result = tc.serialized_arguments
             _ = tc.serialized_arguments
             assert mock_loads.call_count == 1
+            assert result == {}
 
     def test_non_empty_dict_is_cached(self) -> None:
         tc = ToolCallEvent(name="tool", arguments='{"key": "value"}')
@@ -98,7 +70,25 @@ class TestSerializedArgumentsCache:
             assert mock_loads.call_count == 1
             assert result == {"key": "value"}
 
+
+class TestSerializedArgumentsEmptyInput:
+    """serialized_arguments must handle empty string and None without crashing."""
+
+    def test_empty_string_returns_empty_dict(self) -> None:
+        tc = ToolCallEvent(name="tool", arguments="")
+        assert tc.serialized_arguments == {}
+
+    def test_none_returns_empty_dict(self) -> None:
+        tc = ToolCallEvent(name="tool", arguments=None)
+        assert tc.serialized_arguments == {}
+
     def test_setter_updates_cache(self) -> None:
         tc = ToolCallEvent(name="tool", arguments='{"a": 1}')
-        tc.serialized_arguments = {"b": 2}
-        assert tc.serialized_arguments == {"b": 2}
+
+        with patch.object(json, "loads", wraps=json.loads) as mock_loads:
+            assert tc.serialized_arguments == {"a": 1}
+
+            tc.serialized_arguments = {"b": 2}
+            assert tc.serialized_arguments == {"b": 2}
+
+            assert mock_loads.call_count == 1

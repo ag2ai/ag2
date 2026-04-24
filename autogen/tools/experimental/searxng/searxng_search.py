@@ -6,6 +6,7 @@ A simple tool to perform web searches using a SearxNG instance.
 """
 
 import logging
+import warnings
 from typing import Annotated, Any
 
 import requests
@@ -108,6 +109,12 @@ class SearxngSearchTool(Tool):
         Args:
             base_url (str): The SearxNG instance URL.
         """
+        warnings.warn(
+            "SearxngSearchTool is deprecated and will be removed in v0.14. "
+            "Use DuckDuckGoSearchTool or TavilySearchTool instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.base_url = base_url
         super().__init__(
             name="searxng_search",

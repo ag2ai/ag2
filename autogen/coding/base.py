@@ -98,7 +98,7 @@ class IPythonCodeResult(CodeResult):
 CodeExecutionConfig = TypedDict(
     "CodeExecutionConfig",
     {
-        "executor": Literal["ipython-embedded", "commandline-local", "yepcode"] | CodeExecutor,
+        "executor": Literal["ipython-embedded", "commandline-local", "yepcode", "remyx", "daytona"] | CodeExecutor,
         "last_n_messages": int | Literal["auto"],
         "timeout": int,
         "use_docker": bool | str | list[str],
@@ -107,6 +107,7 @@ CodeExecutionConfig = TypedDict(
         "commandline-local": Mapping[str, Any],
         "yepcode": Mapping[str, Any],
         "remyx": Mapping[str, Any],
+        "daytona": Mapping[str, Any],
     },
     total=False,
 )

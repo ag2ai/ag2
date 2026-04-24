@@ -26,7 +26,7 @@ class GraphStoreQueryResult:
 
 @runtime_checkable
 class GraphQueryEngine(Protocol):
-    """An abstract base class that represents a graph query engine on top of a underlying graph database.
+    """An abstract base class that represents a graph query engine on top of an underlying graph database.
 
     This interface defines the basic methods for graph-based RAG.
     """

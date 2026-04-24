@@ -222,25 +222,7 @@ result, context_variables, last_agent = initiate_group_chat(
 
 When we run this enhanced financial compliance system, here's what happens:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
-    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects transactions"| Finance
-
-    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
-    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
-
-    Summary --> |"Generates report"| Human
-    Human --> |"Reviews & exits"| End([End])
-
-    style GroupOrch fill:#fff0f5,stroke:#ff69b4
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style GroupManager fill:#ffebee,stroke:#f44336
-```
+![Group Chat Workflow](assets/group-chat-workflow.png)
 
 - **Initial Processing**: The `finance_bot` analyzes each transaction
 
@@ -527,24 +509,7 @@ result, _, _ = initiate_group_chat(
 
 With these changes, our workflow becomes more streamlined:
 
-```mermaid
-flowchart TD
-    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
-    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
-    Human --> |"Approves/rejects transactions"| Finance
-
-    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
-    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
-
-    Summary --> |"Generates report with termination marker"| End([End])
-
-    style GroupOrch fill:#fff0f5,stroke:#ff69b4
-    style Finance fill:#e3f2fd,stroke:#1976d2
-    style Human fill:#f3e5f5,stroke:#7b1fa2
-    style Summary fill:#e8f5e9,stroke:#4caf50
-    style GroupManager fill:#ffebee,stroke:#f44336
-```
+![Updated Flow with Automatic Termination](assets/auto-termination-workflow.png)
 
 Now the human agent only participates when needed for transaction approval, and the workflow automatically terminates after the summary report is generated.
 

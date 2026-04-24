@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -31,7 +31,7 @@ async def test_sync_hitl(
 
     def hitl_hook(event: HumanInputRequest) -> HumanMessage:
         mock.hitl(event.content)
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     agent = Agent(
         "",
@@ -56,7 +56,7 @@ async def test_async_hitl(
         return ""
 
     async def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     agent = Agent(
         "",
@@ -87,7 +87,7 @@ async def test_hitl_decorator(
 
     @agent.hitl_hook
     def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="answer")
+        return HumanMessage("answer")
 
     await agent.ask("Hi!")
 
@@ -110,14 +110,14 @@ async def test_hitl_decorator_override(
     )
 
     @agent.hitl_hook
-    def overrided_hook(event: HumanInputRequest) -> HumanMessage:
-        return HumanMessage(content="wrong")
+    def overridden_hook(event: HumanInputRequest) -> HumanMessage:
+        return HumanMessage("wrong")
 
     with pytest.warns(RuntimeWarning):
 
         @agent.hitl_hook
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
-            return HumanMessage(content="answer")
+            return HumanMessage("answer")
 
     await agent.ask("Hi!")
 

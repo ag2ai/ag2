@@ -5,15 +5,17 @@
 # Original portions of this file are derived from https://github.com/microsoft/autogen under the MIT License.
 # SPDX-License-Identifier: MIT
 
+import logging
+
 from .base import JupyterConnectable, JupyterConnectionInfo
-from .docker_jupyter_server import DockerJupyterServer
 from .embedded_ipython_code_executor import EmbeddedIPythonCodeExecutor
 from .jupyter_client import JupyterClient
 from .jupyter_code_executor import JupyterCodeExecutor
 from .local_jupyter_server import LocalJupyterServer
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
-    "DockerJupyterServer",
     "EmbeddedIPythonCodeExecutor",
     "JupyterClient",
     "JupyterCodeExecutor",
@@ -21,3 +23,14 @@ __all__ = [
     "JupyterConnectionInfo",
     "LocalJupyterServer",
 ]
+
+# Try to import DockerJupyterServer and add to __all__ if available
+try:
+    from .docker_jupyter_server import DockerJupyterServer  # noqa: F401
+
+    __all__.append("DockerJupyterServer")
+except ImportError:
+    logger.debug(
+        "DockerJupyterServer not available: missing dependencies. Install with: pip install ag2[docker,jupyter-executor]"
+    )
+    pass

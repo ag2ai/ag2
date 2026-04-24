@@ -26,26 +26,29 @@ jobs:
       actions: read # Required for Claude to read CI results on PRs
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Checkout PR branch (if comment is on a PR)
         if: github.event.issue.pull_request || github.event.pull_request
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
         run: |
-          if [ -n "${{ github.event.issue.number }}" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-          elif [ -n "${{ github.event.pull_request.number }}" ]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
+          if [ -n "$ISSUE_NUMBER" ]; then
+            PR_NUMBER="$ISSUE_NUMBER"
+          elif [ -n "$PR_NUMBER_EVENT" ]; then
+            PR_NUMBER="$PR_NUMBER_EVENT"
           fi
 
           if [ -n "$PR_NUMBER" ]; then
             echo "Detected comment on PR #$PR_NUMBER"
 
             # Check if it's a forked PR
-            PR_INFO=$(gh pr view $PR_NUMBER --json isCrossRepository,headRepositoryOwner 2>/dev/null || echo '{}')
+            PR_INFO=$(gh pr view "$PR_NUMBER" --json isCrossRepository,headRepositoryOwner 2>/dev/null || echo '{}')
             IS_FORK=$(echo "$PR_INFO" | jq -r '.isCrossRepository // false')
 
             if [ "$IS_FORK" = "true" ]; then
@@ -55,13 +58,13 @@ jobs:
             fi
 
             echo "Checking out PR #$PR_NUMBER"
-            gh pr checkout $PR_NUMBER
+            gh pr checkout "$PR_NUMBER"
             echo "✅ PR branch checked out successfully"
           fi
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1eddb334cfa79fdb21ecbe2180ca1a016e8e7d47 # v1.0.88
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
