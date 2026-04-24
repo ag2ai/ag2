@@ -10,6 +10,21 @@ from autogen.beta import Agent, PromptedSchema, ResponseSchema, response_schema
 from autogen.beta.testing import TestConfig
 
 
+class CheckResponseSchema:
+    def check_none(self) -> None:
+        rs = ResponseSchema.ensure_schema(None)
+        assert_type(rs, None)
+
+    def check_primitive(self) -> None:
+        rs = ResponseSchema.ensure_schema(str)
+        assert_type(rs, ResponseSchema[str])
+
+    def check_schema(self) -> None:
+        rs1 = ResponseSchema.ensure_schema(str)
+        rs2 = ResponseSchema.ensure_schema(rs1)
+        assert_type(rs2, ResponseSchema[str])
+
+
 async def check_default_response_schema() -> None:
     agent = Agent(
         "test",
@@ -77,7 +92,7 @@ async def check_response_schema_object() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_sync_callable_reponse() -> None:
+async def check_sync_callable_response() -> None:
     @response_schema
     def func(content: str) -> int:
         return int(content)
@@ -93,7 +108,7 @@ async def check_sync_callable_reponse() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_async_callable_reponse() -> None:
+async def check_async_callable_response() -> None:
     @response_schema
     async def func(content: str) -> int:
         return int(content)
@@ -109,7 +124,7 @@ async def check_async_callable_reponse() -> None:
     assert_type(await reply.content(), int | None)
 
 
-async def check_converstation_save_type() -> None:
+async def check_conversation_save_type() -> None:
     agent = Agent(
         "test",
         config=TestConfig(),

@@ -1,0 +1,95 @@
+---
+title: Tool middleware
+sidebarTitle: Tool middleware
+---
+
+# Tool middleware
+
+Tool middleware lets you wrap **one** function tool with async hooks that run immediately around its execution—the same idea as an agent's `on_tool_execution()` [Middleware](/docs/beta/middleware), but attached at **tool definition** time with plain callables (no `BaseMiddleware` subclass).
+
+Use this pattern when behavior is specific to a single tool. For policies that apply to **every** tool on an agent, register [`BaseMiddleware`](/docs/beta/middleware) with `on_tool_execution()` instead.
+
+## Why use it
+
+Tool-scoped hooks are **optional**. They help when:
+
+- **Colocation** — Validation, redaction, or metrics for one tool live next to that implementation instead of in shared agent middleware.
+- **Clear contracts** — Libraries can ship a tool with hooks that always run (normalize arguments, scrub secrets) without requiring consumers to register matching agent middleware.
+- **Simpler agents** — You avoid a large `on_tool_execution` full of `if event.name == ...` when only a few tools need special handling.
+
+Use agent **`middleware=[...]`** when the policy is global or shared across most tools. Use **`middleware=[...]`** on [`@tool`](/docs/beta/tools/tools), [`@agent.tool`](/docs/beta/tools/tools#registering-tools-via-a-decorator), or [`@toolkit.tool`](/docs/beta/tools/toolkits) when the behavior belongs to that tool only.
+
+## Typical cases
+
+| Scenario | Reason to use tool-scoped hooks |
+| -------- | ------------------------------- |
+| Normalize or validate arguments for one function | Only that tool’s schema needs the transform; keeps agent middleware small. |
+| Redact or reshape results before they return to the model | Per-tool privacy or formatting (for example strip internal IDs). |
+| Light auditing or metrics for a sensitive action | The hook is bundled with the tool so it is hard to forget at agent setup. |
+| Retry or fallback tied to one integration | Failure handling stays next to the API client without naming the tool in global middleware. |
+| **Approve or reject** before the tool body runs | Gate dangerous or irreversible tools on policy, session flags, or a human decision without scattering checks inside the implementation. |
+
+## API
+
+The public type alias is **`ToolMiddleware`** in `autogen.beta.middleware`.
+A hook is an **async** callable with the same parameters as `BaseMiddleware.on_tool_execution`, except the first argument is the inner **`ToolExecution`** (the next step in the chain), not `self`.
+
+- Pass **`middleware=[hook, ...]`** to **`@tool`**, **`Agent.tool`**, or **`Toolkit.tool`**.
+- Multiple hooks use the **same nesting as agent tool middleware**: the **first** entry in the list is the **outermost** layer around the tool body.
+- If the agent **also** registers `BaseMiddleware` with `on_tool_execution`, **agent middleware runs outside** tool-scoped hooks (it sees the full execution, including hooks).
+
+```python linenums="1" hl_lines="8-14 16"
+from typing import Annotated
+
+from autogen.beta import Agent, Context, tool, Variable
+from autogen.beta.config import OpenAIConfig
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import ToolExecution
+
+async def add_request_id(
+    call_next: ToolExecution,
+    event: ToolCallEvent,
+    context: Context,
+) -> ToolResultEvent:
+    context.variables.setdefault("request_id", "unknown")
+    return await call_next(event, context)
+
+@tool(middleware=[add_request_id])
+def search(query: str, request_id: Annotated[str, Variable()]) -> str:
+    """Runs a search. request_id may be injected by middleware."""
+    return f"results-for-{query}-{request_id}"
+
+agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+```
+
+!!! note
+    Tool-scoped hooks are plain callables. They do **not** use the `Middleware(...)` factory or `BaseMiddleware`.
+
+## Adding middleware to an existing tool
+
+Use `#!python tool.with_middleware()` to wrap a tool with additional hooks **without modifying** the original. The returned tool is an independent copy with the new middleware as the outermost layer:
+
+```python linenums="1" hl_lines="16"
+from autogen.beta import tool
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.middleware import ToolExecution
+
+async def audit(
+    call_next: ToolExecution, event: ToolCallEvent, context: Context,
+) -> ToolResultEvent:
+    print(f"audit: {event.name}")
+    return await call_next(event, context)
+
+@tool
+def delete_record(record_id: str) -> str:
+    """Deletes a record."""
+    return f"Deleted {record_id}"
+
+audited_delete = delete_record.with_middleware(audit)
+
+# delete_record is unchanged; audited_delete runs audit → delete_record
+```
+
+## Toolkit-level middleware
+
+Pass `middleware=[...]` to a [`Toolkit`](/docs/beta/tools/toolkits) constructor to apply hooks to **all** tools in the set. Toolkit middleware is the outermost layer — it runs before any per-tool hooks. See [Toolkit middleware](/docs/beta/tools/toolkits#toolkit-middleware).

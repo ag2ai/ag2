@@ -26,7 +26,7 @@ class TestExtractedContent:
             ("about:blank", None),
         ],
     )
-    def test_url_is_proprely_set(self, url: str, expected_url: str) -> None:
+    def test_url_is_properly_set(self, url: str, expected_url: str) -> None:
         extracted_content = ExtractedContent(content="content", url=url)
         assert extracted_content.url == expected_url
 
@@ -85,8 +85,8 @@ class TestBrowserUseToolOpenai:
         assert len(result.extracted_content) > 0
 
     @pytest.fixture()
-    def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
-        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
+    def browser_use_tool(self, credentials_openai_mini: Credentials) -> BrowserUseTool:
+        return BrowserUseTool(llm_config=credentials_openai_mini.llm_config)
 
     def test_get_controller(self, mock_credentials: Credentials) -> None:
         controller = BrowserUseTool._get_controller(llm_config=mock_credentials.llm_config)

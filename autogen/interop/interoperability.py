@@ -54,7 +54,7 @@ class Interoperability:
         """
         supported_types = cls.registry.get_supported_types()
         if type not in supported_types:
-            supported_types_formatted = ", ".join(["'t'" for t in supported_types])
+            supported_types_formatted = ", ".join([f"'{t}'" for t in supported_types])
             raise ValueError(
                 f"Interoperability class {type} is not supported, supported types: {supported_types_formatted}"
             )

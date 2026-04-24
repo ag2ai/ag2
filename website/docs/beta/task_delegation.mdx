@@ -1,0 +1,190 @@
+---
+title: Task Delegation
+sidebarTitle: Task Delegation
+---
+
+Task delegation allows agents to delegate work to other agents through tool calling. The calling agent's LLM decides when and what to delegate, and each sub-task runs on its own isolated stream with independent history.
+
+## Why Use Subagents
+
+Breaking work across multiple agents gives you:
+
+- **Separation of concerns** — each agent has a focused prompt, tools, and config tuned for its role.
+- **Independent context** — sub-tasks run on fresh streams, so history doesn't grow unboundedly.
+- **LLM-driven orchestration** — the calling agent decides when to delegate, what context to pass, and how to use the result.
+
+!!! note
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+
+## Subagents API
+
+Use `#!python Agent.as_tool()` to make one agent available as a tool for another.
+
+```python linenums="1" hl_lines="23-26"
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+
+config = AnthropicConfig("claude-sonnet-4-6")
+
+researcher = Agent(
+    "researcher",
+    prompt="You are a thorough researcher. Provide concise factual findings.",
+    config=config,
+    tools=[search_tool],
+)
+
+writer = Agent(
+    "writer",
+    prompt="You are a skilled writer. Turn research into clear prose.",
+    config=config,
+)
+
+coordinator = Agent(
+    "coordinator",
+    prompt="First delegate research, then pass findings to the writer.",
+    config=config,
+    tools=[
+        researcher.as_tool(description="Research a topic and return findings."),
+        writer.as_tool(description="Write an article. Pass research notes in the context parameter."),
+    ],
+)
+
+reply = await coordinator.ask("Write a short article about the history of Python.")
+print(await reply.content())
+```
+
+The coordinator's LLM sees two tools — `task_researcher` and `task_writer` — and calls them as needed. Each call spawns the target agent on a fresh stream, runs it to completion, and returns the result.
+
+The calling agent's LLM sees a tool named `#!python task_{agent.name}` with `objective` (required) and `context` (optional) parameters.
+
+The `context` tool parameter is how the calling LLM shares relevant information with the sub-task:
+
+```python linenums="1"
+task_writer(
+    objective="Write an article about Python's history",
+    context="Key findings: Created by Guido van Rossum in 1991. Named after Monty Python."
+)
+```
+
+`as_tool()` accepts these parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `description` | `str` | Tool description shown to the LLM (required) |
+| `name` | `str | None` | Override the default `task_{agent.name}` tool name |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `depth_limiter`, `approval_required`) |
+
+You can also use `#!python subagent_tool()` directly for more control:
+
+```python linenums="1" hl_lines="1 7"
+from autogen.beta.tools.subagents import subagent_tool
+
+coordinator = Agent(
+    "coordinator",
+    config=config,
+    tools=[
+        subagent_tool(researcher, description="Research a topic."),
+    ],
+)
+```
+
+## Self-Delegation
+
+An agent can delegate to itself to break complex work into independent sub-tasks. Each sub-task runs as a fresh copy of the agent with its own stream and history.
+
+```python linenums="1" hl_lines="12-17"
+analyst = Agent(
+    "analyst",
+    prompt=(
+        "You have search and sub_task tools. "
+        "Only use sub_task when the task has clearly independent parts. "
+        "Otherwise handle it directly with search."
+    ),
+    config=config,
+    tools=[search_tool],
+)
+
+analyst.add_tool(
+    analyst.as_tool(
+        description="Break work into a focused sub-task for independent analysis.",
+        name="sub_task",
+    )
+)
+
+reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX, and ecosystem.")
+```
+
+The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
+
+### Depth Limiter
+
+Self-delegation and deep chains (A → B → C → …) can cause infinite recursion. Use `#!python depth_limiter()` to cap the nesting depth:
+
+```python linenums="1" hl_lines="1 7"
+from autogen.beta.tools.subagents import depth_limiter
+
+analyst.add_tool(
+    analyst.as_tool(
+        description="Break work into a focused sub-task.",
+        name="sub_task",
+        middleware=[depth_limiter(max_depth=2)],
+    )
+)
+```
+
+When a sub-agent tries to delegate beyond the limit, its tool call returns an error message instead of executing. The calling LLM sees the error and can respond accordingly.
+
+`depth_limiter` accepts a single parameter:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `max_depth` | `3` | Maximum nesting depth. `1` means the top-level agent can delegate once; sub-tasks cannot delegate further. |
+
+## Sub-Task Streams
+
+### Default Behavior
+
+By default, each sub-task creates a fresh `MemoryStream`. The sub-task's history is isolated — it doesn't carry over between invocations.
+
+It means that subagent has no information about previous calls or results. It just sees the current call and the context.
+
+| What | Behavior | Why |
+|---|---|---|
+| **Dependencies** | Copied | Isolated — child mutations don't affect parent |
+| **Variables** | Copied; synced back on success | Concurrent-safe — user variable mutations propagate back |
+| **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
+| **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
+| **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
+
+### Persistent Stream
+
+`#!python persistent_stream()` gives the same agent a consistent stream across multiple invocations within a context. The sub-task's history accumulates across calls rather than starting fresh each time:
+
+```python linenums="1" hl_lines="5"
+from autogen.beta.tools.subagents import persistent_stream
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=persistent_stream(),
+)
+```
+
+It stores the stream ID in `#!python context.dependencies` keyed by `#!python f"ag:{agent.name}:stream"` and reuses the parent stream's storage backend. This is useful when the sub-agent benefits from seeing its own prior work — for example, a researcher that should avoid repeating searches.
+
+### Custom Factory
+
+For full control, pass any callable matching `#!python StreamFactory = Callable[[Agent, Context], Stream]`:
+
+```python linenums="1" hl_lines="4-6 9"
+from autogen.beta import Agent, Context
+from autogen.beta.streams.redis import RedisStream
+
+def make_redis_stream(agent: Agent, ctx: Context) -> RedisStream:
+    return RedisStream(MY_REDIS_URL, prefix=f"ag2:sub:{agent.name}")
+
+researcher.as_tool(
+    description="Research a topic",
+    stream=make_redis_stream,
+)
+```

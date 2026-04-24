@@ -4,7 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import warnings
 from typing import Any, Literal
+
+from typing_extensions import deprecated
 
 from ...llm_config import LLMConfig
 from ..agent import Agent
@@ -16,8 +19,17 @@ The user will give you analysis INSTRUCTIONS copied twice, at both the beginning
 You will follow these INSTRUCTIONS in analyzing the TEXT, then give the results of your expert analysis in the format requested."""
 
 
+@deprecated(
+    "TextAnalyzerAgent is deprecated and will be removed in v0.14. "
+    "Use ConversableAgent with an appropriate system message instead."
+)
 class TextAnalyzerAgent(ConversableAgent):
-    """(Experimental) Text Analysis agent, a subclass of ConversableAgent designed to analyze text as instructed."""
+    """(Deprecated) Text Analysis agent, a subclass of ConversableAgent designed to analyze text as instructed.
+
+    .. deprecated::
+        TextAnalyzerAgent is deprecated and will be removed in v0.14.
+        Use ConversableAgent with an appropriate system message instead.
+    """
 
     def __init__(
         self,
@@ -37,6 +49,12 @@ class TextAnalyzerAgent(ConversableAgent):
             To disable llm-based auto reply, set to False.
         **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
+        warnings.warn(
+            "TextAnalyzerAgent is deprecated and will be removed in v0.14. "
+            "Use ConversableAgent with an appropriate system message instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             system_message=system_message,

@@ -24,7 +24,7 @@
 | Marc Willhaus     | [willhama](https://github.com/willhama)                    | -                        | -                                       |
 | George Sideris    | [giorgossideris](https://github.com/giorgossideris)        | -                        | reasoning, RAG                          |
 | Beibin Li         | [BeibinLi](https://github.com/BeibinLi)                    | GenAI, Meta              | multimodal, reasoning, optiguide        |
-| Nikita Pastukhov  | [Lancetnik](https://github.com/lancetnik)                  | -                        | A2A                                     |
+| Nikita Pastukhov  | [Lancetnik](https://github.com/lancetnik)                  | -                        | A2A, AG-UI, Beta                        |
 | Priyanshu Deshmukh| [priyansh4320](https://github.com/priyansh4320)            | -                        | GPT-5 support,apply patch tool, shell tool|
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**

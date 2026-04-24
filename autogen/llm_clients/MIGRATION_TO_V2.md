@@ -648,7 +648,7 @@ def test_openai_wrapper_integration():
     """Verify V2 client works with OpenAIWrapper"""
     config_list = [{
         "model": "gpt-4o",
-        "api_key": "test",
+        "api_key": "test",  # pragma: allowlist secret
         "api_type": "openai"
     }]
 
@@ -666,7 +666,7 @@ def test_agent_integration():
     """Verify agents work with V2 clients"""
     agent = ConversableAgent(
         name="assistant",
-        llm_config={"model": "gpt-4o", "api_key": "test"}
+        llm_config={"model": "gpt-4o", "api_key": "test"}  # pragma: allowlist secret
     )
 
     # Agent should handle V2 responses transparently

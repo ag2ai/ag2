@@ -466,7 +466,8 @@ class TestHandoffs:
 
         # Chain multiple operations
         result = (
-            handoffs.add_context_condition(mock_on_context_condition)
+            handoffs
+            .add_context_condition(mock_on_context_condition)
             .add_llm_condition(mock_on_condition)
             .set_after_work(mock_after_work)
         )

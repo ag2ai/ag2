@@ -4,6 +4,7 @@
 
 import re
 import sys
+import warnings
 from typing import Any
 
 from ...doc_utils import export_module
@@ -51,6 +52,11 @@ class CrewAIInteroperability:
             ValueError: If the provided tool is not an instance of `CrewAITool`, or if
                         any additional arguments are passed.
         """
+        warnings.warn(
+            "CrewAIInteroperability is deprecated and will be removed in v0.14.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if not isinstance(tool, CrewAITool):
             raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
         if kwargs:
