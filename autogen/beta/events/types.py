@@ -56,6 +56,13 @@ class BinaryResult:
     data: bytes
     metadata: dict[str, Any] = dataclass_field(default_factory=dict)
 
+    @property
+    def name(self) -> str:
+        return self.metadata.get("filename", "generated_file")
+
+    async def content(self) -> bytes:
+        return self.data
+
 
 class ModelResponse(ModelEvent):
     """Final model response produced for a given request."""

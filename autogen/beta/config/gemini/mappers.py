@@ -7,15 +7,20 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from autogen.beta.events.input_events import (
     BinaryInput,
+    BinaryType,
+    DataInput,
+    FileIdInput,
     UrlInput,
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -166,6 +171,7 @@ def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
 
 def convert_messages(
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[types.Content]:
     result: list[types.Content] = []
 
@@ -188,19 +194,47 @@ def convert_messages(
         elif isinstance(message, ToolResultsEvent):
             parts_list: list[types.Part] = []
             for r in message.results:
+                text_chunks: list[str] = []
+                media_parts: list[types.FunctionResponsePart] = []
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        text_chunks.append(part.content)
+                    elif isinstance(part, DataInput):
+                        text_chunks.append(serializer.encode(part.data).decode())
+                    elif isinstance(part, BinaryInput) and part.kind in (BinaryType.IMAGE, BinaryType.DOCUMENT):
+                        media_parts.append(
+                            types.FunctionResponsePart.from_bytes(data=part.data, mime_type=part.media_type)
+                        )
+                    elif isinstance(part, UrlInput) and part.kind in (BinaryType.IMAGE, BinaryType.DOCUMENT):
+                        media_parts.append(
+                            types.FunctionResponsePart.from_uri(file_uri=part.url, mime_type=_mime_from_url(part.url))
+                        )
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "gemini")
+
+                if text_chunks:
+                    result_value = text_chunks[0] if len(text_chunks) == 1 else text_chunks
+                    response_dict: dict[str, Any] = {"result": result_value}
+                else:
+                    response_dict = {}
+
                 parts_list.append(
                     types.Part.from_function_response(
-                        name=r.name if hasattr(r, "name") else "",
-                        response={"result": r.content},
+                        name=r.name or "",
+                        response=response_dict,
+                        parts=media_parts or None,
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
 
         elif isinstance(message, ModelRequest):
             parts: list[types.Part] = []
-            for inp in message.inputs:
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append(types.Part.from_text(text=inp.content))
+
+                elif isinstance(inp, DataInput):
+                    parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     mime = _mime_from_url(inp.url)
@@ -208,6 +242,15 @@ def convert_messages(
                         parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
                     else:
                         parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+
+                elif isinstance(inp, FileIdInput):
+                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            "gemini",
+                        )
+                    file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
+                    parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
 
                 elif isinstance(inp, BinaryInput):
                     part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
@@ -225,12 +268,15 @@ def convert_messages(
 
 def normalize_usage(metadata: Any) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
-    cache_read: float | None = None
-    if metadata.cached_content_token_count:
-        cache_read = float(metadata.cached_content_token_count)
+
+    cache_read = _to_float(metadata.cached_content_token_count) or None
     return Usage(
-        prompt_tokens=float(metadata.prompt_token_count),
-        completion_tokens=float(metadata.candidates_token_count),
-        total_tokens=float(metadata.total_token_count),
+        prompt_tokens=_to_float(metadata.prompt_token_count),
+        completion_tokens=_to_float(metadata.candidates_token_count),
+        total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
     )
+
+
+def _to_float(value: Any) -> float | None:
+    return float(value) if value is not None else None

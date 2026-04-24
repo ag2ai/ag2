@@ -13,6 +13,7 @@ from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient
@@ -150,6 +151,9 @@ class OpenAIConfig(ModelConfig):
             create_options=options,
         )
 
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)
+
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     model: ChatModel | str
@@ -239,3 +243,6 @@ class OpenAIResponsesConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
         )
+
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)

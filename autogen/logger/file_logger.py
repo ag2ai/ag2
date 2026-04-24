@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
+from .logger_utils import redact as _redact
 
 if TYPE_CHECKING:
     from openai import AzureOpenAI, OpenAI
@@ -38,8 +39,6 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 __all__ = ("FileLogger",)
-
-from .logger_utils import redact as _redact
 
 
 def safe_serialize(obj: Any) -> str:
@@ -109,7 +108,7 @@ class FileLogger(BaseLogger):
                 "invocation_id": str(invocation_id),
                 "client_id": client_id,
                 "wrapper_id": wrapper_id,
-                "request": to_dict(request),
+                "request": _redact(to_dict(request)),
                 "response": str(response),
                 "is_cached": is_cached,
                 "cost": cost,
@@ -137,7 +136,7 @@ class FileLogger(BaseLogger):
                 "session_id": self.session_id,
                 "current_time": get_current_ts(),
                 "agent_type": type(agent).__name__,
-                "args": to_dict(init_args),
+                "args": _redact(to_dict(init_args)),
                 "thread_id": thread_id,
             })
             self.logger.info(log_data)

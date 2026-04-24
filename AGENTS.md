@@ -2,7 +2,9 @@
 
 ## Common rules
 
-- Do not use `from __future__ import annotations` in new code.
+- Never use `from __future__ import annotations`.
+- All imports must be at the top of the test file. Never place imports inside individual functions until user asks for it.
+- Never create global objects. Do not use any functions in global scope.
 
 ## Package Structure
 
@@ -41,7 +43,7 @@ Advanced modules:
 
 ### Re-export rules
 
-All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires optional dependencies, wrap the import in a `try/except ImportError` block and register a `_missing_optional_dependency_config` fallback (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). This ensures users get a clear install hint instead of an unexplained `ImportError`.
+All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires optional dependencies, wrap the import in a `try/except ImportError` block and register a `missing_optional_dependency_config` fallback (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). This ensures users get a clear install hint instead of an unexplained `ImportError`.
 
 ### Design principles
 

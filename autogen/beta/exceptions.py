@@ -2,9 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from unittest.mock import Mock
+
 
 class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
+
+
+class ToolConflictError(AG2Error):
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(f"Could not add tool: `{tool_name}`. Tool with such name already registered.")
 
 
 class ToolResolutionError(AG2Error):
@@ -86,3 +93,12 @@ class SkillDownloadError(SkillError):
 
 class SkillInstallError(SkillError):
     """Raised when a downloaded skill archive cannot be extracted or validated."""
+
+
+def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+    def _raise(*args: object, **kwargs: object) -> None:
+        raise ImportError(
+            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
+        ) from error
+
+    return Mock(side_effect=_raise)

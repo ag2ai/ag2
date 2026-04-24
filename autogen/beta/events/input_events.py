@@ -8,7 +8,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, overload
 
-from autogen.beta.types import AudioMediaType, DocumentMediaType, ImageMediaType, MediaType, VideoMediaType
+from autogen.beta.types import (
+    AudioMediaType,
+    DocumentMediaType,
+    ImageMediaType,
+    MediaType,
+    SendableMessage,
+    VideoMediaType,
+)
 
 from .base import BaseEvent, Field
 
@@ -19,20 +26,28 @@ class Input(BaseEvent):
     metadata: dict[str, Any] = Field(default_factory=dict, repr=False)
 
     @classmethod
-    def ensure_input(cls, content: "str | Input") -> "Input":
+    def ensure_input(cls, content: "SendableMessage | Input") -> "Input":
         if isinstance(content, Input):
             return content
-        return TextInput(content)
+        elif isinstance(content, str):
+            return TextInput(content)
+        return DataInput(content)
 
 
 class ModelRequest(BaseEvent):
     """Event representing a user turn sent to the model, containing one or more inputs."""
 
-    inputs: "list[Input]" = Field(kw_only=False)
+    parts: "list[Input]" = Field(kw_only=False)
 
     @classmethod
     def ensure_request(cls, msgs: "Iterable[str | Input]") -> "ModelRequest":
         return cls([Input.ensure_input(m) for m in msgs])
+
+
+class DataInput(Input):
+    """Data input event sent to the model."""
+
+    data: SendableMessage = Field(kw_only=False)
 
 
 class TextInput(Input):

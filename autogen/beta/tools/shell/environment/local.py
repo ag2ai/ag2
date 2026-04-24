@@ -144,8 +144,7 @@ class LocalShellEnvironment(ShellEnvironment):
             )
             output = (result.stdout + result.stderr).strip()
 
-            if len(output) > self._max_output:
-                total = len(output)
+            if (total := len(output)) > self._max_output:
                 output = output[: self._max_output]
                 output += f"\n[truncated: showing first {self._max_output} of {total} chars]"
 

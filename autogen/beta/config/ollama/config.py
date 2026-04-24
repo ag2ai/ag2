@@ -58,3 +58,6 @@ class OllamaConfig(ModelConfig):
             streaming=self.streaming,
             create_options=options,
         )
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

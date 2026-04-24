@@ -10,6 +10,7 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
+from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
@@ -113,8 +114,9 @@ class OpenAIResponsesClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: "SerializerProto",
     ) -> ModelResponse:
-        input_items = events_to_responses_input(messages)
+        input_items = events_to_responses_input(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))

@@ -128,7 +128,12 @@ The figure below illustrates how docker execution works.
 Similar to the local command line code executor, the docker executor extracts code blocks from input messages, writes them to code files. For each code file, it starts a docker container to execute the code file,
 and reads the console output of the code execution.
 
-To use docker execution, you need to [install Docker](https://docs.docker.com/engine/install/) on your machine.
+To use docker execution, you need to [install Docker](https://docs.docker.com/engine/install/) on your machine **and** install AG2 with the `docker` extra:
+
+```bash
+pip install ag2[docker]
+```
+
 Once you have Docker installed and running, you can set up your code executor agent as follow:
 
 ```python

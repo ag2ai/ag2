@@ -3,7 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import types
-from typing import Literal, TypeAlias, TypeVar
+from collections.abc import Sequence
+from datetime import datetime
+from decimal import Decimal
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+)
 
 AudioMediaType: TypeAlias = Literal[
     "audio/wav",
@@ -75,3 +85,19 @@ omit = Omit()
 _T = TypeVar("_T")
 
 Omittable = _T | Omit
+
+
+JsonDecodable: TypeAlias = bool | bytes | bytearray | float | int | str | None
+
+SendableArray: TypeAlias = Sequence["SendableMessage"]
+
+SendableTable: TypeAlias = dict[str, "SendableMessage"]
+
+
+class StandardDataclass(Protocol):
+    """Protocol to check type is dataclass."""
+
+    __dataclass_fields__: ClassVar[dict[str, Any]]
+
+
+SendableMessage: TypeAlias = JsonDecodable | StandardDataclass | SendableTable | SendableArray | Decimal | datetime

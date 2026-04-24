@@ -5,28 +5,36 @@
 import json
 import traceback
 from dataclasses import dataclass, field
-from typing import Any, Generic
+from typing import Any
 from uuid import uuid4
 
-from fast_depends.pydantic import PydanticSerializer
-from typing_extensions import TypeVar as TypeVar313
+from autogen.beta.types import SendableMessage
 
 from .base import BaseEvent, Field
-
-ResultT = TypeVar313("ResultT", default=Any)
+from .input_events import Input
 
 
 @dataclass(slots=True)
-class ToolResult(Generic[ResultT]):
-    content: ResultT = None
-    final: bool = field(default=False, kw_only=True)
+class ToolResult:
+    parts: list[Input]
+    final: bool = field(default=False, kw_only=True, compare=False)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __init__(
+        self,
+        *parts: SendableMessage | Input,
+        final: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self.parts = [Input.ensure_input(p) for p in parts]
+        self.final = final
+        self.metadata = metadata or {}
+
     @classmethod
-    def ensure_result(cls, data: Any) -> "ToolResult":
+    def ensure_result(cls, data: "ToolResult | SendableMessage | Input") -> "ToolResult":
         if isinstance(data, ToolResult):
             return data
-        return cls(content=data)
+        return cls(data)
 
 
 class ToolCallsEvent(BaseEvent):
@@ -44,7 +52,7 @@ class ToolCallsEvent(BaseEvent):
 class ToolResultsEvent(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
-    results: list["ToolResultEvent[Any] | ToolErrorEvent"] = Field(kw_only=False)
+    results: list["ToolResultEvent"] = Field(kw_only=False)
 
 
 class ToolEvent(BaseEvent):
@@ -55,7 +63,7 @@ class ToolCallEvent(ToolEvent):
     """Represents a single tool invocation requested by the model."""
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str
+    name: str = Field(kw_only=False)
     arguments: str = "{}"
     provider_data: dict[str, Any] = Field(default_factory=dict, compare=False)
 
@@ -88,11 +96,15 @@ class ToolCallEvent(ToolEvent):
         }
 
 
-class ClientToolCallEvent(ToolCallEvent):
+class ClientToolCallEvent(ToolEvent):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = Field(kw_only=False)
+    arguments: str = "{}"
+
     @classmethod
     def from_call(cls, call: ToolCallEvent) -> "ClientToolCallEvent":
         return cls(
-            parent_id=call.id,
+            id=call.id,
             name=call.name,
             arguments=call.arguments,
         )
@@ -102,54 +114,36 @@ class BuiltinToolCallEvent(ToolCallEvent):
     """Represents a builtin tool invocation requested by the model."""
 
 
-class ToolResultEvent(ToolEvent, Generic[ResultT]):
+class ToolResultEvent(ToolEvent):
     """Represents a successful tool execution result."""
 
     parent_id: str
     name: str | None = None
 
-    result: "ToolResult[ResultT]"
-    _content: str = Field(default_factory=str, init=False)
-
-    @property
-    def content(self) -> str:
-        if not self._content:
-            self._content = PydanticSerializer.encode(self.result.content).decode()
-        return self._content
-
-    @content.setter
-    def content(self, value: str) -> None:
-        self._content = value
+    result: "ToolResult"
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name='{self.name}', content={self.content})"
+        return f"{self.__class__.__name__}(parent_id={self.parent_id}, name='{self.name}', result={self.result})"
 
     @classmethod
-    def from_call(cls, call: ToolCallEvent, result: ResultT) -> "ToolResultEvent[ResultT]":
+    def from_call(cls, call: ToolCallEvent, result: Any) -> "ToolResultEvent":
         return cls(
             parent_id=call.id,
             name=call.name,
             result=ToolResult.ensure_result(result),
         )
 
-    def to_api(self) -> dict[str, Any]:
-        return {
-            "role": "tool",
-            "tool_call_id": self.parent_id,
-            "content": self.content,
-        }
-
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ToolResultEvent):
             return NotImplemented
-        return self.parent_id == other.parent_id and self.name == other.name and self.content == other.content
+        return self.parent_id == other.parent_id and self.name == other.name and self.result == other.result
 
 
 class BuiltinToolResultEvent(ToolResultEvent):
     """Represents a successful builtin tool execution result."""
 
 
-class ToolErrorEvent(ToolResultEvent[None]):
+class ToolErrorEvent(ToolResultEvent):
     """Represents a failed tool execution with an associated error."""
 
     error: Exception
@@ -160,36 +154,23 @@ class ToolErrorEvent(ToolResultEvent[None]):
             parent_id=call.id,
             name=call.name,
             error=error,
-            result=ToolResult(),
-        )
-
-    @property
-    def content(self) -> str:
-        if not self._content:
-            self._content = "".join(
-                traceback.format_exception(
-                    type(self.error),
-                    self.error,
-                    self.error.__traceback__,
+            result=ToolResult(
+                "".join(
+                    traceback.format_exception(
+                        type(error),
+                        error,
+                        error.__traceback__,
+                    )
                 )
-            )
-        return self._content
-
-    @content.setter
-    def content(self, value: str) -> None:
-        self._content = value
+            ),
+        )
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ToolErrorEvent):
             return NotImplemented
         # Compare error types and messages to avoid relying on identity.
         same_error = type(self.error) is type(other.error) and str(self.error) == str(other.error)
-        return (
-            self.parent_id == other.parent_id
-            and self.name == other.name
-            and self.content == other.content
-            and same_error
-        )
+        return self.parent_id == other.parent_id and self.name == other.name and same_error
 
 
 class ToolNotFoundEvent(ToolErrorEvent):  # noqa: N818

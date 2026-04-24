@@ -15,6 +15,7 @@ from anthropic.types import (
     ThinkingBlock,
     ToolUseBlock,
 )
+from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
@@ -36,6 +37,7 @@ from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
+    has_file_id_references,
     normalize_usage,
     response_proto_to_output_config,
     tool_to_api,
@@ -86,8 +88,9 @@ class AnthropicClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
-        anthropic_messages = convert_messages(messages)
+        anthropic_messages = convert_messages(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -137,6 +140,13 @@ class AnthropicClient(LLMClient):
             )
             existing_betas.discard("")
             existing_betas.update(["code-execution-2025-08-25", "skills-2025-10-02"])
+            create_kwargs.setdefault("extra_headers", {})
+            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+
+        if has_file_id_references(messages):
+            existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
+            existing_betas.discard("")
+            existing_betas.add("files-api-2025-04-14")
             create_kwargs.setdefault("extra_headers", {})
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 
@@ -191,7 +201,7 @@ class AnthropicClient(LLMClient):
         response: Message,
         context: "ConversationContext",
     ) -> ModelResponse:
-        text_parts: list[str] = []
+        model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
 
         for block in response.content:
@@ -200,7 +210,8 @@ class AnthropicClient(LLMClient):
                     await context.send(ModelReasoning(block.thinking))
 
             elif isinstance(block, TextBlock):
-                text_parts.append(block.text)
+                model_msg = ModelMessage(block.text)
+                await context.send(model_msg)
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -210,11 +221,6 @@ class AnthropicClient(LLMClient):
                         arguments=json.dumps(block.input),
                     )
                 )
-
-        model_msg: ModelMessage | None = None
-        if text_parts:
-            model_msg = ModelMessage("\n\n".join(text_parts))
-            await context.send(model_msg)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
