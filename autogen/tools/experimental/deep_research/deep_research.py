@@ -255,7 +255,9 @@ class DeepResearchTool(Tool):
                 message="Analyse and gather subqestions for the following question: " + question,
             )
 
-            return DeepResearchTool._extract_last_result_with_prefix(result, DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX)
+            return DeepResearchTool._extract_last_result_with_prefix(
+                result, DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX
+            )
 
         return split_question_and_answer_subquestions
 

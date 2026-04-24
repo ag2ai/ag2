@@ -82,6 +82,18 @@ class TestExtractLastResultWithPrefix:
         result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
         assert result == ""
 
+    def test_skips_list_content_and_finds_prefix(self) -> None:
+        """List-type content (multimodal messages) should be skipped gracefully."""
+        chat_result = ChatResult(
+            chat_history=[
+                {"role": "tool", "content": "Answer confirmed: Correct answer"},
+                {"role": "assistant", "content": [{"type": "text", "text": "multimodal"}]},
+            ],
+            summary="",
+        )
+        result = DeepResearchTool._extract_last_result_with_prefix(chat_result, "Answer confirmed:")
+        assert result == "Answer confirmed: Correct answer"
+
 
 @run_for_optional_imports(
     ["langchain_openai", "browser_use"],
