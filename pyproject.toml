@@ -319,7 +319,7 @@ test = [
     "ag2[test-core]",
     "ag2[docker]",
     "ipykernel==7.1.0",
-    "nbconvert==7.16.6",
+    "nbconvert==7.17.1",
     "nbformat==5.10.4",
     "pandas==2.3.3",
     "fastapi==0.116.1",
