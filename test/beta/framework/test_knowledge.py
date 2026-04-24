@@ -5,14 +5,14 @@
 """Tests for KnowledgeStore, EventLogWriter, and bootstrapping."""
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from autogen.beta.events import ModelRequest, TaskCompleted, TextInput
-from autogen.beta.events.lifecycle import UnknownEvent
+from autogen.beta.events import ModelRequest, TaskCompleted, TextInput, UnknownEvent
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
@@ -182,8 +182,6 @@ class TestEventLogWriter:
     async def test_unknown_event_fallback(self) -> None:
         store = MemoryKnowledgeStore()
         # Write a record with a non-existent event type
-        import json
-
         stream_id = uuid4()
         record = json.dumps({"type": "nonexistent.module.FakeEvent", "data": {"key": "val"}})
         await store.write(f"/log/{stream_id}.jsonl", record)

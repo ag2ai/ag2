@@ -7,9 +7,7 @@ from contextlib import ExitStack
 import pytest
 
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ToolCallEvent
-from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.events.conditions import TypeCondition
+from autogen.beta.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
 from autogen.beta.observer import BaseObserver
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
@@ -41,18 +39,18 @@ class NullObserver(BaseObserver):
         return None
 
 
+@pytest.mark.asyncio
 class TestBaseObserver:
-    @pytest.mark.asyncio
     async def test_attach_and_process(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
         obs = DummyObserver()
 
         signals: list = []
-        stream.subscribe(
-            lambda e: signals.append(e),
-            condition=TypeCondition(ObserverAlert),
-        )
+
+        @stream.where(ObserverAlert).subscribe()
+        def on_alert(e: ObserverAlert) -> None:
+            signals.append(e)
 
         with ExitStack() as stack:
             obs.register(stack, ctx)
@@ -63,7 +61,6 @@ class TestBaseObserver:
             assert signals[0].source == "test-observer"
             assert signals[0].severity == Severity.WARNING
 
-    @pytest.mark.asyncio
     async def test_detach_stops_processing(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
@@ -76,17 +73,16 @@ class TestBaseObserver:
         await stream.send(ToolCallEvent(name="search", arguments="{}"), ctx)
         assert obs.process_count == 0
 
-    @pytest.mark.asyncio
     async def test_null_signal_not_emitted(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
         obs = NullObserver()
 
         signals: list = []
-        stream.subscribe(
-            lambda e: signals.append(e),
-            condition=TypeCondition(ObserverAlert),
-        )
+
+        @stream.where(ObserverAlert).subscribe()
+        def on_alert(e: ObserverAlert) -> None:
+            signals.append(e)
 
         with ExitStack() as stack:
             obs.register(stack, ctx)
@@ -94,7 +90,6 @@ class TestBaseObserver:
 
             assert len(signals) == 0
 
-    @pytest.mark.asyncio
     async def test_only_matching_events(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)

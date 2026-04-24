@@ -13,17 +13,14 @@ Actor.run_subtasks sequential exception handling, and the
 ObserverCompleted emission guarantee when ``detach()`` raises.
 """
 
-from __future__ import annotations
+from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta.events import ModelMessage
+from autogen.beta import tool
+from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, Usage
 from autogen.beta.events._serialization import import_event_class
-from autogen.beta.events.base import BaseEvent
-
-# ---------------------------------------------------------------------------
-# Bug 1: _import_event_class can't handle nested class qualnames
-# ---------------------------------------------------------------------------
+from autogen.beta.observers import TokenMonitor
 
 
 class Outer:
@@ -52,11 +49,7 @@ class TestNestedEventClassImport:
         assert cls is None
 
 
-# ---------------------------------------------------------------------------
-# Bug 7: Gemini client usage normalization
-# ---------------------------------------------------------------------------
-
-
+@pytest.mark.asyncio
 class TestGeminiUsageNormalization:
     """Gemini client should normalize usage keys to standard names."""
 
@@ -81,13 +74,7 @@ class TestGeminiUsageNormalization:
         assert usage["candidates_token_count"] == 50
         assert usage["total_token_count"] == 150
 
-    @pytest.mark.asyncio
     async def test_token_monitor_works_with_normalized_keys(self) -> None:
-        from unittest.mock import MagicMock
-
-        from autogen.beta.events import ModelResponse, Usage
-        from autogen.beta.observers.token_monitor import TokenMonitor
-
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
         event = ModelResponse(
@@ -105,22 +92,11 @@ class TestGeminiUsageNormalization:
         assert result is None  # Under threshold
 
 
-# ---------------------------------------------------------------------------
-# Bug 8: FunctionTool has no __name__ attribute
-# ---------------------------------------------------------------------------
+def test_function_tool_name_via_schema() -> None:
+    @tool
+    async def my_cool_tool(x: int) -> str:
+        """A test tool."""
+        return str(x)
 
-
-class TestFunctionToolNameAccess:
-    def test_function_tool_name_via_schema(self) -> None:
-        from autogen.beta.tools.final import tool
-
-        @tool
-        async def my_cool_tool(x: int) -> str:
-            """A test tool."""
-            return str(x)
-
-        # __name__ should not be the right access path.
-        assert not hasattr(my_cool_tool, "__name__") or not isinstance(getattr(my_cool_tool, "__name__", None), str)
-
-        # schema.function.name is the supported access path.
-        assert my_cool_tool.schema.function.name == "my_cool_tool"
+    assert not hasattr(my_cool_tool, "__name__") or not isinstance(getattr(my_cool_tool, "__name__", None), str)
+    assert my_cool_tool.schema.function.name == "my_cool_tool"

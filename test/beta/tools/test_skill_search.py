@@ -78,11 +78,6 @@ def _make_meta(tmp_path: Path, name: str = "vercel-react-best-practices") -> Ski
     )
 
 
-# ---------------------------------------------------------------------------
-# extract_skill
-# ---------------------------------------------------------------------------
-
-
 def test_extract_skill_monorepo(tmp_path: Path) -> None:
     dest = tmp_path / "skills"
     dest.mkdir()
@@ -165,11 +160,6 @@ def test_extract_skill_validates_metadata(tmp_path: Path) -> None:
         extract_skill(tar_path, "", dest)
 
 
-# ---------------------------------------------------------------------------
-# search_skills  (patch SkillsClient.search at class level)
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_search_skills_formats_output(tmp_path: Path) -> None:
     skills_data = [
@@ -208,11 +198,6 @@ async def test_search_skills_network_error(tmp_path: Path) -> None:
 
     assert "Error searching skills.sh" in result
     assert "connection refused" in result
-
-
-# ---------------------------------------------------------------------------
-# install_skill  (patch SkillsClient.download_skill at class level)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -281,11 +266,6 @@ async def test_install_skill_invalid_id(tmp_path: Path) -> None:
     assert "Invalid skill_id format" in result
 
 
-# ---------------------------------------------------------------------------
-# remove_skill
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_remove_skill_success(tmp_path: Path) -> None:
     install_dir = tmp_path / "skills"
@@ -345,11 +325,6 @@ async def test_remove_skill_path_traversal_blocked(tmp_path: Path) -> None:
     assert outside.exists()
 
 
-# ---------------------------------------------------------------------------
-# SkillsLock
-# ---------------------------------------------------------------------------
-
-
 def test_lock_record_and_read(tmp_path: Path) -> None:
     lock = SkillsLock(tmp_path / "skills-lock.json")
 
@@ -386,11 +361,6 @@ def test_lock_read_nonexistent(tmp_path: Path) -> None:
 
     data = lock.read()
     assert data == {"version": 1, "skills": {}}
-
-
-# ---------------------------------------------------------------------------
-# SkillSearchToolkit — schema
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

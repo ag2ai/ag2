@@ -15,14 +15,15 @@ Phase 4.
 """
 
 import asyncio
+import datetime
 import logging
 from contextlib import ExitStack
 
 import pytest
 
+from autogen.beta.annotations import Context as AnnContext
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events import ModelMessage, ObserverAlert
 from autogen.beta.observer import BaseObserver
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import CronWatch, EventWatch
@@ -38,8 +39,16 @@ class _CrashingObserver(BaseObserver):
         raise RuntimeError("observer exploded")
 
 
+class _NullObserver(BaseObserver):
+    def __init__(self) -> None:
+        super().__init__("null", watch=EventWatch(ModelMessage))
+
+    async def process(self, events, ctx):
+        return None
+
+
+@pytest.mark.asyncio
 class TestObserverExceptionHandling:
-    @pytest.mark.asyncio
     async def test_observer_process_exception_is_caught(self, caplog) -> None:
         observer = _CrashingObserver()
         stream = MemoryStream()
@@ -54,17 +63,7 @@ class TestObserverExceptionHandling:
 
         assert any("process() failed" in r.message for r in caplog.records)
 
-    @pytest.mark.asyncio
     async def test_observer_returns_none_no_signal(self) -> None:
-        from autogen.beta.annotations import Context as AnnContext
-
-        class _NullObserver(BaseObserver):
-            def __init__(self) -> None:
-                super().__init__("null", watch=EventWatch(ModelMessage))
-
-            async def process(self, events, ctx):
-                return None
-
         observer = _NullObserver()
         stream = MemoryStream()
         ctx = Context(stream=stream)
@@ -74,9 +73,7 @@ class TestObserverExceptionHandling:
         async def _capture(event: ObserverAlert, _ctx: AnnContext) -> None:
             signals.append(event)
 
-        from autogen.beta.events.conditions import TypeCondition
-
-        stream.subscribe(_capture, condition=TypeCondition(ObserverAlert))
+        stream.where(ObserverAlert).subscribe(_capture)
 
         with ExitStack() as stack:
             observer.register(stack, ctx)
@@ -88,32 +85,24 @@ class TestObserverExceptionHandling:
 
 class TestCronWatchExpressions:
     def test_range_expression(self) -> None:
-        import datetime
-
         cron = CronWatch("1-5 * * * *")
         now = datetime.datetime(2026, 3, 22, 10, 0, 0)
         next_fire = cron._next_fire_time(now)
         assert next_fire.minute in {1, 2, 3, 4, 5}
 
     def test_list_expression(self) -> None:
-        import datetime
-
         cron = CronWatch("0,15,30,45 * * * *")
         now = datetime.datetime(2026, 3, 22, 10, 0, 0)
         next_fire = cron._next_fire_time(now)
         assert next_fire.minute in {0, 15, 30, 45}
 
     def test_step_with_range(self) -> None:
-        import datetime
-
         cron = CronWatch("*/10 * * * *")
         now = datetime.datetime(2026, 3, 22, 10, 0, 0)
         next_fire = cron._next_fire_time(now)
         assert next_fire.minute in {0, 10, 20, 30, 40, 50}
 
     def test_specific_hour_and_minute(self) -> None:
-        import datetime
-
         cron = CronWatch("30 14 * * *")
         now = datetime.datetime(2026, 3, 22, 10, 0, 0)
         next_fire = cron._next_fire_time(now)
@@ -121,8 +110,51 @@ class TestCronWatchExpressions:
         assert next_fire.minute == 30
 
     def test_invalid_field_count_raises(self) -> None:
-        import datetime
-
         cron = CronWatch("* * *")
         with pytest.raises(ValueError, match="5 fields"):
             cron._next_fire_time(datetime.datetime.now())
+
+    def test_step_five_minutes(self) -> None:
+        cron = CronWatch("*/5 * * * *")
+        now = datetime.datetime(2026, 3, 21, 10, 3, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.minute == 5
+        assert nxt.hour == 10
+
+    def test_day_of_week_name(self) -> None:
+        cron = CronWatch("0 9 * * MON")
+        # 2026-03-21 is a Saturday; next Monday is 2026-03-23
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.weekday() == 0
+        assert nxt.hour == 9
+        assert nxt.minute == 0
+
+    def test_invalid_expression_raises(self) -> None:
+        cron = CronWatch("bad")
+        with pytest.raises(ValueError, match="Invalid cron"):
+            cron._next_fire_time(datetime.datetime.now())
+
+    def test_numeric_dow_sunday_zero(self) -> None:
+        cron = CronWatch("0 9 * * 0")
+        # 2026-03-21 is a Saturday; next Sunday is 2026-03-22
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.isoweekday() % 7 == 0
+        assert nxt.day == 22
+        assert nxt.hour == 9
+
+    def test_numeric_dow_saturday_six(self) -> None:
+        cron = CronWatch("0 9 * * 6")
+        # 2026-03-21 (Saturday) at 10:00 — past 9:00; next Saturday is 2026-03-28
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.isoweekday() % 7 == 6
+        assert nxt.day == 28
+        assert nxt.hour == 9
+
+    def test_numeric_dow_seven_is_sunday_alias(self) -> None:
+        watch_seven = CronWatch("0 9 * * 7")
+        watch_zero = CronWatch("0 9 * * 0")
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        assert watch_seven._next_fire_time(now) == watch_zero._next_fire_time(now)

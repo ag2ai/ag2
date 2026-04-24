@@ -13,20 +13,23 @@ Verifies that events marked ``__transient__ = True`` are:
 import pytest
 
 from autogen.beta import Context, MemoryStream
-from autogen.beta.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.lifecycle import (
+from autogen.beta.events import (
     AggregationCompleted,
+    BaseEvent,
     CompactionCompleted,
+    ModelMessage,
+    ModelMessageChunk,
+    ModelReasoning,
+    ModelRequest,
+    ModelResponse,
     ObserverCompleted,
     ObserverStarted,
+    TaskCompleted,
+    TaskProgress,
+    TaskStarted,
+    TextInput,
+    ToolCallEvent,
 )
-from autogen.beta.events.task_events import TaskCompleted, TaskProgress, TaskStarted
-from autogen.beta.events.tool_events import ToolCallEvent
-from autogen.beta.events.types import ModelReasoning
-
-# ---------------------------------------------------------------------------
-# Transient flag on event types
-# ---------------------------------------------------------------------------
 
 
 class TestTransientFlag:
@@ -75,11 +78,6 @@ class TestTransientFlag:
         assert AggregationCompleted.__transient__ is True
 
 
-# ---------------------------------------------------------------------------
-# Transient events still delivered to subscribers
-# ---------------------------------------------------------------------------
-
-
 class TestTransientDelivery:
     """Transient events must still reach subscribers (for real-time streaming)."""
 
@@ -111,11 +109,6 @@ class TestTransientDelivery:
 
         assert len(received) == 1
         assert received[0].content == "working..."
-
-
-# ---------------------------------------------------------------------------
-# Transient events NOT persisted by default
-# ---------------------------------------------------------------------------
 
 
 class TestTransientNotPersisted:
@@ -215,11 +208,6 @@ class TestTransientNotPersisted:
 
         events = list(await stream.history.get_events())
         assert len(events) == 3
-
-
-# ---------------------------------------------------------------------------
-# persist_all=True stores everything
-# ---------------------------------------------------------------------------
 
 
 class TestPersistAll:
