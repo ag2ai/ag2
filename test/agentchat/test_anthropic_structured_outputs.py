@@ -90,7 +90,7 @@ def config_list_haiku_structured():
 
     return [
         {
-            "model": "claude-3-haiku-20240307",
+            "model": "claude-3-5-haiku-20241022",
             "api_key": os.getenv("ANTHROPIC_API_KEY"),
             "api_type": "anthropic",
             "response_format": MathReasoning,

@@ -943,7 +943,7 @@ def test_real_json_mode_fallback_api_call():
 
     # Test with Claude Haiku (does NOT support native structured outputs, should fallback to JSON Mode)
     params = {
-        "model": "claude-3-haiku-20240307",
+        "model": "claude-3-5-haiku-20241022",
         "messages": [{"role": "user", "content": "Solve: 3x - 4 = 11. Show your work step by step."}],
         "max_tokens": 1024,
         "response_format": MathReasoning,
@@ -1002,7 +1002,7 @@ def test_real_native_vs_json_mode_comparison():
 
     # Test 2: JSON Mode fallback (Haiku)
     params_json = {
-        "model": "claude-3-haiku-20240307",
+        "model": "claude-3-5-haiku-20241022",
         "messages": [{"role": "user", "content": test_message}],
         "max_tokens": 1024,
         "response_format": AnalysisResult,
