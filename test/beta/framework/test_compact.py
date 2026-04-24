@@ -29,7 +29,7 @@ class TestTailWindowCompact:
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
-        assert result[0].inputs[0].content == "msg-7"
+        assert result[0].parts[0].content == "msg-7"
 
     @pytest.mark.asyncio
     async def test_persists_dropped_to_store(self) -> None:

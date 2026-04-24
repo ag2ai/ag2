@@ -72,7 +72,7 @@ class TestSlidingWindowPolicy:
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 3
-        assert filtered[0].inputs[0].content == "msg-7"
+        assert filtered[0].parts[0].content == "msg-7"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_note(self) -> None:
@@ -101,7 +101,7 @@ class TestTokenBudgetPolicy:
         _, filtered = await policy.apply([], events, ctx)
         # Should keep at least the last event that fits
         assert len(filtered) >= 1
-        assert filtered[-1].inputs[0].content == "b" * 5
+        assert filtered[-1].parts[0].content == "b" * 5
 
 
 class TestAssemblerMiddleware:

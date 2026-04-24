@@ -172,7 +172,7 @@ class TestWorkingMemoryAggregate:
         prompt_event = call_args[0][0][0]
         assert any(
             isinstance(inp, TextInput) and "Existing context about project X." in inp.content
-            for inp in prompt_event.inputs
+            for inp in prompt_event.parts
         )
 
         content = await store.read("/memory/working.md")

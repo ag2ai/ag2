@@ -27,7 +27,7 @@ def _tool_response(call_id: str = "tc_1", name: str = "get") -> ModelResponse:
 
 def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEvent:
     return ToolResultsEvent(
-        results=[ToolResultEvent(parent_id=parent_id, name=name, result=ToolResult(content="ok"))],
+        results=[ToolResultEvent(parent_id=parent_id, name=name, result=ToolResult("ok"))],
     )
 
 
@@ -54,7 +54,7 @@ class TestTrimming:
 
         _, result = await policy.apply([], events, context)
 
-        assert result[-1].inputs[0].content == "z"
+        assert result[-1].parts[0].content == "z"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:

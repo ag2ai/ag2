@@ -27,7 +27,7 @@ def _tool_response(call_id: str = "tc_1", name: str = "get") -> ModelResponse:
 
 def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEvent:
     return ToolResultsEvent(
-        results=[ToolResultEvent(parent_id=parent_id, name=name, result=ToolResult(content="ok"))],
+        results=[ToolResultEvent(parent_id=parent_id, name=name, result=ToolResult("ok"))],
     )
 
 
@@ -61,8 +61,8 @@ class TestTrimming:
         _, result = await policy.apply([], events, context)
 
         assert len(result) == 2
-        assert result[0].inputs[0].content == "3"
-        assert result[1].inputs[0].content == "4"
+        assert result[0].parts[0].content == "3"
+        assert result[1].parts[0].content == "4"
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
@@ -95,7 +95,7 @@ class TestOrphanedToolResults:
         # The ToolResultsEvent should be dropped, leaving 2 events
         assert len(result) == 2
         assert isinstance(result[0], ModelRequest)
-        assert result[0].inputs[0].content == "next"
+        assert result[0].parts[0].content == "next"
 
     @pytest.mark.asyncio
     async def test_multiple_leading_orphaned_tool_results_are_skipped(self, context: Context) -> None:
