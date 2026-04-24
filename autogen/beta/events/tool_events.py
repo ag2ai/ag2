@@ -22,11 +22,15 @@ class ToolResult:
 
     def __init__(
         self,
-        *parts: SendableMessage | Input,
+        *args: SendableMessage | Input,
+        parts: list[SendableMessage | Input] | None = None,
         final: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self.parts = [Input.ensure_input(p) for p in parts]
+        inputs: list[SendableMessage | Input] = list(args)
+        if parts:
+            inputs.extend(parts)
+        self.parts = [Input.ensure_input(p) for p in inputs]
         self.final = final
         self.metadata = metadata or {}
 
