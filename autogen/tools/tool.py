@@ -61,7 +61,7 @@ class Tool:
                 f"Parameter 'func_or_tool' must be a function, method or a Tool instance, it is '{type(func_or_tool)}' instead."
             )
 
-        self._func_schema = (
+        self._func_schema: dict[str, Any] | None = (
             {
                 "type": "function",
                 "function": {
