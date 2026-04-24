@@ -64,13 +64,26 @@ class TestTokenMonitor:
         assert len(signals) == 1
         assert signals[0].severity == Severity.CRITICAL
 
-    async def test_reset(self) -> None:
+    async def test_reset_clears_counter_and_allows_rewarning(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
-        monitor._total_tokens = 150
-        monitor._warned = True
+
+        signals: list = []
+        stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
+
+        monitor.register(ExitStack(), ctx)
+
+        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
+        assert monitor.total_tokens == 110
+        assert len(signals) == 1
+
         monitor.reset()
         assert monitor.total_tokens == 0
-        assert monitor._warned is False
+
+        # Warning must fire again after reset
+        await stream.send(ModelResponse(usage=Usage(total_tokens=110)), ctx)
+        assert len(signals) == 2
 
     async def test_task_completed_usage_dict(self) -> None:
         """TaskCompleted carries usage as a plain dict — monitor must handle it."""
@@ -246,10 +259,23 @@ class TestLoopDetector:
 
         assert len(signals) == 0
 
-    async def test_reset(self) -> None:
-        detector = LoopDetector()
-        detector._history.append(("a", "b"))
-        detector._flagged.add(("a", "b"))
+    async def test_reset_clears_history_and_allows_redetection(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        detector = LoopDetector(repeat_threshold=3)
+
+        signals: list = []
+        stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
+
+        detector.register(ExitStack(), ctx)
+
+        for _ in range(3):
+            await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+        assert len(signals) == 1
+
         detector.reset()
-        assert len(detector._history) == 0
-        assert len(detector._flagged) == 0
+
+        # Same sequence must trigger again after reset
+        for _ in range(3):
+            await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
+        assert len(signals) == 2
