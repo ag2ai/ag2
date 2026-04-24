@@ -543,7 +543,7 @@ def test_get_param_annotations_excludes_kwargs() -> None:
     def func_with_kwargs(
         a: Annotated[str, AG2Field(description="Param a")],
         b: int = 2,
-        **kwargs: Annotated[Dict, "Extra keyword arguments"],
+        **kwargs: Annotated[Dict[str, Any], "Extra keyword arguments"],
     ) -> str:
         return ""
 
@@ -634,7 +634,7 @@ def test_get_function_schema_with_regular_params_and_kwargs() -> None:
     def hello_world(
         arg1: Annotated[str, AG2Field(description="Case Name")],
         arg2: Annotated[str, AG2Field(description="Clue Name")],
-        **kwargs: Annotated[Dict, "Extra keyword arguments"],
+        **kwargs: Annotated[Dict[str, Any], "Extra keyword arguments"],
     ) -> str:
         return f"{arg1} {arg2}"
 
