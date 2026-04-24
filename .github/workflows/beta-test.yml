@@ -61,7 +61,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test-core,openai,anthropic,dashscope,gemini,ollama,tracing,redis]
+          uv pip install --system --group=testing --group=optionals -e .
       - name: Test with pytest
         run: |
           just test-beta-cov
@@ -92,7 +92,7 @@ jobs:
           python-version: "3.13"
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test-core]
+          uv pip install --system --group=testing --group=optionals -e .
       - name: Test with pytest
         run: |
           just test-beta-cov
@@ -123,7 +123,7 @@ jobs:
           python-version: "3.13"
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test-core]
+          uv pip install --system --group=testing --group=optionals -e .
       - name: Test with pytest
         run: |
           just test-beta-cov

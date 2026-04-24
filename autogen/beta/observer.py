@@ -23,12 +23,25 @@ class Observer(Protocol):
     def register(self, stack: ExitStack, context: Context) -> None: ...
 
 
-@dataclass(slots=True)
-class StreamObserver:
-    condition: Condition
+@dataclass(slots=True, kw_only=True)
+class BaseObserver:
     callback: Callable[..., Any]
     interrupt: bool = False
     sync_to_thread: bool = True
+
+    def register(self, stack: ExitStack, context: Context) -> None:
+        stack.enter_context(
+            context.stream.sub_scope(
+                self.callback,
+                interrupt=self.interrupt,
+                sync_to_thread=self.sync_to_thread,
+            )
+        )
+
+
+@dataclass(slots=True)
+class ConditionalObserver(BaseObserver):
+    condition: Condition
 
     def register(self, stack: ExitStack, context: Context) -> None:
         stack.enter_context(
@@ -40,45 +53,55 @@ class StreamObserver:
         )
 
 
-def _ensure_condition(condition: ClassInfo | Condition) -> Condition:
-    if isinstance(condition, Condition):
-        return condition
-    return TypeCondition(condition)
-
-
 @overload
 def observer(
-    condition: ClassInfo | Condition,
-    callback: Callable[..., Any],
-    *,
-    interrupt: bool = False,
-    sync_to_thread: bool = True,
-) -> StreamObserver: ...
-
-
-@overload
-def observer(
-    condition: ClassInfo | Condition,
+    condition: ClassInfo | Condition | None = None,
     callback: None = None,
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> Callable[[Callable[..., Any]], StreamObserver]: ...
+) -> Callable[[Callable[..., Any]], Observer]: ...
+
+
+@overload
+def observer(
+    condition: ClassInfo | Condition | None = None,
+    callback: Callable[..., Any] = ...,
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> Observer: ...
 
 
 def observer(
-    condition: ClassInfo | Condition,
+    condition: ClassInfo | Condition | None = None,
     callback: Callable[..., Any] | None = None,
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
-    cond = _ensure_condition(condition)
+) -> Observer | Callable[[Callable[..., Any]], Observer]:
+    if condition is None:
+        cond: Condition | None = None
+    elif isinstance(condition, Condition):
+        cond = condition
+    else:
+        cond = TypeCondition(condition)
+
+    def decorator(func: Callable[..., Any]) -> Observer:
+        if cond:
+            return ConditionalObserver(
+                condition=cond,
+                callback=func,
+                interrupt=interrupt,
+                sync_to_thread=sync_to_thread,
+            )
+
+        return BaseObserver(
+            callback=func,
+            interrupt=interrupt,
+            sync_to_thread=sync_to_thread,
+        )
 
     if callback is not None:
-        return StreamObserver(condition=cond, callback=callback, interrupt=interrupt, sync_to_thread=sync_to_thread)
-
-    def decorator(func: Callable[..., Any]) -> StreamObserver:
-        return StreamObserver(condition=cond, callback=func, interrupt=interrupt, sync_to_thread=sync_to_thread)
-
+        return decorator(callback)
     return decorator
