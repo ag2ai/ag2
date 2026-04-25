@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -421,13 +423,18 @@ class Actor(Generic[TResult]):
         self._middleware = list(middleware)
         self._observers = list(observers)
 
+        self._serializer: SerializerProto = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
+        )
+
         self.dependency_provider = Provider()
         self.tools: list[FunctionTool] = []
         for t in tools:
             self.add_tool(t)
 
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
-        self.__tool_executor = ToolExecutor()
+        self.__tool_executor = ToolExecutor(self._serializer)
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[
@@ -592,19 +599,19 @@ class Actor(Generic[TResult]):
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None,
         callback: Callable[..., Any],
     ) -> Callable[..., Any]: ...
 
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -967,6 +974,7 @@ class Actor(Generic[TResult]):
                 client,
                 tools=all_schemas,
                 response_schema=final_schema,
+                serializer=self._serializer,
             )
 
             for m in reversed(
@@ -1262,19 +1270,19 @@ class Plugin:
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None,
         callback: Callable[..., Any],
     ) -> Callable[..., Any]: ...
 
     @overload
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     def observer(
         self,
-        condition: ClassInfo | Condition,
+        condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
