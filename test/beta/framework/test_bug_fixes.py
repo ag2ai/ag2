@@ -36,11 +36,14 @@ from typing import Any
 import pytest
 from typing_extensions import Self
 
-from autogen.beta import Actor, BaseObserver, KnowledgeConfig, TaskConfig
+from autogen.beta import Actor
 from autogen.beta.actor import (
+    KnowledgeConfig,
+    TaskConfig,
     _AggregationMiddleware,
     _HaltCheckMiddleware,
 )
+from autogen.beta.observer import BaseObserver
 from autogen.beta.aggregate import AggregateTrigger
 from autogen.beta.annotations import Context
 from autogen.beta.config import LLMClient, ModelConfig
@@ -55,6 +58,7 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 from autogen.beta.events.conditions import TypeCondition
@@ -529,8 +533,4 @@ class TestTaskEventsUnified:
         await parent._spawn_subtask("answer 40+2", ctx)
 
         assert len(completions) == 1
-        assert completions[0].usage == {
-            "prompt_tokens": 7,
-            "completion_tokens": 2,
-            "total_tokens": 9,
-        }
+        assert completions[0].usage == Usage(prompt_tokens=7, completion_tokens=2, total_tokens=9)

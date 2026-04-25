@@ -18,8 +18,9 @@ from unittest.mock import MagicMock
 import pytest
 from typing_extensions import Self
 
-from autogen.beta import Actor, BaseObserver
+from autogen.beta import Actor
 from autogen.beta.config import LLMClient, ModelConfig
+from autogen.beta.observer import BaseObserver
 from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity

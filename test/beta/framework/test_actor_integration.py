@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Actor
 from autogen.beta.actor import (
+    KnowledgeConfig,
     _AggregationMiddleware,
     _CompactionMiddleware,
 )
