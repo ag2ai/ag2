@@ -19,6 +19,7 @@ from autogen.beta.events.input_events import (
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -211,6 +212,22 @@ def _file_id_block_type(filename: str | None) -> str:
     return "document"
 
 
+def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
+    """True if any message (user turn or tool result) references a file_id.
+
+    Used by the client to auto-inject the `files-api-2025-04-14` beta header.
+    """
+    for msg in messages:
+        if isinstance(msg, ModelRequest):
+            if any(isinstance(p, FileIdInput) for p in msg.parts):
+                return True
+        elif isinstance(msg, ToolResultsEvent):
+            for r in msg.results:
+                if any(isinstance(p, FileIdInput) for p in r.result.parts):
+                    return True
+    return False
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
@@ -241,9 +258,41 @@ def convert_messages(
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):
                         parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    elif isinstance(part, BinaryInput):
+                        if part.kind is BinaryType.IMAGE:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        elif part.kind is BinaryType.DOCUMENT:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "document",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        else:
+                            raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, UrlInput):
+                        if part.kind is BinaryType.IMAGE:
+                            parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
+                        elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                            parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
+                        else:
+                            raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, FileIdInput):
+                        block_type = _file_id_block_type(part.filename)
+                        parts.append({
+                            "type": block_type,
+                            "source": {"type": "file", "file_id": part.file_id},
+                        })
                     else:
                         raise UnsupportedInputError(type(part).__name__, "anthropic")
-                tool_content: str | list[dict[str, Any]] = parts[0]["text"] if len(parts) == 1 else parts
+
+                if len(parts) == 1 and (part := parts[0])["type"] == "text":
+                    tool_content: str | list[dict[str, Any]] = part["text"]
+                else:
+                    tool_content = parts
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": r.parent_id,
@@ -261,6 +310,12 @@ def convert_messages(
                     content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
+                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
+                            "anthropic",
+                        )
+
                     block_type = _file_id_block_type(inp.filename)
                     content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
 
@@ -301,7 +356,11 @@ def convert_messages(
                     raise UnsupportedInputError(type(inp).__name__, "anthropic")
 
             if content_parts:
-                result.append({"role": "user", "content": content_parts})
+                if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
+                    content: str | list[dict[str, Any]] = part["text"]
+                else:
+                    content = content_parts
+                result.append({"role": "user", "content": content})
 
     return result
 
@@ -310,9 +369,12 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format."""
     cc = raw.get("cache_creation_input_tokens")
     cr = raw.get("cache_read_input_tokens")
+    prompt = float(raw.get("input_tokens", 0))
+    completion = float(raw.get("output_tokens", 0))
     return Usage(
-        prompt_tokens=float(raw.get("input_tokens", 0)),
-        completion_tokens=float(raw.get("output_tokens", 0)),
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=prompt + completion,
         cache_creation_input_tokens=float(cc) if cc else None,
         cache_read_input_tokens=float(cr) if cr else None,
     )

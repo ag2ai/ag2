@@ -12,6 +12,7 @@ from typing_extensions import Unpack
 from autogen.beta.config.config import ModelConfig
 
 from .anthropic_client import AnthropicClient, CreateOptions
+from .files import AnthropicFilesClient
 
 
 class AnthropicConfigOverrides(TypedDict, total=False):
@@ -85,3 +86,6 @@ class AnthropicConfig(ModelConfig):
             create_options=options,
             prompt_caching=self.prompt_caching,
         )
+
+    def create_files_client(self) -> AnthropicFilesClient:
+        return AnthropicFilesClient(self)

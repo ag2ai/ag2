@@ -214,6 +214,7 @@ quick-research = [
 
 browser-use = [
     "browser-use>=0.3.1,<1.0",
+    "langchain-google-vertexai>=2.0,<3.0",
 ]
 
 google-client = ["google-api-python-client>=2.163.0,<3.0"]

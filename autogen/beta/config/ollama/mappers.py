@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
 from collections.abc import Iterable
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import DataInput
+from autogen.beta.events.input_events import BinaryInput, BinaryType, DataInput
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -59,13 +60,28 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            text_parts: list[str] = []
+            images: list[str] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    text_parts.append(inp.content)
                 elif isinstance(inp, DataInput):
-                    result.append({"role": "user", "content": serializer.encode(inp.data).decode()})
+                    text_parts.append(serializer.encode(inp.data).decode())
+                elif isinstance(inp, BinaryInput) and inp.kind is BinaryType.IMAGE:
+                    images.append(base64.b64encode(inp.data).decode())
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "ollama")
+
+            # Ollama API only accepts plain-string `content`, so we emit one
+            # user message per TextInput instead of joining them. Images are
+            # attached to the last text message to keep them in the same turn.
+            for text in text_parts:
+                result.append({"role": "user", "content": text})
+            if images:
+                if text_parts:
+                    result[-1]["images"] = images
+                else:
+                    result.append({"role": "user", "content": "", "images": images})
 
         elif isinstance(message, ModelResponse):
             msg: dict[str, Any] = {

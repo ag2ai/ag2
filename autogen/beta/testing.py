@@ -76,6 +76,9 @@ class TrackingConfig(ModelConfig):
     def create(self) -> TrackingClient:
         return TrackingClient(self.config.create(), self.mock)
 
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+
 
 class TestConfig(ModelConfig):
     __test__ = False
@@ -88,3 +91,6 @@ class TestConfig(ModelConfig):
 
     def create(self) -> TestClient:
         return TestClient(*self.events)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

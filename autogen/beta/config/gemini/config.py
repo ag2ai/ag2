@@ -10,6 +10,7 @@ from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import GeminiFilesClient
 from .gemini_client import CreateConfig, GeminiClient
 
 
@@ -90,6 +91,9 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
             create_config=self._build_create_config(),
             cached_content=self.cached_content,
         )
+
+    def create_files_client(self) -> GeminiFilesClient:
+        return GeminiFilesClient(self)
 
 
 @dataclass(slots=True)
