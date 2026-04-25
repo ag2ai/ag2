@@ -37,18 +37,18 @@ except ImportError as e:
 
 __all__ = [
     "CONVERSATIONS_PREFIX",
+    "LOG_PREFIX",
+    "WORKING_MEMORY_PATH",
     "ChangeCallback",
     "ChangeSubscription",
     "DefaultBootstrap",
     "DiskKnowledgeStore",
     "EventLogWriter",
     "KnowledgeStore",
-    "LOG_PREFIX",
     "LockedKnowledgeStore",
     "MemoryKnowledgeStore",
     "NoopChangeSubscription",
     "RedisKnowledgeStore",
     "SqliteKnowledgeStore",
     "StoreBootstrap",
-    "WORKING_MEMORY_PATH",
 ]
