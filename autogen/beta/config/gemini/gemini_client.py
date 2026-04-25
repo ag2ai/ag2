@@ -6,6 +6,7 @@ import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
+from uuid import uuid4
 
 import google.auth
 import google.genai as genai
@@ -139,7 +140,7 @@ class GeminiClient(LLMClient):
                             pdata["thought_signature"] = part.thought_signature
                         calls.append(
                             ToolCallEvent(
-                                id=fc.id or fc.name or "",
+                                id=fc.id or str(uuid4()),
                                 name=fc.name or "",
                                 arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
                                 provider_data=pdata,
@@ -191,7 +192,7 @@ class GeminiClient(LLMClient):
                                 pdata["thought_signature"] = part.thought_signature
                             calls.append(
                                 ToolCallEvent(
-                                    id=fc.id or fc.name or "",
+                                    id=fc.id or str(uuid4()),
                                     name=fc.name or "",
                                     arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
                                     provider_data=pdata,
