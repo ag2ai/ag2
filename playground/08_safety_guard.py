@@ -22,10 +22,11 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor, BaseObserver
+from autogen.beta import Actor
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.observer import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch

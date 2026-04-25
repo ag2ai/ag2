@@ -16,10 +16,11 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor, BaseObserver, LoopDetector, TokenMonitor
+from autogen.beta import Actor
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 
