@@ -15,7 +15,7 @@ with optional_import_block():
     from langchain_core.tools import BaseTool as LangchainTool
 
 
-def _langchain_tool_has_async_implementation(langchain_tool: "LangchainTool") -> bool:
+def _langchain_tool_has_async_implementation(langchain_tool: "LangchainTool") -> bool:  # type: ignore[no-any-unimported]
     """Check if a LangChain tool has a real async implementation.
 
     LangChain's ``BaseTool`` defines a default ``_arun`` that raises
