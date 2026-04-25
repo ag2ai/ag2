@@ -287,13 +287,13 @@ These follow the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" c
 | `gen_ai.request.temperature` | float | Temperature parameter | `llm` |
 | `gen_ai.request.max_tokens` | int | Max tokens parameter | `llm` |
 | `gen_ai.request.top_p` | float | Top-p parameter | `llm` |
-| `gen_ai.input.messages` | string (JSON) | Input messages in OTEL format | `conversation`, `agent`, `llm` (opt-in) |
-| `gen_ai.output.messages` | string (JSON) | Output messages in OTEL format | `conversation`, `agent`, `llm` (opt-in) |
+| `gen_ai.input.messages` | string (JSON) | Input messages in OTEL format | `conversation`, `agent` (opt-in; see [Content Capture](#content-capture)), `llm` (opt-in; see [Enabling LLM Message Capture](#enabling-llm-message-capture)) |
+| `gen_ai.output.messages` | string (JSON) | Output messages in OTEL format | `conversation`, `agent` (opt-in; see [Content Capture](#content-capture)), `llm` (opt-in; see [Enabling LLM Message Capture](#enabling-llm-message-capture)) |
 | `gen_ai.response.finish_reasons` | string (JSON) | Finish reasons from the LLM response | `llm` |
 | `gen_ai.tool.name` | string | Tool function name | `tool` |
 | `gen_ai.tool.call.id` | string | Tool call ID | `tool` |
-| `gen_ai.tool.call.arguments` | string (JSON) | Tool call arguments | `tool` |
-| `gen_ai.tool.call.result` | string | Tool call result | `tool` |
+| `gen_ai.tool.call.arguments` | string (JSON) | Tool call arguments | `tool` (opt-in; see [Content Capture](#content-capture)) |
+| `gen_ai.tool.call.result` | string | Tool call result | `tool` (opt-in; see [Content Capture](#content-capture)) |
 | `gen_ai.conversation.id` | string | Conversation/chat ID | `conversation` |
 | `gen_ai.conversation.turns` | int | Number of turns in the conversation | `conversation` |
 | `gen_ai.conversation.max_turns` | int | Maximum allowed turns | `conversation` |
@@ -305,13 +305,16 @@ These follow the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" c
 | `ag2.span.type` | string | AG2 span type (see [Span Types](#span-types) table) | All |
 | `ag2.speaker_selection.candidates` | string (JSON) | List of candidate agent names | `speaker_selection` |
 | `ag2.speaker_selection.selected` | string | Name of the selected speaker | `speaker_selection` |
-| `ag2.human_input.prompt` | string | Prompt shown to the human | `human_input` |
-| `ag2.human_input.response` | string | Human's response | `human_input` |
+| `ag2.human_input.prompt` | string | Prompt shown to the human | `human_input` (opt-in; see [Content Capture](#content-capture)) |
+| `ag2.human_input.response` | string | Human's response | `human_input` (opt-in; see [Content Capture](#content-capture)) |
 | `ag2.code_execution.exit_code` | int | Exit code from code execution | `code_execution` |
-| `ag2.code_execution.output` | string | Output from code execution (truncated to 4096 chars) | `code_execution` |
+| `ag2.code_execution.output` | string | Output from code execution (truncated to 4096 chars) | `code_execution` (opt-in; see [Content Capture](#content-capture)) |
 | `ag2.chats.count` | int | Number of chats in `initiate_chats` | `multi_conversation` |
 | `ag2.chats.mode` | string | `"sequential"` or `"parallel"` | `multi_conversation` |
 | `ag2.chats.recipients` | string (JSON) | List of recipient agent names | `multi_conversation` |
+| `ag2.chats.summaries` | string (JSON) | List of per-chat summary strings | `multi_conversation` (opt-in; see [Content Capture](#content-capture)) |
+| `ag2.chats.ids` | string (JSON) | List of chat UUIDs | `multi_conversation` |
+| `ag2.chats.prerequisites` | string (JSON) | Dependency map between chats (async `initiate_chats` only) | `multi_conversation` |
 | `gen_ai.agent.remote` | bool | Whether the agent is a remote A2A agent | `agent` |
 | `server.address` | string | URL of the remote A2A agent | `agent` |
 | `error.type` | string | Error type on failure (`ExecutionError`, `CodeExecutionError`, etc.) | Any |
@@ -642,18 +645,49 @@ The `instrument_pattern` call on the client side instruments `A2aRemoteAgent` so
 
 AG2 tracing captures data at different levels depending on the span type:
 
-| Span type | Data captured | Controllable? |
+| Span type | Data captured | Default / control |
 |---|---|---|
-| `conversation` (run / initiate_chat) | Input/output messages | No, always captured |
-| `agent` (generate_reply) | Input/output messages | No, always captured |
-| `tool` (execute_function) | Tool arguments and results | No, always captured |
-| `human_input` (get_human_input) | Prompt shown and human's response | No, always captured |
-| `llm` (LLM API call) | Request/response messages | Yes, off by default via `capture_messages` |
+| `conversation` (`run` / `initiate_chat`) | Input/output messages | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `agent` (`generate_reply`) | Input/output messages | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `tool` (`execute_function`) | Tool arguments and results | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `human_input` (`get_human_input`) | Prompt shown and human response | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `multi_conversation` (`initiate_chats`) | Chat summaries | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `code_execution` | Script output | Off by default; set `AG2_OTEL_RECORD_CONTENT=1` to enable |
+| `llm` (LLM API call) | Request/response messages | Off by default; pass `capture_messages=True` to `instrument_llm_wrapper` |
 
-Conversation and agent spans always include input and output messages (`gen_ai.input.messages` / `gen_ai.output.messages`). Tool spans always capture call arguments (`gen_ai.tool.call.arguments`) and results (`gen_ai.tool.call.result`). Human input spans always capture the prompt shown (`ag2.human_input.prompt`) and the human's response (`ag2.human_input.response`). Only LLM spans require explicit opt-in via `capture_messages=True` -- all other span types capture their data by default.
+Content-bearing attributes on `conversation`, `multi_conversation`, `agent`, `tool`, `human_input`, and `code_execution` spans are disabled by default. Set the `AG2_OTEL_RECORD_CONTENT` environment variable to enable them (see [Content Capture](#content-capture) below). LLM (`chat`) spans are controlled separately via `capture_messages=True` on `instrument_llm_wrapper` (see [Enabling LLM Message Capture](#enabling-llm-message-capture)).
 
 !!! warning
-    If your agents process sensitive data (personal information, credentials, proprietary content), be aware that conversation messages, tool arguments and results, and human input prompts and responses will appear in your tracing backend with default settings. Ensure your backend has appropriate access controls and retention policies.
+    Enabling `AG2_OTEL_RECORD_CONTENT` or `capture_messages=True` sends conversation
+    messages, tool arguments and results, human input prompts and responses, and
+    code execution output to your tracing backend. Enable content capture only in
+    development or trusted environments, and ensure your backend has appropriate
+    access controls and data retention policies.
+
+### Content Capture
+
+By default, AG2 tracing does **not** capture message content, tool arguments, human input, or code execution output on any span. This follows the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/" className="external-link" target="_blank" rel="noopener noreferrer">OpenTelemetry GenAI Semantic Conventions</a> recommendation that instrumentation SHOULD NOT record prompt and response content by default, as it may contain PII, API keys, or proprietary data.
+
+To enable content capture across all non-LLM span types, set the `AG2_OTEL_RECORD_CONTENT` environment variable before starting your application:
+
+```bash
+# Enable content capture (development / debugging only)
+AG2_OTEL_RECORD_CONTENT=1 python your_script.py
+```
+
+Accepted values: `1`, `true`, `yes` (case-insensitive). Any other value (including unset, `0`, `false`, `no`) leaves content capture disabled. The flag is read once at module import time, so it must be set before the Python process starts -- changing `os.environ` at runtime has no effect.
+
+When enabled, the following additional attributes appear on their respective spans:
+
+| Span type | Attributes added |
+|---|---|
+| `conversation`, `agent` | `gen_ai.input.messages`, `gen_ai.output.messages` |
+| `multi_conversation` | `ag2.chats.summaries` |
+| `tool` | `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result` |
+| `human_input` | `ag2.human_input.prompt`, `ag2.human_input.response` |
+| `code_execution` | `ag2.code_execution.output` |
+
+For LLM (`chat`) spans, content capture is controlled separately via the `capture_messages` argument to `instrument_llm_wrapper` (see [Enabling LLM Message Capture](#enabling-llm-message-capture) below).
 
 ### Enabling LLM Message Capture
 

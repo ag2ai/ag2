@@ -8,6 +8,7 @@ from typing import Any
 
 from opentelemetry.trace import Tracer
 
+import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _otel_cfg
 from autogen import Agent
 from autogen.opentelemetry.consts import SpanType
 
@@ -65,7 +66,8 @@ def instrument_code_execution(agent: Agent, *, tracer: Tracer) -> Agent:
                             # Truncate output if too long
                             if len(output) > 4096:
                                 output = output[:4096] + "... (truncated)"
-                            span.set_attribute("ag2.code_execution.output", output)
+                            if _otel_cfg.RECORD_CONTENT:
+                                span.set_attribute("ag2.code_execution.output", output)
 
                     return is_final, result
 

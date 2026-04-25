@@ -10,6 +10,7 @@ tool results.
 """
 
 import json
+from unittest.mock import MagicMock
 
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
@@ -19,6 +20,7 @@ import autogen.opentelemetry.instrumentators.agent_instrumentators._config as _o
 from autogen import ConversableAgent
 from autogen.opentelemetry import instrument_agent
 from autogen.opentelemetry.consts import SpanType
+from autogen.opentelemetry.instrumentators.agent_instrumentators.code import instrument_code_execution
 from autogen.opentelemetry.instrumentators.agent_instrumentators.human_input import instrument_human_input
 from autogen.opentelemetry.setup import get_tracer
 from autogen.testing import TestAgent
@@ -33,6 +35,7 @@ _CONTENT_ATTRS = {
     "ag2.human_input.prompt",
     "ag2.human_input.response",
     "ag2.chats.summaries",
+    "ag2.code_execution.output",
 }
 
 
@@ -272,3 +275,130 @@ class TestHumanInputContentGating:
         hi_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.HUMAN_INPUT.value]
         assert len(hi_spans) == 1
         _assert_no_content_attrs(hi_spans[0])
+
+
+# ---------------------------------------------------------------------------
+# Code execution span
+# ---------------------------------------------------------------------------
+def _make_code_exec_agent_and_tracer(otel_setup, fake_reply: str):
+    """Return (agent, tracer, exporter) with a fake _generate_code_execution_reply_using_executor."""
+    exporter, provider = otel_setup
+    tracer = get_tracer(provider)
+    agent = ConversableAgent("code_agent", llm_config=False, human_input_mode="NEVER")
+    # Ensure code execution is not short-circuited by the traced wrapper's early-exit guard
+    agent._code_execution_config = {}
+
+    # Inject a minimal _reply_func_list entry that instrument_code_execution can wrap
+    def _fake_code_exec(self_agent, messages=None, sender=None, config=None):
+        return True, fake_reply
+
+    _fake_code_exec.__name__ = "_generate_code_execution_reply_using_executor"
+    agent._reply_func_list = [{"reply_func": _fake_code_exec}]
+
+    instrument_code_execution(agent, tracer=tracer)
+    return agent, tracer, exporter
+
+
+class TestCodeExecutionContentGating:
+    def test_code_execution_output_gated_off(self, otel_setup, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ag2.code_execution.output must be absent when RECORD_CONTENT=False."""
+        monkeypatch.setattr(_otel_cfg, "RECORD_CONTENT", False)
+        fake_reply = "exitcode: 0 (success)\nCode output: secret script output"
+        agent, _tracer, exporter = _make_code_exec_agent_and_tracer(otel_setup, fake_reply)
+
+        traced_func = agent._reply_func_list[0]["reply_func"]
+        traced_func(agent, messages=[], sender=None, config=None)
+
+        spans = exporter.get_finished_spans()
+        code_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.CODE_EXECUTION.value]
+        assert len(code_spans) == 1
+        assert "ag2.code_execution.output" not in code_spans[0].attributes
+        # Structural attribute must still be recorded
+        assert code_spans[0].attributes.get("ag2.code_execution.exit_code") == 0
+
+    def test_code_execution_output_gated_on(self, otel_setup, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ag2.code_execution.output must be present when RECORD_CONTENT=True."""
+        monkeypatch.setattr(_otel_cfg, "RECORD_CONTENT", True)
+        fake_reply = "exitcode: 0 (success)\nCode output: visible output"
+        agent, _tracer, exporter = _make_code_exec_agent_and_tracer(otel_setup, fake_reply)
+
+        traced_func = agent._reply_func_list[0]["reply_func"]
+        traced_func(agent, messages=[], sender=None, config=None)
+
+        spans = exporter.get_finished_spans()
+        code_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.CODE_EXECUTION.value]
+        assert len(code_spans) == 1
+        assert code_spans[0].attributes.get("ag2.code_execution.output") == "visible output"
+
+    def test_code_execution_exit_code_always_recorded(self, otel_setup, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ag2.code_execution.exit_code is structural metadata -- must be present in both modes."""
+        for record_content in (False, True):
+            monkeypatch.setattr(_otel_cfg, "RECORD_CONTENT", record_content)
+            fake_reply = "exitcode: 1 (failed)\nCode output: some output"
+            agent, _tracer, exporter = _make_code_exec_agent_and_tracer(otel_setup, fake_reply)
+
+            traced_func = agent._reply_func_list[0]["reply_func"]
+            traced_func(agent, messages=[], sender=None, config=None)
+
+        spans = exporter.get_finished_spans()
+        code_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.CODE_EXECUTION.value]
+        assert len(code_spans) == 2
+        for span in code_spans:
+            assert span.attributes.get("ag2.code_execution.exit_code") == 1
+
+
+# ---------------------------------------------------------------------------
+# Multi-conversation span -- initiate_chats (chats.summaries gating)
+# ---------------------------------------------------------------------------
+def _make_instrumented_agent_with_mock_initiate_chats(otel_setup):
+    """Return (agent, exporter) with initiate_chats mocked to return two fake ChatResults."""
+    exporter, provider = otel_setup
+    agent = ConversableAgent("multi_sender", llm_config=False, human_input_mode="NEVER")
+    recipient = ConversableAgent("multi_recipient", llm_config=False, human_input_mode="NEVER")
+
+    mock_result1 = MagicMock()
+    mock_result1.chat_id = 1
+    mock_result1.summary = "secret summary one"
+    mock_result2 = MagicMock()
+    mock_result2.chat_id = 2
+    mock_result2.summary = "secret summary two"
+
+    # Replace underlying initiate_chats BEFORE instrumentation so the wrapper
+    # calls the mock and captures its results into the span.
+    agent.initiate_chats = MagicMock(return_value=[mock_result1, mock_result2])
+    instrument_agent(agent, tracer_provider=provider)
+
+    chat_queue = [
+        {"recipient": recipient, "message": "Hi"},
+        {"recipient": recipient, "message": "Ho"},
+    ]
+    return agent, exporter, chat_queue
+
+
+class TestChatsSummariesContentGating:
+    def test_chats_summaries_gated_off(self, otel_setup, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ag2.chats.summaries must be absent on multi_conversation span when RECORD_CONTENT=False."""
+        monkeypatch.setattr(_otel_cfg, "RECORD_CONTENT", False)
+        agent, exporter, chat_queue = _make_instrumented_agent_with_mock_initiate_chats(otel_setup)
+
+        agent.initiate_chats(chat_queue)
+
+        spans = exporter.get_finished_spans()
+        multi_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.MULTI_CONVERSATION.value]
+        assert len(multi_spans) == 1
+        assert "ag2.chats.summaries" not in multi_spans[0].attributes
+        # Structural metadata must still be present
+        assert multi_spans[0].attributes["ag2.chats.count"] == 2
+
+    def test_chats_summaries_gated_on(self, otel_setup, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ag2.chats.summaries must be present on multi_conversation span when RECORD_CONTENT=True."""
+        monkeypatch.setattr(_otel_cfg, "RECORD_CONTENT", True)
+        agent, exporter, chat_queue = _make_instrumented_agent_with_mock_initiate_chats(otel_setup)
+
+        agent.initiate_chats(chat_queue)
+
+        spans = exporter.get_finished_spans()
+        multi_spans = [s for s in spans if s.attributes.get("ag2.span.type") == SpanType.MULTI_CONVERSATION.value]
+        assert len(multi_spans) == 1
+        summaries = json.loads(multi_spans[0].attributes["ag2.chats.summaries"])
+        assert summaries == ["secret summary one", "secret summary two"]
