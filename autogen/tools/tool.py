@@ -90,7 +90,7 @@ class Tool:
     def parameters_json_schema(self) -> dict[str, Any] | None:
         """Get the custom parameters JSON schema, if one was provided."""
         if self._func_schema is not None:
-            return self._func_schema["function"].get("parameters")
+            return self._func_schema["function"].get("parameters")  # type: ignore[no-any-return]
         return None
 
     def register_for_llm(self, agent: "ConversableAgent") -> None:
