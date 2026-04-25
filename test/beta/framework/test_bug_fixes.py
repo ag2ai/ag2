@@ -42,6 +42,7 @@ from autogen.beta.actor import (
     TaskConfig,
     _AggregationMiddleware,
     _HaltCheckMiddleware,
+    _get_stream_turn_lock,
 )
 from autogen.beta.observer import BaseObserver
 from autogen.beta.aggregate import AggregateTrigger
@@ -534,3 +535,104 @@ class TestTaskEventsUnified:
 
         assert len(completions) == 1
         assert completions[0].usage == Usage(prompt_tokens=7, completion_tokens=2, total_tokens=9)
+
+
+class TestSharedStreamTurnSerialization:
+    """Actor._execute holds a per-stream lock so two turns on the same
+    stream don't cross-contaminate each other's tool-executor subscribers.
+
+    See ``autogen/beta/actor.py::_get_stream_turn_lock`` for the failure
+    mode this guards against.
+    """
+
+    def test_same_stream_returns_same_lock(self) -> None:
+        stream = MemoryStream()
+        lock = _get_stream_turn_lock(stream)
+
+        assert isinstance(lock, asyncio.Lock)
+        assert _get_stream_turn_lock(stream) is lock
+
+    def test_different_streams_get_distinct_locks(self) -> None:
+        lock_a = _get_stream_turn_lock(MemoryStream())
+        lock_b = _get_stream_turn_lock(MemoryStream())
+
+        assert lock_a is not lock_b
+
+    @pytest.mark.asyncio
+    async def test_concurrent_asks_on_shared_stream_do_not_overlap(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If the lock works, at most one `_execute_locked` is ever active."""
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+
+        original = Actor._execute_locked
+
+        async def tracked(
+            self: Actor[Any],
+            *args: Any,
+            **kwargs: Any,
+        ) -> Any:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            try:
+                # Give the scheduler a chance to enter the other turn
+                # if the lock is broken.
+                await asyncio.sleep(0)
+                return await original(self, *args, **kwargs)
+            finally:
+                active -= 1
+
+        monkeypatch.setattr(Actor, "_execute_locked", tracked)
+
+        actor = Actor("shared", config=_CannedConfig("a", "b"))
+
+        await asyncio.gather(
+            actor.ask("first", stream=stream),
+            actor.ask("second", stream=stream),
+        )
+
+        assert peak == 1
+
+    @pytest.mark.asyncio
+    async def test_fresh_streams_run_in_parallel(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two asks on *distinct* streams must still be allowed to overlap.
+
+        Regression guard against over-serializing: the lock is per-stream,
+        not global on Actor.
+        """
+        gate = asyncio.Event()
+        arrivals = 0
+
+        original = Actor._execute_locked
+
+        async def tracked(
+            self: Actor[Any],
+            *args: Any,
+            **kwargs: Any,
+        ) -> Any:
+            nonlocal arrivals
+            arrivals += 1
+            if arrivals == 2:
+                gate.set()
+            # Both turns must be inside _execute_locked simultaneously,
+            # otherwise the gate never opens and the test times out.
+            await asyncio.wait_for(gate.wait(), timeout=1.0)
+            return await original(self, *args, **kwargs)
+
+        monkeypatch.setattr(Actor, "_execute_locked", tracked)
+
+        actor = Actor("fresh", config=_CannedConfig("a", "b"))
+
+        await asyncio.gather(
+            actor.ask("first", stream=MemoryStream()),
+            actor.ask("second", stream=MemoryStream()),
+        )
+
+        assert arrivals == 2

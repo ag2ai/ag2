@@ -295,6 +295,43 @@ class AgentReply(Generic[TResult, TAgent]):
         )
 
 
+_STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
+
+
+def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
+    """Return (creating if needed) a per-stream asyncio.Lock.
+
+    Attaching the lock to the stream object itself means:
+      * A fresh stream per turn (the default subtask / subagent path)
+        pays a trivial no-contention acquire — no behaviour change.
+      * A stream shared across concurrent ``Actor.ask`` calls
+        serializes those calls so subscribers registered by one turn
+        never fire for events of another.
+
+    The lock is allocated lazily on first use so Actor instantiation
+    outside an event loop (which would bind the lock to the wrong loop)
+    still works.
+    """
+    lock = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
+    if lock is None:
+        lock = asyncio.Lock()
+        try:
+            setattr(stream, _STREAM_TURN_LOCK_ATTR, lock)
+        except (AttributeError, TypeError):
+            # Stream uses __slots__ and doesn't declare our attr — fall
+            # back to a per-id registry so the lock still persists.
+            _stream_id_locks.setdefault(id(stream), lock)
+            lock = _stream_id_locks[id(stream)]
+    return lock
+
+
+# Fallback for streams that reject attribute assignment. Keyed by
+# ``id(stream)`` — asyncio.Lock has no weakref slot, so we can't key on
+# a weak reference. Only populated for slotted streams without the
+# turn-lock slot (MemoryStream declares it).
+_stream_id_locks: dict[int, asyncio.Lock] = {}
+
+
 class Actor(Generic[TResult]):
     """The agentic unit of autogen.beta.
 
@@ -870,6 +907,47 @@ class Actor(Generic[TResult]):
         return result.result or ""
 
     async def _execute(
+        self,
+        event: BaseEvent,
+        *,
+        context: Context,
+        client: LLMClient,
+        hitl_hook: HumanHook | None = None,
+        additional_tools: Iterable[Tool] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+    ) -> AgentReply[Any, Any]:
+        # Serialize turns on the same stream. Tool executor subscribers
+        # (see ``tools/executor.py``) register on the stream during a turn
+        # and unregister when the turn exits. If two ``ask`` calls share a
+        # stream and run concurrently, both turns' subscribers see every
+        # event, causing duplicate tool execution, racing ``set_result``
+        # calls on ``context.stream.get`` futures, and orphaned tool_use
+        # records that break subsequent Anthropic turns
+        # ("messages.N: tool_use ids were found without tool_result
+        # blocks immediately after").
+        #
+        # The lock is a lazy per-stream asyncio.Lock attached to the
+        # stream itself. Streams created fresh for a single turn pay a
+        # no-contention acquire — no behaviour change. Shared streams
+        # queue turns instead of interleaving them. Sub-tasks spawn on
+        # their own stream (see ``run_task.py``), so they never contend
+        # with the parent turn's lock.
+        stream_lock = _get_stream_turn_lock(context.stream)
+        async with stream_lock:
+            return await self._execute_locked(
+                event,
+                context=context,
+                client=client,
+                hitl_hook=hitl_hook,
+                additional_tools=additional_tools,
+                additional_middleware=additional_middleware,
+                additional_observers=additional_observers,
+                response_schema=response_schema,
+            )
+
+    async def _execute_locked(
         self,
         event: BaseEvent,
         *,
