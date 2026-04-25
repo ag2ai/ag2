@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta import Agent, observer
+from autogen.beta import Actor, observer
 from autogen.beta.events import ModelResponse
 from autogen.beta.testing import TestConfig
 
@@ -12,7 +12,7 @@ async def check_agent_constructor_with_observers() -> None:
     def on_response(event: ModelResponse) -> None:
         pass
 
-    Agent(
+    Actor(
         "test",
         config=TestConfig(),
         observers=[on_response],
@@ -32,7 +32,7 @@ async def check_any_event_observer() -> None:
 
 
 async def check_agent_constructor_with_direct_observers() -> None:
-    Agent(
+    Actor(
         "test",
         config=TestConfig(),
         observers=[observer(ModelResponse, lambda e: None)],
@@ -40,7 +40,7 @@ async def check_agent_constructor_with_direct_observers() -> None:
 
 
 async def check_agent_ask_with_observers() -> None:
-    agent = Agent("test", config=TestConfig())
+    agent = Actor("test", config=TestConfig())
 
     await agent.ask(
         "Hi!",
@@ -49,7 +49,7 @@ async def check_agent_ask_with_observers() -> None:
 
 
 async def check_agent_turn_ask_with_observers() -> None:
-    agent = Agent("test", config=TestConfig())
+    agent = Actor("test", config=TestConfig())
 
     turn = await agent.ask("Hi!")
 
@@ -60,7 +60,7 @@ async def check_agent_turn_ask_with_observers() -> None:
 
 
 async def check_agent_observer_decorator() -> None:
-    agent = Agent("test", config=TestConfig())
+    agent = Actor("test", config=TestConfig())
 
     @agent.observer(ModelResponse)
     def on_response(event: ModelResponse) -> None:
@@ -76,7 +76,7 @@ async def check_any_event_agent_observer_decorator() -> None:
 
 
 async def check_agent_observer_direct() -> None:
-    agent = Agent("test", config=TestConfig())
+    agent = Actor("test", config=TestConfig())
 
     def on_response(event: ModelResponse) -> None:
         pass
