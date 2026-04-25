@@ -144,9 +144,7 @@ async def test_update_file(tmp_path: Path) -> None:
     config = TestConfig(
         ToolCallEvent(
             name="update_file",
-            arguments=json.dumps(
-                {"path": "data.txt", "old_content": "bar", "new_content": "qux"}
-            ),
+            arguments=json.dumps({"path": "data.txt", "old_content": "bar", "new_content": "qux"}),
         ),
         "done",
     )
@@ -219,15 +217,9 @@ async def test_find_files(tmp_path: Path) -> None:
 
     tracking = TrackingConfig(
         TestConfig(
-            ToolCallEvent(
-                name="find_files", arguments=json.dumps({"pattern": "**/*.py"})
-            ),
-            ToolCallEvent(
-                name="find_files", arguments=json.dumps({"pattern": "sub/*"})
-            ),
-            ToolCallEvent(
-                name="find_files", arguments=json.dumps({"pattern": "sub/**"})
-            ),
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "**/*.py"})),
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/*"})),
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "sub/**"})),
             "done",
         )
     )

@@ -65,9 +65,7 @@ async def run_task(
         prompt = f"{objective}\n\n## Context\n{context}"
 
     if emit_events:
-        await parent_context.send(
-            TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective)
-        )
+        await parent_context.send(TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective))
 
     # Bridge HITL events to the parent stream so the parent's hook
     # can handle them. If the subagent has its own HITL hook, it is

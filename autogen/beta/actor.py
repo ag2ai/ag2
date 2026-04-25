@@ -15,8 +15,6 @@ for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
 or ``tasks=TaskConfig(...)`` for subtask spawning defaults.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -118,9 +116,7 @@ class TaskConfig:
     """Groups task-spawning Actor parameters."""
 
     config: ModelConfig | None = None
-    prompt: str = (
-        "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
-    )
+    prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
     max_depth: int | None = 3
 
 
@@ -131,7 +127,7 @@ class AgentReply(Generic[TResult, TAgent]):
         *,
         context: Context,
         client: LLMClient,
-        agent: Actor[TAgent],
+        agent: "Actor[TAgent]",
         provider: Provider | None,
         response_schema: ResponseProto[TResult] | None,
     ) -> None:
@@ -172,9 +168,7 @@ class AgentReply(Generic[TResult, TAgent]):
                     raise e
 
                 schema_section = (
-                    f"\n\n== Schema ==\n{json.dumps(schema.json_schema)}."
-                    if schema.json_schema is not None
-                    else ""
+                    f"\n\n== Schema ==\n{json.dumps(schema.json_schema)}." if schema.json_schema is not None else ""
                 )
                 current = await current.ask(
                     "Your previous response could not be validated by schema."
@@ -212,7 +206,7 @@ class AgentReply(Generic[TResult, TAgent]):
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[T2, TAgent]: ...
+    ) -> "AgentReply[T2, TAgent]": ...
 
     @overload
     async def ask(
@@ -227,7 +221,7 @@ class AgentReply(Generic[TResult, TAgent]):
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[T2, TAgent]: ...
+    ) -> "AgentReply[T2, TAgent]": ...
 
     @overload
     async def ask(
@@ -242,7 +236,7 @@ class AgentReply(Generic[TResult, TAgent]):
         observers: Iterable[Observer] = ...,
         response_schema: None,
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[str, TAgent]: ...
+    ) -> "AgentReply[str, TAgent]": ...
 
     @overload
     async def ask(
@@ -256,7 +250,7 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[TAgent, TAgent]: ...
+    ) -> "AgentReply[TAgent, TAgent]": ...
 
     async def ask(
         self,
@@ -270,7 +264,7 @@ class AgentReply(Generic[TResult, TAgent]):
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
-    ) -> AgentReply[Any, Any]:
+    ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest.ensure_request(list(msg))
 
         context = self.context
@@ -365,7 +359,7 @@ class Actor(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: type[TResult],
-        plugins: Iterable[Plugin] = ...,
+        plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
@@ -385,7 +379,7 @@ class Actor(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: ResponseProto[TResult],
-        plugins: Iterable[Plugin] = ...,
+        plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
@@ -405,7 +399,7 @@ class Actor(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: types.UnionType,
-        plugins: Iterable[Plugin] = ...,
+        plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
@@ -425,7 +419,7 @@ class Actor(Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
         response_schema: None = ...,
-        plugins: Iterable[Plugin] = ...,
+        plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
@@ -443,10 +437,8 @@ class Actor(Generic[TResult]):
         observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
-        response_schema: (
-            ResponseProto[TResult] | type[TResult] | types.UnionType | None
-        ) = None,
-        plugins: Iterable[Plugin] = (),
+        response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
+        plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | None = None,
         assembly: Iterable[AssemblyPolicy] = (),
@@ -474,9 +466,7 @@ class Actor(Generic[TResult]):
         self.__tool_executor = ToolExecutor(self._serializer)
 
         self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[
-            Callable[[ModelRequest, Context], Awaitable[str]]
-        ] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
@@ -505,13 +495,9 @@ class Actor(Generic[TResult]):
         self._bootstrap_done: bool = False
         self._bootstrap_lock: asyncio.Lock | None = None
         self._compact_strategy = kc.compact if kc else None
-        self._compact_trigger = (
-            kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
-        )
+        self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
-        self._aggregate_trigger = (
-            kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
-        )
+        self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
 
         # Assembly policies (empty by default; bare Actor has no harness).
         self._policies: list[AssemblyPolicy] = list(assembly)
@@ -578,7 +564,7 @@ class Actor(Generic[TResult]):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
-    def add_middleware(self, m: MiddlewareFactory) -> Actor[TResult]:
+    def add_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
         """Append middleware as the innermost wrapper in the chain.
 
         The added middleware is called last on turn entry and first on turn exit,
@@ -587,7 +573,7 @@ class Actor(Generic[TResult]):
         self._middleware.append(m)
         return self
 
-    def insert_middleware(self, m: MiddlewareFactory) -> Actor[TResult]:
+    def insert_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
         """Insert middleware as the outermost wrapper in the chain.
 
         The inserted middleware is called first on turn entry and last on turn exit,
@@ -596,10 +582,8 @@ class Actor(Generic[TResult]):
         self._middleware.insert(0, m)
         return self
 
-    def add_tool(self, t: Callable[..., Any] | Tool) -> Actor[TResult]:
-        self.tools.append(
-            FunctionTool.ensure_tool(t, provider=self.dependency_provider)
-        )
+    def add_tool(self, t: Callable[..., Any] | Tool) -> "Actor[TResult]":
+        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
         return self
 
     def add_observer(self, observer: Observer) -> None:
@@ -674,7 +658,7 @@ class Actor(Generic[TResult]):
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[T2, TResult]: ...
+    ) -> "AgentReply[T2, TResult]": ...
 
     @overload
     async def ask(
@@ -691,7 +675,7 @@ class Actor(Generic[TResult]):
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[T2, TResult]: ...
+    ) -> "AgentReply[T2, TResult]": ...
 
     @overload
     async def ask(
@@ -708,7 +692,7 @@ class Actor(Generic[TResult]):
         observers: Iterable[Observer] = ...,
         response_schema: None,
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[str, TResult]: ...
+    ) -> "AgentReply[str, TResult]": ...
 
     @overload
     async def ask(
@@ -724,7 +708,7 @@ class Actor(Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
-    ) -> AgentReply[TResult, TResult]: ...
+    ) -> "AgentReply[TResult, TResult]": ...
 
     async def ask(
         self,
@@ -739,7 +723,7 @@ class Actor(Generic[TResult]):
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
         hitl_hook: HumanHook | None = None,
-    ) -> AgentReply[Any, Any]:
+    ) -> "AgentReply[Any, Any]":
         config = config or self.config
         if not config:
             raise ConfigNotProvidedError()
@@ -816,9 +800,7 @@ class Actor(Generic[TResult]):
                 return f"Deleted: {path}"
 
             else:
-                return (
-                    f"Unknown action: {action}. Available: read, write, list, delete."
-                )
+                return f"Unknown action: {action}. Available: read, write, list, delete."
 
         return [knowledge]
 
@@ -835,9 +817,7 @@ class Actor(Generic[TResult]):
 
         actor = self
         mw: list[ToolMiddleware] = (
-            [depth_limiter(max_depth=self._task_max_depth)]
-            if self._task_max_depth is not None
-            else []
+            [depth_limiter(max_depth=self._task_max_depth)] if self._task_max_depth is not None else []
         )
 
         @tool(middleware=mw)
@@ -851,9 +831,7 @@ class Actor(Generic[TResult]):
             return await actor._spawn_subtask(task, ctx)
 
         @tool(middleware=mw)
-        async def run_subtasks(
-            ctx: Context, tasks: list[str], parallel: bool = True
-        ) -> str:
+        async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
             """Run multiple subtask agents at once.
 
             Args:
@@ -866,10 +844,7 @@ class Actor(Generic[TResult]):
                     *(actor._spawn_subtask(t, ctx) for t in tasks),
                     return_exceptions=True,
                 )
-                results = [
-                    r if not isinstance(r, BaseException) else f"Error: {r}"
-                    for r in raw
-                ]
+                results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
             else:
                 results = []
                 for t in tasks:
@@ -917,7 +892,7 @@ class Actor(Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> AgentReply[Any, Any]:
+    ) -> "AgentReply[Any, Any]":
         # Serialize turns on the same stream. Tool executor subscribers
         # (see ``tools/executor.py``) register on the stream during a turn
         # and unregister when the turn exits. If two ``ask`` calls share a
@@ -958,7 +933,7 @@ class Actor(Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> AgentReply[Any, Any]:
+    ) -> "AgentReply[Any, Any]":
         additional_observers = list(additional_observers)
         subtask_tools = self._build_subtask_tools()
 
@@ -1005,11 +980,7 @@ class Actor(Generic[TResult]):
 
         if self._aggregate_strategy and self._knowledge_store:
             trigger = self._aggregate_trigger
-            if (
-                trigger.every_n_turns > 0
-                or trigger.every_n_events > 0
-                or trigger.on_end
-            ):
+            if trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end:
                 harness_middleware.append(
                     _AggregationMiddlewareFactory(
                         self.name,
@@ -1077,9 +1048,7 @@ class Actor(Generic[TResult]):
 
             with ExitStack() as stack:
                 stack.enter_context(
-                    context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(
-                        _call_client
-                    ),
+                    context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
                 )
 
                 hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
@@ -1112,9 +1081,7 @@ class Actor(Generic[TResult]):
                 # Observers are live — emit Started so they can see their own
                 # lifecycle event if they subscribe to it.
                 for obs in all_observers:
-                    await context.send(
-                        ObserverStarted(name=getattr(obs, "name", type(obs).__name__))
-                    )
+                    await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
                 try:
                     message = await agent_turn(event, context)
@@ -1132,20 +1099,14 @@ class Actor(Generic[TResult]):
                     # see it before the ExitStack unregisters them.
                     for obs in all_observers:
                         with suppress(Exception):
-                            await context.send(
-                                ObserverCompleted(
-                                    name=getattr(obs, "name", type(obs).__name__)
-                                )
-                            )
+                            await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
 
                 return reply
         finally:
             if self._knowledge_store:
                 try:
                     events = list(await context.stream.history.get_events())
-                    await EventLogWriter(self._knowledge_store).persist(
-                        context.stream.id, events
-                    )
+                    await EventLogWriter(self._knowledge_store).persist(context.stream.id, events)
                 except Exception:
                     logger.exception("Event log persistence failed for %s", self.name)
 
@@ -1154,7 +1115,7 @@ class Actor(Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        stream: StreamFactory | None = None,
+        stream: "StreamFactory | None" = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         from .tools.subagents import subagent_tool
@@ -1167,7 +1128,7 @@ class Actor(Generic[TResult]):
             middleware=middleware,
         )
 
-    def as_conversable(self) -> ConversableAdapter:
+    def as_conversable(self) -> "ConversableAdapter":
         from .conversable import ConversableAdapter
 
         return ConversableAdapter(self)
@@ -1225,9 +1186,7 @@ class Plugin:
         self._hitl_hook = hitl_hook
 
         self._system_prompt: list[str] = []
-        self._dynamic_prompt: list[
-            Callable[[ModelRequest, Context], Awaitable[str]]
-        ] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
@@ -1237,7 +1196,7 @@ class Plugin:
             else:
                 self._dynamic_prompt.append(_wrap_prompt_hook(p))
 
-    def register(self, actor: Actor[Any]) -> None:
+    def register(self, actor: "Actor[Any]") -> None:
         """Apply this plugin's contributions to an Actor instance."""
         for t in self._tools:
             actor.add_tool(t)
@@ -1469,9 +1428,7 @@ class _CompactionMiddleware(BaseMiddleware):
         events = list(await context.stream.history.get_events())
         # Count only non-transient events — transient events (chunks, lifecycle)
         # should not influence compaction decisions even if persist_all=True.
-        conversation_events = [
-            e for e in events if not getattr(type(e), "__transient__", False)
-        ]
+        conversation_events = [e for e in events if not getattr(type(e), "__transient__", False)]
         event_count = len(conversation_events)
 
         # Prevent double compaction — skip if count hasn't grown since last
@@ -1482,19 +1439,14 @@ class _CompactionMiddleware(BaseMiddleware):
         if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
             should_compact = True
         if self._trigger.max_tokens > 0:
-            estimated = (
-                sum(len(str(e)) for e in conversation_events)
-                // self._trigger.chars_per_token
-            )
+            estimated = sum(len(str(e)) for e in conversation_events) // self._trigger.chars_per_token
             if estimated > self._trigger.max_tokens:
                 should_compact = True
 
         if should_compact:
             compacted = await self._strategy.compact(events, context, self._store)
             await context.stream.history.replace(compacted)
-            self._last_compact_event_count = len(
-                [e for e in compacted if not getattr(type(e), "__transient__", False)]
-            )
+            self._last_compact_event_count = len([e for e in compacted if not getattr(type(e), "__transient__", False)])
 
             usage = getattr(self._strategy, "last_usage", {})
             await context.send(

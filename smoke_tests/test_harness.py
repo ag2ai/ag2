@@ -8,9 +8,6 @@ aggregation — every opt-in Actor primitive exercised against a real LLM.
 Uses Gemini 3 Flash Preview as the default driver (fast, cheap, capable).
 """
 
-from __future__ import annotations
-
-import asyncio
 from pathlib import Path
 
 import pytest
@@ -37,20 +34,12 @@ from autogen.beta.knowledge import (
 )
 from autogen.beta.policies import (
     ConversationPolicy,
-    EpisodicMemoryPolicy,
     SlidingWindowPolicy,
     TokenBudgetPolicy,
-    WorkingMemoryPolicy,
 )
 from autogen.beta.stream import MemoryStream
 
-
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
-
-
-# ---------------------------------------------------------------------------
-# Assembly policies
-# ---------------------------------------------------------------------------
 
 
 async def test_conversation_policy_basic(gemini_flash_config) -> None:
@@ -144,11 +133,6 @@ async def test_multiple_policies_compose(gemini_flash_config) -> None:
     assert "2" in reply.body
 
 
-# ---------------------------------------------------------------------------
-# Knowledge store
-# ---------------------------------------------------------------------------
-
-
 async def test_memory_knowledge_store_crud() -> None:
     """Direct KnowledgeStore CRUD — no LLM needed."""
     store = MemoryKnowledgeStore()
@@ -191,8 +175,7 @@ async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
     )
 
     r1 = await agent.ask(
-        "Please remember that my favourite animal is a red panda. "
-        "Store this at /preferences/animal.md"
+        "Please remember that my favourite animal is a red panda. Store this at /preferences/animal.md"
     )
     assert r1.body is not None
 
@@ -202,9 +185,7 @@ async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
     assert "red panda" in content.lower()
 
     # Ask the agent to recall via the tool
-    r2 = await agent.ask(
-        "What is my favourite animal? Look it up in /preferences/animal.md and tell me."
-    )
+    r2 = await agent.ask("What is my favourite animal? Look it up in /preferences/animal.md and tell me.")
     assert r2.body is not None
     assert "red panda" in r2.body.lower()
 
@@ -225,11 +206,6 @@ async def test_bootstrap_runs_once(gemini_flash_config) -> None:
 
     # Post-condition: sentinel was written
     assert await store.exists("/.initialized") is True
-
-
-# ---------------------------------------------------------------------------
-# Compaction
-# ---------------------------------------------------------------------------
 
 
 async def test_tail_window_compact_triggers(gemini_flash_config) -> None:
@@ -294,11 +270,6 @@ async def test_summarize_compact_uses_llm(gemini_flash_config) -> None:
     assert evt.llm_calls >= 1  # Compaction used the LLM
 
 
-# ---------------------------------------------------------------------------
-# Aggregation
-# ---------------------------------------------------------------------------
-
-
 async def test_on_end_aggregation(gemini_flash_config) -> None:
     """AggregateTrigger(on_end=True) fires at execute finalisation."""
     store = MemoryKnowledgeStore()
@@ -356,9 +327,9 @@ async def test_every_n_turns_aggregation(gemini_flash_config) -> None:
     )
 
     r = await agent.ask("Say 'a'.", stream=stream)  # turn 1
-    r = await r.ask("Say 'b'.")                      # turn 2 → fire
-    r = await r.ask("Say 'c'.")                      # turn 3
-    r = await r.ask("Say 'd'.")                      # turn 4 → fire
+    r = await r.ask("Say 'b'.")  # turn 2 → fire
+    r = await r.ask("Say 'c'.")  # turn 3
+    r = await r.ask("Say 'd'.")  # turn 4 → fire
 
     assert len(aggregate_events) == 2
     for evt in aggregate_events:
@@ -395,8 +366,8 @@ async def test_every_n_events_aggregation(gemini_flash_config) -> None:
     )
 
     r = await agent.ask("Say 'w'.", stream=stream)  # 0→2, no crossing
-    r = await r.ask("Say 'x'.")                      # 2→4, crosses 3 → fire
-    r = await r.ask("Say 'y'.")                      # 4→6, crosses 6 → fire
-    r = await r.ask("Say 'z'.")                      # 6→8, no crossing
+    r = await r.ask("Say 'x'.")  # 2→4, crosses 3 → fire
+    r = await r.ask("Say 'y'.")  # 4→6, crosses 6 → fire
+    r = await r.ask("Say 'z'.")  # 6→8, no crossing
 
     assert len(aggregate_events) == 2

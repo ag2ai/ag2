@@ -12,8 +12,6 @@ Run::
     .venv-beta/bin/python playground/04_token_watchdog.py
 """
 
-from __future__ import annotations
-
 import asyncio
 
 from _config import default_config, section
@@ -37,9 +35,7 @@ class AlertConsole(BaseObserver):
         for event in events:
             if isinstance(event, ObserverAlert):
                 self.seen.append(event)
-                print(
-                    f"    [{event.severity.upper():<8}] {event.source}: {event.message}"
-                )
+                print(f"    [{event.severity.upper():<8}] {event.source}: {event.message}")
         return None  # Don't emit a follow-up alert
 
 
@@ -56,10 +52,7 @@ async def main() -> None:
 
     agent = Actor(
         "writer",
-        prompt=(
-            "Write prose the user asks for. Favour variety — never repeat "
-            "the same sentence twice."
-        ),
+        prompt=("Write prose the user asks for. Favour variety — never repeat the same sentence twice."),
         config=config,
         observers=[token_monitor, loop_detector, console],
     )

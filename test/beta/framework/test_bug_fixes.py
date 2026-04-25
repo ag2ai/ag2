@@ -26,11 +26,8 @@ harness audit:
    ``TaskStarted`` / ``TaskCompleted`` event taxonomy.
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Sequence
-from contextlib import ExitStack
 from typing import Any
 
 import pytest
@@ -44,9 +41,7 @@ from autogen.beta.actor import (
     _HaltCheckMiddleware,
     _get_stream_turn_lock,
 )
-from autogen.beta.observer import BaseObserver
 from autogen.beta.aggregate import AggregateTrigger
-from autogen.beta.annotations import Context
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import (
@@ -59,24 +54,18 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
-    Usage,
 )
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
-from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.events.lifecycle import (
     AggregationCompleted,
     ObserverCompleted,
     ObserverStarted,
 )
 from autogen.beta.knowledge import MemoryKnowledgeStore, StoreBootstrap
+from autogen.beta.observer import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
-
-
-# ---------------------------------------------------------------------------
-# Shared fakes
-# ---------------------------------------------------------------------------
 
 
 class _CannedClient(LLMClient):
@@ -141,11 +130,6 @@ class _FatalObserver(BaseObserver):
             severity=Severity.FATAL,
             message="stop",
         )
-
-
-# ---------------------------------------------------------------------------
-# Bug 3: _HaltCheckMiddleware subscription cleanup
-# ---------------------------------------------------------------------------
 
 
 class TestHaltCheckMiddlewareSubscriptionCleanup:
@@ -214,11 +198,6 @@ class TestHaltCheckMiddlewareSubscriptionCleanup:
         assert "policy blew up" in result.content
 
 
-# ---------------------------------------------------------------------------
-# Bug 4: ObserverStarted / Completed emitted while observers are registered
-# ---------------------------------------------------------------------------
-
-
 class _SelfAwareObserver(BaseObserver):
     """Observer that watches ObserverStarted & ObserverCompleted on itself."""
 
@@ -272,11 +251,6 @@ class TestObserverLifecycleSelfVisibility:
         assert started[0].name == "alpha"
 
 
-# ---------------------------------------------------------------------------
-# Bug 5: Bootstrap TOCTOU race
-# ---------------------------------------------------------------------------
-
-
 class TestBootstrapRace:
     @pytest.mark.asyncio
     async def test_concurrent_asks_bootstrap_once(self) -> None:
@@ -317,11 +291,6 @@ class TestBootstrapRace:
         await actor.ask("hi")
 
         assert counter.calls == 0
-
-
-# ---------------------------------------------------------------------------
-# Bug 6: AlertPolicy content-based dedup
-# ---------------------------------------------------------------------------
 
 
 class TestAlertPolicyContentDedup:
@@ -377,11 +346,6 @@ class TestAlertPolicyContentDedup:
         replaced = ObserverAlert(source="mon", severity=Severity.WARNING, message="watch out")
         prompts, _ = await policy.apply([], [replaced], ctx)
         assert all("watch out" not in p for p in prompts)
-
-
-# ---------------------------------------------------------------------------
-# Bug 11: on_end aggregation via unified middleware path
-# ---------------------------------------------------------------------------
 
 
 class _TrackedAggregate:
@@ -469,11 +433,6 @@ class TestAggregationOnEndViaMiddleware:
 
         # Both conditions match, but the middleware still calls aggregate() once
         assert strategy.calls == 1
-
-
-# ---------------------------------------------------------------------------
-# Bug 1+2: Unified task event emission via run_task()
-# ---------------------------------------------------------------------------
 
 
 class TestTaskEventsUnified:

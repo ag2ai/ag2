@@ -464,19 +464,17 @@ def convert_messages(
             # `resolved_tool_ids` above). Emit as its own user turn so
             # the conversation stays consistent.
             parent = getattr(message, "parent_id", None)
-            if (
-                parent
-                and parent in valid_tool_ids
-                and parent not in emitted_result_ids
-            ):
+            if parent and parent in valid_tool_ids and parent not in emitted_result_ids:
                 emitted_result_ids.add(parent)
                 result.append({
                     "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": parent,
-                        "content": message.content,
-                    }],
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": parent,
+                            "content": message.content,
+                        }
+                    ],
                 })
 
     return result

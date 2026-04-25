@@ -8,8 +8,6 @@ LoopDetector, ObserverAlert → HaltEvent short-circuit, ObserverStarted/Complet
 All real LLM calls via Gemini 3 Flash Preview.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from autogen.beta import Actor, BaseObserver, observer
@@ -23,8 +21,7 @@ from autogen.beta.events.lifecycle import ObserverCompleted, ObserverStarted
 from autogen.beta.observers import LoopDetector, TokenMonitor
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
-from autogen.beta.watch import BatchWatch, EventWatch
-
+from autogen.beta.watch import EventWatch
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
 
@@ -146,8 +143,7 @@ async def test_loop_detector_builtin(gemini_flash_config) -> None:
     agent = Actor(
         "looper",
         prompt=(
-            "You must call the get_status tool repeatedly until it returns a "
-            "non-pending status. Try at least 4 times."
+            "You must call the get_status tool repeatedly until it returns a non-pending status. Try at least 4 times."
         ),
         config=gemini_flash_config,
         tools=[get_status],

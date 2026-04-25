@@ -16,8 +16,6 @@ Run::
     .venv-beta/bin/python playground/05_research_squad.py
 """
 
-from __future__ import annotations
-
 import asyncio
 import time
 

@@ -14,8 +14,6 @@ dependency injection, context variables, per-ask tool injection, and
 error paths (missing config, tool exception).
 """
 
-from __future__ import annotations
-
 import asyncio
 from dataclasses import dataclass
 from typing import Annotated, Any
@@ -80,9 +78,7 @@ async def test_sync_tool_use(provider_config) -> None:
         config=provider_config,
         tools=[add],
     )
-    reply = await agent.ask(
-        "Use the add tool to compute 17 + 25. Return only the number."
-    )
+    reply = await agent.ask("Use the add tool to compute 17 + 25. Return only the number.")
     assert reply.body is not None
     assert "42" in reply.body
     assert len(tool_calls) >= 1
@@ -100,9 +96,7 @@ async def test_async_tool_use(provider_config) -> None:
         config=provider_config,
         tools=[lookup_stock],
     )
-    reply = await agent.ask(
-        "What is AAPL trading at? Include the price in your answer."
-    )
+    reply = await agent.ask("What is AAPL trading at? Include the price in your answer.")
     assert reply.body is not None
     assert "123.45" in reply.body
 
@@ -223,11 +217,7 @@ async def test_multi_turn_ask_chain(provider_config) -> None:
     reply3 = await reply2.ask("And what was the first thing I told you?")
     assert reply3.body is not None
     # Should still remember the colour across three turns
-    assert (
-        "teal" in reply3.body.lower()
-        or "colour" in reply3.body.lower()
-        or "color" in reply3.body.lower()
-    )
+    assert "teal" in reply3.body.lower() or "colour" in reply3.body.lower() or "color" in reply3.body.lower()
 
 
 async def test_streaming_chunks_arrive(streaming_config) -> None:

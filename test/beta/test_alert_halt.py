@@ -20,18 +20,14 @@ from typing_extensions import Self
 
 from autogen.beta import Actor
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.observer import BaseObserver
 from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.observer import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import tool
 from autogen.beta.watch import EventWatch
-
-# ---------------------------------------------------------------------------
-# Test helpers
-# ---------------------------------------------------------------------------
 
 
 @tool
@@ -77,11 +73,6 @@ class _RecordingConfig(ModelConfig):
     def create(self) -> _RecordingClient:
         self.client = _RecordingClient(*self._responses)
         return self.client
-
-
-# ---------------------------------------------------------------------------
-# AlertPolicy unit tests
-# ---------------------------------------------------------------------------
 
 
 class TestAlertPolicyUnit:
@@ -261,11 +252,6 @@ class TestAlertPolicyUnit:
         assert len(halt.alerts) == 2
 
 
-# ---------------------------------------------------------------------------
-# _HaltCheckMiddleware unit tests (via Actor integration)
-# ---------------------------------------------------------------------------
-
-
 class TestHaltCheckMiddleware:
     """_HaltCheckMiddleware short-circuits LLM on HaltEvent."""
 
@@ -425,11 +411,6 @@ class TestHaltCheckMiddleware:
 
         assert reply.body is not None
         assert "HALTED" in reply.body
-
-
-# ---------------------------------------------------------------------------
-# AlertPolicy ordering validation
-# ---------------------------------------------------------------------------
 
 
 class TestAlertPolicyOrdering:

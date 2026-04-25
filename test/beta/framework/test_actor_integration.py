@@ -8,8 +8,6 @@ knowledge/memory tools, LockedKnowledgeStore, and unregister cleanup.
 Covers gaps identified in the design review.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from autogen.beta import Actor
@@ -36,10 +34,6 @@ from autogen.beta.knowledge import (
 )
 from autogen.beta.policies import TokenBudgetPolicy
 from autogen.beta.stream import MemoryStream
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 class _FakeAggregate:
@@ -74,11 +68,6 @@ async def _populate_history(stream: MemoryStream, events: list[BaseEvent]) -> No
     """Set events directly in stream history."""
     existing = list(await stream.history.get_events())
     await stream.history.replace(existing + events)
-
-
-# ---------------------------------------------------------------------------
-# CompactionMiddleware tests
-# ---------------------------------------------------------------------------
 
 
 class TestCompactionMiddleware:
@@ -248,15 +237,8 @@ class TestCompactionMiddleware:
         # Second turn — no new events, should not compact again
         await mw.on_turn(call_next, initial_event, ctx)
         remaining2 = list(await stream.history.get_events())
-        non_lifecycle2 = [
-            e for e in remaining2 if not isinstance(e, CompactionCompleted)
-        ]
+        non_lifecycle2 = [e for e in remaining2 if not isinstance(e, CompactionCompleted)]
         assert len(non_lifecycle2) == len(non_lifecycle)
-
-
-# ---------------------------------------------------------------------------
-# AggregationMiddleware tests
-# ---------------------------------------------------------------------------
 
 
 class TestAggregationMiddleware:
@@ -394,11 +376,6 @@ class TestAggregationMiddleware:
         assert collected[0].actor == "test-actor"
 
 
-# ---------------------------------------------------------------------------
-# LockedKnowledgeStore tests
-# ---------------------------------------------------------------------------
-
-
 class TestLockedKnowledgeStore:
     @pytest.mark.asyncio
     async def test_read_not_locked(self) -> None:
@@ -468,11 +445,6 @@ class TestLockedKnowledgeStore:
 # ---------------------------------------------------------------------------
 # Hub.unregister cleanup tests (V2) were dropped during the V3 rewrite.
 # Equivalent coverage for the V3 Hub lives in test/beta/network/test_hub_registry.py.
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Knowledge tool tests
 # ---------------------------------------------------------------------------
 
 
@@ -563,11 +535,6 @@ class TestKnowledgeTool:
         assert "Unknown action" in result
 
 
-# ---------------------------------------------------------------------------
-# TokenBudgetPolicy transparent mode
-# ---------------------------------------------------------------------------
-
-
 class TestTokenBudgetPolicyTransparent:
     @pytest.mark.asyncio
     async def test_transparent_adds_note(self) -> None:
@@ -582,11 +549,6 @@ class TestTokenBudgetPolicyTransparent:
         assert "token budget" in prompts[0].lower()
 
 
-# ---------------------------------------------------------------------------
-# CompactTrigger max_tokens path
-# ---------------------------------------------------------------------------
-
-
 class TestCompactTriggerMaxTokens:
     def test_defaults(self) -> None:
         trigger = CompactTrigger()
@@ -597,11 +559,6 @@ class TestCompactTriggerMaxTokens:
     def test_custom_chars_per_token(self) -> None:
         trigger = CompactTrigger(max_tokens=100, chars_per_token=2)
         assert trigger.chars_per_token == 2
-
-
-# ---------------------------------------------------------------------------
-# ConversationSummaryAggregate uses full stream_id
-# ---------------------------------------------------------------------------
 
 
 class TestConversationSummaryAggregateStreamId:
@@ -633,11 +590,6 @@ class TestConversationSummaryAggregateStreamId:
         filename = entries[0]
         # Full UUID (36 chars with hyphens) must be in the filename
         assert full_id in filename
-
-
-# ---------------------------------------------------------------------------
-# DefaultBootstrap no longer writes sentinel
-# ---------------------------------------------------------------------------
 
 
 class TestDefaultBootstrapNoSentinel:

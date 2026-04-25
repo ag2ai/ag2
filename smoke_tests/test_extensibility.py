@@ -7,32 +7,18 @@
 Real LLM calls via Gemini 3 Flash Preview.
 """
 
-from __future__ import annotations
-
-from typing import Any
-
 import pytest
 
 from autogen.beta import Actor, Context
 from autogen.beta.events import (
-    BaseEvent,
     HumanInputRequest,
     HumanMessage,
-    ModelRequest,
-    ModelResponse,
 )
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.middleware.builtin import LoggingMiddleware
 from autogen.beta.plugin import Plugin
-from autogen.beta.stream import MemoryStream
-
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
-
-
-# ---------------------------------------------------------------------------
-# Custom middleware
-# ---------------------------------------------------------------------------
 
 
 async def test_custom_middleware_on_turn(gemini_flash_config) -> None:
@@ -139,11 +125,6 @@ async def test_insert_middleware_outermost(gemini_flash_config) -> None:
     assert order == ["B-pre", "A-pre", "A-post", "B-post"]
 
 
-# ---------------------------------------------------------------------------
-# HITL hooks
-# ---------------------------------------------------------------------------
-
-
 async def test_hitl_hook_provides_input(gemini_flash_config) -> None:
     """A registered hitl_hook is invoked when a tool calls ``ctx.input(...)``."""
     inputs_requested: list[str] = []
@@ -171,11 +152,6 @@ async def test_hitl_hook_provides_input(gemini_flash_config) -> None:
     assert len(inputs_requested) >= 1
     assert "approve" in inputs_requested[0].lower()
     assert "performed" in reply.body.lower() or "delete_file" in reply.body.lower()
-
-
-# ---------------------------------------------------------------------------
-# Plugins
-# ---------------------------------------------------------------------------
 
 
 async def test_plugin_contributes_tool_and_prompt(gemini_flash_config) -> None:

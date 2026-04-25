@@ -7,8 +7,6 @@ retry middleware on flaky tools, history limiter, response schema retry on
 malformed output, very large responses.
 """
 
-from __future__ import annotations
-
 import asyncio
 
 import pytest
@@ -101,10 +99,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
 
     agent = Actor(
         "parallel",
-        prompt=(
-            "Use run_subtasks with parallel=True to dispatch independent jobs. "
-            "Be concise."
-        ),
+        prompt=("Use run_subtasks with parallel=True to dispatch independent jobs. Be concise."),
         config=gemini_flash_config,
     )
 
@@ -126,9 +121,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
     spread = times[-1] - times[0]
     # Parallel dispatch happens within one event-loop iteration → spread is
     # typically sub-millisecond; sequential would be ≥1s per LLM call.
-    assert (
-        spread < 0.5
-    ), f"subtasks were not dispatched in parallel; spread={spread:.3f}s"
+    assert spread < 0.5, f"subtasks were not dispatched in parallel; spread={spread:.3f}s"
 
 
 async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
@@ -218,9 +211,7 @@ async def test_large_response(gemini_flash_config) -> None:
         prompt="When asked, write a thorough multi-paragraph response.",
         config=gemini_flash_config,
     )
-    reply = await agent.ask(
-        "Write 5 paragraphs about photosynthesis. Each paragraph at least 50 words."
-    )
+    reply = await agent.ask("Write 5 paragraphs about photosynthesis. Each paragraph at least 50 words.")
     assert reply.body is not None
     assert len(reply.body) > 500  # Roughly 5 * 50 * avg-word-length
 

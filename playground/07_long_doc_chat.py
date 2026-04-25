@@ -17,8 +17,6 @@ Run::
     .venv-beta/bin/python playground/07_long_doc_chat.py
 """
 
-from __future__ import annotations
-
 import asyncio
 
 from _config import default_config, section

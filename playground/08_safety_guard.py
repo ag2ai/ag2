@@ -18,8 +18,6 @@ Run::
     .venv-beta/bin/python playground/08_safety_guard.py
 """
 
-from __future__ import annotations
-
 import asyncio
 
 from _config import default_config, section
@@ -49,9 +47,7 @@ class PathGuardian(BaseObserver):
     def __init__(self) -> None:
         super().__init__("path-guardian", watch=EventWatch(ToolCallEvent))
 
-    async def process(
-        self, events: list[BaseEvent], ctx: Context
-    ) -> ObserverAlert | None:
+    async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
             if not isinstance(event, ToolCallEvent):
                 continue

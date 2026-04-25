@@ -6,8 +6,6 @@
 delegation, depth_limiter, persistent_stream. Real LLM calls.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from autogen.beta import Actor, TaskConfig
@@ -16,7 +14,6 @@ from autogen.beta.events.tool_events import ToolResultEvent
 from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.subagents import depth_limiter, persistent_stream
-
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
 
@@ -171,11 +168,7 @@ async def test_depth_limiter_prevents_recursion(gemini_flash_config) -> None:
     assert results, "task_helper must have produced a tool result"
     # The limiter's deterministic error string must appear in at least one
     # tool result — this proves the middleware actually short-circuited.
-    assert any(
-        "maximum task depth" in (e.content or "")
-        for e in results
-        if e.name == "task_helper"
-    )
+    assert any("maximum task depth" in (e.content or "") for e in results if e.name == "task_helper")
 
 
 async def test_persistent_stream_shares_history(gemini_flash_config) -> None:

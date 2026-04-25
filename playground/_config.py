@@ -5,8 +5,6 @@ config. All playground scripts import ``default_config()`` from this module
 so you can point every example at a different provider by editing one place.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 from pathlib import Path

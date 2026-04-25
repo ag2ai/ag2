@@ -12,8 +12,6 @@ deeper reasoning can override the config inline — provider modules are
 re-imported from ``autogen.beta.config``.
 """
 
-from __future__ import annotations
-
 import os
 from pathlib import Path
 
