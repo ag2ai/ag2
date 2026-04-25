@@ -17,7 +17,7 @@ from ag_ui.core import (
 )
 from dirty_equals import IsInt, IsPartialDict, IsStr
 
-from autogen.beta import Agent, Context, Variable
+from autogen.beta import Actor, Context, Variable
 from autogen.beta.ag_ui import AGUIEvent, AGUIStream
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
@@ -36,7 +36,7 @@ pytestmark = pytest.mark.asyncio
 
 class TestBasicConversation:
     async def test_basic_user_message(self) -> None:
-        agent = Agent("test_agent", config=TestConfig("Hello! I'm doing well, thank you for asking."))
+        agent = Actor("test_agent", config=TestConfig("Hello! I'm doing well, thank you for asking."))
 
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="msg_1", content="Hello, how are you?"))
@@ -64,7 +64,7 @@ class TestBasicConversation:
         })
 
     async def test_multiple_messages_history(self) -> None:
-        agent = Agent("test_agent", config=TestConfig("I see you've been talking about weather. It's sunny today!"))
+        agent = Actor("test_agent", config=TestConfig("I see you've been talking about weather. It's sunny today!"))
 
         stream = AGUIStream(agent)
 
@@ -83,7 +83,7 @@ class TestBasicConversation:
 
 class TestBackendTools:
     async def test_backend_tool_call_and_result(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(
                 ToolCallEvent(name="get_current_time"),
@@ -127,7 +127,7 @@ class TestBackendTools:
         assert_event_type(events, "RUN_FINISHED")
 
     async def test_backend_tool_with_arguments(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(
                 ToolCallEvent(name="calculate_sum", arguments='{"a":5,"b":3}'),
@@ -162,7 +162,7 @@ class TestBackendTools:
         })
 
     async def test_multiple_backend_tool_calls(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(
                 (
@@ -203,7 +203,7 @@ class TestBackendTools:
 
 class TestFrontendTools:
     async def test_frontend_tool_call(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(
                 ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}'),
@@ -228,7 +228,7 @@ class TestFrontendTools:
         assert_event_type(events, "RUN_FINISHED")
 
     async def test_frontend_tool_with_result(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(
                 "The weather in Paris is sunny with 22°C.",
@@ -269,7 +269,7 @@ class TestFrontendTools:
         })
 
     async def test_multiple_frontend_tools(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig([
                 ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}'),
@@ -299,7 +299,7 @@ class TestFrontendTools:
 
 class TestMixedTools:
     async def test_backend_and_frontend_tools(self) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig([
                 # Create a message with both backend and frontend tool calls
@@ -333,7 +333,7 @@ class TestMixedTools:
 
 class TestEventTypes:
     async def test_text_message_event_structure(self) -> None:
-        agent = Agent("test_agent", config=TestConfig("Hello world!"))
+        agent = Actor("test_agent", config=TestConfig("Hello world!"))
 
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="msg_1", content="Hi!"))
@@ -348,7 +348,7 @@ class TestEventTypes:
         })
 
     async def test_tool_call_event_structure(self) -> None:
-        agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"))
+        agent = Actor("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"))
 
         @agent.tool
         def my_tool() -> str:
@@ -390,7 +390,7 @@ class TestEventTypes:
 
 class TestStateSnapshotEvent:
     async def test_initial_agent_variables_send_state_event(self, mock: MagicMock) -> None:
-        agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"), variables={"var": "123"})
+        agent = Actor("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"), variables={"var": "123"})
 
         @agent.tool
         def my_tool(var: Annotated[str, Variable()]) -> str:
@@ -411,7 +411,7 @@ class TestStateSnapshotEvent:
         mock.assert_called_once_with("123")
 
     async def test_agent_turn_variables_send_state_event(self, mock: MagicMock) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(ToolCallEvent(name="my_tool"), "Done"),
         )
@@ -434,7 +434,7 @@ class TestStateSnapshotEvent:
         mock.assert_called_once_with("123")
 
     async def test_frontend_variables_usage(self, mock: MagicMock) -> None:
-        agent = Agent(
+        agent = Actor(
             "test_agent",
             config=TestConfig(ToolCallEvent(name="my_tool"), "Done"),
         )
@@ -454,7 +454,7 @@ class TestStateSnapshotEvent:
         mock.assert_called_once_with("123")
 
     async def test_no_initial_state_snapshot_when_state_matches(self) -> None:
-        agent = Agent("test_agent", config=TestConfig("Done"))
+        agent = Actor("test_agent", config=TestConfig("Done"))
         stream = AGUIStream(agent)
 
         run_input = create_run_input(UserMessage(id="msg_1", content="Hello!"))
@@ -464,7 +464,7 @@ class TestStateSnapshotEvent:
         assert_no_event_type(events, "STATE_SNAPSHOT")
 
     async def test_state_snapshot_when_tool_returns_reply_result_with_context(self) -> None:
-        agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"), variables={"var": "123"})
+        agent = Actor("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"), variables={"var": "123"})
 
         @agent.tool
         def my_tool(var: Annotated[str, Variable()], ctx: Context) -> str:
@@ -487,7 +487,7 @@ class TestStateSnapshotEvent:
 
 
 async def test_custom_event() -> None:
-    agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"))
+    agent = Actor("test_agent", config=TestConfig(ToolCallEvent(name="my_tool"), "Done"))
 
     @agent.tool
     async def my_tool(ctx: Context) -> None:

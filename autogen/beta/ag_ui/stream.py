@@ -34,7 +34,7 @@ from anyio.streams.memory import MemoryObjectSendStream
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
-from autogen.beta import Agent, MemoryStream, ToolResult, events
+from autogen.beta import Actor, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
 from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
@@ -53,7 +53,7 @@ except ImportError:
 
 
 class AGUIStream:
-    def __init__(self, agent: Agent) -> None:
+    def __init__(self, agent: Actor) -> None:
         self.__agent = agent
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
@@ -120,7 +120,7 @@ class AGStreamInput:
 
 async def run_stream(
     command: AGStreamInput,
-    agent: Agent,
+    agent: Actor,
     write_events_stream: MemoryObjectSendStream[BaseEvent],
 ) -> None:
     client_tools = []

@@ -11,7 +11,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("exa_py")
 
-from autogen.beta import Agent, DataInput, Variable
+from autogen.beta import Actor, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -105,7 +105,7 @@ class TestSearchExecution:
         toolkit = ExaToolkit(client=mock)
 
         config = TrackingConfig(_tool_call_config({"query": "AG2 framework"}, tool_name="exa_search"))
-        agent = Agent("a", config=config, tools=[toolkit])
+        agent = Actor("a", config=config, tools=[toolkit])
 
         await agent.ask("search")
 
@@ -140,7 +140,7 @@ class TestSearchExecution:
         toolkit = ExaToolkit(client=mock)
 
         config = TrackingConfig(_tool_call_config({"query": "nothing"}, tool_name="exa_search"))
-        agent = Agent("a", config=config, tools=[toolkit])
+        agent = Actor("a", config=config, tools=[toolkit])
 
         await agent.ask("search")
 
@@ -153,7 +153,7 @@ class TestSearchExecution:
         mock.search.return_value = _response([])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="exa_search"), tools=[toolkit])
+        agent = Actor("a", config=_tool_call_config({"query": "q"}, tool_name="exa_search"), tools=[toolkit])
 
         await agent.ask("search")
 
@@ -176,7 +176,7 @@ class TestSearchExecution:
             livecrawl="always",
         )
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
@@ -202,7 +202,7 @@ class TestSearchExecution:
         mock.search_and_contents.return_value = _response([_result(text="full article text")])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[toolkit.search(max_characters=500)],
@@ -216,7 +216,7 @@ class TestSearchExecution:
         mock.search_and_contents.return_value = _response([])
         toolkit = ExaToolkit(client=mock, max_characters=800)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[toolkit],
@@ -230,7 +230,7 @@ class TestSearchExecution:
         mock.search.return_value = _response([])
         toolkit = ExaToolkit(client=mock, num_results=7)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[toolkit],
@@ -246,7 +246,7 @@ class TestFindSimilar:
         mock.find_similar.return_value = _response([_result(title="Similar page")])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"url": "https://ag2.ai"}, tool_name="exa_find_similar"),
             tools=[toolkit.find_similar(num_results=3)],
@@ -259,7 +259,7 @@ class TestFindSimilar:
         mock.find_similar.return_value = _response([])
         toolkit = ExaToolkit(client=mock, num_results=4)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"url": "https://ag2.ai"}, tool_name="exa_find_similar"),
             tools=[toolkit],
@@ -272,7 +272,7 @@ class TestFindSimilar:
         mock.find_similar.return_value = _response([])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"url": "https://ag2.ai"}, tool_name="exa_find_similar"),
             tools=[toolkit.find_similar(num_results=2, exclude_source_domain=True)],
@@ -297,7 +297,7 @@ class TestGetContents:
         toolkit = ExaToolkit(client=mock)
 
         config = TrackingConfig(_tool_call_config({"urls": ["https://ag2.ai"]}, tool_name="exa_get_contents"))
-        agent = Agent("a", config=config, tools=[toolkit])
+        agent = Actor("a", config=config, tools=[toolkit])
         await agent.ask("get contents")
 
         mock.get_contents.assert_called_once_with(["https://ag2.ai"], text=True)
@@ -327,7 +327,7 @@ class TestAnswer:
         toolkit = ExaToolkit(client=mock)
 
         config = TrackingConfig(_tool_call_config({"query": "What is AG2?"}, tool_name="exa_answer"))
-        agent = Agent("a", config=config, tools=[toolkit])
+        agent = Actor("a", config=config, tools=[toolkit])
         await agent.ask("answer")
 
         mock.answer.assert_called_once_with("What is AG2?", text=True)
@@ -354,7 +354,7 @@ class TestExaToolkitVariable:
             search_type=Variable(),
         )
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
@@ -369,7 +369,7 @@ class TestExaToolkitVariable:
         toolkit = ExaToolkit(client=mock)
         search_tool = toolkit.search(search_type=Variable())
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
@@ -385,7 +385,7 @@ class TestIndividualTools:
         mock.search.return_value = _response([_result()])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[toolkit.search()],
@@ -399,7 +399,7 @@ class TestIndividualTools:
         mock.answer.return_value = SimpleNamespace(answer="ok", citations=[])
         toolkit = ExaToolkit(client=mock)
 
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[toolkit.search(), toolkit.answer()],

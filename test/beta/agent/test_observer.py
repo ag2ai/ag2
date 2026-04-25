@@ -100,7 +100,7 @@ async def test_decorate_any_event(
     async def track_response(event: BaseEvent) -> None:
         mock(event)
 
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
         observers=[track_response],
@@ -135,7 +135,7 @@ async def test_agent_decorator_style_any_event(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Agent(
+    agent = Actor(
         "",
         config=test_config,
     )

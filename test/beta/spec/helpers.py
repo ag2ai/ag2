@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from autogen.beta import Agent
+from autogen.beta import Actor
 from autogen.beta.tools import tool
 
 
@@ -26,7 +26,7 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 
-def make_agent(**kwargs: Any) -> Agent:
+def make_agent(**kwargs: Any) -> Actor:
     """Create a test agent without a real config."""
     defaults: dict[str, Any] = {
         "name": "test_agent",
@@ -34,4 +34,4 @@ def make_agent(**kwargs: Any) -> Agent:
         "tools": [add, multiply],
     }
     defaults.update(kwargs)
-    return Agent(**defaults)
+    return Actor(**defaults)

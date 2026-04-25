@@ -10,7 +10,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("tavily")
 
-from autogen.beta import Agent, DataInput, Variable
+from autogen.beta import Actor, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -81,7 +81,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework"))
-        agent = Agent("a", config=config, tools=[tavily])
+        agent = Actor("a", config=config, tools=[tavily])
 
         # act
         await agent.ask("search")
@@ -116,7 +116,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("nothing"))
-        agent = Agent("a", config=config, tools=[tavily])
+        agent = Actor("a", config=config, tools=[tavily])
 
         # act
         await agent.ask("search")
@@ -149,7 +149,7 @@ class TestSearchExecution:
             auto_parameters=True,
             include_favicon=True,
         )
-        agent = Agent("a", config=_make_config("q"), tools=[tavily])
+        agent = Actor("a", config=_make_config("q"), tools=[tavily])
 
         await agent.ask("search")
 
@@ -177,7 +177,7 @@ class TestSearchExecution:
         mock.search.return_value = {"query": "q", "results": []}
 
         tavily = TavilySearchTool(client=mock)
-        agent = Agent("a", config=_make_config("q"), tools=[tavily])
+        agent = Actor("a", config=_make_config("q"), tools=[tavily])
 
         await agent.ask("search")
 
@@ -190,7 +190,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework", tool_name="web_search"))
-        agent = Agent("a", config=config, tools=[ddg])
+        agent = Actor("a", config=config, tools=[ddg])
 
         # act
         await agent.ask("search")
@@ -211,7 +211,7 @@ class TestTavilykSearchToolVariable:
         )
 
         # arrange agent
-        agent = Agent(
+        agent = Actor(
             "a",
             config=_make_config("test query"),
             tools=[tavily],
@@ -238,7 +238,7 @@ class TestTavilykSearchToolVariable:
             topic=Variable(),
         )
 
-        agent = Agent("a", config=_make_config("test query"), tools=[tavily])
+        agent = Actor("a", config=_make_config("test query"), tools=[tavily])
 
         with pytest.raises(KeyError, match="topic"):
             await agent.ask("search")

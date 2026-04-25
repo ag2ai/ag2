@@ -40,7 +40,7 @@ class SkillsToolkit(Toolkit):
         SkillsToolkit(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
 
         # Pick individual tools
-        agent = Agent(
+        agent = Actor(
             "a",
             config=config,
             tools=[

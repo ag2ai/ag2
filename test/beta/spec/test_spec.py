@@ -8,7 +8,7 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from autogen.beta import Agent, AgentSpec
+from autogen.beta import Actor, AgentSpec
 from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ResponseSchemaSpec
@@ -176,7 +176,7 @@ class TestBuiltinTools:
 class TestToolkit:
     def test_round_trip(self, tmp_path: Path) -> None:
         fs = FilesystemToolkit(base_path=tmp_path, read_only=True)
-        agent = Agent(name="bot", tools=[add, fs])
+        agent = Actor(name="bot", tools=[add, fs])
         spec = AgentSpec.from_agent(agent)
 
         assert spec.tool_names == ["add", "filesystem_toolkit"]

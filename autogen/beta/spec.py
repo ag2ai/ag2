@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autogen.beta.agent import Agent, Plugin
+from autogen.beta.actor import Actor, Plugin
 from autogen.beta.config.config import ModelConfig
 from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.hitl import HumanHook
@@ -37,9 +37,9 @@ class ResponseSchemaSpec(BaseModel):
 
 
 class AgentSpec(BaseModel):
-    """JSON-serializable specification of an Agent.
+    """JSON-serializable specification of an Actor.
 
-    Captures the declarative, data-only parts of an ``Agent``: name, prompt,
+    Captures the declarative, data-only parts of an ``Actor``: name, prompt,
     tool names, and response schema.
 
     Non-serializable parts (middleware, callbacks, dependencies, dynamic prompts)
@@ -53,8 +53,8 @@ class AgentSpec(BaseModel):
     response_schema: ResponseSchemaSpec | None = None
 
     @classmethod
-    def from_agent(cls, agent: Agent) -> "AgentSpec":
-        """Create an ``AgentSpec`` from a live ``Agent`` instance.
+    def from_agent(cls, agent: Actor) -> "AgentSpec":
+        """Create an ``AgentSpec`` from a live ``Actor`` instance.
 
         Only serializable state is captured. Dynamic prompts, middleware,
         callbacks, and dependencies are dropped.
@@ -91,8 +91,8 @@ class AgentSpec(BaseModel):
         variables: dict[str, Any] | None = None,
         response_schema: ResponseProto[Any] | type | None = None,
         plugins: Iterable[Plugin] = (),
-    ) -> Agent:
-        """Reconstruct an ``Agent`` from this spec."""
+    ) -> Actor:
+        """Reconstruct an ``Actor`` from this spec."""
 
         # Build name -> tool index from available_tools
         tool_index: dict[str, Tool] = {}
@@ -121,7 +121,7 @@ class AgentSpec(BaseModel):
         if final_rs is None and self.response_schema is not None:
             final_rs = self.response_schema.to_response_schema()
 
-        return Agent(
+        return Actor(
             name=self.name,
             prompt=list(self.prompt),
             config=config,

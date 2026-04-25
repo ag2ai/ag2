@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from dirty_equals import IsList
 
-from autogen.beta import Agent, Context, MemoryStream, testing
+from autogen.beta import Actor, Context, MemoryStream, testing
 from autogen.beta.events import BaseEvent, ToolCallEvent
 from autogen.beta.watch import CadenceWatch, CronWatch
 
@@ -31,7 +31,7 @@ class TestCadenceWatchTimeTrigger:
             ToolCallEvent(name="t2", arguments="{}"),
         ]
 
-        agent = Agent(
+        agent = Actor(
             "test-agent",
             config=testing.TestConfig(tool_calls, "Done"),
         )
@@ -60,7 +60,7 @@ class TestCadenceWatchTimeTrigger:
         watch = CadenceWatch(max_wait=0.01, condition=ToolCallEvent)
         watch.arm(stream, callback)
 
-        agent = Agent("test-agent", config=testing.TestConfig("Done"))
+        agent = Actor("test-agent", config=testing.TestConfig("Done"))
         await agent.ask("Hello", stream=stream)
         await asyncio.sleep(0.02)
 
@@ -77,7 +77,7 @@ class TestCadenceWatchTimeTrigger:
         watch.arm(stream, callback)
         watch.disarm()
 
-        agent = Agent("test-agent", config=testing.TestConfig("Done"))
+        agent = Actor("test-agent", config=testing.TestConfig("Done"))
         await agent.ask("Hello", stream=stream)
         await asyncio.sleep(0.02)
 

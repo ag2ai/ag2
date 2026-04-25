@@ -216,7 +216,7 @@ async def test_depends_override_toolkit(mock: MagicMock, test_config: TestConfig
 
     toolkit = Toolkit(my_tool)
 
-    agent = Agent("", config=test_config)
+    agent = Actor("", config=test_config)
     agent.add_tool(toolkit)
 
     agent.dependency_provider.override(dep1, dep2)
