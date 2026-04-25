@@ -24,13 +24,13 @@ class TestAggregateTrigger:
         trigger = AggregateTrigger()
         assert trigger.every_n_turns == 0
         assert trigger.every_n_events == 0
-        assert trigger.on_end is True
+        assert trigger.on_end is False
 
     def test_custom_values(self) -> None:
-        trigger = AggregateTrigger(every_n_turns=5, every_n_events=50, on_end=False)
+        trigger = AggregateTrigger(every_n_turns=5, every_n_events=50, on_end=True)
         assert trigger.every_n_turns == 5
         assert trigger.every_n_events == 50
-        assert trigger.on_end is False
+        assert trigger.on_end is True
 
 
 class TestConversationSummaryAggregate:

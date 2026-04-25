@@ -52,11 +52,11 @@ from autogen.beta.aggregate import AggregateTrigger
 trigger = AggregateTrigger(
     every_n_turns=10,      # aggregate every 10 LLM turns
     every_n_events=100,    # aggregate every 100 new events
-    on_end=True,           # aggregate when the conversation ends (default)
+    on_end=True,           # aggregate when the conversation ends
 )
 ```
 
-Each condition is independent. Setting a counter to `0` disables it. `AggregateTrigger()` with no arguments only fires `on_end`.
+Each condition is independent. Setting a counter to `0` disables it. `AggregateTrigger()` with no arguments fires nothing — every condition is opt-in. `on_end` defaults to `False` because each strategy costs one LLM call per fire, and a typical setup pairs `ConversationSummaryAggregate` with `WorkingMemoryAggregate` (so `on_end=True` doubles the per-conversation cost).
 
 Like `CompactTrigger`, this is a plain data object — it records when you want aggregation to fire, but does not fire it. Strategies are invoked explicitly via `#!python await strategy.aggregate(...)`.
 

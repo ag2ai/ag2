@@ -57,7 +57,7 @@ class AggregateTrigger:
 
     every_n_turns: int = 0  # Aggregate every N LLM turns. 0 = disabled.
     every_n_events: int = 0  # Aggregate every N new events since last aggregation. 0 = disabled.
-    on_end: bool = True  # Aggregate when conversation ends.
+    on_end: bool = False  # Aggregate when conversation ends. Opt-in: each strategy is one LLM call.
 
 
 class ConversationSummaryAggregate:
