@@ -938,6 +938,7 @@ class GroupChat:
         if self.select_speaker_prompt_template is not None:
             start_message = {
                 "content": self.select_speaker_prompt(agents),
+                "name": "checking_agent",
                 "override_role": self.role_for_select_speaker_messages,
             }
         else:
