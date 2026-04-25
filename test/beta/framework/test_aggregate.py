@@ -4,8 +4,6 @@
 
 """Tests for AggregateStrategy, AggregateTrigger, and built-in strategies."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

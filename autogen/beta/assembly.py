@@ -10,18 +10,12 @@ transforms (prompts, events) before each LLM call.
 Policies compose left-to-right: each sees the output of the previous.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.middleware.base import BaseMiddleware, LLMCall
-
-# ---------------------------------------------------------------------------
-# Protocol
-# ---------------------------------------------------------------------------
 
 
 @runtime_checkable
@@ -46,11 +40,6 @@ class AssemblyPolicy(Protocol):
     ) -> tuple[list[str], list[BaseEvent]]:
         """Transform prompts and events. Return modified copies."""
         ...
-
-
-# ---------------------------------------------------------------------------
-# Middleware
-# ---------------------------------------------------------------------------
 
 
 class AssemblerMiddleware(BaseMiddleware):

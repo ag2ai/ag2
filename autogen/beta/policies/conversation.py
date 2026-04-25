@@ -4,8 +4,6 @@
 
 """ConversationPolicy — only conversation and tool events reach the LLM."""
 
-from __future__ import annotations
-
 from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse

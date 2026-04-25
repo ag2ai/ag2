@@ -11,26 +11,17 @@ triggered at deterministic milestones to maintain actor effectiveness.
 Unlike compaction (which removes), aggregation creates.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.annotations import Context
+from autogen.beta.config import ModelConfig
+from autogen.beta.context import ConversationContext
+from autogen.beta.events import BaseEvent, ModelRequest
+from autogen.beta.stream import MemoryStream
 
-from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH
-
-if TYPE_CHECKING:
-    from autogen.beta.annotations import Context
-    from autogen.beta.config import ModelConfig
-
-    from .knowledge import KnowledgeStore
-
-
-# ---------------------------------------------------------------------------
-# Protocol
-# ---------------------------------------------------------------------------
+from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
 
 
 @runtime_checkable
@@ -57,11 +48,6 @@ class AggregateStrategy(Protocol):
         ...
 
 
-# ---------------------------------------------------------------------------
-# Trigger
-# ---------------------------------------------------------------------------
-
-
 @dataclass(slots=True)
 class AggregateTrigger:
     """Deterministic conditions for triggering aggregation.
@@ -72,11 +58,6 @@ class AggregateTrigger:
     every_n_turns: int = 0  # Aggregate every N LLM turns. 0 = disabled.
     every_n_events: int = 0  # Aggregate every N new events since last aggregation. 0 = disabled.
     on_end: bool = True  # Aggregate when conversation ends.
-
-
-# ---------------------------------------------------------------------------
-# Built-in strategies
-# ---------------------------------------------------------------------------
 
 
 class ConversationSummaryAggregate:
@@ -104,10 +85,6 @@ class ConversationSummaryAggregate:
         await store.write(f"{CONVERSATIONS_PREFIX}{ts}_{stream_id}.md", summary)
 
     async def _summarize(self, events: list[BaseEvent]) -> str:
-        from autogen.beta.context import ConversationContext as Ctx
-        from autogen.beta.events import ModelRequest
-        from autogen.beta.stream import MemoryStream
-
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize this conversation. Include key decisions, "
@@ -115,7 +92,7 @@ class ConversationSummaryAggregate:
         ])
         response = await client(
             [prompt_event],
-            Ctx(MemoryStream()),
+            ConversationContext(MemoryStream()),
             tools=[],
             response_schema=None,
         )
@@ -150,10 +127,6 @@ class WorkingMemoryAggregate:
         await store.write(WORKING_MEMORY_PATH, updated)
 
     async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
-        from autogen.beta.context import ConversationContext as Ctx
-        from autogen.beta.events import ModelRequest
-        from autogen.beta.stream import MemoryStream
-
         client = self._config.create()
         prompt = (
             "You maintain an actor's working memory. Update it based on "
@@ -164,7 +137,7 @@ class WorkingMemoryAggregate:
         )
         response = await client(
             [ModelRequest.ensure_request([prompt])],
-            Ctx(MemoryStream()),
+            ConversationContext(MemoryStream()),
             tools=[],
             response_schema=None,
         )

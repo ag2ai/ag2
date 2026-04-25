@@ -12,23 +12,16 @@ stream history.
 Compaction removes. Aggregation creates. They are separate concerns.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-from autogen.beta.events import BaseEvent
+from autogen.beta.annotations import Context
+from autogen.beta.config import ModelConfig
+from autogen.beta.context import ConversationContext
+from autogen.beta.events import BaseEvent, ModelRequest
+from autogen.beta.stream import MemoryStream
 
-if TYPE_CHECKING:
-    from autogen.beta.annotations import Context
-    from autogen.beta.config import ModelConfig
-
-    from .knowledge import KnowledgeStore
-
-
-# ---------------------------------------------------------------------------
-# Events
-# ---------------------------------------------------------------------------
+from .knowledge import EventLogWriter, KnowledgeStore
 
 
 class CompactionSummary(BaseEvent):
@@ -41,11 +34,6 @@ class CompactionSummary(BaseEvent):
 
     summary: str
     event_count: int  # How many events were summarized
-
-
-# ---------------------------------------------------------------------------
-# Protocol
-# ---------------------------------------------------------------------------
 
 
 @runtime_checkable
@@ -73,11 +61,6 @@ class CompactStrategy(Protocol):
         ...
 
 
-# ---------------------------------------------------------------------------
-# Trigger
-# ---------------------------------------------------------------------------
-
-
 @dataclass(slots=True)
 class CompactTrigger:
     """Deterministic conditions for triggering compaction.
@@ -88,11 +71,6 @@ class CompactTrigger:
     max_events: int = 0  # Compact when event count exceeds this. 0 = disabled.
     max_tokens: int = 0  # Compact when estimated token count exceeds this. 0 = disabled.
     chars_per_token: int = 4  # For token estimation.
-
-
-# ---------------------------------------------------------------------------
-# Built-in strategies
-# ---------------------------------------------------------------------------
 
 
 class TailWindowCompact:
@@ -118,8 +96,6 @@ class TailWindowCompact:
         retained = events[-self._target :]
 
         if store:
-            from .knowledge import EventLogWriter
-
             writer = EventLogWriter(store)
             await writer.persist_dropped(context.stream.id, dropped)
 
@@ -154,8 +130,6 @@ class SummarizeCompact:
 
         # Persist full old events before dropping
         if store:
-            from .knowledge import EventLogWriter
-
             writer = EventLogWriter(store)
             await writer.persist_dropped(context.stream.id, old)
 
@@ -168,19 +142,14 @@ class SummarizeCompact:
         return [summary_event] + recent
 
     async def _summarize(self, events: list[BaseEvent]) -> str:
-        from autogen.beta.events import ModelRequest
-        from autogen.beta.stream import MemoryStream
-
         client = self._config.create()
         prompt_event = ModelRequest.ensure_request([
             "Summarize the following conversation history concisely, "
             "preserving key decisions, findings, and context:\n\n" + "\n".join(str(e) for e in events)
         ])
-        from autogen.beta.context import ConversationContext as Ctx
-
         response = await client(
             [prompt_event],
-            Ctx(MemoryStream()),
+            ConversationContext(MemoryStream()),
             tools=[],
             response_schema=None,
         )

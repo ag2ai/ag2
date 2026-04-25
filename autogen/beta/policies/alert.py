@@ -14,8 +14,6 @@ Key behaviors preserved from the old system:
 - FATAL handling: emits HaltEvent for observers to halt execution
 """
 
-from __future__ import annotations
-
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity

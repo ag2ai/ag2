@@ -4,8 +4,6 @@
 
 """SlidingWindowPolicy — keep the last N events."""
 
-from __future__ import annotations
-
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent, ToolResultsEvent
 

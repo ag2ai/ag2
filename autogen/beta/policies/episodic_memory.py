@@ -4,8 +4,6 @@
 
 """EpisodicMemoryPolicy — injects past conversation summaries."""
 
-from __future__ import annotations
-
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.knowledge import CONVERSATIONS_PREFIX, KnowledgeStore

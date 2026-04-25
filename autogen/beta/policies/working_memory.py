@@ -4,8 +4,6 @@
 
 """WorkingMemoryPolicy — injects persistent working memory."""
 
-from __future__ import annotations
-
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.knowledge import WORKING_MEMORY_PATH, KnowledgeStore
