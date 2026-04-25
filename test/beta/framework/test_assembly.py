@@ -6,7 +6,7 @@
 
 import pytest
 
-from autogen.beta import AssemblerMiddleware
+from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
