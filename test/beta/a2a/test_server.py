@@ -57,6 +57,6 @@ def test_custom_task_store_passes_through() -> None:
     store = InMemoryTaskStore()
     server = A2AServer(_agent(), task_store=store)
 
-    app = server.build_asgi()  # should not raise
+    app = server.build_asgi()
 
     assert isinstance(app, Starlette)
