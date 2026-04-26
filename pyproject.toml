@@ -298,6 +298,7 @@ duckduckgo = ["duckduckgo_search>=8.0.2"]
 ddgs = ["ddgs>=9.0.0,<10"]
 tavily = ["tavily-python>=0.7.4,<0.8"]
 exa = ["exa-py>=2.0.0,<3"]
+perplexity = ["perplexityai>=0.30.0,<1"]
 
 nlip = [
     "nlip-sdk>=0.1.0, <1",
@@ -345,6 +346,7 @@ docs = [
     "ag2[tavily]",                  # Tavily search is exposed in the public API by the optional `autogen.beta.tools.search` module
     "ag2[exa]",                     # Exa search is exposed in the public API by the optional `autogen.beta.tools.search` module
     "ag2[ddgs]",                    # DuckDuckGo search is exposed in the public API by the optional `autogen.beta.tools.search` module
+    "ag2[perplexity]",              # Perplexity search is exposed in the public API by the optional `autogen.beta.tools.search` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
@@ -401,7 +403,7 @@ optionals = [
     "ag2[tracing]",
     "ag2[watchdog]",  # DiskKnowledgeStore
     # search tools
-    "ag2[tavily,ddgs,exa]",
+    "ag2[tavily,ddgs,exa,perplexity]",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
