@@ -25,6 +25,25 @@ class UserLocation:
     country: str | None = None
     timezone: str | None = None
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, UserLocation):
+            return NotImplemented
+        # Only compare fields that are explicitly set (not None) in either location.
+        # If one location specifies a field and the other doesn't, that field is ignored.
+        # UserLocation(country="DE") == UserLocation(country="DE", timezone="Europe/Berlin")
+        # because the only shared explicitly-set field is country="DE".
+        fields = ["city", "region", "country", "timezone"]
+        self_vals = [getattr(self, f) for f in fields]
+        other_vals = [getattr(other, f) for f in fields]
+        for s, o in zip(self_vals, other_vals):
+            if s is None and o is None:
+                continue
+            if s is None or o is None:
+                continue
+            if s != o:
+                return False
+        return True
+
 
 @dataclass(slots=True)
 class WebSearchToolSchema(ToolSchema):
