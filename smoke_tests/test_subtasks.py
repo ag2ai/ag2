@@ -3,17 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Subtask smoke: run_subtask, run_subtasks (parallel + sequential), as_tool
-delegation, depth_limiter, persistent_stream. Real LLM calls.
+delegation, no-recursion guarantee, persistent_stream. Real LLM calls.
 """
 
 import pytest
 
-from autogen.beta import Actor, TaskConfig
+from autogen.beta import Actor
+from autogen.beta import actor as actor_mod
+from autogen.beta.actor import TaskConfig
 from autogen.beta.events import TaskCompleted, TaskStarted
-from autogen.beta.events.tool_events import ToolResultEvent
 from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.subagents import depth_limiter, persistent_stream
+from autogen.beta.tools.subagents import persistent_stream
+from autogen.beta.tools.subagents import run_task as run_task_mod
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
 
@@ -139,36 +141,38 @@ async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
     assert "437" in reply.body
 
 
-async def test_depth_limiter_prevents_recursion(gemini_flash_config) -> None:
-    """depth_limiter() short-circuits delegation when depth is exceeded.
+async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
+    """Subtasks structurally lack ``run_subtask`` — no recursion possible.
 
-    Use ``max_depth=0`` so the very first call is blocked deterministically,
-    and assert on the ``ToolResultEvent`` the limiter emits — checking the
-    LLM's body is unreliable because it may paraphrase or ignore the error.
+    The parent has ``run_subtask``; we instruct it to delegate. Inside the
+    spawned subtask Actor we inspect the tool surface: ``run_subtask`` /
+    ``run_subtasks`` must be absent, and ``_task_config`` must be ``None``.
     """
-    results: list[ToolResultEvent] = []
-    stream = MemoryStream()
-    stream.where(ToolResultEvent).subscribe(lambda e: results.append(e))
+    captured_subtasks: list[Actor] = []
 
-    actor = Actor(
-        "blocked",
-        prompt="Use the task_helper tool to solve any task.",
-        config=gemini_flash_config,
-    )
-    actor.add_tool(
-        actor.as_tool(
-            name="task_helper",
-            description="Delegate work to yourself.",
-            middleware=[depth_limiter(max_depth=0)],
+    original = run_task_mod.run_task
+
+    async def capturing_run_task(agent, *args, **kwargs):
+        captured_subtasks.append(agent)
+        return await original(agent, *args, **kwargs)
+
+    run_task_mod.run_task = capturing_run_task
+    actor_mod._run_task = capturing_run_task
+    try:
+        agent = Actor(
+            "delegator",
+            prompt="Always use run_subtask for any factual lookup. Be concise.",
+            config=gemini_flash_config,
         )
-    )
+        await agent.ask("Use run_subtask to look up: what colour is the sky?")
+    finally:
+        run_task_mod.run_task = original
+        actor_mod._run_task = original
 
-    reply = await actor.ask("Use task_helper with the objective 'compute 2+2'.", stream=stream)
-    assert reply.body is not None
-    assert results, "task_helper must have produced a tool result"
-    # The limiter's deterministic error string must appear in at least one
-    # tool result — this proves the middleware actually short-circuited.
-    assert any("maximum task depth" in (e.content or "") for e in results if e.name == "task_helper")
+    assert captured_subtasks, "subtask must have been spawned"
+    child = captured_subtasks[0]
+    assert child._task_config is None
+    assert child._build_subtask_tools() == []
 
 
 async def test_persistent_stream_shares_history(gemini_flash_config) -> None:

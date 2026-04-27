@@ -25,7 +25,7 @@ from contextlib import AsyncExitStack, ExitStack, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeAlias, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
@@ -78,13 +78,14 @@ from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
+from .tools.subagents.run_task import run_task as _run_task
+from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
-    from .tools.subagents import StreamFactory
 
 
 logger = logging.getLogger(__name__)
@@ -113,11 +114,23 @@ class KnowledgeConfig:
 
 @dataclass
 class TaskConfig:
-    """Groups task-spawning Actor parameters."""
+    """Groups task-spawning Actor parameters.
+
+    By default a subtask Actor inherits **all** of the parent's user-supplied
+    tools (everything passed via ``tools=``). Subtask Actors never receive the
+    auto-injected ``run_subtask`` / ``run_subtasks`` tools, so recursive
+    delegation is structurally impossible — no depth limiting required.
+
+    Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
+    narrow what the subtask sees, and ``extra_tools`` to add capabilities the
+    parent doesn't have.
+    """
 
     config: ModelConfig | None = None
     prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
-    max_depth: int | None = 3
+    include_tools: Iterable[str] | None = None
+    exclude_tools: Iterable[str] = ()
+    extra_tools: Iterable[Callable[..., Any] | Tool] = ()
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -341,8 +354,10 @@ class Actor(Generic[TResult]):
       ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
     * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
       compaction, aggregation.
-    * ``tasks=TaskConfig(...)`` — override LLM config/prompt for the auto
-      injected ``run_subtask`` / ``run_subtasks`` tools.
+    * ``tasks=TaskConfig(...)`` — override the LLM config / prompt /
+      tool-inheritance rules for the auto-injected ``run_subtask`` /
+      ``run_subtasks`` tools. Pass ``tasks=False`` to suppress those tools
+      entirely.
     """
 
     @overload
@@ -361,7 +376,7 @@ class Actor(Generic[TResult]):
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | None = ...,
+        tasks: TaskConfig | Literal[False] | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -381,7 +396,7 @@ class Actor(Generic[TResult]):
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | None = ...,
+        tasks: TaskConfig | Literal[False] | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -401,7 +416,7 @@ class Actor(Generic[TResult]):
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | None = ...,
+        tasks: TaskConfig | Literal[False] | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -421,7 +436,7 @@ class Actor(Generic[TResult]):
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | None = ...,
+        tasks: TaskConfig | Literal[False] | None = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -440,7 +455,7 @@ class Actor(Generic[TResult]):
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
-        tasks: TaskConfig | None = None,
+        tasks: TaskConfig | Literal[False] | None = None,
         assembly: Iterable[AssemblyPolicy] = (),
     ):
         self.name = name
@@ -482,11 +497,15 @@ class Actor(Generic[TResult]):
         for p in plugins:
             p.register(self)
 
-        # Task spawning
-        tc = tasks or TaskConfig(config=config)
-        self._task_config: ModelConfig | None = tc.config or config
-        self._task_prompt = tc.prompt
-        self._task_max_depth: int | None = tc.max_depth
+        # Task spawning. ``tasks=False`` opts out entirely; ``tasks=None`` (the
+        # default) auto-injects ``run_subtask`` / ``run_subtasks`` with
+        # ``TaskConfig()`` defaults.
+        if tasks is False:
+            self._task_config: TaskConfig | None = None
+        else:
+            self._task_config = tasks if tasks is not None else TaskConfig(config=config)
+
+        self._subtask_tools: list[Tool] = _build_subtask_tools(self) if self._task_config is not None else []
 
         # Knowledge store + compaction/aggregation strategies
         kc = knowledge
@@ -498,6 +517,9 @@ class Actor(Generic[TResult]):
         self._compact_trigger = kc.compact_trigger if kc and kc.compact_trigger else CompactTrigger()
         self._aggregate_strategy = kc.aggregate if kc else None
         self._aggregate_trigger = kc.aggregate_trigger if kc and kc.aggregate_trigger else AggregateTrigger()
+        self._knowledge_tools: list[Tool] = (
+            [_make_knowledge_tool(self._knowledge_store)] if self._knowledge_store else []
+        )
 
         # Assembly policies (empty by default; bare Actor has no harness).
         self._policies: list[AssemblyPolicy] = list(assembly)
@@ -760,123 +782,44 @@ class Actor(Generic[TResult]):
         )
 
     def _build_knowledge_tool(self) -> list[Tool]:
-        """Build the knowledge tool (typed action group)."""
-        store = self._knowledge_store
-
-        @tool
-        async def knowledge(action: str, path: str = "/", content: str = "") -> str:
-            """Manage your knowledge store.
-
-            Actions:
-                read   - Read file at path.
-                write  - Write content to path.
-                list   - List entries at path.
-                delete - Delete file at path.
-            """
-            if action == "read":
-                result = await store.read(path)  # type: ignore[union-attr]
-                return result if result is not None else f"Not found: {path}"
-
-            elif action == "write":
-                if not content:
-                    return "Error: content is required for write action."
-                await store.write(path, content)  # type: ignore[union-attr]
-                return f"Written to {path}"
-
-            elif action == "list":
-                entries = await store.list(path)  # type: ignore[union-attr]
-                if not entries:
-                    return f"Empty: {path}"
-                # Check for SKILL.md
-                skill_path = f"{path.rstrip('/')}/SKILL.md"
-                skill = await store.read(skill_path)  # type: ignore[union-attr]
-                listing = "\n".join(entries)
-                if skill:
-                    listing = f"{skill}\n---\n{listing}"
-                return listing
-
-            elif action == "delete":
-                await store.delete(path)  # type: ignore[union-attr]
-                return f"Deleted: {path}"
-
-            else:
-                return f"Unknown action: {action}. Available: read, write, list, delete."
-
-        return [knowledge]
+        """Return the cached knowledge tool list (built at __init__ time)."""
+        return self._knowledge_tools
 
     def _build_subtask_tools(self) -> list[Tool]:
-        """Create ``run_subtask`` / ``run_subtasks`` tools.
+        """Return the cached subtask tool list (built at __init__ time).
 
-        Each invocation spawns a fresh, bare ``Actor`` (configured by
-        ``TaskConfig``) and delegates via
-        :func:`~autogen.beta.tools.subagents.run_task.run_task`, which owns
-        ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed`` emission,
-        dependency + variable copy, HITL bridging, and depth counting.
+        Tools are built once per Actor instance to avoid reallocating closures
+        on every turn (and to satisfy AGENTS.md's "no nested functions in
+        runtime execution paths" rule).
         """
-        from .tools.subagents.depth_limiter import depth_limiter
-
-        actor = self
-        mw: list[ToolMiddleware] = (
-            [depth_limiter(max_depth=self._task_max_depth)] if self._task_max_depth is not None else []
-        )
-
-        @tool(middleware=mw)
-        async def run_subtask(task: str, ctx: Context) -> str:
-            """Run a subtask agent to handle isolated compute work autonomously.
-
-            Use this when a sub-problem can be researched or solved
-            independently. The subtask agent runs with its own LLM context
-            and returns the result.
-            """
-            return await actor._spawn_subtask(task, ctx)
-
-        @tool(middleware=mw)
-        async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
-            """Run multiple subtask agents at once.
-
-            Args:
-                ctx: The context to run the tasks in.
-                tasks: List of subtask descriptions.
-                parallel: Run concurrently (default True) or sequentially.
-            """
-            if parallel:
-                raw = await asyncio.gather(
-                    *(actor._spawn_subtask(t, ctx) for t in tasks),
-                    return_exceptions=True,
-                )
-                results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
-            else:
-                results = []
-                for t in tasks:
-                    try:
-                        results.append(await actor._spawn_subtask(t, ctx))
-                    except Exception as e:
-                        results.append(f"Error: {e}")
-
-            parts = []
-            for task_desc, result in zip(tasks, results):
-                parts.append(f"## {task_desc}\n\n{result}")
-            return "\n\n---\n\n".join(parts)
-
-        return [run_subtask, run_subtasks]
+        return self._subtask_tools
 
     async def _spawn_subtask(self, task: str, ctx: Context) -> str:
-        """Spawn a fresh bare ``Actor`` and delegate via ``run_task``.
+        """Spawn a subtask Actor and delegate via ``run_task``.
 
-        A new ``Actor`` is constructed on every call so sibling subtasks
-        do not accumulate state between invocations. ``run_task`` emits the
-        ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed`` lifecycle
-        events and handles dependency/variable copy and HITL bridging.
+        The subtask inherits the parent's user-supplied tools (filtered by
+        ``TaskConfig.include_tools`` / ``exclude_tools``) plus
+        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False`` so
+        the child has **no** ``run_subtask`` tools — recursive delegation is
+        impossible by construction. ``run_task`` emits the ``TaskStarted`` /
+        ``TaskCompleted`` / ``TaskFailed`` lifecycle events and handles
+        dependency/variable copy and HITL bridging.
         """
-        from .tools.subagents.run_task import run_task
+        tc = self._task_config
+        if tc is None:
+            return "Error: subtask spawning is disabled on this Actor (tasks=False)."
+
+        inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
 
         bare = Actor(
             name=f"subtask-{uuid4().hex[:8]}",
-            prompt=self._task_prompt,
-            config=self._task_config,
+            prompt=tc.prompt,
+            config=tc.config or self.config,
+            tools=[*inherited, *tc.extra_tools],
+            tasks=False,
         )
 
-        result = await run_task(bare, task, parent_context=ctx)
+        result = await _run_task(bare, task, parent_context=ctx)
         if not result.completed:
             return f"Error: {result.error}"
         return result.result or ""
@@ -935,7 +878,7 @@ class Actor(Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
     ) -> "AgentReply[Any, Any]":
         additional_observers = list(additional_observers)
-        subtask_tools = self._build_subtask_tools()
+        subtask_tools = self._subtask_tools
 
         # Bootstrap the knowledge store on first use, guarded by an asyncio
         # lock so concurrent asks on the same Actor can't double-bootstrap.
@@ -952,7 +895,7 @@ class Actor(Generic[TResult]):
                         await bootstrap.bootstrap(self._knowledge_store, self.name)
                     self._bootstrap_done = True
 
-        knowledge_tools = self._build_knowledge_tool() if self._knowledge_store else []
+        knowledge_tools = self._knowledge_tools
 
         if self._knowledge_store:
             context.dependencies[KnowledgeStore] = self._knowledge_store
@@ -1115,11 +1058,9 @@ class Actor(Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        stream: "StreamFactory | None" = None,
+        stream: StreamFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        from .tools.subagents import subagent_tool
-
         return subagent_tool(
             self,
             description=description,
@@ -1129,6 +1070,8 @@ class Actor(Generic[TResult]):
         )
 
     def as_conversable(self) -> "ConversableAdapter":
+        # Local import: ``conversable`` imports ``Actor`` from this module —
+        # a top-level import would create a circular dependency.
         from .conversable import ConversableAdapter
 
         return ConversableAdapter(self)
@@ -1164,6 +1107,131 @@ def _wrap_prompt_hook(
         return r
 
     return wrapper
+
+
+_RUN_SUBTASK_DESCRIPTION = (
+    "Spawn an isolated subtask agent for self-contained focused work. "
+    "The subtask runs with a fresh conversation history and inherits this "
+    "agent's tools, then returns its result as a string. "
+    "You can call this tool multiple times in parallel within a single "
+    "response — each call runs concurrently in its own context. For "
+    "deliberate fan-out with one tool call, use run_subtasks instead."
+)
+
+_RUN_SUBTASKS_DESCRIPTION = (
+    "Run multiple subtasks bundled into one tool call. Each task runs in "
+    "its own isolated subtask agent (fresh history, parent's tools). "
+    "Set parallel=True (default) to dispatch them concurrently — preferred "
+    "when the tasks are independent. parallel=False runs them sequentially "
+    "and is useful only when later tasks depend on earlier results."
+)
+
+
+def _build_subtask_tools(actor: "Actor[Any]") -> list[Tool]:
+    """Construct the ``run_subtask`` / ``run_subtasks`` tools for ``actor``.
+
+    Called once per Actor instance from ``__init__``. The closures capture
+    ``actor`` so the resulting Tools can be reused across every turn without
+    re-allocation (per AGENTS.md: no nested function creation in runtime
+    execution paths).
+    """
+
+    @tool(name="run_subtask", description=_RUN_SUBTASK_DESCRIPTION)
+    async def run_subtask(task: str, ctx: Context) -> str:
+        return await actor._spawn_subtask(task, ctx)
+
+    @tool(name="run_subtasks", description=_RUN_SUBTASKS_DESCRIPTION)
+    async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
+        if parallel:
+            raw = await asyncio.gather(
+                *(actor._spawn_subtask(t, ctx) for t in tasks),
+                return_exceptions=True,
+            )
+            results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
+        else:
+            results = []
+            for t in tasks:
+                try:
+                    results.append(await actor._spawn_subtask(t, ctx))
+                except Exception as e:
+                    results.append(f"Error: {e}")
+
+        parts = [f"## {task_desc}\n\n{result}" for task_desc, result in zip(tasks, results)]
+        return "\n\n---\n\n".join(parts)
+
+    return [run_subtask, run_subtasks]
+
+
+def _filter_subtask_tools(
+    tools: Iterable[FunctionTool],
+    include: Iterable[str] | None,
+    exclude: Iterable[str],
+) -> list[FunctionTool]:
+    """Apply ``include_tools`` / ``exclude_tools`` filters to ``tools``.
+
+    ``include`` is an allowlist of tool names — ``None`` (the default) lets
+    every tool through. ``exclude`` is always applied as a blocklist after
+    the allowlist. Tool identity is by ``schema.function.name``.
+    """
+    include_set = set(include) if include is not None else None
+    exclude_set = set(exclude)
+    result: list[FunctionTool] = []
+    for t in tools:
+        name = t.schema.function.name
+        if include_set is not None and name not in include_set:
+            continue
+        if name in exclude_set:
+            continue
+        result.append(t)
+    return result
+
+
+def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
+    """Build the ``knowledge`` action-group tool bound to ``store``.
+
+    Called once at Actor ``__init__`` so the LLM-visible tool definition is
+    stable across turns and we don't re-allocate the closure per turn.
+    """
+
+    @tool
+    async def knowledge(action: str, path: str = "/", content: str = "") -> str:
+        """Manage your knowledge store.
+
+        Actions:
+            read   - Read file at path.
+            write  - Write content to path.
+            list   - List entries at path.
+            delete - Delete file at path.
+        """
+        if action == "read":
+            result = await store.read(path)
+            return result if result is not None else f"Not found: {path}"
+
+        elif action == "write":
+            if not content:
+                return "Error: content is required for write action."
+            await store.write(path, content)
+            return f"Written to {path}"
+
+        elif action == "list":
+            entries = await store.list(path)
+            if not entries:
+                return f"Empty: {path}"
+            skill_path = f"{path.rstrip('/')}/SKILL.md"
+            skill = await store.read(skill_path)
+            listing = "\n".join(entries)
+            if skill:
+                listing = f"{skill}\n---\n{listing}"
+            return listing
+
+        elif action == "delete":
+            await store.delete(path)
+            return f"Deleted: {path}"
+
+        else:
+            return f"Unknown action: {action}. Available: read, write, list, delete."
+
+    return knowledge
 
 
 class Plugin:

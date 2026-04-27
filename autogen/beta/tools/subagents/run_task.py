@@ -17,9 +17,7 @@ from autogen.beta.events import (
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.actor import Actor
-
-_DEPTH_KEY = "ag:task_depth"
+    from autogen.beta.actor import Actor, AgentReply
 
 
 @dataclass
@@ -33,11 +31,26 @@ class TaskResult:
     error: Exception | None = None
 
 
-def _reply_usage(reply) -> Usage:
+def _reply_usage(reply: "AgentReply | None") -> Usage:
     """Pull the typed Usage from an AgentReply, defaulting to an empty Usage."""
     if reply and reply.response and reply.response.usage:
         return reply.response.usage
     return Usage()
+
+
+def _make_hitl_bridge(parent_context: Context):
+    """Forward ``HumanInputRequest`` events from the child stream to the parent.
+
+    Defined at module level so it isn't re-created per ``run_task`` call (per
+    AGENTS.md: no nested functions in runtime execution paths). The closure
+    over ``parent_context`` is captured here, at definition time of the
+    bridge, not inside any hot loop.
+    """
+
+    async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
+        await parent_context.stream.send(event, ctx)
+
+    return _bridge_hitl
 
 
 async def run_task(
@@ -67,35 +80,28 @@ async def run_task(
     if emit_events:
         await parent_context.send(TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective))
 
-    # Bridge HITL events to the parent stream so the parent's hook
-    # can handle them. If the subagent has its own HITL hook, it is
-    # registered as an interrupter and swallows the event first.
+    # Bridge HITL events to the parent stream so the parent's hook can handle
+    # them. If the subagent has its own HITL hook, it is registered as an
+    # interrupter and swallows the event first.
+    sub_id: str | None = None
     if not agent._hitl_hook:
-
-        async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
-            await parent_context.stream.send(event, ctx)
-
-        sub_id = task_stream.where(HumanInputRequest).subscribe(_bridge_hitl, interrupt=True)
-    else:
-        sub_id = None
+        sub_id = task_stream.where(HumanInputRequest).subscribe(
+            _make_hitl_bridge(parent_context),
+            interrupt=True,
+        )
 
     try:
         reply = await agent.ask(
             prompt,
             stream=task_stream,
             dependencies=parent_context.dependencies.copy(),
-            # Copy variables so concurrent sibling tasks don't interfere,
-            # and increment the task depth counter for the child.
-            variables={
-                **parent_context.variables,
-                _DEPTH_KEY: parent_context.variables.get(_DEPTH_KEY, 0) + 1,
-            },
+            # Copy variables so concurrent sibling tasks don't interfere.
+            # Mutations made by the child are intentionally not synced back —
+            # with concurrent siblings via asyncio.gather, last-writer-wins
+            # would silently clobber values, so we keep child mutations
+            # scoped to the child run by design.
+            variables=parent_context.variables.copy(),
         )
-
-        # Sync variable mutations back to the parent context,
-        # excluding the depth counter (internal bookkeeping).
-        reply.context.variables.pop(_DEPTH_KEY, None)
-        parent_context.variables.update(reply.context.variables)
 
         usage = _reply_usage(reply)
 

@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Actor, tool
+from autogen.beta import actor as actor_mod
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, Usage
 from autogen.beta.events._serialization import import_event_class
 from autogen.beta.observer import TokenMonitor
@@ -137,6 +138,10 @@ class TestRunSubtasksSequentialExceptionHandling:
         assert results[2] == "result of task-3-ok"
 
     def test_sequential_code_path_has_try_except(self) -> None:
-        source = inspect.getsource(Actor._build_subtask_tools)
+        # ``run_subtasks(parallel=False)`` lives at module level now; the
+        # try/except guarantee is verified by behaviour in the async test
+        # above. We additionally lock the source pattern down to catch
+        # accidental refactors that drop the exception handling.
+        source = inspect.getsource(actor_mod._build_subtask_tools)
         assert "except Exception as e:" in source
         assert 'f"Error: {e}"' in source

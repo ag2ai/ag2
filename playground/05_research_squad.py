@@ -5,11 +5,13 @@ Two patterns for multi-Actor orchestration:
 1. **Auto-injected subtask tools.** Every Actor automatically carries
    ``run_subtask`` / ``run_subtasks``. The coordinator uses ``run_subtasks``
    with ``parallel=True`` to fan out three short investigations
-   concurrently.
+   concurrently. Spawned subtasks have **no** ``run_subtask`` tools, so
+   recursion is structurally impossible — no depth limiter needed.
 
 2. **``Actor.as_tool()``.** A second Actor (``math_expert``) is exposed to
-   the coordinator as a callable tool with a ``depth_limiter`` middleware
-   so it can't recurse into itself indefinitely.
+   the coordinator as a callable tool. Because the wrapped Actor's own
+   ``run_subtask`` tools were stripped at spawn time (in the subtask path)
+   or are simply not used here, recursion is bounded by the call structure.
 
 Run::
 
@@ -24,7 +26,6 @@ from _config import default_config, section
 from autogen.beta import Actor
 from autogen.beta.events import TaskCompleted, TaskStarted
 from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.subagents import depth_limiter
 
 
 async def main() -> None:
@@ -85,7 +86,6 @@ async def main() -> None:
         tools=[
             math_expert.as_tool(
                 description="Delegate arithmetic problems to the math expert.",
-                middleware=[depth_limiter(max_depth=2)],
             )
         ],
     )
