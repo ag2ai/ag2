@@ -3,12 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from collections.abc import Callable
+from typing import Any
 
 import pytest
+from anthropic.types import (
+    BashCodeExecutionToolResultBlock,
+    ServerToolUseBlock,
+    TextEditorCodeExecutionToolResultBlock,
+    WebSearchToolResultBlock,
+)
+from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecutionToolResultError
+from anthropic.types.text_editor_code_execution_tool_result_error import TextEditorCodeExecutionToolResultError
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
+from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
@@ -26,6 +37,7 @@ from autogen.beta.events import (
     ToolResultsEvent,
     VideoInput,
 )
+from autogen.beta.events.types import ModelMessage
 from autogen.beta.exceptions import UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 
@@ -559,6 +571,248 @@ class TestToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
             convert_messages([event], SerializerCls)
+
+
+@pytest.mark.parametrize(
+    ("input_factory", "match"),
+    [
+        pytest.param(
+            lambda: AudioInput(url="https://example.com/audio.wav"),
+            "UrlInput.*audio.*anthropic",
+            id="audio_url",
+        ),
+        pytest.param(
+            lambda: VideoInput(url="https://example.com/video.mp4"),
+            "UrlInput.*video.*anthropic",
+            id="video_url",
+        ),
+        pytest.param(
+            lambda: AudioInput(data=b"\x00audio", media_type="audio/wav"),
+            "BinaryInput.*audio.*anthropic",
+            id="audio_binary",
+        ),
+        pytest.param(
+            lambda: VideoInput(data=b"\x00video", media_type="video/mp4"),
+            "BinaryInput.*video.*anthropic",
+            id="video_binary",
+        ),
+        pytest.param(
+            lambda: BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY),
+            "BinaryInput.*binary.*anthropic",
+            id="generic_binary",
+        ),
+    ],
+)
+def test_unsupported_input_raises(input_factory: Callable[[], Any], match: str) -> None:
+    with pytest.raises(UnsupportedInputError, match=match):
+        convert_messages([ModelRequest([input_factory()])], SerializerCls)
+
+
+def _server_tool_use_block(
+    *,
+    id: str = "stu_1",
+    name: str = "web_search",
+    input: dict | None = None,
+) -> ServerToolUseBlock:
+    return ServerToolUseBlock(
+        id=id,
+        name=name,
+        input=input if input is not None else {"query": "bitcoin price"},
+        type="server_tool_use",
+    )
+
+
+def _web_search_result_block(
+    *,
+    tool_use_id: str = "stu_1",
+    content: list | None = None,
+) -> WebSearchToolResultBlock:
+    return WebSearchToolResultBlock(
+        tool_use_id=tool_use_id,
+        type="web_search_tool_result",
+        content=content if content is not None else [],
+    )
+
+
+class TestAnthropicServerToolCallEvent:
+    def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
+        block = _server_tool_use_block()
+        result = convert_messages(
+            [
+                AnthropicServerToolCallEvent(
+                    id=block.id,
+                    name="web_search",
+                    arguments="{}",
+                    block=block,
+                ),
+            ],
+            SerializerCls,
+        )
+
+        assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
+
+    def test_appends_to_existing_assistant_message(self) -> None:
+        block = _server_tool_use_block(input={"query": "test"})
+        result = convert_messages(
+            [
+                ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
+                AnthropicServerToolCallEvent(id=block.id, name="web_search", arguments="{}", block=block),
+            ],
+            SerializerCls,
+        )
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Let me search for that."},
+                    block.model_dump(exclude_none=True, mode="json"),
+                ],
+            }
+        ]
+
+
+class TestAnthropicServerToolResultEvent:
+    def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
+        block = _web_search_result_block()
+        result = convert_messages(
+            [
+                AnthropicServerToolResultEvent(
+                    parent_id=block.tool_use_id,
+                    name="web_search",
+                    result=ToolResult(),
+                    block=block,
+                ),
+            ],
+            SerializerCls,
+        )
+
+        assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
+
+    def test_call_and_result_blocks_stack_into_one_assistant_message(self) -> None:
+        call_block = _server_tool_use_block(input={"query": "test"})
+        result_block = _web_search_result_block()
+        result = convert_messages(
+            [
+                AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
+                AnthropicServerToolResultEvent(
+                    parent_id=result_block.tool_use_id,
+                    name="web_search",
+                    result=ToolResult(),
+                    block=result_block,
+                ),
+            ],
+            SerializerCls,
+        )
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    call_block.model_dump(exclude_none=True, mode="json"),
+                    result_block.model_dump(exclude_none=True, mode="json"),
+                ],
+            }
+        ]
+
+
+def test_full_sequence_round_trip() -> None:
+    """ModelRequest -> call+result -> ModelResponse -> ModelRequest."""
+    call_block = _server_tool_use_block(input={"query": "bitcoin"})
+    result_block = _web_search_result_block()
+    events = [
+        ModelRequest([TextInput("Search for bitcoin price")]),
+        AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
+        AnthropicServerToolResultEvent(
+            parent_id=result_block.tool_use_id,
+            name="web_search",
+            result=ToolResult(),
+            block=result_block,
+        ),
+        ModelResponse(message=ModelMessage("Bitcoin is $74,000."), tool_calls=ToolCallsEvent()),
+        ModelRequest([TextInput("What was the exact price?")]),
+    ]
+
+    result = convert_messages(events, SerializerCls)
+
+    assert result == [
+        {"role": "user", "content": "Search for bitcoin price"},
+        {
+            "role": "assistant",
+            "content": [
+                call_block.model_dump(exclude_none=True, mode="json"),
+                result_block.model_dump(exclude_none=True, mode="json"),
+            ],
+        },
+        {"role": "assistant", "content": [{"type": "text", "text": "Bitcoin is $74,000."}]},
+        {"role": "user", "content": "What was the exact price?"},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("call_block", "result_block"),
+    [
+        pytest.param(
+            ServerToolUseBlock(
+                id="stu_1",
+                name="bash_code_execution",
+                input={"command": "echo hello"},
+                type="server_tool_use",
+            ),
+            BashCodeExecutionToolResultBlock(
+                tool_use_id="stu_1",
+                type="bash_code_execution_tool_result",
+                content=BashCodeExecutionToolResultError(
+                    error_code="unavailable",
+                    type="bash_code_execution_tool_result_error",
+                ),
+            ),
+            id="bash",
+        ),
+        pytest.param(
+            ServerToolUseBlock(
+                id="stu_2",
+                name="text_editor_code_execution",
+                input={"command": "view", "path": "/a.txt"},
+                type="server_tool_use",
+            ),
+            TextEditorCodeExecutionToolResultBlock(
+                tool_use_id="stu_2",
+                type="text_editor_code_execution_tool_result",
+                content=TextEditorCodeExecutionToolResultError(
+                    error_code="file_not_found",
+                    type="text_editor_code_execution_tool_result_error",
+                ),
+            ),
+            id="text_editor",
+        ),
+    ],
+)
+def test_code_execution_subtool_preserves_block_shape(
+    call_block: ServerToolUseBlock,
+    result_block: Any,
+) -> None:
+    """Anthropic's code_execution tool reports results via sub-tool-specific block
+    types. The typed event preserves the original block shape so replay stays lossless."""
+    result = convert_messages(
+        [
+            AnthropicServerToolCallEvent(id=call_block.id, name="code_execution", arguments="{}", block=call_block),
+            AnthropicServerToolResultEvent(
+                parent_id=result_block.tool_use_id, name="code_execution", result=ToolResult(), block=result_block
+            ),
+        ],
+        SerializerCls,
+    )
+
+    assert result == [
+        {
+            "role": "assistant",
+            "content": [
+                call_block.model_dump(exclude_none=True, mode="json"),
+                result_block.model_dump(exclude_none=True, mode="json"),
+            ],
+        }
+    ]
 
 
 class TestUnsupportedInputs:

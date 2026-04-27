@@ -9,6 +9,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
+from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -144,8 +145,12 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": t.version, "name": "memory"}
 
     elif isinstance(t, ShellToolSchema):
-        # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
-        return {"type": t.version, "name": "bash"}
+        # Anthropic's bash tool is client-side — it ships a typed schema but the
+        # application must execute the command itself and return a tool_result.
+        # autogen/beta does not provide a default executor for this here.
+        # Use LocalShellTool (tools/shell/) instead, which runs commands via subprocess
+        # and works with any provider.
+        raise UnsupportedToolError(t.type, "anthropic")
 
     elif isinstance(t, SkillsToolSchema):
         # Skills are handled via the container parameter, not the tools[] array.
@@ -252,6 +257,13 @@ def convert_messages(
                 })
             if content:
                 result.append({"role": "assistant", "content": content})
+
+        elif isinstance(message, (AnthropicServerToolCallEvent, AnthropicServerToolResultEvent)):
+            block = message.block.model_dump(exclude_none=True, mode="json")
+            if result and result[-1]["role"] == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
 
         elif isinstance(message, ToolResultsEvent):
             tool_results = []

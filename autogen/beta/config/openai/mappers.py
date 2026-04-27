@@ -10,6 +10,7 @@ from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
+from autogen.beta.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -117,6 +118,7 @@ def events_to_responses_input(
 ) -> list[dict[str, Any]]:
     """Convert a sequence of events to Responses API input items."""
     result: list[dict[str, Any]] = []
+    seen_reasoning_ids: set[str] = set()
 
     for message in messages:
         if isinstance(message, ModelResponse):
@@ -190,6 +192,14 @@ def events_to_responses_input(
                         "call_id": r.parent_id,
                         "output": blocks,
                     })
+
+        elif isinstance(message, OpenAIReasoningEvent):
+            if message.item.id not in seen_reasoning_ids:
+                seen_reasoning_ids.add(message.item.id)
+                result.append(message.item.model_dump(exclude_none=True, mode="json"))
+
+        elif isinstance(message, OpenAIServerToolCallEvent):
+            result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
