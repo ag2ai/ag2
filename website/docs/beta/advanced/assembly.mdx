@@ -42,20 +42,20 @@ class AssemblyPolicy(Protocol):
 
 A policy receives the current `prompts` and `events`, returns modified copies. Policies compose left-to-right: each one sees the output of the previous. They must be pure — side-effect-free, idempotent where possible, and they must not emit events onto the stream (with one exception: `AlertPolicy` emits `HaltEvent` on FATAL, documented below).
 
-## Wiring policies onto an Actor
+## Wiring policies onto an Agent
 
-Pass your policy list via the `assembly=` keyword when constructing an Actor. The Actor wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
+Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
 
 ```python linenums="1" hl_lines="10-14"
 from autogen.beta import (
-    Actor,
+    Agent,
     AlertPolicy,
     WorkingMemoryPolicy,
     SlidingWindowPolicy,
 )
 from autogen.beta.config import OpenAIConfig
 
-actor = Actor(
+agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
     assembly=[
@@ -74,7 +74,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` are also available as public symbols from `#!python autogen.beta` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Actor`).
+    `AssemblerMiddleware` and `AssemblyPolicy` are also available as public symbols from `#!python autogen.beta` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
 
 ## Ordering matters
 
@@ -149,14 +149,14 @@ from autogen.beta import AlertPolicy
 policy = AlertPolicy()
 ```
 
-Takes no arguments. Dedup state lives on the instance — give each Actor its own `AlertPolicy`.
+Takes no arguments. Dedup state lives on the instance — give each Agent its own `AlertPolicy`.
 
 !!! note
     `AlertPolicy` is what bridges the [Observer](/docs/beta/advanced/observers) system into the LLM. Without it, `ObserverAlert` events sit on the stream but never reach the model. Place it after other injection policies and before reduction policies.
 
 ### WorkingMemoryPolicy
 
-Reads `/memory/working.md` from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) and injects it into the prompt. Working memory is the actor's persistent state — written between conversations by an aggregation strategy and read on every turn.
+Reads `/memory/working.md` from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) and injects it into the prompt. Working memory is the agent's persistent state — written between conversations by an aggregation strategy and read on every turn.
 
 ```python linenums="1" hl_lines="7-12"
 from autogen.beta import AssemblerMiddleware, WorkingMemoryPolicy
@@ -165,7 +165,7 @@ from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
 store = MemoryKnowledgeStore()
 await store.write("/memory/working.md", "- user prefers metric\n- timezone: Australia/Melbourne")
 
-actor = Actor(
+agent = Agent(
     "assistant",
     config=config,
     dependencies={KnowledgeStore: store},

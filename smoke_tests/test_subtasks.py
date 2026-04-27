@@ -8,9 +8,9 @@ delegation, no-recursion guarantee, persistent_stream. Real LLM calls.
 
 import pytest
 
-from autogen.beta import Actor
-from autogen.beta import actor as actor_mod
-from autogen.beta.actor import TaskConfig
+from autogen.beta import Agent
+from autogen.beta import agent as actor_mod
+from autogen.beta.agent import TaskConfig
 from autogen.beta.events import TaskCompleted, TaskStarted
 from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
@@ -21,7 +21,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
 
 
 async def test_run_subtask_auto_injected(gemini_flash_config) -> None:
-    """run_subtask is auto-injected on every Actor; LLM can dispatch it."""
+    """run_subtask is auto-injected on every Agent; LLM can dispatch it."""
     task_starts: list[TaskStarted] = []
     task_completions: list[TaskCompleted] = []
 
@@ -29,7 +29,7 @@ async def test_run_subtask_auto_injected(gemini_flash_config) -> None:
     stream.where(TaskStarted).subscribe(lambda e: task_starts.append(e))
     stream.where(TaskCompleted).subscribe(lambda e: task_completions.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "delegator",
         prompt=(
             "You can spawn subtasks via the run_subtask tool when a question "
@@ -57,7 +57,7 @@ async def test_run_subtasks_parallel(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(TaskCompleted).subscribe(lambda e: task_completions.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "fanner",
         prompt=(
             "You can call run_subtasks(tasks=[...], parallel=True) to run "
@@ -94,7 +94,7 @@ async def test_subtask_prompt_override(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(TaskCompleted).subscribe(lambda e: completions.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "two-tier",
         prompt="Use run_subtask for any factual lookup. Be concise.",
         config=gemini_flash_config,
@@ -119,14 +119,14 @@ async def test_subtask_prompt_override(gemini_flash_config) -> None:
 
 
 async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
-    """A.as_tool() lets actor B call A as a sibling tool."""
-    expert = Actor(
+    """A.as_tool() lets agent B call A as a sibling tool."""
+    expert = Agent(
         "math-expert",
         prompt="You only do arithmetic. Reply with just the number.",
         config=gemini_flash_config,
     )
 
-    coordinator = Actor(
+    coordinator = Agent(
         "coordinator",
         prompt=(
             "You delegate math problems to the task_math-expert tool. "
@@ -145,10 +145,10 @@ async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
     """Subtasks structurally lack ``run_subtask`` — no recursion possible.
 
     The parent has ``run_subtask``; we instruct it to delegate. Inside the
-    spawned subtask Actor we inspect the tool surface: ``run_subtask`` /
+    spawned subtask Agent we inspect the tool surface: ``run_subtask`` /
     ``run_subtasks`` must be absent, and ``_task_config`` must be ``None``.
     """
-    captured_subtasks: list[Actor] = []
+    captured_subtasks: list[Agent] = []
 
     original = run_task_mod.run_task
 
@@ -159,7 +159,7 @@ async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
     run_task_mod.run_task = capturing_run_task
     actor_mod._run_task = capturing_run_task
     try:
-        agent = Actor(
+        agent = Agent(
             "delegator",
             prompt="Always use run_subtask for any factual lookup. Be concise.",
             config=gemini_flash_config,
@@ -197,14 +197,14 @@ async def test_persistent_stream_shares_history(gemini_flash_config) -> None:
         captured_streams.append(s)
         return s
 
-    child = Actor(
+    child = Agent(
         "memo",
         prompt="You are a notepad. Reply briefly to whatever the user asks.",
         config=gemini_flash_config,
     )
 
     parent_stream = MemoryStream(storage=MemoryStorage())
-    parent = Actor(
+    parent = Agent(
         "owner",
         prompt="Use the task_memo tool when the user asks you to.",
         config=gemini_flash_config,

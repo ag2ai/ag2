@@ -10,7 +10,7 @@ import pytest
 from fast_depends import Depends
 from pydantic import BaseModel
 
-from autogen.beta import Actor, Context, DataInput, ImageInput, TextInput, ToolResult, events, testing, tool
+from autogen.beta import Agent, Context, DataInput, ImageInput, TextInput, ToolResult, events, testing, tool
 
 
 @pytest.mark.asyncio
@@ -175,7 +175,7 @@ class TestReturnInput:
         def my_func() -> DataInput:
             return DataInput({"a": "1"})
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         await agent.ask("Call my func")
 
         tool_result_msg: events.ToolResultEvent = config.mock.call_args_list[1][0][0].results[0]
@@ -189,7 +189,7 @@ class TestReturnInput:
                 DataInput({"b": "2"}),
             )
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         await agent.ask("Call my func")
 
         tool_result_msg: events.ToolResultEvent = config.mock.call_args_list[1][0][0].results[0]
@@ -206,7 +206,7 @@ class TestReturnInput:
                 {"b": "2"},
             )
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         await agent.ask("Call my func")
 
         tool_result_msg: events.ToolResultEvent = config.mock.call_args_list[1][0][0].results[0]
@@ -220,7 +220,7 @@ class TestReturnInput:
         def my_func() -> ToolResult:
             return ToolResult(TextInput("hello"), final=True)
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         reply = await agent.ask("Call my func")
 
         assert reply.body == "hello"
@@ -230,7 +230,7 @@ class TestReturnInput:
         def my_func() -> ToolResult:
             return ToolResult(DataInput({"a": "1"}), final=True)
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         reply = await agent.ask("Call my func")
 
         assert json.loads(reply.body) == {"a": "1"}
@@ -240,7 +240,7 @@ class TestReturnInput:
         def my_func() -> ToolResult:
             return ToolResult(ImageInput("https://example.com/img.png"), final=True)
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
 
         with pytest.raises(ValueError, match="Unsupported part type"):
             await agent.ask("Call my func")
@@ -250,7 +250,7 @@ class TestReturnInput:
         def my_func() -> ToolResult:
             return ToolResult(TextInput("a"), TextInput("b"), final=True)
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
 
         with pytest.raises(ValueError, match="must have exactly one part"):
             await agent.ask("Call my func")
@@ -260,7 +260,7 @@ class TestReturnInput:
         def my_func() -> ToolResult:
             return ToolResult(TextInput("result"), final=True)
 
-        agent = Actor("", config=config, tools=[my_func])
+        agent = Agent("", config=config, tools=[my_func])
         await agent.ask("Call my func")
 
         assert config.mock.call_count == 1

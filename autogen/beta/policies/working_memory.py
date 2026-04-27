@@ -12,9 +12,9 @@ from autogen.beta.knowledge import WORKING_MEMORY_PATH, KnowledgeStore
 class WorkingMemoryPolicy:
     """Injects /memory/working.md from the knowledge store.
 
-    Working memory is the actor's persistent state -- updated by
+    Working memory is the agent's persistent state -- updated by
     AggregateStrategy between conversations. This policy injects
-    it as system prompt context so the actor has continuity.
+    it as system prompt context so the agent has continuity.
     """
 
     name = "working_memory"

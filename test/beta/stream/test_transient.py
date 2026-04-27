@@ -188,8 +188,8 @@ class TestTransientNotPersisted:
         ctx = Context(stream)
 
         await stream.send(ModelRequest([TextInput("hi")]), ctx)
-        await stream.send(CompactionCompleted(actor="pilot", strategy="s", events_before=10, events_after=5), ctx)
-        await stream.send(AggregationCompleted(actor="pilot", strategy="s", event_count=5), ctx)
+        await stream.send(CompactionCompleted(agent="pilot", strategy="s", events_before=10, events_after=5), ctx)
+        await stream.send(AggregationCompleted(agent="pilot", strategy="s", event_count=5), ctx)
 
         events = list(await stream.history.get_events())
         types = [type(e).__name__ for e in events]

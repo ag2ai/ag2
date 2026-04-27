@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.events.lifecycle import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -34,7 +34,7 @@ async def test_long_conversation_with_compaction(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compactions.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "long-talker",
         prompt="Be very brief — 1 sentence answers.",
         config=gemini_flash_config,
@@ -69,7 +69,7 @@ async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
         """Echo the text back unchanged."""
         return f"echo: {text}"
 
-    agent = Actor(
+    agent = Agent(
         "unicode",
         prompt="Use the echo tool for any text the user gives you.",
         config=gemini_flash_config,
@@ -97,7 +97,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
     stream = MemoryStream()
     stream.where(TaskStarted).subscribe(lambda e: starts.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "parallel",
         prompt=("Use run_subtasks with parallel=True to dispatch independent jobs. Be concise."),
         config=gemini_flash_config,
@@ -126,7 +126,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
 
 async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
     """RetryMiddleware wraps LLM calls; happy-path traffic is unaffected."""
-    agent = Actor(
+    agent = Agent(
         "retry",
         config=gemini_flash_config,
         middleware=[RetryMiddleware(max_retries=2)],
@@ -153,7 +153,7 @@ async def test_history_limiter_caps_context(gemini_flash_config) -> None:
     # Middleware ordering: HistoryLimiter must be OUTSIDE CaptureLLMCall so
     # the capture sees the post-trim event list. Earlier list entries become
     # outer wrappers, so HistoryLimiter goes first.
-    agent = Actor(
+    agent = Agent(
         "limited",
         prompt="One short word answers.",
         config=gemini_flash_config,
@@ -191,7 +191,7 @@ async def test_response_schema_strict_validation(gemini_flash_config) -> None:
     class StrictAnswer(BaseModel):
         answer: int = Field(..., description="The numeric answer, no text")
 
-    agent = Actor(
+    agent = Agent(
         "strict",
         prompt="Reply ONLY with valid JSON matching the schema. The 'answer' must be an integer.",
         config=gemini_flash_config,
@@ -206,7 +206,7 @@ async def test_response_schema_strict_validation(gemini_flash_config) -> None:
 
 async def test_large_response(gemini_flash_config) -> None:
     """Agent handles a large multi-paragraph response without truncation."""
-    agent = Actor(
+    agent = Agent(
         "verbose",
         prompt="When asked, write a thorough multi-paragraph response.",
         config=gemini_flash_config,
@@ -218,7 +218,7 @@ async def test_large_response(gemini_flash_config) -> None:
 
 async def test_empty_string_user_message(gemini_flash_config) -> None:
     """Sending an empty-ish user message should still produce a coherent reply."""
-    agent = Actor(
+    agent = Agent(
         "empty",
         prompt="If the user sends nothing useful, just say 'ok'.",
         config=gemini_flash_config,
@@ -229,8 +229,8 @@ async def test_empty_string_user_message(gemini_flash_config) -> None:
 
 
 async def test_concurrent_independent_asks(gemini_flash_config) -> None:
-    """Two .ask() calls on the same actor with independent streams should not interfere."""
-    agent = Actor(
+    """Two .ask() calls on the same agent with independent streams should not interfere."""
+    agent = Agent(
         "parallel-asks",
         prompt="Reply with just the requested word.",
         config=gemini_flash_config,

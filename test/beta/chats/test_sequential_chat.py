@@ -6,15 +6,15 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen import ConversableAgent
-from autogen.beta import Actor, testing
+from autogen.beta import Agent, testing
 from autogen.testing import TestAgent
 
 
 @pytest.mark.asyncio()
 async def test_sequential_chat() -> None:
     # arrange remote side
-    agent1 = Actor(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
-    agent2 = Actor(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
+    agent1 = Agent(name="agent1", config=testing.TestConfig("Hi, I am agent one!")).as_conversable()
+    agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
     local_agent = ConversableAgent("local")
 
     # act

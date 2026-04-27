@@ -7,7 +7,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen import ConversableAgent
-from autogen.beta import Actor, events, testing
+from autogen.beta import Agent, events, testing
 from autogen.testing import TestAgent, ToolCall
 
 
@@ -17,7 +17,7 @@ async def test_initiate_chat() -> None:
     def get_weekday(date_string: str) -> str:
         return datetime.strptime(date_string, "%Y-%m-%d").strftime("%A")
 
-    beta_agent = Actor(
+    beta_agent = Agent(
         "agent",
         config=testing.TestConfig(
             events.ToolCallEvent(name="get_weekday", arguments='{"date_string":"2025-11-07"}'),

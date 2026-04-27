@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context, MemoryStream, Variable, tool
-from autogen.beta import actor as actor_mod
-from autogen.beta.actor import TaskConfig
+from autogen.beta import Agent, Context, MemoryStream, Variable, tool
+from autogen.beta import agent as actor_mod
+from autogen.beta.agent import TaskConfig
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,
@@ -45,7 +45,7 @@ class TestRunTask:
     @pytest.mark.asyncio
     async def test_basic(self):
         config = TestConfig(ModelResponse(ModelMessage("Task done!")))
-        agent = Actor("worker", config=config)
+        agent = Agent("worker", config=config)
 
         result = await run_task(agent, "Do something", parent_context=_make_parent_context())
 
@@ -57,7 +57,7 @@ class TestRunTask:
     async def test_with_context(self):
         """Context string is appended to the objective in the prompt."""
         config = TestConfig(ModelResponse(ModelMessage("Analyzed.")))
-        agent = Actor("analyst", config=config)
+        agent = Agent("analyst", config=config)
 
         result = await run_task(
             agent, "Analyze data", parent_context=_make_parent_context(), context="Here is some data"
@@ -71,9 +71,9 @@ class TestRunTask:
 
     @pytest.mark.asyncio
     async def test_failure(self):
-        """Actor that raises an exception produces completed=False."""
+        """Agent that raises an exception produces completed=False."""
         config = TestConfig()  # no responses -> StopIteration
-        agent = Actor("broken", config=config)
+        agent = Agent("broken", config=config)
 
         result = await run_task(agent, "This will fail", parent_context=_make_parent_context())
 
@@ -85,7 +85,7 @@ class TestRunTask:
     async def test_with_custom_stream(self):
         """run_task uses the provided stream instead of creating a MemoryStream."""
         config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        agent = Actor("worker", config=config)
+        agent = Agent("worker", config=config)
 
         custom_stream = MemoryStream()
         result = await run_task(agent, "Do it", parent_context=_make_parent_context(), stream=custom_stream)
@@ -109,7 +109,7 @@ class TestRunTask:
             ToolCallEvent(name="get_db_name", arguments="{}"),
             ModelResponse(ModelMessage("Got it.")),
         )
-        agent = Actor("worker", config=config, tools=[get_db_name])
+        agent = Agent("worker", config=config, tools=[get_db_name])
 
         parent_ctx = _make_parent_context(dependencies={"db_name": "prod_db"})
         result = await run_task(agent, "Check DB", parent_context=parent_ctx)
@@ -120,7 +120,7 @@ class TestRunTask:
     async def test_default_stream(self):
         """Without a stream argument, run_task creates a MemoryStream."""
         config = TestConfig(ModelResponse(ModelMessage("OK")))
-        agent = Actor("worker", config=config)
+        agent = Agent("worker", config=config)
 
         result = await run_task(agent, "Test", parent_context=_make_parent_context())
 
@@ -135,13 +135,13 @@ class TestSpecialistDelegation:
     async def test_via_as_tool(self):
         """Coordinator delegates to a specialist via as_tool."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research findings: X is true.")))
-        researcher = Actor("researcher", config=researcher_config)
+        researcher = Agent("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Find info about X"}'),
             ModelResponse(ModelMessage("Based on research, X is true.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Delegate research tasks to the researcher agent")],
@@ -155,13 +155,13 @@ class TestSpecialistDelegation:
     async def test_via_subagent_tool(self):
         """Coordinator delegates to a specialist via subagent_tool."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research findings: X is true.")))
-        researcher = Actor("researcher", config=researcher_config)
+        researcher = Agent("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Find info about X"}'),
             ModelResponse(ModelMessage("Based on research, X is true.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[subagent_tool(researcher, description="Delegate research tasks to the researcher agent")],
@@ -175,7 +175,7 @@ class TestSpecialistDelegation:
     async def test_with_context_param(self):
         """The LLM can pass context to the sub-task via the context tool parameter."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Found data.")))
-        researcher = Actor("researcher", config=researcher_config)
+        researcher = Agent("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(
@@ -184,7 +184,7 @@ class TestSpecialistDelegation:
             ),
             ModelResponse(ModelMessage("Done.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research")],
@@ -212,13 +212,13 @@ class TestSpecialistDelegation:
             ToolCallEvent(name="lookup", arguments='{"term": "quantum"}'),
             ModelResponse(ModelMessage("Quantum means something important.")),
         )
-        researcher = Actor("researcher", config=researcher_config, tools=[lookup])
+        researcher = Agent("researcher", config=researcher_config, tools=[lookup])
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Define quantum"}'),
             ModelResponse(ModelMessage("Quantum is important.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research with lookup")],
@@ -239,17 +239,17 @@ class TestSpecialistDelegation:
     async def test_multiple_specialists(self):
         """Coordinator delegates to multiple specialists sequentially."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Research done.")))
-        researcher = Actor("researcher", config=researcher_config)
+        researcher = Agent("researcher", config=researcher_config)
 
         writer_config = TestConfig(ModelResponse(ModelMessage("Article written.")))
-        writer = Actor("writer", config=writer_config)
+        writer = Agent("writer", config=writer_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Research topic"}'),
             ToolCallEvent(name="task_writer", arguments='{"objective": "Write article", "context": "Research done."}'),
             ModelResponse(ModelMessage("All done.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[
@@ -274,17 +274,17 @@ class TestSpecialistDelegation:
 
 @pytest.mark.asyncio
 async def test_self_delegation():
-    """Actor delegates to a copy of itself via as_tool."""
+    """Agent delegates to a copy of itself via as_tool."""
     inner_config = TestConfig(
         ModelResponse(ModelMessage("Sub-task A done.")),
     )
-    inner_agent = Actor("analyst", config=inner_config)
+    inner_agent = Agent("analyst", config=inner_config)
 
     outer_config = TestConfig(
         ToolCallEvent(name="self_delegate", arguments='{"objective": "Sub-task A"}'),
         ModelResponse(ModelMessage("All sub-tasks complete.")),
     )
-    agent = Actor("analyst", config=outer_config)
+    agent = Agent("analyst", config=outer_config)
     agent.add_tool(inner_agent.as_tool(description="Break work into sub-tasks", name="self_delegate"))
 
     reply = await agent.ask("Do complex analysis")
@@ -297,7 +297,7 @@ class TestLifecycleEvents:
     async def test_on_parent_stream(self):
         """TaskStarted and TaskCompleted appear on the parent stream."""
         researcher_config = TestConfig(ModelResponse(ModelMessage("Found it.")))
-        researcher = Actor("researcher", config=researcher_config)
+        researcher = Agent("researcher", config=researcher_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_researcher", arguments='{"objective": "Search for Y"}'),
@@ -305,7 +305,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[researcher.as_tool(description="Research agent")],
@@ -330,7 +330,7 @@ class TestLifecycleEvents:
     async def test_completed_has_stream_reference(self):
         """TaskCompleted.task_stream points to the sub-task's stream."""
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
@@ -338,7 +338,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],
@@ -357,9 +357,9 @@ class TestLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_failure_event(self):
-        """Actor that crashes produces TaskFailed on parent stream."""
+        """Agent that crashes produces TaskFailed on parent stream."""
         broken_config = TestConfig()
-        broken = Actor("broken", config=broken_config)
+        broken = Agent("broken", config=broken_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_broken", arguments='{"objective": "Do impossible thing"}'),
@@ -367,7 +367,7 @@ class TestLifecycleEvents:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[broken.as_tool(description="Broken agent")],
@@ -397,13 +397,13 @@ class TestStreamFactory:
             return s
 
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task 1"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker", stream=make_stream)],
@@ -429,14 +429,14 @@ class TestStreamFactory:
             ModelResponse(ModelMessage("A done.")),
             ModelResponse(ModelMessage("B done.")),
         )
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task A"}'),
             ToolCallEvent(name="task_worker", arguments='{"objective": "Task B"}'),
             ModelResponse(ModelMessage("Both done.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker", stream=make_stream)],
@@ -456,7 +456,7 @@ class TestStreamFactory:
     async def test_defaults_to_memory_stream(self):
         """Without stream factory, sub-tasks use MemoryStream."""
         worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Do it"}'),
@@ -464,7 +464,7 @@ class TestStreamFactory:
         )
 
         parent_stream = MemoryStream()
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],
@@ -492,13 +492,13 @@ class TestVariablesPropagation:
             ToolCallEvent(name="read_var", arguments="{}"),
             ModelResponse(ModelMessage("Got the secret.")),
         )
-        worker = Actor("worker", config=worker_config, tools=[read_var])
+        worker = Agent("worker", config=worker_config, tools=[read_var])
 
         coordinator_config = TestConfig(
             ToolCallEvent(name="task_worker", arguments='{"objective": "Read the secret"}'),
             ModelResponse(ModelMessage("Secret retrieved.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker with variable access")],
@@ -529,7 +529,7 @@ class TestVariablesPropagation:
             ToolCallEvent(name="mutate_var", arguments="{}"),
             ModelResponse(ModelMessage("Done.")),
         )
-        worker = Actor("worker", config=worker_config, tools=[mutate_var])
+        worker = Agent("worker", config=worker_config, tools=[mutate_var])
 
         parent_ctx = _make_parent_context(variables={"counter": 10, "existing": "yes"})
 
@@ -544,16 +544,16 @@ class TestVariablesPropagation:
 class TestSubtaskOptOut:
     async def test_disabled_actor_has_no_subtask_tools(self) -> None:
         """``tasks=False`` suppresses ``run_subtask`` / ``run_subtasks``."""
-        actor = Actor("disabled", tasks=False)
+        agent = Agent("disabled", tasks=False)
 
-        names = {t.schema.function.name for t in actor._build_subtask_tools()}
+        names = {t.schema.function.name for t in agent._build_subtask_tools()}
         assert names == set()
 
     async def test_default_actor_has_subtask_tools(self) -> None:
-        """A bare Actor still gets the auto-injected subtask tools by default."""
-        actor = Actor("default")
+        """A bare Agent still gets the auto-injected subtask tools by default."""
+        agent = Agent("default")
 
-        names = {t.schema.function.name for t in actor._build_subtask_tools()}
+        names = {t.schema.function.name for t in agent._build_subtask_tools()}
         assert names == {"run_subtask", "run_subtasks"}
 
 
@@ -577,10 +577,10 @@ class TestSubtaskInheritance:
             ToolCallEvent(name="run_subtask", arguments='{"task": "Define quark"}'),
             ModelResponse(ModelMessage("Got it.")),
         )
-        # The subtask Actor uses the parent's task config — but we can't share
+        # The subtask Agent uses the parent's task config — but we can't share
         # config instances because TestConfig consumes responses in order. So
         # we use a TaskConfig with a fresh config we control.
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=parent_config,
             tools=[lookup],
@@ -615,7 +615,7 @@ class TestSubtaskInheritance:
             ToolCallEvent(name="run_subtask", arguments='{"task": "Work"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=parent_config,
             tools=[secret_tool, public_tool],
@@ -624,16 +624,16 @@ class TestSubtaskInheritance:
 
         # Reach the spawn path directly so we can inspect what the subtask sees.
         parent_ctx = _make_parent_context()
-        # Trigger _spawn_subtask via the wrapped tool; capture spawned actor.
-        spawned_actors: list[Actor] = []
+        # Trigger _spawn_subtask via the wrapped tool; capture spawned agent.
+        spawned_actors: list[Agent] = []
         original_spawn = parent._spawn_subtask
 
         async def capture_spawn(task: str, ctx: Context) -> str:
-            # Reconstruct the spawn manually so we can intercept the bare actor.
+            # Reconstruct the spawn manually so we can intercept the bare agent.
             tc = parent._task_config
             assert tc is not None
             inherited = [t for t in parent.tools if t.schema.function.name not in set(tc.exclude_tools)]
-            bare = Actor(
+            bare = Agent(
                 name="captured",
                 prompt=tc.prompt,
                 config=tc.config,
@@ -646,7 +646,7 @@ class TestSubtaskInheritance:
         parent._spawn_subtask = capture_spawn  # type: ignore[assignment]
         await parent.ask("go", stream=parent_ctx.stream)
 
-        # The captured subtask actor must not have secret_tool.
+        # The captured subtask agent must not have secret_tool.
         assert spawned_actors, "subtask must have been spawned"
         names = {t.schema.function.name for t in spawned_actors[0].tools}
         assert "secret_tool" not in names
@@ -668,7 +668,7 @@ class TestSubtaskInheritance:
             return "c"
 
         sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=TestConfig(),
             tools=[t_a, t_b, t_c],
@@ -700,7 +700,7 @@ class TestSubtaskInheritance:
             ToolCallEvent(name="run_subtask", arguments='{"task": "Use subtask_only"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=parent_config,
             tools=[parent_only],
@@ -720,19 +720,19 @@ class TestSubtaskInheritance:
 @pytest.mark.asyncio
 class TestSubtaskNoRecursion:
     async def test_child_has_no_subtask_tools(self) -> None:
-        """A subtask Actor never gets ``run_subtask`` — recursion impossible.
+        """A subtask Agent never gets ``run_subtask`` — recursion impossible.
 
-        Spawn a subtask, capture the bare child Actor, and assert its
+        Spawn a subtask, capture the bare child Agent, and assert its
         ``_subtask_tools`` is empty regardless of what the parent has.
         """
         sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=TestConfig(),
             tasks=TaskConfig(config=sub_config),
         )
 
-        captured: list[Actor] = []
+        captured: list[Agent] = []
         original = run_task_mod.run_task
 
         async def capturing_run_task(agent, *args, **kwargs):
@@ -740,7 +740,7 @@ class TestSubtaskNoRecursion:
             return await original(agent, *args, **kwargs)
 
         # Monkey-patch both bindings: ``run_task_mod.run_task`` is the import
-        # site; ``actor_mod._run_task`` is the ``actor.py`` reference.
+        # site; ``actor_mod._run_task`` is the ``agent.py`` reference.
         run_task_mod.run_task = capturing_run_task
         actor_mod._run_task = capturing_run_task
 
@@ -753,7 +753,7 @@ class TestSubtaskNoRecursion:
 
         assert captured, "subtask must have run"
         child = captured[0]
-        # The child Actor has zero subtask tools and zero ``_task_config``.
+        # The child Agent has zero subtask tools and zero ``_task_config``.
         assert child._task_config is None
         assert child._build_subtask_tools() == []
 
@@ -782,7 +782,7 @@ class TestParallelSubtasks:
             ModelResponse(ModelMessage("All three done.")),
         )
 
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=parent_config,
             # Each spawn rebuilds the TestClient from this config, so every
@@ -804,7 +804,7 @@ class TestParallelSubtasks:
     async def test_run_subtasks_bundles_parallel_dispatch(self) -> None:
         """``run_subtasks(parallel=True)`` is one tool call, N subtasks.
 
-        Each spawned subtask Actor creates its own TestClient from the shared
+        Each spawned subtask Agent creates its own TestClient from the shared
         ``TaskConfig.config``, so all children produce the same first response;
         we assert on dispatch shape (2 TaskCompleted events for 2 task strings)
         rather than on per-call content.
@@ -817,7 +817,7 @@ class TestParallelSubtasks:
             ModelResponse(ModelMessage("Wrapped up.")),
         )
 
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=parent_config,
             tasks=TaskConfig(config=TestConfig(ModelResponse(ModelMessage("subtask done.")))),
@@ -838,8 +838,8 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     This is what teaches Claude/GPT/Gemini to emit multiple ``tool_use``
     blocks in one assistant message rather than serializing them.
     """
-    actor = Actor("any")
-    [run_subtask, run_subtasks] = actor._build_subtask_tools()
+    agent = Agent("any")
+    [run_subtask, run_subtasks] = agent._build_subtask_tools()
 
     desc = run_subtask.schema.function.description
     assert "parallel" in desc.lower()
@@ -856,7 +856,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="ask_human", arguments="{}"),
             ModelResponse(ModelMessage("Human approved.")),
         )
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         @worker.tool
         async def ask_human(ctx: Context) -> str:
@@ -869,7 +869,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
             ModelResponse(ModelMessage("Approval obtained.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker that needs human input")],
@@ -893,7 +893,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="ask_human", arguments="{}"),
             ModelResponse(ModelMessage("Done.")),
         )
-        worker = Actor("worker", config=worker_config)
+        worker = Agent("worker", config=worker_config)
 
         @worker.tool
         async def ask_human(ctx: Context) -> str:
@@ -911,7 +911,7 @@ class TestHitlPropagation:
             ToolCallEvent(name="task_worker", arguments='{"objective": "Get approval"}'),
             ModelResponse(ModelMessage("OK.")),
         )
-        coordinator = Actor(
+        coordinator = Agent(
             "coordinator",
             config=coordinator_config,
             tools=[worker.as_tool(description="Worker")],

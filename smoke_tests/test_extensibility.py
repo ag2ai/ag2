@@ -9,7 +9,7 @@ Real LLM calls via Gemini 3 Flash Preview.
 
 import pytest
 
-from autogen.beta import Actor, Context
+from autogen.beta import Agent, Context
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,
@@ -32,7 +32,7 @@ async def test_custom_middleware_on_turn(gemini_flash_config) -> None:
             events_observed.append(f"end:{type(result).__name__}")
             return result
 
-    agent = Actor(
+    agent = Agent(
         "traced",
         config=gemini_flash_config,
         middleware=[lambda event, context: TraceMiddleware(event, context)],
@@ -56,7 +56,7 @@ async def test_custom_middleware_on_llm_call(gemini_flash_config) -> None:
         """Add two numbers."""
         return a + b
 
-    agent = Actor(
+    agent = Agent(
         "counter",
         prompt="Use the add tool then report the result.",
         config=gemini_flash_config,
@@ -71,7 +71,7 @@ async def test_custom_middleware_on_llm_call(gemini_flash_config) -> None:
 
 async def test_logging_middleware_doesnt_crash(gemini_flash_config) -> None:
     """The built-in LoggingMiddleware runs cleanly end-to-end."""
-    agent = Actor(
+    agent = Agent(
         "logged",
         config=gemini_flash_config,
         middleware=[LoggingMiddleware()],
@@ -89,7 +89,7 @@ async def test_add_middleware_at_runtime(gemini_flash_config) -> None:
             seen.append("T")
             return await call_next(event, context)
 
-    agent = Actor("rt", config=gemini_flash_config)
+    agent = Agent("rt", config=gemini_flash_config)
     agent.add_middleware(lambda event, context: T(event, context))
     await agent.ask("Hi.")
 
@@ -114,7 +114,7 @@ async def test_insert_middleware_outermost(gemini_flash_config) -> None:
             order.append("B-post")
             return r
 
-    agent = Actor(
+    agent = Agent(
         "ordering",
         config=gemini_flash_config,
         middleware=[lambda e, c: A(e, c)],
@@ -140,7 +140,7 @@ async def test_hitl_hook_provides_input(gemini_flash_config) -> None:
             return f"performed: {action}"
         return "cancelled"
 
-    agent = Actor(
+    agent = Agent(
         "hitl",
         prompt="Use confirm_then_act for any user-requested action. Report the result.",
         config=gemini_flash_config,
@@ -166,14 +166,14 @@ async def test_plugin_contributes_tool_and_prompt(gemini_flash_config) -> None:
         tools=[secret_word],
     )
 
-    agent = Actor("plugged", config=gemini_flash_config, plugins=[plugin])
+    agent = Agent("plugged", config=gemini_flash_config, plugins=[plugin])
     reply = await agent.ask("What is the secret word?")
     assert reply.body is not None
     assert "moonlight" in reply.body.lower()
 
 
 async def test_plugin_with_dependencies_and_variables(gemini_flash_config) -> None:
-    """Plugin propagates dependencies and variables onto the actor."""
+    """Plugin propagates dependencies and variables onto the agent."""
     from typing import Annotated
 
     from autogen.beta.annotations import Inject, Variable
@@ -197,7 +197,7 @@ async def test_plugin_with_dependencies_and_variables(gemini_flash_config) -> No
         variables={"role": "admin"},
     )
 
-    agent = Actor("identity", config=gemini_flash_config, plugins=[plugin])
+    agent = Agent("identity", config=gemini_flash_config, plugins=[plugin])
     reply = await agent.ask("Who am I and what's my role?")
     assert reply.body is not None
     assert captured["user"] == "alice"
@@ -218,7 +218,7 @@ async def test_multiple_plugins_compose(gemini_flash_config) -> None:
     plugin_a = Plugin(prompt="If asked for A, call tool_a.", tools=[tool_a])
     plugin_b = Plugin(prompt="If asked for B, call tool_b.", tools=[tool_b])
 
-    agent = Actor("composed", config=gemini_flash_config, plugins=[plugin_a, plugin_b])
+    agent = Agent("composed", config=gemini_flash_config, plugins=[plugin_a, plugin_b])
     reply = await agent.ask("Get me both A and B by calling the tools.")
     assert reply.body is not None
     body = reply.body.lower()

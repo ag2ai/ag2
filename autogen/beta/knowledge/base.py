@@ -35,7 +35,7 @@ class NoopChangeSubscription:
 
 @runtime_checkable
 class KnowledgeStore(Protocol):
-    """Virtual path-based store for actor knowledge.
+    """Virtual path-based store for agent knowledge.
 
     Provides filesystem semantics over any storage backend.
     Paths use Unix conventions: /dir/subdir/file.txt

@@ -6,7 +6,7 @@
 
 Aggregation extracts structured knowledge from raw events and writes it
 to the knowledge store. This is the knowledge-organizing operation:
-triggered at deterministic milestones to maintain actor effectiveness.
+triggered at deterministic milestones to maintain agent effectiveness.
 
 Unlike compaction (which removes), aggregation creates.
 """
@@ -104,7 +104,7 @@ class WorkingMemoryAggregate:
     """Update /memory/working.md with latest context.
 
     Reads existing working memory, merges with new events, writes
-    updated working memory. The actor starts each new conversation
+    updated working memory. The agent starts each new conversation
     with this as context (via WorkingMemoryPolicy).
 
     Costs one LLM call per aggregation.
@@ -129,7 +129,7 @@ class WorkingMemoryAggregate:
     async def _merge(self, existing: str, events: list[BaseEvent]) -> str:
         client = self._config.create()
         prompt = (
-            "You maintain an actor's working memory. Update it based on "
+            "You maintain an agent's working memory. Update it based on "
             "the new conversation below. Preserve important existing context. "
             "Remove outdated information. Keep it concise and actionable.\n\n"
             f"## Current Working Memory\n{existing or '(empty)'}\n\n"

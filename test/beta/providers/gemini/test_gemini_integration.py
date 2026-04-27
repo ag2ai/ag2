@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 
 
@@ -22,7 +22,7 @@ def gemini_config() -> GeminiConfig:
 @pytest.mark.gemini
 @pytest.mark.asyncio()
 async def test_system_prompt(gemini_config: GeminiConfig) -> None:
-    agent = Actor(
+    agent = Agent(
         name="french_agent",
         prompt="You must always respond in French, no matter what language the user uses.",
         config=gemini_config,
@@ -42,7 +42,7 @@ async def test_tool_use(gemini_config: GeminiConfig) -> None:
         """Get the current weather for a city."""
         return f"The weather in {city} is sunny and 22°C."
 
-    agent = Actor(
+    agent = Agent(
         name="weather_agent",
         prompt="You are a weather assistant. Use the get_weather tool to answer weather questions.",
         config=gemini_config,
@@ -58,7 +58,7 @@ async def test_tool_use(gemini_config: GeminiConfig) -> None:
 @pytest.mark.gemini
 @pytest.mark.asyncio()
 async def test_structured_output_primitive(gemini_config: GeminiConfig) -> None:
-    agent = Actor(
+    agent = Agent(
         name="math_agent",
         prompt="You are a math assistant. Return only the numeric answer.",
         config=gemini_config,
@@ -80,7 +80,7 @@ async def test_structured_output_dataclass(gemini_config: GeminiConfig) -> None:
         country: str
         population: int
 
-    agent = Actor(
+    agent = Agent(
         name="geo_agent",
         prompt="You are a geography assistant. Provide city information.",
         config=gemini_config,
@@ -98,7 +98,7 @@ async def test_structured_output_dataclass(gemini_config: GeminiConfig) -> None:
 @pytest.mark.gemini
 @pytest.mark.asyncio()
 async def test_multi_turn(gemini_config: GeminiConfig) -> None:
-    agent = Actor(
+    agent = Agent(
         name="memory_agent",
         prompt="You are a helpful assistant. Be concise.",
         config=gemini_config,
@@ -121,7 +121,7 @@ async def test_multi_turn_after_empty_args_tool_call(gemini_config: GeminiConfig
         """Discover available agents, optionally filtered by capability."""
         return "Available agents: researcher, writer, coder"
 
-    agent = Actor(
+    agent = Agent(
         name="hub_agent",
         prompt="You have a discover_agents tool. Use it when asked about available agents. Be concise.",
         config=gemini_config,

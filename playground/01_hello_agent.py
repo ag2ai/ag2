@@ -1,6 +1,6 @@
-"""01 · Hello Actor
+"""01 · Hello Agent
 
-The smallest possible example: a bare ``Actor`` with a single LLM config and
+The smallest possible example: a bare ``Agent`` with a single LLM config and
 one ``ask()`` call. No tools, no harness primitives, no plugins.
 
 Run::
@@ -12,15 +12,15 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 
 
 async def main() -> None:
     config = default_config()
 
-    section("Bare Actor — ask and print")
+    section("Bare Agent — ask and print")
 
-    agent = Actor(
+    agent = Agent(
         "greeter",
         prompt="You are a friendly but concise assistant. Reply in one sentence.",
         config=config,
@@ -29,7 +29,7 @@ async def main() -> None:
     reply = await agent.ask("Give me a single tip for learning to play chess.")
     print(reply.body)
 
-    section("Reuse the Actor for another ask")
+    section("Reuse the Agent for another ask")
 
     reply2 = await agent.ask("And a tip for learning poker, in one sentence.")
     print(reply2.body)

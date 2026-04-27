@@ -23,17 +23,17 @@ class FilesystemToolkit(Toolkit):
     All paths are resolved relative to *base_path*.  A path-traversal guard
     rejects any resolved path that escapes the base directory.
 
-    Individual tools are available as attributes and can be passed to an actor
+    Individual tools are available as attributes and can be passed to an agent
     separately::
 
         fs = FilesystemToolkit(base_path="/tmp/workspace")
 
         # use the full toolkit
-        actor = Actor("actor", config=config, tools=[fs])
+        agent = Agent("agent", config=config, tools=[fs])
 
         # or pick individual tools
-        actor = Actor(
-            "actor",
+        agent = Agent(
+            "agent",
             config=config,
             tools=[
                 fs.read_file(),

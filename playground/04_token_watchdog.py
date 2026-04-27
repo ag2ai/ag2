@@ -1,6 +1,6 @@
 """04 · Token watchdog — observers and alerts
 
-Demonstrates three observer patterns running against a single Actor:
+Demonstrates three observer patterns running against a single Agent:
 
 1. ``TokenMonitor`` — built-in, tallies usage and warns above a threshold.
 2. ``LoopDetector`` — built-in, spots repetitive tool calls.
@@ -16,7 +16,7 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.alert import ObserverAlert
@@ -51,7 +51,7 @@ async def main() -> None:
 
     stream = MemoryStream()
 
-    agent = Actor(
+    agent = Agent(
         "writer",
         prompt=("Write prose the user asks for. Favour variety — never repeat the same sentence twice."),
         config=config,

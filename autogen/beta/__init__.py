@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .actor import Actor, AgentReply
+from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
@@ -24,7 +24,7 @@ from .stream import MemoryStream
 from .tools import ToolResult, Toolkit, tool
 
 __all__ = (
-    "Actor",
+    "Agent",
     "AgentReply",
     "AgentSpec",
     "AudioInput",

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Cross-provider smoke: every core Actor feature exercised once per provider.
+"""Cross-provider smoke: every core Agent feature exercised once per provider.
 
 Each test takes ``provider_config`` and runs on all three providers
 (OpenAI, Anthropic, Gemini). Tests hit the real APIs — no mocks.
@@ -21,7 +21,7 @@ from typing import Annotated, Any
 import pytest
 from pydantic import BaseModel
 
-from autogen.beta import Actor, Context
+from autogen.beta import Agent, Context
 from autogen.beta.annotations import Inject, Variable
 from autogen.beta.events import ModelMessageChunk
 from autogen.beta.exceptions import ConfigNotProvidedError
@@ -31,14 +31,14 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_basic_ask(provider_config) -> None:
-    agent = Actor("basic", config=provider_config)
+    agent = Agent("basic", config=provider_config)
     reply = await agent.ask("Reply with exactly the word: ping")
     assert reply.body is not None
     assert "ping" in reply.body.lower()
 
 
 async def test_static_system_prompt(provider_config) -> None:
-    agent = Actor(
+    agent = Agent(
         "capitals",
         prompt="You are a geography tutor. Always start your answer with 'Answer:'.",
         config=provider_config,
@@ -52,7 +52,7 @@ async def test_static_system_prompt(provider_config) -> None:
 async def test_dynamic_prompt_with_context(provider_config) -> None:
     """@agent.prompt decorator receives live Context; dynamic prompt runs per ask."""
 
-    agent = Actor("dynamic", config=provider_config)
+    agent = Agent("dynamic", config=provider_config)
 
     @agent.prompt
     def render(ctx: Context) -> str:
@@ -72,7 +72,7 @@ async def test_sync_tool_use(provider_config) -> None:
         tool_calls.append(f"add({a}, {b})")
         return a + b
 
-    agent = Actor(
+    agent = Agent(
         "calculator",
         prompt="You are a calculator. Use the add tool for every arithmetic question.",
         config=provider_config,
@@ -90,7 +90,7 @@ async def test_async_tool_use(provider_config) -> None:
         await asyncio.sleep(0.01)
         return f"{ticker} is at $123.45"
 
-    agent = Actor(
+    agent = Agent(
         "stocks",
         prompt="You quote stock prices. Use lookup_stock for every symbol you are asked about.",
         config=provider_config,
@@ -116,7 +116,7 @@ async def test_multi_tool_dispatch(provider_config) -> None:
         """Return the latest headline for a topic."""
         return f"No news about {topic} today"
 
-    agent = Actor(
+    agent = Agent(
         "concierge",
         prompt="You answer user questions using the right tool. Be concise.",
         config=provider_config,
@@ -134,7 +134,7 @@ async def test_tool_error_propagates(provider_config) -> None:
         """Query the flaky service."""
         raise RuntimeError("service unavailable")
 
-    agent = Actor(
+    agent = Agent(
         "resilient",
         prompt=(
             "You have a flaky_service tool. If it errors, apologise briefly and explain the "
@@ -150,7 +150,7 @@ async def test_tool_error_propagates(provider_config) -> None:
 
 
 async def test_structured_output_primitive(provider_config) -> None:
-    agent = Actor(
+    agent = Agent(
         "math",
         prompt="Return only the numeric answer.",
         config=provider_config,
@@ -168,7 +168,7 @@ async def test_structured_output_dataclass(provider_config) -> None:
         author: str
         year: int
 
-    agent = Actor(
+    agent = Agent(
         "librarian",
         prompt="Return book metadata. Moby-Dick is by Herman Melville, published 1851.",
         config=provider_config,
@@ -187,7 +187,7 @@ async def test_structured_output_pydantic(provider_config) -> None:
         age: int
         hobbies: list[str]
 
-    agent = Actor(
+    agent = Agent(
         "bio",
         prompt="Return structured person info. Alice is 30 and enjoys chess and hiking.",
         config=provider_config,
@@ -202,7 +202,7 @@ async def test_structured_output_pydantic(provider_config) -> None:
 
 
 async def test_multi_turn_ask_chain(provider_config) -> None:
-    agent = Actor(
+    agent = Agent(
         "memoryful",
         prompt="You are a helpful assistant. Remember details the user shares.",
         config=provider_config,
@@ -231,7 +231,7 @@ async def test_streaming_chunks_arrive(streaming_config) -> None:
     chunks: list[str] = []
 
     with stream.where(ModelMessageChunk).sub_scope(lambda e: chunks.append(e.content)):
-        agent = Actor(
+        agent = Agent(
             "writer",
             prompt="Write a short 2-sentence haiku-like description of the ocean.",
             config=streaming_config,
@@ -244,7 +244,7 @@ async def test_streaming_chunks_arrive(streaming_config) -> None:
 
 
 async def test_dependency_injection_into_tool(provider_config) -> None:
-    """Actor-level dependency surfaces inside a tool via Inject."""
+    """Agent-level dependency surfaces inside a tool via Inject."""
 
     class UserService:
         def lookup(self, user_id: str) -> dict[str, Any]:
@@ -256,7 +256,7 @@ async def test_dependency_injection_into_tool(provider_config) -> None:
         return f"User {info['id']}: {info['name']} ({info['tier']})"
 
     service = UserService()
-    agent = Actor(
+    agent = Agent(
         "user-info",
         prompt="Look up users with the describe_user tool and repeat exactly what it returns.",
         config=provider_config,
@@ -274,7 +274,7 @@ async def test_context_variables_injected_into_tool(provider_config) -> None:
         """Return the caller's current role from context variables."""
         return f"The role is {role}"
 
-    agent = Actor(
+    agent = Agent(
         "role-reader",
         prompt="Use get_role to look up the user's role and include it verbatim in your answer.",
         config=provider_config,
@@ -295,7 +295,7 @@ async def test_per_ask_tool_injection(provider_config) -> None:
         """Return the secret word."""
         return "zephyr"
 
-    agent = Actor(
+    agent = Agent(
         "per-ask",
         prompt="If a secret_word tool exists, call it and include its output.",
         config=provider_config,
@@ -306,15 +306,15 @@ async def test_per_ask_tool_injection(provider_config) -> None:
 
 
 async def test_missing_config_raises() -> None:
-    """Actor without config must raise ConfigNotProvidedError on ask."""
-    agent = Actor("no-config")
+    """Agent without config must raise ConfigNotProvidedError on ask."""
+    agent = Agent("no-config")
     with pytest.raises(ConfigNotProvidedError):
         await agent.ask("anything")
 
 
 async def test_config_override_per_ask(provider_config) -> None:
     """Passing config= to ask() overrides the agent's default config."""
-    agent = Actor("override")  # No default config
+    agent = Agent("override")  # No default config
     reply = await agent.ask("Say 'ok'.", config=provider_config)
     assert reply.body is not None
     assert "ok" in reply.body.lower()

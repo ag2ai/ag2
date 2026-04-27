@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context
+from autogen.beta import Agent, Context
 from autogen.beta.events import HumanInputRequest, HumanMessage, ToolCallEvent
 from autogen.beta.exceptions import HumanInputNotProvidedError
 from autogen.beta.testing import TestConfig
@@ -33,7 +33,7 @@ async def test_sync_hitl(
         mock.hitl(event.content)
         return HumanMessage("answer")
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -58,7 +58,7 @@ async def test_async_hitl(
     async def hitl_hook(event: HumanInputRequest) -> HumanMessage:
         return HumanMessage("answer")
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -79,7 +79,7 @@ async def test_hitl_decorator(
         mock(await ctx.input("Say smth", timeout=1.0))
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -103,7 +103,7 @@ async def test_hitl_decorator_override(
         mock(await ctx.input("Say smth", timeout=1.0))
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -136,7 +136,7 @@ async def test_hitl_not_set(
             mock()
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],

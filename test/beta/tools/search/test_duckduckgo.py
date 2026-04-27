@@ -10,7 +10,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("ddgs")
 final_reply: str = "done"
-from autogen.beta import Actor, DataInput, Variable
+from autogen.beta import Agent, DataInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -75,7 +75,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework"))
-        agent = Actor("a", config=config, tools=[ddg])
+        agent = Agent("a", config=config, tools=[ddg])
 
         # act
         await agent.ask("search")
@@ -99,7 +99,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("nonexistent query"))
-        agent = Actor("a", config=config, tools=[ddg])
+        agent = Agent("a", config=config, tools=[ddg])
 
         # act
         await agent.ask("search")
@@ -117,7 +117,7 @@ class TestSearchExecution:
         mock.text.return_value = SAMPLE_RESULTS
         ddg = DuckDuckSearchTool(client=mock, max_results=3, region="us-en", safesearch="off")
 
-        agent = Actor("a", config=_make_config("test query"), tools=[ddg])
+        agent = Agent("a", config=_make_config("test query"), tools=[ddg])
 
         await agent.ask("search")
 
@@ -135,7 +135,7 @@ class TestSearchExecution:
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework", tool_name="web_search"))
-        agent = Actor("a", config=config, tools=[ddg])
+        agent = Agent("a", config=config, tools=[ddg])
 
         # act
         await agent.ask("search")
@@ -156,7 +156,7 @@ class TestDuckDuckSearchToolVariable:
         )
 
         # arrange agent
-        agent = Actor(
+        agent = Agent(
             "a",
             config=_make_config("test query"),
             tools=[ddg],
@@ -184,7 +184,7 @@ class TestDuckDuckSearchToolVariable:
             safesearch=Variable(),
         )
 
-        agent = Actor("a", config=_make_config("test query"), tools=[ddg])
+        agent = Agent("a", config=_make_config("test query"), tools=[ddg])
 
         with pytest.raises(KeyError, match="safesearch"):
             await agent.ask("search")

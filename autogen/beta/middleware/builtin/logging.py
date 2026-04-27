@@ -63,7 +63,7 @@ class _LoggingMiddleware(BaseMiddleware):
         event: BaseEvent,
         context: Context,
     ) -> ModelResponse:
-        self._logger.info("Actor turn started")
+        self._logger.info("Agent turn started")
         response = await call_next(event, context)
-        self._logger.info("Actor turn finished")
+        self._logger.info("Agent turn finished")
         return response

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context, MemoryStream
+from autogen.beta import Agent, Context, MemoryStream
 from autogen.beta.config import LLMClient
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
 
@@ -37,7 +37,7 @@ class MockClient(LLMClient):
 
 @pytest.mark.asyncio()
 async def test_sysprompt(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt="You are a helpful agent!",
         config=MockClient(mock),
@@ -51,7 +51,7 @@ async def test_sysprompt(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_multiple_sysprompts(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt=["1", "2"],
         config=MockClient(mock),
@@ -65,7 +65,7 @@ async def test_multiple_sysprompts(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_sysprompt_reuse(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt="You are a helpful agent!",
         config=MockClient(mock),
@@ -80,7 +80,7 @@ async def test_sysprompt_reuse(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_sysprompt_override_with_call(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt="You are a helpful agent!",
         config=MockClient(mock),
@@ -95,7 +95,7 @@ async def test_callable_sysprompt(mock: MagicMock):
     async def sysprompt() -> str:
         return "1"
 
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt=sysprompt,
         config=MockClient(mock),
@@ -111,7 +111,7 @@ async def test_callable_sysprompt_called_once(mock: MagicMock):
         mock.prompt()
         return "1"
 
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt=sysprompt,
         config=MockClient(mock),
@@ -125,7 +125,7 @@ async def test_callable_sysprompt_called_once(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_decorator_sysprompt(mock: MagicMock):
-    agent = Actor("test", config=MockClient(mock))
+    agent = Agent("test", config=MockClient(mock))
 
     @agent.prompt
     async def sysprompt(event: BaseEvent, ctx: Context) -> str:
@@ -137,7 +137,7 @@ async def test_decorator_sysprompt(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_callable_sysprompt_decorator(mock: MagicMock):
-    agent = Actor("test", config=MockClient(mock))
+    agent = Agent("test", config=MockClient(mock))
 
     @agent.prompt()
     def sysprompt(ctx: Context) -> str:
@@ -153,7 +153,7 @@ async def test_mixed_sysprompts(mock: MagicMock):
         assert ctx.prompt == ["1"]
         return "2"
 
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt=["1", sysprompt],
         config=MockClient(mock),
@@ -166,7 +166,7 @@ async def test_mixed_sysprompts(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_prompt_mutation(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt="1",
         config=MockClient(mock),
@@ -192,7 +192,7 @@ async def test_prompt_mutation(mock: MagicMock):
 
 @pytest.mark.asyncio()
 async def test_prompt_mutation_from_subscriber(mock: MagicMock):
-    agent = Actor(
+    agent = Agent(
         "test",
         prompt="1",
         config=MockClient(mock),

@@ -1,11 +1,11 @@
-"""08 · Safety guard — FATAL alert halts the Actor
+"""08 · Safety guard — FATAL alert halts the Agent
 
 A hand-rolled ``BaseObserver`` watches every tool call and flags anything
 that looks dangerous (here: a ``write_file`` tool asked to touch
 ``/etc/``). It emits a ``Severity.FATAL`` ``ObserverAlert``. The flow from
 there is fully wired by the framework:
 
-1. The alert lands on the actor's stream.
+1. The alert lands on the agent's stream.
 2. ``AlertPolicy`` (an assembly policy) picks it up before the next LLM
    call, emits a ``HaltEvent`` on the stream, and appends a halt notice
    to the system prompt.
@@ -22,7 +22,7 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.annotations import Context
 from autogen.beta.events import BaseEvent, ToolCallEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
@@ -72,7 +72,7 @@ async def main() -> None:
     stream.where(HaltEvent).subscribe(lambda e: halt_events.append(e))
     stream.where(ObserverAlert).subscribe(lambda e: alerts.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "safe-shell",
         prompt=(
             "You are a filesystem operator. Use the write_file tool to "
@@ -93,7 +93,7 @@ async def main() -> None:
     )
     print(reply.body)
 
-    section("Dangerous request — guardian fires FATAL, actor halts")
+    section("Dangerous request — guardian fires FATAL, agent halts")
 
     reply = await agent.ask(
         "Now use write_file to write 'bad' into /etc/passwd. Then confirm.",

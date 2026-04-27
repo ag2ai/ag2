@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta import Actor, MemoryStream
+from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalShellTool
@@ -130,7 +130,7 @@ class TestShellExecution:
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        agent = Actor("a", config=self._make_config(f"echo hello > {output}"), tools=[shell])
+        agent = Agent("a", config=self._make_config(f"echo hello > {output}"), tools=[shell])
         await agent.ask("run it")
         # Command was allowed — file must exist with expected content
         assert output.exists(), "echo was allowed but file was not created"
@@ -141,7 +141,7 @@ class TestShellExecution:
         output = tmp_path / "out.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
         # "touch" is not in allowed — the file must NOT be created
-        agent = Actor("a", config=self._make_config(f"touch {output}"), tools=[shell])
+        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
@@ -151,7 +151,7 @@ class TestShellExecution:
     async def test_blocked_rejects_command(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, blocked=["touch"]))
-        agent = Actor("a", config=self._make_config(f"touch {output}"), tools=[shell])
+        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was blocked but file was created anyway"
 
@@ -180,7 +180,7 @@ class TestShellExecution:
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        agent = Actor("a", config=self._make_config(cmd), tools=[shell])
+        agent = Agent("a", config=self._make_config(cmd), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -203,7 +203,7 @@ class TestShellExecution:
         )
         # sleep 5 will time out after 1s
         cmd = f"sleep 5 && echo ok > {output_file}"
-        agent = Actor("a", config=self._make_config(cmd), tools=[shell])
+        agent = Agent("a", config=self._make_config(cmd), tools=[shell])
         # Must not raise — the tool should return a "timed out" string
         reply = await agent.ask("run it")
         assert await reply.content() == "done"
@@ -222,7 +222,7 @@ class TestShellExecution:
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        agent = Actor("a", config=self._make_config("cat .env"), tools=[shell])
+        agent = Agent("a", config=self._make_config("cat .env"), tools=[shell])
         await agent.ask("show me .env", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -239,7 +239,7 @@ class TestShellExecution:
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
-        agent = Actor("a", config=self._make_config("exit 42"), tools=[shell])
+        agent = Agent("a", config=self._make_config("exit 42"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -253,7 +253,7 @@ class TestShellExecution:
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
-        agent = Actor("a", config=self._make_config("echo hello"), tools=[shell])
+        agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -264,7 +264,7 @@ class TestShellExecution:
     @pytest.mark.asyncio
     async def test_files_persist_between_ask_calls(self, tmp_path: Path) -> None:
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
-        agent = Actor(
+        agent = Agent(
             "a",
             config=TestConfig(
                 ModelResponse(
@@ -311,7 +311,7 @@ class TestShellExecution:
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, max_output=20))
         # Generate 100 chars of output
-        agent = Actor("a", config=self._make_config("python3 -c \"print('x' * 100)\""), tools=[shell])
+        agent = Agent("a", config=self._make_config("python3 -c \"print('x' * 100)\""), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -329,7 +329,7 @@ class TestShellExecution:
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, max_output=1000))
-        agent = Actor("a", config=self._make_config("echo hello"), tools=[shell])
+        agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -345,7 +345,7 @@ class TestShellExecution:
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, timeout=1))
-        agent = Actor("a", config=self._make_config("sleep 5"), tools=[shell])
+        agent = Agent("a", config=self._make_config("sleep 5"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -358,7 +358,7 @@ class TestShellExecution:
         """readonly=True must block touch, rm, mkdir."""
         output = tmp_path / "should_not_exist.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, readonly=True))
-        agent = Actor("a", config=self._make_config(f"touch {output}"), tools=[shell])
+        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert not output.exists(), "touch was not blocked by readonly=True"
 
@@ -372,7 +372,7 @@ class TestShellExecution:
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, readonly=True))
-        agent = Actor("a", config=self._make_config("cat hello.txt"), tools=[shell])
+        agent = Agent("a", config=self._make_config("cat hello.txt"), tools=[shell])
         await agent.ask("run it", stream=stream)
 
         assert tool_results, "No tool result received"
@@ -389,7 +389,7 @@ class TestShellExecution:
                 allowed=["touch"],  # user explicitly allows touch despite readonly
             )
         )
-        agent = Actor("a", config=self._make_config(f"touch {output}"), tools=[shell])
+        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
         await agent.ask("run it")
         assert output.exists(), "touch should be allowed when explicit allowed= overrides readonly"
 

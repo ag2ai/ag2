@@ -156,13 +156,13 @@ Subagent tools live in `autogen/beta/tools/subagents/` and are imported from `au
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
-### Actor.as_tool()
+### Agent.as_tool()
 
-`Actor.as_tool(description, name?, stream?, middleware?)` is a convenience method that delegates to `subagent_tool()`. It creates a tool named `task_{agent.name}` with parameters `objective` (required) and `context` (optional).
+`Agent.as_tool(description, name?, stream?, middleware?)` is a convenience method that delegates to `subagent_tool()`. It creates a tool named `task_{agent.name}` with parameters `objective` (required) and `context` (optional).
 
 ### Auto-injected `run_subtask` / `run_subtasks`
 
-Every `Actor` (unless constructed with `tasks=False`) automatically carries a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Actor** that:
+Every `Agent` (unless constructed with `tasks=False`) automatically carries a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Agent** that:
 
 - Inherits the parent's user-supplied tools by default (filterable via `TaskConfig.include_tools` / `exclude_tools`, extendable via `extra_tools`).
 - Is constructed with `tasks=False`, so the subtask itself has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.

@@ -1,15 +1,15 @@
 """06 · Journal companion — knowledge store with working memory
 
-Persistent actor memory using the framework's three knowledge primitives:
+Persistent agent memory using the framework's three knowledge primitives:
 
-- ``KnowledgeStore`` — virtual filesystem for actor state.
+- ``KnowledgeStore`` — virtual filesystem for agent state.
 - ``WorkingMemoryAggregate`` — an LLM-driven summary rollup that runs at
   the end of every conversation and writes ``/memory/working.md``.
 - ``WorkingMemoryPolicy`` — an assembly policy that reads
   ``/memory/working.md`` and injects it as context at the start of every
   subsequent conversation.
 
-The actor therefore "remembers" what you told it even after a full restart,
+The agent therefore "remembers" what you told it even after a full restart,
 because the state lives in the knowledge store — not in conversation
 history.
 
@@ -25,7 +25,7 @@ from pathlib import Path
 
 from _config import default_config, section
 
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.aggregate import AggregateTrigger, WorkingMemoryAggregate
 from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.policies import ConversationPolicy, WorkingMemoryPolicy
@@ -40,8 +40,8 @@ async def main() -> None:
     try:
         store = DiskKnowledgeStore(str(workdir))
 
-        def build_agent() -> Actor:
-            return Actor(
+        def build_agent() -> Agent:
+            return Agent(
                 "journal",
                 prompt=(
                     "You are a supportive daily journal companion. Keep a "
@@ -81,7 +81,7 @@ async def main() -> None:
         print("## /memory/working.md after session 1")
         print(working)
 
-        section("Session 2 — new Actor instance, same store: memory persists")
+        section("Session 2 — new Agent instance, same store: memory persists")
 
         agent2 = build_agent()
         r2 = await agent2.ask("Quick check-in: what was I working on? Answer in one line.")

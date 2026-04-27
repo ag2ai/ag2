@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Harness feature smoke: assembly policies, knowledge store, compaction,
-aggregation — every opt-in Actor primitive exercised against a real LLM.
+aggregation — every opt-in Agent primitive exercised against a real LLM.
 
 Uses Gemini 3 Flash Preview as the default driver (fast, cheap, capable).
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -47,7 +47,7 @@ async def test_conversation_policy_basic(gemini_flash_config) -> None:
 
     The agent should still produce a sensible reply when the policy is active.
     """
-    agent = Actor(
+    agent = Agent(
         "conv",
         prompt="Be concise.",
         config=gemini_flash_config,
@@ -65,7 +65,7 @@ async def test_sliding_window_trims_long_history(gemini_flash_config) -> None:
     ancient turns because the window trimmed them out.
     """
     # Window of 4 conversation events = ~2 turns
-    agent = Actor(
+    agent = Agent(
         "sliding",
         prompt="Be concise. Only answer from what's in the conversation history.",
         config=gemini_flash_config,
@@ -95,7 +95,7 @@ async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
     earlier turns, so the model cannot produce the fruit list. The control
     (no policy) is verified separately to keep this test cheap.
     """
-    agent = Actor(
+    agent = Agent(
         "budget",
         prompt="One-word answers.",
         config=gemini_flash_config,
@@ -118,7 +118,7 @@ async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
 
 async def test_multiple_policies_compose(gemini_flash_config) -> None:
     """Composed policies: Conversation → SlidingWindow → TokenBudget."""
-    agent = Actor(
+    agent = Agent(
         "composed",
         prompt="Brief.",
         config=gemini_flash_config,
@@ -163,7 +163,7 @@ async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
     """LLM drives the knowledge tool: write a note, list, read it back."""
     store = MemoryKnowledgeStore()
 
-    agent = Actor(
+    agent = Agent(
         "knower",
         prompt=(
             "You have a `knowledge` tool with actions: read, write, list, delete. "
@@ -197,7 +197,7 @@ async def test_bootstrap_runs_once(gemini_flash_config) -> None:
     # Pre-condition: store is empty
     assert await store.exists("/.initialized") is False
 
-    agent = Actor(
+    agent = Agent(
         "bootstrapped",
         config=gemini_flash_config,
         knowledge=KnowledgeConfig(store=store, bootstrap=DefaultBootstrap()),
@@ -216,7 +216,7 @@ async def test_tail_window_compact_triggers(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compact_events.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "compactor",
         prompt="Reply in one short sentence.",
         config=gemini_flash_config,
@@ -248,7 +248,7 @@ async def test_summarize_compact_uses_llm(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compact_events.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "summarizer",
         prompt="Very short answers.",
         config=gemini_flash_config,
@@ -278,7 +278,7 @@ async def test_on_end_aggregation(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "aggregator",
         prompt="Brief answer.",
         config=gemini_flash_config,
@@ -315,7 +315,7 @@ async def test_every_n_turns_aggregation(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "periodic",
         prompt="One word answers.",
         config=gemini_flash_config,
@@ -354,7 +354,7 @@ async def test_every_n_events_aggregation(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "event-counter",
         prompt="Very short.",
         config=gemini_flash_config,

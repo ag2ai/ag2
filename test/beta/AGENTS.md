@@ -45,7 +45,7 @@ async def test_collects_events_in_window(self) -> None:
         ToolCallEvent(name="t2", arguments="{}"),
     ]
 
-    agent = Actor(
+    agent = Agent(
         "test-agent",
         config=testing.TestConfig(tool_calls, "Done"),
     )

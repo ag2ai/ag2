@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context
+from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware
 from autogen.beta.middleware.base import HumanInputHook
@@ -77,7 +77,7 @@ class TestHumanInputMiddleware:
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("answer")
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -99,7 +99,7 @@ class TestHumanInputMiddleware:
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("answer")
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -132,7 +132,7 @@ class TestHumanInputMiddleware:
             mock.hitl(event.content)
             return HumanMessage("answer")
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -163,7 +163,7 @@ class TestHumanInputMiddleware:
         def hitl_hook(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("answer")
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -195,7 +195,7 @@ class TestHumanInputMiddleware:
             mock.hitl()
             return HumanMessage("answer")
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -220,7 +220,7 @@ class TestHumanInputHook:
         def hitl_hook(event: HumanInputRequest) -> str:
             return "raw answer"
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -240,7 +240,7 @@ class TestHumanInputHook:
         async def hitl_hook(event: HumanInputRequest) -> str:
             return "async raw answer"
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -257,7 +257,7 @@ class TestHumanInputHook:
             mock(await ctx.input("Say smth", timeout=1.0))
             return ""
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],
@@ -276,7 +276,7 @@ class TestHumanInputHook:
         def agent_hook(event: HumanInputRequest) -> str:
             return "agent-level"
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=test_config,
             tools=[my_tool],

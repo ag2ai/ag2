@@ -10,7 +10,7 @@ All real LLM calls via Gemini 3 Flash Preview.
 
 import pytest
 
-from autogen.beta import Actor, observer
+from autogen.beta import Agent, observer
 from autogen.beta.events import (
     BaseEvent,
     ModelMessageChunk,
@@ -35,7 +35,7 @@ async def test_stream_observer_decorator_sees_responses(gemini_flash_config) -> 
 
     obs = observer(ModelResponse, on_response)
 
-    agent = Actor("watcher", config=gemini_flash_config, observers=[obs])
+    agent = Agent("watcher", config=gemini_flash_config, observers=[obs])
     await agent.ask("Say 'hi'.")
 
     assert len(seen) >= 1
@@ -55,7 +55,7 @@ async def test_observer_sees_streamed_chunks(gemini_flash_streaming_config) -> N
 
     obs = observer(ModelMessageChunk, on_chunk)
 
-    agent = Actor("chunker", config=gemini_flash_streaming_config, observers=[obs])
+    agent = Agent("chunker", config=gemini_flash_streaming_config, observers=[obs])
     reply = await agent.ask("Say the single word 'ocean'.")
     assert reply.body is not None
     assert chunks, "streaming observer must receive at least one chunk"
@@ -73,7 +73,7 @@ async def test_base_observer_event_watch_fires(gemini_flash_config) -> None:
 
     obs = CountingObserver("counter", watch=EventWatch(ModelResponse))
 
-    agent = Actor("base", config=gemini_flash_config, observers=[obs])
+    agent = Agent("base", config=gemini_flash_config, observers=[obs])
     await agent.ask("Say 'ok'.")
 
     assert len(processed) >= 1
@@ -97,7 +97,7 @@ async def test_base_observer_returns_alert_on_stream(gemini_flash_config) -> Non
     stream = MemoryStream()
     stream.where(ObserverAlert).subscribe(lambda e: alerts.append(e))
 
-    agent = Actor("alerter", config=gemini_flash_config, observers=[obs])
+    agent = Agent("alerter", config=gemini_flash_config, observers=[obs])
     await agent.ask("Say 'ok'.", stream=stream)
 
     assert len(alerts) >= 1
@@ -114,7 +114,7 @@ async def test_token_monitor_builtin(gemini_flash_config) -> None:
     stream = MemoryStream()
     stream.where(ObserverAlert).subscribe(lambda e: alerts.append(e))
 
-    agent = Actor("tokens", config=gemini_flash_config, observers=[monitor])
+    agent = Agent("tokens", config=gemini_flash_config, observers=[monitor])
     reply = await agent.ask("Write a 30-word paragraph about a river.", stream=stream)
     assert reply.body is not None
 
@@ -140,7 +140,7 @@ async def test_loop_detector_builtin(gemini_flash_config) -> None:
         """Return the current system status."""
         return "Status: pending. Call this tool again to retry."
 
-    agent = Actor(
+    agent = Agent(
         "looper",
         prompt=(
             "You must call the get_status tool repeatedly until it returns a non-pending status. Try at least 4 times."
@@ -189,7 +189,7 @@ async def test_alert_policy_fatal_halts_llm(gemini_flash_config) -> None:
         """Add two numbers."""
         return a + b
 
-    agent = Actor(
+    agent = Agent(
         "halter",
         prompt="Use the add tool to compute 5+5, then say done.",
         config=gemini_flash_config,
@@ -208,7 +208,7 @@ async def test_alert_policy_fatal_halts_llm(gemini_flash_config) -> None:
 
 
 async def test_observer_lifecycle_events_emitted(gemini_flash_config) -> None:
-    """ObserverStarted / ObserverCompleted fire around Actor execution."""
+    """ObserverStarted / ObserverCompleted fire around Agent execution."""
     started: list[ObserverStarted] = []
     completed: list[ObserverCompleted] = []
 
@@ -222,8 +222,8 @@ async def test_observer_lifecycle_events_emitted(gemini_flash_config) -> None:
     obs_a = observer(ModelResponse, noop)
     obs_b = observer(ModelResponse, noop)
 
-    # These both end up unnamed — the actor uses type(obs).__name__ = StreamObserver
-    agent = Actor("lifecycle", config=gemini_flash_config, observers=[obs_a, obs_b])
+    # These both end up unnamed — the agent uses type(obs).__name__ = StreamObserver
+    agent = Agent("lifecycle", config=gemini_flash_config, observers=[obs_a, obs_b])
     await agent.ask("Say 'ok'.", stream=stream)
 
     # Two observers → two Started, two Completed
@@ -238,7 +238,7 @@ async def test_per_ask_observer_augments(gemini_flash_config) -> None:
     def on_resp(event: ModelResponse) -> None:
         seen_at_ask.append(event.content or "")
 
-    agent = Actor("per-ask-obs", config=gemini_flash_config)
+    agent = Agent("per-ask-obs", config=gemini_flash_config)
     obs = observer(ModelResponse, on_resp)
     await agent.ask("Say 'hello'.", observers=[obs])
 

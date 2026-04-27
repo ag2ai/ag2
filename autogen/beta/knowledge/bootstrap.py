@@ -12,7 +12,7 @@ from .constants import LOG_PREFIX
 class StoreBootstrap(Protocol):
     """Initializes a knowledge store with a starting structure.
 
-    Called once when an actor first runs with a store. Subsequent
+    Called once when an agent first runs with a store. Subsequent
     runs skip bootstrapping (detected via a sentinel file).
     """
 

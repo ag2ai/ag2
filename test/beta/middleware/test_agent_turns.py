@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context
+from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.middleware import AgentTurn, BaseMiddleware, Middleware
 from autogen.beta.testing import TestConfig, TrackingConfig
@@ -42,7 +42,7 @@ class MockMiddleware(BaseMiddleware):
 class TestAgentTurnMiddleware:
     @pytest.mark.asyncio()
     async def test_creation(self, mock: MagicMock) -> None:
-        agent = Actor(
+        agent = Agent(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(MockMiddleware, mock=mock)],
@@ -53,7 +53,7 @@ class TestAgentTurnMiddleware:
         mock.create.assert_called_once_with(ModelRequest([TextInput("Hi!")]))
 
     async def test_chaining(self, mock: MagicMock) -> None:
-        agent = Actor(
+        agent = Agent(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(MockMiddleware, mock=mock, position=i) for i in range(1, 4)],
@@ -79,7 +79,7 @@ class TestAgentTurnMiddleware:
                 result = await call_next(event, ctx)
                 return ModelResponse(ModelMessage(result.content * 2))
 
-        agent = Actor(
+        agent = Agent(
             "",
             config=tracking_config,
             middleware=[MutatingMiddleware, MutatingMiddleware, MutatingMiddleware],
@@ -94,7 +94,7 @@ class TestAgentTurnMiddleware:
 @pytest.mark.asyncio()
 class TestInsertMiddleware:
     async def test_is_called(self, mock: MagicMock) -> None:
-        agent = Actor("", config=TestConfig("result"))
+        agent = Agent("", config=TestConfig("result"))
         agent.insert_middleware(Middleware(MockMiddleware, mock=mock))
 
         await agent.ask("Hi!")
@@ -102,7 +102,7 @@ class TestInsertMiddleware:
         mock.enter.assert_called_once_with(0)
 
     async def test_inserted_is_outer(self, mock: MagicMock) -> None:
-        agent = Actor(
+        agent = Agent(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(MockMiddleware, mock=mock, position=2)],
@@ -118,7 +118,7 @@ class TestInsertMiddleware:
 @pytest.mark.asyncio()
 class TestAddMiddleware:
     async def test_is_called(self, mock: MagicMock) -> None:
-        agent = Actor("", config=TestConfig("result"))
+        agent = Agent("", config=TestConfig("result"))
         agent.add_middleware(Middleware(MockMiddleware, mock=mock))
 
         await agent.ask("Hi!")
@@ -126,7 +126,7 @@ class TestAddMiddleware:
         mock.enter.assert_called_once_with(0)
 
     async def test_added_is_inner(self, mock: MagicMock) -> None:
-        agent = Actor(
+        agent = Agent(
             "",
             config=TestConfig("result"),
             middleware=[Middleware(MockMiddleware, mock=mock, position=1)],

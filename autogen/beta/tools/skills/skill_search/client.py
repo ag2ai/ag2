@@ -37,7 +37,7 @@ class SkillsClient:
 
         self._headers: dict[str, str] = {
             "Accept": "application/vnd.github+json",
-            "User-Actor": "ag2-skill-search/1.0",
+            "User-Agent": "ag2-skill-search/1.0",
         }
         token = cfg.github_token or os.environ.get("GITHUB_TOKEN")
         if token:

@@ -90,10 +90,10 @@ class ExaToolkit(Toolkit):
         toolkit = ExaToolkit(api_key=...)
 
         # all four tools
-        agent = Actor("a", config=config, tools=[toolkit])
+        agent = Agent("a", config=config, tools=[toolkit])
 
         # only two, with custom parameters
-        agent = Actor(
+        agent = Agent(
             "a",
             config=config,
             tools=[

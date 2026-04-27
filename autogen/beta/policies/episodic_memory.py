@@ -13,7 +13,7 @@ class EpisodicMemoryPolicy:
     """Injects past conversation summaries from the knowledge store.
 
     Reads /memory/conversations/ and injects the most recent summaries
-    into the system prompt. This gives the actor context about past episodes.
+    into the system prompt. This gives the agent context about past episodes.
     """
 
     name = "episodic_memory"

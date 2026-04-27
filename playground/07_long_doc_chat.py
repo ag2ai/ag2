@@ -9,7 +9,7 @@ Shows the assembly chain in action. Three policies compose in order:
 3. ``TokenBudgetPolicy(max_tokens=2000)`` — character-based secondary cap,
    belt-and-braces against one huge event blowing the budget.
 
-Also pairs the assembly chain with ``TailWindowCompact`` so the actor's
+Also pairs the assembly chain with ``TailWindowCompact`` so the agent's
 stream history itself (not just the view into it) is kept small.
 
 Run::
@@ -21,7 +21,7 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.events.lifecycle import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -50,7 +50,7 @@ async def main() -> None:
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compactions.append(e))
 
-    agent = Actor(
+    agent = Agent(
         "lexicon",
         prompt="Be very terse — one short sentence per reply.",
         config=config,

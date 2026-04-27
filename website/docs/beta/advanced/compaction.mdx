@@ -116,18 +116,18 @@ summary = CompactionSummary(
 
 `CompactionSummary` is on the allowlist of [`ConversationPolicy`](/docs/beta/advanced/assembly#conversationpolicy), so it passes through the assembly chain and reaches the LLM as context — without requiring special handling elsewhere.
 
-## Wiring onto an Actor
+## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/actor#knowledgeconfig). The Actor wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
+Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/agent#knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
 ```python linenums="1" hl_lines="10-14"
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-actor = Actor(
+agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
     knowledge=KnowledgeConfig(
@@ -142,7 +142,7 @@ Each completed turn emits a [`CompactionCompleted`](/docs/beta/advanced/observer
 
 ## Driving a strategy directly
 
-If you're not using `Actor` (custom harness, tests, one-off scripts), call `#!python await strategy.compact(...)` yourself:
+If you're not using `Agent` (custom harness, tests, one-off scripts), call `#!python await strategy.compact(...)` yourself:
 
 ```python linenums="1"
 from autogen.beta.compact import CompactTrigger, TailWindowCompact

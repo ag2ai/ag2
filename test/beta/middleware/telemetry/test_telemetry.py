@@ -10,7 +10,7 @@ import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
 from autogen.beta.middleware.builtin.telemetry import TelemetryMiddleware
 from autogen.beta.testing import TestConfig
@@ -50,7 +50,7 @@ def otel_setup():
 async def test_turn_span_emitted(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(ModelResponse(ModelMessage("Hello!"))),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
@@ -71,7 +71,7 @@ async def test_turn_span_emitted(otel_setup):
 async def test_llm_span_with_usage(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -112,7 +112,7 @@ async def test_tool_span(otel_setup):
         """Get weather."""
         return f"Sunny in {city}"
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -148,7 +148,7 @@ async def test_tool_span_with_content_capture(otel_setup):
         """Greet someone."""
         return f"Hello {name}"
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -181,7 +181,7 @@ async def test_tool_error_marks_span_error(otel_setup):
         """Always fails."""
         raise ValueError("something went wrong")
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -208,7 +208,7 @@ async def test_tool_error_marks_span_error(otel_setup):
 async def test_span_parent_child_hierarchy(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(ModelMessage("Hi!"), usage=Usage(prompt_tokens=5, completion_tokens=3)),
@@ -231,7 +231,7 @@ async def test_span_parent_child_hierarchy(otel_setup):
 async def test_capture_content_false_omits_messages(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(ModelMessage("Secret response")),
@@ -251,7 +251,7 @@ async def test_capture_content_false_omits_messages(otel_setup):
 async def test_capture_content_true_includes_messages(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(ModelMessage("Hello!")),
@@ -274,7 +274,7 @@ async def test_capture_content_true_includes_messages(otel_setup):
 async def test_auto_detect_model_provider_from_response(otel_setup):
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -318,7 +318,7 @@ async def test_tool_span_has_tool_type(otel_setup):
         """Greet someone."""
         return f"Hello {name}"
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -345,7 +345,7 @@ async def test_constructor_params_override_response(otel_setup):
     """When constructor provides model_name/provider_name, those take precedence."""
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -382,7 +382,7 @@ async def test_cache_token_usage_attributes(otel_setup):
     """Cache creation/read token counts appear in LLM span attributes."""
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(
@@ -416,7 +416,7 @@ async def test_cache_read_tokens_when_nonzero(otel_setup):
     """cache_read_input_tokens appears when non-zero (simulates cache hit)."""
     exporter, provider = otel_setup
 
-    agent = Actor(
+    agent = Agent(
         "assistant",
         config=TestConfig(
             ModelResponse(

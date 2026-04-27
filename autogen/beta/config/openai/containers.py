@@ -45,7 +45,7 @@ class ContainerManager:
             expires_after=ExpiresAfter(minutes=20),
         )
 
-        agent = Actor(
+        agent = Agent(
             ...,
             tools=[ShellTool(environment=ContainerReferenceEnvironment(container_id=container.id))],
         )

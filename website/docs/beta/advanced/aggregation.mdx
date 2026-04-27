@@ -89,7 +89,7 @@ Token usage is recorded on the strategy instance as `#!python strategy.last_usag
 
 ### WorkingMemoryAggregate
 
-Updates `/memory/working.md` — the actor's single persistent state document. Reads the existing file, merges in context from recent events, writes the updated version back. The companion to [`WorkingMemoryPolicy`](/docs/beta/advanced/assembly#workingmemorypolicy).
+Updates `/memory/working.md` — the agent's single persistent state document. Reads the existing file, merges in context from recent events, writes the updated version back. The companion to [`WorkingMemoryPolicy`](/docs/beta/advanced/assembly#workingmemorypolicy).
 
 ```python linenums="1" hl_lines="6 9"
 from autogen.beta.aggregate import WorkingMemoryAggregate
@@ -125,19 +125,19 @@ flowchart LR
 
 The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined in `#!python autogen.beta.knowledge`. Both sides of each pair use those constants so the producer/consumer contract is held together by types, not magic strings.
 
-## Wiring onto an Actor
+## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/actor#knowledgeconfig). The Actor wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
+Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/agent#knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
 
 ```python linenums="1" hl_lines="11-15"
-from autogen.beta import Actor, KnowledgeConfig
+from autogen.beta import Agent, KnowledgeConfig
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from autogen.beta.config import OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 summarizer_config = OpenAIConfig(model="gpt-5-mini")  # cheap model for summaries
-actor = Actor(
+agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
     knowledge=KnowledgeConfig(
@@ -152,7 +152,7 @@ Each completed aggregation emits an `AggregationCompleted` lifecycle event with 
 
 ## Driving a strategy directly
 
-If you're not using `Actor` (custom harness, tests, one-off scripts), call `#!python await strategy.aggregate(...)` yourself:
+If you're not using `Agent` (custom harness, tests, one-off scripts), call `#!python await strategy.aggregate(...)` yourself:
 
 ```python linenums="1"
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate

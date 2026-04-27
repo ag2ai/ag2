@@ -105,8 +105,8 @@ class MemoryStream(ABCStream):
         "_subscribers",
         "_interrupters",
         "history",
-        # Lazy per-stream asyncio.Lock used by Actor._execute to serialize
-        # concurrent turns on a shared stream. See actor.py's
+        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
+        # concurrent turns on a shared stream. See agent.py's
         # `_get_stream_turn_lock`. Declared here (not initialized in
         # __init__) so __slots__ doesn't reject the attribute set.
         "_ag2_turn_lock",
@@ -127,7 +127,7 @@ class MemoryStream(ABCStream):
 
         storage = storage or MemoryStorage()
         self.history = History(self.id, storage)
-        # Actor._execute populates this lazily on first turn — setting it
+        # Agent._execute populates this lazily on first turn — setting it
         # to None here so `getattr(..., None)` returns None instead of
         # hitting a slot-uninitialized AttributeError.
         self._ag2_turn_lock = None  # type: ignore[assignment]

@@ -54,7 +54,7 @@ class TelemetryMiddleware(MiddlewareFactory):
     Args:
         tracer_provider: Optional TracerProvider. Defaults to the global provider.
         capture_content: Whether to include message content, tool arguments/results in spans. Defaults to True.
-        agent_name: Actor name for span attributes. If not set, defaults to "unknown".
+        agent_name: Agent name for span attributes. If not set, defaults to "unknown".
         provider_name: LLM provider name (e.g. "openai", "anthropic").
         model_name: Model name (e.g. "gpt-4o-mini").
     """

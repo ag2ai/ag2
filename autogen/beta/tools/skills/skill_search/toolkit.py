@@ -32,14 +32,14 @@ class SkillSearchToolkit(SkillsToolkit):
     Example::
 
         import asyncio
-        from autogen.beta import Actor
+        from autogen.beta import Agent
         from autogen.beta.config import AnthropicConfig
         from autogen.beta.tools import SkillSearchToolkit
 
         config = AnthropicConfig(model="claude-sonnet-4-5")
         skills = SkillSearchToolkit()
 
-        actor = Actor(
+        agent = Agent(
             "coder",
             "You are a helpful coding assistant. Use skills to extend your capabilities.",
             config=config,
@@ -48,7 +48,7 @@ class SkillSearchToolkit(SkillsToolkit):
 
 
         async def main():
-            reply = await actor.ask("Find and install a skill for React best practices, then tell me the top 3 rules.")
+            reply = await agent.ask("Find and install a skill for React best practices, then tell me the top 3 rules.")
             print(await reply.content())
 
 
@@ -71,7 +71,7 @@ class SkillSearchToolkit(SkillsToolkit):
 
     Individual tools are available as methods::
 
-        actor = Actor("a", config=config, tools=[skills.search_skills(), skills.install_skill()])
+        agent = Agent("a", config=config, tools=[skills.search_skills(), skills.install_skill()])
     """
 
     __slots__ = ("_client", "_lock")

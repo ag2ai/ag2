@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor lifecycle events: observer, compaction, aggregation, and deserialization.
+"""Agent lifecycle events: observer, compaction, aggregation, and deserialization.
 
-These events are emitted by Actor (framework core) during execution. They are
-not network-specific — any Actor emits them regardless of Hub registration.
+These events are emitted by Agent (framework core) during execution. They are
+not network-specific — any Agent emits them regardless of Hub registration.
 
 Task-subagent lifecycle events live in ``autogen.beta.events.task_events``
 (``TaskStarted`` / ``TaskProgress`` / ``TaskCompleted`` / ``TaskFailed``).
@@ -15,7 +15,7 @@ from .base import BaseEvent, Field
 
 
 class ObserverStarted(BaseEvent):
-    """Emitted when an observer attaches to the actor's stream."""
+    """Emitted when an observer attaches to the agent's stream."""
 
     __transient__ = True
 
@@ -23,7 +23,7 @@ class ObserverStarted(BaseEvent):
 
 
 class ObserverCompleted(BaseEvent):
-    """Emitted when an observer detaches from the actor's stream."""
+    """Emitted when an observer detaches from the agent's stream."""
 
     __transient__ = True
 
@@ -31,11 +31,11 @@ class ObserverCompleted(BaseEvent):
 
 
 class CompactionCompleted(BaseEvent):
-    """Emitted on the actor's stream when compaction finishes."""
+    """Emitted on the agent's stream when compaction finishes."""
 
     __transient__ = True
 
-    actor: str
+    agent: str
     strategy: str
     events_before: int
     events_after: int
@@ -44,11 +44,11 @@ class CompactionCompleted(BaseEvent):
 
 
 class AggregationCompleted(BaseEvent):
-    """Emitted on the actor's stream when aggregation finishes."""
+    """Emitted on the agent's stream when aggregation finishes."""
 
     __transient__ = True
 
-    actor: str
+    agent: str
     strategy: str
     event_count: int
     llm_calls: int = 0

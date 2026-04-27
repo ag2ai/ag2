@@ -13,7 +13,7 @@ import asyncio
 
 from _config import default_config, section
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 
 TURNS = [
     "I want to plan a 5-day trip to Japan in late April. Just cherry-blossom season.",
@@ -27,7 +27,7 @@ TURNS = [
 async def main() -> None:
     config = default_config()
 
-    agent = Actor(
+    agent = Agent(
         "travel-planner",
         prompt=(
             "You are a detail-oriented travel planner. When the user adds "

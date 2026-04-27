@@ -9,7 +9,7 @@ The original grab-bag file mixed V2-network-specific bug fixes with
 framework-core regressions. The V2 parts were dropped during the V3
 rewrite; this file preserves the framework-core cases — nested event
 import, Gemini usage normalization, FunctionTool name access,
-Actor.run_subtasks sequential exception handling, and the
+Agent.run_subtasks sequential exception handling, and the
 ObserverCompleted emission guarantee when ``detach()`` raises.
 """
 
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, tool
-from autogen.beta import actor as actor_mod
+from autogen.beta import Agent, tool
+from autogen.beta import agent as actor_mod
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, Usage
 from autogen.beta.events._serialization import import_event_class
 from autogen.beta.observer import TokenMonitor
@@ -107,7 +107,7 @@ def test_function_tool_name_via_schema() -> None:
 class TestRunSubtasksSequentialExceptionHandling:
     @pytest.mark.asyncio
     async def test_sequential_run_subtasks_catches_exception(self) -> None:
-        actor = Actor("test-actor")
+        agent = Agent("test-agent")
 
         call_log: list[str] = []
 
@@ -117,13 +117,13 @@ class TestRunSubtasksSequentialExceptionHandling:
                 raise RuntimeError("LLM API timeout")
             return f"result of {task}"
 
-        actor._run_task = mock_run_task  # type: ignore[assignment]
+        agent._run_task = mock_run_task  # type: ignore[assignment]
 
         tasks = ["task-1-ok", "task-2-fail", "task-3-ok"]
         results = []
         for t in tasks:
             try:
-                results.append(await actor._run_task(t, MagicMock()))
+                results.append(await agent._run_task(t, MagicMock()))
             except Exception as e:
                 results.append(f"Error: {e}")
 

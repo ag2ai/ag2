@@ -1,15 +1,15 @@
 """05 · Research squad — parallel subtasks and sibling delegation
 
-Two patterns for multi-Actor orchestration:
+Two patterns for multi-Agent orchestration:
 
-1. **Auto-injected subtask tools.** Every Actor automatically carries
+1. **Auto-injected subtask tools.** Every Agent automatically carries
    ``run_subtask`` / ``run_subtasks``. The coordinator uses ``run_subtasks``
    with ``parallel=True`` to fan out three short investigations
    concurrently. Spawned subtasks have **no** ``run_subtask`` tools, so
    recursion is structurally impossible — no depth limiter needed.
 
-2. **``Actor.as_tool()``.** A second Actor (``math_expert``) is exposed to
-   the coordinator as a callable tool. Because the wrapped Actor's own
+2. **``Agent.as_tool()``.** A second Agent (``math_expert``) is exposed to
+   the coordinator as a callable tool. Because the wrapped Agent's own
    ``run_subtask`` tools were stripped at spawn time (in the subtask path)
    or are simply not used here, recursion is bounded by the call structure.
 
@@ -23,7 +23,7 @@ import time
 
 from _config import default_config, section
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.events import TaskCompleted, TaskStarted
 from autogen.beta.stream import MemoryStream
 
@@ -33,7 +33,7 @@ async def main() -> None:
 
     section("Parallel subtasks — fan out three lookups in one tool call")
 
-    coordinator = Actor(
+    coordinator = Agent(
         "coordinator",
         prompt=(
             "You answer multi-part questions by dispatching run_subtasks "
@@ -69,13 +69,13 @@ async def main() -> None:
 
     section("Sibling delegation — math_expert is a tool on coordinator2")
 
-    math_expert = Actor(
+    math_expert = Agent(
         "math-expert",
         prompt="You are an arithmetic specialist. Reply with only the number.",
         config=config,
     )
 
-    coordinator2 = Actor(
+    coordinator2 = Agent(
         "coordinator2",
         prompt=(
             "When arithmetic comes up, delegate to the task_math-expert tool "

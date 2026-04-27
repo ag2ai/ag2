@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context, Variable
+from autogen.beta import Agent, Context, Variable
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -29,7 +29,7 @@ async def test_ask_variables(
         mock(ctx.variables["dep"])
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -49,7 +49,7 @@ async def test_agent_variables(
         mock(ctx.variables["dep"])
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -70,7 +70,7 @@ async def test_mixed_variables(
         mock(ctx.variables)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -91,7 +91,7 @@ async def test_variable_alias(
         mock(dep)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -111,7 +111,7 @@ async def test_variable_by_name(
         mock(d)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -131,7 +131,7 @@ async def test_variable_with_default(
         mock(dep)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -150,7 +150,7 @@ async def test_variable_with_default_factory(
         mock(dep)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -171,7 +171,7 @@ async def test_set_variable_by_tool(mock: MagicMock) -> None:
         mock(ctx.variables["dep"])
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=TestConfig(
             ToolCallEvent(name="my_tool"),
@@ -205,7 +205,7 @@ async def test_variable_with_default_factory_called_once(mock: MagicMock) -> Non
         mock.second(dep.copy())
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=TestConfig(
             ToolCallEvent(name="my_tool"),

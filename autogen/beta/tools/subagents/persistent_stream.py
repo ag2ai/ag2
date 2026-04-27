@@ -11,11 +11,11 @@ from autogen.beta.stream import MemoryStream
 from .subagent_tool import StreamFactory
 
 if TYPE_CHECKING:
-    from autogen.beta.actor import Actor
+    from autogen.beta.agent import Agent
 
 
 def persistent_stream() -> StreamFactory:
-    def stream_factory(agent: "Actor", ctx: "Context") -> MemoryStream:
+    def stream_factory(agent: "Agent", ctx: "Context") -> MemoryStream:
         key = f"ag:{agent.name}:stream"
         if not (stream_id := ctx.dependencies.get(key)):
             stream_id = ctx.dependencies[key] = uuid4()

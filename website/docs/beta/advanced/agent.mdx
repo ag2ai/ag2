@@ -1,16 +1,16 @@
 ---
-title: Actor
-sidebarTitle: Actor
+title: Agent
+sidebarTitle: Agent
 ---
 
-An **Actor** is the agentic unit of the beta module. It runs a model loop, honours middleware and observers, and optionally wires the harness primitives — [assembly](/docs/beta/advanced/assembly), [compaction](/docs/beta/advanced/compaction), [aggregation](/docs/beta/advanced/aggregation), [knowledge store](/docs/beta/advanced/knowledge_store), and subtask delegation — through two configuration dataclasses: `KnowledgeConfig` and `TaskConfig`.
+An **Agent** is the agentic unit of the beta module. It runs a model loop, honours middleware and observers, and optionally wires the harness primitives — [assembly](/docs/beta/advanced/assembly), [compaction](/docs/beta/advanced/compaction), [aggregation](/docs/beta/advanced/aggregation), [knowledge store](/docs/beta/advanced/knowledge_store), and subtask delegation — through two configuration dataclasses: `KnowledgeConfig` and `TaskConfig`.
 
-A bare `Actor` has zero harness middleware — it behaves exactly like a plain LLM loop. Harness features are opt-in.
+A bare `Agent` has zero harness middleware — it behaves exactly like a plain LLM loop. Harness features are opt-in.
 
-## Minimal Actor
+## Minimal Agent
 
 ```python linenums="1"
-from autogen.beta import Actor, tool
+from autogen.beta import Agent, tool
 from autogen.beta.config import OpenAIConfig
 
 
@@ -20,23 +20,23 @@ def add(a: int, b: int) -> int:
     return a + b
 
 
-actor = Actor(
+agent = Agent(
     "math",
     prompt="You are a helpful calculator.",
     config=OpenAIConfig(model="gpt-5"),
     tools=[add],
 )
 
-reply = await actor.ask("what is 2 + 3?")
+reply = await agent.ask("what is 2 + 3?")
 print(reply.body)
 ```
 
-This is the shape the old `Agent` class had. `Actor` is the rename; all of tools, observers, middleware, prompt hooks, dependencies, and variables work exactly as before.
+This is the shape the old `Agent` class had. `Agent` is the rename; all of tools, observers, middleware, prompt hooks, dependencies, and variables work exactly as before.
 
 ## Constructor
 
 ```python linenums="1"
-Actor(
+Agent(
     name: str,
     prompt: str | Callable | Iterable = (),
     *,
@@ -59,17 +59,17 @@ The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prom
 
 ## `assembly=` — context policies
 
-A list of [`AssemblyPolicy`](/docs/beta/advanced/assembly) instances. When non-empty, the Actor wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
+A list of [`AssemblyPolicy`](/docs/beta/advanced/assembly) instances. When non-empty, the Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
 
 ```python linenums="1" hl_lines="10-14"
 from autogen.beta import (
-    Actor,
+    Agent,
     AlertPolicy,
     SlidingWindowPolicy,
     WorkingMemoryPolicy,
 )
 
-actor = Actor(
+agent = Agent(
     "assistant",
     config=config,
     assembly=[
@@ -107,7 +107,7 @@ class KnowledgeConfig:
 | `bootstrap` | Runs once on first use to seed the store (e.g. `DefaultBootstrap` writes SKILL.md files). |
 
 ```python linenums="1" hl_lines="12-18"
-from autogen.beta import Actor, KnowledgeConfig, WorkingMemoryPolicy
+from autogen.beta import Agent, KnowledgeConfig, WorkingMemoryPolicy
 from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.knowledge import DiskKnowledgeStore
@@ -115,7 +115,7 @@ from pathlib import Path
 
 store = DiskKnowledgeStore(Path("./knowledge"))
 
-actor = Actor(
+agent = Agent(
     "assistant",
     config=main_config,
     knowledge=KnowledgeConfig(
@@ -133,7 +133,7 @@ The compaction and aggregation middleware are opt-in per field: passing `compact
 
 ## `tasks=` — TaskConfig
 
-Defaults for sub-tasks spawned via `Actor.as_tool()` or the subagent tool family.
+Defaults for sub-tasks spawned via `Agent.as_tool()` or the subagent tool family.
 
 ```python linenums="1"
 from dataclasses import dataclass
@@ -150,14 +150,14 @@ class TaskConfig:
 
 | Field | What it does |
 |---|---|
-| `config` | The `ModelConfig` used for sub-task Actors when they don't specify their own. Falls back to the parent Actor's `config`. |
-| `prompt` | Default system prompt for sub-task Actors. |
+| `config` | The `ModelConfig` used for sub-task Agents when they don't specify their own. Falls back to the parent Agent's `config`. |
+| `prompt` | Default system prompt for sub-task Agents. |
 | `max_depth` | Cap on recursive sub-task nesting. Prevents runaway A → B → A → B delegation chains. `None` disables the cap. |
 
 ```python linenums="1" hl_lines="8-12"
-from autogen.beta import Actor, TaskConfig
+from autogen.beta import Agent, TaskConfig
 
-actor = Actor(
+agent = Agent(
     "orchestrator",
     config=main_config,
     tools=[...],
@@ -169,18 +169,18 @@ actor = Actor(
 )
 ```
 
-## Actor.as_tool()
+## Agent.as_tool()
 
-Expose any Actor as a `FunctionTool` so another Actor can invoke it like any other tool:
+Expose any Agent as a `FunctionTool` so another Agent can invoke it like any other tool:
 
 ```python linenums="1" hl_lines="10 13"
-child = Actor(
+child = Agent(
     "researcher",
     prompt="Answer the objective concisely.",
     config=main_config,
 )
 
-parent = Actor(
+parent = Agent(
     "lead",
     config=main_config,
     tools=[child.as_tool(description="Delegate fact-finding to a researcher.")],
@@ -193,7 +193,7 @@ reply = await parent.ask("Find out where Melbourne is.")
 
 ## Turn lifecycle
 
-Each `await actor.ask(...)` runs through the middleware chain in this order (outermost → innermost):
+Each `await agent.ask(...)` runs through the middleware chain in this order (outermost → innermost):
 
 ```
 1. AssemblerMiddleware              (if assembly=[...])
@@ -208,14 +208,14 @@ The internal harness middleware (`_AssemblerMiddleware`, `_HaltCheckMiddleware`,
 
 Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](/docs/beta/advanced/observers) or a stream subscriber.
 
-## Actor vs Agent
+## Agent vs Agent
 
-For users familiar with the old `Agent` class: `Actor` is the rename, with the additional `assembly=`, `knowledge=`, and `tasks=` parameters. All other construction, tool registration, middleware, and observer patterns are unchanged.
+For users familiar with the old `Agent` class: `Agent` is the rename, with the additional `assembly=`, `knowledge=`, and `tasks=` parameters. All other construction, tool registration, middleware, and observer patterns are unchanged.
 
-| | Old `Agent` | New `Actor` |
+| | Old `Agent` | New `Agent` |
 |---|---|---|
 | Harness wiring | Manual (custom middleware) | `assembly=` / `knowledge=` / `tasks=` |
 | Sub-task defaults | Manual | `TaskConfig` |
 | `AgentSpec` round-trip | `from_agent` / `to_agent` | `from_actor` / `to_actor` (class name `AgentSpec` preserved) |
 
-The class `Agent` no longer exists; any import that references it needs to be updated to `Actor`.
+The class `Agent` no longer exists; any import that references it needs to be updated to `Agent`.

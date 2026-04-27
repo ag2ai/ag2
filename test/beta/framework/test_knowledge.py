@@ -199,10 +199,10 @@ class TestDefaultBootstrap:
     @pytest.mark.asyncio
     async def test_creates_standard_layout(self) -> None:
         store = MemoryKnowledgeStore()
-        # Actor writes sentinel before calling bootstrap, so simulate that
-        await store.write("/.initialized", "test-actor")
+        # Agent writes sentinel before calling bootstrap, so simulate that
+        await store.write("/.initialized", "test-agent")
         bootstrap = DefaultBootstrap()
-        await bootstrap.bootstrap(store, "test-actor")
+        await bootstrap.bootstrap(store, "test-agent")
 
         assert await store.exists("/.initialized")
         assert await store.exists("/SKILL.md")
@@ -211,22 +211,22 @@ class TestDefaultBootstrap:
         assert await store.exists("/memory/SKILL.md")
 
         root_skill = await store.read("/SKILL.md")
-        assert "test-actor" in root_skill
+        assert "test-agent" in root_skill
 
     @pytest.mark.asyncio
     async def test_sentinel_prevents_rebootstrap(self) -> None:
         store = MemoryKnowledgeStore()
-        # Actor writes sentinel before calling bootstrap
-        await store.write("/.initialized", "actor-1")
+        # Agent writes sentinel before calling bootstrap
+        await store.write("/.initialized", "agent-1")
         bootstrap = DefaultBootstrap()
-        await bootstrap.bootstrap(store, "actor-1")
+        await bootstrap.bootstrap(store, "agent-1")
 
         # Overwrite a file
         await store.write("/SKILL.md", "custom content")
 
         # Sentinel exists, so a second bootstrap should be skipped by caller logic
         assert await store.exists("/.initialized")
-        # (The Actor checks this before calling bootstrap)
+        # (The Agent checks this before calling bootstrap)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="DiskKnowledgeStore is POSIX-only")

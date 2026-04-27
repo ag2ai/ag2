@@ -1,6 +1,6 @@
 """02 · Recipe builder — tools and structured output
 
-Shows two core Actor features on top of the bare loop:
+Shows two core Agent features on top of the bare loop:
 
 1. A custom ``@tool`` function the LLM can call (``scale_ingredient``).
 2. A Pydantic ``response_schema`` so the final reply is a typed object.
@@ -15,7 +15,7 @@ import asyncio
 from _config import default_config, section
 from pydantic import BaseModel, Field
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 
 
 class Ingredient(BaseModel):
@@ -45,7 +45,7 @@ async def main() -> None:
 
     section("Recipe builder — scale an existing dish for 6 servings")
 
-    agent = Actor(
+    agent = Agent(
         "chef",
         prompt=(
             "You are a culinary assistant. When asked to rescale a recipe, "

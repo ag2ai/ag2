@@ -7,8 +7,8 @@
 AlertPolicy is the assembly-chain replacement for the old Signal delivery
 system. _HaltCheckMiddleware catches HaltEvent and short-circuits LLM calls.
 
-These tests isolate both components from the full Actor stack to verify
-edge cases not covered by Actor integration tests.
+These tests isolate both components from the full Agent stack to verify
+edge cases not covered by Agent integration tests.
 """
 
 from collections.abc import Sequence
@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 from typing_extensions import Self
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import ConversationContext as ContextType
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
@@ -76,7 +76,7 @@ class _RecordingConfig(ModelConfig):
 
 
 class TestAlertPolicyUnit:
-    """AlertPolicy in isolation (no Actor, no middleware)."""
+    """AlertPolicy in isolation (no Agent, no middleware)."""
 
     @pytest.mark.asyncio
     async def test_no_alerts_is_noop(self) -> None:
@@ -260,8 +260,8 @@ class TestHaltCheckMiddleware:
         """Without any FATAL alert, LLM is called normally."""
         config = _RecordingConfig("normal response")
 
-        actor = Actor("test", config=config, assembly=[AlertPolicy()])
-        reply = await actor.ask("Hi")
+        agent = Agent("test", config=config, assembly=[AlertPolicy()])
+        reply = await agent.ask("Hi")
 
         assert reply.body == "normal response"
         assert config.client is not None
@@ -295,14 +295,14 @@ class TestHaltCheckMiddleware:
                 return None
 
         observer = _FatalOnFirst()
-        actor = Actor(
+        agent = Agent(
             "test",
             config=config,
             observers=[observer],
             tools=[echo_tool],
             assembly=[AlertPolicy()],
         )
-        reply = await actor.ask("Hi")
+        reply = await agent.ask("Hi")
 
         assert observer.fired
         assert reply.body is not None
@@ -334,14 +334,14 @@ class TestHaltCheckMiddleware:
         halts: list[HaltEvent] = []
         stream.subscribe(lambda e: halts.append(e))
 
-        actor = Actor(
+        agent = Agent(
             "test",
             config=config,
             observers=[_Fatal()],
             tools=[echo_tool],
             assembly=[AlertPolicy()],
         )
-        await actor.ask("Hi", stream=stream)
+        await agent.ask("Hi", stream=stream)
 
         halt_events = [e for e in halts if isinstance(e, HaltEvent)]
         assert len(halt_events) >= 1
@@ -366,14 +366,14 @@ class TestHaltCheckMiddleware:
                     message="be careful",
                 )
 
-        actor = Actor(
+        agent = Agent(
             "test",
             config=config,
             observers=[_Warning()],
             tools=[echo_tool],
             assembly=[AlertPolicy()],
         )
-        reply = await actor.ask("Hi")
+        reply = await agent.ask("Hi")
 
         # Should complete normally — second LLM call happens
         assert reply.body == "final result"
@@ -400,14 +400,14 @@ class TestHaltCheckMiddleware:
                     message=self._msg,
                 )
 
-        actor = Actor(
+        agent = Agent(
             "test",
             config=config,
             observers=[_FatalObs("obs-a", "crash-a"), _FatalObs("obs-b", "crash-b")],
             tools=[echo_tool],
             assembly=[AlertPolicy()],
         )
-        reply = await actor.ask("Hi")
+        reply = await agent.ask("Hi")
 
         assert reply.body is not None
         assert "HALTED" in reply.body

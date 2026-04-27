@@ -13,13 +13,13 @@ from autogen.beta.tools.final import FunctionTool, tool
 from .run_task import run_task
 
 if TYPE_CHECKING:
-    from autogen.beta.actor import Actor
+    from autogen.beta.agent import Agent
 
-StreamFactory: TypeAlias = Callable[["Actor", Context], Stream]
+StreamFactory: TypeAlias = Callable[["Agent", Context], Stream]
 
 
 def subagent_tool(
-    agent: "Actor",
+    agent: "Agent",
     *,
     description: str,
     name: str | None = None,

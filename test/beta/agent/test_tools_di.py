@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from autogen.beta import Actor, Context, Depends, Inject, Toolkit
+from autogen.beta import Agent, Context, Depends, Inject, Toolkit
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -30,7 +30,7 @@ async def test_call_tool_with_injected_object(
         mock(ctx.dependencies["dep"])
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -54,7 +54,7 @@ async def test_call_tool_with_agent_dependency(
 
     dependency = object()
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -75,7 +75,7 @@ async def test_call_tool_with_mixed_dependencies(
         mock(ctx.dependencies)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -100,7 +100,7 @@ async def test_inject_alias(
 
     dependency = object()
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -124,7 +124,7 @@ async def test_inject_by_custom_name(
 
     dependency = object()
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -146,7 +146,7 @@ async def test_inject_with_default(
         mock(dep)
         return ""
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -163,7 +163,7 @@ async def test_miss_injection(test_config: TestConfig) -> None:
     ) -> str:
         return dep
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -187,7 +187,7 @@ async def test_depends_override(mock: MagicMock, test_config: TestConfig) -> Non
         mock(dep)
         return dep
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -216,7 +216,7 @@ async def test_depends_override_toolkit(mock: MagicMock, test_config: TestConfig
 
     toolkit = Toolkit(my_tool)
 
-    agent = Actor("", config=test_config)
+    agent = Agent("", config=test_config)
     agent.add_tool(toolkit)
 
     agent.dependency_provider.override(dep1, dep2)

@@ -4,16 +4,16 @@
 
 """Regression tests for the harness-layer bug sweep.
 
-Each test locks in the fix for a specific bug caught during the Actor +
+Each test locks in the fix for a specific bug caught during the Agent +
 harness audit:
 
 1. ``_HaltCheckMiddleware`` no longer leaks a ``HaltEvent`` subscription
    onto the user's stream — the subscription is scoped to one turn and
    unsubscribed in a ``finally``.
-2. ``Actor`` emits ``ObserverStarted`` after observers register and
+2. ``Agent`` emits ``ObserverStarted`` after observers register and
    ``ObserverCompleted`` before they unregister, so observers subscribed
    to their own lifecycle events actually receive them.
-3. Concurrent asks on the same ``Actor`` bootstrap the knowledge store at
+3. Concurrent asks on the same ``Agent`` bootstrap the knowledge store at
    most once (``asyncio.Lock`` + ``_bootstrap_done`` flag).
 4. ``AlertPolicy`` deduplicates on ``(source, severity, message)``
    content rather than ``id(event)``, surviving history replay and
@@ -33,8 +33,8 @@ from typing import Any
 import pytest
 from typing_extensions import Self
 
-from autogen.beta import Actor
-from autogen.beta.actor import (
+from autogen.beta import Agent
+from autogen.beta.agent import (
     KnowledgeConfig,
     TaskConfig,
     _AggregationMiddleware,
@@ -222,7 +222,7 @@ class TestObserverLifecycleSelfVisibility:
         config = _CannedConfig("hello")
         obs = _SelfAwareObserver()
 
-        agent = Actor("with-obs", config=config, observers=[obs])
+        agent = Agent("with-obs", config=config, observers=[obs])
         await agent.ask("hi")
 
         assert obs.started_seen == ["self-aware"]
@@ -243,7 +243,7 @@ class TestObserverLifecycleSelfVisibility:
         stream.where(ObserverStarted).subscribe(lambda e: started.append(e))
 
         obs = _SelfAwareObserver(name="alpha")
-        agent = Actor("lifecycle", config=config, observers=[obs])
+        agent = Agent("lifecycle", config=config, observers=[obs])
         await agent.ask("go", stream=stream)
 
         # External listener still sees Started (and only one, matching obs.name)
@@ -254,22 +254,22 @@ class TestObserverLifecycleSelfVisibility:
 class TestBootstrapRace:
     @pytest.mark.asyncio
     async def test_concurrent_asks_bootstrap_once(self) -> None:
-        """Two concurrent asks on the same actor run bootstrap exactly once."""
+        """Two concurrent asks on the same agent run bootstrap exactly once."""
         store = MemoryKnowledgeStore()
         counter = _CountingBootstrap()
 
-        def build_agent() -> Actor:
-            return Actor(
+        def build_agent() -> Agent:
+            return Agent(
                 "booter",
                 config=_CannedConfig("ok"),
                 knowledge=KnowledgeConfig(store=store, bootstrap=counter),
             )
 
-        actor = build_agent()
+        agent = build_agent()
         await asyncio.gather(
-            actor.ask("hi", stream=MemoryStream()),
-            actor.ask("hi", stream=MemoryStream()),
-            actor.ask("hi", stream=MemoryStream()),
+            agent.ask("hi", stream=MemoryStream()),
+            agent.ask("hi", stream=MemoryStream()),
+            agent.ask("hi", stream=MemoryStream()),
         )
 
         assert counter.calls == 1
@@ -278,17 +278,17 @@ class TestBootstrapRace:
 
     @pytest.mark.asyncio
     async def test_second_actor_same_store_respects_sentinel(self) -> None:
-        """A brand-new Actor on an already-initialized store doesn't re-bootstrap."""
+        """A brand-new Agent on an already-initialized store doesn't re-bootstrap."""
         store = MemoryKnowledgeStore()
-        await store.write("/.initialized", "prior-actor")
+        await store.write("/.initialized", "prior-agent")
 
         counter = _CountingBootstrap()
-        actor = Actor(
+        agent = Agent(
             "later",
             config=_CannedConfig("ok"),
             knowledge=KnowledgeConfig(store=store, bootstrap=counter),
         )
-        await actor.ask("hi")
+        await agent.ask("hi")
 
         assert counter.calls == 0
 
@@ -369,7 +369,7 @@ class TestAggregationOnEndViaMiddleware:
         stream = MemoryStream()
         stream.where(AggregationCompleted).subscribe(lambda e: events_seen.append(e))
 
-        agent = Actor(
+        agent = Agent(
             "roller",
             config=_CannedConfig("done"),
             knowledge=KnowledgeConfig(
@@ -382,7 +382,7 @@ class TestAggregationOnEndViaMiddleware:
 
         assert strategy.calls == 1
         assert len(events_seen) == 1
-        assert events_seen[0].actor == "roller"
+        assert events_seen[0].agent == "roller"
 
     @pytest.mark.asyncio
     async def test_on_end_runs_even_when_turn_raises(self) -> None:
@@ -420,7 +420,7 @@ class TestAggregationOnEndViaMiddleware:
         store = MemoryKnowledgeStore()
         strategy = _TrackedAggregate()
 
-        agent = Actor(
+        agent = Agent(
             "once",
             config=_CannedConfig("ok"),
             knowledge=KnowledgeConfig(
@@ -451,7 +451,7 @@ class TestTaskEventsUnified:
         stream.where(TaskStarted).subscribe(lambda e: starts.append(e))
         stream.where(TaskCompleted).subscribe(lambda e: completions.append(e))
 
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=_CannedConfig("from parent"),
             tasks=TaskConfig(config=_CannedConfig("from child")),
@@ -484,7 +484,7 @@ class TestTaskEventsUnified:
             usage=Usage(prompt_tokens=7, completion_tokens=2, total_tokens=9),
         )
 
-        parent = Actor(
+        parent = Agent(
             "parent",
             config=_CannedConfig("ignored"),
             tasks=TaskConfig(config=_CannedConfig(child_response)),
@@ -497,10 +497,10 @@ class TestTaskEventsUnified:
 
 
 class TestSharedStreamTurnSerialization:
-    """Actor._execute holds a per-stream lock so two turns on the same
+    """Agent._execute holds a per-stream lock so two turns on the same
     stream don't cross-contaminate each other's tool-executor subscribers.
 
-    See ``autogen/beta/actor.py::_get_stream_turn_lock`` for the failure
+    See ``autogen/beta/agent.py::_get_stream_turn_lock`` for the failure
     mode this guards against.
     """
 
@@ -527,10 +527,10 @@ class TestSharedStreamTurnSerialization:
         active = 0
         peak = 0
 
-        original = Actor._execute_locked
+        original = Agent._execute_locked
 
         async def tracked(
-            self: Actor[Any],
+            self: Agent[Any],
             *args: Any,
             **kwargs: Any,
         ) -> Any:
@@ -545,13 +545,13 @@ class TestSharedStreamTurnSerialization:
             finally:
                 active -= 1
 
-        monkeypatch.setattr(Actor, "_execute_locked", tracked)
+        monkeypatch.setattr(Agent, "_execute_locked", tracked)
 
-        actor = Actor("shared", config=_CannedConfig("a", "b"))
+        agent = Agent("shared", config=_CannedConfig("a", "b"))
 
         await asyncio.gather(
-            actor.ask("first", stream=stream),
-            actor.ask("second", stream=stream),
+            agent.ask("first", stream=stream),
+            agent.ask("second", stream=stream),
         )
 
         assert peak == 1
@@ -564,15 +564,15 @@ class TestSharedStreamTurnSerialization:
         """Two asks on *distinct* streams must still be allowed to overlap.
 
         Regression guard against over-serializing: the lock is per-stream,
-        not global on Actor.
+        not global on Agent.
         """
         gate = asyncio.Event()
         arrivals = 0
 
-        original = Actor._execute_locked
+        original = Agent._execute_locked
 
         async def tracked(
-            self: Actor[Any],
+            self: Agent[Any],
             *args: Any,
             **kwargs: Any,
         ) -> Any:
@@ -585,13 +585,13 @@ class TestSharedStreamTurnSerialization:
             await asyncio.wait_for(gate.wait(), timeout=1.0)
             return await original(self, *args, **kwargs)
 
-        monkeypatch.setattr(Actor, "_execute_locked", tracked)
+        monkeypatch.setattr(Agent, "_execute_locked", tracked)
 
-        actor = Actor("fresh", config=_CannedConfig("a", "b"))
+        agent = Agent("fresh", config=_CannedConfig("a", "b"))
 
         await asyncio.gather(
-            actor.ask("first", stream=MemoryStream()),
-            actor.ask("second", stream=MemoryStream()),
+            agent.ask("first", stream=MemoryStream()),
+            agent.ask("second", stream=MemoryStream()),
         )
 
         assert arrivals == 2

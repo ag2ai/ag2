@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Actor — the agentic unit of autogen.beta.
+"""Agent — the agentic unit of autogen.beta.
 
-An ``Actor`` runs a model loop, invokes tools, honours middleware, surfaces
+An ``Agent`` runs a model loop, invokes tools, honours middleware, surfaces
 events through observers, and optionally runs the harness primitives
 (assembly policies, compaction/aggregation, knowledge store, subtask
 spawning).
 
-A bare ``Actor(name, config=cfg)`` has zero harness middleware — it behaves
+A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
 exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
 or ``tasks=TaskConfig(...)`` for subtask spawning defaults.
@@ -102,7 +102,7 @@ PromptType: TypeAlias = str | PromptHook
 
 @dataclass
 class KnowledgeConfig:
-    """Groups knowledge-related Actor parameters."""
+    """Groups knowledge-related Agent parameters."""
 
     store: KnowledgeStore
     compact: CompactStrategy | None = None
@@ -114,10 +114,10 @@ class KnowledgeConfig:
 
 @dataclass
 class TaskConfig:
-    """Groups task-spawning Actor parameters.
+    """Groups task-spawning Agent parameters.
 
-    By default a subtask Actor inherits **all** of the parent's user-supplied
-    tools (everything passed via ``tools=``). Subtask Actors never receive the
+    By default a subtask Agent inherits **all** of the parent's user-supplied
+    tools (everything passed via ``tools=``). Subtask Agents never receive the
     auto-injected ``run_subtask`` / ``run_subtasks`` tools, so recursive
     delegation is structurally impossible — no depth limiting required.
 
@@ -140,7 +140,7 @@ class AgentReply(Generic[TResult, TAgent]):
         *,
         context: Context,
         client: LLMClient,
-        agent: "Actor[TAgent]",
+        agent: "Agent[TAgent]",
         provider: Provider | None,
         response_schema: ResponseProto[TResult] | None,
     ) -> None:
@@ -311,11 +311,11 @@ def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
     Attaching the lock to the stream object itself means:
       * A fresh stream per turn (the default subtask / subagent path)
         pays a trivial no-contention acquire — no behaviour change.
-      * A stream shared across concurrent ``Actor.ask`` calls
+      * A stream shared across concurrent ``Agent.ask`` calls
         serializes those calls so subscribers registered by one turn
         never fire for events of another.
 
-    The lock is allocated lazily on first use so Actor instantiation
+    The lock is allocated lazily on first use so Agent instantiation
     outside an event loop (which would bind the lock to the wrong loop)
     still works.
     """
@@ -339,14 +339,14 @@ def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
 _stream_id_locks: dict[int, asyncio.Lock] = {}
 
 
-class Actor(Generic[TResult]):
+class Agent(Generic[TResult]):
     """The agentic unit of autogen.beta.
 
-    An Actor runs a model loop, invokes tools, honours middleware, surfaces
+    An Agent runs a model loop, invokes tools, honours middleware, surfaces
     events through observers, and optionally runs the harness primitives
     (assembly, compaction, aggregation, knowledge store, subtask spawning).
 
-    A bare ``Actor(name, config=cfg)`` has zero harness middleware and
+    A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
 
     * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
@@ -521,7 +521,7 @@ class Actor(Generic[TResult]):
             [_make_knowledge_tool(self._knowledge_store)] if self._knowledge_store else []
         )
 
-        # Assembly policies (empty by default; bare Actor has no harness).
+        # Assembly policies (empty by default; bare Agent has no harness).
         self._policies: list[AssemblyPolicy] = list(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
@@ -586,7 +586,7 @@ class Actor(Generic[TResult]):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], Tool]: ...
 
-    def add_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
+    def add_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
         """Append middleware as the innermost wrapper in the chain.
 
         The added middleware is called last on turn entry and first on turn exit,
@@ -595,16 +595,16 @@ class Actor(Generic[TResult]):
         self._middleware.append(m)
         return self
 
-    def insert_middleware(self, m: MiddlewareFactory) -> "Actor[TResult]":
+    def insert_middleware(self, m: MiddlewareFactory) -> "Agent[TResult]":
         """Insert middleware as the outermost wrapper in the chain.
 
         The inserted middleware is called first on turn entry and last on turn exit,
-        executing before all middleware already registered on the actor.
+        executing before all middleware already registered on the agent.
         """
         self._middleware.insert(0, m)
         return self
 
-    def add_tool(self, t: Callable[..., Any] | Tool) -> "Actor[TResult]":
+    def add_tool(self, t: Callable[..., Any] | Tool) -> "Agent[TResult]":
         self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
         return self
 
@@ -788,14 +788,14 @@ class Actor(Generic[TResult]):
     def _build_subtask_tools(self) -> list[Tool]:
         """Return the cached subtask tool list (built at __init__ time).
 
-        Tools are built once per Actor instance to avoid reallocating closures
+        Tools are built once per Agent instance to avoid reallocating closures
         on every turn (and to satisfy AGENTS.md's "no nested functions in
         runtime execution paths" rule).
         """
         return self._subtask_tools
 
     async def _spawn_subtask(self, task: str, ctx: Context) -> str:
-        """Spawn a subtask Actor and delegate via ``run_task``.
+        """Spawn a subtask Agent and delegate via ``run_task``.
 
         The subtask inherits the parent's user-supplied tools (filtered by
         ``TaskConfig.include_tools`` / ``exclude_tools``) plus
@@ -807,11 +807,11 @@ class Actor(Generic[TResult]):
         """
         tc = self._task_config
         if tc is None:
-            return "Error: subtask spawning is disabled on this Actor (tasks=False)."
+            return "Error: subtask spawning is disabled on this Agent (tasks=False)."
 
         inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
 
-        bare = Actor(
+        bare = Agent(
             name=f"subtask-{uuid4().hex[:8]}",
             prompt=tc.prompt,
             config=tc.config or self.config,
@@ -881,8 +881,8 @@ class Actor(Generic[TResult]):
         subtask_tools = self._subtask_tools
 
         # Bootstrap the knowledge store on first use, guarded by an asyncio
-        # lock so concurrent asks on the same Actor can't double-bootstrap.
-        # The lock is created lazily so Actor can be instantiated outside an
+        # lock so concurrent asks on the same Agent can't double-bootstrap.
+        # The lock is created lazily so Agent can be instantiated outside an
         # event loop (asyncio.Lock binds to the running loop on first use).
         if self._knowledge_store and not self._bootstrap_done:
             if self._bootstrap_lock is None:
@@ -1070,7 +1070,7 @@ class Actor(Generic[TResult]):
         )
 
     def as_conversable(self) -> "ConversableAdapter":
-        # Local import: ``conversable`` imports ``Actor`` from this module —
+        # Local import: ``conversable`` imports ``Agent`` from this module —
         # a top-level import would create a circular dependency.
         from .conversable import ConversableAdapter
 
@@ -1127,24 +1127,24 @@ _RUN_SUBTASKS_DESCRIPTION = (
 )
 
 
-def _build_subtask_tools(actor: "Actor[Any]") -> list[Tool]:
-    """Construct the ``run_subtask`` / ``run_subtasks`` tools for ``actor``.
+def _build_subtask_tools(agent: "Agent[Any]") -> list[Tool]:
+    """Construct the ``run_subtask`` / ``run_subtasks`` tools for ``agent``.
 
-    Called once per Actor instance from ``__init__``. The closures capture
-    ``actor`` so the resulting Tools can be reused across every turn without
+    Called once per Agent instance from ``__init__``. The closures capture
+    ``agent`` so the resulting Tools can be reused across every turn without
     re-allocation (per AGENTS.md: no nested function creation in runtime
     execution paths).
     """
 
     @tool(name="run_subtask", description=_RUN_SUBTASK_DESCRIPTION)
     async def run_subtask(task: str, ctx: Context) -> str:
-        return await actor._spawn_subtask(task, ctx)
+        return await agent._spawn_subtask(task, ctx)
 
     @tool(name="run_subtasks", description=_RUN_SUBTASKS_DESCRIPTION)
     async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
         if parallel:
             raw = await asyncio.gather(
-                *(actor._spawn_subtask(t, ctx) for t in tasks),
+                *(agent._spawn_subtask(t, ctx) for t in tasks),
                 return_exceptions=True,
             )
             results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
@@ -1152,7 +1152,7 @@ def _build_subtask_tools(actor: "Actor[Any]") -> list[Tool]:
             results = []
             for t in tasks:
                 try:
-                    results.append(await actor._spawn_subtask(t, ctx))
+                    results.append(await agent._spawn_subtask(t, ctx))
                 except Exception as e:
                     results.append(f"Error: {e}")
 
@@ -1189,7 +1189,7 @@ def _filter_subtask_tools(
 def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
     """Build the ``knowledge`` action-group tool bound to ``store``.
 
-    Called once at Actor ``__init__`` so the LLM-visible tool definition is
+    Called once at Agent ``__init__`` so the LLM-visible tool definition is
     stable across turns and we don't re-allocate the closure per turn.
     """
 
@@ -1264,29 +1264,29 @@ class Plugin:
             else:
                 self._dynamic_prompt.append(_wrap_prompt_hook(p))
 
-    def register(self, actor: "Actor[Any]") -> None:
-        """Apply this plugin's contributions to an Actor instance."""
+    def register(self, agent: "Agent[Any]") -> None:
+        """Apply this plugin's contributions to an Agent instance."""
         for t in self._tools:
-            actor.add_tool(t)
+            agent.add_tool(t)
 
         for m in self._middleware:
-            actor.add_middleware(m)
+            agent.add_middleware(m)
 
         if self._hitl_hook is not None:
-            if actor._hitl_hook is not None:
+            if agent._hitl_hook is not None:
                 warnings.warn(
-                    f"Actor '{actor.name}' already has a HITL hook; the plugin's hook will be ignored.",
+                    f"Agent '{agent.name}' already has a HITL hook; the plugin's hook will be ignored.",
                     stacklevel=2,
                 )
             else:
-                actor._hitl_hook = wrap_hitl(self._hitl_hook)
+                agent._hitl_hook = wrap_hitl(self._hitl_hook)
 
-        actor._agent_dependencies = self._dependencies | actor._agent_dependencies
-        actor._agent_variables.update(self._variables)
+        agent._agent_dependencies = self._dependencies | agent._agent_dependencies
+        agent._agent_variables.update(self._variables)
 
-        actor._observers.extend(self._observers)
-        actor._system_prompt.extend(self._system_prompt)
-        actor._dynamic_prompt.extend(self._dynamic_prompt)
+        agent._observers.extend(self._observers)
+        agent._system_prompt.extend(self._system_prompt)
+        agent._dynamic_prompt.extend(self._dynamic_prompt)
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
         if self._hitl_hook is not None:
@@ -1519,7 +1519,7 @@ class _CompactionMiddleware(BaseMiddleware):
             usage = getattr(self._strategy, "last_usage", {})
             await context.send(
                 CompactionCompleted(
-                    actor=self._actor_name,
+                    agent=self._actor_name,
                     strategy=type(self._strategy).__name__,
                     events_before=len(events),
                     events_after=len(compacted),
@@ -1624,7 +1624,7 @@ class _AggregationMiddleware(BaseMiddleware):
                     usage = getattr(self._strategy, "last_usage", {})
                     await context.send(
                         AggregationCompleted(
-                            actor=self._actor_name,
+                            agent=self._actor_name,
                             strategy=type(self._strategy).__name__,
                             event_count=count_after,
                             llm_calls=1 if usage else 0,

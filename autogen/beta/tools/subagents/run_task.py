@@ -17,7 +17,7 @@ from autogen.beta.events import (
 from autogen.beta.stream import MemoryStream, Stream
 
 if TYPE_CHECKING:
-    from autogen.beta.actor import Actor, AgentReply
+    from autogen.beta.agent import Agent, AgentReply
 
 
 @dataclass
@@ -54,7 +54,7 @@ def _make_hitl_bridge(parent_context: Context):
 
 
 async def run_task(
-    agent: "Actor",
+    agent: "Agent",
     objective: str,
     *,
     parent_context: Context,

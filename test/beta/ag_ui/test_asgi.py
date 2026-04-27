@@ -9,7 +9,7 @@ import pytest
 from ag_ui.core import UserMessage
 from dirty_equals import IsInt, IsPartialDict
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.ag_ui import AGUIStream
 from autogen.beta.testing import TestConfig
 from test.ag_ui.utils import assert_event_type, create_run_input
@@ -32,7 +32,7 @@ pytestmark = [
 
 class TestASGIEndpoint:
     async def test_build_asgi_creates_endpoint(self) -> None:
-        agent = Actor("test_agent")
+        agent = Agent("test_agent")
 
         stream = AGUIStream(agent)
         endpoint_class = stream.build_asgi()
@@ -40,7 +40,7 @@ class TestASGIEndpoint:
         assert issubclass(endpoint_class, HTTPEndpoint)
 
     async def test_asgi_endpoint_handles_request(self) -> None:
-        agent = Actor("test_agent", config=TestConfig("Hello from ASGI!"))
+        agent = Agent("test_agent", config=TestConfig("Hello from ASGI!"))
 
         stream = AGUIStream(agent)
         endpoint_class = stream.build_asgi()

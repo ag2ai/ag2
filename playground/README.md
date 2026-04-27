@@ -1,6 +1,6 @@
 # `autogen.beta` Playground
 
-Runnable examples showing how to build with `Actor` and the framework-core
+Runnable examples showing how to build with `Agent` and the framework-core
 harness primitives (observers, knowledge store, assembly policies, subtask
 delegation, compaction, aggregation).
 
@@ -35,11 +35,11 @@ Every example is self-contained and prints what it's doing.
 
 | # | File | Topic | Primitives exercised |
 |---|------|-------|----------------------|
-| 01 | `01_hello_actor.py` | Minimal Actor — one config, one ask | `Actor`, `GeminiConfig` |
-| 02 | `02_recipe_builder.py` | Tools + Pydantic response schema | `Actor`, `tool`, `response_schema` |
+| 01 | `01_hello_actor.py` | Minimal Agent — one config, one ask | `Agent`, `GeminiConfig` |
+| 02 | `02_recipe_builder.py` | Tools + Pydantic response schema | `Agent`, `tool`, `response_schema` |
 | 03 | `03_travel_planner.py` | Multi-turn chat via chained `reply.ask()` | `AgentReply.ask`, context memory |
 | 04 | `04_token_watchdog.py` | Observers: `TokenMonitor`, `LoopDetector`, custom `BaseObserver` | `BaseObserver`, `EventWatch`, `ObserverAlert` |
-| 05 | `05_research_squad.py` | Parallel subtasks + sibling `as_tool` delegation | `run_subtasks`, `Actor.as_tool` |
+| 05 | `05_research_squad.py` | Parallel subtasks + sibling `as_tool` delegation | `run_subtasks`, `Agent.as_tool` |
 | 06 | `06_journal_companion.py` | Knowledge store + working-memory aggregation | `KnowledgeConfig`, `WorkingMemoryAggregate`, `WorkingMemoryPolicy` |
 | 07 | `07_long_doc_chat.py` | Assembly policies composed: conversation → sliding window → token budget | `assembly=[...]`, `SlidingWindowPolicy`, `TokenBudgetPolicy` |
 | 08 | `08_safety_guard.py` | FATAL alert → `AlertPolicy` → `HaltEvent` → short-circuit | `ObserverAlert(FATAL)`, `AlertPolicy`, `HaltEvent` |

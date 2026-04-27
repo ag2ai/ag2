@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor
+from autogen.beta import Agent
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.exceptions import ConfigNotProvidedError, ToolNotFoundError
 from autogen.beta.testing import TestConfig
@@ -25,7 +25,7 @@ async def test_tool_raise_exc(test_config: TestConfig) -> None:
     def my_tool() -> str:
         raise ValueError
 
-    agent = Actor(
+    agent = Agent(
         "",
         config=test_config,
         tools=[my_tool],
@@ -40,7 +40,7 @@ async def test_tool_not_found(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:
-    agent = Actor("", config=test_config)
+    agent = Agent("", config=test_config)
 
     with pytest.raises(ToolNotFoundError, match="Tool `my_tool` not found"):
         await agent.ask("Hi!")
@@ -48,7 +48,7 @@ async def test_tool_not_found(
 
 @pytest.mark.asyncio()
 async def test_ask_with_explicit_config_option(test_config: TestConfig) -> None:
-    agent = Actor("")
+    agent = Agent("")
 
     res = await agent.ask(
         "Hi!",
@@ -60,7 +60,7 @@ async def test_ask_with_explicit_config_option(test_config: TestConfig) -> None:
 
 @pytest.mark.asyncio()
 async def test_ask_without_any_config() -> None:
-    agent = Actor("")
+    agent = Agent("")
 
     with pytest.raises(ConfigNotProvidedError):
         await agent.ask("Hi!")

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta import Actor, Context, observer
+from autogen.beta import Agent, Context, observer
 from autogen.beta.events import BaseEvent, HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware, Middleware
 from autogen.beta.middleware.base import AgentTurn
@@ -48,7 +48,7 @@ class TestPluginTools:
             return "ok"
 
         plugin = Plugin(tools=[my_tool])
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once()
@@ -63,7 +63,7 @@ class TestPluginTools:
             mock()
             return "ok"
 
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
         await agent.ask("Hi!")
         mock.assert_called_once()
 
@@ -80,7 +80,7 @@ class TestPluginTools:
             return "ok"
 
         plugin = Plugin(tools=[plugin_tool])
-        agent = Actor("agent", config=test_config, plugins=[plugin], tools=[agent_tool])
+        agent = Agent("agent", config=test_config, plugins=[plugin], tools=[agent_tool])
 
         # Only plugin_tool is triggered by TestConfig here, but both should be registered
         await agent.ask("Hi!")
@@ -92,7 +92,7 @@ class TestPluginTools:
 class TestPluginPrompts:
     async def test_static(self, mock: MagicMock) -> None:
         plugin = Plugin(prompt="from plugin")
-        agent = Actor("agent", config=MockClient(mock), plugins=[plugin])
+        agent = Agent("agent", config=MockClient(mock), plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with(["from plugin"])
@@ -104,14 +104,14 @@ class TestPluginPrompts:
         async def my_prompt() -> str:
             return "dynamic"
 
-        agent = Actor("agent", config=MockClient(mock), plugins=[plugin])
+        agent = Agent("agent", config=MockClient(mock), plugins=[plugin])
         await agent.ask("Hi!")
         mock.assert_called_once_with(["dynamic"])
 
     async def test_multiple_plugins_ordered(self, mock: MagicMock) -> None:
         p1 = Plugin(prompt="first")
         p2 = Plugin(prompt="second")
-        agent = Actor("agent", config=MockClient(mock), plugins=[p1, p2])
+        agent = Agent("agent", config=MockClient(mock), plugins=[p1, p2])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with(["first", "second"])
@@ -123,7 +123,7 @@ class TestPluginObservers:
         test_config = TestConfig("response")
 
         plugin = Plugin(observers=[observer(ModelResponse, mock)])
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once()
@@ -137,7 +137,7 @@ class TestPluginObservers:
         def on_response(event: ModelResponse) -> None:
             mock()
 
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
         await agent.ask("Hi!")
         mock.assert_called_once()
 
@@ -154,7 +154,7 @@ class TestPluginDependenciesAndVariables:
             return "ok"
 
         plugin = Plugin(tools=[my_tool], dependencies={"dep": dep_value})
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with(dep_value)
@@ -167,7 +167,7 @@ class TestPluginDependenciesAndVariables:
             return "ok"
 
         plugin = Plugin(tools=[my_tool], variables={"var": "hello"})
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("hello")
@@ -180,7 +180,7 @@ class TestPluginDependenciesAndVariables:
             return "ok"
 
         plugin = Plugin(tools=[my_tool], dependencies={"dep": "from_plugin"})
-        agent = Actor("agent", config=test_config, plugins=[plugin], dependencies={"dep": "from_agent"})
+        agent = Agent("agent", config=test_config, plugins=[plugin], dependencies={"dep": "from_agent"})
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("from_agent")
@@ -199,7 +199,7 @@ class TestPluginHITLHook:
             return HumanMessage("answer")
 
         plugin = Plugin(tools=[my_tool], hitl_hook=hitl)
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("answer")
@@ -217,12 +217,12 @@ class TestPluginHITLHook:
         def hitl(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("from_decorator")
 
-        agent = Actor("agent", config=test_config, plugins=[plugin])
+        agent = Agent("agent", config=test_config, plugins=[plugin])
         await agent.ask("Hi!")
         mock.assert_called_once_with("from_decorator")
 
     async def test_agent_hook_overrides_plugin(self, mock: MagicMock) -> None:
-        """Actor's direct hitl_hook takes priority over the plugin's."""
+        """Agent's direct hitl_hook takes priority over the plugin's."""
         test_config = TestConfig(ToolCallEvent(name="my_tool"), "result")
 
         async def my_tool(ctx: Context) -> str:
@@ -236,7 +236,7 @@ class TestPluginHITLHook:
             return HumanMessage("agent_answer")
 
         plugin = Plugin(tools=[my_tool], hitl_hook=plugin_hitl)
-        agent = Actor("agent", config=test_config, plugins=[plugin], hitl_hook=agent_hitl)
+        agent = Agent("agent", config=test_config, plugins=[plugin], hitl_hook=agent_hitl)
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("agent_answer")
@@ -264,7 +264,7 @@ async def test_plugin_middleware_is_invoked(mock: MagicMock) -> None:
 
     test_config = TestConfig("response")
     plugin = Plugin(middleware=[Middleware(TrackingMiddleware)])
-    agent = Actor("agent", config=test_config, plugins=[plugin])
+    agent = Agent("agent", config=test_config, plugins=[plugin])
 
     await agent.ask("Hi!")
     mock.assert_called_once()
@@ -285,7 +285,7 @@ class TestMultiplePlugins:
 
         p1 = Plugin(tools=[tool_a])
         p2 = Plugin(tools=[tool_b])
-        agent = Actor("agent", config=test_config, plugins=[p1, p2])
+        agent = Agent("agent", config=test_config, plugins=[p1, p2])
 
         await agent.ask("Hi!")
         mock.a.assert_called_once()
@@ -309,7 +309,7 @@ class TestMultiplePlugins:
         p2 = Plugin(hitl_hook=hook2)
 
         with pytest.warns(UserWarning, match="already has a HITL hook"):
-            agent = Actor("agent", config=test_config, plugins=[p1, p2])
+            agent = Agent("agent", config=test_config, plugins=[p1, p2])
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("first")

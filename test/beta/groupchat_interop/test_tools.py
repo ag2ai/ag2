@@ -12,7 +12,7 @@ from autogen import ConversableAgent
 from autogen.agentchat import GroupChat, a_initiate_group_chat
 from autogen.agentchat.group import AgentTarget, AskUserTarget, ContextVariables
 from autogen.agentchat.group.patterns import RoundRobinPattern
-from autogen.beta import Actor, Context, ToolResult, Variable, events, testing
+from autogen.beta import Agent, Context, ToolResult, Variable, events, testing
 from autogen.testing import TestAgent
 
 
@@ -23,7 +23,7 @@ async def test_remote_tool_with_context() -> None:
         ctx.variables["issue_count"] = issue_count + 1
         return "Tool result"
 
-    agent = Actor(
+    agent = Agent(
         "agent",
         config=testing.TestConfig(
             events.ToolCallEvent(name="some_tool", arguments="{}"),
@@ -62,8 +62,8 @@ async def test_remote_tool_with_context() -> None:
 
 @pytest.mark.asyncio()
 async def test_tool_agent_handoff(mock: MagicMock) -> None:
-    agent2 = Actor(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
-    agent3 = Actor(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
+    agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
+    agent3 = Agent(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
 
     def some_tool() -> ToolResult:
         mock()
@@ -73,7 +73,7 @@ async def test_tool_agent_handoff(mock: MagicMock) -> None:
             final=True,
         )
 
-    agent1 = Actor(
+    agent1 = Agent(
         "agent1",
         config=testing.TestConfig(events.ToolCallEvent(name="some_tool", arguments="{}")),
         tools=[some_tool],
@@ -108,8 +108,8 @@ async def test_tool_agent_handoff(mock: MagicMock) -> None:
 
 @pytest.mark.asyncio()
 async def test_user_target_handoff(mock: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
-    agent2 = Actor(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
-    agent3 = Actor(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
+    agent2 = Agent(name="agent2", config=testing.TestConfig("Hi, I am agent two!")).as_conversable()
+    agent3 = Agent(name="agent3", config=testing.TestConfig("Hi, I am agent three!")).as_conversable()
 
     def some_tool() -> ToolResult:
         mock()
@@ -119,7 +119,7 @@ async def test_user_target_handoff(mock: MagicMock, monkeypatch: pytest.MonkeyPa
             final=True,
         )
 
-    agent1 = Actor(
+    agent1 = Agent(
         "agent1",
         config=testing.TestConfig(events.ToolCallEvent(name="some_tool", arguments="{}")),
         tools=[some_tool],

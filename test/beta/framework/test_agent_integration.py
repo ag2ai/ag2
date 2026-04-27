@@ -10,8 +10,8 @@ Covers gaps identified in the design review.
 
 import pytest
 
-from autogen.beta import Actor
-from autogen.beta.actor import (
+from autogen.beta import Agent
+from autogen.beta.agent import (
     KnowledgeConfig,
     _AggregationMiddleware,
     _CompactionMiddleware,
@@ -186,7 +186,7 @@ class TestCompactionMiddleware:
         mw = _CompactionMiddleware(
             initial_event,
             ctx,
-            actor_name="test-actor",
+            actor_name="test-agent",
             strategy=strategy,
             store=None,
             trigger=trigger,
@@ -199,7 +199,7 @@ class TestCompactionMiddleware:
         stream.unsubscribe(sub)
 
         assert len(collected) == 1
-        assert collected[0].actor == "test-actor"
+        assert collected[0].agent == "test-agent"
         assert collected[0].events_before == 5
         assert collected[0].events_after == 2
         assert collected[0].strategy == "TailWindowCompact"
@@ -360,7 +360,7 @@ class TestAggregationMiddleware:
         mw = _AggregationMiddleware(
             initial_event,
             ctx,
-            actor_name="test-actor",
+            actor_name="test-agent",
             strategy=strategy,
             store=store,
             trigger=trigger,
@@ -373,7 +373,7 @@ class TestAggregationMiddleware:
         stream.unsubscribe(sub)
 
         assert len(collected) == 1
-        assert collected[0].actor == "test-actor"
+        assert collected[0].agent == "test-agent"
 
 
 class TestLockedKnowledgeStore:
@@ -458,8 +458,8 @@ class TestKnowledgeTool:
     async def test_read_action(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello world")
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="read", path="/test.txt")
         assert result == "hello world"
 
@@ -467,8 +467,8 @@ class TestKnowledgeTool:
     async def test_read_nonexistent(self) -> None:
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="read", path="/missing.txt")
         assert "Not found" in result
 
@@ -476,8 +476,8 @@ class TestKnowledgeTool:
     async def test_write_action(self) -> None:
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="write", path="/note.txt", content="my note")
         assert "Written" in result
         assert await store.read("/note.txt") == "my note"
@@ -486,8 +486,8 @@ class TestKnowledgeTool:
     async def test_write_requires_content(self) -> None:
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="write", path="/note.txt")
         assert "Error" in result
 
@@ -498,8 +498,8 @@ class TestKnowledgeTool:
         await store.write("/dir/SKILL.md", "This directory stores artifacts.")
         await store.write("/dir/file1.txt", "data")
         await store.write("/dir/file2.txt", "data")
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="list", path="/dir/")
         assert "This directory stores artifacts." in result
         assert "file1.txt" in result
@@ -509,8 +509,8 @@ class TestKnowledgeTool:
     async def test_list_empty_directory(self) -> None:
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="list", path="/empty/")
         assert "Empty" in result
 
@@ -519,8 +519,8 @@ class TestKnowledgeTool:
 
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "data")
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="delete", path="/test.txt")
         assert "Deleted" in result
         assert await store.read("/test.txt") is None
@@ -529,8 +529,8 @@ class TestKnowledgeTool:
     async def test_unknown_action(self) -> None:
 
         store = MemoryKnowledgeStore()
-        actor = Actor("test", knowledge=KnowledgeConfig(store=store))
-        fn = _get_raw_fn(actor._build_knowledge_tool())
+        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
+        fn = _get_raw_fn(agent._build_knowledge_tool())
         result = await fn(action="bogus")
         assert "Unknown action" in result
 
@@ -595,10 +595,10 @@ class TestConversationSummaryAggregateStreamId:
 class TestDefaultBootstrapNoSentinel:
     @pytest.mark.asyncio
     async def test_bootstrap_does_not_write_sentinel(self) -> None:
-        """DefaultBootstrap should NOT write /.initialized — Actor owns that."""
+        """DefaultBootstrap should NOT write /.initialized — Agent owns that."""
         store = MemoryKnowledgeStore()
         bootstrap = DefaultBootstrap()
-        await bootstrap.bootstrap(store, "test-actor")
+        await bootstrap.bootstrap(store, "test-agent")
 
         # Bootstrap creates SKILL.md files but NOT /.initialized
         assert await store.exists("/SKILL.md")

@@ -11,7 +11,7 @@ from autogen import ConversableAgent
 from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.patterns import RoundRobinPattern
-from autogen.beta import Actor, Context, Variable, events, testing
+from autogen.beta import Agent, Context, Variable, events, testing
 from autogen.testing import TestAgent
 
 
@@ -22,7 +22,7 @@ async def test_remote_tool_with_context() -> None:
         ctx.variables["issue_count"] = issue_count + 1
         return "Tool result"
 
-    agent = Actor(
+    agent = Agent(
         "agent",
         config=testing.TestConfig(
             events.ToolCallEvent(name="some_tool", arguments="{}"),
