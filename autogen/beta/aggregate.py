@@ -43,7 +43,7 @@ class AggregateStrategy(Protocol):
         Args:
             events: Current stream history.
             context: Execution context.
-            store: Actor's knowledge store to write into.
+            store: Agent's knowledge store to write into.
         """
         ...
 

@@ -55,7 +55,7 @@ class CompactStrategy(Protocol):
         Args:
             events: Current stream history.
             context: Execution context.
-            store: Actor's knowledge store (for persisting dropped content).
+            store: Agent's knowledge store (for persisting dropped content).
                    None if not configured.
         """
         ...

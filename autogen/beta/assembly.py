@@ -49,7 +49,7 @@ class AssemblerMiddleware(BaseMiddleware):
     policies in order, transforming (prompts, events) before they
     reach the LLM client.
 
-    Middleware ordering in Actor._execute()::
+    Middleware ordering in Agent._execute()::
 
         1. AssemblerMiddleware(policies)     -- outermost: assembles context
         2. AlertPolicy (in assembly chain)   -- injects observer alerts

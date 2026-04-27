@@ -8,7 +8,7 @@ matching consumer.
 """
 
 WORKING_MEMORY_PATH = "/memory/working.md"
-"""Actor's persistent state. Produced by WorkingMemoryAggregate, read by WorkingMemoryPolicy."""
+"""Agent's persistent state. Produced by WorkingMemoryAggregate, read by WorkingMemoryPolicy."""
 
 CONVERSATIONS_PREFIX = "/memory/conversations/"
 """Past-conversation summaries. Produced by ConversationSummaryAggregate, read by EpisodicMemoryPolicy."""
