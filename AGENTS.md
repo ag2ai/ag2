@@ -1,5 +1,14 @@
 # AG2 Beta Development Guidelines
 
+## AI-assisted contribution policy
+
+Before opening a PR, read and follow `.github/AI_POLICY.md`.
+
+- Do not open PRs with unverified AI-generated code or text.
+- Ensure the PR description explains the real problem or use case and accurately reflects the diff.
+- Include validation and testing information in the PR body.
+- Be prepared to explain and revise the contribution in response to reviewer questions.
+
 ## Common rules
 
 - Do not use `from __future__ import annotations`.

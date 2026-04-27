@@ -29,7 +29,15 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_system_instruction, build_tools, convert_messages, normalize_usage, response_proto_to_config
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
+from .mappers import (
+    build_system_instruction,
+    build_tools,
+    convert_messages,
+    grounding_tool_name,
+    normalize_usage,
+    response_proto_to_config,
+)
 
 
 class CreateConfig(TypedDict, total=False):
@@ -126,6 +134,7 @@ class GeminiClient(LLMClient):
         calls: list[ToolCallEvent] = []
 
         for candidate in response.candidates or ():
+            pending_code_call_id: str | None = None
             if candidate.content:
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
@@ -146,6 +155,28 @@ class GeminiClient(LLMClient):
                                 provider_data=pdata,
                             )
                         )
+                    elif part.executable_code and (call_event := GeminiServerToolCallEvent.from_executable_code(part)):
+                        pending_code_call_id = call_event.id
+                        await context.send(call_event)
+                    elif (
+                        part.code_execution_result
+                        and pending_code_call_id is not None
+                        and (
+                            result_event := GeminiServerToolResultEvent.from_code_execution_result(
+                                part, parent_id=pending_code_call_id
+                            )
+                        )
+                    ):
+                        await context.send(result_event)
+                        pending_code_call_id = None
+            grounding = candidate.grounding_metadata if candidate.grounding_metadata else None
+            if grounding:
+                name = grounding_tool_name(grounding)
+                gnd_call = GeminiServerToolCallEvent.from_grounding(grounding, name=name)
+                await context.send(gnd_call)
+                await context.send(
+                    GeminiServerToolResultEvent.from_grounding(grounding, parent_id=gnd_call.id, name=name)
+                )
 
         usage = Usage()
         if response.usage_metadata:
@@ -175,6 +206,8 @@ class GeminiClient(LLMClient):
         calls: list[ToolCallEvent] = []
         usage = Usage()
         finish_reason: str | None = None
+        pending_code_call_id: str | None = None
+        last_grounding_metadata: types.GroundingMetadata | None = None
 
         async for chunk in stream:
             for candidate in chunk.candidates or ():
@@ -198,6 +231,25 @@ class GeminiClient(LLMClient):
                                     provider_data=pdata,
                                 )
                             )
+                        elif part.executable_code and (
+                            call_event := GeminiServerToolCallEvent.from_executable_code(part)
+                        ):
+                            pending_code_call_id = call_event.id
+                            await context.send(call_event)
+                        elif (
+                            part.code_execution_result
+                            and pending_code_call_id is not None
+                            and (
+                                result_event := GeminiServerToolResultEvent.from_code_execution_result(
+                                    part, parent_id=pending_code_call_id
+                                )
+                            )
+                        ):
+                            await context.send(result_event)
+                            pending_code_call_id = None
+                grounding = candidate.grounding_metadata if candidate.grounding_metadata else None
+                if grounding:
+                    last_grounding_metadata = grounding
 
             if chunk.usage_metadata:
                 usage = normalize_usage(chunk.usage_metadata)
@@ -206,6 +258,14 @@ class GeminiClient(LLMClient):
                 fr = chunk.candidates[0].finish_reason
                 if fr is not None:
                     finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
+        if last_grounding_metadata is not None:
+            name = grounding_tool_name(last_grounding_metadata)
+            gnd_call = GeminiServerToolCallEvent.from_grounding(last_grounding_metadata, name=name)
+            await context.send(gnd_call)
+            await context.send(
+                GeminiServerToolResultEvent.from_grounding(last_grounding_metadata, parent_id=gnd_call.id, name=name)
+            )
 
         message: ModelMessage | None = None
         if full_content:
