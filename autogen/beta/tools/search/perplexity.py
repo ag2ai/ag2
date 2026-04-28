@@ -8,9 +8,11 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
 from perplexity import Perplexity
+from perplexity.types import APIPublicSearchResult
 from pydantic import Field
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import ImageInput, ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
@@ -37,11 +39,21 @@ class SearchResult:
 
 
 @dataclass(slots=True)
+class ImageMeta:
+    image_url: str
+    origin_url: str | None = None
+    title: str | None = None
+    width: int | None = None
+    height: int | None = None
+
+
+@dataclass(slots=True)
 class SearchResponse:
     query: str
     content: str | None = None
     search_results: list[SearchResult] = field(default_factory=list)
     citations: list[str] = field(default_factory=list)
+    images: list[ImageMeta] = field(default_factory=list)
 
 
 class PerplexitySearchTool(Tool):
@@ -77,7 +89,7 @@ class PerplexitySearchTool(Tool):
         def perplexity_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
-        ) -> SearchResponse:
+        ) -> ToolResult:
             """Search the web using Perplexity AI and return content with sources."""
             resolved_model = resolve_variable(model, ctx, param_name="model") or "sonar"
             resolved_max_tokens = resolve_variable(max_tokens, ctx, param_name="max_tokens") or 1000
@@ -115,24 +127,42 @@ class PerplexitySearchTool(Tool):
                 message = getattr(choices[0], "message", None)
                 content = getattr(message, "content", None) if message is not None else None
 
+            search_results: list[APIPublicSearchResult] = getattr(raw, "search_results", None) or []
             results = [
                 SearchResult(
-                    title=getattr(r, "title", "") or "",
-                    url=getattr(r, "url", "") or "",
-                    date=getattr(r, "date", None),
-                    snippet=getattr(r, "snippet", None),
+                    title=r.title or "",
+                    url=r.url or "",
+                    date=r.date,
+                    snippet=r.snippet,
                 )
-                for r in (getattr(raw, "search_results", None) or [])
+                for r in search_results
             ]
 
             citations = list(getattr(raw, "citations", None) or [])
 
-            return SearchResponse(
+            raw_images: list[dict[str, Any]] = getattr(raw, "images", None) or []
+            images = [
+                ImageMeta(
+                    image_url=url,
+                    origin_url=img.get("origin_url"),
+                    title=img.get("title"),
+                    width=img.get("width"),
+                    height=img.get("height"),
+                )
+                for img in raw_images
+                if (url := img.get("image_url"))
+            ]
+
+            response = SearchResponse(
                 query=query,
                 content=content,
                 search_results=results,
                 citations=citations,
+                images=images,
             )
+
+            image_parts = [ImageInput(url=img.image_url) for img in images]
+            return ToolResult(response, *image_parts)
 
         self._tool = perplexity_search
         self.name = name

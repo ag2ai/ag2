@@ -142,9 +142,9 @@ def events_to_responses_input(
                 blocks: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        blocks.append({"type": "output_text", "text": part.content})
+                        blocks.append({"type": "input_text", "text": part.content})
                     elif isinstance(part, DataInput):
-                        blocks.append({"type": "output_text", "text": serializer.encode(part.data).decode()})
+                        blocks.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
                     elif isinstance(part, BinaryInput):
                         b64 = base64.b64encode(part.data).decode()
                         if part.kind is BinaryType.IMAGE:
@@ -180,7 +180,7 @@ def events_to_responses_input(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-responses")
 
-                if len(blocks) == 1 and (block := blocks[0])["type"] == "output_text":
+                if len(blocks) == 1 and (block := blocks[0])["type"] == "input_text":
                     result.append({
                         "type": "function_call_output",
                         "call_id": r.parent_id,

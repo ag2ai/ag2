@@ -11,11 +11,11 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("perplexity")
 
-from autogen.beta import Agent, DataInput, Variable
+from autogen.beta import Agent, DataInput, ImageInput, Variable
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools.search.perplexity import PerplexitySearchTool, SearchResponse, SearchResult
+from autogen.beta.tools.search.perplexity import ImageMeta, PerplexitySearchTool, SearchResponse, SearchResult
 
 SAMPLE_RAW = SimpleNamespace(
     id="chatcmpl-xxx",
@@ -229,6 +229,114 @@ class TestSearchExecution:
 
         # assert tool was actually invoked under the custom name
         mock.chat.completions.create.assert_called_once()
+
+    async def test_returns_image_parts_when_api_yields_images(self, mock: MagicMock) -> None:
+        # The Perplexity SDK delivers `images` as plain dicts (the field is not
+        # declared on StreamChunk's pydantic model). Mirror that here.
+        raw = SimpleNamespace(
+            id="chatcmpl-img",
+            model="sonar",
+            created=0,
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(role="assistant", content="See attached images."),
+                ),
+            ],
+            search_results=None,
+            citations=None,
+            images=[
+                {
+                    "image_url": "https://example.com/a.jpg",
+                    "origin_url": "https://example.com/a",
+                    "title": "Image A",
+                    "width": 800,
+                    "height": 600,
+                },
+                {
+                    "image_url": "https://example.com/b.png",
+                    "origin_url": "https://example.com/b",
+                    "title": "Image B",
+                    "width": 1024,
+                    "height": 768,
+                },
+            ],
+        )
+        mock.chat.completions.create.return_value = raw
+        perp = PerplexitySearchTool(client=mock, return_images=True)
+
+        # arrange agent
+        config = TrackingConfig(_make_config("show me images"))
+        agent = Agent("a", config=config, tools=[perp])
+
+        # act
+        await agent.ask("search")
+
+        # assert: parts == [DataInput(SearchResponse w/ image metadata), UrlInput(IMAGE), UrlInput(IMAGE)]
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        [tool_result] = tool_results_event.results
+        data_part, image_a, image_b = tool_result.result.parts
+
+        assert data_part == DataInput(
+            SearchResponse(
+                query="show me images",
+                content="See attached images.",
+                search_results=[],
+                citations=[],
+                images=[
+                    ImageMeta(
+                        image_url="https://example.com/a.jpg",
+                        origin_url="https://example.com/a",
+                        title="Image A",
+                        width=800,
+                        height=600,
+                    ),
+                    ImageMeta(
+                        image_url="https://example.com/b.png",
+                        origin_url="https://example.com/b",
+                        title="Image B",
+                        width=1024,
+                        height=768,
+                    ),
+                ],
+            )
+        )
+        assert image_a == ImageInput(url="https://example.com/a.jpg")
+        assert image_b == ImageInput(url="https://example.com/b.png")
+
+    async def test_skips_image_entries_without_image_url(self, mock: MagicMock) -> None:
+        # API may return image objects without an image_url — those should be silently dropped.
+        raw = SimpleNamespace(
+            id="chatcmpl-img",
+            model="sonar",
+            created=0,
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(role="assistant", content=""),
+                ),
+            ],
+            search_results=None,
+            citations=None,
+            images=[
+                {"origin_url": None, "title": None, "width": None, "height": None},
+                {"image_url": "https://example.com/ok.jpg"},
+            ],
+        )
+        mock.chat.completions.create.return_value = raw
+        perp = PerplexitySearchTool(client=mock, return_images=True)
+
+        config = TrackingConfig(_make_config("q"))
+        agent = Agent("a", config=config, tools=[perp])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        [tool_result] = tool_results_event.results
+        data_part, image = tool_result.result.parts
+        assert image == ImageInput(url="https://example.com/ok.jpg")
 
 
 @pytest.mark.asyncio
