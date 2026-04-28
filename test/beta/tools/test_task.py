@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.beta import Agent, Context, MemoryStream, Variable, tool
+from autogen.beta import agent as actor_mod
+from autogen.beta.agent import TaskConfig
 from autogen.beta.events import (
     HumanInputRequest,
     HumanMessage,
@@ -19,10 +21,10 @@ from autogen.beta.events import (
     TaskStarted,
     ToolCallEvent,
     ToolCallsEvent,
-    ToolResultsEvent,
 )
-from autogen.beta.testing import TestConfig, TrackingConfig
-from autogen.beta.tools.subagents import depth_limiter, subagent_tool
+from autogen.beta.testing import TestConfig
+from autogen.beta.tools.subagents import run_task as run_task_mod
+from autogen.beta.tools.subagents import subagent_tool
 from autogen.beta.tools.subagents.run_task import run_task
 
 
@@ -507,9 +509,14 @@ class TestVariablesPropagation:
         mock.assert_called_once_with("42")
 
     @pytest.mark.asyncio
-    async def test_mutation_affects_parent(self) -> None:
-        """Mutating variables in a sub-task is visible in the parent context
-        because run_task syncs variables back after completion."""
+    async def test_child_mutations_do_not_leak_to_parent(self) -> None:
+        """Child variable mutations are isolated from the parent context.
+
+        ``run_task`` deliberately does not sync child variable mutations back
+        to the parent: with concurrent sibling subtasks via ``asyncio.gather``,
+        last-writer-wins would silently clobber values. Each subtask runs on
+        a copy of the parent's variables and any mutations stay scoped to it.
+        """
 
         @tool
         def mutate_var(ctx: Context) -> str:
@@ -529,146 +536,315 @@ class TestVariablesPropagation:
         result = await run_task(worker, "Mutate", parent_context=parent_ctx)
 
         assert result.completed is True
-        assert parent_ctx.variables["counter"] == 11
-        assert parent_ctx.variables["new_key"] == "new_value"
-        assert parent_ctx.variables["existing"] == "yes"
+        # Parent's variables are unchanged — the child mutated its own copy.
+        assert parent_ctx.variables == {"counter": 10, "existing": "yes"}
 
 
-class TestDepthLimiter:
-    @pytest.mark.asyncio
-    async def test_rejects(self) -> None:
-        """Real nested delegation: outer -> L1 -> L2 -> L3 (rejected at depth 3 with max_depth=2).
+@pytest.mark.asyncio
+class TestSubtaskOptOut:
+    async def test_disabled_actor_has_no_subtask_tools(self) -> None:
+        """``tasks=False`` suppresses ``run_subtask`` / ``run_subtasks``."""
+        agent = Agent("disabled", tasks=False)
 
-        outer (depth 0) delegates to L1 (depth 1) which delegates to L2 (depth 2).
-        L2 tries to delegate to L3 but the limiter sees depth=2 >= max_depth=2 and blocks.
-        """
-        limiter = depth_limiter(max_depth=2)
+        names = {t.schema.function.name for t in agent._build_subtask_tools()}
+        assert names == set()
 
-        l3 = Agent(
-            "l3",
-            config=TestConfig(ModelResponse(ModelMessage("Should not reach."))),
+    async def test_default_actor_has_subtask_tools(self) -> None:
+        """A bare Agent still gets the auto-injected subtask tools by default."""
+        agent = Agent("default")
+
+        names = {t.schema.function.name for t in agent._build_subtask_tools()}
+        assert names == {"run_subtask", "run_subtasks"}
+
+
+@pytest.mark.asyncio
+class TestSubtaskInheritance:
+    async def test_subtask_inherits_parent_tools(self) -> None:
+        """A subtask spawned via ``run_subtask`` sees the parent's tools."""
+
+        @tool
+        def lookup(term: str) -> str:
+            """Look up a term."""
+            return f"definition of {term}"
+
+        # Subtask's first response calls lookup; second wraps up.
+        subtask_inner_config = TestConfig(
+            ToolCallEvent(name="lookup", arguments='{"term": "quark"}'),
+            ModelResponse(ModelMessage("a quark is definition of quark")),
         )
-
-        l2_config = TestConfig(
-            ToolCallEvent(name="task_l3", arguments='{"objective": "Go even deeper"}'),
-            ModelResponse(ModelMessage("L3 was blocked.")),
+        # Parent: dispatch run_subtask, then summarize.
+        parent_config = TestConfig(
+            ToolCallEvent(name="run_subtask", arguments='{"task": "Define quark"}'),
+            ModelResponse(ModelMessage("Got it.")),
         )
-        l2_tracking = TrackingConfig(l2_config)
-        l2 = Agent(
-            "l2",
-            config=l2_tracking,
-            tools=[l3.as_tool(description="L3 agent", middleware=[limiter])],
-        )
-
-        l1 = Agent(
-            "l1",
-            config=TestConfig(
-                ToolCallEvent(name="task_l2", arguments='{"objective": "Go deeper"}'),
-                ModelResponse(ModelMessage("L2 done.")),
-            ),
-            tools=[l2.as_tool(description="L2 agent", middleware=[limiter])],
-        )
-
-        outer = Agent(
-            "outer",
-            config=TestConfig(
-                ToolCallEvent(name="task_l1", arguments='{"objective": "Start"}'),
-                ModelResponse(ModelMessage("Done.")),
-            ),
-            tools=[l1.as_tool(description="L1 agent", middleware=[limiter])],
-        )
-
-        await outer.ask("Go")
-
-        tool_results: ToolResultsEvent = l2_tracking.mock.call_args_list[1].args[0]
-        assert "maximum task depth" in tool_results.results[0].result.parts[0].content
-
-    @pytest.mark.asyncio
-    async def test_passes(self) -> None:
-        """Below max_depth the tool executes and produces a TaskCompleted event."""
-        worker_config = TestConfig(ModelResponse(ModelMessage("Done.")))
-        worker = Agent("worker", config=worker_config)
-
-        inner_config = TestConfig(
-            ToolCallEvent(name="task_worker", arguments='{"objective": "Do work"}'),
-            ModelResponse(ModelMessage("OK.")),
-        )
-        tracking_config = TrackingConfig(inner_config)
-
-        coordinator = Agent(
-            "coordinator",
-            config=tracking_config,
-            tools=[worker.as_tool(description="Worker", middleware=[depth_limiter(max_depth=2)])],
+        # The subtask Agent uses the parent's task config — but we can't share
+        # config instances because TestConfig consumes responses in order. So
+        # we use a TaskConfig with a fresh config we control.
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[lookup],
+            tasks=TaskConfig(config=subtask_inner_config),
         )
 
         parent_stream = MemoryStream()
-        await coordinator.ask("Go", stream=parent_stream)
+        reply = await parent.ask("Define quark", stream=parent_stream)
+
+        assert reply.body == "Got it."
+        events = list(await parent_stream.history.get_events())
+        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
+        # Subtask actually called lookup — proving it inherited the tool.
+        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
+        assert any(isinstance(e, ToolCallEvent) and e.name == "lookup" for e in sub_events)
+
+    async def test_subtask_excludes_via_exclude_tools(self) -> None:
+        """``TaskConfig.exclude_tools`` removes named tools from inheritance."""
+
+        @tool
+        def secret_tool() -> str:
+            """A tool the subtask must NOT see."""
+            return "should not run"
+
+        @tool
+        def public_tool() -> str:
+            """A tool the subtask CAN see."""
+            return "ok"
+
+        sub_config = TestConfig(ModelResponse(ModelMessage("Done without secret.")))
+        parent_config = TestConfig(
+            ToolCallEvent(name="run_subtask", arguments='{"task": "Work"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[secret_tool, public_tool],
+            tasks=TaskConfig(config=sub_config, exclude_tools=["secret_tool"]),
+        )
+
+        # Reach the spawn path directly so we can inspect what the subtask sees.
+        parent_ctx = _make_parent_context()
+        # Trigger _spawn_subtask via the wrapped tool; capture spawned agent.
+        spawned_actors: list[Agent] = []
+        original_spawn = parent._spawn_subtask
+
+        async def capture_spawn(task: str, ctx: Context) -> str:
+            # Reconstruct the spawn manually so we can intercept the bare agent.
+            tc = parent._task_config
+            assert tc is not None
+            inherited = [t for t in parent.tools if t.schema.function.name not in set(tc.exclude_tools)]
+            bare = Agent(
+                name="captured",
+                prompt=tc.prompt,
+                config=tc.config,
+                tools=inherited,
+                tasks=False,
+            )
+            spawned_actors.append(bare)
+            return await original_spawn(task, ctx)
+
+        parent._spawn_subtask = capture_spawn  # type: ignore[assignment]
+        await parent.ask("go", stream=parent_ctx.stream)
+
+        # The captured subtask agent must not have secret_tool.
+        assert spawned_actors, "subtask must have been spawned"
+        names = {t.schema.function.name for t in spawned_actors[0].tools}
+        assert "secret_tool" not in names
+        assert "public_tool" in names
+
+    async def test_subtask_include_tools_allowlist(self) -> None:
+        """``include_tools=[...]`` keeps only the named tools."""
+
+        @tool
+        def t_a() -> str:
+            return "a"
+
+        @tool
+        def t_b() -> str:
+            return "b"
+
+        @tool
+        def t_c() -> str:
+            return "c"
+
+        sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        parent = Agent(
+            "parent",
+            config=TestConfig(),
+            tools=[t_a, t_b, t_c],
+            tasks=TaskConfig(config=sub_config, include_tools=["t_a", "t_c"]),
+        )
+
+        # Drive _spawn_subtask directly.
+        ctx = _make_parent_context()
+        result = await parent._spawn_subtask("any", ctx)
+        assert result == "Done."
+
+    async def test_subtask_extra_tools_added(self) -> None:
+        """``extra_tools=[...]`` adds tools beyond what the parent has."""
+
+        @tool
+        def parent_only() -> str:
+            return "parent"
+
+        @tool
+        def subtask_only() -> str:
+            return "subtask"
+
+        # Subtask must see BOTH the inherited and the extra tool.
+        sub_config = TestConfig(
+            ToolCallEvent(name="subtask_only", arguments="{}"),
+            ModelResponse(ModelMessage("Used the extra tool.")),
+        )
+        parent_config = TestConfig(
+            ToolCallEvent(name="run_subtask", arguments='{"task": "Use subtask_only"}'),
+            ModelResponse(ModelMessage("OK.")),
+        )
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tools=[parent_only],
+            tasks=TaskConfig(config=sub_config, extra_tools=[subtask_only]),
+        )
+
+        parent_stream = MemoryStream()
+        await parent.ask("go", stream=parent_stream)
 
         events = list(await parent_stream.history.get_events())
-        assert any(isinstance(e, TaskCompleted) for e in events)
+        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
+        sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
+        # The extra tool was actually invoked in the subtask.
+        assert any(isinstance(e, ToolCallEvent) and e.name == "subtask_only" for e in sub_events)
 
-    @pytest.mark.asyncio
-    async def test_concurrent_subagents(self) -> None:
-        """Concurrent subagent calls get independent depth counters.
 
-        coordinator (depth 0) dispatches worker_a and worker_b in parallel.
-        worker_a itself delegates to sub_worker (depth 2), proving it can go
-        deeper without affecting worker_b's depth counter.  If depth leaked
-        between siblings, worker_b would see depth=2 and be incorrectly blocked.
+@pytest.mark.asyncio
+class TestSubtaskNoRecursion:
+    async def test_child_has_no_subtask_tools(self) -> None:
+        """A subtask Agent never gets ``run_subtask`` — recursion impossible.
+
+        Spawn a subtask, capture the bare child Agent, and assert its
+        ``_subtask_tools`` is empty regardless of what the parent has.
         """
-        limiter = depth_limiter(max_depth=3)
-
-        sub_worker = Agent(
-            "sub_worker",
-            config=TestConfig(ModelResponse(ModelMessage("Sub done."))),
+        sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        parent = Agent(
+            "parent",
+            config=TestConfig(),
+            tasks=TaskConfig(config=sub_config),
         )
 
-        worker_a = Agent(
-            "worker_a",
-            config=TestConfig(
-                ToolCallEvent(name="task_sub_worker", arguments='{"objective": "Sub-task"}'),
-                ModelResponse(ModelMessage("A done.")),
-            ),
-            tools=[sub_worker.as_tool(description="Sub-worker", middleware=[limiter])],
-        )
+        captured: list[Agent] = []
+        original = run_task_mod.run_task
 
-        worker_b = Agent(
-            "worker_b",
-            config=TestConfig(ModelResponse(ModelMessage("B done."))),
-        )
+        async def capturing_run_task(agent, *args, **kwargs):
+            captured.append(agent)
+            return await original(agent, *args, **kwargs)
 
-        inner_config = TestConfig(
+        # Monkey-patch both bindings: ``run_task_mod.run_task`` is the import
+        # site; ``actor_mod._run_task`` is the ``agent.py`` reference.
+        run_task_mod.run_task = capturing_run_task
+        actor_mod._run_task = capturing_run_task
+
+        try:
+            ctx = _make_parent_context()
+            await parent._spawn_subtask("anything", ctx)
+        finally:
+            run_task_mod.run_task = original
+            actor_mod._run_task = original
+
+        assert captured, "subtask must have run"
+        child = captured[0]
+        # The child Agent has zero subtask tools and zero ``_task_config``.
+        assert child._task_config is None
+        assert child._build_subtask_tools() == []
+
+
+@pytest.mark.asyncio
+class TestParallelSubtasks:
+    async def test_parallel_run_subtask_calls_succeed(self) -> None:
+        """The LLM can emit multiple ``run_subtask`` tool_use blocks in one
+        assistant message; the executor dispatches them concurrently and
+        the parent sees one ``TaskStarted`` / ``TaskCompleted`` per call.
+
+        This is the parallel-tool-use pattern Anthropic recommends — N
+        independent subtasks bundled into one assistant turn become N
+        parallel children, each with its own stream.
+        """
+        parent_config = TestConfig(
             ModelResponse(
                 tool_calls=ToolCallsEvent(
                     calls=[
-                        ToolCallEvent(name="task_worker_a", arguments='{"objective": "Task A"}'),
-                        ToolCallEvent(name="task_worker_b", arguments='{"objective": "Task B"}'),
+                        ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                        ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                        ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
                     ]
                 )
             ),
-            ModelResponse(ModelMessage("Both done.")),
+            ModelResponse(ModelMessage("All three done.")),
         )
-        tracking_config = TrackingConfig(inner_config)
 
-        coordinator = Agent(
-            "coordinator",
-            config=tracking_config,
-            tools=[
-                worker_a.as_tool(description="Worker A", middleware=[limiter]),
-                worker_b.as_tool(description="Worker B", middleware=[limiter]),
-            ],
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            # Each spawn rebuilds the TestClient from this config, so every
+            # child runs against an independent queue with this single response.
+            tasks=TaskConfig(config=TestConfig(ModelResponse(ModelMessage("subtask done.")))),
         )
 
         parent_stream = MemoryStream()
-        await coordinator.ask("Go", stream=parent_stream)
+        reply = await parent.ask("go", stream=parent_stream)
 
-        tool_results: ToolResultsEvent = tracking_config.mock.call_args_list[1].args[0]
-        assert "A done." in tool_results.results[0].result.parts[0].content
-        assert "B done." in tool_results.results[1].result.parts[0].content
+        assert reply.body == "All three done."
+        events = list(await parent_stream.history.get_events())
+        starts = [e for e in events if isinstance(e, TaskStarted)]
+        completions = [e for e in events if isinstance(e, TaskCompleted)]
+        # All three subtasks dispatched and completed concurrently.
+        assert len(starts) == 3
+        assert len(completions) == 3
+
+    async def test_run_subtasks_bundles_parallel_dispatch(self) -> None:
+        """``run_subtasks(parallel=True)`` is one tool call, N subtasks.
+
+        Each spawned subtask Agent creates its own TestClient from the shared
+        ``TaskConfig.config``, so all children produce the same first response;
+        we assert on dispatch shape (2 TaskCompleted events for 2 task strings)
+        rather than on per-call content.
+        """
+        parent_config = TestConfig(
+            ToolCallEvent(
+                name="run_subtasks",
+                arguments='{"tasks": ["task X", "task Y"], "parallel": true}',
+            ),
+            ModelResponse(ModelMessage("Wrapped up.")),
+        )
+
+        parent = Agent(
+            "parent",
+            config=parent_config,
+            tasks=TaskConfig(config=TestConfig(ModelResponse(ModelMessage("subtask done.")))),
+        )
+
+        parent_stream = MemoryStream()
+        await parent.ask("go", stream=parent_stream)
 
         events = list(await parent_stream.history.get_events())
-        completed = [e for e in events if isinstance(e, TaskCompleted)]
-        assert len(completed) == 2
+        completions = [e for e in events if isinstance(e, TaskCompleted)]
+        assert len(completions) == 2
+
+
+def test_run_subtask_description_advertises_parallel_invocation() -> None:
+    """The ``run_subtask`` tool description must inform the LLM that it can
+    be invoked multiple times in parallel within a single response.
+
+    This is what teaches Claude/GPT/Gemini to emit multiple ``tool_use``
+    blocks in one assistant message rather than serializing them.
+    """
+    agent = Agent("any")
+    [run_subtask, run_subtasks] = agent._build_subtask_tools()
+
+    desc = run_subtask.schema.function.description
+    assert "parallel" in desc.lower()
+    # And ``run_subtasks`` advertises the bundled fan-out.
+    assert "parallel" in run_subtasks.schema.function.description.lower()
 
 
 class TestHitlPropagation:

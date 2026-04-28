@@ -109,7 +109,7 @@ await sub.cancel()
 
 ## DefaultBootstrap
 
-`DefaultBootstrap` populates a store with a standard layout and `SKILL.md` files that explain each directory to an LLM reader. It's designed to be called once per actor:
+`DefaultBootstrap` populates a store with a standard layout and `SKILL.md` files that explain each directory to an LLM reader. It's designed to be called once per agent:
 
 ```python linenums="1"
 from autogen.beta import DefaultBootstrap, MemoryKnowledgeStore
@@ -157,7 +157,7 @@ loaded = await writer.load(stream.id)  # -> list[BaseEvent]
 Persisted events land at `/log/{stream_id}.jsonl`. Events of types that cannot be deserialized (e.g. a removed class) come back as `UnknownEvent` — no data is lost.
 
 !!! tip
-    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent actor state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`.
+    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent agent state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`.
 
 ## LockedKnowledgeStore — serialize writers
 

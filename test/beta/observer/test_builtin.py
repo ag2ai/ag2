@@ -6,10 +6,22 @@ from contextlib import ExitStack
 
 import pytest
 
+from autogen.beta import Agent
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelResponse, ObserverAlert, Severity, TaskCompleted, ToolCallEvent, Usage
-from autogen.beta.observer import LoopDetector, TokenMonitor
+from autogen.beta.events import (
+    ModelMessage,
+    ModelResponse,
+    ObserverAlert,
+    Severity,
+    TaskCompleted,
+    ToolCallEvent,
+    Usage,
+)
+from autogen.beta.events.lifecycle import ObserverCompleted, ObserverStarted
+from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
+from autogen.beta.testing import TestConfig
+from autogen.beta.watch import EventWatch
 
 
 @pytest.mark.asyncio
@@ -279,3 +291,57 @@ class TestLoopDetector:
         for _ in range(3):
             await stream.send(ToolCallEvent(name="search", arguments="q"), ctx)
         assert len(signals) == 2
+
+
+class _SelfAwareObserver(BaseObserver):
+    """Observer that watches ``ObserverStarted``/``ObserverCompleted`` on itself."""
+
+    def __init__(self, name: str = "self-aware") -> None:
+        super().__init__(name, watch=EventWatch(ObserverStarted | ObserverCompleted))
+        self.started_seen: list[str] = []
+        self.completed_seen: list[str] = []
+
+    async def process(self, events, ctx) -> None:
+        for event in events:
+            if isinstance(event, ObserverStarted):
+                self.started_seen.append(event.name)
+            elif isinstance(event, ObserverCompleted):
+                self.completed_seen.append(event.name)
+        return None
+
+
+@pytest.mark.asyncio
+class TestObserverLifecycleSelfVisibility:
+    """An observer subscribed to its own lifecycle events must receive them.
+
+    ``ObserverStarted`` is emitted *after* the observer registers on the
+    stream so the observer itself can react to its own start; the same
+    contract applies to ``ObserverCompleted`` (emitted *before* unregister).
+    """
+
+    async def test_observer_sees_own_started_and_completed(self) -> None:
+        obs = _SelfAwareObserver()
+        agent = Agent(
+            "with-obs",
+            config=TestConfig(ModelResponse(ModelMessage("hello"))),
+            observers=[obs],
+        )
+        await agent.ask("hi")
+
+        assert obs.started_seen == ["self-aware"]
+        assert obs.completed_seen == ["self-aware"]
+
+    async def test_external_subscriber_also_sees_started(self) -> None:
+        stream = MemoryStream()
+        started: list[ObserverStarted] = []
+        stream.where(ObserverStarted).subscribe(lambda e: started.append(e))
+
+        agent = Agent(
+            "lifecycle",
+            config=TestConfig(ModelResponse(ModelMessage("hi"))),
+            observers=[_SelfAwareObserver(name="alpha")],
+        )
+        await agent.ask("go", stream=stream)
+
+        assert len(started) == 1
+        assert started[0].name == "alpha"

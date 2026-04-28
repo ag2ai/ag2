@@ -52,40 +52,47 @@ def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
     )
 
 
+def _matching_tool_result(content: str = "ok") -> ToolResultsEvent:
+    """Companion ToolResultsEvent so the tool_use above isn't dropped as an orphan."""
+    return ToolResultsEvent(
+        results=[
+            ToolResultEvent(
+                parent_id="tc_1",
+                name="list_items",
+                result=ToolResult(content),
+            )
+        ],
+    )
+
+
 class TestConvertMessagesEmptyArguments:
     """json.loads must not crash on empty or None tool call arguments."""
 
     @pytest.mark.parametrize("arguments", ["", None])
     def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
         response = _model_response_with_tool_call(arguments)
-        result = convert_messages([response], SerializerCls)
+        result = convert_messages([response, _matching_tool_result()], SerializerCls)
 
-        assert result == [
-            IsPartialDict({
-                "role": "assistant",
-                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "role": "assistant",
+            "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
+        })
 
     def test_valid_arguments_are_preserved(self) -> None:
         response = _model_response_with_tool_call('{"category": "books"}')
-        result = convert_messages([response], SerializerCls)
+        result = convert_messages([response, _matching_tool_result()], SerializerCls)
 
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
+        })
 
     def test_empty_object_arguments(self) -> None:
         response = _model_response_with_tool_call("{}")
-        result = convert_messages([response], SerializerCls)
+        result = convert_messages([response, _matching_tool_result()], SerializerCls)
 
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {}})],
-            }),
-        ]
+        assert result[0] == IsPartialDict({
+            "content": [IsPartialDict({"type": "tool_use", "input": {}})],
+        })
 
 
 def test_full_sequence_with_empty_args() -> None:

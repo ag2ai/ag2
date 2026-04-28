@@ -37,7 +37,13 @@ async def test_schemas(async_mock: AsyncMock) -> None:
     schemas = list(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
-    assert names == {"read_file", "write_file", "update_file", "delete_file", "find_files"}
+    assert names == {
+        "read_file",
+        "write_file",
+        "update_file",
+        "delete_file",
+        "find_files",
+    }
 
 
 @pytest.mark.asyncio
@@ -117,7 +123,10 @@ async def test_write_creates_parent_dirs(tmp_path: Path) -> None:
     toolkit = FilesystemToolkit(base_path=tmp_path)
 
     config = TestConfig(
-        ToolCallEvent(name="write_file", arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"})),
+        ToolCallEvent(
+            name="write_file",
+            arguments=json.dumps({"path": "sub/dir/file.txt", "content": "nested"}),
+        ),
         "done",
     )
     agent = Agent("", config=config, tools=[toolkit])

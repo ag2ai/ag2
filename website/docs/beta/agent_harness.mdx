@@ -1,0 +1,216 @@
+---
+title: The Agent Harness
+sidebarTitle: Harness
+---
+
+A bare `Agent` is just a model loop. The **harness** is the set of opt-in primitives you compose onto it to give it richer capabilities — context assembly, persistent knowledge, sub-task spawning, and the supporting middleware they wire in.
+
+This page is the configuration reference for those primitives. For the conversational entry point (`agent.ask()`, tools, HITL, observing events), see [Agent Communication](/docs/beta/agents).
+
+## Constructor
+
+```python linenums="1"
+Agent(
+    name: str,
+    prompt: str | Callable | Iterable = (),
+    *,
+    config: ModelConfig | None = None,
+    tools: Iterable = (),
+    middleware: Iterable = (),
+    observers: Iterable = (),
+    dependencies: dict | None = None,
+    variables: dict | None = None,
+    response_schema: ResponseProto | type | None = None,
+    hitl_hook: HumanHook | None = None,
+    plugins: Iterable[Plugin] = (),
+    assembly: Iterable[AssemblyPolicy] = (),
+    knowledge: KnowledgeConfig | None = None,
+    tasks: TaskConfig | Literal[False] | None = None,
+)
+```
+
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/beta/agents) and the parameter-specific guides. The harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below.
+
+## `assembly=` — context policies
+
+A list of [`AssemblyPolicy`](/docs/beta/advanced/assembly) instances. When non-empty, the Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
+
+```python linenums="1" hl_lines="10-14"
+from autogen.beta import Agent
+from autogen.beta.policies import (
+    AlertPolicy,
+    SlidingWindowPolicy,
+    WorkingMemoryPolicy,
+)
+
+agent = Agent(
+    "assistant",
+    config=config,
+    assembly=[
+        WorkingMemoryPolicy(),                # inject /memory/working.md
+        AlertPolicy(),                         # deliver ObserverAlerts, halt on FATAL
+        SlidingWindowPolicy(max_events=50),   # cap history footprint
+    ],
+)
+```
+
+Order matters — see the [ordering rule in the assembly doc](/docs/beta/advanced/assembly#ordering-matters). `AssemblerMiddleware.validate_order()` will flag known problematic compositions.
+
+## `knowledge=` — KnowledgeConfig
+
+Groups everything that involves the [`KnowledgeStore`](/docs/beta/advanced/knowledge_store): the store itself, optional bootstrap, and optional compaction + aggregation strategies.
+
+```python linenums="1"
+from dataclasses import dataclass
+
+@dataclass
+class KnowledgeConfig:
+    store: KnowledgeStore
+    compact: CompactStrategy | None = None
+    compact_trigger: CompactTrigger | None = None
+    aggregate: AggregateStrategy | None = None
+    aggregate_trigger: AggregateTrigger | None = None
+    bootstrap: StoreBootstrap | None = None
+```
+
+| Field | What it does |
+|---|---|
+| `store` | Registered in `#!python context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it; also given to `EventLogWriter` for stream persistence. |
+| `compact` / `compact_trigger` | Wires a compaction middleware that fires [`compact()`](/docs/beta/advanced/compaction) between turns when the trigger thresholds are exceeded. |
+| `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/beta/advanced/aggregation) on the configured cadence. |
+| `bootstrap` | Runs once on first use to seed the store (e.g. `DefaultBootstrap` writes SKILL.md files). |
+
+```python linenums="1" hl_lines="12-18"
+from autogen.beta import Agent, KnowledgeConfig
+from autogen.beta.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from autogen.beta.compact import CompactTrigger, TailWindowCompact
+from autogen.beta.knowledge import DiskKnowledgeStore
+from autogen.beta.policies import WorkingMemoryPolicy
+from pathlib import Path
+
+store = DiskKnowledgeStore(Path("./knowledge"))
+
+agent = Agent(
+    "assistant",
+    config=main_config,
+    knowledge=KnowledgeConfig(
+        store=store,
+        compact=TailWindowCompact(target=100),
+        compact_trigger=CompactTrigger(max_events=200),
+        aggregate=ConversationSummaryAggregate(config=summarizer_config),
+        aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
+    ),
+    assembly=[WorkingMemoryPolicy()],
+)
+```
+
+The compaction and aggregation middleware are opt-in per field: passing `compact=` without `compact_trigger=` still works (a default `CompactTrigger()` with all thresholds disabled is used). Omit a strategy entirely and the corresponding middleware is not wired.
+
+## `tasks=` — TaskConfig
+
+Every Agent (unless constructed with `tasks=False`) automatically carries a pair of sub-task tools — `run_subtask` and `run_subtasks` — that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
+
+```python linenums="1"
+from dataclasses import dataclass
+
+@dataclass
+class TaskConfig:
+    config: ModelConfig | None = None
+    prompt: str = (
+        "You are a task agent. Complete the assigned task thoroughly and "
+        "concisely. Return only the result."
+    )
+    include_tools: Iterable[str] | None = None
+    exclude_tools: Iterable[str] = ()
+    extra_tools: Iterable[Callable | Tool] = ()
+```
+
+| Field | What it does |
+|---|---|
+| `config` | The `ModelConfig` used for sub-task Agents. Falls back to the parent Agent's `config`. |
+| `prompt` | Default system prompt for sub-task Agents. |
+| `include_tools` | Allowlist of parent-tool names to inherit. `None` means "inherit all". |
+| `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
+| `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
+
+By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are constructed with `tasks=False`, so they themselves have no `run_subtask` / `run_subtasks` tools — recursive delegation is structurally impossible and no depth limit is needed.
+
+```python linenums="1" hl_lines="8-12"
+from autogen.beta import Agent, TaskConfig
+
+agent = Agent(
+    "orchestrator",
+    config=main_config,
+    tools=[search, fetch_url, summarize],
+    tasks=TaskConfig(
+        config=worker_config,                 # cheaper model for sub-tasks
+        prompt="You are a focused worker; one step only.",
+        include_tools=["search", "fetch_url"],  # don't expose summarize to children
+    ),
+)
+```
+
+### `tasks=False` — opt out
+
+Pass `tasks=False` to suppress the auto-injected sub-task tools entirely. Use this when an Agent should never spawn children — for example, when it's already running as a sub-task itself, or when delegation isn't appropriate for its role.
+
+```python linenums="1"
+focused = Agent(
+    "summarizer",
+    prompt="Summarise the input. Do not delegate.",
+    config=main_config,
+    tasks=False,
+)
+```
+
+## `run_subtask` / `run_subtasks` — auto-injected tools
+
+Unless you set `tasks=False`, every Agent exposes two tools to the LLM:
+
+- `run_subtask(task: str)` — spawn one sub-task Agent. Useful when the LLM has a single self-contained piece of work to delegate.
+- `run_subtasks(tasks: list[str], parallel: bool = True)` — spawn multiple sub-tasks in one tool call. Defaults to running them concurrently with `asyncio.gather`; pass `parallel=False` only when later tasks depend on earlier results.
+
+The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
+
+For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agent-as-tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+
+See [Task Delegation](/docs/beta/task_delegation) for the full sub-task delegation guide — context flow, custom streams, and the `depth_limiter` middleware for self-delegation via `as_tool()`.
+
+## Agent.as_tool()
+
+Expose any Agent as a `FunctionTool` so another Agent can invoke it like any other tool:
+
+```python linenums="1" hl_lines="10 13"
+child = Agent(
+    "researcher",
+    prompt="Answer the objective concisely.",
+    config=main_config,
+)
+
+parent = Agent(
+    "lead",
+    config=main_config,
+    tools=[child.as_tool(description="Delegate fact-finding to a researcher.")],
+)
+
+reply = await parent.ask("Find out where Melbourne is.")
+```
+
+`as_tool()` returns a `FunctionTool` named `task_{child.name}` that accepts an `objective` parameter and forwards it into the child's stream. See [Task Delegation](/docs/beta/task_delegation) for sub-task streams, depth limiting, and stream factories.
+
+## Turn lifecycle
+
+Each `await agent.ask(...)` runs through the middleware chain in this order (outermost → innermost):
+
+```
+1. AssemblerMiddleware              (if assembly=[...])
+2. _HaltCheckMiddleware             (if assembly=[...] — watches for HaltEvent)
+3. _CompactionMiddleware            (if knowledge.compact configured)
+4. _AggregationMiddleware           (if knowledge.aggregate configured)
+5. User-provided middleware         (retry, rate-limit, logging, …)
+6. LLM client                       (innermost)
+```
+
+The internal harness middleware (`_AssemblerMiddleware`, `_HaltCheckMiddleware`, `_CompactionMiddleware`, `_AggregationMiddleware`) are assembled conditionally — you only pay for what you turn on.
+
+Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](/docs/beta/advanced/observers) or a stream subscriber.

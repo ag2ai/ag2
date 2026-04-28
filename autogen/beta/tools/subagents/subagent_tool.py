@@ -4,10 +4,8 @@
 
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, TypeAlias
-from uuid import uuid4
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import TaskCompleted, TaskFailed, TaskStarted
 from autogen.beta.middleware.base import ToolMiddleware
 from autogen.beta.stream import Stream
 from autogen.beta.tools.final import FunctionTool, tool
@@ -40,16 +38,7 @@ def subagent_tool(
         objective: str,
         context: str = "",
     ) -> str:
-        task_id = str(uuid4())
         task_stream = stream(agent, ctx) if stream else None
-
-        await ctx.send(
-            TaskStarted(
-                task_id=task_id,
-                agent_name=agent.name,
-                objective=objective,
-            )
-        )
 
         result = await run_task(
             agent,
@@ -58,28 +47,6 @@ def subagent_tool(
             parent_context=ctx,
             stream=task_stream,
         )
-
-        if result.completed:
-            await ctx.send(
-                TaskCompleted(
-                    task_id=task_id,
-                    agent_name=agent.name,
-                    objective=objective,
-                    result=result.result,
-                    task_stream=result.stream.id,
-                    usage=result.usage,
-                )
-            )
-
-        else:
-            await ctx.send(
-                TaskFailed(
-                    task_id=task_id,
-                    agent_name=agent.name,
-                    objective=objective,
-                    error=result.error,
-                )
-            )
 
         return result.result or ""
 
