@@ -103,18 +103,12 @@ def streaming_config(request):
         pytest.param("gemini", marks=pytest.mark.gemini),
     ]
 )
-def provider_config(
-    request,
-    openai_config,
-    anthropic_config,
-    gemini_config,
-):
+def provider_config(request):
     """Parametrized fixture that yields a config for each provider.
 
-    Tests using this fixture run once per provider.
+    Tests using this fixture run once per provider. The per-provider
+    fixtures are resolved lazily via ``request.getfixturevalue`` so that
+    a CI job installing only one provider's SDK does not trip the missing-
+    optional-dependency stubs of the other providers' ``ModelConfig``s.
     """
-    return {
-        "openai": openai_config,
-        "anthropic": anthropic_config,
-        "gemini": gemini_config,
-    }[request.param]
+    return request.getfixturevalue(f"{request.param}_config")
