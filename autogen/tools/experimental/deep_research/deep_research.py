@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+import warnings
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -70,6 +71,55 @@ class GatheredInformation(BaseModel):
         )
 
 
+def _extract_confirmed_answer(sender: Any, recipient: Any, summary_args: Any) -> str:
+    """Extract the confirmed answer from chat history.
+
+    Scans the conversation for tool-result messages containing the confirmed
+    answer prefix. Falls back to the standard last-message extraction if no
+    confirmed answer is found.
+    """
+    prefix = DeepResearchTool.ANSWER_CONFIRMED_PREFIX
+    try:
+        messages = recipient.chat_messages_for_summary(sender)
+        for msg in reversed(messages):
+            content = msg.get("content", "") or ""
+            if isinstance(content, str) and content.startswith(prefix):
+                return content
+    except (IndexError, AttributeError) as e:
+        warnings.warn(f"Cannot extract confirmed answer: {e}. Falling back to last_msg.", UserWarning)
+
+    return ConversableAgent._last_msg_as_summary(sender, recipient, summary_args)
+
+
+def _extract_subquestions_answer(sender: Any, recipient: Any, summary_args: Any) -> str:
+    """Extract the subquestions answer from chat history."""
+    prefix = DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX
+    try:
+        messages = recipient.chat_messages_for_summary(sender)
+        for msg in reversed(messages):
+            content = msg.get("content", "") or ""
+            if isinstance(content, str) and content.startswith(prefix):
+                return content
+    except (IndexError, AttributeError) as e:
+        warnings.warn(f"Cannot extract subquestions answer: {e}. Falling back to last_msg.", UserWarning)
+
+    return ConversableAgent._last_msg_as_summary(sender, recipient, summary_args)
+
+
+def _make_confirm_summary(prefix: str) -> Callable[..., str]:
+    """Create a confirm_summary function for the outer critic/summarizer chat."""
+    def confirm_summary(answer: str, reasoning: str) -> str:
+        return f"{prefix}" + answer + "\nReasoning: " + reasoning
+    return confirm_summary
+
+
+def _make_confirm_answer(prefix: str) -> Callable[..., str]:
+    """Create a confirm_answer function for the websurfer critic chat."""
+    def confirm_answer(answer: str) -> str:
+        return f"{prefix} " + answer
+    return confirm_answer
+
+
 @export_module("autogen.tools.experimental")
 class DeepResearchTool(Tool):
     """A tool that delegates a web research task to the subteams of agents."""
@@ -118,6 +168,13 @@ class DeepResearchTool(Tool):
             human_input_mode="NEVER",
         )
 
+        # Register confirm_summary once, not per-call
+        confirm_summary = _make_confirm_summary(self.ANSWER_CONFIRMED_PREFIX)
+        self.summarizer_agent.register_for_execution()(confirm_summary)
+        self.critic_agent.register_for_llm(
+            description="Call this method to confirm the final answer."
+        )(confirm_summary)
+
         def delegate_research_task(
             task: Annotated[str, "The task to perform a research on."],
             llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
@@ -133,12 +190,6 @@ class DeepResearchTool(Tool):
             Returns:
                 str: The answer to the research task.
             """
-
-            @self.summarizer_agent.register_for_execution()
-            @self.critic_agent.register_for_llm(description="Call this method to confirm the final answer.")
-            def confirm_summary(answer: str, reasoning: str) -> str:
-                return f"{self.ANSWER_CONFIRMED_PREFIX}" + answer + "\nReasoning: " + reasoning
-
             split_question_and_answer_subquestions = DeepResearchTool._get_split_question_and_answer_subquestions(
                 llm_config=llm_config,
                 max_web_steps=max_web_steps,
@@ -154,6 +205,7 @@ class DeepResearchTool(Tool):
                 message="Please answer the following question: " + task,
                 # This outer chat should preserve the history of the conversation
                 clear_history=False,
+                summary_method=_extract_confirmed_answer,
             )
 
             return result.summary
@@ -232,6 +284,7 @@ class DeepResearchTool(Tool):
             result = decomposition_critic.initiate_chat(
                 decomposition_agent,
                 message="Analyse and gather subqestions for the following question: " + question,
+                summary_method=_extract_subquestions_answer,
             )
 
             return result.summary
@@ -318,18 +371,18 @@ class DeepResearchTool(Tool):
             human_input_mode="NEVER",
         )
 
-        @websurfer_agent.register_for_execution()
-        @websurfer_critic.register_for_llm(
+        confirm_answer = _make_confirm_answer(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
+        websurfer_agent.register_for_execution()(confirm_answer)
+        websurfer_critic.register_for_llm(
             description="Call this method when you agree that the original question can be answered with the gathered information and provide the answer."
-        )
-        def confirm_answer(answer: str) -> str:
-            return f"{DeepResearchTool.ANSWER_CONFIRMED_PREFIX} " + answer
+        )(confirm_answer)
 
         websurfer_critic.register_for_execution()(websurfer_agent.tool)
 
         result = websurfer_critic.initiate_chat(
             websurfer_agent,
             message="Please find the answer to this question: " + question,
+            summary_method=_extract_confirmed_answer,
         )
 
         return result.summary
