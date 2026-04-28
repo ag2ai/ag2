@@ -11,7 +11,8 @@ import asyncio
 
 import pytest
 
-from autogen.beta import Agent, KnowledgeConfig
+from autogen.beta import Agent
+from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
 from autogen.beta.events.lifecycle import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
@@ -19,10 +20,10 @@ from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.middleware.builtin import HistoryLimiter, RetryMiddleware
 from autogen.beta.stream import MemoryStream
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
+pytestmark = pytest.mark.asyncio
 
 
-async def test_long_conversation_with_compaction(gemini_flash_config) -> None:
+async def test_long_conversation_with_compaction(provider_config) -> None:
     """A multi-turn conversation triggers compaction without breaking the chat.
 
     With max_events=8 (a low threshold), compaction must fire after a few
@@ -37,7 +38,7 @@ async def test_long_conversation_with_compaction(gemini_flash_config) -> None:
     agent = Agent(
         "long-talker",
         prompt="Be very brief — 1 sentence answers.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
             compact=TailWindowCompact(target=4),
@@ -62,7 +63,7 @@ async def test_long_conversation_with_compaction(gemini_flash_config) -> None:
     assert len(compactions) >= 1
 
 
-async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
+async def test_unicode_and_emoji_pass_through(provider_config) -> None:
     """Emoji and non-ASCII characters survive round-trip through the agent."""
 
     def echo(text: str) -> str:
@@ -72,7 +73,7 @@ async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
     agent = Agent(
         "unicode",
         prompt="Use the echo tool for any text the user gives you.",
-        config=gemini_flash_config,
+        config=provider_config,
         tools=[echo],
     )
     reply = await agent.ask("Use echo with text='日本語 🎌 ñoño 🚀'.")
@@ -82,7 +83,7 @@ async def test_unicode_and_emoji_pass_through(gemini_flash_config) -> None:
     assert any(token in body for token in ["日本語", "🎌", "ñoño", "🚀"])
 
 
-async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> None:
+async def test_concurrent_tool_calls_via_run_subtasks(provider_config) -> None:
     """run_subtasks(parallel=True) dispatches subtasks concurrently.
 
     Verified by inspecting ``TaskStarted.created_at`` for the three subtasks:
@@ -100,7 +101,7 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
     agent = Agent(
         "parallel",
         prompt=("Use run_subtasks with parallel=True to dispatch independent jobs. Be concise."),
-        config=gemini_flash_config,
+        config=provider_config,
     )
 
     reply = await agent.ask(
@@ -124,11 +125,11 @@ async def test_concurrent_tool_calls_via_run_subtasks(gemini_flash_config) -> No
     assert spread < 0.5, f"subtasks were not dispatched in parallel; spread={spread:.3f}s"
 
 
-async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
+async def test_retry_middleware_happy_path(provider_config) -> None:
     """RetryMiddleware wraps LLM calls; happy-path traffic is unaffected."""
     agent = Agent(
         "retry",
-        config=gemini_flash_config,
+        config=provider_config,
         middleware=[RetryMiddleware(max_retries=2)],
     )
     reply = await agent.ask("Say 'ok'.")
@@ -136,7 +137,7 @@ async def test_retry_middleware_happy_path(gemini_flash_config) -> None:
     assert "ok" in reply.body.lower()
 
 
-async def test_history_limiter_caps_context(gemini_flash_config) -> None:
+async def test_history_limiter_caps_context(provider_config) -> None:
     """HistoryLimiter caps the number of events forwarded to the LLM.
 
     HistoryLimiter preserves the first ``ModelRequest`` and the trailing window;
@@ -156,7 +157,7 @@ async def test_history_limiter_caps_context(gemini_flash_config) -> None:
     agent = Agent(
         "limited",
         prompt="One short word answers.",
-        config=gemini_flash_config,
+        config=provider_config,
         middleware=[
             HistoryLimiter(max_events=3),
             lambda e, c: CaptureLLMCall(e, c),
@@ -177,7 +178,7 @@ async def test_history_limiter_caps_context(gemini_flash_config) -> None:
     assert captured_lengths[-1] <= 3
 
 
-async def test_response_schema_strict_validation(gemini_flash_config) -> None:
+async def test_response_schema_strict_validation(provider_config) -> None:
     """AgentReply.content() returns a validated instance for strict schemas.
 
     NOTE: with ``temperature=0`` the model produces a valid response on the
@@ -194,7 +195,7 @@ async def test_response_schema_strict_validation(gemini_flash_config) -> None:
     agent = Agent(
         "strict",
         prompt="Reply ONLY with valid JSON matching the schema. The 'answer' must be an integer.",
-        config=gemini_flash_config,
+        config=provider_config,
         response_schema=StrictAnswer,
     )
 
@@ -204,36 +205,36 @@ async def test_response_schema_strict_validation(gemini_flash_config) -> None:
     assert result.answer == 25
 
 
-async def test_large_response(gemini_flash_config) -> None:
+async def test_large_response(provider_config) -> None:
     """Agent handles a large multi-paragraph response without truncation."""
     agent = Agent(
         "verbose",
         prompt="When asked, write a thorough multi-paragraph response.",
-        config=gemini_flash_config,
+        config=provider_config,
     )
     reply = await agent.ask("Write 5 paragraphs about photosynthesis. Each paragraph at least 50 words.")
     assert reply.body is not None
     assert len(reply.body) > 500  # Roughly 5 * 50 * avg-word-length
 
 
-async def test_empty_string_user_message(gemini_flash_config) -> None:
+async def test_empty_string_user_message(provider_config) -> None:
     """Sending an empty-ish user message should still produce a coherent reply."""
     agent = Agent(
         "empty",
         prompt="If the user sends nothing useful, just say 'ok'.",
-        config=gemini_flash_config,
+        config=provider_config,
     )
     reply = await agent.ask(".")
     assert reply.body is not None
     assert reply.body.strip() != ""
 
 
-async def test_concurrent_independent_asks(gemini_flash_config) -> None:
+async def test_concurrent_independent_asks(provider_config) -> None:
     """Two .ask() calls on the same agent with independent streams should not interfere."""
     agent = Agent(
         "parallel-asks",
         prompt="Reply with just the requested word.",
-        config=gemini_flash_config,
+        config=provider_config,
     )
 
     r1, r2 = await asyncio.gather(

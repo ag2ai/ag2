@@ -24,7 +24,6 @@ from pydantic import BaseModel
 from autogen.beta import Agent, Context
 from autogen.beta.annotations import Inject, Variable
 from autogen.beta.events import ModelMessageChunk
-from autogen.beta.exceptions import ConfigNotProvidedError
 from autogen.beta.stream import MemoryStream
 
 pytestmark = pytest.mark.asyncio
@@ -303,13 +302,6 @@ async def test_per_ask_tool_injection(provider_config) -> None:
     reply = await agent.ask("Reveal the secret word.", tools=[secret_word])
     assert reply.body is not None
     assert "zephyr" in reply.body.lower()
-
-
-async def test_missing_config_raises() -> None:
-    """Agent without config must raise ConfigNotProvidedError on ask."""
-    agent = Agent("no-config")
-    with pytest.raises(ConfigNotProvidedError):
-        await agent.ask("anything")
 
 
 async def test_config_override_per_ask(provider_config) -> None:

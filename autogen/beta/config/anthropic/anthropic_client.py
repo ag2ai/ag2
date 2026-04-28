@@ -192,9 +192,10 @@ class AnthropicClient(LLMClient):
             if isinstance(block, ServerToolUseBlock):
                 if call_event := AnthropicServerToolCallEvent.from_block(block):
                     await context.send(call_event)
-            elif isinstance(block, AnthropicServerToolResultBlockType):
-                if result_event := AnthropicServerToolResultEvent.from_block(block):
-                    await context.send(result_event)
+            elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                result_event := AnthropicServerToolResultEvent.from_block(block)
+            ):
+                await context.send(result_event)
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
         text = "\n".join(prompt)
@@ -243,9 +244,10 @@ class AnthropicClient(LLMClient):
                 if call_event := AnthropicServerToolCallEvent.from_block(block):
                     await context.send(call_event)
 
-            elif isinstance(block, AnthropicServerToolResultBlockType):
-                if result_event := AnthropicServerToolResultEvent.from_block(block):
-                    await context.send(result_event)
+            elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                result_event := AnthropicServerToolResultEvent.from_block(block)
+            ):
+                await context.send(result_event)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
@@ -283,9 +285,10 @@ class AnthropicClient(LLMClient):
                 elif block_type == "server_tool_use":
                     if call_event := AnthropicServerToolCallEvent.from_block(block):
                         await context.send(call_event)
-                elif isinstance(block, AnthropicServerToolResultBlockType):
-                    if result_event := AnthropicServerToolResultEvent.from_block(block):
-                        await context.send(result_event)
+                elif isinstance(block, AnthropicServerToolResultBlockType) and (
+                    result_event := AnthropicServerToolResultEvent.from_block(block)
+                ):
+                    await context.send(result_event)
 
             elif event_type == "content_block_delta":
                 delta = event.delta

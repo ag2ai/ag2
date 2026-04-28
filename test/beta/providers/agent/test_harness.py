@@ -4,15 +4,12 @@
 
 """Harness feature smoke: assembly policies, knowledge store, compaction,
 aggregation — every opt-in Agent primitive exercised against a real LLM.
-
-Uses Gemini 3 Flash Preview as the default driver (fast, cheap, capable).
 """
-
-from pathlib import Path
 
 import pytest
 
-from autogen.beta import Agent, KnowledgeConfig
+from autogen.beta import Agent
+from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -29,7 +26,6 @@ from autogen.beta.events.lifecycle import (
 )
 from autogen.beta.knowledge import (
     DefaultBootstrap,
-    DiskKnowledgeStore,
     MemoryKnowledgeStore,
 )
 from autogen.beta.policies import (
@@ -39,10 +35,10 @@ from autogen.beta.policies import (
 )
 from autogen.beta.stream import MemoryStream
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
+pytestmark = pytest.mark.asyncio
 
 
-async def test_conversation_policy_basic(gemini_flash_config) -> None:
+async def test_conversation_policy_basic(provider_config) -> None:
     """ConversationPolicy filters stream to conversation + tool events.
 
     The agent should still produce a sensible reply when the policy is active.
@@ -50,7 +46,7 @@ async def test_conversation_policy_basic(gemini_flash_config) -> None:
     agent = Agent(
         "conv",
         prompt="Be concise.",
-        config=gemini_flash_config,
+        config=provider_config,
         assembly=[ConversationPolicy()],
     )
     reply = await agent.ask("Say 'hello'.")
@@ -58,7 +54,7 @@ async def test_conversation_policy_basic(gemini_flash_config) -> None:
     assert "hello" in reply.body.lower()
 
 
-async def test_sliding_window_trims_long_history(gemini_flash_config) -> None:
+async def test_sliding_window_trims_long_history(provider_config) -> None:
     """SlidingWindowPolicy trims history to the most-recent N events.
 
     We stuff history, then ask for a recall and expect the model NOT to recall
@@ -68,7 +64,7 @@ async def test_sliding_window_trims_long_history(gemini_flash_config) -> None:
     agent = Agent(
         "sliding",
         prompt="Be concise. Only answer from what's in the conversation history.",
-        config=gemini_flash_config,
+        config=provider_config,
         assembly=[ConversationPolicy(), SlidingWindowPolicy(max_events=4)],
     )
 
@@ -87,7 +83,7 @@ async def test_sliding_window_trims_long_history(gemini_flash_config) -> None:
     assert "elephant" not in body
 
 
-async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
+async def test_token_budget_policy_clamps_history(provider_config) -> None:
     """TokenBudgetPolicy with a very tight budget evicts older turns.
 
     Build up a multi-turn history of fruits, then ask the agent to recall
@@ -98,7 +94,7 @@ async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
     agent = Agent(
         "budget",
         prompt="One-word answers.",
-        config=gemini_flash_config,
+        config=provider_config,
         assembly=[ConversationPolicy(), TokenBudgetPolicy(max_tokens=5)],
     )
     r = await agent.ask("Say 'apple'.")
@@ -116,12 +112,12 @@ async def test_token_budget_policy_clamps_history(gemini_flash_config) -> None:
     )
 
 
-async def test_multiple_policies_compose(gemini_flash_config) -> None:
+async def test_multiple_policies_compose(provider_config) -> None:
     """Composed policies: Conversation → SlidingWindow → TokenBudget."""
     agent = Agent(
         "composed",
         prompt="Brief.",
-        config=gemini_flash_config,
+        config=provider_config,
         assembly=[
             ConversationPolicy(),
             SlidingWindowPolicy(max_events=20),
@@ -133,33 +129,7 @@ async def test_multiple_policies_compose(gemini_flash_config) -> None:
     assert "2" in reply.body
 
 
-async def test_memory_knowledge_store_crud() -> None:
-    """Direct KnowledgeStore CRUD — no LLM needed."""
-    store = MemoryKnowledgeStore()
-    await store.write("/notes/alpha.md", "content-alpha")
-    await store.write("/notes/beta.md", "content-beta")
-
-    assert await store.read("/notes/alpha.md") == "content-alpha"
-    assert "alpha.md" in (await store.list("/notes"))
-    assert "beta.md" in (await store.list("/notes"))
-
-    await store.delete("/notes/alpha.md")
-    assert await store.read("/notes/alpha.md") is None
-    assert "alpha.md" not in (await store.list("/notes"))
-
-
-async def test_disk_knowledge_store_persists(tmp_path: Path) -> None:
-    root = tmp_path / "kstore"
-    store1 = DiskKnowledgeStore(str(root))
-    await store1.write("/hello.txt", "world")
-    assert await store1.read("/hello.txt") == "world"
-
-    # Re-open: data persists
-    store2 = DiskKnowledgeStore(str(root))
-    assert await store2.read("/hello.txt") == "world"
-
-
-async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
+async def test_knowledge_tool_via_actor(provider_config) -> None:
     """LLM drives the knowledge tool: write a note, list, read it back."""
     store = MemoryKnowledgeStore()
 
@@ -170,7 +140,7 @@ async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
             "Paths are slash-separated. Always use the tool when the user asks you "
             "to remember or recall things."
         ),
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(store=store),
     )
 
@@ -190,7 +160,7 @@ async def test_knowledge_tool_via_actor(gemini_flash_config) -> None:
     assert "red panda" in r2.body.lower()
 
 
-async def test_bootstrap_runs_once(gemini_flash_config) -> None:
+async def test_bootstrap_runs_once(provider_config) -> None:
     """DefaultBootstrap writes initial store layout on first _execute."""
     store = MemoryKnowledgeStore()
 
@@ -199,7 +169,7 @@ async def test_bootstrap_runs_once(gemini_flash_config) -> None:
 
     agent = Agent(
         "bootstrapped",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(store=store, bootstrap=DefaultBootstrap()),
     )
     await agent.ask("Say 'ok'.")
@@ -208,7 +178,7 @@ async def test_bootstrap_runs_once(gemini_flash_config) -> None:
     assert await store.exists("/.initialized") is True
 
 
-async def test_tail_window_compact_triggers(gemini_flash_config) -> None:
+async def test_tail_window_compact_triggers(provider_config) -> None:
     """TailWindowCompact (non-LLM) triggers after enough events."""
     store = MemoryKnowledgeStore()
 
@@ -219,7 +189,7 @@ async def test_tail_window_compact_triggers(gemini_flash_config) -> None:
     agent = Agent(
         "compactor",
         prompt="Reply in one short sentence.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
             compact=TailWindowCompact(target=3),
@@ -240,7 +210,7 @@ async def test_tail_window_compact_triggers(gemini_flash_config) -> None:
     assert evt.strategy == "TailWindowCompact"
 
 
-async def test_summarize_compact_uses_llm(gemini_flash_config) -> None:
+async def test_summarize_compact_uses_llm(provider_config) -> None:
     """SummarizeCompact uses a secondary LLM call to summarize history."""
     store = MemoryKnowledgeStore()
 
@@ -251,10 +221,10 @@ async def test_summarize_compact_uses_llm(gemini_flash_config) -> None:
     agent = Agent(
         "summarizer",
         prompt="Very short answers.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
-            compact=SummarizeCompact(target=2, config=gemini_flash_config),
+            compact=SummarizeCompact(target=2, config=provider_config),
             compact_trigger=CompactTrigger(max_events=4),
         ),
     )
@@ -270,7 +240,7 @@ async def test_summarize_compact_uses_llm(gemini_flash_config) -> None:
     assert evt.llm_calls >= 1  # Compaction used the LLM
 
 
-async def test_on_end_aggregation(gemini_flash_config) -> None:
+async def test_on_end_aggregation(provider_config) -> None:
     """AggregateTrigger(on_end=True) fires at execute finalisation."""
     store = MemoryKnowledgeStore()
 
@@ -281,10 +251,10 @@ async def test_on_end_aggregation(gemini_flash_config) -> None:
     agent = Agent(
         "aggregator",
         prompt="Brief answer.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
-            aggregate=ConversationSummaryAggregate(config=gemini_flash_config),
+            aggregate=ConversationSummaryAggregate(config=provider_config),
             aggregate_trigger=AggregateTrigger(on_end=True),
         ),
     )
@@ -301,7 +271,7 @@ async def test_on_end_aggregation(gemini_flash_config) -> None:
     assert len(listing) > 0
 
 
-async def test_every_n_turns_aggregation(gemini_flash_config) -> None:
+async def test_every_n_turns_aggregation(provider_config) -> None:
     """AggregateTrigger(every_n_turns=2) fires aggregation every 2 user asks.
 
     A "turn" is counted as a :class:`ModelRequest` event in stream history
@@ -318,10 +288,10 @@ async def test_every_n_turns_aggregation(gemini_flash_config) -> None:
     agent = Agent(
         "periodic",
         prompt="One word answers.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
-            aggregate=WorkingMemoryAggregate(config=gemini_flash_config),
+            aggregate=WorkingMemoryAggregate(config=provider_config),
             aggregate_trigger=AggregateTrigger(every_n_turns=2, on_end=False),
         ),
     )
@@ -339,7 +309,7 @@ async def test_every_n_turns_aggregation(gemini_flash_config) -> None:
     assert len(await store.list("/")) > 0
 
 
-async def test_every_n_events_aggregation(gemini_flash_config) -> None:
+async def test_every_n_events_aggregation(provider_config) -> None:
     """AggregateTrigger(every_n_events=N) fires when history crosses multiples of N.
 
     Stateless semantics: each turn we check whether total event count in
@@ -357,10 +327,10 @@ async def test_every_n_events_aggregation(gemini_flash_config) -> None:
     agent = Agent(
         "event-counter",
         prompt="Very short.",
-        config=gemini_flash_config,
+        config=provider_config,
         knowledge=KnowledgeConfig(
             store=store,
-            aggregate=WorkingMemoryAggregate(config=gemini_flash_config),
+            aggregate=WorkingMemoryAggregate(config=provider_config),
             aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
         ),
     )

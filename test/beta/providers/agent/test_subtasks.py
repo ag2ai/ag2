@@ -17,10 +17,10 @@ from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.subagents import persistent_stream
 from autogen.beta.tools.subagents import run_task as run_task_mod
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
+pytestmark = pytest.mark.asyncio
 
 
-async def test_run_subtask_auto_injected(gemini_flash_config) -> None:
+async def test_run_subtask_auto_injected(provider_config) -> None:
     """run_subtask is auto-injected on every Agent; LLM can dispatch it."""
     task_starts: list[TaskStarted] = []
     task_completions: list[TaskCompleted] = []
@@ -36,7 +36,7 @@ async def test_run_subtask_auto_injected(gemini_flash_config) -> None:
             "needs isolated focused work. Always use run_subtask for "
             "self-contained research questions. Be concise."
         ),
-        config=gemini_flash_config,
+        config=provider_config,
     )
     reply = await agent.ask(
         "Use run_subtask to find out what colour ripe bananas are. Then tell me the answer in one sentence.",
@@ -50,7 +50,7 @@ async def test_run_subtask_auto_injected(gemini_flash_config) -> None:
     assert "yellow" in reply.body.lower()
 
 
-async def test_run_subtasks_parallel(gemini_flash_config) -> None:
+async def test_run_subtasks_parallel(provider_config) -> None:
     """run_subtasks(parallel=True) dispatches multiple subtasks concurrently."""
     task_completions: list[TaskCompleted] = []
 
@@ -64,7 +64,7 @@ async def test_run_subtasks_parallel(gemini_flash_config) -> None:
             "many independent questions concurrently. Use this whenever the "
             "user asks several unrelated things at once."
         ),
-        config=gemini_flash_config,
+        config=provider_config,
     )
     reply = await agent.ask(
         "Use run_subtasks with parallel=True to answer ALL of these in one tool call: "
@@ -82,7 +82,7 @@ async def test_run_subtasks_parallel(gemini_flash_config) -> None:
     assert len(task_completions) >= 3
 
 
-async def test_subtask_prompt_override(gemini_flash_config) -> None:
+async def test_subtask_prompt_override(provider_config) -> None:
     """TaskConfig.prompt overrides the default subtask system prompt.
 
     Verified by injecting a unique watermark token into the override prompt
@@ -97,7 +97,7 @@ async def test_subtask_prompt_override(gemini_flash_config) -> None:
     agent = Agent(
         "two-tier",
         prompt="Use run_subtask for any factual lookup. Be concise.",
-        config=gemini_flash_config,
+        config=provider_config,
         tasks=TaskConfig(
             prompt=(
                 "You are a fast lookup agent. ALWAYS begin every reply with the "
@@ -118,12 +118,12 @@ async def test_subtask_prompt_override(gemini_flash_config) -> None:
     assert any("100" in (c.result or "") for c in completions)
 
 
-async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
+async def test_actor_as_tool_delegation(provider_config) -> None:
     """A.as_tool() lets agent B call A as a sibling tool."""
     expert = Agent(
         "math-expert",
         prompt="You only do arithmetic. Reply with just the number.",
-        config=gemini_flash_config,
+        config=provider_config,
     )
 
     coordinator = Agent(
@@ -132,7 +132,7 @@ async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
             "You delegate math problems to the task_math-expert tool. "
             "After receiving the answer, present it as a complete sentence."
         ),
-        config=gemini_flash_config,
+        config=provider_config,
         tools=[expert.as_tool(description="Delegate any arithmetic to the math-expert agent.")],
     )
 
@@ -141,7 +141,7 @@ async def test_actor_as_tool_delegation(gemini_flash_config) -> None:
     assert "437" in reply.body
 
 
-async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
+async def test_subtask_cannot_recurse(provider_config) -> None:
     """Subtasks structurally lack ``run_subtask`` — no recursion possible.
 
     The parent has ``run_subtask``; we instruct it to delegate. Inside the
@@ -162,7 +162,7 @@ async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
         agent = Agent(
             "delegator",
             prompt="Always use run_subtask for any factual lookup. Be concise.",
-            config=gemini_flash_config,
+            config=provider_config,
         )
         await agent.ask("Use run_subtask to look up: what colour is the sky?")
     finally:
@@ -175,7 +175,7 @@ async def test_subtask_cannot_recurse(gemini_flash_config) -> None:
     assert child._build_subtask_tools() == []
 
 
-async def test_persistent_stream_shares_history(gemini_flash_config) -> None:
+async def test_persistent_stream_shares_history(provider_config) -> None:
     """persistent_stream() reuses one stream id + storage across as_tool calls.
 
     The original test asserted on the parent's reply body, but the parent's
@@ -200,14 +200,14 @@ async def test_persistent_stream_shares_history(gemini_flash_config) -> None:
     child = Agent(
         "memo",
         prompt="You are a notepad. Reply briefly to whatever the user asks.",
-        config=gemini_flash_config,
+        config=provider_config,
     )
 
     parent_stream = MemoryStream(storage=MemoryStorage())
     parent = Agent(
         "owner",
         prompt="Use the task_memo tool when the user asks you to.",
-        config=gemini_flash_config,
+        config=provider_config,
         tools=[child.as_tool(description="Notepad agent.", stream=wrapped_factory)],
     )
 

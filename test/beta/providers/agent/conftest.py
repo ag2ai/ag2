@@ -2,26 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Fixtures for end-to-end smoke tests that hit real provider APIs.
+"""Fixtures for end-to-end Agent smoke tests that hit real provider APIs.
 
-Loads credentials from the repo-root ``.env`` so the whole smoke suite
-can be run with ``.venv-beta/bin/python -m pytest smoke_tests``.
+Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` via
+``provider_config`` or ``streaming_config``, so each instance carries
+the corresponding per-provider mark and is excluded from
+``test-beta-cov`` by ``_beta_llm_filter``.
 
-Every fixture here returns a cheap-but-capable model. Tests that need
-deeper reasoning can override the config inline — provider modules are
-re-imported from ``autogen.beta.config``.
+Credentials are read from the environment — `just` loads ``.env``
+automatically; for direct ``pytest`` invocation, export the keys
+yourself or run via ``set -a; source .env; pytest …``.
 """
 
 import os
-from pathlib import Path
 
 import pytest
-from dotenv import load_dotenv
 
 from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(_REPO_ROOT / ".env")
 
 
 def _require(env: str) -> str:
@@ -29,6 +26,13 @@ def _require(env: str) -> str:
     if not value:
         pytest.skip(f"{env} not set; skipping real-API smoke test")
     return value
+
+
+def _require_gemini_key() -> str:
+    key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not key:
+        pytest.skip("GEMINI_API_KEY/GOOGLE_API_KEY not set; skipping real-API smoke test")
+    return key
 
 
 @pytest.fixture()
@@ -50,33 +54,10 @@ def anthropic_config() -> AnthropicConfig:
 
 
 @pytest.fixture()
-def anthropic_sonnet_config() -> AnthropicConfig:
-    """Heavier Claude for tests that need real tool-use reasoning."""
-    return AnthropicConfig(
-        model="claude-sonnet-4-6",
-        api_key=_require("ANTHROPIC_API_KEY"),
-        temperature=0,
-    )
-
-
-@pytest.fixture()
 def gemini_config() -> GeminiConfig:
     return GeminiConfig(
         model="gemini-3.1-flash-lite-preview",
-        api_key=_require("GEMINI_API_KEY"),
-        temperature=0,
-    )
-
-
-@pytest.fixture()
-def gemini_flash_config() -> GeminiConfig:
-    """Fast, cheap, and capable enough for tool-dispatch smoke tests.
-
-    Default driver for all non-parity smoke suites.
-    """
-    return GeminiConfig(
-        model="gemini-3-flash-preview",
-        api_key=_require("GEMINI_API_KEY"),
+        api_key=_require_gemini_key(),
         temperature=0,
     )
 
@@ -109,18 +90,7 @@ def streaming_config(request):
         )
     return GeminiConfig(
         model="gemini-3.1-flash-lite-preview",
-        api_key=_require("GEMINI_API_KEY"),
-        temperature=0,
-        streaming=True,
-    )
-
-
-@pytest.fixture()
-def gemini_flash_streaming_config() -> GeminiConfig:
-    """Streaming-enabled Gemini Flash for chunk-observer smoke tests."""
-    return GeminiConfig(
-        model="gemini-3-flash-preview",
-        api_key=_require("GEMINI_API_KEY"),
+        api_key=_require_gemini_key(),
         temperature=0,
         streaming=True,
     )

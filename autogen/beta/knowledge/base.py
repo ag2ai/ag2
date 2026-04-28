@@ -42,12 +42,11 @@ class KnowledgeStore(Protocol):
     Directories are implicit -- writing /a/b/c.txt implies /a/ and /a/b/ exist.
     Listing returns immediate children. Directory entries end with '/'.
 
-    The network layer uses the same protocol to back the hub's virtual file
-    system; see :mod:`autogen.beta.network`. Three methods beyond the basic
-    CRUD are required for WAL-backed sessions: ``append`` and ``read_range``
-    are mandatory, while ``on_change`` is optional (backends that cannot
-    observe changes efficiently return a :class:`NoopChangeSubscription`
-    and callers fall back to polling).
+    Three methods beyond the basic CRUD are required for WAL-backed
+    sessions: ``append`` and ``read_range`` are mandatory, while
+    ``on_change`` is optional (backends that cannot observe changes
+    efficiently return a :class:`NoopChangeSubscription` and callers
+    fall back to polling).
     """
 
     async def read(self, path: str) -> str | None:

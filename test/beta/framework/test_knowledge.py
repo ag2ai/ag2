@@ -238,6 +238,13 @@ class TestDiskKnowledgeStore:
         assert await store.read("/test.txt") == "hello"
         assert (tmp_path / "test.txt").read_text() == "hello"
 
+    async def test_persists_across_reopens(self, tmp_path: Path) -> None:
+        store1 = DiskKnowledgeStore(str(tmp_path))
+        await store1.write("/hello.txt", "world")
+
+        store2 = DiskKnowledgeStore(str(tmp_path))
+        assert await store2.read("/hello.txt") == "world"
+
     async def test_read_nonexistent(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
         assert await store.read("/missing.txt") is None

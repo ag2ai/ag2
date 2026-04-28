@@ -127,7 +127,7 @@ The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined i
 
 ## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/advanced/agent#knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
+Pass the strategy + trigger through [`KnowledgeConfig`](/docs/beta/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
 
 ```python linenums="1" hl_lines="11-15"
 from autogen.beta import Agent, KnowledgeConfig
