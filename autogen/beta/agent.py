@@ -12,7 +12,7 @@ spawning).
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
 exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
-or ``tasks=TaskConfig(...)`` for subtask spawning defaults.
+or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 """
 
 import asyncio
@@ -354,10 +354,10 @@ class Agent(Generic[TResult]):
       ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
     * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
       compaction, aggregation.
-    * ``tasks=TaskConfig(...)`` — override the LLM config / prompt /
-      tool-inheritance rules for the auto-injected ``run_subtask`` /
-      ``run_subtasks`` tools. Pass ``tasks=False`` to suppress those tools
-      entirely.
+    * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
+      / ``run_subtasks`` tools, and override the LLM config / prompt /
+      tool-inheritance rules for sub-task Agents. Defaults to ``False``
+      (sub-task tools disabled).
     """
 
     @overload
@@ -376,7 +376,7 @@ class Agent(Generic[TResult]):
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | Literal[False] | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -396,7 +396,7 @@ class Agent(Generic[TResult]):
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | Literal[False] | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -416,7 +416,7 @@ class Agent(Generic[TResult]):
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | Literal[False] | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -436,7 +436,7 @@ class Agent(Generic[TResult]):
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
-        tasks: TaskConfig | Literal[False] | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
@@ -455,7 +455,7 @@ class Agent(Generic[TResult]):
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
-        tasks: TaskConfig | Literal[False] | None = None,
+        tasks: TaskConfig | Literal[False] = False,
         assembly: Iterable[AssemblyPolicy] = (),
     ):
         self.name = name
@@ -497,13 +497,13 @@ class Agent(Generic[TResult]):
         for p in plugins:
             p.register(self)
 
-        # Task spawning. ``tasks=False`` opts out entirely; ``tasks=None`` (the
-        # default) auto-injects ``run_subtask`` / ``run_subtasks`` with
-        # ``TaskConfig()`` defaults.
+        # Task spawning. ``tasks=False`` (the default) means no auto-injected
+        # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
+        # to opt in.
         if tasks is False:
             self._task_config: TaskConfig | None = None
         else:
-            self._task_config = tasks if tasks is not None else TaskConfig(config=config)
+            self._task_config = tasks
 
         self._subtask_tools: list[Tool] = _build_subtask_tools(self) if self._task_config is not None else []
 
@@ -799,15 +799,16 @@ class Agent(Generic[TResult]):
 
         The subtask inherits the parent's user-supplied tools (filtered by
         ``TaskConfig.include_tools`` / ``exclude_tools``) plus
-        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False`` so
-        the child has **no** ``run_subtask`` tools — recursive delegation is
-        impossible by construction. ``run_task`` emits the ``TaskStarted`` /
-        ``TaskCompleted`` / ``TaskFailed`` lifecycle events and handles
-        dependency/variable copy and HITL bridging.
+        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
+        (the default) so the child has **no** ``run_subtask`` tools —
+        recursive delegation is impossible by construction. ``run_task``
+        emits the ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed``
+        lifecycle events and handles dependency/variable copy and HITL
+        bridging.
         """
         tc = self._task_config
         if tc is None:
-            return "Error: subtask spawning is disabled on this Agent (tasks=False)."
+            return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
 
         inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
 

@@ -86,7 +86,6 @@ async def main() -> None:
             "Answer directly without calling any tools."
         ),
         config=config,
-        tasks=False,  # No subtask tools — keeps the demo focused on assembly + compaction.
         assembly=[
             ConversationPolicy(),
             SlidingWindowPolicy(max_events=6, transparent=True),

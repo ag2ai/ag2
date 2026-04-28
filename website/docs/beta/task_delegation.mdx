@@ -17,7 +17,7 @@ Breaking work across multiple agents gives you:
     When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
 
 !!! tip
-    For lightweight self-delegation where the parent doesn't need a *named* delegate, every Agent already auto-carries `#!python run_subtask` / `#!python run_subtasks` tools — see [`tasks=` in The Agent Harness](/docs/beta/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
+    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `#!python run_subtask` / `#!python run_subtasks` tools by passing `#!python tasks=TaskConfig(...)` — see [`tasks=` in The Agent Harness](/docs/beta/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
 
 ## Subagents API
 

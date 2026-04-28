@@ -108,7 +108,7 @@ The compaction and aggregation middleware are opt-in per field: passing `compact
 
 ## `tasks=` — TaskConfig
 
-Every Agent (unless constructed with `tasks=False`) automatically carries a pair of sub-task tools — `run_subtask` and `run_subtasks` — that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
+Sub-task delegation is **off by default** — a bare Agent has no `run_subtask` / `run_subtasks` tools. Pass `tasks=TaskConfig(...)` to opt in, and the Agent will auto-inject the pair of sub-task tools that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
 
 ```python linenums="1"
 from dataclasses import dataclass
@@ -133,7 +133,7 @@ class TaskConfig:
 | `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
 | `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
 
-By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are constructed with `tasks=False`, so they themselves have no `run_subtask` / `run_subtasks` tools — recursive delegation is structurally impossible and no depth limit is needed.
+By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are themselves constructed with `tasks=False` (the Agent default), so they have no `run_subtask` / `run_subtasks` tools — recursive delegation is structurally impossible and no depth limit is needed.
 
 ```python linenums="1" hl_lines="8-12"
 from autogen.beta import Agent, TaskConfig
@@ -150,22 +150,22 @@ agent = Agent(
 )
 ```
 
-### `tasks=False` — opt out
+### `tasks=False` — the default
 
-Pass `tasks=False` to suppress the auto-injected sub-task tools entirely. Use this when an Agent should never spawn children — for example, when it's already running as a sub-task itself, or when delegation isn't appropriate for its role.
+`tasks=False` is the Agent default, so a bare Agent never spawns children. You only need to pass it explicitly to be self-documenting; otherwise just omit `tasks=` entirely.
 
 ```python linenums="1"
 focused = Agent(
     "summarizer",
     prompt="Summarise the input. Do not delegate.",
     config=main_config,
-    tasks=False,
+    # tasks=False is the default — no run_subtask / run_subtasks tools.
 )
 ```
 
 ## `run_subtask` / `run_subtasks` — auto-injected tools
 
-Unless you set `tasks=False`, every Agent exposes two tools to the LLM:
+When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the LLM:
 
 - `run_subtask(task: str)` — spawn one sub-task Agent. Useful when the LLM has a single self-contained piece of work to delegate.
 - `run_subtasks(tasks: list[str], parallel: bool = True)` — spawn multiple sub-tasks in one tool call. Defaults to running them concurrently with `asyncio.gather`; pass `parallel=False` only when later tasks depend on earlier results.
