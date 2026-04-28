@@ -105,7 +105,7 @@ ag-ui = [
 diskcache = ["diskcache"]
 
 # providers
-openai = ["openai>=1.99.3,<2"]
+openai = ["openai>=1.99.3,<2.34"]
 openai-realtime = ["ag2[openai]", "openai[realtime]"]
 
 deepseek = ["ag2[openai]"]
