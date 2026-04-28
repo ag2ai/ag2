@@ -20,6 +20,7 @@ from autogen.beta.compact import (
     SummarizeCompact,
     TailWindowCompact,
 )
+from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.events.lifecycle import (
     AggregationCompleted,
     CompactionCompleted,
@@ -55,32 +56,52 @@ async def test_conversation_policy_basic(provider_config) -> None:
 
 
 async def test_sliding_window_trims_long_history(provider_config) -> None:
-    """SlidingWindowPolicy trims history to the most-recent N events.
+    """``SlidingWindowPolicy`` caps the events delivered to the LLM.
 
-    We stuff history, then ask for a recall and expect the model NOT to recall
-    ancient turns because the window trimmed them out.
+    Asserts on the *policy's contract* — the trimmed event list sent to
+    the LLM — instead of the model's reply, which is unreliable across
+    providers (assistant responses can echo trimmed words back).
     """
-    # Window of 4 conversation events = ~2 turns
+    sent_payloads: list[list] = []
+
+    class _CapturingClient:
+        def __init__(self, inner):
+            self._inner = inner
+
+        async def __call__(self, messages, context, **kwargs):
+            sent_payloads.append(list(messages))
+            return await self._inner(messages, context=context, **kwargs)
+
+    class _CapturingConfig:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def copy(self):
+            return self
+
+        def create(self):
+            return _CapturingClient(self._inner.create())
+
     agent = Agent(
         "sliding",
-        prompt="Be concise. Only answer from what's in the conversation history.",
-        config=provider_config,
+        prompt="Be concise.",
+        config=_CapturingConfig(provider_config),
         assembly=[ConversationPolicy(), SlidingWindowPolicy(max_events=4)],
     )
 
     r1 = await agent.ask("Remember the word 'elephant'.")
     r2 = await r1.ask("Remember the word 'volcano'.")
     r3 = await r2.ask("Remember the word 'nebula'.")
-    # After r3, history has ~6 ModelRequests/Responses. With max_events=4,
-    # the sliding window drops the oldest turns — so 'elephant' should be gone.
-    r4 = await r3.ask("Which three words did I ask you to remember? Be precise.")
+    r4 = await r3.ask("Which words have I mentioned?")
     assert r4.body is not None
-    body = r4.body.lower()
-    # Most-recent word must survive
-    assert "nebula" in body
-    # First-turn word must be evicted by the sliding window —
-    # this is the assertion that proves the policy actually trimmed history.
-    assert "elephant" not in body
+
+    # Last LLM call is the assembly-trimmed view for r4.
+    last = sent_payloads[-1]
+    assert len(last) <= 5  # 4 from the window cap + the new ModelRequest
+    assert not any(
+        isinstance(e, ModelRequest) and any(isinstance(p, TextInput) and "elephant" in p.content for p in e.parts)
+        for e in last
+    ), f"sliding window did not evict 'elephant'; LLM saw: {last!r}"
 
 
 async def test_token_budget_policy_clamps_history(provider_config) -> None:

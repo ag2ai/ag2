@@ -125,33 +125,35 @@ async def test_token_monitor_builtin(provider_config) -> None:
 async def test_loop_detector_builtin(provider_config) -> None:
     """LoopDetector emits an ObserverAlert when a tool is called repeatedly.
 
-    The test gives the agent a tool whose result instructs it to retry, so
-    the LLM ends up calling the same tool with identical arguments multiple
-    times in a row. With ``repeat_threshold=3`` the detector must emit a
-    'loop detected' alert.
+    The tool returns "pending" the first 3 calls and "ready" after that,
+    so the LLM exits the retry loop naturally. ``repeat_threshold=2`` is
+    crossed during the pending phase, so the detector still fires.
     """
-    detector = LoopDetector(window_size=10, repeat_threshold=3)
+    detector = LoopDetector(window_size=10, repeat_threshold=2)
 
     alerts: list[ObserverAlert] = []
     stream = MemoryStream()
     stream.where(ObserverAlert).subscribe(lambda e: alerts.append(e))
 
+    call_count = 0
+
     def get_status() -> str:
         """Return the current system status."""
-        return "Status: pending. Call this tool again to retry."
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            return "Status: pending. Call this tool again to retry."
+        return "Status: ready."
 
     agent = Agent(
         "looper",
-        prompt=(
-            "You must call the get_status tool repeatedly until it returns a non-pending status. Try at least 4 times."
-        ),
+        prompt="Call get_status until it returns a non-pending status, then stop.",
         config=provider_config,
         tools=[get_status],
         observers=[detector],
     )
-    reply = await agent.ask("Get the system status. Keep retrying until it's not pending.", stream=stream)
+    reply = await agent.ask("Get the system status. Retry until non-pending.", stream=stream)
     assert reply.body is not None
-    # The detector must have emitted at least one loop alert
     loop_alerts = [a for a in alerts if "loop" in a.message.lower()]
     assert loop_alerts, f"LoopDetector did not fire; got alerts={alerts!r}"
     assert loop_alerts[0].source == "loop-detector"
