@@ -1,3 +1,28 @@
+---
+title: "Token Watchdog"
+sidebarTitle: "04 · Token Watchdog"
+---
+
+A creative-writing Agent runs with three observers attached: two built-in (`TokenMonitor`, `LoopDetector`) and one custom (`AlertConsole`). The thresholds are deliberately low so a single ask trips the monitors and the custom observer prints every alert to stdout — giving you a live "watchdog dashboard" view of what the framework is noticing.
+
+## What it covers
+
+- Wiring multiple observers onto an Agent via `observers=[...]`.
+- Using built-in observers (`TokenMonitor`, `LoopDetector`) to detect cost and repetition issues out of the box.
+- Implementing a custom `BaseObserver` that subscribes to `ObserverAlert` events and reacts to them.
+- Reading observer state after a run (`token_monitor.total_tokens`, `console.seen`).
+
+## Primitives covered
+
+- `BaseObserver` (custom subclass)
+- Built-in observers: `TokenMonitor`, `LoopDetector`
+- `ObserverAlert` events
+- `EventWatch` for filtering which events the observer wakes on
+- `MemoryStream` to capture a turn's events
+
+## Source
+
+```python linenums="1"
 """04 · Token watchdog — observers and alerts
 
 Demonstrates three observer patterns running against a single Agent:
@@ -14,15 +39,18 @@ Run::
 
 import asyncio
 
-from _config import default_config, section
-
 from autogen.beta import Agent
 from autogen.beta.annotations import Context
+from autogen.beta.config import GeminiConfig
 from autogen.beta.events import BaseEvent
 from autogen.beta.events.alert import ObserverAlert
 from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
+
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
 
 
 class AlertConsole(BaseObserver):
@@ -41,7 +69,7 @@ class AlertConsole(BaseObserver):
 
 
 async def main() -> None:
-    config = default_config()
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
     section("Watchdog — low thresholds so observers trip on a single ask")
 
@@ -73,3 +101,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+```

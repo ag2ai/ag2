@@ -1,3 +1,25 @@
+---
+title: "Travel Planner"
+sidebarTitle: "03 · Travel Planner"
+---
+
+A travel-planner Agent walks through five turns of a single conversation: kicking off the trip, layering on budget and travel-mode constraints, swapping a day's activity, and producing a final itinerary summary. Each turn uses `reply.ask()` so the conversation context (constraints from earlier turns) carries forward without the caller re-supplying it.
+
+## What it covers
+
+- Holding a multi-turn conversation by chaining `reply.ask(...)` instead of calling `agent.ask(...)` each time.
+- How conversation history persists across turns so the Agent doesn't "forget" the user's earlier constraints.
+- The pattern of incremental refinement — start broad, add constraints, ask for revisions, then summarise.
+
+## Primitives covered
+
+- `Agent`
+- `agent.ask()` for the first turn
+- `reply.ask()` for follow-up turns (context-preserving)
+
+## Source
+
+```python linenums="1"
 """03 · Travel planner — multi-turn conversation
 
 Chained ``reply.ask()`` builds on the same conversation history. The planner
@@ -11,9 +33,13 @@ Run::
 
 import asyncio
 
-from _config import default_config, section
-
 from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig
+
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
+
 
 TURNS = [
     "I want to plan a 5-day trip to Japan in late April. Just cherry-blossom season.",
@@ -25,7 +51,7 @@ TURNS = [
 
 
 async def main() -> None:
-    config = default_config()
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
     agent = Agent(
         "travel-planner",
@@ -49,3 +75,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+```

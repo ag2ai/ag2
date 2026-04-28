@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol, runtime_checkable
 
+from fast_depends.pydantic import PydanticSerializer
+
 from autogen.beta.annotations import Context
 from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext
@@ -69,6 +71,10 @@ class ConversationSummaryAggregate:
 
     def __init__(self, config: ModelConfig) -> None:
         self._config = config
+        self._serializer = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
+        )
         self.last_usage: dict = {}
 
     async def aggregate(
@@ -95,6 +101,7 @@ class ConversationSummaryAggregate:
             ConversationContext(MemoryStream()),
             tools=[],
             response_schema=None,
+            serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
         return response.content or ""
@@ -112,6 +119,10 @@ class WorkingMemoryAggregate:
 
     def __init__(self, config: ModelConfig) -> None:
         self._config = config
+        self._serializer = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
+        )
         self.last_usage: dict = {}
 
     async def aggregate(
@@ -140,6 +151,7 @@ class WorkingMemoryAggregate:
             ConversationContext(MemoryStream()),
             tools=[],
             response_schema=None,
+            serializer=self._serializer,
         )
         self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
         return response.content or existing

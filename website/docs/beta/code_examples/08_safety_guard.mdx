@@ -1,3 +1,29 @@
+---
+title: "Safety Guard"
+sidebarTitle: "08 · Safety Guard"
+---
+
+A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` → `HaltEvent` → `_HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
+
+## What it covers
+
+- Building a `BaseObserver` that watches a specific event type (here `ToolCallEvent`) via `EventWatch`.
+- Returning an `ObserverAlert(severity=Severity.FATAL, ...)` from an observer to signal a hard-stop condition.
+- How `AlertPolicy` (in the `assembly` chain) translates a FATAL alert into a `HaltEvent` and appends a halt notice to the system prompt.
+- How `_HaltCheckMiddleware` (auto-wired when `assembly` is non-empty) sees the `HaltEvent` and short-circuits the next LLM call.
+- Subscribing to `HaltEvent` and `ObserverAlert` from outside the Agent to verify the halt fired.
+
+## Primitives covered
+
+- `BaseObserver` + `EventWatch(ToolCallEvent)`
+- `ObserverAlert` with `Severity.FATAL`
+- `AlertPolicy` in the `assembly=` chain
+- Auto-wired `_HaltCheckMiddleware` (no explicit middleware setup needed)
+- `HaltEvent` lifecycle event
+
+## Source
+
+```python linenums="1"
 """08 · Safety guard — FATAL alert halts the Agent
 
 A hand-rolled ``BaseObserver`` watches every tool call and flags anything
@@ -20,16 +46,20 @@ Run::
 
 import asyncio
 
-from _config import default_config, section
-
 from autogen.beta import Agent
 from autogen.beta.annotations import Context
+from autogen.beta.config import GeminiConfig
 from autogen.beta.events import BaseEvent, ToolCallEvent
 from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
 from autogen.beta.observer import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
+
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
+
 
 # ---- Tool under supervision -------------------------------------------------
 
@@ -64,7 +94,7 @@ class PathGuardian(BaseObserver):
 
 
 async def main() -> None:
-    config = default_config()
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
     halt_events: list[HaltEvent] = []
     alerts: list[ObserverAlert] = []
@@ -112,3 +142,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+```

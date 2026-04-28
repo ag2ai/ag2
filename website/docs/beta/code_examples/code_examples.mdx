@@ -1,0 +1,33 @@
+---
+title: "Code Examples"
+sidebarTitle: "Overview"
+---
+
+End-to-end runnable scripts demonstrating `autogen.beta`. Each example is self-contained, instantiates a `GeminiConfig` directly, and exercises one or two specific harness primitives so you can read it top-to-bottom and copy what you need. The same scripts live in `playground/` at the repo root for quick local hacking.
+
+## Examples
+
+| # | Page | Topic | Primitives covered |
+|---|------|-------|--------------------|
+| 01 | [Hello Agent](/docs/beta/code_examples/01_hello_agent) | Minimal Agent — one config, one ask | `Agent`, `GeminiConfig` |
+| 02 | [Recipe Builder](/docs/beta/code_examples/02_recipe_builder) | Tools + Pydantic structured output | `Agent`, `tools=`, `response_schema=` |
+| 03 | [Travel Planner](/docs/beta/code_examples/03_travel_planner) | Multi-turn chat via chained `reply.ask()` | `agent.ask()`, `reply.ask()` |
+| 04 | [Token Watchdog](/docs/beta/code_examples/04_token_watchdog) | Built-in + custom observers, `ObserverAlert` | `BaseObserver`, `TokenMonitor`, `LoopDetector`, `EventWatch` |
+| 05 | [Research Squad](/docs/beta/code_examples/05_research_squad) | Parallel subtasks + sibling delegation | `run_subtasks(parallel=True)`, `Agent.as_tool()` |
+| 06 | [Journal Companion](/docs/beta/code_examples/06_journal_companion) | Persistent memory across runs | `KnowledgeConfig`, `WorkingMemoryAggregate`, `WorkingMemoryPolicy` |
+| 07 | [Long-Doc Chat](/docs/beta/code_examples/07_long_doc_chat) | Composing assembly policies + compaction | `assembly=[...]`, `SlidingWindowPolicy`, `TokenBudgetPolicy`, `TailWindowCompact` |
+| 08 | [Safety Guard](/docs/beta/code_examples/08_safety_guard) | FATAL alert → `AlertPolicy` → `HaltEvent` | `ObserverAlert(FATAL)`, `AlertPolicy`, `HaltEvent` |
+
+## Running locally
+
+The same scripts ship in [`playground/`](https://github.com/ag2ai/ag2/tree/main/playground){.external-link target="_blank"} at the repo root. From a clone:
+
+```bash
+# Install beta extras
+uv sync --extra beta
+
+# Run any example
+.venv-beta/bin/python playground/01_hello_agent.py
+```
+
+Set `GEMINI_API_KEY` (or swap in another provider's `ModelConfig` — `AnthropicConfig`, `OpenAIConfig`, etc.) before running.

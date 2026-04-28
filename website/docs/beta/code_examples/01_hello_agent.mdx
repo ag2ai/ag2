@@ -1,0 +1,65 @@
+---
+title: "Hello Agent"
+sidebarTitle: "01 · Hello Agent"
+---
+
+The smallest possible end-to-end example: instantiate an `Agent` with one model config, call `ask()`, print the reply, then reuse the same Agent for a second turn. No tools, no harness primitives, no plugins — just the bare loop.
+
+## What it covers
+
+- Building an Agent from a name, prompt, and `ModelConfig`.
+- Awaiting `agent.ask(...)` and reading `reply.body`.
+- Reusing the same Agent for a follow-up `ask()` call.
+
+## Primitives covered
+
+- `Agent`
+- `agent.ask()` / `reply.body`
+- `GeminiConfig` (any `ModelConfig` works the same way)
+
+## Source
+
+```python linenums="1"
+"""01 · Hello Agent
+
+The smallest possible example: a bare ``Agent`` with a single LLM config and
+one ``ask()`` call. No tools, no harness primitives, no plugins.
+
+Run::
+
+    .venv-beta/bin/python playground/01_hello_agent.py
+"""
+
+import asyncio
+
+from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig
+
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
+
+
+async def main() -> None:
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+
+    section("Bare Agent — ask and print")
+
+    agent = Agent(
+        "greeter",
+        prompt="You are a friendly but concise assistant. Reply in one sentence.",
+        config=config,
+    )
+
+    reply = await agent.ask("Give me a single tip for learning to play chess.")
+    print(reply.body)
+
+    section("Reuse the Agent for another ask")
+
+    reply2 = await agent.ask("And a tip for learning poker, in one sentence.")
+    print(reply2.body)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```

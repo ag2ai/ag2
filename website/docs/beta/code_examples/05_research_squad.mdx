@@ -1,3 +1,28 @@
+---
+title: "Research Squad"
+sidebarTitle: "05 · Research Squad"
+---
+
+Two complementary multi-Agent patterns in one example. First, a coordinator uses the auto-injected `run_subtasks` tool to fan out three independent factual lookups concurrently in a single tool call. Then a second coordinator delegates arithmetic to a `math_expert` Agent exposed via `Agent.as_tool()`. Together they show "fan out then collect" alongside "named delegate".
+
+## What it covers
+
+- Auto-injected `run_subtask` / `run_subtasks` — every Agent has them by default; subtasks themselves don't, so recursion is impossible by construction.
+- Calling `run_subtasks(parallel=True)` to dispatch many sub-questions concurrently from one tool call.
+- Wrapping an Agent with `Agent.as_tool()` to expose it as a named delegate (`task_math-expert`) on a parent's tool list.
+- Subscribing to `TaskStarted` / `TaskCompleted` lifecycle events to observe the fan-out from outside the Agent.
+
+## Primitives covered
+
+- `Agent` with auto-injected sub-task tools
+- `run_subtasks(parallel=True)` for concurrent fan-out
+- `Agent.as_tool(description=...)` for sibling delegation
+- `TaskStarted` / `TaskCompleted` events on the stream
+- `MemoryStream` + `stream.where(EventType).subscribe(...)`
+
+## Source
+
+```python linenums="1"
 """05 · Research squad — parallel subtasks and sibling delegation
 
 Two patterns for multi-Agent orchestration:
@@ -21,15 +46,18 @@ Run::
 import asyncio
 import time
 
-from _config import default_config, section
-
 from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig
 from autogen.beta.events import TaskCompleted, TaskStarted
 from autogen.beta.stream import MemoryStream
 
 
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
+
+
 async def main() -> None:
-    config = default_config()
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
     section("Parallel subtasks — fan out three lookups in one tool call")
 
@@ -96,3 +124,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+```

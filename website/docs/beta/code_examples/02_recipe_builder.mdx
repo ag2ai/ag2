@@ -1,3 +1,26 @@
+---
+title: "Recipe Builder"
+sidebarTitle: "02 · Recipe Builder"
+---
+
+A culinary assistant that rescales a classic carbonara recipe from 2 servings to 6. The Agent is given a custom Python function as a tool and a Pydantic model as its `response_schema`, so the final reply is a fully validated `Recipe` object instead of free-form text.
+
+## What it covers
+
+- Decorating a plain function (`scale_ingredient`) and registering it via `tools=[...]` so the LLM can call it.
+- Passing a Pydantic class to `response_schema=` to coerce the model output into a typed object.
+- Reading the typed result through `await reply.content(retries=1)` (with a retry on validation failure).
+
+## Primitives covered
+
+- `Agent` with `tools=` and `response_schema=`
+- Plain Python `def` as a tool (auto-decorated)
+- `pydantic.BaseModel` for structured output
+- `reply.content(retries=...)` for schema-validated reads
+
+## Source
+
+```python linenums="1"
 """02 · Recipe builder — tools and structured output
 
 Shows two core Agent features on top of the bare loop:
@@ -12,10 +35,14 @@ Run::
 
 import asyncio
 
-from _config import default_config, section
 from pydantic import BaseModel, Field
 
 from autogen.beta import Agent
+from autogen.beta.config import GeminiConfig
+
+
+def section(title: str) -> None:
+    print(f"\n── {title} ───")
 
 
 class Ingredient(BaseModel):
@@ -41,7 +68,7 @@ def scale_ingredient(quantity: float, factor: float) -> float:
 
 
 async def main() -> None:
-    config = default_config()
+    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
     section("Recipe builder — scale an existing dish for 6 servings")
 
@@ -82,3 +109,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
