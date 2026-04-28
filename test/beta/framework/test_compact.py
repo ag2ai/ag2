@@ -6,11 +6,15 @@
 
 import pytest
 
+from autogen.beta import Agent
+from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelRequest, TextInput
+from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
+from autogen.beta.events.lifecycle import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
+from autogen.beta.testing import TestConfig
 
 
 class TestTailWindowCompact:
@@ -73,3 +77,64 @@ class TestCompactTrigger:
         trigger = CompactTrigger(max_events=100, max_tokens=50000)
         assert trigger.max_events == 100
         assert trigger.max_tokens == 50000
+
+    def test_custom_chars_per_token(self) -> None:
+        trigger = CompactTrigger(max_tokens=100, chars_per_token=2)
+        assert trigger.chars_per_token == 2
+
+
+class TestCompactionWiredOnAgent:
+    """End-to-end: an Agent configured with compaction emits CompactionCompleted
+    on the stream and shrinks history once the trigger threshold is crossed."""
+
+    @pytest.mark.asyncio
+    async def test_fires_when_threshold_crossed(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(
+                ModelResponse(ModelMessage("a")),
+                ModelResponse(ModelMessage("b")),
+                ModelResponse(ModelMessage("c")),
+                ModelResponse(ModelMessage("d")),
+            ),
+            knowledge=KnowledgeConfig(
+                store=store,
+                compact=TailWindowCompact(target=2),
+                compact_trigger=CompactTrigger(max_events=3),
+            ),
+        )
+
+        # Four turns on the same stream — history grows past max_events=3
+        reply = await agent.ask("turn-1", stream=stream)
+        for q in ("turn-2", "turn-3", "turn-4"):
+            reply = await reply.ask(q)
+
+        assert len(completions) >= 1
+        assert completions[0].agent == "compactor"
+        assert completions[0].strategy == "TailWindowCompact"
+        assert completions[0].events_after <= 2
+
+    @pytest.mark.asyncio
+    async def test_does_not_fire_below_threshold(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(ModelResponse(ModelMessage("hi"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                compact=TailWindowCompact(target=2),
+                compact_trigger=CompactTrigger(max_events=100),
+            ),
+        )
+        await agent.ask("once", stream=stream)
+
+        assert completions == []

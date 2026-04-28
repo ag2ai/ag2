@@ -225,6 +225,26 @@ class TestAlertPolicyUnit:
         assert "First" not in prompts2[1]
 
     @pytest.mark.asyncio
+    async def test_dedup_survives_history_replacement(self) -> None:
+        """A re-constructed alert with identical content is still treated as a duplicate.
+
+        Compaction rebuilds events from disk into fresh objects; an
+        ``id(event)``-based dedup would re-deliver the alert. Content
+        dedup (source, severity, message) must hold.
+        """
+        policy = AlertPolicy()
+        ctx = MagicMock()
+
+        original = ObserverAlert(source="mon", severity=Severity.WARNING, message="watch out")
+        await policy.apply(["System"], [original], ctx)
+
+        replaced = ObserverAlert(source="mon", severity=Severity.WARNING, message="watch out")
+        assert original is not replaced
+
+        prompts, _ = await policy.apply(["System"], [replaced], ctx)
+        assert all("watch out" not in p for p in prompts)
+
+    @pytest.mark.asyncio
     async def test_multiple_fatals_uses_first_for_halt(self) -> None:
         """When multiple FATAL alerts arrive, the first one drives the HaltEvent."""
         policy = AlertPolicy()

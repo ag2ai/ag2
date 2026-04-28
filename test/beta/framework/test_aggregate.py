@@ -8,15 +8,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autogen.beta import Agent
+from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelRequest, TextInput
+from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
+from autogen.beta.events.lifecycle import AggregationCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
+from autogen.beta.testing import TestConfig
 
 
 class TestAggregateTrigger:
@@ -206,3 +210,108 @@ class TestWorkingMemoryAggregate:
         # Should fall back to existing content when LLM returns empty
         content = await store.read("/memory/working.md")
         assert content == "Existing content."
+
+
+class TestConversationSummaryStreamId:
+    @pytest.mark.asyncio
+    async def test_filename_uses_full_stream_id(self) -> None:
+        """The summary filename must contain the full stream UUID, not a prefix."""
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        full_id = str(stream.id)
+
+        mock_response = MagicMock()
+        mock_response.content = "summary"
+        mock_response.usage = {}
+        mock_client = AsyncMock(return_value=mock_response)
+        mock_config = MagicMock()
+        mock_config.create.return_value = mock_client
+
+        agg = ConversationSummaryAggregate(config=mock_config)
+        await agg.aggregate([ModelRequest([TextInput("hello")])], ctx, store)
+
+        entries = await store.list("/memory/conversations/")
+        assert len(entries) == 1
+        assert full_id in entries[0]
+
+
+class _RecordingAggregate:
+    """In-process AggregateStrategy that records calls without LLM traffic."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.last_usage: dict = {}
+
+    async def aggregate(self, events, context, store) -> None:
+        self.calls += 1
+        await store.write(f"/memory/runs/{self.calls}.md", "rolled up")
+
+
+class TestAggregationWiredOnAgent:
+    """End-to-end behaviour of the aggregation middleware on an Agent."""
+
+    @pytest.mark.asyncio
+    async def test_on_end_fires_once_per_ask(self) -> None:
+        store = MemoryKnowledgeStore()
+        strategy = _RecordingAggregate()
+        stream = MemoryStream()
+        completions: list[AggregationCompleted] = []
+        stream.where(AggregationCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "roller",
+            config=TestConfig(ModelResponse(ModelMessage("done"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=strategy,
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            ),
+        )
+        await agent.ask("go", stream=stream)
+
+        assert strategy.calls == 1
+        assert len(completions) == 1
+        assert completions[0].agent == "roller"
+
+    @pytest.mark.asyncio
+    async def test_on_end_does_not_double_fire_with_other_triggers(self) -> None:
+        """``on_end=True`` plus ``every_n_turns=1`` still aggregates once per ask."""
+        store = MemoryKnowledgeStore()
+        strategy = _RecordingAggregate()
+        agent = Agent(
+            "once",
+            config=TestConfig(ModelResponse(ModelMessage("ok"))),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=strategy,
+                aggregate_trigger=AggregateTrigger(every_n_turns=1, on_end=True),
+            ),
+        )
+        await agent.ask("go")
+
+        assert strategy.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_on_end_runs_even_when_turn_raises(self) -> None:
+        """If the LLM call errors, ``on_end`` aggregation still fires.
+
+        TestConfig with no canned responses raises on the first call,
+        simulating a failed turn.
+        """
+        store = MemoryKnowledgeStore()
+        strategy = _RecordingAggregate()
+        agent = Agent(
+            "boom",
+            config=TestConfig(),
+            knowledge=KnowledgeConfig(
+                store=store,
+                aggregate=strategy,
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            ),
+        )
+
+        with pytest.raises(Exception):
+            await agent.ask("go")
+
+        assert strategy.calls == 1
