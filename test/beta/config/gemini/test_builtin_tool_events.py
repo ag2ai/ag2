@@ -16,6 +16,7 @@ from autogen.beta.config.gemini.events import (
 from autogen.beta.config.gemini.gemini_client import GeminiClient
 from autogen.beta.config.gemini.mappers import grounding_tool_name
 from autogen.beta.context import ConversationContext
+from autogen.beta.events import BinaryType, TextInput, UrlInput
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
@@ -71,7 +72,7 @@ class TestFactoryFromCodeExecutionResult:
         assert event == GeminiServerToolResultEvent(
             parent_id="call-1",
             name=CODE_EXECUTION_TOOL_NAME,
-            result=ToolResult(),
+            result=ToolResult(TextInput("42"), metadata={"outcome": "OUTCOME_OK"}),
             part=part,
         )
 
@@ -141,7 +142,7 @@ class TestProcessResponseEmitsBuiltinEvents:
             GeminiServerToolResultEvent(
                 parent_id=call_event.id,
                 name=CODE_EXECUTION_TOOL_NAME,
-                result=ToolResult(),
+                result=ToolResult(TextInput("1\n"), metadata={"outcome": "OUTCOME_OK"}),
                 part=result_part,
             ),
         ]
@@ -226,7 +227,7 @@ class TestProcessStreamEmitsBuiltinEvents:
             GeminiServerToolResultEvent(
                 parent_id=call_event.id,
                 name=CODE_EXECUTION_TOOL_NAME,
-                result=ToolResult(),
+                result=ToolResult(TextInput("2\n"), metadata={"outcome": "OUTCOME_OK"}),
                 part=result_part,
             ),
         ]
@@ -255,6 +256,117 @@ class TestProcessStreamEmitsBuiltinEvents:
             GeminiServerToolResultEvent(
                 parent_id=call_event.id,
                 name=WEB_SEARCH_TOOL_NAME,
+                result=ToolResult(),
+                grounding_metadata=gm,
+            ),
+        ]
+
+
+@pytest.mark.asyncio
+class TestResultParts:
+    async def test_code_execution_result_emits_output_text(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        ctx, stream = memory_context
+        code_part = types.Part(executable_code=types.ExecutableCode(code="print(42)", language="PYTHON"))
+        result_part = types.Part(code_execution_result=types.CodeExecutionResult(outcome="OUTCOME_OK", output="42"))
+
+        await client._process_response(_response([_candidate([code_part, result_part])]), ctx)
+
+        events = list(await stream.history.get_events())
+        [call_event, _] = events
+        assert events == [
+            GeminiServerToolCallEvent(
+                id=call_event.id,
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"code": "print(42)", "language": "PYTHON"}',
+                part=code_part,
+            ),
+            GeminiServerToolResultEvent(
+                parent_id=call_event.id,
+                name=CODE_EXECUTION_TOOL_NAME,
+                result=ToolResult(TextInput("42"), metadata={"outcome": "OUTCOME_OK"}),
+                part=result_part,
+            ),
+        ]
+
+    async def test_code_execution_result_no_output_empty_parts(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        ctx, stream = memory_context
+        code_part = types.Part(executable_code=types.ExecutableCode(code="noop()", language="PYTHON"))
+        result_part = types.Part(code_execution_result=types.CodeExecutionResult(outcome="OUTCOME_OK", output=""))
+
+        await client._process_response(_response([_candidate([code_part, result_part])]), ctx)
+
+        events = list(await stream.history.get_events())
+        [call_event, _] = events
+        assert events == [
+            GeminiServerToolCallEvent(
+                id=call_event.id,
+                name=CODE_EXECUTION_TOOL_NAME,
+                arguments='{"code": "noop()", "language": "PYTHON"}',
+                part=code_part,
+            ),
+            GeminiServerToolResultEvent(
+                parent_id=call_event.id,
+                name=CODE_EXECUTION_TOOL_NAME,
+                result=ToolResult(metadata={"outcome": "OUTCOME_OK"}),
+                part=result_part,
+            ),
+        ]
+
+    async def test_grounding_emits_url_inputs_per_chunk(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        ctx, stream = memory_context
+        chunk = types.GroundingChunk(web=types.GroundingChunkWeb(uri="https://x", title="X", domain="x.com"))
+        gm = types.GroundingMetadata(web_search_queries=["q"], grounding_chunks=[chunk])
+
+        await client._process_response(_response([_candidate([types.Part(text="answer")], grounding_metadata=gm)]), ctx)
+
+        events = list(await stream.history.get_events())
+        [call_event, _] = events
+        assert events == [
+            GeminiServerToolCallEvent(
+                id=call_event.id,
+                name=WEB_SEARCH_TOOL_NAME,
+                arguments='{"queries": ["q"]}',
+                grounding_metadata=gm,
+            ),
+            GeminiServerToolResultEvent(
+                parent_id=call_event.id,
+                name=WEB_SEARCH_TOOL_NAME,
+                result=ToolResult(
+                    UrlInput("https://x", kind=BinaryType.BINARY, metadata={"title": "X", "domain": "x.com"}),
+                    metadata={"queries": ["q"]},
+                ),
+                grounding_metadata=gm,
+            ),
+        ]
+
+    async def test_grounding_url_context_no_chunks_empty_parts(
+        self, client: GeminiClient, memory_context: tuple[Context, MemoryStream]
+    ) -> None:
+        # url_context-only responses arrive without grounding chunks; the provider
+        # does not return the fetched bytes, so parts/metadata stay empty.
+        ctx, stream = memory_context
+        gm = types.GroundingMetadata()
+
+        await client._process_response(_response([_candidate([types.Part(text="answer")], grounding_metadata=gm)]), ctx)
+
+        events = list(await stream.history.get_events())
+        [call_event, _] = events
+        assert events == [
+            GeminiServerToolCallEvent(
+                id=call_event.id,
+                name=WEB_FETCH_TOOL_NAME,
+                arguments='{"queries": []}',
+                grounding_metadata=gm,
+            ),
+            GeminiServerToolResultEvent(
+                parent_id=call_event.id,
+                name=WEB_FETCH_TOOL_NAME,
                 result=ToolResult(),
                 grounding_metadata=gm,
             ),

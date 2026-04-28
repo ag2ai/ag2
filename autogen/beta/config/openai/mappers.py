@@ -199,7 +199,10 @@ def events_to_responses_input(
                 result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, OpenAIServerToolCallEvent):
-            result.append(message.item.model_dump(exclude_none=True, mode="json"))
+            # warnings=False: openai SDK pins ActionSearchSource.type to
+            # Literal["url"] but the API returns other values (e.g. "api"),
+            # which makes pydantic warn on every round-trip serialization.
+            result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -460,6 +463,14 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         raise UnsupportedToolError(t.type, "openai-responses")
 
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
+    includes: list[str] = []
+    for t in tools:
+        if isinstance(t, WebSearchToolSchema):
+            includes.append("web_search_call.action.sources")
+    return includes
 
 
 def normalize_usage(usage: CompletionUsage) -> Usage:

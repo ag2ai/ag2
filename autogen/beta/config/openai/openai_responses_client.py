@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import base64
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
@@ -45,6 +44,7 @@ from .mappers import (
     events_to_responses_input,
     normalize_responses_usage,
     response_proto_to_text_config,
+    responses_api_includes,
     tool_to_responses_api,
 )
 
@@ -115,11 +115,15 @@ class OpenAIResponsesClient(LLMClient):
 
         instructions = "\n".join(prompt) or None
 
-        openai_tools = [tool_to_responses_api(t) for t in tools]
+        tools_list = list(tools)
+        openai_tools = [tool_to_responses_api(t) for t in tools_list]
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):
             kwargs["text"] = r
+
+        if includes := responses_api_includes(tools_list):
+            kwargs["include"] = includes
 
         response = await self._client.responses.create(
             **self._create_options,
@@ -168,15 +172,12 @@ class OpenAIResponsesClient(LLMClient):
 
             elif call_event := OpenAIServerToolCallEvent.from_item(item):
                 await context.send(call_event)
-                if result_event := OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id):
+                result_event = OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id)
+                if result_event:
                     await context.send(result_event)
-                if isinstance(item, ImageGenerationCall) and item.result:
-                    files.append(
-                        BinaryResult(
-                            base64.b64decode(item.result),
-                            metadata=item.model_dump(exclude={"result", "status", "type"}),
-                        )
-                    )
+                    if isinstance(item, ImageGenerationCall) and item.result:
+                        binary = result_event.result.parts[0]
+                        files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
@@ -231,15 +232,12 @@ class OpenAIResponsesClient(LLMClient):
 
                 elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
                     await context.send(call_event)
-                    if result_event := OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id):
+                    result_event = OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id)
+                    if result_event:
                         await context.send(result_event)
-                    if isinstance(event.item, ImageGenerationCall) and event.item.result:
-                        files.append(
-                            BinaryResult(
-                                base64.b64decode(event.item.result),
-                                metadata=event.item.model_dump(exclude={"result", "status", "type"}),
-                            )
-                        )
+                        if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                            binary = result_event.result.parts[0]
+                            files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
 
             elif isinstance(event, ResponseCompletedEvent):
                 # Stream finished
