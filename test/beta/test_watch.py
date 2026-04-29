@@ -258,6 +258,43 @@ class TestCadenceWatch:
         assert len(batches[1]) == 1
 
     @pytest.mark.asyncio
+    async def test_events_during_slow_callback_are_not_stranded(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        delivered: list[str] = []
+        callback_sleep = 0.15
+        max_wait = 0.05
+
+        async def slow_callback(events, _ctx):
+            await asyncio.sleep(callback_sleep)
+            delivered.extend(e.content for e in events)
+
+        watch = CadenceWatch(n=5, max_wait=max_wait)
+        watch.arm(stream, slow_callback)
+
+        # Wave 1: count-trigger fires batch 1 (callback now awaiting).
+        for i in range(1, 6):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+
+        # Wave 2: while batch 1's callback is in flight, queue 3 events.
+        # max_wait elapses, _wait_and_fire fires batch 2 (also slow).
+        await asyncio.sleep(0.01)
+        for i in range(6, 9):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+        await asyncio.sleep(max_wait + 0.02)
+
+        # Wave 3: lands while batch 2's callback is awaiting. Pre-fix, the
+        # max_wait timer task is alive (in callback) so no fresh timer is
+        # scheduled and these events sit in the buffer forever.
+        for i in range(9, 12):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+
+        # Wait for all in-flight callbacks plus one more max_wait cycle.
+        await asyncio.sleep(2 * callback_sleep + max_wait + 0.1)
+
+        assert set(delivered) == {f"m{i}" for i in range(1, 12)}
+
+    @pytest.mark.asyncio
     async def test_count_fires_after_timer_flush(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
