@@ -71,6 +71,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
   - [Announcements](#announcements)
   - [Code style and linting](#code-style-and-linting)
+  - [AI-assisted contributing with Agent Skills](#ai-assisted-contributing-with-agent-skills)
   - [Related papers](#related-papers)
   - [Contributors Wall](#contributors-wall)
   - [Cite the project](#cite-the-project)
@@ -420,6 +421,18 @@ prek install
 ```bash
 prek run --all-files
 ```
+
+## AI-assisted contributing with Agent Skills
+
+This repo ships [Agent Skills](https://agentskills.io/) for AI coding assistants under `.agents/skills/`. Cursor, OpenAI Codex CLI, Gemini CLI, and OpenCode read this path natively. Claude Code reads `.claude/skills/`, which is committed as a symlink to `.agents/skills/` so a single source of truth covers every tool.
+
+**Windows users (non-WSL):** git stores the `.claude/skills` symlink as a real symlink, but native Windows git checks it out as a plain text file by default, which breaks Claude Code's skill discovery. Before cloning, run:
+
+```bash
+git config --global core.symlinks true
+```
+
+You may also need to enable Windows Developer Mode (or run git as Administrator) so symlinks can be created without elevation. WSL and Mac/Linux users are unaffected.
 
 ## Related papers
 

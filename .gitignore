@@ -1,5 +1,7 @@
-.agents
-.claude
+.agents/*
+!.agents/skills/
+.claude/*
+!.claude/skills
 .rtk
 skills-lock.json
 
@@ -210,5 +212,4 @@ remote-examples
 
 *CLAUDE.md:
 .cursor/
-.claude/
 .vercel/
