@@ -128,15 +128,8 @@ class ContextExpression:
             ast.Load,
             ast.Constant,
             ast.Expression,
-            # Support for basic numeric operations in comparisons
-            ast.Num,
-            ast.NameConstant,
             # Support for negative numbers
             ast.USub,
-            ast.UnaryOp,
-            # Support for string literals
-            ast.Str,
-            ast.Constant,
             # Support for function calls (specifically len())
             ast.Call,
         )

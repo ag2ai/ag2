@@ -36,15 +36,28 @@ class ModelEvent(BaseEvent):
 
 
 class ModelReasoning(ModelEvent):
-    """Intermediate reasoning content emitted by the model."""
+    """Intermediate reasoning content emitted by the model.
+
+    Transient: intermediate thinking content, not part of the final response.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
 
 
 class ModelMessage(ModelEvent):
-    """Single message emitted by the model."""
+    """Single message emitted by the model.
+
+    Transient: already embedded in ``ModelResponse.message``.
+    Not persisted to durable storage by default.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
+
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +66,13 @@ class BinaryResult:
 
     data: bytes
     metadata: dict[str, Any] = dataclass_field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.metadata.get("filename", "generated_file")
+
+    async def content(self) -> bytes:
+        return self.data
 
 
 class ModelResponse(ModelEvent):
@@ -71,11 +91,20 @@ class ModelResponse(ModelEvent):
     finish_reason: str | None = Field(default=None, compare=False)
 
     @property
+    def metadata(self) -> dict[str, Any]:
+        return self.message.metadata if self.message else {}
+
+    @property
     def content(self) -> str | None:
         return self.message.content if self.message else None
 
     def __repr__(self) -> str:
-        text = f"content={getattr(self.message, 'content', None)}"
+        if self.message:
+            text = f"content={self.message.content}"
+            if self.message.metadata:
+                text += f", metadata={self.message.metadata}"
+        else:
+            text = "content=None"
         if self.tool_calls:
             text += f", tool_calls={self.tool_calls}"
         if self.usage:
@@ -95,7 +124,13 @@ class ModelResponse(ModelEvent):
 
 
 class ModelMessageChunk(ModelEvent):
-    """Chunk of a streamed model message."""
+    """Chunk of a streamed model message.
+
+    Transient: superseded by the final ``ModelResponse`` which carries the
+    complete content.  Not persisted to durable storage by default.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
 

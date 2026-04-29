@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta.events import BinaryInput, FileIdInput, ImageInput, ImageUrlInput
+from autogen.beta.events import BinaryInput, FileIdInput, ImageInput, UrlInput
 
 
 def test_url_returns_image_url_input() -> None:
     result = ImageInput("https://example.com/img.png")
 
-    assert isinstance(result, ImageUrlInput)
+    assert isinstance(result, UrlInput)
     assert result.url == "https://example.com/img.png"
 
 

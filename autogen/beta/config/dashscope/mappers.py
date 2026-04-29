@@ -2,10 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from fast_depends.library.serializer import SerializerProto
+
+from autogen.beta.events import (
+    BaseEvent,
+    BinaryInput,
+    BinaryType,
+    DataInput,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolResultsEvent,
+    UrlInput,
+)
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -48,22 +61,62 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
+    serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = [{"content": p, "role": "system"} for p in system_prompt]
 
     for message in messages:
         if isinstance(message, ModelRequest):
-            for inp in message.inputs:
+            blocks: list[dict[str, str]] = []
+            has_non_text = False
+            for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    blocks.append({"text": inp.content})
+                elif isinstance(inp, DataInput):
+                    blocks.append({"text": serializer.encode(inp.data).decode()})
+                elif isinstance(inp, BinaryInput) and inp.kind is BinaryType.IMAGE:
+                    b64 = base64.b64encode(inp.data).decode()
+                    blocks.append({"image": f"data:{inp.media_type};base64,{b64}"})
+                    has_non_text = True
+                elif isinstance(inp, UrlInput) and inp.kind is BinaryType.IMAGE:
+                    blocks.append({"image": inp.url})
+                    has_non_text = True
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "dashscope")
+
+            if not blocks:
+                continue
+            if not has_non_text and len(blocks) == 1:
+                result.append({"role": "user", "content": blocks[0]["text"]})
+            else:
+                result.append({"role": "user", "content": blocks})
 
         elif isinstance(message, ModelResponse):
             result.append(message.to_api())
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result.append(r.to_api())
+                blocks: list[dict[str, str]] = []
+                has_non_text = False
+                for part in r.result.parts:
+                    if isinstance(part, TextInput):
+                        blocks.append({"text": part.content})
+                    elif isinstance(part, DataInput):
+                        blocks.append({"text": serializer.encode(part.data).decode()})
+                    elif isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
+                        b64 = base64.b64encode(part.data).decode()
+                        blocks.append({"image": f"data:{part.media_type};base64,{b64}"})
+                        has_non_text = True
+                    elif isinstance(part, UrlInput) and part.kind is BinaryType.IMAGE:
+                        blocks.append({"image": part.url})
+                        has_non_text = True
+                    else:
+                        raise UnsupportedInputError(type(part).__name__, "dashscope")
+
+                if not has_non_text and len(blocks) == 1:
+                    content: str | list[dict[str, str]] = blocks[0]["text"]
+                else:
+                    content = blocks
+                result.append({"role": "tool", "tool_call_id": r.parent_id, "content": content})
 
     return result

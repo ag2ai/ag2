@@ -19,6 +19,18 @@ async def check_agent_constructor_with_observers() -> None:
     )
 
 
+async def check_any_event_observer() -> None:
+    @observer()
+    def on_response(event: ModelResponse) -> None:
+        pass
+
+    Agent(
+        "test",
+        config=TestConfig(),
+        observers=[on_response],
+    )
+
+
 async def check_agent_constructor_with_direct_observers() -> None:
     Agent(
         "test",
@@ -51,6 +63,14 @@ async def check_agent_observer_decorator() -> None:
     agent = Agent("test", config=TestConfig())
 
     @agent.observer(ModelResponse)
+    def on_response(event: ModelResponse) -> None:
+        pass
+
+
+async def check_any_event_agent_observer_decorator() -> None:
+    agent = Agent("test", config=TestConfig())
+
+    @agent.observer()
     def on_response(event: ModelResponse) -> None:
         pass
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,6 +6,7 @@ import traceback
 from typing import TYPE_CHECKING
 
 from .base import BaseEvent, Field
+from .types import Usage
 
 if TYPE_CHECKING:
     from autogen.beta.context import StreamId
@@ -21,9 +22,21 @@ class TaskStarted(TaskEvent):
     pass
 
 
+class TaskProgress(TaskEvent):
+    """Streamed progress update from a running task sub-agent.
+
+    Transient: superseded by the final ``TaskCompleted``.
+    """
+
+    __transient__ = True
+
+    content: str
+
+
 class TaskCompleted(TaskEvent):
     result: str | None
     task_stream: "StreamId"  # Stream reference for inspection
+    usage: Usage = Field(default_factory=Usage)
 
 
 class TaskFailed(TaskEvent):

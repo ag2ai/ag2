@@ -13,7 +13,7 @@ from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
-from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -44,6 +44,14 @@ class FunctionToolSchema(ToolSchema):
 
 
 class FunctionTool(Tool):
+    __slots__ = (
+        "model",
+        "name",
+        "schema",
+        "provider",
+        "_middleware",
+    )
+
     def __init__(
         self,
         model: CallModel,
@@ -51,10 +59,10 @@ class FunctionTool(Tool):
         name: str,
         description: str,
         schema: FunctionParameters,
-        tool_middleware: Iterable[ToolMiddleware] = (),
+        middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self.model = model
-        self._tool_middleware: tuple[ToolMiddleware, ...] = tuple(tool_middleware)
+        self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
 
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
@@ -65,27 +73,31 @@ class FunctionTool(Tool):
         )
 
         self.provider: Provider | None = None
+        self.name = name
 
     def with_middleware(self, *middleware: ToolMiddleware) -> "FunctionTool":
         """Return a new FunctionTool with additional middleware appended.
 
         Does not modify the original tool.
         """
-        clone = deepcopy(self)
-        clone._tool_middleware = tuple(middleware) + self._tool_middleware
-        return clone
+        cloned = deepcopy(self)
+        cloned._middleware = tuple(middleware) + self._middleware
+        return cloned
 
     async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return [self.schema]
+
+    def set_provider(self, provider: Provider) -> None:
+        self.provider = provider
 
     @staticmethod
     def ensure_tool(
         func: "Tool | Callable[..., Any]",
         *,
         provider: Provider | None = None,
-    ) -> "FunctionTool":
+    ) -> "Tool":
         t = deepcopy(func) if isinstance(func, Tool) else tool(func)
-        t.provider = provider
+        t.set_provider(provider)
         return t
 
     def register(
@@ -96,10 +108,10 @@ class FunctionTool(Tool):
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         execution: ToolExecution = self
-        for hook in reversed(self._tool_middleware):
-            execution = _wrap_tool_middleware(hook, execution)
+        for hook in reversed(self._middleware):
+            execution = _wrap_middleware(hook, execution)
         for mw in middleware:
-            execution = _wrap_tool_middleware(mw.on_tool_execution, execution)
+            execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
             result = await execution(event, context)
@@ -157,7 +169,11 @@ def tool(
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
-        call_model = build_model(f, sync_to_thread=sync_to_thread)
+        call_model = build_model(
+            f,
+            sync_to_thread=sync_to_thread,
+            serialize_result=False,
+        )
 
         return FunctionTool(
             call_model,
@@ -168,7 +184,7 @@ def tool(
                 call_model,
                 exclude=(CONTEXT_OPTION_NAME,),
             ),
-            tool_middleware=middleware,
+            middleware=middleware,
         )
 
     if function:
@@ -176,7 +192,7 @@ def tool(
     return make_tool
 
 
-def _wrap_tool_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
+def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
     async def call(event: "ToolCallEvent", context: "Context") -> "ToolResultType":
         return await hook(inner, event, context)
 

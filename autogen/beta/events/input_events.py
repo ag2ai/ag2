@@ -2,13 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections.abc import Iterable
 from enum import Enum
-from os import PathLike
 from pathlib import Path
 from typing import Any, overload
 
-from autogen.beta.types import AudioMediaType, DocumentMediaType, ImageMediaType, MediaType, VideoMediaType
+from autogen.beta.types import (
+    AudioMediaType,
+    DocumentMediaType,
+    ImageMediaType,
+    MediaType,
+    SendableMessage,
+    VideoMediaType,
+)
 
 from .base import BaseEvent, Field
 
@@ -16,23 +23,31 @@ from .base import BaseEvent, Field
 class Input(BaseEvent):
     """Base class for all input events sent to the model."""
 
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, repr=False)
 
     @classmethod
-    def ensure_input(cls, content: "str | Input") -> "Input":
+    def ensure_input(cls, content: "SendableMessage | Input") -> "Input":
         if isinstance(content, Input):
             return content
-        return TextInput(content)
+        elif isinstance(content, str):
+            return TextInput(content)
+        return DataInput(content)
 
 
 class ModelRequest(BaseEvent):
     """Event representing a user turn sent to the model, containing one or more inputs."""
 
-    inputs: "list[Input]" = Field(kw_only=False)
+    parts: "list[Input]" = Field(kw_only=False)
 
     @classmethod
     def ensure_request(cls, msgs: "Iterable[str | Input]") -> "ModelRequest":
         return cls([Input.ensure_input(m) for m in msgs])
+
+
+class DataInput(Input):
+    """Data input event sent to the model."""
+
+    data: SendableMessage = Field(kw_only=False)
 
 
 class TextInput(Input):
@@ -72,32 +87,14 @@ class FileIdInput(Input):
     filename: str | None = None
 
 
-class ImageUrlInput(Input):
-    """Image input event sent to the model."""
-
-    url: str = Field(kw_only=False)
-
-
-class AudioUrlInput(Input):
-    """Audio URL input event sent to the model."""
-
-    url: str = Field(kw_only=False)
-
-
-class DocumentUrlInput(Input):
-    """Document URL input event sent to the model."""
-
-    url: str = Field(kw_only=False)
-
-
-class VideoUrlInput(Input):
-    """Video URL input event sent to the model."""
+class UrlInput(Input):
+    kind: BinaryType
 
     url: str = Field(kw_only=False)
 
 
 @overload
-def ImageInput(url: str) -> ImageUrlInput: ...
+def ImageInput(url: str) -> UrlInput: ...
 
 
 @overload
@@ -109,7 +106,7 @@ def ImageInput(*, data: bytes, media_type: ImageMediaType) -> BinaryInput: ...
 
 
 @overload
-def ImageInput(*, path: str | PathLike[str], media_type: ImageMediaType | None = None) -> BinaryInput: ...
+def ImageInput(*, path: str | os.PathLike[str], media_type: ImageMediaType | None = None) -> BinaryInput: ...
 
 
 def ImageInput(  # noqa: N802
@@ -119,8 +116,8 @@ def ImageInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: ImageMediaType | None = None,
-    path: str | PathLike[str] | None = None,
-) -> ImageUrlInput | FileIdInput | BinaryInput:
+    path: str | os.PathLike[str] | None = None,
+) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating image input events.
 
     Usage:
@@ -130,7 +127,7 @@ def ImageInput(  # noqa: N802
         ImageInput(path="photo.jpg")                        # local file
     """
     if url is not None:
-        return ImageUrlInput(url)
+        return UrlInput(url, kind=BinaryType.IMAGE)
 
     if file_id is not None:
         return FileIdInput(file_id, filename=filename)
@@ -168,7 +165,7 @@ def ImageInput(  # noqa: N802
 
 
 @overload
-def DocumentInput(url: str) -> DocumentUrlInput: ...
+def DocumentInput(url: str) -> UrlInput: ...
 
 
 @overload
@@ -180,7 +177,7 @@ def DocumentInput(*, data: bytes, media_type: DocumentMediaType) -> BinaryInput:
 
 
 @overload
-def DocumentInput(*, path: str | PathLike[str], media_type: DocumentMediaType | None = None) -> BinaryInput: ...
+def DocumentInput(*, path: str | os.PathLike[str], media_type: DocumentMediaType | None = None) -> BinaryInput: ...
 
 
 def DocumentInput(  # noqa: N802
@@ -190,8 +187,8 @@ def DocumentInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: DocumentMediaType | None = None,
-    path: str | PathLike[str] | None = None,
-) -> DocumentUrlInput | FileIdInput | BinaryInput:
+    path: str | os.PathLike[str] | None = None,
+) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating document input events.
 
     Usage:
@@ -201,7 +198,7 @@ def DocumentInput(  # noqa: N802
         DocumentInput(path="report.pdf")                            # local file
     """
     if url is not None:
-        return DocumentUrlInput(url)
+        return UrlInput(url, kind=BinaryType.DOCUMENT)
 
     if file_id is not None:
         return FileIdInput(file_id, filename=filename)
@@ -239,7 +236,7 @@ def DocumentInput(  # noqa: N802
 
 
 @overload
-def AudioInput(url: str) -> AudioUrlInput: ...
+def AudioInput(url: str) -> UrlInput: ...
 
 
 @overload
@@ -251,7 +248,7 @@ def AudioInput(*, data: bytes, media_type: AudioMediaType) -> BinaryInput: ...
 
 
 @overload
-def AudioInput(*, path: str | PathLike[str], media_type: AudioMediaType | None = None) -> BinaryInput: ...
+def AudioInput(*, path: str | os.PathLike[str], media_type: AudioMediaType | None = None) -> BinaryInput: ...
 
 
 def AudioInput(  # noqa: N802
@@ -261,8 +258,8 @@ def AudioInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: AudioMediaType | None = None,
-    path: str | PathLike[str] | None = None,
-) -> AudioUrlInput | FileIdInput | BinaryInput:
+    path: str | os.PathLike[str] | None = None,
+) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating audio input events.
 
     Usage:
@@ -272,7 +269,7 @@ def AudioInput(  # noqa: N802
         AudioInput(path="recording.wav")                        # local file
     """
     if url is not None:
-        return AudioUrlInput(url)
+        return UrlInput(url, kind=BinaryType.AUDIO)
 
     if file_id is not None:
         return FileIdInput(file_id, filename=filename)
@@ -310,7 +307,7 @@ def AudioInput(  # noqa: N802
 
 
 @overload
-def VideoInput(url: str) -> VideoUrlInput: ...
+def VideoInput(url: str) -> UrlInput: ...
 
 
 @overload
@@ -322,7 +319,7 @@ def VideoInput(*, data: bytes, media_type: VideoMediaType) -> BinaryInput: ...
 
 
 @overload
-def VideoInput(*, path: str | PathLike[str], media_type: VideoMediaType | None = None) -> BinaryInput: ...
+def VideoInput(*, path: str | os.PathLike[str], media_type: VideoMediaType | None = None) -> BinaryInput: ...
 
 
 def VideoInput(  # noqa: N802
@@ -332,8 +329,8 @@ def VideoInput(  # noqa: N802
     filename: str | None = None,
     data: bytes | None = None,
     media_type: VideoMediaType | None = None,
-    path: str | PathLike[str] | None = None,
-) -> VideoUrlInput | FileIdInput | BinaryInput:
+    path: str | os.PathLike[str] | None = None,
+) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating video input events.
 
     Usage:
@@ -343,7 +340,7 @@ def VideoInput(  # noqa: N802
         VideoInput(path="clip.mp4")                            # local file
     """
     if url is not None:
-        return VideoUrlInput(url)
+        return UrlInput(url, kind=BinaryType.VIDEO)
 
     if file_id is not None:
         return FileIdInput(file_id, filename=filename)

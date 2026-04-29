@@ -13,6 +13,7 @@ from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
+from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient
@@ -56,6 +57,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     store: bool | None | Omit
     verbosity: str | None | Omit
     web_search_options: dict[str, Any] | Omit
+    extra_body: dict[str, Any] | None
 
 
 @dataclass(slots=True)
@@ -97,6 +99,7 @@ class OpenAIConfig(ModelConfig):
     store: bool | None | Omit = omit
     verbosity: str | None | Omit = omit
     web_search_options: dict[str, Any] | Omit = omit
+    extra_body: dict[str, Any] | None = None
 
     def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
         return replace(self, **overrides)
@@ -131,6 +134,7 @@ class OpenAIConfig(ModelConfig):
             verbosity=self.verbosity,
             web_search_options=self.web_search_options,
             stream_options={"include_usage": True} if self.streaming else omit,
+            extra_body=self.extra_body,
         )
 
         return OpenAIClient(
@@ -146,6 +150,9 @@ class OpenAIConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
         )
+
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)
 
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
@@ -236,3 +243,6 @@ class OpenAIResponsesConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
         )
+
+    def create_files_client(self) -> OpenAIFilesClient:
+        return OpenAIFilesClient(self)

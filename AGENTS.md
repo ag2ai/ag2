@@ -1,5 +1,79 @@
 # AG2 Beta Development Guidelines
 
+## AI-assisted contribution policy
+
+Before opening a PR, read and follow `.github/AI_POLICY.md`.
+
+- Do not open PRs with unverified AI-generated code or text.
+- Ensure the PR description explains the real problem or use case and accurately reflects the diff.
+- Include validation and testing information in the PR body.
+- Be prepared to explain and revise the contribution in response to reviewer questions.
+
+## Common rules
+
+- Do not use `from __future__ import annotations`.
+- Do not use global variables or top-level side-effect function calls unless the user explicitly allows it.
+- For filesystem paths, use `pathlib.Path` internally. Public signatures should accept `str | os.PathLike[str]`.
+- Top-level imports from `autogen.beta.*` are for common APIs that are broadly reusable across scenarios and core agent flows.
+  Good: `autogen.beta.[Input]` — common structures usable in `await agent.ask(Input())` and as tool results.
+  Bad: `autogen.beta.middleware.BaseMiddleware` — this is advanced/specialized and should be imported only when implementing custom middleware.
+- Do not use function-level imports unless the user explicitly allows it.
+  ```python
+  # === BAD - import inside function ===
+  def execute_tool():
+      from .tool import Tool
+      ...
+
+  # === GOOD - top-level import ===
+  from .tool import Tool
+
+  def execute_tool():
+      ...
+  ```
+- Do not create nested functions inside runtime execution paths.
+  ```python
+  # === BAD - function will be created each call ===
+  def execute_tool():
+      def _inner_function():
+          pass
+
+      _inner_function()
+
+  # === GOOD - function created once, executed each call ===
+  def execute_tool():
+      _inner_function()
+
+  def _inner_function():
+      pass
+
+  # === GOOD - decorator executed import time, so we can use closure functions here ===
+  def decorator(func):
+      def wrapper():
+          return func()
+      return wrapper
+  ```
+- Do not perform side effects in initialization methods. Apply side effects only at runtime.
+  ```python
+  # === BAD - create directory in initial method ===
+  class KnowledgeStore:
+      def __init__(self, path: str | os.PathLike[str]) -> None:
+          self.path = Path(path)
+          # side effect - directory creation
+          self.path.parent.mkdir(parents=True, exist_ok=True)
+
+      def run(self) -> None:
+          ...
+
+  # === GOOD - create directory in runtime method ===
+  class KnowledgeStore:
+      def __init__(self, path: str | os.PathLike[str]) -> None:
+          self.path = Path(path)
+
+      def run(self) -> None:
+          self.path.parent.mkdir(parents=True, exist_ok=True)
+          ...
+  ```
+
 ## Package Structure
 
 `autogen/beta/` is a protocol-driven async agent framework. Key modules:
@@ -13,7 +87,7 @@
 | `events/` | Event types for the agent loop | `BaseEvent`, `ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `Usage`, … |
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Tool system — builtin + user-defined | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `depth_limiter`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
@@ -30,14 +104,18 @@ Top-level modules:
 - `autogen.beta.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
 - `autogen.beta.testing` - Testing utilities
 - `autogen.beta.middleware` - Request/response interception (see [below](#middleware))
+- `autogen.beta.observer` - Reusable observer implementations
 
 Advanced modules:
 - `autogen.beta.events` - Event types for the agent loop
 - `autogen.beta.streams` - Persistent stream backends (e.g. Redis)
+- `autogen.beta.watch` - Watch system for triggering observers
+- `autogen.beta.knowledge` - Knowledge management
+- `autogen.beta.plugin` - Plugin system
 
 ### Re-export rules
 
-All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires optional dependencies, wrap the import in a `try/except ImportError` block and register a `_missing_optional_dependency_config` fallback (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). This ensures users get a clear install hint instead of an unexplained `ImportError`.
+All implementations must be re-exported from their public module's `__init__.py` and listed in `__all__`. If an implementation requires optional dependencies, wrap the import in a `try/except ImportError` block and register a `missing_optional_dependency_config` fallback (see `autogen/beta/config/__init__.py`, `autogen/beta/middleware/builtin/__init__.py` as the reference pattern). This ensures users get a clear install hint instead of an unexplained `ImportError`.
 
 ### Design principles
 
@@ -76,19 +154,21 @@ Subagent tools live in `autogen/beta/tools/subagents/` and are imported from `au
 |------|---------|
 | `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task |
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
-| `depth_limiter.py` | `depth_limiter()` — `ToolMiddleware` to cap nesting depth |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
 ### Agent.as_tool()
 
 `Agent.as_tool(description, name?, stream?, middleware?)` is a convenience method that delegates to `subagent_tool()`. It creates a tool named `task_{agent.name}` with parameters `objective` (required) and `context` (optional).
 
-### depth_limiter
+### Auto-injected `run_subtask` / `run_subtasks`
 
-`depth_limiter(max_depth=3)` returns a `ToolMiddleware` that prevents unbounded recursive delegation (A → B → A, or deep chains).
+Sub-task delegation is **off by default** (`tasks=False`). Pass `tasks=TaskConfig(...)` to opt in, and the `Agent` gains a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Agent** that:
 
-- **Concurrent-safe**: the middleware is read-only — it checks `context.variables["ag:task_depth"]` without mutation. Depth is incremented by `run_task()` in a per-call variables copy, so concurrent sibling calls (dispatched via `asyncio.gather`) get independent counters.
-- Attach to `subagent_tool(middleware=[depth_limiter()])` or `agent.as_tool(middleware=[depth_limiter()])`.
+- Inherits the parent's user-supplied tools by default (filterable via `TaskConfig.include_tools` / `exclude_tools`, extendable via `extra_tools`).
+- Is itself constructed with `tasks=False` (the default), so the subtask has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.
+- Runs on its own `MemoryStream`; child events do not leak into the parent's stream beyond `TaskStarted` / `TaskCompleted` / `TaskFailed` lifecycle events.
+
+The LLM is told (via the tool description) that `run_subtask` may be invoked multiple times in parallel within a single response, encouraging the parallel-tool-use pattern Anthropic recommends.
 
 ### persistent_stream
 
@@ -104,10 +184,10 @@ agent.as_tool(description="...", stream=persistent_stream())
 
 | What | Behavior | Why |
 |------|----------|-----|
-| Dependencies | Copied (`dict.copy()`) | Isolated; child mutations don't affect parent |
-| Variables | Copied (new dict); synced back on success (excluding `_DEPTH_KEY`) | Concurrent-safe; user variable mutations propagate back |
+| Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
+| Variables | Copied (new dict); **not** synced back | Concurrent siblings via `asyncio.gather` would race-clobber a shared dict — last-writer-wins is silent data loss. Each subtask's mutations stay scoped to it. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
-| Depth counter | Incremented in child copy; excluded from sync-back | Internal bookkeeping; never leaks to parent |
+| Tool inheritance | Parent's user-supplied tools (filtered by `TaskConfig`) | Subtasks need real capabilities to do work; child has no `run_subtask` tools so recursion is impossible |
 
 ## LLM Provider Clients
 

@@ -123,7 +123,6 @@ First, let's create our agents and configure the basic structure:
 
 ```python
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
@@ -172,21 +171,19 @@ sensitive_info_guardrail = RegexGuardrail(
     activation_message="Sensitive information detected - routing to compliance review"
 )
 
-# LLM guardrail to detect inappropriate requests
-inappropriate_request_guardrail = LLMGuardrail(
+# Regex guardrail to detect inappropriate or harmful requests
+inappropriate_request_guardrail = RegexGuardrail(
     name="inappropriate_request_detector",
-    condition="Does this message contain inappropriate, harmful, or unethical requests?",
+    condition=r"(?i).*(hack|crack|break\s+into|unauthorized\s+access|phish|illegal).*",
     target=AgentTarget(escalation_agent),
-    llm_config=llm_config,
     activation_message="Inappropriate request detected - routing to escalation"
 )
 
-# LLM guardrail to detect if agent responses accidentally include personal data
-data_leak_guardrail = LLMGuardrail(
+# Regex guardrail to detect if agent responses accidentally include personal data
+data_leak_guardrail = RegexGuardrail(
     name="data_leak_detector",
-    condition="Does this response contain personal information, account numbers, or sensitive data?",
+    condition=r"(?i).*(account\s+number|password|api[_-]?key|\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}).*",
     target=AgentTarget(compliance_agent),
-    llm_config=llm_config,
     activation_message="Potential data leak detected - routing to compliance"
 )
 
@@ -209,13 +206,32 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-# Start the conversation with an edge case
-result, context, last_agent = initiate_group_chat(
+# Run the chat
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="I need help with my account. I want you to help me hack into my ex-partner's email.",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
 ```
+
 ## Example Output
 
 If you run the complete example, you should see a conversation flow similar to this:
@@ -293,16 +309,18 @@ flowchart LR
 
 ## Complete Example
 
-Here's the full working example that demonstrates both guardrail types:
+Here's the full working example that demonstrates regex-based guardrails:
 
 ```python
-from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
-from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
-from autogen.agentchat.group import AgentTarget
-from dotenv import load_dotenv
 import os
+import pprint
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat_iter
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.agentchat.group.guardrails import RegexGuardrail
+from autogen.agentchat.group import AgentTarget
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
+from dotenv import load_dotenv
 load_dotenv()
 
 # Configure LLM
@@ -336,19 +354,17 @@ sensitive_info_guardrail = RegexGuardrail(
     activation_message="Sensitive information detected - routing to compliance review"
 )
 
-inappropriate_request_guardrail = LLMGuardrail(
+inappropriate_request_guardrail = RegexGuardrail(
     name="inappropriate_request_detector",
-    condition="Does this message contain inappropriate, harmful, or unethical requests?",
+    condition=r"(?i).*(hack|crack|break\s+into|unauthorized\s+access|phish|illegal).*",
     target=AgentTarget(escalation_agent),
-    llm_config=llm_config,
     activation_message="Inappropriate request detected - routing to escalation"
 )
 
-data_leak_guardrail = LLMGuardrail(
+data_leak_guardrail = RegexGuardrail(
     name="data_leak_detector",
-    condition="Does this response contain personal information, account numbers, or sensitive data?",
+    condition=r"(?i).*(account\s+number|password|api[_-]?key|\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}).*",
     target=AgentTarget(compliance_agent),
-    llm_config=llm_config,
     activation_message="Potential data leak detected - routing to compliance"
 )
 
@@ -365,11 +381,30 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config}
 )
 
-result, context, last_agent = initiate_group_chat(
+# Run the chat
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="I need help with my account. I want you to help me hack into my ex-partner's email.",
-    max_rounds=10
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
 ```
 
 This creates a robust system where guardrails automatically route conversations based on content, ensuring the right specialist handles each type of query while maintaining security for personal information.

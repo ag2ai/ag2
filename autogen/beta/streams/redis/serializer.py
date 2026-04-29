@@ -8,6 +8,7 @@ import pickle
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import Any
+from uuid import UUID
 
 from autogen.beta.events import BaseEvent
 
@@ -63,6 +64,16 @@ def _to_json(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: _to_json(v) for k, v in obj.items()}
 
+    if isinstance(obj, Enum):
+        cls = type(obj)
+        return {
+            "__type__": f"{cls.__module__}.{cls.__qualname__}",
+            "__enum_value__": _to_json(obj.value),
+        }
+
+    if isinstance(obj, UUID):
+        return {"__type__": "uuid.UUID", "__uuid__": str(obj)}
+
     if isinstance(obj, (list, tuple)):
         return [_to_json(item) for item in obj]
 
@@ -95,6 +106,13 @@ def _from_json(data: Any) -> Any:
             except (ImportError, AttributeError):
                 exc_cls = Exception
             return exc_cls(data.get("message", ""))
+
+        if type_path == "uuid.UUID":
+            return UUID(data["__uuid__"])
+
+        if "__enum_value__" in data:
+            cls = _resolve_class(type_path)
+            return cls(_from_json(data["__enum_value__"]))
 
         cls = _resolve_class(type_path)
         fields_data = {k: _from_json(v) for k, v in data.items() if k != "__type__"}

@@ -5,20 +5,25 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from autogen.beta.annotations import Context
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
+
+CODE_EXECUTION_TOOL_NAME = "code_execution"
+
+CodeExecutionVersions: TypeAlias = Literal["code_execution_20250825", "code_execution_20260120"]
 
 
 @dataclass(slots=True)
 class CodeExecutionToolSchema(ToolSchema):
     """Provider-neutral capability flag for code execution."""
 
-    type: str = field(default="code_execution", init=False)
-    version: Literal["code_execution_20250825"] = "code_execution_20250825"
+    type: str = field(default=CODE_EXECUTION_TOOL_NAME, init=False)
+    version: CodeExecutionVersions = "code_execution_20250825"
 
 
 class CodeExecutionTool(Tool):
@@ -28,12 +33,18 @@ class CodeExecutionTool(Tool):
     into the correct provider-specific API format.
     """
 
+    __slots__ = (
+        "name",
+        "_schema",
+    )
+
     def __init__(
         self,
         *,
-        version: Literal["code_execution_20250825"] = "code_execution_20250825",
+        version: CodeExecutionVersions = "code_execution_20250825",
     ) -> None:
         self._schema = CodeExecutionToolSchema(version=version)
+        self.name = CODE_EXECUTION_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         return [self._schema]
@@ -45,4 +56,9 @@ class CodeExecutionTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == CODE_EXECUTION_TOOL_NAME).sub_scope(execute),
+        )

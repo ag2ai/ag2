@@ -20,6 +20,12 @@ def client_tool() -> ClientTool:
     return ClientTool(schema={"function": {"name": "my_client_tool", "description": "desc", "parameters": {}}})
 
 
+def test_client_tool_condition() -> None:
+    condition = ClientToolCallEvent.id == "1"
+    assert condition(ClientToolCallEvent(id="1", name="test"))
+    assert not condition(ToolCallEvent(id="1", name="test"))
+
+
 @pytest.mark.asyncio
 async def test_client_tool_call_returns_client_tool_call(client_tool: ClientTool, mock: MagicMock) -> None:
     """ClientTool.__call__ must return a ClientToolCallEvent wrapping the original call."""
@@ -28,7 +34,7 @@ async def test_client_tool_call_returns_client_tool_call(client_tool: ClientTool
 
     assert isinstance(result, ClientToolCallEvent)
     assert result.name == "my_client_tool"
-    assert result.parent_id == call.id
+    assert result.id == call.id
 
 
 @pytest.mark.asyncio
@@ -49,10 +55,9 @@ async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientT
 
     events = await stream.history.get_events()
 
-    assert len(events) == 2
     assert isinstance(events[-1], ClientToolCallEvent)
-    assert events[1].parent_id == call.id
-    assert events[1].name == call.name
+    assert events[-1].id == call.id
+    assert events[-1].name == call.name
 
 
 @pytest.mark.asyncio
@@ -75,7 +80,6 @@ async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> 
 
     events = await stream.history.get_events()
 
-    assert len(events) == 2
     assert isinstance(events[-1], ClientToolCallEvent)
     assert getattr(events[-1], "_tag", None) == "middleware_ran"
 
@@ -109,8 +113,8 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
 
     wrapped = add.with_middleware(second_mw)
 
-    assert len(add._tool_middleware) == 1
-    assert len(wrapped._tool_middleware) == 2
+    assert len(add._middleware) == 1
+    assert len(wrapped._middleware) == 2
 
     config = TestConfig(
         ToolCallEvent(name="add", arguments=json.dumps({"a": 1, "b": 2})),

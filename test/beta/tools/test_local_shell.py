@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 
 from autogen.beta import Agent, MemoryStream
-from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
-from autogen.beta.events.types import ModelResponse
+from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools import LocalShellEnvironment, LocalShellTool
+from autogen.beta.tools import LocalShellTool
+from autogen.beta.tools.shell import LocalShellEnvironment
 from autogen.beta.tools.shell.environment.base import check_ignore, matches
 
 
@@ -101,12 +101,12 @@ class TestLocalShellToolConstruction:
 
     def test_explicit_path_created(self, tmp_path: Path) -> None:
         target = tmp_path / "workspace"
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=target))
+        shell = LocalShellTool(environment=target)
         assert shell.workdir == target
         assert target.exists()
 
     def test_workdir_is_readonly_property(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path))
+        shell = LocalShellTool(environment=tmp_path)
         with pytest.raises(AttributeError):
             shell.workdir = tmp_path  # type: ignore[misc]
 
@@ -117,7 +117,7 @@ class TestShellExecution:
     def _make_tool_call(self, command: str) -> ToolCallEvent:
         return ToolCallEvent(
             arguments=json.dumps({"command": command}),
-            name="shell",
+            name="run_shell_command",
         )
 
     def _make_config(self, command: str, final_reply: str = "done") -> TestConfig:
@@ -272,7 +272,7 @@ class TestShellExecution:
                         calls=[
                             ToolCallEvent(
                                 arguments=json.dumps({"command": "echo 42 > counter.txt"}),
-                                name="shell",
+                                name="run_shell_command",
                             )
                         ]
                     )
@@ -283,7 +283,7 @@ class TestShellExecution:
                         calls=[
                             ToolCallEvent(
                                 arguments=json.dumps({"command": "cat counter.txt"}),
-                                name="shell",
+                                name="run_shell_command",
                             )
                         ]
                     )
@@ -318,6 +318,7 @@ class TestShellExecution:
         result = tool_results[0]
         assert "truncated" in result, f"Expected truncation note but got: {result!r}"
         # Output was 100 'x' chars; with max_output=20 only 20 should appear
+        result = result.replace("TextInput", "")
         assert result.count("x") == 20, f"Expected exactly 20 'x' chars, got {result.count('x')}"
 
     @pytest.mark.asyncio

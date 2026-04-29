@@ -6,9 +6,13 @@ import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
+from uuid import uuid4
 
-from google import genai
+import google.auth
+import google.genai as genai
+from fast_depends.library.serializer import SerializerProto
 from google.genai import types
+from google.oauth2 import service_account
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
@@ -25,7 +29,15 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import build_system_instruction, build_tools, convert_messages, normalize_usage, response_proto_to_config
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
+from .mappers import (
+    build_system_instruction,
+    build_tools,
+    convert_messages,
+    grounding_tool_name,
+    normalize_usage,
+    response_proto_to_config,
+)
 
 
 class CreateConfig(TypedDict, total=False):
@@ -44,11 +56,23 @@ class GeminiClient(LLMClient):
         self,
         model: str,
         api_key: str | None = None,
+        vertexai: bool | None = None,
+        credentials: google.auth.credentials.Credentials | str | None = None,
+        project: str | None = None,
+        location: str | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
         cached_content: str | None = None,
     ) -> None:
-        self._client = genai.Client(api_key=api_key)
+        if isinstance(credentials, str):
+            # String indicates a json credentials file, load into credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        self._client = genai.Client(
+            vertexai=vertexai, api_key=api_key, credentials=credentials, project=project, location=location
+        )
         self._model_name = model
         self._streaming = streaming
         self._create_config = create_config or {}
@@ -61,8 +85,9 @@ class GeminiClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: SerializerProto,
     ) -> ModelResponse:
-        contents = convert_messages(messages)
+        contents = convert_messages(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -109,6 +134,7 @@ class GeminiClient(LLMClient):
         calls: list[ToolCallEvent] = []
 
         for candidate in response.candidates or ():
+            pending_code_call_id: str | None = None
             if candidate.content:
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
@@ -123,12 +149,34 @@ class GeminiClient(LLMClient):
                             pdata["thought_signature"] = part.thought_signature
                         calls.append(
                             ToolCallEvent(
-                                id=fc.id or fc.name or "",
+                                id=fc.id or str(uuid4()),
                                 name=fc.name or "",
                                 arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
                                 provider_data=pdata,
                             )
                         )
+                    elif part.executable_code and (call_event := GeminiServerToolCallEvent.from_executable_code(part)):
+                        pending_code_call_id = call_event.id
+                        await context.send(call_event)
+                    elif (
+                        part.code_execution_result
+                        and pending_code_call_id is not None
+                        and (
+                            result_event := GeminiServerToolResultEvent.from_code_execution_result(
+                                part, parent_id=pending_code_call_id
+                            )
+                        )
+                    ):
+                        await context.send(result_event)
+                        pending_code_call_id = None
+            grounding = candidate.grounding_metadata if candidate.grounding_metadata else None
+            if grounding:
+                name = grounding_tool_name(grounding)
+                gnd_call = GeminiServerToolCallEvent.from_grounding(grounding, name=name)
+                await context.send(gnd_call)
+                await context.send(
+                    GeminiServerToolResultEvent.from_grounding(grounding, parent_id=gnd_call.id, name=name)
+                )
 
         usage = Usage()
         if response.usage_metadata:
@@ -158,6 +206,8 @@ class GeminiClient(LLMClient):
         calls: list[ToolCallEvent] = []
         usage = Usage()
         finish_reason: str | None = None
+        pending_code_call_id: str | None = None
+        last_grounding_metadata: types.GroundingMetadata | None = None
 
         async for chunk in stream:
             for candidate in chunk.candidates or ():
@@ -175,12 +225,31 @@ class GeminiClient(LLMClient):
                                 pdata["thought_signature"] = part.thought_signature
                             calls.append(
                                 ToolCallEvent(
-                                    id=fc.id or fc.name or "",
+                                    id=fc.id or str(uuid4()),
                                     name=fc.name or "",
                                     arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
                                     provider_data=pdata,
                                 )
                             )
+                        elif part.executable_code and (
+                            call_event := GeminiServerToolCallEvent.from_executable_code(part)
+                        ):
+                            pending_code_call_id = call_event.id
+                            await context.send(call_event)
+                        elif (
+                            part.code_execution_result
+                            and pending_code_call_id is not None
+                            and (
+                                result_event := GeminiServerToolResultEvent.from_code_execution_result(
+                                    part, parent_id=pending_code_call_id
+                                )
+                            )
+                        ):
+                            await context.send(result_event)
+                            pending_code_call_id = None
+                grounding = candidate.grounding_metadata if candidate.grounding_metadata else None
+                if grounding:
+                    last_grounding_metadata = grounding
 
             if chunk.usage_metadata:
                 usage = normalize_usage(chunk.usage_metadata)
@@ -189,6 +258,14 @@ class GeminiClient(LLMClient):
                 fr = chunk.candidates[0].finish_reason
                 if fr is not None:
                     finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+
+        if last_grounding_metadata is not None:
+            name = grounding_tool_name(last_grounding_metadata)
+            gnd_call = GeminiServerToolCallEvent.from_grounding(last_grounding_metadata, name=name)
+            await context.send(gnd_call)
+            await context.send(
+                GeminiServerToolResultEvent.from_grounding(last_grounding_metadata, parent_id=gnd_call.id, name=name)
+            )
 
         message: ModelMessage | None = None
         if full_content:

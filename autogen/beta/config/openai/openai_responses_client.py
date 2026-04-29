@@ -9,15 +9,13 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
+from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
-    ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
-    ResponseFunctionWebSearch,
-    ResponseOutputItemAddedEvent,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
@@ -32,22 +30,17 @@ from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     BinaryResult,
-    BuiltinToolCallEvent,
-    BuiltinToolResultEvent,
     ModelMessage,
     ModelMessageChunk,
-    ModelReasoning,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
     Usage,
 )
 from autogen.beta.response import ResponseProto
-from autogen.beta.tools import ToolResult
-from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
+from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
 from .mappers import (
     events_to_responses_input,
     normalize_responses_usage,
@@ -111,8 +104,9 @@ class OpenAIResponsesClient(LLMClient):
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
+        serializer: "SerializerProto",
     ) -> ModelResponse:
-        input_items = events_to_responses_input(messages)
+        input_items = events_to_responses_input(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -150,32 +144,18 @@ class OpenAIResponsesClient(LLMClient):
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
-                for summary in item.summary or []:
-                    if hasattr(summary, "text") and summary.text:
-                        await context.send(ModelReasoning(summary.text))
+                summaries = [s.text for s in item.summary if s.text]
+                if not summaries:
+                    await context.send(OpenAIReasoningEvent("", item=item))
+                else:
+                    for text in summaries:
+                        await context.send(OpenAIReasoningEvent(text, item=item))
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
                     if hasattr(part, "text") and part.text:
                         model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
-
-            elif isinstance(item, ResponseFunctionWebSearch):
-                args = item.action.model_dump_json()
-                await context.send(
-                    BuiltinToolCallEvent(
-                        id=item.id,
-                        name=WEB_SEARCH_TOOL_NAME,
-                        arguments=args,
-                    )
-                )
-                await context.send(
-                    BuiltinToolResultEvent(
-                        parent_id=item.id,
-                        name=WEB_SEARCH_TOOL_NAME,
-                        result=ToolResult(args),
-                    )
-                )
 
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
@@ -186,26 +166,17 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-            elif isinstance(item, ImageGenerationCall) and item.result:
-                result = BinaryResult(
-                    base64.b64decode(item.result),
-                    metadata=item.model_dump(exclude={"result", "status", "type"}),
-                )
-                await context.send(
-                    BuiltinToolCallEvent(
-                        id=item.id,
-                        name=IMAGE_GENERATION_TOOL_NAME,
-                        arguments="",
+            elif call_event := OpenAIServerToolCallEvent.from_item(item):
+                await context.send(call_event)
+                if result_event := OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id):
+                    await context.send(result_event)
+                if isinstance(item, ImageGenerationCall) and item.result:
+                    files.append(
+                        BinaryResult(
+                            base64.b64decode(item.result),
+                            metadata=item.model_dump(exclude={"result", "status", "type"}),
+                        )
                     )
-                )
-                await context.send(
-                    BuiltinToolResultEvent(
-                        parent_id=item.id,
-                        name=IMAGE_GENERATION_TOOL_NAME,
-                        result=ToolResult(item.result),
-                    )
-                )
-                files.append(result)
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
@@ -236,64 +207,39 @@ class OpenAIResponsesClient(LLMClient):
                 full_content += event.delta
                 await context.send(ModelMessageChunk(event.delta))
 
-            elif isinstance(event, ResponseFunctionCallArgumentsDoneEvent):
-                calls.append(
-                    ToolCallEvent(
-                        id=event.item_id,
-                        name=event.name,
-                        arguments=event.arguments,
-                    )
-                )
-
-            elif isinstance(event, ResponseOutputItemAddedEvent):
-                # call image generation tool
-                if isinstance(event.item, ImageGenerationCall):
-                    await context.send(
-                        BuiltinToolCallEvent(
-                            id=event.item.id,
-                            name=IMAGE_GENERATION_TOOL_NAME,
-                            arguments="",
-                        )
-                    )
-
-                # call web search tool
-                elif isinstance(event.item, ResponseFunctionWebSearch):
-                    await context.send(
-                        BuiltinToolCallEvent(
-                            id=event.item.id,
-                            name=WEB_SEARCH_TOOL_NAME,
-                            arguments=event.item.action.model_dump_json(),
-                        )
-                    )
-
-                else:
-                    pass
-
             elif isinstance(event, ResponseOutputItemDoneEvent):
-                # image generation tool call result
-                if isinstance(event.item, ImageGenerationCall) and event.item.result:
-                    result = BinaryResult(
-                        base64.b64decode(event.item.result),
-                        metadata=event.item.model_dump(exclude={"result", "status", "type"}),
-                    )
-                    await context.send(
-                        BuiltinToolResultEvent(
-                            parent_id=event.item.id,
-                            name=IMAGE_GENERATION_TOOL_NAME,
-                            result=ToolResult(event.item.result),
-                        )
-                    )
-                    files.append(result)
+                # Builtin and reasoning events are emitted on Done so the typed
+                # SDK object carried by the event is fully populated (Added fires
+                # before the server-side tool has executed — code/outputs missing).
 
-                # web search tool call result
-                elif isinstance(event.item, ResponseFunctionWebSearch):
-                    await context.send(
-                        BuiltinToolResultEvent(
-                            parent_id=event.item.id,
-                            name=WEB_SEARCH_TOOL_NAME,
-                            result=ToolResult(event.item.action.model_dump_json()),
+                if isinstance(event.item, ResponseReasoningItem):
+                    summaries = [s.text for s in event.item.summary if s.text]
+                    if not summaries:
+                        await context.send(OpenAIReasoningEvent("", item=event.item))
+                    else:
+                        for text in summaries:
+                            await context.send(OpenAIReasoningEvent(text, item=event.item))
+
+                elif isinstance(event.item, ResponseFunctionToolCall):
+                    calls.append(
+                        ToolCallEvent(
+                            id=event.item.call_id,
+                            name=event.item.name,
+                            arguments=event.item.arguments,
                         )
                     )
+
+                elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
+                    await context.send(call_event)
+                    if result_event := OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id):
+                        await context.send(result_event)
+                    if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                        files.append(
+                            BinaryResult(
+                                base64.b64decode(event.item.result),
+                                metadata=event.item.model_dump(exclude={"result", "status", "type"}),
+                            )
+                        )
 
             elif isinstance(event, ResponseCompletedEvent):
                 # Stream finished

@@ -8,16 +8,19 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
 
+WEB_FETCH_TOOL_NAME = "web_fetch"
+
 
 @dataclass(slots=True)
 class WebFetchToolSchema(ToolSchema):
-    type: str = field(default="web_fetch", init=False)
+    type: str = field(default=WEB_FETCH_TOOL_NAME, init=False)
     max_uses: int | None = None
     allowed_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
@@ -27,7 +30,10 @@ class WebFetchToolSchema(ToolSchema):
 
 
 class WebFetchTool(Tool):
-    __slots__ = ("_params",)
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -53,6 +59,8 @@ class WebFetchTool(Tool):
         if version is not None:
             self._params["web_fetch_version"] = version
 
+        self.name = WEB_FETCH_TOOL_NAME
+
     async def schemas(self, context: "Context") -> list[WebFetchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
         return [WebFetchToolSchema(**resolved)]
@@ -64,4 +72,9 @@ class WebFetchTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == WEB_FETCH_TOOL_NAME).sub_scope(execute),
+        )

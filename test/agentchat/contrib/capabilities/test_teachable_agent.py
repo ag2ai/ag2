@@ -7,6 +7,8 @@
 # !/usr/bin/env python3 -m pytest
 
 
+import pytest
+
 from autogen import ConversableAgent
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
@@ -120,6 +122,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     return num_errors, num_tests
 
 
+@pytest.mark.timeout(120)
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb"], "teachable")
 @run_for_optional_imports(["openai"], "openai")

@@ -24,6 +24,11 @@ from .realtime_test_utils import text_to_speech, trace
 logger = getLogger(__name__)
 
 
+@pytest.mark.skip(
+    reason="RealtimeAgent is deprecated and scheduled for removal in v0.14; "
+    "relies on deprecated realtime API endpoints and an aging model alias. "
+    "Revisit when (or if) the realtime path is re-architected."
+)
 class TestSwarmE2E:
     async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_openai_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.

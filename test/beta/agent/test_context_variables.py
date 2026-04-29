@@ -21,7 +21,7 @@ def test_config() -> TestConfig:
 
 
 @pytest.mark.asyncio()
-async def test_set_variables(
+async def test_ask_variables(
     mock: MagicMock,
     test_config: TestConfig,
 ) -> None:

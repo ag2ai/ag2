@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta.events import AudioInput, AudioUrlInput, BinaryInput, FileIdInput
+from autogen.beta.events import AudioInput, BinaryInput, FileIdInput, UrlInput
 
 
 def test_url_returns_audio_url_input() -> None:
     result = AudioInput("https://example.com/audio.wav")
 
-    assert isinstance(result, AudioUrlInput)
+    assert isinstance(result, UrlInput)
     assert result.url == "https://example.com/audio.wav"
 
 

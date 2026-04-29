@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -43,41 +44,48 @@ class ContainerReferenceEnvironment:
 ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment
 
 
+SHELL_TOOL_NAME = "shell"
+
+
 @dataclass(slots=True)
 class ShellToolSchema(ToolSchema):
-    """Provider-neutral capability flag for shell/bash execution.
+    """Provider-neutral capability flag for provider-executed shell.
 
-    Each provider mapper converts this into the appropriate API format:
-
-    - Anthropic: ``bash_20250124``
-    - OpenAI Responses API: ``shell`` (with optional ``environment``)
+    Currently only OpenAI Responses API executes shell server-side.
+    Anthropic's bash tool is client-side and is rejected with
+    :class:`~autogen.beta.exceptions.UnsupportedToolError` — use
+    :class:`~autogen.beta.tools.LocalShellTool` instead.
     """
 
-    type: str = field(default="shell", init=False)
+    type: str = field(default=SHELL_TOOL_NAME, init=False)
     version: Literal["bash_20250124"] = "bash_20250124"
     environment: ShellEnvironment | None = None
 
 
 class ShellTool(Tool):
-    """Shell/bash execution tool.
+    """Shell execution tool — provider-executed server-side.
 
-    Provider-specific mapping:
+    Provider support:
 
-    - **Anthropic** — maps to ``bash_20250124``. Claude calls the tool with
-      a ``command`` or ``restart`` input; the application must execute it and
-      return the result (client-side tool).
-      ``environment`` is ignored for Anthropic.
+    - **OpenAI Responses API** — maps to ``shell``. Use ``environment`` to
+      control where commands execute: ``ContainerAutoEnvironment``,
+      ``ContainerReferenceEnvironment``.
 
-    - **OpenAI Responses API** — maps to ``shell`` (``gpt-5.4``).
-      Use ``environment`` to control where commands execute:
-      ``ContainerAutoEnvironment``, ``ContainerReferenceEnvironment``
+    - **Anthropic** — NOT supported. Claude's ``bash`` tool is a client-side
+      tool (the application must execute the command and return the result).
+      Using ``ShellTool`` with ``AnthropicConfig`` raises
+      :class:`~autogen.beta.exceptions.UnsupportedToolError`. Use
+      :class:`~autogen.beta.tools.LocalShellTool` instead, which runs
+      commands via subprocess and works with any provider.
 
     See:
-    - https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
     - https://developers.openai.com/api/docs/guides/tools-shell
     """
 
-    __slots__ = ("_params",)
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -85,14 +93,14 @@ class ShellTool(Tool):
         environment: ShellEnvironment | Variable | None = None,
         version: Literal["bash_20250124"] = "bash_20250124",
     ) -> None:
-        self._params: dict[str, object] = {}
+        self._params: dict[str, object] = {"version": version}
         if environment is not None:
             self._params["environment"] = environment
-        self._version = version
+        self.name = SHELL_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ShellToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
-        return [ShellToolSchema(version=self._version, **resolved)]
+        return [ShellToolSchema(**resolved)]
 
     def register(
         self,
@@ -101,4 +109,9 @@ class ShellTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == SHELL_TOOL_NAME).sub_scope(execute),
+        )

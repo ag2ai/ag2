@@ -8,6 +8,3 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class ToolSchema:
     type: str
-
-
-__all__ = ("ToolSchema",)

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -48,7 +49,10 @@ class ImageGenerationTool(Tool):
         partial_images: Number of partial images to stream (1–3).
     """
 
-    __slots__ = "_params"
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -74,6 +78,8 @@ class ImageGenerationTool(Tool):
         if partial_images is not None:
             self._params["partial_images"] = partial_images
 
+        self.name = IMAGE_GENERATION_TOOL_NAME
+
     async def schemas(self, context: "Context") -> list[ImageGenerationToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
         return [ImageGenerationToolSchema(**resolved)]
@@ -85,4 +91,9 @@ class ImageGenerationTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == IMAGE_GENERATION_TOOL_NAME).sub_scope(execute),
+        )
