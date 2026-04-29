@@ -76,7 +76,7 @@ task_writer(
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `task_{agent.name}` tool name |
 | `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
-| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `depth_limiter`, `approval_required`) |
+| `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 You can also use `#!python subagent_tool()` directly for more control:
 
@@ -119,30 +119,6 @@ reply = await analyst.ask("Compare Python vs Rust for web APIs: performance, DX,
 ```
 
 The analyst's LLM may call `sub_task` multiple times — one per aspect — then synthesise the results.
-
-### Depth Limiter
-
-Self-delegation and deep chains (A → B → C → …) can cause infinite recursion. Use `#!python depth_limiter()` to cap the nesting depth:
-
-```python linenums="1" hl_lines="1 7"
-from autogen.beta.tools.subagents import depth_limiter
-
-analyst.add_tool(
-    analyst.as_tool(
-        description="Break work into a focused sub-task.",
-        name="sub_task",
-        middleware=[depth_limiter(max_depth=2)],
-    )
-)
-```
-
-When a sub-agent tries to delegate beyond the limit, its tool call returns an error message instead of executing. The calling LLM sees the error and can respond accordingly.
-
-`depth_limiter` accepts a single parameter:
-
-| Parameter | Default | Description |
-|---|---|---|
-| `max_depth` | `3` | Maximum nesting depth. `1` means the top-level agent can delegate once; sub-tasks cannot delegate further. |
 
 ## Sub-Task Streams
 

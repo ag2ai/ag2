@@ -47,8 +47,8 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
 
 ```python linenums="1" hl_lines="10-14"
-from autogen.beta import (
-    Agent,
+from autogen.beta import Agent
+from autogen.beta.policies import (
     AlertPolicy,
     WorkingMemoryPolicy,
     SlidingWindowPolicy,
@@ -74,7 +74,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` are also available as public symbols from `#!python autogen.beta` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
+    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python autogen.beta.assembly` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
 
 ## Ordering matters
 
@@ -90,7 +90,8 @@ The rule: **injection before reduction**. If a reducer runs first, the injection
 `AssemblerMiddleware.validate_order()` catches known bad orderings and returns a list of warnings:
 
 ```python linenums="1" hl_lines="6-9"
-from autogen.beta import AssemblerMiddleware, AlertPolicy, SlidingWindowPolicy
+from autogen.beta.assembly import AssemblerMiddleware
+from autogen.beta.policies import AlertPolicy, SlidingWindowPolicy
 
 policies = [
     SlidingWindowPolicy(max_events=20),  # reduction first — wrong
@@ -103,14 +104,14 @@ for w in warnings:
 
 ## Built-in policies
 
-All six built-ins are importable from `#!python autogen.beta`.
+All six built-ins are importable from `#!python autogen.beta.policies`.
 
 ### ConversationPolicy
 
 Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`). Drops alerts, lifecycle events, observer output — anything the LLM does not need to see.
 
 ```python linenums="1"
-from autogen.beta import ConversationPolicy
+from autogen.beta.policies import ConversationPolicy
 
 policy = ConversationPolicy()
 ```
@@ -122,7 +123,7 @@ Takes no arguments. Effectively an allowlist — add a new event type to the str
 Keeps only the last `max_events` events. Skips leading orphaned `ToolResultsEvent` entries so the window never starts on an unmatched tool result.
 
 ```python linenums="1"
-from autogen.beta import SlidingWindowPolicy
+from autogen.beta.policies import SlidingWindowPolicy
 
 policy = SlidingWindowPolicy(max_events=50, transparent=True)
 ```
@@ -134,7 +135,7 @@ Set `transparent=True` to append a prompt note like `"[sliding_window] Showing l
 Keeps the newest events that fit in an estimated token budget. Estimation is `#!python len(str(event)) / chars_per_token` — cheap, not perfectly accurate. Use it as a safety net, not an exact meter.
 
 ```python linenums="1"
-from autogen.beta import TokenBudgetPolicy
+from autogen.beta.policies import TokenBudgetPolicy
 
 policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=True)
 ```
@@ -144,7 +145,7 @@ policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=Tru
 Delivers [ObserverAlerts](/docs/beta/advanced/observers) to the model. Each new alert is formatted into the prompt once (deduplicated on `(source, severity, message)`), and **FATAL** alerts additionally emit a `HaltEvent` onto the stream so the surrounding loop can short-circuit.
 
 ```python linenums="1"
-from autogen.beta import AlertPolicy
+from autogen.beta.policies import AlertPolicy
 
 policy = AlertPolicy()
 ```
@@ -159,7 +160,8 @@ Takes no arguments. Dedup state lives on the instance — give each Agent its ow
 Reads `/memory/working.md` from the [KnowledgeStore](/docs/beta/advanced/knowledge_store) and injects it into the prompt. Working memory is the agent's persistent state — written between conversations by an aggregation strategy and read on every turn.
 
 ```python linenums="1" hl_lines="7-12"
-from autogen.beta import AssemblerMiddleware, WorkingMemoryPolicy
+from autogen.beta.assembly import AssemblerMiddleware
+from autogen.beta.policies import WorkingMemoryPolicy
 from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
@@ -180,7 +182,7 @@ The policy looks up the store by type (`#!python context.dependencies.get(Knowle
 Reads the most recent summaries under `/memory/conversations/` and injects them. The companion reader for `ConversationSummaryAggregate`, which writes timestamped summary files to that path after each conversation.
 
 ```python linenums="1"
-from autogen.beta import EpisodicMemoryPolicy
+from autogen.beta.policies import EpisodicMemoryPolicy
 
 policy = EpisodicMemoryPolicy(max_episodes=5, transparent=True)
 ```
@@ -192,8 +194,8 @@ Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op oth
 Typical production ordering — injections first, then `AlertPolicy`, then reduce:
 
 ```python linenums="1" hl_lines="8-14"
-from autogen.beta import (
-    AssemblerMiddleware,
+from autogen.beta.assembly import AssemblerMiddleware
+from autogen.beta.policies import (
     AlertPolicy,
     EpisodicMemoryPolicy,
     SlidingWindowPolicy,

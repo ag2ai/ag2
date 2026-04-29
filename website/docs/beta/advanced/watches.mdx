@@ -58,7 +58,8 @@ For event-driven watches (`EventWatch`, `CadenceWatch`, `Sequence`), `events` co
 Fires immediately on each matching event.
 
 ```python linenums="1"
-from autogen.beta import EventWatch, MemoryStream
+from autogen.beta import MemoryStream
+from autogen.beta.watch import EventWatch
 from autogen.beta.events import ModelResponse
 
 stream = MemoryStream()
@@ -73,7 +74,7 @@ watch.arm(stream, on_response)
 `EventWatch` also supports field conditions:
 
 ```python linenums="1"
-from autogen.beta import EventWatch
+from autogen.beta.watch import EventWatch
 from autogen.beta.events import ToolCallEvent
 
 watch = EventWatch(ToolCallEvent.name == "search")
@@ -84,7 +85,7 @@ watch = EventWatch(ToolCallEvent.name == "search")
 Buffers matching events and fires once the buffer reaches **size** `n`, once **time** `max_wait` seconds have elapsed since the first buffered event, or whichever comes first when both are set. At least one of `n` and `max_wait` is required.
 
 ```python linenums="1"
-from autogen.beta import CadenceWatch
+from autogen.beta.watch import CadenceWatch
 from autogen.beta.events import ModelResponse
 
 # Count-only: fire every 5 model responses
@@ -109,7 +110,7 @@ The timer starts on the **first** buffered event in a cadence — a quiet stream
 Fires exactly once after a delay, then auto-disarms.
 
 ```python linenums="1"
-from autogen.beta import DelayWatch
+from autogen.beta.watch import DelayWatch
 
 watch = DelayWatch(30.0)
 
@@ -125,7 +126,7 @@ watch.arm(stream, timeout_guard)
 Fires periodically at a fixed interval until disarmed.
 
 ```python linenums="1"
-from autogen.beta import IntervalWatch
+from autogen.beta.watch import IntervalWatch
 
 watch = IntervalWatch(60.0)
 
@@ -138,7 +139,7 @@ async def heartbeat(events, ctx):
 Fires on a standard 5-field cron expression.
 
 ```python linenums="1"
-from autogen.beta import CronWatch
+from autogen.beta.watch import CronWatch
 
 watch = CronWatch("0 9 * * MON")  # every Monday at 9am
 ```
@@ -152,7 +153,7 @@ Supports `*`, `*/n`, `a-b`, comma lists, and `SUN`–`SAT` day-of-week names.
 Fires once when **every** sub-watch has fired at least once.
 
 ```python linenums="1"
-from autogen.beta import AllOf, EventWatch
+from autogen.beta.watch import AllOf, EventWatch
 from autogen.beta.events import ModelResponse, ToolCallEvent
 
 watch = AllOf(
@@ -172,7 +173,7 @@ After firing, the gate resets — both sub-watches must fire again for the next 
 Fires on **any** sub-watch, every time.
 
 ```python linenums="1"
-from autogen.beta import AnyOf, EventWatch
+from autogen.beta.watch import AnyOf, EventWatch
 from autogen.beta.events.alert import ObserverAlert
 
 watch = AnyOf(
@@ -186,7 +187,7 @@ watch = AnyOf(
 Fires when sub-watches trigger **in order**. Each sub-watch is armed only after the previous has fired.
 
 ```python linenums="1"
-from autogen.beta import Sequence, EventWatch
+from autogen.beta.watch import Sequence, EventWatch
 from autogen.beta.events import ModelRequest, ModelResponse
 
 watch = Sequence(
@@ -206,7 +207,8 @@ After the last sub-watch fires, the sequence resets.
 A Watch callback can send events back onto the stream — this is how [trigger-driven Observers](/docs/beta/advanced/observers#trigger-driven-observers-baseobserver) emit alerts:
 
 ```python linenums="1"
-from autogen.beta import DelayWatch, MemoryStream
+from autogen.beta import MemoryStream
+from autogen.beta.watch import DelayWatch
 from autogen.beta.events.alert import ObserverAlert, Severity
 
 watch = DelayWatch(30.0)
