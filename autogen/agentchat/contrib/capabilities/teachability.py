@@ -4,8 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import json
 import os
-import pickle
 from typing import Any
 
 from ....formatting_utils import colored
@@ -271,17 +271,35 @@ class MemoStore:
         self.vec_db = self.db_client.create_collection("memos", get_or_create=True)  # The collection is the DB.
 
         # Load or create the associated memo dict on disk.
-        self.path_to_dict = os.path.join(path_to_db_dir, "uid_text_dict.pkl")
-        self.uid_text_dict = {}
+        # JSON path is the current format; .pkl is the legacy format that is
+        # no longer written.  If only .pkl exists, raise a RuntimeError asking
+        # the user to run the migration helper before continuing.
+        self.path_to_dict = os.path.join(path_to_db_dir, "uid_text_dict.json")
+        _legacy_pkl = os.path.join(path_to_db_dir, "uid_text_dict.pkl")
+        self.uid_text_dict: dict[str, Any] = {}
         self.last_memo_id = 0
+
+        if (not reset) and os.path.exists(_legacy_pkl) and not os.path.exists(self.path_to_dict):
+            raise RuntimeError(
+                f"Found a legacy pickle store at {_legacy_pkl!r} but no JSON store. "
+                "To migrate, run:\n\n"
+                "    python -m autogen.agentchat.contrib.capabilities.teachability_migrate_pickle_to_json"
+                f" --path {path_to_db_dir!r}\n\n"
+                "This is required for security: pickle.load on an attacker-writable path allows RCE."
+            )
+
         if (not reset) and os.path.exists(self.path_to_dict):
             print(colored("\nLOADING MEMORY FROM DISK", "light_green"))
             print(colored(f"    Location = {self.path_to_dict}", "light_green"))
-            with open(self.path_to_dict, "rb") as f:
-                self.uid_text_dict = pickle.load(f)
-                self.last_memo_id = len(self.uid_text_dict)
-                if self.verbosity >= 3:
-                    self.list_memos()
+            with open(self.path_to_dict, encoding="utf-8") as f:
+                raw = json.load(f)
+            # Validate schema: must be dict[str, list[str, str]]
+            if not isinstance(raw, dict):
+                raise ValueError(f"Memo store at {self.path_to_dict!r} has unexpected format (expected dict).")
+            self.uid_text_dict = raw
+            self.last_memo_id = len(self.uid_text_dict)
+            if self.verbosity >= 3:
+                self.list_memos()
 
         # Clear the DB if requested.
         if reset:
@@ -299,10 +317,10 @@ class MemoStore:
                 )
             )
 
-    def _save_memos(self):
-        """Saves self.uid_text_dict to disk."""
-        with open(self.path_to_dict, "wb") as file:
-            pickle.dump(self.uid_text_dict, file)
+    def _save_memos(self) -> None:
+        """Saves self.uid_text_dict to disk as JSON."""
+        with open(self.path_to_dict, "w", encoding="utf-8") as file:
+            json.dump(self.uid_text_dict, file, indent=2)
 
     def reset_db(self):
         """Forces immediate deletion of the DB's contents, in memory and on disk."""
