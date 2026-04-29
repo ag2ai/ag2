@@ -64,7 +64,7 @@ For **OpenAI-compatible endpoints** (vLLM, LM Studio, Together, NVIDIA NIM, etc.
 config = OpenAIConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
-    api_key="NotRequired",
+    api_key="NotRequired",  # pragma: allowlist secret
 )
 ```
 
@@ -94,7 +94,7 @@ You can also override the model **per ask** — useful when the user brings thei
 
 ```python
 agent = Agent("assistant", prompt="Help.")
-reply = await agent.ask("Hello!", config=OpenAIConfig(model="gpt-5", api_key="sk-..."))
+reply = await agent.ask("Hello!", config=OpenAIConfig(model="gpt-5", api_key="sk-..."))  # pragma: allowlist secret
 ```
 
 The per-ask config completely replaces the agent's config for that turn.
