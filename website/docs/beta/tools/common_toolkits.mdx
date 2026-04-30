@@ -384,6 +384,67 @@ All runtime parameters accept `Variable` for deferred context resolution.
 
 ---
 
+## PerplexitySearchTool
+
+`PerplexitySearchTool` gives an agent web search powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}'s Sonar models. Each call returns an LLM-generated answer alongside the search results, citations, and optional images used to ground it.
+
+!!! note
+    Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import PerplexitySearchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[PerplexitySearchTool(api_key=os.environ["PERPLEXITY_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` environment variable automatically.
+
+### Configuration
+
+```python linenums="1"
+tool = PerplexitySearchTool(
+    model="sonar-pro",              # "sonar" | "sonar-pro" | "sonar-reasoning" | "sonar-reasoning-pro" | "sonar-deep-research" — default: "sonar"
+    max_tokens=2000,                # default: 1000
+    search_context_size="high",     # "low" | "medium" | "high" — default: "high"
+    search_mode="academic",         # "web" | "academic" | "sec"
+    search_recency_filter="month",  # "hour" | "day" | "week" | "month" | "year"
+    return_images=True,             # include image URLs in the response
+    return_related_questions=True,  # include suggested follow-up questions
+    search_domain_filter=["arxiv.org", "nature.com"],
+)
+```
+
+All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+### Result
+
+The tool returns a `SearchResponse` with these fields:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The original search query |
+| `content` | LLM-generated answer grounded in the sources |
+| `search_results` | List of `SearchResult` (`title`, `url`, `date`, `snippet`) used by the model |
+| `citations` | URLs the model cited inline |
+| `images` | List of `ImageMeta` returned when `return_images=True` |
+
+When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on the tool result so the next model turn receives them as proper image inputs.
+
+!!! note
+    `PerplexitySearchTool` calls Perplexity's [Sonar API](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — an LLM-grounded answer with citations, not raw search hits. For unprocessed ranked search results, use Perplexity's separate Search API.
+
+!!! tip
+    `search_domain_filter` is a Pro-tier feature on the Perplexity API; see [usage tiers](https://docs.perplexity.ai/guides/usage-tiers){.external-link target="_blank"}.
+
+---
+
 ## TavilySearchTool
 
 `TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.
