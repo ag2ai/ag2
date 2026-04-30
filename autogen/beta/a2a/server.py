@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCard
+from a2a.types import AgentCapabilities, AgentCard
 
 from .card import build_card
 from .executor import AG2AgentExecutor
@@ -32,14 +32,30 @@ class A2AServer:
         self,
         agent: "Agent",
         *,
-        card: AgentCard | None = None,
-        extended_card: AgentCard | None = None,
         url: str = "http://localhost:8000",
+        card: AgentCard | None = None,
+        version: str = "0.1.0",
+        description: str | None = None,
+        capabilities: AgentCapabilities | None = None,
+        default_input_modes: Sequence[str] | None = None,
+        default_output_modes: Sequence[str] | None = None,
+        extended_card: AgentCard | None = None,
         task_store: "TaskStore | None" = None,
     ) -> None:
         self._agent = agent
         self._url = url
-        self._card = card or build_card(agent, url=url, supports_extended=extended_card is not None)
+        # `card` overrides the field-by-field params. When you pass `card=`,
+        # `version` / `description` / `capabilities` / mode params are ignored.
+        self._card = card or build_card(
+            agent,
+            url=url,
+            version=version,
+            description=description,
+            capabilities=capabilities,
+            default_input_modes=default_input_modes,
+            default_output_modes=default_output_modes,
+            supports_extended=extended_card is not None,
+        )
         if extended_card is not None and not self._card.supports_authenticated_extended_card:
             warnings.warn(
                 "extended_card was provided but the supplied `card` does not advertise "
