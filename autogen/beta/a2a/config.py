@@ -11,7 +11,8 @@ from typing_extensions import Self
 
 from autogen.beta.config.config import ModelConfig
 
-from .a2a_client import A2AClient, HttpxClientFactory
+from .a2a_client import A2AClient
+from .types import HttpxClientFactory
 
 
 @dataclass(slots=True)
@@ -21,7 +22,7 @@ class A2AConfig(ModelConfig):
     client_config: ClientConfig | None = None
     interceptors: tuple[ClientCallInterceptor, ...] = field(default_factory=tuple)
     max_reconnects: int = 3
-    polling_interval: float = 0.5
+    reconnect_backoff: float = 0.5
     agent_card: AgentCard | None = None
 
     def copy(self, /, **overrides: Any) -> Self:
@@ -34,7 +35,7 @@ class A2AConfig(ModelConfig):
             client_config=self.client_config,
             interceptors=list(self.interceptors),
             max_reconnects=self.max_reconnects,
-            polling_interval=self.polling_interval,
+            reconnect_backoff=self.reconnect_backoff,
             agent_card=self.agent_card,
         )
 

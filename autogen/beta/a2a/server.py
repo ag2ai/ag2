@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -14,6 +15,8 @@ from .card import build_card
 from .executor import AgentExecutor
 
 if TYPE_CHECKING:
+    from a2a.server.apps.jsonrpc.jsonrpc_app import CallContextBuilder
+    from a2a.server.request_handlers import RequestHandler
     from a2a.server.tasks import TaskStore
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
@@ -22,25 +25,39 @@ if TYPE_CHECKING:
 
 
 class A2AServer:
-    __slots__ = ("_agent", "_card", "_executor", "_task_store", "_url")
+    __slots__ = ("_agent", "_card", "_executor", "_extended_card", "_task_store", "_url")
 
     def __init__(
         self,
         agent: "Agent",
         *,
         card: AgentCard | None = None,
+        extended_card: AgentCard | None = None,
         url: str = "http://localhost:8000",
         task_store: "TaskStore | None" = None,
     ) -> None:
         self._agent = agent
         self._url = url
-        self._card = card or build_card(agent, url=url)
+        self._card = card or build_card(agent, url=url, supports_extended=extended_card is not None)
+        if extended_card is not None and not self._card.supports_authenticated_extended_card:
+            warnings.warn(
+                "extended_card was provided but the supplied `card` does not advertise "
+                "`supports_authenticated_extended_card=True`; A2A clients will not fetch the "
+                "extended card. Set the flag on `card` to expose it.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        self._extended_card = extended_card
         self._task_store = task_store
         self._executor = AgentExecutor(agent)
 
     @property
     def card(self) -> AgentCard:
         return self._card
+
+    @property
+    def extended_card(self) -> AgentCard | None:
+        return self._extended_card
 
     @property
     def executor(self) -> AgentExecutor:
@@ -50,8 +67,8 @@ class A2AServer:
         self,
         *,
         middleware: Iterable["Middleware"] | None = None,
-        request_handler: Any | None = None,
-        context_builder: Any | None = None,
+        request_handler: "RequestHandler | None" = None,
+        context_builder: "CallContextBuilder | None" = None,
     ) -> "Starlette":
         """Construct a Starlette ASGI application that serves the A2A protocol."""
         handler = request_handler or DefaultRequestHandler(
@@ -60,6 +77,7 @@ class A2AServer:
         )
         app = A2AStarletteApplication(
             agent_card=self._card,
+            extended_agent_card=self._extended_card,
             http_handler=handler,
             context_builder=context_builder,
         ).build()

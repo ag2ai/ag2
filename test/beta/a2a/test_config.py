@@ -8,8 +8,9 @@ import pytest
 from a2a.types import AgentCapabilities, AgentCard
 
 from autogen.beta import MemoryStream
-from autogen.beta.a2a import A2AClientToolsNotSupportedError, A2AConfig
+from autogen.beta.a2a import A2AConfig
 from autogen.beta.a2a.a2a_client import A2AClient
+from autogen.beta.a2a.errors import A2AClientToolsNotSupportedError
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.response.proto import ResponseProto
@@ -41,12 +42,12 @@ class TestCopy:
     def test_copy_applies_overrides(self) -> None:
         config = A2AConfig("http://localhost:8000", max_reconnects=3)
 
-        copied = config.copy(max_reconnects=10, polling_interval=1.5)
+        copied = config.copy(max_reconnects=10, reconnect_backoff=1.5)
 
         assert copied.max_reconnects == 10
-        assert copied.polling_interval == 1.5
+        assert copied.reconnect_backoff == 1.5
         assert config.max_reconnects == 3
-        assert config.polling_interval == 0.5
+        assert config.reconnect_backoff == 0.5
 
 
 class TestCreate:
@@ -85,10 +86,10 @@ class TestFromCard:
     def test_extra_overrides_propagate(self) -> None:
         card = _card("http://prebuilt:9000")
 
-        config = A2AConfig.from_card(card, max_reconnects=7, polling_interval=2.0)
+        config = A2AConfig.from_card(card, max_reconnects=7, reconnect_backoff=2.0)
 
         assert config.max_reconnects == 7
-        assert config.polling_interval == 2.0
+        assert config.reconnect_backoff == 2.0
 
 
 class _PassthroughSchema(ResponseProto[str]):

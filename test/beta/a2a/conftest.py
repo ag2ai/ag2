@@ -6,11 +6,13 @@ from collections.abc import AsyncIterator, Callable
 
 import httpx
 import pytest_asyncio
+from a2a.types import AgentCapabilities
 
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig, A2AServer
+from autogen.beta.a2a.card import build_card
 
-AgentFactory = Callable[[Agent], "AgentEnv"]
+AgentFactory = Callable[..., "AgentEnv"]
 
 
 class AgentEnv:
@@ -30,7 +32,8 @@ async def serve() -> AsyncIterator[AgentFactory]:
 
     Usage:
 
-        env = serve(my_agent)
+        env = serve(my_agent)                       # streaming card (default)
+        env = serve(my_agent, streaming=False)      # forces polling path on the client
         client = env.config.create()
         await client(...)
 
@@ -40,8 +43,10 @@ async def serve() -> AsyncIterator[AgentFactory]:
     """
     open_clients: list[httpx.AsyncClient] = []
 
-    def _factory(agent: Agent) -> AgentEnv:
-        server = A2AServer(agent, url="http://test")
+    def _factory(agent: Agent, *, streaming: bool = True) -> AgentEnv:
+        card = build_card(agent, url="http://test")
+        card.capabilities = AgentCapabilities(streaming=streaming)
+        server = A2AServer(agent, card=card, url="http://test")
         asgi = server.build_asgi()
         transport = httpx.ASGITransport(app=asgi)
         http = httpx.AsyncClient(transport=transport, base_url="http://test")

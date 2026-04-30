@@ -23,14 +23,11 @@ from a2a.types import (
 )
 
 from autogen.beta.events import (
-    BaseEvent,
     BinaryInput,
     DataInput,
     FileIdInput,
-    ModelMessage,
     ModelMessageChunk,
     ModelRequest,
-    ModelResponse,
     TextInput,
     UrlInput,
 )
@@ -49,7 +46,6 @@ __all__ = (
     "inputs_to_a2a_parts",
     "model_request_to_a2a_message",
     "task_artifact_update_to_chunks",
-    "task_history_to_events",
     "text_from_message",
     "text_from_parts",
     "text_parts",
@@ -155,22 +151,6 @@ def hitl_replay_queue(task: Task) -> list[str]:
     """
     msgs = user_messages(task)
     return [text_from_message(m) for m in msgs[1:]]
-
-
-def task_history_to_events(task: Task) -> list[BaseEvent]:
-    """Convert A2A `task.history` into beta events for stream seeding.
-
-    Currently unused by the executor (it relies on full agent replay rather
-    than seeding the stream), but kept for callers that want to inspect
-    historical exchanges as beta events.
-    """
-    events: list[BaseEvent] = []
-    for msg in task.history or ():
-        if msg.role == Role.user:
-            events.append(ModelRequest(a2a_message_to_inputs(msg)))
-        else:
-            events.append(ModelResponse(message=ModelMessage(text_from_message(msg))))
-    return events
 
 
 def input_required_message(text: str, *, context_id: str, task_id: str) -> Message:
@@ -301,6 +281,9 @@ def _iter_artifact_text(artifact: Artifact) -> Iterator[str]:
         if isinstance(root, TextPart):
             yield root.text
         elif isinstance(root, DataPart):
+            # Cross-compat with legacy `autogen/a2a/`: that executor emits
+            # streaming chunks as `DataPart(data={"content": text})`.
+            # We don't produce this shape ourselves but accept it on read.
             content = root.data.get("content")
             if isinstance(content, str):
                 yield content

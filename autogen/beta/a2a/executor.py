@@ -12,11 +12,11 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import InternalError, Message, Task, TaskState, TaskStatus
 from a2a.utils.errors import ServerError
+from a2a.utils.message import new_agent_text_message
 
 from autogen.beta.events import HumanInputRequest, HumanMessage, ModelMessageChunk
 from autogen.beta.stream import MemoryStream
 
-from .errors import InputRequiredError
 from .mappers import (
     a2a_message_to_inputs,
     hitl_replay_queue,
@@ -28,7 +28,19 @@ from .utils import RESULT_ARTIFACT_NAME
 
 if TYPE_CHECKING:
     from autogen.beta import Agent
-    from autogen.beta.hitl import HumanHook
+
+
+class _InputRequiredSignal(Exception):  # noqa: N818  # control-flow signal, not a user-visible error
+    """Internal signal raised by the replay HITL hook to suspend a task.
+
+    `execute()` catches this and translates it into an A2A `requires_input(...)`
+    event so the client can supply the answer. On the follow-up request, the
+    executor replays the agent with the answer pre-loaded in the replay queue.
+    """
+
+    def __init__(self, prompt: str) -> None:
+        self.prompt = prompt
+        super().__init__(f"Human input required: {prompt!r}")
 
 
 class AgentExecutor(A2ABaseAgentExecutor):
@@ -59,21 +71,28 @@ class AgentExecutor(A2ABaseAgentExecutor):
             reply = await self._agent.ask(
                 *inputs,
                 stream=stream,
-                hitl_hook=_make_replay_hook(replay_queue),
+                hitl_hook=_ReplayHook(replay_queue),
             )
-        except InputRequiredError as signal:
+        except _InputRequiredSignal as signal:
             await updater.requires_input(
                 message=input_required_message(signal.prompt, context_id=task.context_id, task_id=task.id),
                 final=True,
             )
             return
         except Exception as exc:
-            raise ServerError(error=InternalError(message=str(exc))) from exc
+            await updater.failed(
+                message=new_agent_text_message(
+                    text=str(exc) or type(exc).__name__,
+                    context_id=task.context_id,
+                    task_id=task.id,
+                ),
+            )
+            return
 
         await updater.add_artifact(
             parts=text_parts(reply.body or ""),
             name=RESULT_ARTIFACT_NAME,
-            append=forwarder.started,
+            append=forwarder.streaming_started,
             last_chunk=True,
         )
         await updater.complete()
@@ -87,39 +106,41 @@ class AgentExecutor(A2ABaseAgentExecutor):
 
 
 class _ChunkForwarder:
-    __slots__ = ("_updater", "started")
+    __slots__ = ("_updater", "streaming_started")
 
     def __init__(self, updater: TaskUpdater) -> None:
         self._updater = updater
-        self.started = False
+        self.streaming_started = False
 
     async def __call__(self, chunk: ModelMessageChunk) -> None:
         await self._updater.add_artifact(
             parts=text_parts(chunk.content),
             name=RESULT_ARTIFACT_NAME,
-            append=self.started,
+            append=self.streaming_started,
             last_chunk=False,
         )
-        self.started = True
+        self.streaming_started = True
 
 
-def _make_replay_hook(queue: list[str]) -> "HumanHook":
-    """Build a HITL hook backed by a pre-recorded queue of human inputs.
+class _ReplayHook:
+    """HITL hook backed by a pre-recorded queue of human inputs.
 
     Each `context.input(...)` call pops the next entry from the queue. When
-    the queue is empty, the hook raises `InputRequiredError`, which the
+    the queue is empty, the hook raises `_InputRequiredSignal`, which the
     executor catches to suspend the task and request input from the client.
     """
-    iterator = iter(queue)
 
-    async def hook(request: HumanInputRequest) -> HumanMessage:
+    __slots__ = ("_iter",)
+
+    def __init__(self, queue: list[str]) -> None:
+        self._iter = iter(queue)
+
+    async def __call__(self, request: HumanInputRequest) -> HumanMessage:
         try:
-            answer = next(iterator)
+            answer = next(self._iter)
         except StopIteration:
-            raise InputRequiredError(request.content) from None
+            raise _InputRequiredSignal(request.content) from None
         return HumanMessage(answer, parent_id=request.id)
-
-    return hook
 
 
 def _build_initial_task(message: Message) -> Task:

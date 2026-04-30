@@ -15,10 +15,5 @@ AG2_BETA_METADATA_KEY_PREFIX = "ag2_beta_"
 """Prefix used in `Part.metadata` to namespace ag2-beta-specific markers and avoid
 collisions with the legacy `ag2_` prefix used by `autogen.a2a`."""
 
-PART_KIND_METADATA_KEY = AG2_BETA_METADATA_KEY_PREFIX + "kind"
-"""`Part.metadata` key that records the original Input subtype, so we can roundtrip
-back into the right Input class on the receiving side (e.g. `file_id`, `url`, `binary`).
-"""
-
 PROVIDER_NAME = "a2a"
 """Value used in `ModelResponse.provider` for replies received over A2A."""
