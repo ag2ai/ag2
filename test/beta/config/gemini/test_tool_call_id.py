@@ -32,7 +32,13 @@ def _function_call(name: str, args: dict, fc_id: str | None = None) -> SimpleNam
 
 def _response(parts: list[SimpleNamespace]) -> SimpleNamespace:
     return SimpleNamespace(
-        candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts), finish_reason=None)],
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(parts=parts),
+                finish_reason=None,
+                grounding_metadata=None,
+            )
+        ],
         usage_metadata=None,
     )
 

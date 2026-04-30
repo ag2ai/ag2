@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""KnowledgeStore — virtual filesystem for actor knowledge.
+"""KnowledgeStore — virtual filesystem for agent knowledge.
 
 A KnowledgeStore provides filesystem semantics over any storage backend.
-It stores everything an actor is associated with throughout its lifetime:
+It stores everything an agent is associated with throughout its lifetime:
 operational logs, external artifacts, summaries, and working memory.
 
 Filesystem semantics are used because:
@@ -23,6 +23,7 @@ from .base import (
     NoopChangeSubscription,
 )
 from .bootstrap import DefaultBootstrap, StoreBootstrap
+from .constants import CONVERSATIONS_PREFIX, LOG_PREFIX, WORKING_MEMORY_PATH
 from .locked import LockedKnowledgeStore
 from .log import EventLogWriter
 from .memory import MemoryKnowledgeStore
@@ -35,6 +36,9 @@ except ImportError as e:
     DiskKnowledgeStore = missing_optional_dependency("DiskKnowledgeStore", "watchdog", e)  # type: ignore[misc]
 
 __all__ = [
+    "CONVERSATIONS_PREFIX",
+    "LOG_PREFIX",
+    "WORKING_MEMORY_PATH",
     "ChangeCallback",
     "ChangeSubscription",
     "DefaultBootstrap",

@@ -12,7 +12,7 @@ import pytest
 import pytest_asyncio
 
 from autogen.beta import Context
-from autogen.beta.events import ModelMessage, TextInput, ToolCallEvent
+from autogen.beta.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
 from autogen.beta.streams.redis.serializer import Serializer
 
 pytestmark = [
@@ -388,3 +388,97 @@ class TestRedisStream:
         assert len(received) == 1
         assert received[0].name == "post_crash"
         assert stream._listener_task is dead_task and dead_task.done()
+
+
+class TestBinaryRoundTrip:
+    """Events carrying binary or provider-SDK fields must round-trip intact."""
+
+    async def test_tool_call_event_with_bytes_provider_data(self, redis_storage, stream_id):
+        """The Gemini thought_signature scenario: bytes nested in provider_data."""
+        storage = redis_storage()
+        sig = b"\x12\x34\n\x32\x01\x0c\x39\xd6\xc7\xa3\x83,t\x95\xa2j\x9c\xb3\xd3"
+
+        original = ToolCallEvent(
+            id="call-1",
+            name="get_weather",
+            arguments='{"city": "Paris"}',
+            provider_data={"thought_signature": sig},
+        )
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, ToolCallEvent)
+        assert restored.provider_data["thought_signature"] == sig
+        assert isinstance(restored.provider_data["thought_signature"], bytes)
+
+    async def test_image_input_round_trip(self, redis_storage, stream_id):
+        """BinaryInput.data (used by ImageInput/AudioInput/...) carries raw bytes."""
+        storage = redis_storage()
+        png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+        original = ImageInput(data=png_bytes, media_type="image/png")
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert restored.data == png_bytes
+        assert isinstance(restored.data, bytes)
+
+    async def test_gemini_server_tool_call_event(self, redis_storage, stream_id):
+        """Gemini grounding/code-exec events embed a google.genai.types.Part."""
+        google_genai = pytest.importorskip("google.genai")
+        from autogen.beta.config.gemini.events import GeminiServerToolCallEvent
+
+        storage = redis_storage()
+        part = google_genai.types.Part(text="search results for ag2")
+        original = GeminiServerToolCallEvent(
+            id="grounding-1",
+            name="grounding",
+            arguments='{"queries": ["ag2"]}',
+            part=part,
+        )
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, GeminiServerToolCallEvent)
+        assert restored.part is not None
+        assert restored.part.text == "search results for ag2"
+
+    async def test_anthropic_server_tool_call_event(self, redis_storage, stream_id):
+        """Anthropic server-tool events embed an anthropic.types.ServerToolUseBlock."""
+        anthropic_types = pytest.importorskip("anthropic.types")
+        from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent
+
+        storage = redis_storage()
+        block = anthropic_types.ServerToolUseBlock(
+            id="srvtoolu_1",
+            name="web_search",
+            input={"query": "ag2"},
+            type="server_tool_use",
+        )
+        original = AnthropicServerToolCallEvent.from_block(block)
+        assert original is not None
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, AnthropicServerToolCallEvent)
+        assert restored.block.id == "srvtoolu_1"
+        assert restored.block.input == {"query": "ag2"}
+
+    async def test_openai_reasoning_event(self, redis_storage, stream_id):
+        """OpenAI reasoning events must round-trip — they explicitly opt into persistence."""
+        openai_responses = pytest.importorskip("openai.types.responses")
+        from autogen.beta.config.openai.events import OpenAIReasoningEvent
+
+        storage = redis_storage()
+        item = openai_responses.ResponseReasoningItem(
+            id="rs_1",
+            type="reasoning",
+            summary=[],
+        )
+        original = OpenAIReasoningEvent("thinking...", item=item)
+        await storage.set_history(stream_id, [original])
+
+        [restored] = list(await storage.get_history(stream_id))
+        assert isinstance(restored, OpenAIReasoningEvent)
+        assert restored.item.id == "rs_1"
+        assert restored.item.type == "reasoning"

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import datetime
 
 import pytest
 
@@ -13,6 +14,7 @@ from autogen.beta.watch import (
     AllOf,
     AnyOf,
     CadenceWatch,
+    CronWatch,
     DelayWatch,
     EventWatch,
     IntervalWatch,
@@ -254,6 +256,43 @@ class TestCadenceWatch:
 
         assert len(batches) == 2
         assert len(batches[1]) == 1
+
+    @pytest.mark.asyncio
+    async def test_events_during_slow_callback_are_not_stranded(self) -> None:
+        stream = MemoryStream()
+        ctx = Context(stream=stream)
+        delivered: list[str] = []
+        callback_sleep = 0.15
+        max_wait = 0.05
+
+        async def slow_callback(events, _ctx):
+            await asyncio.sleep(callback_sleep)
+            delivered.extend(e.content for e in events)
+
+        watch = CadenceWatch(n=5, max_wait=max_wait)
+        watch.arm(stream, slow_callback)
+
+        # Wave 1: count-trigger fires batch 1 (callback now awaiting).
+        for i in range(1, 6):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+
+        # Wave 2: while batch 1's callback is in flight, queue 3 events.
+        # max_wait elapses, _wait_and_fire fires batch 2 (also slow).
+        await asyncio.sleep(0.01)
+        for i in range(6, 9):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+        await asyncio.sleep(max_wait + 0.02)
+
+        # Wave 3: lands while batch 2's callback is awaiting. Pre-fix, the
+        # max_wait timer task is alive (in callback) so no fresh timer is
+        # scheduled and these events sit in the buffer forever.
+        for i in range(9, 12):
+            await stream.send(ModelMessage(content=f"m{i}"), ctx)
+
+        # Wait for all in-flight callbacks plus one more max_wait cycle.
+        await asyncio.sleep(2 * callback_sleep + max_wait + 0.1)
+
+        assert set(delivered) == {f"m{i}" for i in range(1, 12)}
 
     @pytest.mark.asyncio
     async def test_count_fires_after_timer_flush(self) -> None:
@@ -506,3 +545,80 @@ class TestSequence:
         await stream.send(ToolCallEvent(name="t2", arguments="{}"), ctx)
         await stream.send(ModelMessage(content="m2"), ctx)
         assert len(received) == 2
+
+
+class TestCronWatchExpressions:
+    def test_range_expression(self) -> None:
+        cron = CronWatch("1-5 * * * *")
+        now = datetime.datetime(2026, 3, 22, 10, 0, 0)
+        next_fire = cron._next_fire_time(now)
+        assert next_fire.minute in {1, 2, 3, 4, 5}
+
+    def test_list_expression(self) -> None:
+        cron = CronWatch("0,15,30,45 * * * *")
+        now = datetime.datetime(2026, 3, 22, 10, 0, 0)
+        next_fire = cron._next_fire_time(now)
+        assert next_fire.minute in {0, 15, 30, 45}
+
+    def test_step_with_range(self) -> None:
+        cron = CronWatch("*/10 * * * *")
+        now = datetime.datetime(2026, 3, 22, 10, 0, 0)
+        next_fire = cron._next_fire_time(now)
+        assert next_fire.minute in {0, 10, 20, 30, 40, 50}
+
+    def test_specific_hour_and_minute(self) -> None:
+        cron = CronWatch("30 14 * * *")
+        now = datetime.datetime(2026, 3, 22, 10, 0, 0)
+        next_fire = cron._next_fire_time(now)
+        assert next_fire.hour == 14
+        assert next_fire.minute == 30
+
+    def test_invalid_field_count_raises(self) -> None:
+        cron = CronWatch("* * *")
+        with pytest.raises(ValueError, match="5 fields"):
+            cron._next_fire_time(datetime.datetime.now())
+
+    def test_step_five_minutes(self) -> None:
+        cron = CronWatch("*/5 * * * *")
+        now = datetime.datetime(2026, 3, 21, 10, 3, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.minute == 5
+        assert nxt.hour == 10
+
+    def test_day_of_week_name(self) -> None:
+        cron = CronWatch("0 9 * * MON")
+        # 2026-03-21 is a Saturday; next Monday is 2026-03-23
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.weekday() == 0
+        assert nxt.hour == 9
+        assert nxt.minute == 0
+
+    def test_invalid_expression_raises(self) -> None:
+        cron = CronWatch("bad")
+        with pytest.raises(ValueError, match="Invalid cron"):
+            cron._next_fire_time(datetime.datetime.now())
+
+    def test_numeric_dow_sunday_zero(self) -> None:
+        cron = CronWatch("0 9 * * 0")
+        # 2026-03-21 is a Saturday; next Sunday is 2026-03-22
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.isoweekday() % 7 == 0
+        assert nxt.day == 22
+        assert nxt.hour == 9
+
+    def test_numeric_dow_saturday_six(self) -> None:
+        cron = CronWatch("0 9 * * 6")
+        # 2026-03-21 (Saturday) at 10:00 — past 9:00; next Saturday is 2026-03-28
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        nxt = cron._next_fire_time(now)
+        assert nxt.isoweekday() % 7 == 6
+        assert nxt.day == 28
+        assert nxt.hour == 9
+
+    def test_numeric_dow_seven_is_sunday_alias(self) -> None:
+        watch_seven = CronWatch("0 9 * * 7")
+        watch_zero = CronWatch("0 9 * * 0")
+        now = datetime.datetime(2026, 3, 21, 10, 0, 0)
+        assert watch_seven._next_fire_time(now) == watch_zero._next_fire_time(now)

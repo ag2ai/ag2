@@ -5,13 +5,14 @@
 from typing import Protocol, runtime_checkable
 
 from .base import KnowledgeStore
+from .constants import LOG_PREFIX
 
 
 @runtime_checkable
 class StoreBootstrap(Protocol):
     """Initializes a knowledge store with a starting structure.
 
-    Called once when an actor first runs with a store. Subsequent
+    Called once when an agent first runs with a store. Subsequent
     runs skip bootstrapping (detected via a sentinel file).
     """
 
@@ -35,7 +36,7 @@ class DefaultBootstrap:
         )
 
         await store.write(
-            "/log/SKILL.md",
+            f"{LOG_PREFIX}SKILL.md",
             "Conversation logs. Each file is a JSONL record of one conversation's events. "
             "Auto-populated by the framework after each conversation.",
         )

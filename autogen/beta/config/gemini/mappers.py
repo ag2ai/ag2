@@ -28,10 +28,12 @@ from autogen.beta.files.types import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
-from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
-from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
+from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME, WebFetchToolSchema
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent
 
 
 def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
@@ -195,6 +197,15 @@ def convert_messages(
             if parts:
                 result.append(types.Content(role="model", parts=parts))
 
+        elif isinstance(message, (GeminiServerToolCallEvent, GeminiServerToolResultEvent)):
+            if message.part is not None:
+                if result and result[-1].role == "model":
+                    parts_existing = list(result[-1].parts or ())
+                    parts_existing.append(message.part)
+                    result[-1] = types.Content(role="model", parts=parts_existing)
+                else:
+                    result.append(types.Content(role="model", parts=[message.part]))
+
         elif isinstance(message, ToolResultsEvent):
             parts_list: list[types.Part] = []
             for r in message.results:
@@ -284,3 +295,9 @@ def normalize_usage(metadata: Any) -> Usage:
 
 def _to_float(value: Any) -> float | None:
     return float(value) if value is not None else None
+
+
+def grounding_tool_name(gm: types.GroundingMetadata) -> str:
+    if gm.web_search_queries:
+        return WEB_SEARCH_TOOL_NAME
+    return WEB_FETCH_TOOL_NAME

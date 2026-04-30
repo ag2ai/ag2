@@ -4,8 +4,13 @@
 
 import pytest
 from fast_depends.use import SerializerCls
+from google.genai import types
 
 from autogen.beta import ToolResult
+from autogen.beta.config.gemini.events import (
+    GeminiServerToolCallEvent,
+    GeminiServerToolResultEvent,
+)
 from autogen.beta.config.gemini.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
@@ -439,3 +444,45 @@ class TestToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
             convert_messages([event], SerializerCls)
+
+
+class TestBuiltinToolEventReplay:
+    def test_executable_code_part_appended_to_existing_model_content(self) -> None:
+        code_part = types.Part(executable_code=types.ExecutableCode(code="print(1)", language="PYTHON"))
+        events = [
+            ModelResponse(message=None, tool_calls=ToolCallsEvent(calls=[])),
+            GeminiServerToolCallEvent(name="code_execution", arguments="{}", part=code_part),
+        ]
+        result = convert_messages(events, SerializerCls)
+
+        assert result == [types.Content(role="model", parts=[code_part])]
+
+    def test_code_execution_pair_stacks_into_one_model_content(self) -> None:
+        code_part = types.Part(executable_code=types.ExecutableCode(code="print(2)", language="PYTHON"))
+        result_part = types.Part(code_execution_result=types.CodeExecutionResult(outcome="OUTCOME_OK", output="2\n"))
+
+        result = convert_messages(
+            [
+                GeminiServerToolCallEvent(name="code_execution", arguments="{}", part=code_part),
+                GeminiServerToolResultEvent(
+                    parent_id="x", name="code_execution", result=ToolResult(), part=result_part
+                ),
+            ],
+            SerializerCls,
+        )
+
+        assert result == [types.Content(role="model", parts=[code_part, result_part])]
+
+    def test_grounding_only_events_are_skipped(self) -> None:
+        gm = types.GroundingMetadata(web_search_queries=["bitcoin"])
+        result = convert_messages(
+            [
+                GeminiServerToolCallEvent(name="web_search", arguments="{}", grounding_metadata=gm),
+                GeminiServerToolResultEvent(
+                    parent_id="x", name="web_search", result=ToolResult(), grounding_metadata=gm
+                ),
+            ],
+            SerializerCls,
+        )
+
+        assert result == []

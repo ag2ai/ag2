@@ -11,6 +11,7 @@ from ddgs.ddgs import DDGS
 from pydantic import Field
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
@@ -60,7 +61,7 @@ class DuckDuckSearchTool(Tool):
         def duckduckgo_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
-        ) -> SearchResponse:
+        ) -> ToolResult:
             """Search the web using DuckDuckGo and return structured results."""
             resolved_max = resolve_variable(_max_results, ctx, param_name="max_results")
             resolved_region = resolve_variable(_region, ctx, param_name="region")
@@ -73,7 +74,7 @@ class DuckDuckSearchTool(Tool):
                 max_results=resolved_max,
             )
             items = [SearchResult(title=r["title"], href=r["href"], body=r["body"]) for r in (raw or [])]
-            return SearchResponse(query=query, results=items)
+            return ToolResult(SearchResponse(query=query, results=items))
 
         self._tool = duckduckgo_search
         self.name = name

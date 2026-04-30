@@ -14,7 +14,9 @@ import pytest
 
 pytest.importorskip("watchdog")
 
-from autogen.beta.events import ModelRequest, TaskCompleted, TextInput, UnknownEvent
+from autogen.beta import Agent
+from autogen.beta.agent import KnowledgeConfig
+from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from autogen.beta.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
@@ -24,6 +26,7 @@ from autogen.beta.knowledge import (
     SqliteKnowledgeStore,
 )
 from autogen.beta.stream import MemoryStream
+from autogen.beta.testing import TestConfig
 
 
 class TestMemoryKnowledgeStore:
@@ -199,10 +202,10 @@ class TestDefaultBootstrap:
     @pytest.mark.asyncio
     async def test_creates_standard_layout(self) -> None:
         store = MemoryKnowledgeStore()
-        # Actor writes sentinel before calling bootstrap, so simulate that
-        await store.write("/.initialized", "test-actor")
+        # Agent writes sentinel before calling bootstrap, so simulate that
+        await store.write("/.initialized", "test-agent")
         bootstrap = DefaultBootstrap()
-        await bootstrap.bootstrap(store, "test-actor")
+        await bootstrap.bootstrap(store, "test-agent")
 
         assert await store.exists("/.initialized")
         assert await store.exists("/SKILL.md")
@@ -211,22 +214,92 @@ class TestDefaultBootstrap:
         assert await store.exists("/memory/SKILL.md")
 
         root_skill = await store.read("/SKILL.md")
-        assert "test-actor" in root_skill
+        assert "test-agent" in root_skill
 
     @pytest.mark.asyncio
     async def test_sentinel_prevents_rebootstrap(self) -> None:
         store = MemoryKnowledgeStore()
-        # Actor writes sentinel before calling bootstrap
-        await store.write("/.initialized", "actor-1")
+        # Agent writes sentinel before calling bootstrap
+        await store.write("/.initialized", "agent-1")
         bootstrap = DefaultBootstrap()
-        await bootstrap.bootstrap(store, "actor-1")
+        await bootstrap.bootstrap(store, "agent-1")
 
         # Overwrite a file
         await store.write("/SKILL.md", "custom content")
 
         # Sentinel exists, so a second bootstrap should be skipped by caller logic
         assert await store.exists("/.initialized")
-        # (The Actor checks this before calling bootstrap)
+        # (The Agent checks this before calling bootstrap)
+
+    @pytest.mark.asyncio
+    async def test_does_not_write_sentinel(self) -> None:
+        """``DefaultBootstrap`` writes SKILL.md files but not ``/.initialized``.
+
+        The sentinel is owned by ``Agent`` (it writes it before calling
+        bootstrap, see ``Agent._bootstrap_store_once``).
+        """
+        store = MemoryKnowledgeStore()
+        await DefaultBootstrap().bootstrap(store, "test-agent")
+
+        assert await store.exists("/SKILL.md")
+        assert not await store.exists("/.initialized")
+
+
+class TestAgentBootstrapsOnce:
+    """End-to-end: a real Agent only bootstraps the store once."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_asks_bootstrap_once(self) -> None:
+        class _CountingBootstrap:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def bootstrap(self, store, actor_name: str) -> None:
+                self.calls += 1
+                await store.write("/SKILL.md", f"bootstrapped by {actor_name}")
+
+        store = MemoryKnowledgeStore()
+        counter = _CountingBootstrap()
+        agent = Agent(
+            "booter",
+            config=TestConfig(
+                ModelResponse(ModelMessage("ok-1")),
+                ModelResponse(ModelMessage("ok-2")),
+                ModelResponse(ModelMessage("ok-3")),
+            ),
+            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+        )
+
+        await asyncio.gather(
+            agent.ask("hi", stream=MemoryStream()),
+            agent.ask("hi", stream=MemoryStream()),
+            agent.ask("hi", stream=MemoryStream()),
+        )
+
+        assert counter.calls == 1
+        assert await store.exists("/.initialized")
+
+    @pytest.mark.asyncio
+    async def test_existing_sentinel_skips_bootstrap(self) -> None:
+        class _CountingBootstrap:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def bootstrap(self, store, actor_name: str) -> None:
+                self.calls += 1
+
+        store = MemoryKnowledgeStore()
+        await store.write("/.initialized", "prior-agent")
+
+        counter = _CountingBootstrap()
+        agent = Agent(
+            "later",
+            config=TestConfig(ModelResponse(ModelMessage("ok"))),
+            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+        )
+        await agent.ask("hi")
+
+        assert counter.calls == 0
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="DiskKnowledgeStore is POSIX-only")
@@ -237,6 +310,13 @@ class TestDiskKnowledgeStore:
         await store.write("/test.txt", "hello")
         assert await store.read("/test.txt") == "hello"
         assert (tmp_path / "test.txt").read_text() == "hello"
+
+    async def test_persists_across_reopens(self, tmp_path: Path) -> None:
+        store1 = DiskKnowledgeStore(str(tmp_path))
+        await store1.write("/hello.txt", "world")
+
+        store2 = DiskKnowledgeStore(str(tmp_path))
+        assert await store2.read("/hello.txt") == "world"
 
     async def test_read_nonexistent(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))

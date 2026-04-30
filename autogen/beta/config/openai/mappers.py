@@ -10,6 +10,7 @@ from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
+from autogen.beta.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -117,6 +118,7 @@ def events_to_responses_input(
 ) -> list[dict[str, Any]]:
     """Convert a sequence of events to Responses API input items."""
     result: list[dict[str, Any]] = []
+    seen_reasoning_ids: set[str] = set()
 
     for message in messages:
         if isinstance(message, ModelResponse):
@@ -140,9 +142,9 @@ def events_to_responses_input(
                 blocks: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        blocks.append({"type": "output_text", "text": part.content})
+                        blocks.append({"type": "input_text", "text": part.content})
                     elif isinstance(part, DataInput):
-                        blocks.append({"type": "output_text", "text": serializer.encode(part.data).decode()})
+                        blocks.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
                     elif isinstance(part, BinaryInput):
                         b64 = base64.b64encode(part.data).decode()
                         if part.kind is BinaryType.IMAGE:
@@ -178,7 +180,7 @@ def events_to_responses_input(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-responses")
 
-                if len(blocks) == 1 and (block := blocks[0])["type"] == "output_text":
+                if len(blocks) == 1 and (block := blocks[0])["type"] == "input_text":
                     result.append({
                         "type": "function_call_output",
                         "call_id": r.parent_id,
@@ -190,6 +192,17 @@ def events_to_responses_input(
                         "call_id": r.parent_id,
                         "output": blocks,
                     })
+
+        elif isinstance(message, OpenAIReasoningEvent):
+            if message.item.id not in seen_reasoning_ids:
+                seen_reasoning_ids.add(message.item.id)
+                result.append(message.item.model_dump(exclude_none=True, mode="json"))
+
+        elif isinstance(message, OpenAIServerToolCallEvent):
+            # warnings=False: openai SDK pins ActionSearchSource.type to
+            # Literal["url"] but the API returns other values (e.g. "api"),
+            # which makes pydantic warn on every round-trip serialization.
+            result.append(message.item.model_dump(exclude_none=True, mode="json", warnings=False))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
@@ -450,6 +463,14 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         raise UnsupportedToolError(t.type, "openai-responses")
 
     raise UnsupportedToolError(t.type, "openai-responses")
+
+
+def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
+    includes: list[str] = []
+    for t in tools:
+        if isinstance(t, WebSearchToolSchema):
+            includes.append("web_search_call.action.sources")
+    return includes
 
 
 def normalize_usage(usage: CompletionUsage) -> Usage:

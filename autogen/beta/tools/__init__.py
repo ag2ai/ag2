@@ -20,7 +20,7 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
-from .search import DuckDuckSearchTool, ExaToolkit, TavilySearchTool
+from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchTool, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
 from .toolkits import FilesystemToolkit
@@ -37,6 +37,7 @@ __all__ = (
     "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
+    "PerplexitySearchTool",
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",
