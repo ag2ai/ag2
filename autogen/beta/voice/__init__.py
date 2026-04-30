@@ -6,22 +6,31 @@ from autogen.beta.exceptions import missing_additional_dependency, missing_optio
 
 from .observer import TTSObserver
 from .protocols import AudioPlayer, TTSConfig
+from .stt import STTConfig, VoiceInput
 
 try:
-    from .opendevice_player import OpenDevicePlayer
+    from .sound_device import Player as SoundDevicePlayer
+    from .sound_device import Recorder as SoundDeviceRecorder
 except ImportError as e:
-    OpenDevicePlayer = missing_additional_dependency("OpenDevicePlayer", "sounddevice[numpy]", e)  # type: ignore[misc]
+    SoundDevicePlayer = missing_additional_dependency("SoundDevicePlayer", "sounddevice[numpy]", e)  # type: ignore[misc]
+    SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)  # type: ignore[misc]
 
 try:
-    from .openai_tts import OpenAITTSConfig
+    from .openai import STTConfig as OpenAITranscriber
+    from .openai import TTSConfig as OpenAISynthesizer
 except ImportError as e:
-    OpenAITTSConfig = missing_optional_dependency("OpenAITTSConfig", "openai", e)  # type: ignore[misc]
+    OpenAITranscriber = missing_optional_dependency("OpenAITranscriber", "openai", e)  # type: ignore[misc]
+    OpenAISynthesizer = missing_optional_dependency("OpenAISynthesizer", "openai", e)  # type: ignore[misc]
 
 
 __all__ = (
     "AudioPlayer",
-    "OpenAITTSConfig",
-    "OpenDevicePlayer",
+    "OpenAISynthesizer",
+    "OpenAITranscriber",
+    "STTConfig",
+    "SoundDevicePlayer",
+    "SoundDeviceRecorder",
     "TTSConfig",
     "TTSObserver",
+    "VoiceInput",
 )

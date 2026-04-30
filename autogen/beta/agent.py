@@ -777,6 +777,43 @@ class Agent(Generic[TResult]):
             response_schema=response_schema,
         )
 
+    async def _ask(
+        self,
+        *msg: str | Input,
+        context: Context,
+        config: ModelConfig | None = None,
+        tools: Iterable[Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
+        observers: Iterable[Observer] = (),
+        response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        hitl_hook: HumanHook | None = None,
+    ) -> "AgentReply[Any, Any]":
+        """`Agent.ask()` alternative method to call agent with prebuild `context`."""
+        config = config or self.config
+        if not config:
+            raise ConfigNotProvidedError()
+        client = config.create()
+
+        initial_event = ModelRequest.ensure_request(msg)
+
+        if not context.prompt:
+            context.prompt.extend(self._system_prompt)
+
+            for dp in self._dynamic_prompt:
+                p = await dp(initial_event, context)
+                context.prompt.append(p)
+
+        return await self._execute(
+            initial_event,
+            context=context,
+            client=client,
+            hitl_hook=hitl_hook,
+            additional_tools=tools,
+            additional_middleware=middleware,
+            additional_observers=observers,
+            response_schema=response_schema,
+        )
+
     def _build_knowledge_tool(self) -> list[Tool]:
         """Return the cached knowledge tool list (built at __init__ time)."""
         return self._knowledge_tools
