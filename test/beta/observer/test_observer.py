@@ -11,7 +11,7 @@ import pytest
 from autogen.beta.annotations import Context as AnnContext
 from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
-from autogen.beta.observer import BaseObserver
+from autogen.beta.observers import BaseObserver
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 

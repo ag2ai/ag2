@@ -36,6 +36,7 @@ from autogen.beta.watch import Watch
 
 __all__ = (
     "BaseObserver",
+    "CompositeObserver",
     "Observer",
     "StreamObserver",
     "observer",
@@ -47,6 +48,15 @@ class Observer(Protocol):
     """Registers stream subscriptions under the caller's ExitStack."""
 
     def register(self, stack: ExitStack, context: Context) -> None: ...
+
+
+class CompositeObserver(Observer):
+    def __init__(self, *observers: Observer) -> None:
+        self._observers = observers
+
+    def register(self, stack: ExitStack, context: Context) -> None:
+        for observer in self._observers:
+            observer.register(stack, context)
 
 
 @dataclass(slots=True, kw_only=True)

@@ -18,7 +18,7 @@ from autogen.beta.events import (
     Usage,
 )
 from autogen.beta.events.lifecycle import ObserverCompleted, ObserverStarted
-from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
+from autogen.beta.observers import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 from autogen.beta.watch import EventWatch
