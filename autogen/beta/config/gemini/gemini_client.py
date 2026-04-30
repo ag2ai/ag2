@@ -139,7 +139,7 @@ class GeminiClient(LLMClient):
                 for part in candidate.content.parts or ():
                     if part.thought and part.text:
                         await context.send(ModelReasoning(part.text))
-                    elif part.text is not None:
+                    elif part.text:
                         model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
                     elif part.function_call:
@@ -215,7 +215,7 @@ class GeminiClient(LLMClient):
                     for part in candidate.content.parts or ():
                         if part.thought and part.text:
                             await context.send(ModelReasoning(part.text))
-                        elif part.text is not None:
+                        elif part.text:
                             full_content += part.text
                             await context.send(ModelMessageChunk(part.text))
                         elif part.function_call:
