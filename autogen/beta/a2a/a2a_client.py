@@ -51,7 +51,12 @@ from .mappers import (
     text_from_message,
 )
 from .types import TERMINAL_TASK_STATES, TRANSPORT_ERRORS, HttpxClientFactory, StreamOutcome
-from .utils import CONTEXT_ID_VAR_KEY, PROVIDER_NAME, TASK_ID_VAR_KEY
+
+CONTEXT_ID_VAR_KEY = "ag:a2a:context_id"
+"""Key under which the server-issued A2A context_id is stored in `Context.variables`."""
+
+TASK_ID_VAR_KEY = "ag:a2a:task_id"
+"""Key under which the current A2A task_id is stored in `Context.variables`."""
 
 
 class A2AClient(LLMClient):
@@ -124,7 +129,7 @@ class A2AClient(LLMClient):
         return ModelResponse(
             message=ModelMessage(text) if text else None,
             model=card.name,
-            provider=PROVIDER_NAME,
+            provider="a2a",
             finish_reason=outcome.task.status.state.value,
         )
 

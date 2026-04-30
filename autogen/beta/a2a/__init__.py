@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .config import A2AConfig
-from .executor import AgentExecutor
+from .executor import AG2AgentExecutor
 from .server import A2AServer
 from .types import HttpxClientFactory
 
 __all__ = (
     "A2AConfig",
     "A2AServer",
-    "AgentExecutor",
+    "AG2AgentExecutor",
     "HttpxClientFactory",
 )

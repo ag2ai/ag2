@@ -6,8 +6,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from a2a.server.agent_execution import AgentExecutor as A2ABaseAgentExecutor
-from a2a.server.agent_execution import RequestContext
+from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import InternalError, Message, Task, TaskState, TaskStatus
@@ -24,7 +23,6 @@ from .mappers import (
     input_required_message,
     text_parts,
 )
-from .utils import RESULT_ARTIFACT_NAME
 
 if TYPE_CHECKING:
     from autogen.beta import Agent
@@ -43,7 +41,7 @@ class _InputRequiredSignal(Exception):  # noqa: N818  # control-flow signal, not
         super().__init__(f"Human input required: {prompt!r}")
 
 
-class AgentExecutor(A2ABaseAgentExecutor):
+class AG2AgentExecutor(AgentExecutor):
     __slots__ = ("_agent",)
 
     def __init__(self, agent: "Agent") -> None:
@@ -91,7 +89,7 @@ class AgentExecutor(A2ABaseAgentExecutor):
 
         await updater.add_artifact(
             parts=text_parts(reply.body or ""),
-            name=RESULT_ARTIFACT_NAME,
+            name="result",
             append=forwarder.streaming_started,
             last_chunk=True,
         )
@@ -115,7 +113,7 @@ class _ChunkForwarder:
     async def __call__(self, chunk: ModelMessageChunk) -> None:
         await self._updater.add_artifact(
             parts=text_parts(chunk.content),
-            name=RESULT_ARTIFACT_NAME,
+            name="result",
             append=self.streaming_started,
             last_chunk=False,
         )

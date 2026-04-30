@@ -12,7 +12,7 @@ from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard
 
 from .card import build_card
-from .executor import AgentExecutor
+from .executor import AG2AgentExecutor
 
 if TYPE_CHECKING:
     from a2a.server.apps.jsonrpc.jsonrpc_app import CallContextBuilder
@@ -49,7 +49,7 @@ class A2AServer:
             )
         self._extended_card = extended_card
         self._task_store = task_store
-        self._executor = AgentExecutor(agent)
+        self._executor = AG2AgentExecutor(agent)
 
     @property
     def card(self) -> AgentCard:
@@ -60,7 +60,7 @@ class A2AServer:
         return self._extended_card
 
     @property
-    def executor(self) -> AgentExecutor:
+    def executor(self) -> AG2AgentExecutor:
         return self._executor
 
     def build_asgi(

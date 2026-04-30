@@ -33,7 +33,9 @@ from autogen.beta.events import (
 )
 from autogen.beta.events.input_events import BinaryType, Input
 
-from .utils import AG2_BETA_METADATA_KEY_PREFIX
+_AG2_BETA_METADATA_KEY_PREFIX = "ag2_beta_"
+"""Prefix used in `Part.metadata` to namespace ag2-beta-specific markers and avoid
+collisions with the legacy `ag2_` prefix used by `autogen.a2a`."""
 
 __all__ = (
     "a2a_message_to_inputs",
@@ -65,10 +67,10 @@ class _PartKind(str, Enum):
     DATA_VALUE = "data_value"
 
 
-_PART_KIND_KEY = AG2_BETA_METADATA_KEY_PREFIX + "kind"
-_BINARY_TYPE_KEY = AG2_BETA_METADATA_KEY_PREFIX + "binary_type"
-_FILENAME_KEY = AG2_BETA_METADATA_KEY_PREFIX + "filename"
-_VENDOR_METADATA_KEY = AG2_BETA_METADATA_KEY_PREFIX + "vendor_metadata"
+_PART_KIND_KEY = _AG2_BETA_METADATA_KEY_PREFIX + "kind"
+_BINARY_TYPE_KEY = _AG2_BETA_METADATA_KEY_PREFIX + "binary_type"
+_FILENAME_KEY = _AG2_BETA_METADATA_KEY_PREFIX + "filename"
+_VENDOR_METADATA_KEY = _AG2_BETA_METADATA_KEY_PREFIX + "vendor_metadata"
 
 
 def inputs_to_a2a_parts(inputs: Iterable[Input]) -> list[Part]:
@@ -297,7 +299,7 @@ def _metadata(internal: dict[str, Any], user: dict[str, Any] | None) -> dict[str
 
 
 def _strip_internal(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in metadata.items() if not k.startswith(AG2_BETA_METADATA_KEY_PREFIX)}
+    return {k: v for k, v in metadata.items() if not k.startswith(_AG2_BETA_METADATA_KEY_PREFIX)}
 
 
 def _coerce_binary_type(value: Any) -> BinaryType:

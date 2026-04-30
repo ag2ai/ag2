@@ -7,8 +7,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from a2a.server.agent_execution import AgentExecutor as A2ABaseAgentExecutor
-from a2a.server.agent_execution import RequestContext
+from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
@@ -18,8 +17,8 @@ from starlette.responses import JSONResponse, Response
 
 from autogen.beta import Agent, MemoryStream
 from autogen.beta.a2a import A2AConfig, A2AServer
+from autogen.beta.a2a.a2a_client import CONTEXT_ID_VAR_KEY, TASK_ID_VAR_KEY
 from autogen.beta.a2a.errors import A2AAuthRequiredError, A2ATaskFailedError, A2ATaskRejectedError
-from autogen.beta.a2a.utils import CONTEXT_ID_VAR_KEY, PROVIDER_NAME, TASK_ID_VAR_KEY
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelMessageChunk, ModelRequest, TextInput, ToolCallEvent
 from autogen.beta.testing import TestConfig
@@ -57,7 +56,7 @@ class TestSimpleRoundTrip:
             serializer=None,  # type: ignore[arg-type]
         )
 
-        assert response.provider == PROVIDER_NAME
+        assert response.provider == "a2a"
         assert response.model == "specialist"
         assert response.finish_reason == "completed"
 
@@ -224,7 +223,7 @@ def _bootstrap_task(context: RequestContext) -> Task:
     )
 
 
-class _RejectingExecutor(A2ABaseAgentExecutor):
+class _RejectingExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task = _bootstrap_task(context)
         if context.current_task is None:
@@ -236,7 +235,7 @@ class _RejectingExecutor(A2ABaseAgentExecutor):
         raise ServerError(error=InternalError(message="not supported"))
 
 
-class _AuthRequiredExecutor(A2ABaseAgentExecutor):
+class _AuthRequiredExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task = _bootstrap_task(context)
         if context.current_task is None:

@@ -23,7 +23,7 @@ from a2a.types import (
 )
 
 from autogen.beta import Agent, Context
-from autogen.beta.a2a.executor import AgentExecutor
+from autogen.beta.a2a.executor import AG2AgentExecutor
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.testing import TestConfig
 
@@ -87,7 +87,7 @@ def _hitl_agent() -> Agent:
 class TestSimpleAsk:
     async def test_emits_text_artifact_with_agent_reply(self) -> None:
         agent = Agent("specialist", "be helpful", config=TestConfig("answer-text"))
-        executor = AgentExecutor(agent)
+        executor = AG2AgentExecutor(agent)
         queue = EventQueue()
 
         await executor.execute(_request_context(_user_message("hi")), queue)
@@ -101,7 +101,7 @@ class TestSimpleAsk:
 
     async def test_terminates_with_completed_status(self) -> None:
         agent = Agent("specialist", "be helpful", config=TestConfig("done"))
-        executor = AgentExecutor(agent)
+        executor = AG2AgentExecutor(agent)
         queue = EventQueue()
 
         await executor.execute(_request_context(_user_message()), queue)
@@ -115,7 +115,7 @@ class TestSimpleAsk:
 @pytest.mark.asyncio
 class TestHITLForwarding:
     async def test_initial_call_emits_input_required_status(self) -> None:
-        executor = AgentExecutor(_hitl_agent())
+        executor = AG2AgentExecutor(_hitl_agent())
         queue = EventQueue()
 
         await executor.execute(_request_context(_user_message("please confirm")), queue)
@@ -125,7 +125,7 @@ class TestHITLForwarding:
         assert not any(_is_state(TaskState.completed)(e) for e in events)
 
     async def test_followup_with_replay_history_completes_task(self) -> None:
-        executor = AgentExecutor(_hitl_agent())
+        executor = AG2AgentExecutor(_hitl_agent())
         original = _user_message("please confirm")
 
         await executor.execute(_request_context(original), EventQueue())
@@ -151,7 +151,7 @@ class TestHITLForwarding:
 @pytest.mark.asyncio
 async def test_cancel_emits_canceled_status() -> None:
     agent = Agent("specialist", "p", config=TestConfig("ok"))
-    executor = AgentExecutor(agent)
+    executor = AG2AgentExecutor(agent)
 
     task = Task(
         id="t-1",
@@ -169,7 +169,7 @@ async def test_cancel_emits_canceled_status() -> None:
 @pytest.mark.asyncio
 async def test_cancel_without_task_is_noop() -> None:
     agent = Agent("specialist", "p", config=TestConfig("ok"))
-    executor = AgentExecutor(agent)
+    executor = AG2AgentExecutor(agent)
 
     queue = EventQueue()
     await executor.cancel(_request_context(_user_message()), queue)

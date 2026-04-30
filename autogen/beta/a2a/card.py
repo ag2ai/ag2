@@ -10,12 +10,6 @@ if TYPE_CHECKING:
     from autogen.beta import Agent
 
 
-_DEFAULT_DESCRIPTION = "AG2 beta agent"
-_DEFAULT_VERSION = "0.1.0"
-_DEFAULT_INPUT_MODES = ("text",)
-_DEFAULT_OUTPUT_MODES = ("text",)
-
-
 def build_card(agent: "Agent", *, url: str, supports_extended: bool = False) -> AgentCard:
     """Build a default `AgentCard` for the given AG2 beta agent.
 
@@ -27,15 +21,15 @@ def build_card(agent: "Agent", *, url: str, supports_extended: bool = False) -> 
     `supports_extended=True` flips `supports_authenticated_extended_card` so
     A2A clients know to also fetch `/agent/authenticatedExtendedCard`.
     """
-    description = "\n".join(agent._system_prompt) if agent._system_prompt else _DEFAULT_DESCRIPTION
+    description = "\n".join(agent._system_prompt) if agent._system_prompt else "AG2 beta agent"
     return AgentCard(
         name=agent.name,
         description=description,
         url=url,
-        version=_DEFAULT_VERSION,
+        version="0.1.0",
         capabilities=AgentCapabilities(streaming=True),
-        default_input_modes=list(_DEFAULT_INPUT_MODES),
-        default_output_modes=list(_DEFAULT_OUTPUT_MODES),
+        default_input_modes=["text"],
+        default_output_modes=["text"],
         skills=[],
         supports_authenticated_extended_card=True if supports_extended else None,
     )

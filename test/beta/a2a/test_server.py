@@ -8,7 +8,7 @@ from a2a.types import AgentCapabilities, AgentCard
 from starlette.applications import Starlette
 
 from autogen.beta import Agent
-from autogen.beta.a2a import A2AServer, AgentExecutor
+from autogen.beta.a2a import A2AServer, AG2AgentExecutor
 from autogen.beta.testing import TestConfig
 
 
@@ -49,7 +49,7 @@ class TestA2AServer:
     def test_executor_wraps_agent(self, agent: Agent) -> None:
         server = A2AServer(agent)
 
-        assert isinstance(server.executor, AgentExecutor)
+        assert isinstance(server.executor, AG2AgentExecutor)
 
     def test_build_asgi_returns_starlette_app(self, agent: Agent) -> None:
         server = A2AServer(agent)
