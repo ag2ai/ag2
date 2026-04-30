@@ -134,12 +134,6 @@ class A2AClient(LLMClient):
         )
 
     async def aclose(self) -> None:
-        """Close the httpx client if we created it ourselves.
-
-        When the user supplies a `client_factory`, lifecycle is theirs.
-        The cached `AgentCard` is preserved — instantiate a new `A2AClient`
-        if you need to refresh it.
-        """
         if self._httpx_client is not None and self._client_factory is None:
             await self._httpx_client.aclose()
         self._httpx_client = None
@@ -148,7 +142,15 @@ class A2AClient(LLMClient):
     async def _ensure_client(self) -> tuple[AgentCard, Client]:
         async with self._init_lock:
             if self._httpx_client is None:
-                self._httpx_client = self._client_factory() if self._client_factory else httpx.AsyncClient()
+                self._httpx_client = (
+                    self._client_factory()
+                    if self._client_factory
+                    else httpx.AsyncClient(
+                        # A2A is a streaming long-poll protocol — the default 5s
+                        # read timeout aborts mid-SSE on any non-trivial reply.
+                        timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0),
+                    )
+                )
             if self._agent_card is None:
                 self._agent_card = await self._fetch_card()
             if self._a2a_client is None:

@@ -79,6 +79,40 @@ class TestSimpleRoundTrip:
 
 
 @pytest.mark.asyncio
+async def test_subagent_tool_shares_context_id_across_calls() -> None:
+    store = InMemoryTaskStore()
+    server_agent = Agent("remote", "p", config=TestConfig("r1", "r2", "r3"))
+    server = A2AServer(server_agent, url="http://test", task_store=store)
+
+    transport = httpx.ASGITransport(app=server)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", trust_env=False) as http:
+        remote = Agent("remote", config=A2AConfig("http://test", client_factory=lambda: http))
+        local = Agent(
+            "orchestrator",
+            "p",
+            config=TestConfig(
+                # Two parallel tool calls in a single response …
+                [
+                    ToolCallEvent(name="task_remote", arguments='{"objective": "first"}'),
+                    ToolCallEvent(name="task_remote", arguments='{"objective": "second"}'),
+                ],
+                # … then one serial follow-up call …
+                ToolCallEvent(name="task_remote", arguments='{"objective": "third"}'),
+                # … then the final answer.
+                "done",
+            ),
+            tools=[remote.as_tool(description="ask remote")],
+        )
+
+        await local.ask("go", stream=MemoryStream())
+
+    persisted = list(store.tasks.values())
+    assert len(persisted) == 3
+    assert len({t.context_id for t in persisted}) == 1
+    assert len({t.id for t in persisted}) == 3
+
+
+@pytest.mark.asyncio
 async def test_client_upgrades_to_extended_card_when_advertised() -> None:
     # Server publishes a public card with `supports_authenticated_extended_card`
     # set, plus an extended card with a different `name`. The client's

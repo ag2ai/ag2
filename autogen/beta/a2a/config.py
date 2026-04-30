@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, ClassVar
 
 from a2a.client import ClientCallInterceptor, ClientConfig
 from a2a.types import AgentCard
@@ -11,7 +11,7 @@ from typing_extensions import Self
 
 from autogen.beta.config.config import ModelConfig
 
-from .a2a_client import A2AClient
+from .a2a_client import CONTEXT_ID_VAR_KEY, A2AClient
 from .types import HttpxClientFactory
 
 
@@ -24,6 +24,12 @@ class A2AConfig(ModelConfig):
     max_reconnects: int = 3
     reconnect_backoff: float = 0.5
     agent_card: AgentCard | None = None
+
+    # Variables keys that subagent tools should pre-seed in the parent context
+    # so that all tool calls to this agent share one A2A `context_id` (per the
+    # protocol's "context_id maintains context across related tasks" rule).
+    # Read by `subagent_tool` via duck-typing — no hard dep from tools/ on a2a/.
+    _subtask_propagate_keys: ClassVar[tuple[str, ...]] = (CONTEXT_ID_VAR_KEY,)
 
     def copy(self, /, **overrides: Any) -> Self:
         return replace(self, **overrides)

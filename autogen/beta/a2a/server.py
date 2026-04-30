@@ -20,12 +20,13 @@ if TYPE_CHECKING:
     from a2a.server.tasks import TaskStore
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
+    from starlette.types import Receive, Scope, Send
 
     from autogen.beta import Agent
 
 
 class A2AServer:
-    __slots__ = ("_agent", "_card", "_executor", "_extended_card", "_task_store", "_url")
+    __slots__ = ("_agent", "_card", "_default_app", "_executor", "_extended_card", "_task_store", "_url")
 
     def __init__(
         self,
@@ -50,6 +51,7 @@ class A2AServer:
         self._extended_card = extended_card
         self._task_store = task_store
         self._executor = AG2AgentExecutor(agent)
+        self._default_app: Starlette | None = None
 
     @property
     def card(self) -> AgentCard:
@@ -84,3 +86,11 @@ class A2AServer:
         for mw in middleware or ():
             app.add_middleware(mw.cls, **mw.options)
         return app
+
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        """ASGI entrypoint — lets the server be passed straight to uvicorn/httpx
+        without an explicit `build_asgi()` call. Builds the default app on first
+        request and reuses it across subsequent requests."""
+        if self._default_app is None:
+            self._default_app = self.build_asgi()
+        await self._default_app(scope, receive, send)

@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, TypeAlias
+from uuid import uuid4
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware.base import ToolMiddleware
@@ -27,6 +28,7 @@ def subagent_tool(
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool:
     tool_name = name or f"task_{agent.name}"
+    propagate_keys: tuple[str, ...] = tuple(getattr(agent.config, "_subtask_propagate_keys", ()))
 
     @tool(
         name=tool_name,
@@ -38,6 +40,13 @@ def subagent_tool(
         objective: str,
         context: str = "",
     ) -> str:
+        # Pre-seed protocol-level conversation keys (e.g. A2A `context_id`)
+        # so that parallel and serial calls to this tool share one server-side
+        # conversation. setdefault is atomic in CPython, so concurrent first
+        # calls converge on the value written by whichever ran first.
+        for key in propagate_keys:
+            ctx.variables.setdefault(key, str(uuid4()))
+
         task_stream = stream(agent, ctx) if stream else None
 
         result = await run_task(
