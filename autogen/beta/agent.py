@@ -71,6 +71,7 @@ from .observer import Observer
 from .observer import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
+from .task import Task, TaskSpec
 from .tools.executor import ToolExecutor
 from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
@@ -607,6 +608,39 @@ class Agent(Generic[TResult]):
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling ask())."""
         self._observers.append(observer)
+
+    def task(
+        self,
+        title: str,
+        *,
+        description: str = "",
+        payload: dict[str, Any] | None = None,
+        ttl_seconds: int | None = None,
+        context: Context | None = None,
+    ) -> Task:
+        """Create a ``Task`` whose lifecycle this Agent owns.
+
+        Returns an unentered ``Task``; use as ``async with agent.task(...)``.
+        Events flow on ``context.stream`` if a ``ConversationContext`` is
+        supplied; else the Task creates a private ``MemoryStream`` on entry
+        and events fire on it (only observers attached to that private
+        stream see them).
+
+        Inside the ``async with`` block, ``ag2.task`` is stamped into
+        ``context.dependencies`` so any tool annotated with ``TaskInject``
+        resolves to this Task.
+        """
+        spec = TaskSpec(
+            title=title,
+            description=description,
+            payload=dict(payload) if payload else {},
+        )
+        return Task(
+            owner_id=self.name,
+            spec=spec,
+            context=context,
+            ttl_seconds=ttl_seconds,
+        )
 
     def tool(
         self,
