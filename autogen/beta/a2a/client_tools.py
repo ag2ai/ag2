@@ -100,3 +100,25 @@ def parse_tool_result_request(message_metadata: dict[str, Any] | None) -> dict[s
         return None
     payload = message_metadata.get(TOOL_CALL_RESULT_KEY)
     return payload if isinstance(payload, dict) else None
+
+
+def validate_client_tool_parameters(parameters: Any) -> None:
+    """Strict structural check for a client-declared JSON Schema.
+
+    Raises ``ValueError`` on any deviation. We only validate the shape that
+    matters for an LLM function-tool parameters block — not the full JSON
+    Schema spec — so the failure is loud and the diagnostic is concrete.
+    """
+    if not isinstance(parameters, dict):
+        raise ValueError(f"client tool parameters must be a JSON object, got {type(parameters).__name__}")
+    declared_type = parameters.get("type", "object")
+    if declared_type != "object":
+        raise ValueError(f"client tool parameters.type must be 'object', got {declared_type!r}")
+    if "properties" in parameters and not isinstance(parameters["properties"], dict):
+        raise ValueError(
+            f"client tool parameters.properties must be a JSON object, got {type(parameters['properties']).__name__}"
+        )
+    if "required" in parameters:
+        required = parameters["required"]
+        if not isinstance(required, list) or not all(isinstance(name, str) for name in required):
+            raise ValueError("client tool parameters.required must be a list of property-name strings")

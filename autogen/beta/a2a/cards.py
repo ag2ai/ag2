@@ -99,8 +99,6 @@ def extract_skills(agent: "Agent") -> list[AgentSkill]:
     out: list[AgentSkill] = []
     for t in agent.tools:
         if isinstance(t, SkillsToolkit):
-            # TODO(a2a-beta): replace `_runtime` access once SkillsToolkit exposes
-            # a public discover() / installed-skills accessor.
             for meta in t._runtime.discover():
                 out.append(
                     AgentSkill(
@@ -110,8 +108,6 @@ def extract_skills(agent: "Agent") -> list[AgentSkill]:
                     )
                 )
         elif isinstance(t, SkillsTool):
-            # TODO(a2a-beta): replace `_skills` access once SkillsTool exposes a
-            # public iter-skills accessor.
             for s in t._skills:
                 desc = f"Provider-managed skill {s.id}"
                 if s.version:
@@ -129,8 +125,6 @@ def _default_interfaces(*, url: str, rest_url: str | None, grpc_url: str | None)
 
 
 def _default_description(agent: "Agent") -> str:
-    # TODO(a2a-beta): replace `_system_prompt` access once Agent exposes a
-    # public system-prompt accessor.
     return "\n".join(agent._system_prompt) if agent._system_prompt else "AG2 beta agent"
 
 

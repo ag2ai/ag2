@@ -26,7 +26,7 @@ from autogen.beta.events import (
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import FunctionTool, tool
 
-from .client_tools import parse_tool_result_request
+from .client_tools import parse_tool_result_request, validate_client_tool_parameters
 from .mappers import (
     CLIENT_TOOLS_KEY,
     REASONING_ARTIFACT_NAME,
@@ -293,14 +293,10 @@ class _ClientToolStub:
 def _build_client_tool_stub(schema: dict[str, Any]) -> FunctionTool:
     name = schema.get("name") or "client_tool"
     description = schema.get("description") or f"Client-side tool {name}."
-    parameters = schema.get("parameters") or {}
+    parameters = schema.get("parameters") or {"type": "object", "properties": {}}
 
-    stub = tool(name=name, description=description)(_ClientToolStub(name))
-
-    if isinstance(parameters, dict):
-        stub.schema.function.parameters = dict(parameters)
-
-    return stub
+    validate_client_tool_parameters(parameters)
+    return tool(name=name, description=description, schema=dict(parameters))(_ClientToolStub(name))
 
 
 def _build_initial_task(message: Message) -> Task:
