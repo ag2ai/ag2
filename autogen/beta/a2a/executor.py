@@ -93,8 +93,16 @@ class AG2AgentExecutor(AgentExecutor):
         if context.message is None:
             raise InternalError("RequestContext.message is required")
 
-        task = context.current_task or _build_initial_task(context.message)
-        if context.current_task is None:
+        task = context.current_task
+        if task is None:
+            ts = Timestamp()
+            ts.FromDatetime(datetime.now(timezone.utc))
+            task = Task(
+                id=context.message.task_id or uuid4().hex,
+                context_id=context.message.context_id or uuid4().hex,
+                status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED, timestamp=ts),
+                history=[context.message],
+            )
             await event_queue.enqueue_event(task)
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
@@ -102,8 +110,11 @@ class AG2AgentExecutor(AgentExecutor):
 
         inputs = initial_inputs(task) or a2a_message_to_inputs(context.message)
         replay_queue = hitl_replay_queue(task)
-        first_message = _user_messages_first(task) or context.message
-        client_tool_schemas = _client_tool_schemas(first_message)
+        first_message = next((m for m in task.history if m.role == Role.ROLE_USER), context.message)
+        raw_schemas = message_metadata(first_message).get(CLIENT_TOOLS_KEY)
+        client_tool_schemas: list[dict[str, Any]] = (
+            [s for s in raw_schemas if isinstance(s, dict)] if isinstance(raw_schemas, list) else []
+        )
         stub_tools = build_client_tool_stubs(client_tool_schemas)
 
         result_forwarder = _ArtifactForwarder(updater, name=RESULT_ARTIFACT_NAME)
@@ -124,7 +135,15 @@ class AG2AgentExecutor(AgentExecutor):
             await self._suspend_for_input(updater, task, signal)
             return
         except Exception as exc:
-            await updater.failed(message=_agent_text_message(task, str(exc) or type(exc).__name__))
+            await updater.failed(
+                message=Message(
+                    role=Role.ROLE_AGENT,
+                    parts=[Part(text=str(exc) or type(exc).__name__)],
+                    message_id=uuid4().hex,
+                    context_id=task.context_id,
+                    task_id=task.id,
+                ),
+            )
             return
 
         await updater.add_artifact(
@@ -230,13 +249,20 @@ class _ReplayHook:
 
 def build_client_tool_stubs(schemas: list[dict[str, Any]]) -> list[FunctionTool]:
     """Materialise stub ``FunctionTool``s from client-supplied JSON schemas."""
-    return [_build_client_tool_stub(s) for s in schemas]
+    stubs: list[FunctionTool] = []
+    for schema in schemas:
+        name = schema.get("name") or "client_tool"
+        description = schema.get("description") or f"Client-side tool {name}."
+        parameters = schema.get("parameters") or {"type": "object", "properties": {}}
+        validate_client_tool_parameters(parameters)
+        stubs.append(tool(name=name, description=description, schema=dict(parameters))(_ClientToolStub(name)))
+    return stubs
 
 
 class _ClientToolStub:
     """Callable that encodes its kwargs as a tool-call request and sends it via ``context.input``.
 
-    Top-level class so ``_build_client_tool_stub`` does not define an inner
+    Top-level class so ``build_client_tool_stubs`` does not define an inner
     function at runtime — only the ``@tool`` decoration is per-request work.
     """
 
@@ -247,53 +273,6 @@ class _ClientToolStub:
 
     async def __call__(self, context: BetaContext, **kwargs: Any) -> str:
         return await context.input(encode_client_tool_call(self._name, kwargs))
-
-
-def _build_client_tool_stub(schema: dict[str, Any]) -> FunctionTool:
-    name = schema.get("name") or "client_tool"
-    description = schema.get("description") or f"Client-side tool {name}."
-    parameters = schema.get("parameters") or {"type": "object", "properties": {}}
-
-    validate_client_tool_parameters(parameters)
-    return tool(name=name, description=description, schema=dict(parameters))(_ClientToolStub(name))
-
-
-def _build_initial_task(message: Message) -> Task:
-    ts = Timestamp()
-    ts.FromDatetime(datetime.now(timezone.utc))
-    return Task(
-        id=message.task_id or uuid4().hex,
-        context_id=message.context_id or uuid4().hex,
-        status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED, timestamp=ts),
-        history=[message],
-    )
-
-
-def _user_messages_first(task: Task) -> Message | None:
-    for m in task.history:
-        if m.role == Role.ROLE_USER:
-            return m
-    return None
-
-
-def _client_tool_schemas(message: Message | None) -> list[dict[str, Any]]:
-    if message is None:
-        return []
-    md = message_metadata(message)
-    raw = md.get(CLIENT_TOOLS_KEY) if md else None
-    if not isinstance(raw, list):
-        return []
-    return [s for s in raw if isinstance(s, dict)]
-
-
-def _agent_text_message(task: Task, text: str) -> Message:
-    return Message(
-        role=Role.ROLE_AGENT,
-        parts=[Part(text=text)],
-        message_id=uuid4().hex,
-        context_id=task.context_id,
-        task_id=task.id,
-    )
 
 
 __all__ = (
