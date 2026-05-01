@@ -9,12 +9,12 @@ from autogen.beta.events.input_events import Input
 from .messages import a2a_message_to_inputs, text_from_message
 
 TASK_STATE_TO_FINISH_REASON: dict[int, str] = {
-    int(TaskState.TASK_STATE_COMPLETED): "stop",
-    int(TaskState.TASK_STATE_CANCELED): "cancelled",
-    int(TaskState.TASK_STATE_FAILED): "error",
-    int(TaskState.TASK_STATE_REJECTED): "rejected",
-    int(TaskState.TASK_STATE_INPUT_REQUIRED): "input_required",
-    int(TaskState.TASK_STATE_AUTH_REQUIRED): "auth_required",
+    TaskState.TASK_STATE_COMPLETED: "stop",
+    TaskState.TASK_STATE_CANCELED: "cancelled",
+    TaskState.TASK_STATE_FAILED: "error",
+    TaskState.TASK_STATE_REJECTED: "rejected",
+    TaskState.TASK_STATE_INPUT_REQUIRED: "input_required",
+    TaskState.TASK_STATE_AUTH_REQUIRED: "auth_required",
 }
 
 
@@ -49,4 +49,4 @@ def hitl_replay_text_queue(task: Task) -> list[str]:
 
 def finish_reason_for(state: int) -> str:
     """Map an A2A ``TaskState`` enum value to an OpenAI-style ``finish_reason`` string."""
-    return TASK_STATE_TO_FINISH_REASON.get(int(state), TaskState.Name(state))
+    return TASK_STATE_TO_FINISH_REASON.get(state, TaskState.Name(state))

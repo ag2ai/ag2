@@ -21,7 +21,6 @@ from autogen.beta.events import (
     HumanMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelResponse,
 )
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import FunctionTool, tool
@@ -113,12 +112,10 @@ class AG2AgentExecutor(AgentExecutor):
 
         result_forwarder = _ArtifactForwarder(updater, name=RESULT_ARTIFACT_NAME)
         reasoning_forwarder = _ArtifactForwarder(updater, name=REASONING_ARTIFACT_NAME)
-        response_collector = _ModelResponseCollector()
 
         stream = MemoryStream()
         stream.where(ModelMessageChunk).subscribe(result_forwarder)
         stream.where(ModelReasoning).subscribe(reasoning_forwarder)
-        stream.where(ModelResponse).subscribe(response_collector)
 
         try:
             reply = await self._agent.ask(
@@ -134,16 +131,15 @@ class AG2AgentExecutor(AgentExecutor):
             await updater.failed(message=_agent_text_message(task, str(exc) or type(exc).__name__))
             return
 
-        last_response = response_collector.last
         await updater.add_artifact(
             parts=text_parts(reply.body or ""),
             name=RESULT_ARTIFACT_NAME,
             append=result_forwarder.streaming_started,
             last_chunk=True,
             metadata=build_result_metadata(
-                usage=last_response.usage if last_response else None,
-                finish_reason=finish_reason_for(int(TaskState.TASK_STATE_COMPLETED)),
-                model=last_response.model if last_response else None,
+                usage=reply.response.usage,
+                finish_reason=finish_reason_for(TaskState.TASK_STATE_COMPLETED),
+                model=reply.response.model,
             ),
         )
         await updater.complete()
@@ -194,20 +190,6 @@ class _ArtifactForwarder:
             last_chunk=False,
         )
         self.streaming_started = True
-
-
-class _ModelResponseCollector:
-    """Capture the last ``ModelResponse`` so the executor can lift its
-    ``Usage`` / ``model`` onto the final artifact metadata.
-    """
-
-    __slots__ = ("last",)
-
-    def __init__(self) -> None:
-        self.last: ModelResponse | None = None
-
-    async def __call__(self, response: ModelResponse) -> None:
-        self.last = response
 
 
 class _ReplayHook:

@@ -12,14 +12,14 @@ from a2a.types import TaskState
 HttpxClientFactory: TypeAlias = Callable[[], httpx.AsyncClient]
 
 
-# Terminal task states from which no further progress is expected. Stored as
-# ``int`` because A2A 1.0 ``TaskState`` is a proto enum (``EnumTypeWrapper``)
-# and ``frozenset`` membership checks resolve to int comparison anyway.
+# Terminal task states from which no further progress is expected.
+# A2A 1.0 ``TaskState`` is a proto enum (int subclass via ``EnumTypeWrapper``),
+# so frozenset membership against the raw enum values just works.
 TERMINAL_TASK_STATES: frozenset[int] = frozenset({
-    int(TaskState.TASK_STATE_COMPLETED),
-    int(TaskState.TASK_STATE_CANCELED),
-    int(TaskState.TASK_STATE_FAILED),
-    int(TaskState.TASK_STATE_REJECTED),
+    TaskState.TASK_STATE_COMPLETED,
+    TaskState.TASK_STATE_CANCELED,
+    TaskState.TASK_STATE_FAILED,
+    TaskState.TASK_STATE_REJECTED,
 })
 
 
