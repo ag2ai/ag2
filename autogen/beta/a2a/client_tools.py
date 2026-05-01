@@ -5,6 +5,7 @@
 import json
 from collections.abc import Sequence
 from typing import Any
+from uuid import uuid4
 
 from autogen.beta.events import (
     BaseEvent,
@@ -17,6 +18,12 @@ from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import TOOL_CALL_REQUEST_KEY, TOOL_CALL_RESULT_KEY
 from .streams import StreamOutcome
+
+# Marker prefix that brands a ``HumanInputRequest.content`` as an encoded
+# client-tool call rather than a real HITL prompt. The executor's HITL hook
+# uses this to decide between the two paths. Lives here (next to encode/decode)
+# rather than in executor.py because both sides of the wire need it.
+_CLIENT_TOOL_CONTENT_PREFIX = "__ag2_client_tool_call__:"
 
 PENDING_TOOL_CALL_ID_VAR_KEY = "ag:a2a:pending_tool_call_id"
 """``Context.variables`` key tracking the in-flight client-side tool call ID.
@@ -100,6 +107,39 @@ def parse_tool_result_request(message_metadata: dict[str, Any] | None) -> dict[s
         return None
     payload = message_metadata.get(TOOL_CALL_RESULT_KEY)
     return payload if isinstance(payload, dict) else None
+
+
+def encode_client_tool_call(name: str, arguments: dict[str, Any]) -> str:
+    """Encode an LLM tool-call invocation as a marker-prefixed JSON string.
+
+    Counterpart to :func:`decode_client_tool_call`. The result is fed into
+    ``context.input(...)`` so the executor's HITL hook routes it through the
+    A2A ``tool_call_request`` flow instead of treating it as a real HITL prompt.
+    """
+    payload = json.dumps(
+        {"id": uuid4().hex, "name": name, "arguments": json.dumps(arguments)},
+        sort_keys=True,
+    )
+    return _CLIENT_TOOL_CONTENT_PREFIX + payload
+
+
+def decode_client_tool_call(content: str) -> dict[str, Any] | None:
+    """Reverse of :func:`encode_client_tool_call`.
+
+    Returns the decoded ``{id, name, arguments}`` dict, or ``None`` if
+    ``content`` is a plain HITL prompt (no marker, malformed JSON, or missing
+    required keys).
+    """
+    if not content.startswith(_CLIENT_TOOL_CONTENT_PREFIX):
+        return None
+    raw = content[len(_CLIENT_TOOL_CONTENT_PREFIX) :]
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(decoded, dict) or "id" not in decoded or "name" not in decoded:
+        return None
+    return decoded
 
 
 def validate_client_tool_parameters(parameters: Any) -> None:

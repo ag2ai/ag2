@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -25,7 +24,12 @@ from autogen.beta.events import (
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final import FunctionTool, tool
 
-from .client_tools import parse_tool_result_request, validate_client_tool_parameters
+from .client_tools import (
+    decode_client_tool_call,
+    encode_client_tool_call,
+    parse_tool_result_request,
+    validate_client_tool_parameters,
+)
 from .mappers import (
     CLIENT_TOOLS_KEY,
     REASONING_ARTIFACT_NAME,
@@ -45,14 +49,6 @@ from .server_middleware import ExecutorMiddleware, compose
 
 if TYPE_CHECKING:
     from autogen.beta import Agent
-
-# JSON marker prefix written into ``HumanInputRequest.content`` by client-tool
-# stubs. The HITL replay hook detects this and routes the request via the
-# tool_call_request metadata path instead of treating the prompt as plain HITL
-# text. Stuffed into ``content`` because beta's ``HumanInputRequest`` does not
-# carry a metadata field; an additive change to the event would be cleaner but
-# is out of scope for this PR.
-_CLIENT_TOOL_CONTENT_PREFIX = "__ag2_client_tool_call__:"
 
 
 class _InputRequiredSignal(Exception):  # noqa: N818  # control-flow signal, not a user-visible error
@@ -210,7 +206,7 @@ class _ReplayHook:
         self._iter = iter(queue)
 
     async def __call__(self, request: HumanInputRequest) -> HumanMessage:
-        encoded_request = _decode_client_tool_request(request.content)
+        encoded_request = decode_client_tool_call(request.content)
 
         try:
             answer = next(self._iter)
@@ -232,21 +228,6 @@ class _ReplayHook:
         return HumanMessage(text_from_message(answer), parent_id=request.id)
 
 
-def _decode_client_tool_request(prompt: str) -> dict[str, Any] | None:
-    if not prompt.startswith(_CLIENT_TOOL_CONTENT_PREFIX):
-        return None
-    raw = prompt[len(_CLIENT_TOOL_CONTENT_PREFIX) :]
-    try:
-        decoded = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(decoded, dict):
-        return None
-    if "id" not in decoded or "name" not in decoded:
-        return None
-    return decoded
-
-
 def build_client_tool_stubs(schemas: list[dict[str, Any]]) -> list[FunctionTool]:
     """Materialise stub ``FunctionTool``s from client-supplied JSON schemas."""
     return [_build_client_tool_stub(s) for s in schemas]
@@ -265,11 +246,7 @@ class _ClientToolStub:
         self._name = name
 
     async def __call__(self, context: BetaContext, **kwargs: Any) -> str:
-        request = json.dumps(
-            {"id": uuid4().hex, "name": self._name, "arguments": json.dumps(kwargs)},
-            sort_keys=True,
-        )
-        return await context.input(_CLIENT_TOOL_CONTENT_PREFIX + request)
+        return await context.input(encode_client_tool_call(self._name, kwargs))
 
 
 def _build_client_tool_stub(schema: dict[str, Any]) -> FunctionTool:
