@@ -6,7 +6,7 @@ from a2a.types import Message, Role, Task, TaskState
 
 from autogen.beta.events.input_events import Input
 
-from .messages import a2a_message_to_inputs, text_from_message
+from .messages import a2a_message_to_inputs
 
 TASK_STATE_TO_FINISH_REASON: dict[int, str] = {
     TaskState.TASK_STATE_COMPLETED: "stop",
@@ -40,11 +40,6 @@ def hitl_replay_queue(task: Task) -> list[Message]:
     """
     msgs = user_messages(task)
     return list(msgs[1:])
-
-
-def hitl_replay_text_queue(task: Task) -> list[str]:
-    """Plain-text view of the replay queue (drops metadata)."""
-    return [text_from_message(m) for m in hitl_replay_queue(task)]
 
 
 def finish_reason_for(state: int) -> str:

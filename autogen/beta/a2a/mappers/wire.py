@@ -38,10 +38,6 @@ parallel to the main ``result`` artifact."""
 RESULT_ARTIFACT_NAME = "result"
 """Default ``Artifact.name`` for the main response body."""
 
-TOOL_CALLS_ARTIFACT_NAME = "tool_calls"
-"""Dedicated ``Artifact.name`` carrying server-emitted ``ToolCallEvent`` payloads
-when the LLM has chosen to invoke a client-side tool."""
-
 CLIENT_TOOLS_EXTENSION_URI = "https://ag2.dev/a2a/client-tools/v1"
 """URI of the AG2 client-side tools extension. Servers that understand it accept
 ``Message.metadata[CLIENT_TOOLS_KEY]`` on inbound messages and emit
