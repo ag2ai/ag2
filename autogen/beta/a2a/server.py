@@ -39,8 +39,11 @@ class A2AServer:
     """Configure once, build any transport.
 
     Concurrent transports against the same ``A2AServer`` instance share the
-    same in-process ``AG2AgentExecutor`` and (by default) the same
-    ``InMemoryTaskStore`` — useful for serving JSON-RPC and gRPC simultaneously.
+    same in-process ``AG2AgentExecutor`` and the same ``TaskStore`` — useful
+    for serving JSON-RPC + REST + gRPC simultaneously, since a task created
+    on one transport remains visible on the others. If ``task_store=`` is
+    omitted, an ``InMemoryTaskStore`` is constructed once at init time and
+    shared across every ``build_*`` call.
     """
 
     __slots__ = (
@@ -110,7 +113,7 @@ class A2AServer:
                 stacklevel=2,
             )
         self._extended_card = extended_card
-        self._task_store = task_store
+        self._task_store: TaskStore = task_store or InMemoryTaskStore()
         self._push_config_store = push_config_store
         self._push_sender = push_sender
         self._executor = AG2AgentExecutor(agent, middleware=executor_middleware)
@@ -156,7 +159,7 @@ class A2AServer:
         """
         return DefaultRequestHandler(
             agent_executor=self._executor,
-            task_store=task_store or self._task_store or InMemoryTaskStore(),
+            task_store=task_store or self._task_store,
             agent_card=self._card,
             push_config_store=push_config_store or self._push_config_store,
             push_sender=push_sender or self._push_sender,
