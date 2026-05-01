@@ -3,18 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from contextlib import ExitStack
 from typing import Any
 from uuid import uuid4
 
+from autogen.beta.annotations import Context
 from autogen.beta.events import (
     BaseEvent,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
 )
-from autogen.beta.tools.final.function_tool import FunctionToolSchema
+from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+from autogen.beta.tools.tool import Tool
 
 from .mappers import TOOL_CALL_REQUEST_KEY, TOOL_CALL_RESULT_KEY
 from .streams import StreamOutcome
@@ -148,17 +152,104 @@ def validate_client_tool_parameters(parameters: Any) -> None:
     Raises ``ValueError`` on any deviation. We only validate the shape that
     matters for an LLM function-tool parameters block — not the full JSON
     Schema spec — so the failure is loud and the diagnostic is concrete.
+
+    A missing or ``null`` ``type`` is accepted (defaults to ``"object"``) since
+    schemas going through proto ``Struct`` round-trips can lose explicit fields.
     """
     if not isinstance(parameters, dict):
         raise ValueError(f"client tool parameters must be a JSON object, got {type(parameters).__name__}")
-    declared_type = parameters.get("type", "object")
-    if declared_type != "object":
+    declared_type = parameters.get("type")
+    if declared_type is not None and declared_type != "object":
         raise ValueError(f"client tool parameters.type must be 'object', got {declared_type!r}")
-    if "properties" in parameters and not isinstance(parameters["properties"], dict):
+    if "properties" in parameters and not isinstance(parameters["properties"], (dict, type(None))):
         raise ValueError(
             f"client tool parameters.properties must be a JSON object, got {type(parameters['properties']).__name__}"
         )
     if "required" in parameters:
         required = parameters["required"]
-        if not isinstance(required, list) or not all(isinstance(name, str) for name in required):
+        if required is not None and (
+            not isinstance(required, list) or not all(isinstance(name, str) for name in required)
+        ):
             raise ValueError("client tool parameters.required must be a list of property-name strings")
+
+
+class ClientToolStub(Tool):
+    """Server-side proxy for a tool declared on the A2A client.
+
+    The client sends the JSON Schema over the wire (``Message.metadata`` →
+    ``CLIENT_TOOLS_KEY``); the server materialises one ``ClientToolStub`` per
+    schema and exposes it to its own LLM. When the LLM picks the tool, the
+    stub forwards the call to the client via ``context.input(...)`` keyed
+    with the marker-prefixed payload, then wraps whatever the client posts
+    back as a ``ToolResultEvent``.
+
+    No ``fast_depends`` / ``inspect.Signature`` plumbing — argument shape is
+    whatever the client declared, the model picks values, and the stub
+    forwards them verbatim. ``_InputRequiredSignal`` (a ``BaseException``)
+    propagates through the bare ``__call__`` so the executor can translate
+    it into an A2A ``requires_input`` task transition.
+    """
+
+    __slots__ = ("name", "schema")
+
+    def __init__(self, name: str, description: str, parameters: dict[str, Any]) -> None:
+        self.name = name
+        self.schema = FunctionToolSchema(
+            function=FunctionDefinition(
+                name=name,
+                description=description,
+                parameters=parameters,
+            )
+        )
+
+    async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
+        return [self.schema]
+
+    def register(
+        self,
+        stack: "ExitStack",
+        context: "Context",
+        *,
+        middleware: Iterable["BaseMiddleware"] = (),
+    ) -> None:
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            result = await self(event, context)
+            await context.send(result)
+
+        stack.enter_context(
+            context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute),
+        )
+
+    async def __call__(
+        self,
+        event: "ToolCallEvent",
+        context: "Context",
+    ) -> "ToolResultEvent | ToolErrorEvent":
+        try:
+            forwarded = await context.input(
+                encode_client_tool_call(self.name, event.serialized_arguments),
+            )
+        except Exception as exc:
+            return ToolErrorEvent.from_call(event, error=exc)
+        return ToolResultEvent.from_call(event, result=forwarded)
+
+
+def build_client_tool_stubs(schemas: list[dict[str, Any]]) -> list[ClientToolStub]:
+    """Materialise stub ``ClientToolStub``s from client-supplied JSON schemas.
+
+    Tools the client declares with no arguments come over the wire with a
+    degenerate ``{"type": "null"}`` schema (artefact of beta's ``tool()``
+    builder for arg-less functions). Any non-``"object"`` ``type`` is
+    coerced to a canonical empty-object schema before validation so the
+    server LLM sees a well-formed JSON Schema.
+    """
+    stubs: list[ClientToolStub] = []
+    for schema in schemas:
+        name = schema.get("name") or "client_tool"
+        description = schema.get("description") or f"Client-side tool {name}."
+        parameters = schema.get("parameters")
+        if not isinstance(parameters, dict) or parameters.get("type") != "object":
+            parameters = {"type": "object", "properties": {}}
+        validate_client_tool_parameters(parameters)
+        stubs.append(ClientToolStub(name=name, description=description, parameters=parameters))
+    return stubs

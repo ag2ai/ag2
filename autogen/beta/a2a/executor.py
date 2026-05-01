@@ -14,21 +14,21 @@ from a2a.types import Message, Part, Role, Task, TaskState, TaskStatus
 from a2a.utils.errors import InternalError
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from autogen.beta.annotations import Context as BetaContext
 from autogen.beta.events import (
+    BaseEvent,
     HumanInputRequest,
     HumanMessage,
     ModelMessageChunk,
     ModelReasoning,
 )
+from autogen.beta.history import MemoryStorage
 from autogen.beta.stream import MemoryStream
-from autogen.beta.tools.final import FunctionTool, tool
 
 from .client_tools import (
+    ClientToolStub,
+    build_client_tool_stubs,
     decode_client_tool_call,
-    encode_client_tool_call,
     parse_tool_result_request,
-    validate_client_tool_parameters,
 )
 from .mappers import (
     CLIENT_TOOLS_KEY,
@@ -51,12 +51,18 @@ if TYPE_CHECKING:
     from autogen.beta import Agent
 
 
-class _InputRequiredSignal(Exception):  # noqa: N818  # control-flow signal, not a user-visible error
+class _InputRequiredSignal(BaseException):  # noqa: N818  # control-flow signal, not a user-visible error
     """Raised by the HITL replay hook to suspend a task.
 
     ``execute()`` catches this and translates it into an A2A
     ``requires_input(...)`` task transition. ``tool_call_request`` is set when
     the suspension was triggered by a client-side tool stub.
+
+    Subclasses ``BaseException`` (not ``Exception``) so the broad
+    ``except Exception`` in ``FunctionTool.__call__`` and similar tool
+    dispatchers does not swallow it into a ``ToolErrorEvent`` — the signal
+    must propagate up to ``_run_bare`` to translate into an A2A
+    ``requires_input`` transition rather than a tool-error frame.
     """
 
     def __init__(self, prompt: str, *, tool_call_request: dict[str, Any] | None = None) -> None:
@@ -75,7 +81,7 @@ class AG2AgentExecutor(AgentExecutor):
     :mod:`autogen.beta.a2a.server_middleware`.
     """
 
-    __slots__ = ("_agent", "_run")
+    __slots__ = ("_agent", "_committed_history", "_run")
 
     def __init__(
         self,
@@ -85,6 +91,11 @@ class AG2AgentExecutor(AgentExecutor):
     ) -> None:
         self._agent = agent
         self._run = compose(middleware, self._run_bare)
+        # Per-``context_id`` committed history. Updated only when an
+        # ``execute()`` call completes successfully — suspended turns
+        # (HITL / client-side tool requests) do not leak partial events
+        # here, so resumption can replay the turn from a clean baseline.
+        self._committed_history: dict[str, list[BaseEvent]] = {}
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         await self._run(context, event_queue)
@@ -104,6 +115,13 @@ class AG2AgentExecutor(AgentExecutor):
                 history=[context.message],
             )
             await event_queue.enqueue_event(task)
+        elif not task.history or task.history[-1].message_id != context.message.message_id:
+            # Resumed task: ``a2a-sdk`` hands us the saved task without the
+            # in-flight follow-up appended yet. ``hitl_replay_queue`` reads
+            # only ``task.history`` — without this append the just-arrived
+            # answer is invisible and the tool re-suspends, causing the
+            # client to see the same prompt twice.
+            task.history.append(context.message)
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
         await updater.start_work()
@@ -120,7 +138,16 @@ class AG2AgentExecutor(AgentExecutor):
         result_forwarder = _ArtifactForwarder(updater, name=RESULT_ARTIFACT_NAME)
         reasoning_forwarder = _ArtifactForwarder(updater, name=REASONING_ARTIFACT_NAME)
 
-        stream = MemoryStream()
+        # Multi-turn replay: seed the per-request stream with the events
+        # committed by previous successful turns sharing this ``context_id``.
+        # Suspended turns (HITL / client-tool requests) do not commit, so
+        # resumption replays the in-flight turn from this same clean baseline
+        # — partial events from the previous attempt never leak in.
+        seed_events = self._committed_history.get(task.context_id, [])
+        storage = MemoryStorage()
+        stream = MemoryStream(storage=storage)
+        if seed_events:
+            await storage.set_history(stream.id, list(seed_events))
         stream.where(ModelMessageChunk).subscribe(result_forwarder)
         stream.where(ModelReasoning).subscribe(reasoning_forwarder)
 
@@ -146,8 +173,12 @@ class AG2AgentExecutor(AgentExecutor):
             )
             return
 
+        # Body parts are only sent here when nothing was streamed — otherwise
+        # the chunks already conveyed the full text and re-sending ``reply.body``
+        # as an appended part would duplicate the content client-side.
+        final_parts = [] if result_forwarder.streaming_started else text_parts(reply.body or "")
         await updater.add_artifact(
-            parts=text_parts(reply.body or ""),
+            parts=final_parts,
             name=RESULT_ARTIFACT_NAME,
             append=result_forwarder.streaming_started,
             last_chunk=True,
@@ -157,6 +188,11 @@ class AG2AgentExecutor(AgentExecutor):
                 model=reply.response.model,
             ),
         )
+        # Commit only after the turn fully succeeds. Suspended turns return
+        # earlier and leave ``_committed_history`` untouched, so the next
+        # ``execute()`` for this ``context_id`` re-seeds from the same
+        # clean baseline and replays the in-flight turn deterministically.
+        self._committed_history[task.context_id] = list(await stream.history.get_events())
         await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -247,35 +283,8 @@ class _ReplayHook:
         return HumanMessage(text_from_message(answer), parent_id=request.id)
 
 
-def build_client_tool_stubs(schemas: list[dict[str, Any]]) -> list[FunctionTool]:
-    """Materialise stub ``FunctionTool``s from client-supplied JSON schemas."""
-    stubs: list[FunctionTool] = []
-    for schema in schemas:
-        name = schema.get("name") or "client_tool"
-        description = schema.get("description") or f"Client-side tool {name}."
-        parameters = schema.get("parameters") or {"type": "object", "properties": {}}
-        validate_client_tool_parameters(parameters)
-        stubs.append(tool(name=name, description=description, schema=dict(parameters))(_ClientToolStub(name)))
-    return stubs
-
-
-class _ClientToolStub:
-    """Callable that encodes its kwargs as a tool-call request and sends it via ``context.input``.
-
-    Top-level class so ``build_client_tool_stubs`` does not define an inner
-    function at runtime — only the ``@tool`` decoration is per-request work.
-    """
-
-    __slots__ = ("_name",)
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-    async def __call__(self, context: BetaContext, **kwargs: Any) -> str:
-        return await context.input(encode_client_tool_call(self._name, kwargs))
-
-
 __all__ = (
     "AG2AgentExecutor",
+    "ClientToolStub",
     "build_client_tool_stubs",
 )
