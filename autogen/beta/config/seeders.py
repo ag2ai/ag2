@@ -2,12 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Optional ``ModelConfig`` capability protocols.
-
-Live next to ``ModelConfig`` so that subagent / tool runtime code can detect
-them without taking a dependency on any specific provider package.
-"""
-
 from typing import Any, Protocol, runtime_checkable
 
 
