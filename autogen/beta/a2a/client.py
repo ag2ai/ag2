@@ -145,8 +145,6 @@ class A2AClient(LLMClient):
             self._httpx_client = None
             self._a2a_client = None
 
-    # ------- session bootstrap -------
-
     async def _ensure_client(self) -> tuple[AgentCard, Client]:
         async with self._init_lock:
             if self._httpx_client is None:
@@ -175,8 +173,6 @@ class A2AClient(LLMClient):
         if config.httpx_client is None:
             config = dataclass_replace(config, httpx_client=self._httpx_client)
         return ClientFactory(config).create(card, interceptors=self._interceptors)
-
-    # ------- outgoing message construction -------
 
     def _build_outgoing(
         self,
@@ -223,8 +219,6 @@ class A2AClient(LLMClient):
             task_id=task_id,
             metadata={TOOL_CALL_RESULT_KEY: tool_result_payload(tool_result)},
         )
-
-    # ------- response shaping -------
 
     @staticmethod
     def _build_tool_call_response(
@@ -275,8 +269,6 @@ class A2AClient(LLMClient):
             provider="a2a",
             finish_reason=finish_reason,
         )
-
-    # ------- one drain+reconnect cycle -------
 
     async def _exchange(
         self,

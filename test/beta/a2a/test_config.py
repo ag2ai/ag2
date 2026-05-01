@@ -9,7 +9,8 @@ from a2a.types import AgentCapabilities, AgentCard, AgentInterface
 from a2a.utils.constants import TransportProtocol
 
 from autogen.beta import MemoryStream
-from autogen.beta.a2a import A2AClient, A2AConfig
+from autogen.beta.a2a import A2AConfig
+from autogen.beta.a2a.client import A2AClient
 from autogen.beta.a2a.errors import A2AResponseSchemaNotSupportedError
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelRequest, TextInput

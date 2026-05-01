@@ -341,11 +341,13 @@ test = [
 ]
 
 docs = [
-    "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
-    "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
-    "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
-    "ag2[docker]",  # Docker-backed executors (autogen.coding.DockerCommandLineCodeExecutor, autogen.coding.jupyter.DockerJupyterServer)
+    "ag2[a2a]",                     # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "ag2[tracing]",                 # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
+    "ag2[ag-ui]",                   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
+    "ag2[docker]",                  # Docker-backed executors (autogen.coding.DockerCommandLineCodeExecutor, autogen.coding.jupyter.DockerJupyterServer)
     # Beta optional dependencies
+    "ag2[a2a-http]",                # HTTP/JSON-RPC/REST transports — used by `autogen.beta.a2a.transports.{asgi,fastapi,rest}`
+    "ag2[a2a-grpc]",                # gRPC transport — used by `autogen.beta.a2a.transports.grpc`
     "ag2[openai]",                  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[anthropic]",               # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[gemini]",                  # Gemini is exposed in the public API by the optional `autogen.beta.config` module

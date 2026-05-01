@@ -174,9 +174,6 @@ class AG2AgentExecutor(AgentExecutor):
         )
 
 
-# ---------- artifact streaming forwarders ----------
-
-
 class _ArtifactForwarder:
     """Forward streamed ``ModelMessageChunk`` / ``ModelReasoning`` content as
     appended ``TaskArtifactUpdate`` events under a fixed artifact ``name``.
@@ -211,9 +208,6 @@ class _ModelResponseCollector:
 
     async def __call__(self, response: ModelResponse) -> None:
         self.last = response
-
-
-# ---------- HITL replay hook (also handles client-tool answers) ----------
 
 
 class _ReplayHook:
@@ -271,9 +265,6 @@ def _decode_client_tool_request(prompt: str) -> dict[str, Any] | None:
     return decoded
 
 
-# ---------- client-side tool stub construction ----------
-
-
 def build_client_tool_stubs(schemas: list[dict[str, Any]]) -> list[FunctionTool]:
     """Materialise stub ``FunctionTool``s from client-supplied JSON schemas."""
     return [_build_client_tool_stub(s) for s in schemas]
@@ -310,9 +301,6 @@ def _build_client_tool_stub(schema: dict[str, Any]) -> FunctionTool:
         stub.schema.function.parameters = dict(parameters)
 
     return stub
-
-
-# ---------- helpers ----------
 
 
 def _build_initial_task(message: Message) -> Task:

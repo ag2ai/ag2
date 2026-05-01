@@ -9,8 +9,9 @@ from a2a.utils.constants import TransportProtocol
 from starlette.applications import Starlette
 
 from autogen.beta import Agent
-from autogen.beta.a2a import A2AServer, AG2AgentExecutor
+from autogen.beta.a2a import A2AServer
 from autogen.beta.a2a.cards import url_from_card
+from autogen.beta.a2a.executor import AG2AgentExecutor
 from autogen.beta.testing import TestConfig
 
 
