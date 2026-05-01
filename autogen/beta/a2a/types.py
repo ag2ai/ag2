@@ -3,24 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import TypeAlias
 
 import httpx
-from a2a.client import A2AClientHTTPError
-from a2a.types import Task, TaskState
+from a2a.client.errors import A2AClientError, A2AClientTimeoutError
+from a2a.types import TaskState
 
 HttpxClientFactory: TypeAlias = Callable[[], httpx.AsyncClient]
 
 
-TERMINAL_TASK_STATES: frozenset[TaskState] = frozenset({
-    TaskState.completed,
-    TaskState.canceled,
-    TaskState.failed,
-    TaskState.rejected,
+# Terminal task states from which no further progress is expected. Stored as
+# ``int`` because A2A 1.0 ``TaskState`` is a proto enum (``EnumTypeWrapper``)
+# and ``frozenset`` membership checks resolve to int comparison anyway.
+TERMINAL_TASK_STATES: frozenset[int] = frozenset({
+    int(TaskState.TASK_STATE_COMPLETED),
+    int(TaskState.TASK_STATE_CANCELED),
+    int(TaskState.TASK_STATE_FAILED),
+    int(TaskState.TASK_STATE_REJECTED),
 })
 
 
+# Errors that should trigger reconnect on the streaming-message path.
 TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
     httpx.ConnectError,
     httpx.ReadError,
@@ -28,15 +31,6 @@ TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
     httpx.RemoteProtocolError,
     httpx.ReadTimeout,
     httpx.ConnectTimeout,
-    A2AClientHTTPError,
+    A2AClientError,
+    A2AClientTimeoutError,
 )
-
-
-@dataclass(slots=True)
-class StreamOutcome:
-    """Result of consuming one A2A streaming or polling session."""
-
-    text: str = ""
-    task: Task | None = None
-    input_required: bool = False
-    input_prompt: str | None = None

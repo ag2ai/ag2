@@ -5,11 +5,17 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from a2a.compat.v0_3.conversions import (
+    to_compat_message,
+    to_core_message,
+    to_core_part,
+    to_core_task,
+)
+from a2a.compat.v0_3.types import Task, TaskState, TaskStatus
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import InternalError, Task, TaskState, TaskStatus
-from a2a.utils.errors import ServerError
+from a2a.types import TaskState as ProtoTaskState
 
 from autogen import ConversableAgent
 from autogen.agentchat.remote import AgentService
@@ -37,73 +43,75 @@ class AutogenAgentExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         assert context.message
 
+        # ``context.message`` arrives as the proto type from a2a-sdk 1.0; our
+        # internal mappers (utils.py) operate on the Pydantic compat types.
+        compat_message = to_compat_message(context.message)
+
         task = context.current_task
-        if not task:
-            request = context.message
-            # build task object manually to allow empty messages
-            task = Task(
+        if task is None:
+            # Build the initial task in compat-types so we can reuse our mappers,
+            # then convert to proto for the EventQueue.
+            compat_task = Task(
                 status=TaskStatus(
                     state=TaskState.submitted,
                     timestamp=datetime.now(timezone.utc).isoformat(),
                 ),
-                id=request.task_id or str(uuid4()),
-                context_id=request.context_id or str(uuid4()),
-                history=[request],
+                id=compat_message.task_id or str(uuid4()),
+                context_id=compat_message.context_id or str(uuid4()),
+                history=[compat_message],
             )
-            # publish the task status submitted event
-            await event_queue.enqueue_event(task)
+            await event_queue.enqueue_event(to_core_task(compat_task))
+            task_id = compat_task.id
+            context_id = compat_task.context_id
+        else:
+            task_id = task.id
+            context_id = task.context_id
 
-        updater = TaskUpdater(event_queue, task.id, task.context_id)
-        await updater.update_status(state=TaskState.working)
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.update_status(state=ProtoTaskState.TASK_STATE_WORKING)
 
         artifact = make_artifact(message=None)
 
         streaming_started = False
-        try:
-            async for response in self.agent(request_message_from_a2a(context.message)):
-                if response.input_required:
-                    await updater.requires_input(
-                        message=make_input_required_message(
-                            context_id=task.context_id,
-                            task_id=task.id,
-                            text=response.input_required,
-                            context=response.context,
-                        ),
-                        final=True,
-                    )
-                    return
+        async for response in self.agent(request_message_from_a2a(compat_message)):
+            if response.input_required:
+                input_msg = make_input_required_message(
+                    context_id=context_id,
+                    task_id=task_id,
+                    text=response.input_required,
+                    context=response.context,
+                )
+                await updater.requires_input(message=to_core_message(input_msg))
+                return
 
-                if response.streaming_text:
-                    artifact = copy_artifact(
-                        artifact=artifact,
-                        message={"content": response.streaming_text},
-                        context=response.context,
-                    )
+            if response.streaming_text:
+                artifact = copy_artifact(
+                    artifact=artifact,
+                    message={"content": response.streaming_text},
+                    context=response.context,
+                )
 
-                    await updater.add_artifact(
-                        parts=artifact.parts,
-                        artifact_id=artifact.artifact_id,
-                        name=artifact.name,
-                        append=streaming_started,
-                        last_chunk=False,
-                    )
+                await updater.add_artifact(
+                    parts=[to_core_part(p) for p in artifact.parts],
+                    artifact_id=artifact.artifact_id,
+                    name=artifact.name,
+                    append=streaming_started,
+                    last_chunk=False,
+                )
 
-                    streaming_started = True
+                streaming_started = True
 
-                elif response.message:
-                    artifact = copy_artifact(
-                        artifact=artifact,
-                        message=response.message,
-                        context=response.context,
-                    )
-
-        except Exception as e:
-            raise ServerError(error=InternalError()) from e
+            elif response.message:
+                artifact = copy_artifact(
+                    artifact=artifact,
+                    message=response.message,
+                    context=response.context,
+                )
 
         await updater.add_artifact(
             artifact_id=artifact.artifact_id,
             name=artifact.name,
-            parts=artifact.parts,
+            parts=[to_core_part(p) for p in artifact.parts],
             metadata=artifact.metadata,
             extensions=artifact.extensions,
             append=streaming_started,

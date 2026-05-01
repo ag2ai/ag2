@@ -18,6 +18,15 @@ from autogen.a2a import A2aRemoteAgent
 from autogen.testing import TestAgent
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Interop blocked by fasta2a 0.6.x ↔ a2a-sdk 1.0+ wire incompatibility: "
+        "fasta2a returns truncated ISO timestamps that a2a-sdk's "
+        "to_compat_send_message_request() cannot parse. Re-enable when fasta2a "
+        "ships a2a-sdk 1.0-compatible timestamps."
+    ),
+    strict=False,
+)
 @pytest.mark.asyncio()
 async def test_pydantic_a2a() -> None:
     # arrange
@@ -50,6 +59,15 @@ async def test_pydantic_a2a() -> None:
 
 
 class CustomTestClient(TestClient):
+    """Wraps Starlette ``TestClient`` so its HTTP methods satisfy the async
+    interface a2a-sdk 1.0 expects.
+
+    Starlette's ``TestClient`` returns a *coroutine* when its sync API is
+    invoked from inside a running event loop (anyio backend detection), and a
+    plain ``Response`` otherwise. We unwrap both shapes so the caller always
+    awaits a single layer.
+    """
+
     async def __aenter__(self) -> "CustomTestClient":
         return self
 
@@ -57,10 +75,24 @@ class CustomTestClient(TestClient):
         pass
 
     async def get(self, *args: Any, **kwargs: Any) -> Response:
-        return super().get(*args, **kwargs)
+        result = super().get(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
 
     async def post(self, *args: Any, **kwargs: Any) -> Response:
-        return super().post(*args, **kwargs)
+        result = super().post(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+    async def send(self, *args: Any, **kwargs: Any) -> Response:
+        # a2a-sdk 1.0 routes JSON-RPC requests through ``httpx_client.send``.
+        kwargs.pop("stream", None)  # TestClient doesn't honour streaming
+        result = super().send(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
 
 
 class FakeModel(Model):

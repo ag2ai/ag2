@@ -7,9 +7,24 @@ import typing
 from typing import Any, Protocol
 from uuid import uuid4
 
-from a2a.types import AgentCapabilities, AgentCard, DataPart, Message, Part, Role, SendMessageSuccessResponse, TextPart
-from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from a2a.compat.v0_3.types import (
+    AgentCapabilities,
+    AgentCard,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    SendMessageSuccessResponse,
+    TextPart,
+)
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from httpx import MockTransport, Request, Response
+
+# Legacy AgentCard discovery paths from a2a-sdk <1.0. The constants were removed
+# in 1.0 but we still serve them from MockClient so consumer tests that probe
+# alternative well-known locations get a usable card instead of a 404.
+_PREV_AGENT_CARD_WELL_KNOWN_PATH = "/.well-known/agent.json"
+_EXTENDED_AGENT_CARD_PATH = "/agent/authenticatedExtendedCard"
 from httpx._client import AsyncClient, Client, EventHook
 from httpx._config import DEFAULT_LIMITS, DEFAULT_MAX_REDIRECTS, DEFAULT_TIMEOUT_CONFIG, Limits
 from httpx._transports.base import AsyncBaseTransport
@@ -167,10 +182,10 @@ def MockClient(  # noqa: N802
         raise ValueError(f"Invalid message type: {type(response_message)}")
 
     async def mock_handler(request: Request) -> Response:
-        if (
-            request.url.path == AGENT_CARD_WELL_KNOWN_PATH
-            or request.url.path == EXTENDED_AGENT_CARD_PATH
-            or request.url.path == PREV_AGENT_CARD_WELL_KNOWN_PATH
+        if request.url.path in (
+            AGENT_CARD_WELL_KNOWN_PATH,
+            _EXTENDED_AGENT_CARD_PATH,
+            _PREV_AGENT_CARD_WELL_KNOWN_PATH,
         ):
             return Response(
                 status_code=200,

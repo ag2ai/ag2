@@ -23,11 +23,16 @@ from uuid import uuid4
 from ....import_utils import optional_import_block
 
 with optional_import_block():
+    from a2a.compat.v0_3.conversions import (
+        to_compat_message,
+        to_core_message,
+        to_core_task,
+    )
+    from a2a.compat.v0_3.types import DataPart, Message, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.server.agent_execution import AgentExecutor, RequestContext
     from a2a.server.events import EventQueue
     from a2a.server.tasks import TaskUpdater
-    from a2a.types import DataPart, InternalError, Message, Part, Task, TaskState, TaskStatus, TextPart
-    from a2a.utils.errors import ServerError
+    from a2a.types import TaskState as ProtoTaskState
 
     from ....a2a.utils import (  # type: ignore[attr-defined]
         make_input_required_message,
@@ -71,15 +76,14 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         self._agent_service = AgentService(agent)
         self._parser = A2UIResponseParser(version_string=version_string, delimiter=delimiter)
 
-    def _extract_incoming_action(self, context: RequestContext) -> dict[str, Any] | None:
+    def _extract_incoming_action(self, message: Message) -> dict[str, Any] | None:
         """Check incoming message parts for A2UI action DataParts.
 
         Supports two formats:
         1. A2UI MIME-typed DataPart: ``{"messages": [{"action": {...}}]}``
         2. genui v0.9 DataPart (no MIME): ``{"version": "v0.9", "action": {...}}``
         """
-        assert context.message
-        for part in context.message.parts:
+        for part in message.parts:
             if isinstance(part.root, DataPart):
                 data = part.root.data
                 # Format 1: A2UI MIME-typed DataPart with messages wrapper
@@ -100,9 +104,14 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         action: dict[str, Any],
         task: Task,
         updater: TaskUpdater,
-        context: RequestContext,
+        compat_message: Message,
     ) -> bool:
-        """Handle an incoming A2UI action. Returns True if handled."""
+        """Handle an incoming A2UI action. Returns True if handled.
+
+        ``compat_message`` is the request message already converted to compat
+        types; mutations here propagate through ``execute()``'s downstream
+        handling because the same instance is reused.
+        """
         from .actions import A2UIAction
 
         action_name = action.get("name", "")
@@ -147,7 +156,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             # Publish text-only result via status update
             text_part = Part(root=TextPart(text=result_text))
             message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
-            await updater.update_status(state=TaskState.completed, message=message, final=True)
+            await updater.update_status(state=ProtoTaskState.TASK_STATE_COMPLETED, message=to_core_message(message))
             return True
 
         else:
@@ -161,9 +170,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             logger.info("Action '%s' routed to LLM with prompt: %s", action_name, prompt)
 
             # Replace only the action DataPart with the prompt, keeping conversation history parts
-            assert context.message
             new_parts = []
-            for part in context.message.parts:
+            for part in compat_message.parts:
                 if (
                     isinstance(part.root, DataPart)
                     and part.root.metadata
@@ -173,32 +181,31 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                     new_parts.append(Part(root=TextPart(text=prompt)))
                 else:
                     new_parts.append(part)
-            context.message.parts = new_parts
+            compat_message.parts = new_parts
             return False  # Let normal execute() flow continue
 
-    async def _setup_task(self, context: RequestContext, event_queue: EventQueue) -> tuple[Task, TaskUpdater]:
+    async def _setup_task(
+        self, compat_message: Message, current_task: Task | None, event_queue: EventQueue
+    ) -> tuple[Task, TaskUpdater]:
         """Create or retrieve the task and return it with a TaskUpdater."""
-        assert context.message
-        task = context.current_task
-        if not task:
-            request = context.message
-            task = Task(
+        if current_task is None:
+            current_task = Task(
                 status=TaskStatus(
                     state=TaskState.submitted,
                     timestamp=datetime.now(timezone.utc).isoformat(),
                 ),
-                id=request.task_id or str(uuid4()),
-                context_id=request.context_id or str(uuid4()),
-                history=[request],
+                id=compat_message.task_id or str(uuid4()),
+                context_id=compat_message.context_id or str(uuid4()),
+                history=[compat_message],
             )
-            await event_queue.enqueue_event(task)
+            await event_queue.enqueue_event(to_core_task(current_task))
 
-        updater = TaskUpdater(event_queue, task.id, task.context_id)
-        await updater.update_status(state=TaskState.working)
-        return task, updater
+        updater = TaskUpdater(event_queue, current_task.id, current_task.context_id)
+        await updater.update_status(state=ProtoTaskState.TASK_STATE_WORKING)
+        return current_task, updater
 
     async def _stream_agent_response(
-        self, context: RequestContext, task: Task, updater: TaskUpdater
+        self, compat_message: Message, task: Task, updater: TaskUpdater
     ) -> tuple[str, bool]:
         """Stream the agent response, forwarding chunks via status updates.
 
@@ -207,26 +214,23 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         """
         full_response_text = ""
         streaming_started = False
-        assert context.message
 
-        async for response in self._agent_service(request_message_from_a2a(context.message)):
+        async for response in self._agent_service(request_message_from_a2a(compat_message)):
             if response.input_required:
-                await updater.requires_input(
-                    message=make_input_required_message(
-                        context_id=task.context_id,
-                        task_id=task.id,
-                        text=response.input_required,
-                        context=response.context,
-                    ),
-                    final=True,
+                input_msg = make_input_required_message(
+                    context_id=task.context_id,
+                    task_id=task.id,
+                    text=response.input_required,
+                    context=response.context,
                 )
+                await updater.requires_input(message=to_core_message(input_msg))
                 return "", False  # Caller should return early
 
             if response.streaming_text:
                 full_response_text += response.streaming_text
                 text_part = Part(root=TextPart(text=response.streaming_text))
                 message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
-                await updater.update_status(state=TaskState.working, message=message)
+                await updater.update_status(state=ProtoTaskState.TASK_STATE_WORKING, message=to_core_message(message))
                 streaming_started = True
 
             elif response.message:
@@ -263,28 +267,29 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         assert context.message
 
+        # ``context.message`` arrives as the proto type from a2a-sdk 1.0; convert
+        # once to compat so all downstream helpers can use Pydantic-style attrs.
+        compat_message = to_compat_message(context.message)
+
         # Negotiate A2UI extension
         use_a2ui = try_activate_a2ui_extension(context)
         if use_a2ui:
             logger.info("A2UI extension activated for this request.")
 
         # Check for incoming A2UI actions
-        incoming_action = self._extract_incoming_action(context)
+        incoming_action = self._extract_incoming_action(compat_message)
         if incoming_action:
             logger.info("Received A2UI action: %s", incoming_action.get("name", "?"))
 
-        task, updater = await self._setup_task(context, event_queue)
+        task, updater = await self._setup_task(compat_message, context.current_task, event_queue)
 
         # Handle incoming A2UI action if present
         if incoming_action:
-            handled = await self._handle_action(incoming_action, task, updater, context)
+            handled = await self._handle_action(incoming_action, task, updater, compat_message)
             if handled:
                 return
 
-        try:
-            full_response_text, streaming_started = await self._stream_agent_response(context, task, updater)
-        except Exception as e:
-            raise ServerError(error=InternalError()) from e
+        full_response_text, streaming_started = await self._stream_agent_response(compat_message, task, updater)
 
         # input_required was handled inside _stream_agent_response
         if not full_response_text and not streaming_started:
@@ -296,7 +301,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
 
         # Send final response via status update so genui_a2a connector can process it
         message = Message(role="agent", message_id=str(uuid4()), parts=final_parts)
-        await updater.update_status(state=TaskState.completed, message=message, final=True)
+        await updater.update_status(state=ProtoTaskState.TASK_STATE_COMPLETED, message=to_core_message(message))
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass

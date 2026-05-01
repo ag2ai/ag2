@@ -16,8 +16,8 @@ from ....a2a.constants import A2UI_MIME_TYPE
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
+    from a2a.compat.v0_3.types import AgentExtension, DataPart, Part
     from a2a.server.agent_execution import RequestContext
-    from a2a.types import AgentExtension, DataPart, Part
 
 A2UI_EXTENSION_URI = "https://a2ui.org/a2a-extension/a2ui/v0.9"
 
@@ -118,19 +118,10 @@ def get_a2ui_agent_extension(
 
 @require_optional_import(["a2a"], "a2a")
 def try_activate_a2ui_extension(context: RequestContext) -> bool:
-    """Activate the A2UI extension if the client requested it.
+    """Check whether the client requested the A2UI extension.
 
-    Call this in your ``AgentExecutor`` to negotiate A2UI support.
-    If the client's request includes the A2UI extension URI, it is
-    activated and the function returns True.
-
-    Args:
-        context: The A2A request context.
-
-    Returns:
-        True if the A2UI extension was activated, False otherwise.
+    A2A 1.0 removed ``RequestContext.add_activated_extension`` — extension
+    negotiation is now a one-way probe of ``requested_extensions``. The hook
+    name is kept for source compatibility; callers branch on the return value.
     """
-    if A2UI_EXTENSION_URI in context.requested_extensions:
-        context.add_activated_extension(A2UI_EXTENSION_URI)
-        return True
-    return False
+    return A2UI_EXTENSION_URI in context.requested_extensions

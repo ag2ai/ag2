@@ -4,9 +4,9 @@
 
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, TypeAlias
-from uuid import uuid4
 
 from autogen.beta.annotations import Context
+from autogen.beta.config.seeders import SubtaskContextSeeder
 from autogen.beta.middleware.base import ToolMiddleware
 from autogen.beta.stream import Stream
 from autogen.beta.tools.final import FunctionTool, tool
@@ -28,7 +28,7 @@ def subagent_tool(
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool:
     tool_name = name or f"task_{agent.name}"
-    propagate_keys: tuple[str, ...] = tuple(getattr(agent.config, "_subtask_propagate_keys", ()))
+    seeder = agent.config if isinstance(agent.config, SubtaskContextSeeder) else None
 
     @tool(
         name=tool_name,
@@ -40,12 +40,12 @@ def subagent_tool(
         objective: str,
         context: str = "",
     ) -> str:
-        # Pre-seed protocol-level conversation keys (e.g. A2A `context_id`)
-        # so that parallel and serial calls to this tool share one server-side
-        # conversation. setdefault is atomic in CPython, so concurrent first
-        # calls converge on the value written by whichever ran first.
-        for key in propagate_keys:
-            ctx.variables.setdefault(key, str(uuid4()))
+        # Let the agent's config (e.g. A2AConfig) pre-seed protocol-level
+        # conversation state so that parallel and serial sub-task calls share
+        # one server-side conversation. ``setdefault`` is atomic in CPython, so
+        # concurrent first-time calls converge on the same value.
+        if seeder is not None:
+            seeder.seed_subtask_variables(ctx.variables)
 
         task_stream = stream(agent, ctx) if stream else None
 

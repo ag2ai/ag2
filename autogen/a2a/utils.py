@@ -6,10 +6,19 @@ from collections.abc import Iterator
 from typing import Any, cast
 from uuid import uuid4
 
-from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskArtifactUpdateEvent, TaskState, TextPart
-from a2a.utils import get_message_text, new_artifact
-from a2a.utils.message import new_agent_text_message
+from a2a.compat.v0_3.types import (
+    Artifact,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskState,
+    TextPart,
+)
 
+from autogen.a2a.constants import A2UI_MIME_TYPE
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.events.client_events import StreamEvent
 
@@ -19,7 +28,26 @@ CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
 
 RESULT_ARTIFACT_NAME = "result"
 
-from autogen.a2a.constants import A2UI_MIME_TYPE
+
+def _get_message_text(message: Message) -> str:
+    """Concatenate all TextPart text in a message — replacement for the removed ``a2a.utils.get_message_text``."""
+    return "".join(p.root.text for p in message.parts if isinstance(p.root, TextPart))
+
+
+def _new_artifact(*, name: str, parts: list[Part], description: str | None = None) -> Artifact:
+    """Construct an Artifact — replacement for the removed ``a2a.utils.new_artifact``."""
+    return Artifact(artifact_id=uuid4().hex, name=name, parts=parts, description=description)
+
+
+def _new_agent_text_message(*, text: str, context_id: str, task_id: str) -> Message:
+    """Construct an agent text Message — replacement for the removed ``a2a.utils.message.new_agent_text_message``."""
+    return Message(
+        message_id=uuid4().hex,
+        role=Role.agent,
+        parts=[Part(root=TextPart(text=text))],
+        context_id=context_id,
+        task_id=task_id,
+    )
 
 
 def request_message_to_a2a(
@@ -64,7 +92,7 @@ def response_message_from_a2a_task(task: Task) -> ResponseMessage | None:
 
         if task.history:
             input_message = task.history[-1]
-            message = get_message_text(input_message)
+            message = _get_message_text(input_message)
 
             if input_message.metadata:
                 context = input_message.metadata.get(CONTEXT_KEY)
@@ -201,7 +229,7 @@ def make_artifact(
     context: dict[str, Any] | None = None,
     name: str = RESULT_ARTIFACT_NAME,
 ) -> Artifact:
-    artifact = new_artifact(
+    artifact = _new_artifact(
         name=name,
         parts=[message_to_part(message)] if message else [],
         description=None,
@@ -242,7 +270,7 @@ def make_input_required_message(
     task_id: str,
     context: dict[str, Any] | None = None,
 ) -> Message:
-    message = new_agent_text_message(
+    message = _new_agent_text_message(
         text=text,
         context_id=context_id,
         task_id=task_id,

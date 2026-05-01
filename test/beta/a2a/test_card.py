@@ -9,7 +9,7 @@ import pytest
 from a2a.types import AgentCapabilities, AgentSkill
 
 from autogen.beta import Agent
-from autogen.beta.a2a.card import build_card
+from autogen.beta.a2a.cards import build_card, url_from_card
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools.builtin.skills import Skill, SkillsTool
 from autogen.beta.tools.skills import LocalRuntime, SkillsToolkit
@@ -25,7 +25,7 @@ class TestBuildCard:
         card = build_card(agent, url="http://localhost:8000")
 
         assert card.name == "specialist"
-        assert card.url == "http://localhost:8000"
+        assert url_from_card(card) == "http://localhost:8000"
 
     def test_description_is_joined_system_prompt(self, agent: Agent) -> None:
         card = build_card(agent, url="http://x")
@@ -67,7 +67,8 @@ class TestBuildCard:
         caps = AgentCapabilities(streaming=False, push_notifications=True)
         card = build_card(agent, url="http://x", capabilities=caps)
 
-        assert card.capabilities == caps
+        assert card.capabilities.streaming is False
+        assert card.capabilities.push_notifications is True
 
     def test_input_output_modes_override(self, agent: Agent) -> None:
         card = build_card(
@@ -137,9 +138,9 @@ class TestBuildCard:
     def test_supports_extended_flag_off_by_default(self, agent: Agent) -> None:
         card = build_card(agent, url="http://x")
 
-        assert not card.supports_authenticated_extended_card
+        assert not card.capabilities.extended_agent_card
 
     def test_supports_extended_flag_set_when_requested(self, agent: Agent) -> None:
         card = build_card(agent, url="http://x", supports_extended=True)
 
-        assert card.supports_authenticated_extended_card is True
+        assert card.capabilities.extended_agent_card is True

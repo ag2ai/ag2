@@ -10,7 +10,7 @@ from a2a.types import AgentCapabilities
 
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig, A2AServer
-from autogen.beta.a2a.card import build_card
+from autogen.beta.a2a.cards import build_card
 
 AgentFactory = Callable[..., "AgentEnv"]
 
@@ -44,8 +44,7 @@ async def serve() -> AsyncIterator[AgentFactory]:
     open_clients: list[httpx.AsyncClient] = []
 
     def _factory(agent: Agent, *, streaming: bool = True) -> AgentEnv:
-        card = build_card(agent, url="http://test")
-        card.capabilities = AgentCapabilities(streaming=streaming)
+        card = build_card(agent, url="http://test", capabilities=AgentCapabilities(streaming=streaming))
         server = A2AServer(agent, card=card, url="http://test")
         asgi = server.build_asgi()
         transport = httpx.ASGITransport(app=asgi)

@@ -5,28 +5,27 @@
 import inspect
 
 import pytest
-from a2a.types import AgentCapabilities, AgentCard
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface
+from a2a.utils.constants import TransportProtocol
 
 from autogen.beta import MemoryStream
-from autogen.beta.a2a import A2AConfig
-from autogen.beta.a2a.a2a_client import A2AClient
-from autogen.beta.a2a.errors import A2AClientToolsNotSupportedError
+from autogen.beta.a2a import A2AClient, A2AConfig
+from autogen.beta.a2a.errors import A2AResponseSchemaNotSupportedError
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.response.proto import ResponseProto
-from autogen.beta.tools.schemas import ToolSchema
 
 
 def _card(url: str = "http://example") -> AgentCard:
     return AgentCard(
         name="remote",
         description="d",
-        url=url,
         version="0.1.0",
         capabilities=AgentCapabilities(streaming=True),
         default_input_modes=["text"],
         default_output_modes=["text"],
         skills=[],
+        supported_interfaces=[AgentInterface(url=url, protocol_binding=TransportProtocol.JSONRPC.value)],
     )
 
 
@@ -103,25 +102,12 @@ class _PassthroughSchema(ResponseProto[str]):
 
 
 @pytest.mark.asyncio
-class TestClientToolsValidation:
-    async def test_raises_when_tools_passed(self) -> None:
-        client = A2AConfig("http://x").create()
-        ctx = ConversationContext(stream=MemoryStream())
-
-        with pytest.raises(A2AClientToolsNotSupportedError):
-            await client(
-                [ModelRequest([TextInput("hi")])],
-                ctx,
-                tools=[ToolSchema(type="custom")],
-                response_schema=None,
-                serializer=None,  # type: ignore[arg-type]
-            )
-
+class TestResponseSchemaValidation:
     async def test_raises_when_response_schema_passed(self) -> None:
         client = A2AConfig("http://x").create()
         ctx = ConversationContext(stream=MemoryStream())
 
-        with pytest.raises(A2AClientToolsNotSupportedError):
+        with pytest.raises(A2AResponseSchemaNotSupportedError):
             await client(
                 [ModelRequest([TextInput("hi")])],
                 ctx,

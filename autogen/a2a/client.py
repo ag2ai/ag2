@@ -10,10 +10,28 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientCallInterceptor, ClientConfig, ClientEvent
+from a2a.client import A2ACardResolver, Client, ClientCallInterceptor, ClientConfig
 from a2a.client import ClientFactory as A2AClientFactory
-from a2a.types import AgentCard, Message, Task, TaskArtifactUpdateEvent, TaskIdParams, TaskQueryParams, TaskState
-from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from a2a.client.errors import A2AClientError
+from a2a.compat.v0_3.conversions import (
+    to_compat_agent_card,
+    to_compat_message,
+    to_compat_task,
+    to_compat_task_artifact_update_event,
+    to_compat_task_status_update_event,
+    to_core_agent_card,
+    to_core_message,
+)
+from a2a.compat.v0_3.types import (
+    AgentCard,
+    Message,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskState,
+    TaskStatusUpdateEvent,
+)
+from a2a.types import GetTaskRequest, SendMessageRequest, StreamResponse, SubscribeToTaskRequest
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from typing_extensions import Self
 
 from autogen import ConversableAgent
@@ -33,6 +51,11 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Stream event yielded by ``_ask_streaming`` / ``_ask_polling``.
+# Mirrors the legacy a2a-sdk shape: either a standalone ``Message`` event,
+# or a ``(Task, status/artifact-update)`` pair sharing a common task object.
+ClientEvent = tuple[Task, TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None]
 
 
 @export_module("autogen.a2a")
@@ -81,6 +104,11 @@ class A2aRemoteAgent(ConversableAgent):
         self.__llm_config: dict[str, Any] = {}
 
         self._client_config = client_config or ClientConfig()
+        # ``accepted_output_modes`` is required on the wire by v0.3-format
+        # servers (e.g. fasta2a, used by pydantic-ai). a2a-sdk's default of
+        # ``[]`` causes those servers to reject the request as malformed.
+        if not self._client_config.accepted_output_modes:
+            self._client_config.accepted_output_modes = ["text"]
         self._interceptors = list(interceptors)
         self._agent_card: AgentCard | None = None
 
@@ -164,7 +192,7 @@ class A2aRemoteAgent(ConversableAgent):
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
             agent_client = A2AClientFactory(self._client_config).create(
-                self._agent_card,
+                to_core_agent_card(self._agent_card),
                 interceptors=self._interceptors,
             )
 
@@ -228,95 +256,89 @@ class A2aRemoteAgent(ConversableAgent):
 
                 return True, reply.messages[-1]
 
-    def _get_requested_extensions(self) -> list[str] | None:
-        """Get extension URIs to request from the agent card capabilities."""
-        if not self._agent_card or not self._agent_card.capabilities.extensions:
-            return None
-        return [ext.uri for ext in self._agent_card.capabilities.extensions]
+    def _connection_error(self, exc: Exception) -> "A2aClientError":
+        if not self._agent_card:
+            return A2aClientError(f"Failed to connect to the agent: agent card not found. {exc}")
+        return A2aClientError(
+            f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {exc}"
+        )
 
     async def _ask_streaming(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
+        request = SendMessageRequest(message=to_core_message(message))
         started_task: Task | None = None
         completed = False
         try:
-            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
-                if not isinstance(event, Message):
-                    started_task = event[0]
-                yield event
-                completed = _is_event_completed(event)
-
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
-            if not started_task:
-                if not self._agent_card:
-                    raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                ) from e
-
-        if not completed:
-            if not started_task:
-                if not self._agent_card:
-                    raise A2aClientError("Failed to connect to the agent: agent card not found")
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}"
-                )
-
-            connection_attempts = 1
-            while not completed and connection_attempts < self._max_reconnects:
-                try:
-                    async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
-                        yield event
-                        completed = _is_event_completed(event)
-
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
-                    connection_attempts += 1
-                    if connection_attempts >= self._max_reconnects:
-                        if not self._agent_card:
-                            raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                        raise A2aClientError(
-                            f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                        ) from e
-
-    async def _ask_polling(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
-        started_task: Task | None = None
-        completed = False
-        try:
-            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
-                if not isinstance(event, Message):
-                    started_task = event[0]
-                yield event
-                if _is_event_completed(event):
+            async for compat_event in _adapt_stream_response(client.send_message(request)):
+                if isinstance(compat_event, Message):
+                    yield compat_event
                     completed = True
-
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
-            if not started_task:
-                if not self._agent_card:
-                    raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                ) from e
-
-        if not completed:
-            if not started_task:
-                if not self._agent_card:
-                    raise A2aClientError("Failed to connect to the agent: agent card not found")
-                raise A2aClientError(
-                    f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}"
-                )
-
-            connection_attempts = 1
-            while not completed and connection_attempts < self._max_reconnects:
-                try:
-                    task = await client.get_task(TaskQueryParams(id=started_task.id))
+                else:
+                    task, _ev = compat_event
+                    started_task = task
+                    yield compat_event
                     completed = _is_task_completed(task)
 
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
+        except (httpx.ConnectError, A2AClientError) as e:
+            if not started_task:
+                raise self._connection_error(e) from e
+
+        if not completed:
+            if not started_task:
+                raise self._connection_error(RuntimeError("stream ended without producing a task"))
+
+            connection_attempts = 1
+            while not completed and connection_attempts < self._max_reconnects:
+                try:
+                    raw = client.subscribe(SubscribeToTaskRequest(id=started_task.id))
+                    async for compat_event in _adapt_stream_response(raw, current_task=started_task):
+                        if isinstance(compat_event, Message):
+                            yield compat_event
+                            completed = True
+                        else:
+                            task, _ev = compat_event
+                            started_task = task
+                            yield compat_event
+                            completed = _is_task_completed(task)
+
+                except (httpx.ConnectError, A2AClientError) as e:
                     connection_attempts += 1
                     if connection_attempts >= self._max_reconnects:
-                        if not self._agent_card:
-                            raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
-                        raise A2aClientError(
-                            f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
-                        ) from e
+                        raise self._connection_error(e) from e
+
+    async def _ask_polling(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
+        request = SendMessageRequest(message=to_core_message(message))
+        started_task: Task | None = None
+        completed = False
+        try:
+            async for compat_event in _adapt_stream_response(client.send_message(request)):
+                if isinstance(compat_event, Message):
+                    yield compat_event
+                    completed = True
+                else:
+                    task, _ev = compat_event
+                    started_task = task
+                    yield compat_event
+                    if _is_task_completed(task):
+                        completed = True
+
+        except (httpx.ConnectError, A2AClientError) as e:
+            if not started_task:
+                raise self._connection_error(e) from e
+
+        if not completed:
+            if not started_task:
+                raise self._connection_error(RuntimeError("stream ended without producing a task"))
+
+            connection_attempts = 1
+            while not completed and connection_attempts < self._max_reconnects:
+                try:
+                    task = to_compat_task(await client.get_task(GetTaskRequest(id=started_task.id)))
+                    completed = _is_task_completed(task)
+
+                except (httpx.ConnectError, A2AClientError) as e:
+                    connection_attempts += 1
+                    if connection_attempts >= self._max_reconnects:
+                        raise self._connection_error(e) from e
 
                 else:
                     yield task, None
@@ -339,40 +361,75 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
-        card: AgentCard | None = None
-
         try:
-            logger.info(
-                f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
-            )
-
-            try:
-                card = await self._card_resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
-            except A2AClientHTTPError as e_public:
-                if e_public.status_code == 404:
-                    logger.info(
-                        f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
-                    )
-                    card = await self._card_resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
-                else:
-                    raise e_public
-
-            if card.supports_authenticated_extended_card:
-                try:
-                    card = await self._card_resolver.get_agent_card(
-                        relative_card_path=EXTENDED_AGENT_CARD_PATH,
-                        http_kwargs=auth_http_kwargs,
-                    )
-                except Exception as e_extended:
-                    logger.warning(
-                        f"Failed to fetch extended agent card: {e_extended}. Will proceed with public card.",
-                        exc_info=True,
-                    )
-
+            logger.info(f"Attempting to fetch public agent card from: {self.url}{AGENT_CARD_WELL_KNOWN_PATH}")
+            proto_card = await self._card_resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
         except Exception as e:
-            raise A2aAgentNotFoundError(f"{self.name}: {self._card_resolver.base_url}") from e
+            raise A2aAgentNotFoundError(f"{self.name}: {self.url}") from e
 
-        return card
+        return to_compat_agent_card(proto_card)
+
+
+async def _adapt_stream_response(
+    raw: AsyncIterator[StreamResponse],
+    *,
+    current_task: Task | None = None,
+) -> AsyncIterator[ClientEvent | Message]:
+    """Translate proto ``StreamResponse`` events into the legacy compat-typed shape.
+
+    A2A 1.0 emits standalone status/artifact update events keyed only by
+    ``task_id``; the legacy autogen consumer expects ``(Task, event)`` pairs that
+    share a single task object whose ``status`` and ``artifacts`` mirror the
+    latest updates. We keep a rolling ``current_task`` and patch its
+    ``status`` (from status_update events) and ``artifacts`` (from
+    artifact_update events) as they arrive so ``response_message_from_a2a_task``
+    can read the accumulated state when the task hits a terminal status.
+    """
+    async for resp in raw:
+        kind = resp.WhichOneof("payload")
+        if kind == "message":
+            yield to_compat_message(resp.message)
+        elif kind == "task":
+            current_task = to_compat_task(resp.task)
+            yield current_task, None
+        elif kind == "status_update":
+            status_event = to_compat_task_status_update_event(resp.status_update)
+            if current_task is not None:
+                current_task.status = status_event.status
+            assert current_task is not None, "status_update received before task event"
+            yield current_task, status_event
+        elif kind == "artifact_update":
+            artifact_event = to_compat_task_artifact_update_event(resp.artifact_update)
+            assert current_task is not None, "artifact_update received before task event"
+            _merge_artifact_update(current_task, artifact_event)
+            yield current_task, artifact_event
+
+
+def _merge_artifact_update(task: Task, event: TaskArtifactUpdateEvent) -> None:
+    """Apply an ``artifact_update`` to ``task.artifacts`` in place.
+
+    A2A 1.0 streams artifacts as deltas: ``append=True`` extends the parts of
+    a previously seen artifact, ``append=False`` (or unset) replaces it.
+    Without this merge ``task.artifacts`` stays empty across the stream and
+    the consumer thinks the agent produced no reply when the task completes.
+    """
+    if task.artifacts is None:
+        task.artifacts = []
+
+    incoming = event.artifact
+    for existing in task.artifacts:
+        if existing.artifact_id == incoming.artifact_id:
+            if event.append:
+                existing.parts = [*existing.parts, *incoming.parts]
+            else:
+                existing.parts = list(incoming.parts)
+            if incoming.metadata is not None:
+                existing.metadata = incoming.metadata
+            if incoming.name:
+                existing.name = incoming.name
+            return
+
+    task.artifacts.append(incoming)
 
 
 def _is_event_completed(event: ClientEvent | Message) -> bool:
