@@ -22,9 +22,6 @@ from .transports import (
     build_asgi as _build_asgi,
 )
 from .transports import (
-    build_fastapi as _build_fastapi,
-)
-from .transports import (
     build_grpc as _build_grpc,
 )
 from .transports import (
@@ -170,12 +167,8 @@ class A2AServer:
         """Starlette ASGI app speaking JSON-RPC."""
         return _build_asgi(self, **kwargs)
 
-    def build_fastapi(self, **kwargs: Any) -> Any:
-        """FastAPI app speaking JSON-RPC."""
-        return _build_fastapi(self, **kwargs)
-
-    def build_rest(self, **kwargs: Any) -> Any:
-        """FastAPI app speaking the HTTP+JSON/REST binding (A2A spec §11)."""
+    def build_rest(self, **kwargs: Any) -> "Starlette":
+        """Starlette ASGI app speaking the HTTP+JSON/REST binding (A2A spec §11)."""
         return _build_rest(self, **kwargs)
 
     def build_grpc(self, **kwargs: Any) -> "GrpcServer":

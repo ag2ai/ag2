@@ -2,44 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
-
-
-def _missing(name: str, extra: str) -> Any:
-    def _raise(*args: Any, **kwargs: Any) -> Any:
-        raise ImportError(
-            f"`autogen.beta.a2a.transports.{name}` requires the optional `{extra}` extra. "
-            f"Install with: pip install ag2[{extra}]"
-        )
-
-    _raise.__name__ = f"build_{name}"
-    return _raise
-
+from autogen.beta.exceptions import missing_optional_dependency
 
 try:
     from .asgi import build_asgi
-except ImportError:
-    build_asgi = _missing("asgi", "a2a")
-
-try:
-    from .fastapi import build_fastapi
-except ImportError:
-    build_fastapi = _missing("fastapi", "a2a")
+except ImportError as e:
+    build_asgi = missing_optional_dependency("build_asgi", "a2a-http", e)  # type: ignore[misc]
 
 try:
     from .rest import build_rest
-except ImportError:
-    build_rest = _missing("rest", "a2a")
+except ImportError as e:
+    build_rest = missing_optional_dependency("build_rest", "a2a-http", e)  # type: ignore[misc]
 
 try:
     from .grpc import build_grpc, make_servicer
-except ImportError:
-    build_grpc = _missing("grpc", "a2a-grpc")
-    make_servicer = _missing("grpc", "a2a-grpc")
+except ImportError as e:
+    build_grpc = missing_optional_dependency("build_grpc", "a2a-grpc", e)  # type: ignore[misc]
+    make_servicer = missing_optional_dependency("make_servicer", "a2a-grpc", e)  # type: ignore[misc]
 
 __all__ = (
     "build_asgi",
-    "build_fastapi",
     "build_grpc",
     "build_rest",
     "make_servicer",
