@@ -81,12 +81,8 @@ class PerplexitySearchAPITool(Tool):
             """Run a Perplexity Search API call and return structured results."""
             params: dict[str, Any] = {
                 "max_results": resolve_variable(max_results, ctx, param_name="max_results"),
-                "max_tokens_per_page": resolve_variable(
-                    max_tokens_per_page, ctx, param_name="max_tokens_per_page"
-                ),
-                "search_domain_filter": resolve_variable(
-                    search_domain_filter, ctx, param_name="search_domain_filter"
-                ),
+                "max_tokens_per_page": resolve_variable(max_tokens_per_page, ctx, param_name="max_tokens_per_page"),
+                "search_domain_filter": resolve_variable(search_domain_filter, ctx, param_name="search_domain_filter"),
                 "search_recency_filter": resolve_variable(
                     search_recency_filter, ctx, param_name="search_recency_filter"
                 ),
