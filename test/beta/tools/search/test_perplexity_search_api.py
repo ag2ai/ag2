@@ -63,9 +63,7 @@ class TestSchema:
         })
 
     async def test_custom_schema(self, context: ConversationContext) -> None:
-        perp = PerplexitySearchAPITool(
-            client=MagicMock(), name="my_search", description="Custom search tool."
-        )
+        perp = PerplexitySearchAPITool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await perp.schemas(context)
 
