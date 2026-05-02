@@ -445,6 +445,42 @@ When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on
 
 ---
 
+## PerplexitySearchAPITool
+
+`PerplexitySearchAPITool` gives an agent web search via Perplexity's dedicated [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"}. It returns ranked results (title, URL, snippet, date) without generating an LLM answer, which keeps token usage minimal.
+
+!!! note
+    Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`. The tool reads `PERPLEXITY_API_KEY` automatically when `api_key` is omitted.
+
+```python linenums="1"
+import os
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.tools import PerplexitySearchAPITool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    tools=[PerplexitySearchAPITool(api_key=os.environ["PERPLEXITY_API_KEY"])],
+)
+```
+
+### Configuration
+
+```python linenums="1"
+tool = PerplexitySearchAPITool(
+    max_results=10,
+    search_domain_filter=["arxiv.org", "-medium.com"],   # prefix '-' to exclude
+    search_recency_filter="month",                        # "hour"|"day"|"week"|"month"|"year"
+    search_after_date_filter="1/1/2025",                  # m/d/yyyy
+    search_before_date_filter="12/31/2025",
+)
+```
+
+Domain filters are either an allowlist or a denylist — do not mix the two; use a leading `-` to negate. All parameters accept a `Variable` for dynamic values resolved at execution time.
+
+---
+
 ## TavilySearchTool
 
 `TavilySearchTool` gives an agent advanced web search capabilities via the [Tavily](https://tavily.com){.external-link target="_blank"} API. Results include relevance scores and optional LLM-generated answers, raw page content, and images.

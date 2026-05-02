@@ -106,7 +106,7 @@ class CaseInSensitiveEnum(str, enum.Enum):
                     unknown_enum_val._name_ = str(value)  # pylint: disable=protected-access
                     unknown_enum_val._value_ = value  # pylint: disable=protected-access
                     return unknown_enum_val
-                except:  # noqa: E722
+                except Exception:
                     return None
 
 
