@@ -178,7 +178,8 @@ Two ready-to-use `BaseObserver` subclasses ship with AG2 Beta:
 Detects repetitive tool-call patterns. Maintains a sliding window of recent tool calls and emits a `WARNING` alert when `repeat_threshold` consecutive identical calls (same tool name and arguments) are observed.
 
 ```python linenums="1"
-from autogen.beta import Agent, LoopDetector
+from autogen.beta import Agent
+from autogen.beta.observer import LoopDetector
 from autogen.beta.config import OpenAIConfig
 
 agent = Agent(
@@ -193,7 +194,8 @@ agent = Agent(
 Tracks cumulative token usage across `ModelResponse` and `TaskCompleted` events. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python linenums="1"
-from autogen.beta import Agent, TokenMonitor
+from autogen.beta import Agent
+from autogen.beta.observer import TokenMonitor
 from autogen.beta.config import OpenAIConfig
 
 agent = Agent(
@@ -221,16 +223,18 @@ def surface_alerts(event: ObserverAlert) -> None:
 !!! note
     `ObserverAlert` is emitted to the stream and persisted in history, but **is not rendered back to the LLM** by the default provider mappers. If you want the agent itself to react to alerts, write a [Middleware](/docs/beta/middleware) that converts alerts into follow-up messages.
 
-Severity levels live in `autogen.beta.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
+Severity levels live in `autogen.beta.events.alert.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
 
 ### Building a custom observer
 
 Subclass `BaseObserver`, pick a [Watch](/docs/beta/advanced/watches), implement `process()`:
 
 ```python linenums="1" hl_lines="10 14 17"
-from autogen.beta import BaseObserver, CadenceWatch, Context, Severity
+from autogen.beta import Context
+from autogen.beta.observer import BaseObserver
+from autogen.beta.watch import CadenceWatch
 from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events.alert import ObserverAlert, Severity
 
 
 class AvgCompletionObserver(BaseObserver):

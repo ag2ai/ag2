@@ -2,17 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Event serialization utilities.
-
-Shared by BaseEvent.to_dict/from_dict and Envelope wire format.
-Placed in the events package to avoid circular imports between
-Layer 1 (events) and Layer 2 (network primitives).
-"""
+"""Event serialization utilities."""
 
 import base64
 import importlib
+from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .base import BaseEvent
@@ -64,6 +63,18 @@ def serialize_value(value: Any) -> Any:
         return [serialize_value(v) for v in value]
     if isinstance(value, (bytes, bytearray)):
         return {"__bytes__": base64.b64encode(value).decode("ascii")}
+    if isinstance(value, UUID):
+        return {"__uuid__": str(value)}
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            "__dataclass__": qualified_name_from_class(type(value)),
+            "data": {f.name: serialize_value(getattr(value, f.name)) for f in fields(value)},
+        }
+    if isinstance(value, BaseModel):
+        return {
+            "__pydantic__": qualified_name_from_class(type(value)),
+            "data": serialize_value(value.model_dump(mode="python")),
+        }
     # Primitives (str, int, float, bool, None) pass through
     return value
 
@@ -91,13 +102,41 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
                 return event_cls(**nested_data)
         if "__bytes__" in value:
             return base64.b64decode(value["__bytes__"])
+        if "__uuid__" in value:
+            return UUID(value["__uuid__"])
         if "__exception__" in value:
             # Reconstruct as a generic Exception with the original message
             return Exception(value.get("message", ""))
+        if "__dataclass__" in value:
+            cls = _resolve_class(value["__dataclass__"])
+            data = {k: deserialize_value(v, event_registry) for k, v in value.get("data", {}).items()}
+            return cls(**data)
+        if "__pydantic__" in value:
+            cls = _resolve_class(value["__pydantic__"])
+            raw = deserialize_value(value.get("data", {}), event_registry)
+            assert issubclass(cls, BaseModel)
+            return cls.model_validate(raw)
         return {k: deserialize_value(v, event_registry) for k, v in value.items()}
     if isinstance(value, list):
         return [deserialize_value(v, event_registry) for v in value]
     return value
+
+
+def _resolve_class(type_path: str) -> type:
+    parts = type_path.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        module_path = ".".join(parts[:i])
+        attr_chain = parts[i:]
+        try:
+            module = importlib.import_module(module_path)
+            obj: Any = module
+            for attr in attr_chain:
+                obj = getattr(obj, attr)
+            if isinstance(obj, type):
+                return obj
+        except (ImportError, AttributeError):
+            continue
+    raise ImportError(f"Could not resolve class {type_path!r}")
 
 
 def _resolve_event_type(type_name: str, event_registry: Any | None = None) -> "type[BaseEvent] | None":

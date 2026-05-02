@@ -4,7 +4,7 @@
 
 """Observer — event-stream subscribers with lifecycle registration.
 
-An ``Observer`` is anything that registers itself against an actor's stream
+An ``Observer`` is anything that registers itself against an agent's stream
 inside a caller-owned ``ExitStack``.  Two canonical shapes ship out of the box:
 
 1. ``StreamObserver`` — lightweight ``condition → callback`` subscription,
@@ -17,7 +17,7 @@ inside a caller-owned ``ExitStack``.  Two canonical shapes ship out of the box:
    which is emitted on the stream.  Ideal for long-running health checks
    (``TokenMonitor``, ``LoopDetector``, …).
 
-Both shapes satisfy the same :class:`Observer` protocol so the Actor
+Both shapes satisfy the same :class:`Observer` protocol so the Agent
 can register either kind via a single ``register(stack, ctx)`` call.
 """
 
@@ -54,7 +54,7 @@ class SimpleObserver:
     """Lightweight ``callback`` stream subscription.
 
     Produced by :func:`observer`. Enters a ``sub_scope`` on the filtered
-    stream; the ``ExitStack`` cleans up the subscription when the actor
+    stream; the ``ExitStack`` cleans up the subscription when the agent
     finishes. When ``condition`` is ``None`` the observer fires on every
     event.
     """
@@ -78,7 +78,7 @@ class StreamObserver(SimpleObserver):
     """Lightweight ``condition → callback`` stream subscription.
 
     Produced by :func:`observer`. Enters a ``sub_scope`` on the filtered
-    stream; the ``ExitStack`` cleans up the subscription when the actor
+    stream; the ``ExitStack`` cleans up the subscription when the agent
     finishes. When ``condition`` is ``None`` the observer fires on every
     event.
     """

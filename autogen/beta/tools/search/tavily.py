@@ -11,6 +11,7 @@ from pydantic import Field
 from tavily import TavilyClient
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import ToolResult
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final.function_tool import FunctionToolSchema, tool
@@ -79,7 +80,7 @@ class TavilySearchTool(Tool):
         def tavily_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
-        ) -> SearchResponse:
+        ) -> ToolResult:
             """Search the web using Tavily and return structured results."""
             params: dict[str, Any] = {
                 "max_results": resolve_variable(max_results, ctx, param_name="max_results"),
@@ -110,11 +111,13 @@ class TavilySearchTool(Tool):
                 )
                 for r in (raw.get("results") or [])
             ]
-            return SearchResponse(
-                query=raw.get("query", query),
-                results=results,
-                answer=raw.get("answer"),
-                images=list(raw.get("images") or []),
+            return ToolResult(
+                SearchResponse(
+                    query=raw.get("query", query),
+                    results=results,
+                    answer=raw.get("answer"),
+                    images=list(raw.get("images") or []),
+                )
             )
 
         self._tool = tavily_search

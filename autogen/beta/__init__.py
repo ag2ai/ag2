@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .agent import Agent, AgentReply
+from .agent import Agent, AgentReply, KnowledgeConfig, TaskConfig
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
@@ -36,10 +36,12 @@ __all__ = (
     "FilesAPI",
     "ImageInput",
     "Inject",
+    "KnowledgeConfig",
     "MemoryStream",
     "Middleware",
     "PromptedSchema",
     "ResponseSchema",
+    "TaskConfig",
     "TextInput",
     "ToolResult",
     "Toolkit",

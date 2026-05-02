@@ -469,6 +469,8 @@ class TestResponsesToolResult:
         ]
 
     def test_mixed_text_and_image(self) -> None:
+        # Responses API rejects 'output_text' inside function_call_output.output;
+        # only input_text / input_image / input_file / scoped_content are allowed.
         png = b"\x89PNG\r\n"
         event = ToolResultsEvent(
             results=[
@@ -487,8 +489,34 @@ class TestResponsesToolResult:
                 "type": "function_call_output",
                 "call_id": "c1",
                 "output": [
-                    {"type": "output_text", "text": "here is an image"},
+                    {"type": "input_text", "text": "here is an image"},
                     {"type": "input_image", "image_url": expected_url},
+                ],
+            }
+        ]
+
+    def test_data_input_with_image_url(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(
+                        DataInput({"query": "everest"}),
+                        ImageInput(url="https://example.com/a.jpg"),
+                    ),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [
+                    {"type": "input_text", "text": '{"query":"everest"}'},
+                    {"type": "input_image", "image_url": "https://example.com/a.jpg"},
                 ],
             }
         ]

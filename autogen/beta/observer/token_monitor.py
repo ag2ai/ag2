@@ -15,7 +15,7 @@ class TokenMonitor(BaseObserver):
     """Tracks cumulative token usage and alerts when thresholds are exceeded.
 
     Observes ``ModelResponse`` and ``TaskCompleted`` events to aggregate
-    usage across the actor and all task sub-agents.
+    usage across the agent and all task sub-agents.
 
     Parameters
     ----------

@@ -10,6 +10,7 @@ from exa_py import Exa
 from pydantic import Field
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import ToolResult
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final import Toolkit, tool
@@ -156,7 +157,7 @@ class ExaToolkit(Toolkit):
         def exa_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
-        ) -> ExaSearchResponse:
+        ) -> ToolResult:
             """Search the web using Exa and return ranked results."""
             kwargs = _clean({
                 "num_results": resolve_variable(num_results, ctx, param_name="num_results"),
@@ -178,20 +179,22 @@ class ExaToolkit(Toolkit):
             else:
                 raw = client.search(query, **kwargs)
 
-            return ExaSearchResponse(
-                query=query,
-                results=[
-                    ExaSearchResult(
-                        title=r.title or "",
-                        url=r.url,
-                        score=getattr(r, "score", None),
-                        published_date=getattr(r, "published_date", None),
-                        author=getattr(r, "author", None),
-                        text=getattr(r, "text", None),
-                    )
-                    for r in raw.results
-                ],
-                autoprompt_string=getattr(raw, "autoprompt_string", None) or getattr(raw, "autoprompt", None),
+            return ToolResult(
+                ExaSearchResponse(
+                    query=query,
+                    results=[
+                        ExaSearchResult(
+                            title=r.title or "",
+                            url=r.url,
+                            score=getattr(r, "score", None),
+                            published_date=getattr(r, "published_date", None),
+                            author=getattr(r, "author", None),
+                            text=getattr(r, "text", None),
+                        )
+                        for r in raw.results
+                    ],
+                    autoprompt_string=getattr(raw, "autoprompt_string", None) or getattr(raw, "autoprompt", None),
+                )
             )
 
         return exa_search
@@ -214,7 +217,7 @@ class ExaToolkit(Toolkit):
         def exa_find_similar(
             url: Annotated[str, Field(description="The URL to find similar pages for.")],
             ctx: Context,
-        ) -> list[ExaSearchResult]:
+        ) -> ToolResult:
             """Find pages similar to a given URL."""
             kwargs = _clean({
                 "num_results": resolve_variable(num_results, ctx, param_name="num_results"),
@@ -223,7 +226,7 @@ class ExaToolkit(Toolkit):
                 ),
             })
             raw = client.find_similar(url, **kwargs)
-            return [
+            results = [
                 ExaSearchResult(
                     title=r.title or "",
                     url=r.url,
@@ -234,6 +237,7 @@ class ExaToolkit(Toolkit):
                 )
                 for r in raw.results
             ]
+            return ToolResult(results)
 
         return exa_find_similar
 
@@ -253,10 +257,10 @@ class ExaToolkit(Toolkit):
         def exa_get_contents(
             urls: Annotated[list[str], Field(description="URLs to fetch content for.")],
             ctx: Context,
-        ) -> list[ExaContentResult]:
+        ) -> ToolResult:
             """Fetch the full text content of specific URLs."""
             raw = client.get_contents(urls, text=True)
-            return [
+            results = [
                 ExaContentResult(
                     url=r.url,
                     title=r.title or "",
@@ -266,6 +270,7 @@ class ExaToolkit(Toolkit):
                 )
                 for r in raw.results
             ]
+            return ToolResult(results)
 
         return exa_get_contents
 
@@ -282,14 +287,17 @@ class ExaToolkit(Toolkit):
         def exa_answer(
             query: Annotated[str, Field(description="The question to answer.")],
             ctx: Context,
-        ) -> ExaAnswerResult:
+        ) -> ToolResult:
             """Generate an AI answer with citations."""
             raw = client.answer(query, text=True)
-            return ExaAnswerResult(
-                answer=raw.answer,
-                citations=[
-                    ExaAnswerCitation(url=c.url, title=c.title or "", text=c.text or "") for c in (raw.citations or [])
-                ],
+            return ToolResult(
+                ExaAnswerResult(
+                    answer=raw.answer,
+                    citations=[
+                        ExaAnswerCitation(url=c.url, title=c.title or "", text=c.text or "")
+                        for c in (raw.citations or [])
+                    ],
+                )
             )
 
         return exa_answer

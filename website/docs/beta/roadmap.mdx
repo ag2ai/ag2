@@ -5,13 +5,15 @@ sidebarTitle: Beta Roadmap
 
 ## Completed
 
+- Agent
+- Agent Harness (including knowledge, subtasks)
 - LLM Configs
 - LLM Providers
-  - OpenAI
-  - Anthropic
-  - Gemini
-  - Ollama
-  - DashScope
+    - OpenAI
+    - Anthropic
+    - Gemini (incl. Vertex AI)
+    - Ollama
+    - DashScope
 - Function Tools
 - Context Variables
 - Dependency Injection
@@ -22,29 +24,52 @@ sidebarTitle: Beta Roadmap
 - OpenTelemetry support
 - Structured Output (static / callable / prompted / transformable)
 - Built-in Tools
-- Multimodality (images, audio, video)
+- Multimodality inputs (images, audio, video)
 - Shell Tool
 - Skills support
 - AG-UI
-- Subagents
+- Subagent delegation
 
 ## In Progress
 
-- History management
+- Multi-Agent Orchestration
 - MCP
-- Orchestration
-
-## Next Steps
-
-- NLIP
+- Messages aggregation
+- Multimodality streaming input: audio / video
+- Multimodality output: audio / video output
+- Third-party contributions policy
 - A2A
-- Background agents
-- Dynamic subagetns
+
+## Future Priorities
+
+### P1
+
 - Prometheus metrics
+- Background agents
+- Dynamic agents
+- Local Code execution tool
+- Scheduler support
+- Repository development skills (code, structure, documentation, tests)
+- Multimodality output: images
 
-## Future Plans
+### P2
 
-- Audio / Video Streaming
-- A2UI support
+- A2UI Plugin
+- NLIP
+- Deferred tools (Tool Search Tool)
+- Builtin Memory toolkit
+
+### P3
+
+- Builtin RAG toolkit
+- Crawl4AI tool
+- Skills Plugin
+- Update AG-UI integration
+- Allow models to configure tool search params
+
+### P4
+
+- Use codegen to optimize tools configuration
+- Msgspec serialization support
 - TUI runtime
 - Checkpoints and snapshots
