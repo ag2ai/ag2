@@ -15,6 +15,7 @@ from .base import (
 from .builtin import (
     HistoryLimiter,
     LoggingMiddleware,
+    MetricsMiddleware,
     RetryMiddleware,
     TelemetryMiddleware,
     TokenLimiter,
@@ -28,6 +29,7 @@ __all__ = (
     "HumanInputHook",
     "LLMCall",
     "LoggingMiddleware",
+    "MetricsMiddleware",
     "Middleware",
     "RetryMiddleware",
     "TelemetryMiddleware",

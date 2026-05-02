@@ -215,6 +215,7 @@ pip install ag2[mcp]               # Model Context Protocol
 pip install ag2[rag]               # RAG capabilities
 pip install ag2[interop]           # Framework interop (CrewAI, LangChain, PydanticAI)
 pip install ag2[tracing]           # OpenTelemetry tracing
+pip install ag2[metrics]           # Prometheus metrics
 pip install ag2[duckduckgo_search] # DuckDuckGo search (no API key)
 pip install ag2[tavily]            # Tavily search
 pip install ag2[quick-research]    # Parallel web research

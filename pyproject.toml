@@ -138,6 +138,7 @@ dashscope = ["dashscope>=1.25.13"]
 # public distributions
 redis = ["redis>=5.0,<7"]
 tracing = ["opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
+metrics = ["prometheus-client>=0.20.0,<0.30.0"]
 
 flaml = [
     "flaml",
@@ -333,6 +334,7 @@ test = [
 docs = [
     "ag2[a2a]",     # A2A is exposed in the public API by the optional `autogen.a2a` module
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
+    "ag2[metrics]", # Metrics is exposed in the public API by the optional `autogen.beta.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     "ag2[docker]",  # Docker-backed executors (autogen.coding.DockerCommandLineCodeExecutor, autogen.coding.jupyter.DockerJupyterServer)
     # Beta optional dependencies
@@ -401,6 +403,7 @@ optionals = [
     "ag2[redis]",
     "ag2[ag-ui]",
     "ag2[tracing]",
+    "ag2[metrics]",
     "ag2[watchdog]",  # DiskKnowledgeStore
     # search tools
     "ag2[tavily,ddgs,exa,perplexity]",
