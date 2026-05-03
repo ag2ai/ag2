@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from autogen.beta.agent import Agent, AgentReply
+from autogen.beta.annotations import Context
 from autogen.beta.config import ModelConfig
 from autogen.beta.context import ConversationContext, Stream
 from autogen.beta.events import BinaryResult, ModelResponse
@@ -28,7 +29,7 @@ class VoiceInput:
 
 class STTConfig(ABC):
     @abstractmethod
-    async def transcribe(self, voice: VoiceInput) -> str: ...
+    async def transcribe(self, voice: VoiceInput, context: Context) -> str: ...
 
     def pipe(self, agent: Agent) -> "VoicePipeline":
         return VoicePipeline(agent, self)
@@ -62,7 +63,7 @@ class VoicePipeline:
             dependency_provider=self.agent.dependency_provider,
         )
 
-        text = await self.stt_config.transcribe(voice)
+        text = await self.stt_config.transcribe(voice, context)
         reply = await self.agent._ask(
             text,
             context=context,
@@ -122,7 +123,7 @@ class VoiceReply:
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
     ) -> AgentReply[str]:
-        text = await self.stt_config.transcribe(voice)
+        text = await self.stt_config.transcribe(voice, self.reply.context)
         return await self.reply.ask(
             text,
             dependencies=dependencies,

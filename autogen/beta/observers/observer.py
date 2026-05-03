@@ -58,6 +58,9 @@ class CompositeObserver(Observer):
         for observer in self._observers:
             observer.register(stack, context)
 
+    def __repr__(self) -> str:
+        return f"CompositeObserver({', '.join(repr(o) for o in self._observers)})"
+
 
 @dataclass(slots=True, kw_only=True)
 class SimpleObserver:

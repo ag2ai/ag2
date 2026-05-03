@@ -17,9 +17,11 @@ except ImportError as e:
 
 try:
     from .openai import STTConfig as OpenAITranscriber
+    from .openai import STTTranslationConfig as OpenAITranslationTranscriber
     from .openai import TTSConfig as OpenAISynthesizer
 except ImportError as e:
     OpenAITranscriber = missing_optional_dependency("OpenAITranscriber", "openai", e)  # type: ignore[misc]
+    OpenAITranslationTranscriber = missing_optional_dependency("OpenAITranslationTranscriber", "openai", e)  # type: ignore[misc]
     OpenAISynthesizer = missing_optional_dependency("OpenAISynthesizer", "openai", e)  # type: ignore[misc]
 
 
@@ -27,6 +29,7 @@ __all__ = (
     "AudioPlayer",
     "OpenAISynthesizer",
     "OpenAITranscriber",
+    "OpenAITranslationTranscriber",
     "STTConfig",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",

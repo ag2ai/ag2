@@ -1079,6 +1079,7 @@ class Agent(Generic[TResult]):
                             await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
 
                 return reply
+
         finally:
             if self._knowledge_store:
                 try:
