@@ -7,15 +7,13 @@
 Real LLM calls via Gemini 3 Flash Preview.
 """
 
+from typing import Annotated
+
 import pytest
 
-from autogen.beta import Agent, Context
-from autogen.beta.events import (
-    HumanInputRequest,
-    HumanMessage,
-)
-from autogen.beta.middleware import BaseMiddleware
-from autogen.beta.middleware.builtin import LoggingMiddleware
+from autogen.beta import Agent, Context, Inject, Variable
+from autogen.beta.events import HumanInputRequest, HumanMessage
+from autogen.beta.middleware import BaseMiddleware, LoggingMiddleware
 from autogen.beta.plugin import Plugin
 
 pytestmark = pytest.mark.asyncio
@@ -174,9 +172,6 @@ async def test_plugin_contributes_tool_and_prompt(provider_config) -> None:
 
 async def test_plugin_with_dependencies_and_variables(provider_config) -> None:
     """Plugin propagates dependencies and variables onto the agent."""
-    from typing import Annotated
-
-    from autogen.beta.annotations import Inject, Variable
 
     captured = {}
 

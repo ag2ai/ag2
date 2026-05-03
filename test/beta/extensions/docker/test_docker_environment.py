@@ -10,8 +10,7 @@ import pytest
 
 docker = pytest.importorskip("docker")
 
-from autogen.beta.annotations import Variable
-from autogen.beta.context import ConversationContext
+from autogen.beta import Context, Variable
 from autogen.beta.extensions.docker import DockerCodeEnvironment
 
 
@@ -189,7 +188,7 @@ class TestVariableResolution:
     async def test_image_resolved_from_context(self) -> None:
         container = _fake_container()
         client = _fake_client(container)
-        ctx = ConversationContext(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
+        ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11-slim"})
         with patch(
             "autogen.beta.extensions.docker.environment.docker.from_env",
             return_value=client,
@@ -202,7 +201,7 @@ class TestVariableResolution:
         assert call.args[0] == "python:3.11-slim"
 
     async def test_missing_variable_raises_key_error(self) -> None:
-        ctx = ConversationContext(stream=MagicMock(), variables={})
+        ctx = Context(stream=MagicMock(), variables={})
         env = DockerCodeEnvironment(image=Variable("tenant_image"))
 
         with pytest.raises(KeyError, match="tenant_image"):

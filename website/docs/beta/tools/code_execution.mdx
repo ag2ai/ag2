@@ -154,7 +154,7 @@ The same pattern works with `DockerCodeEnvironment` (container stopped + removed
 `DaytonaCodeEnvironment` accepts `Variable` markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `DockerCodeEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
-from autogen.beta.annotations import Variable
+from autogen.beta import Variable
 from autogen.beta.extensions.daytona import DaytonaCodeEnvironment
 
 env = DaytonaCodeEnvironment(

@@ -10,8 +10,7 @@ import pytest
 
 daytona = pytest.importorskip("daytona")
 
-from autogen.beta.annotations import Variable
-from autogen.beta.context import ConversationContext
+from autogen.beta import Context, Variable
 from autogen.beta.extensions.daytona import DaytonaCodeEnvironment, DaytonaResources
 
 
@@ -214,7 +213,7 @@ class TestVariableResolution:
 
     async def test_image_resolved_from_context(self) -> None:
         sandbox = _fake_sandbox()
-        ctx = ConversationContext(stream=MagicMock(), variables={"tenant_image": "python:3.11"})
+        ctx = Context(stream=MagicMock(), variables={"tenant_image": "python:3.11"})
         with _patch_async_daytona(sandbox) as mock_async_daytona:
             env = DaytonaCodeEnvironment(api_key="test", image=Variable("tenant_image"))
             await env.run("print(1)", "python", context=ctx)
@@ -225,7 +224,7 @@ class TestVariableResolution:
         assert params.image == "python:3.11"
 
     async def test_missing_variable_raises_key_error(self) -> None:
-        ctx = ConversationContext(stream=MagicMock(), variables={})
+        ctx = Context(stream=MagicMock(), variables={})
         # No need to patch AsyncDaytona — resolution fails before sandbox creation
         env = DaytonaCodeEnvironment(api_key="test", image=Variable("tenant_image"))
 
