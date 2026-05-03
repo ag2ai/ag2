@@ -10,7 +10,7 @@ it expands to a Union of every entry class so static type checkers can still
 narrow `list[ConfigEntries]` annotations.
 """
 
-from typing import TYPE_CHECKING, Any, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from autogen.llm_config.entry import LLMConfigEntry
 from autogen.oai.entry_registry import get_entry_class
@@ -34,23 +34,23 @@ if TYPE_CHECKING:
     from autogen.oai.ollama import OllamaLLMConfigEntry
     from autogen.oai.together import TogetherLLMConfigEntry
 
-    ConfigEntries: TypeAlias = Union[
-        AnthropicLLMConfigEntry,
-        CerebrasLLMConfigEntry,
-        BedrockLLMConfigEntry,
-        AzureOpenAILLMConfigEntry,
-        DeepSeekLLMConfigEntry,
-        OpenAILLMConfigEntry,
-        OpenAIResponsesLLMConfigEntry,
-        OpenAIV2LLMConfigEntry,
-        CohereLLMConfigEntry,
-        GeminiLLMConfigEntry,
-        GroqLLMConfigEntry,
-        MistralLLMConfigEntry,
-        OllamaLLMConfigEntry,
-        TogetherLLMConfigEntry,
-        OpenAIResponsesV2LLMConfigEntry,
-    ]
+    ConfigEntries: TypeAlias = (
+        AnthropicLLMConfigEntry
+        | CerebrasLLMConfigEntry
+        | BedrockLLMConfigEntry
+        | AzureOpenAILLMConfigEntry
+        | DeepSeekLLMConfigEntry
+        | OpenAILLMConfigEntry
+        | OpenAIResponsesLLMConfigEntry
+        | OpenAIV2LLMConfigEntry
+        | CohereLLMConfigEntry
+        | GeminiLLMConfigEntry
+        | GroqLLMConfigEntry
+        | MistralLLMConfigEntry
+        | OllamaLLMConfigEntry
+        | TogetherLLMConfigEntry
+        | OpenAIResponsesV2LLMConfigEntry
+    )
 else:
     ConfigEntries = LLMConfigEntry
 
@@ -67,10 +67,7 @@ def parse_entry(value: Any) -> LLMConfigEntry:
         # base class doesn't declare.
         return value
     if not isinstance(value, dict):
-        raise TypeError(
-            f"config_list entries must be dict or LLMConfigEntry, "
-            f"got {type(value).__name__}"
-        )
+        raise TypeError(f"config_list entries must be dict or LLMConfigEntry, got {type(value).__name__}")
     api_type = value.get("api_type", "openai")
     cls = get_entry_class(api_type)
     return cls.model_validate(value)  # type: ignore[no-any-return]

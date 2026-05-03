@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny, field_validator
 from typing_extensions import Self

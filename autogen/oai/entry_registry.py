@@ -9,7 +9,7 @@ register custom api_types via `register_entry()`.
 """
 
 from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from autogen.llm_config.entry import LLMConfigEntry
@@ -67,7 +67,7 @@ def get_entry_class(api_type: str) -> type["LLMConfigEntry"]:
             f"autogen.oai.entry_registry.register_entry(api_type, EntryClass)."
         )
     mod_name, cls_name = _BUILTIN[api_type]
-    cls: type["LLMConfigEntry"] = getattr(import_module(mod_name), cls_name)
+    cls: type[LLMConfigEntry] = getattr(import_module(mod_name), cls_name)
     _resolved[api_type] = cls
     return cls
 

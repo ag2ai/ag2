@@ -79,8 +79,7 @@ def test_openai_llmconfig_does_not_load_other_provider_clients():
     # The Gemini/Anthropic/etc. *Client* modules (and their heavy SDK chains
     # like vertexai) must stay unloaded when only OpenAI is configured.
     leaked = set(HEAVY_PROVIDER_SDKS) & _modules_after(
-        "from autogen import LLMConfig\n"
-        "LLMConfig({'model': 'gpt-4o', 'api_key': 'sk-test'})"
+        "from autogen import LLMConfig\nLLMConfig({'model': 'gpt-4o', 'api_key': 'sk-test'})"
     )
     assert not leaked, f"OpenAI-only LLMConfig leaked: {sorted(leaked)}"
 
@@ -91,8 +90,7 @@ def test_gemini_llmconfig_loads_vertexai_lazily():
     # module no longer pulls in vertexai (verify behavior, then update test).
     pytest.importorskip("vertexai")
     loaded = _modules_after(
-        "from autogen import LLMConfig\n"
-        "LLMConfig({'model': 'gemini-1.5-pro', 'api_type': 'google', 'api_key': 'x'})"
+        "from autogen import LLMConfig\nLLMConfig({'model': 'gemini-1.5-pro', 'api_type': 'google', 'api_key': 'x'})"
     )
     assert "vertexai" in loaded
 
@@ -106,9 +104,7 @@ def test_concrete_subclass_preserved_after_validation():
     from autogen import LLMConfig
     from autogen.oai import GeminiLLMConfigEntry
 
-    cfg = LLMConfig(
-        {"model": "gemini-1.5-pro", "api_type": "google", "api_key": "x"}
-    )
+    cfg = LLMConfig({"model": "gemini-1.5-pro", "api_type": "google", "api_key": "x"})
     assert type(cfg.config_list[0]) is GeminiLLMConfigEntry
 
 
@@ -126,9 +122,7 @@ def test_register_entry_extension_point():
 
     register_entry("custom_provider_xyz", CustomEntry)
 
-    cfg = LLMConfig(
-        {"model": "test-model", "api_type": "custom_provider_xyz", "api_key": "k"}
-    )
+    cfg = LLMConfig({"model": "test-model", "api_type": "custom_provider_xyz", "api_key": "k"})
     assert isinstance(cfg.config_list[0], CustomEntry)
 
 
