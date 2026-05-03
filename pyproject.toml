@@ -147,7 +147,7 @@ flaml = [
 ]
 
 # code execution backends
-docker = ["docker>=6.0.0,<7"]
+docker = ["docker>=6.0.0,<8"]
 
 jupyter-executor = [
     "jupyter-kernel-gateway",
