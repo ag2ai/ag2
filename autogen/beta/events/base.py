@@ -215,7 +215,7 @@ class BaseEvent(metaclass=_ConditionMeta):
         # Collect known field names across the MRO
         known_fields: set[str] = set()
         for klass in cls.__mro__:
-            for name, f in getattr(klass, "_event_fields_", {}).items():
+            for name in getattr(klass, "_event_fields_", {}):
                 known_fields.add(name)
 
         # Deserialize nested events/special types, then filter to known fields

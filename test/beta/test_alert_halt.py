@@ -18,11 +18,18 @@ from unittest.mock import MagicMock
 import pytest
 from typing_extensions import Self
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Context
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.context import ConversationContext as ContextType
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.events import (
+    BaseEvent,
+    HaltEvent,
+    ModelMessage,
+    ModelResponse,
+    ObserverAlert,
+    Severity,
+    ToolCallEvent,
+    ToolCallsEvent,
+)
 from autogen.beta.observers import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
@@ -47,7 +54,7 @@ class _RecordingClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: ContextType,
+        context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
         self.calls.append((list(messages), list(context.prompt)))
@@ -304,7 +311,7 @@ class TestHaltCheckMiddleware:
                 super().__init__("fatal-first", watch=EventWatch(ModelResponse))
                 self.fired = False
 
-            async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
+            async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
                 if not self.fired:
                     self.fired = True
                     return ObserverAlert(
@@ -343,7 +350,7 @@ class TestHaltCheckMiddleware:
             def __init__(self) -> None:
                 super().__init__("fatal", watch=EventWatch(ModelResponse))
 
-            async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
+            async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
                 return ObserverAlert(
                     source="fatal",
                     severity=Severity.FATAL,
@@ -379,7 +386,7 @@ class TestHaltCheckMiddleware:
             def __init__(self) -> None:
                 super().__init__("warner", watch=EventWatch(ModelResponse))
 
-            async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
+            async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
                 return ObserverAlert(
                     source="warner",
                     severity=Severity.WARNING,
@@ -413,7 +420,7 @@ class TestHaltCheckMiddleware:
                 super().__init__(name, watch=EventWatch(ModelResponse))
                 self._msg = msg
 
-            async def process(self, events: list[BaseEvent], ctx: ContextType) -> ObserverAlert | None:
+            async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
                 return ObserverAlert(
                     source=self.name,
                     severity=Severity.FATAL,

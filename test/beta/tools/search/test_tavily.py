@@ -10,8 +10,7 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("tavily")
 
-from autogen.beta import Agent, DataInput, Variable
-from autogen.beta.context import ConversationContext
+from autogen.beta import Agent, Context, DataInput, Variable
 from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
@@ -48,7 +47,7 @@ def _make_config(query: str, final_reply: str = "done", tool_name: str = "tavily
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schema(self, context: ConversationContext) -> None:
+    async def test_default_schema(self, context: Context) -> None:
         tavily = TavilySearchTool(client=MagicMock())
 
         [schema] = await tavily.schemas(context)
@@ -59,7 +58,7 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_schema(self, context: ConversationContext) -> None:
+    async def test_custom_schema(self, context: Context) -> None:
         tavily = TavilySearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await tavily.schemas(context)

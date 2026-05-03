@@ -7,17 +7,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.beta.context import ConversationContext
+from autogen.beta import Context
 
 
 @pytest.fixture
-def context() -> ConversationContext:
-    return ConversationContext(stream=MagicMock())
+def context() -> Context:
+    return Context(stream=MagicMock())
 
 
 @pytest.fixture
-def make_context() -> Callable[..., ConversationContext]:
-    def _make(**variables: object) -> ConversationContext:
-        return ConversationContext(stream=MagicMock(), variables=variables)
+def make_context() -> Callable[..., Context]:
+    def _make(**variables: object) -> Context:
+        return Context(stream=MagicMock(), variables=variables)
 
     return _make

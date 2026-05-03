@@ -20,10 +20,11 @@ from autogen.beta.compact import (
     SummarizeCompact,
     TailWindowCompact,
 )
-from autogen.beta.events import ModelRequest, TextInput
-from autogen.beta.events.lifecycle import (
+from autogen.beta.events import (
     AggregationCompleted,
     CompactionCompleted,
+    ModelRequest,
+    TextInput,
 )
 from autogen.beta.knowledge import (
     DefaultBootstrap,
