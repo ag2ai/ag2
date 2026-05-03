@@ -10,7 +10,7 @@ it expands to a Union of every entry class so static type checkers can still
 narrow `list[ConfigEntries]` annotations.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias, Union
 
 from autogen.llm_config.entry import LLMConfigEntry
 from autogen.oai.entry_registry import get_entry_class
@@ -34,23 +34,23 @@ if TYPE_CHECKING:
     from autogen.oai.ollama import OllamaLLMConfigEntry
     from autogen.oai.together import TogetherLLMConfigEntry
 
-    ConfigEntries = (
-        AnthropicLLMConfigEntry
-        | CerebrasLLMConfigEntry
-        | BedrockLLMConfigEntry
-        | AzureOpenAILLMConfigEntry
-        | DeepSeekLLMConfigEntry
-        | OpenAILLMConfigEntry
-        | OpenAIResponsesLLMConfigEntry
-        | OpenAIV2LLMConfigEntry
-        | CohereLLMConfigEntry
-        | GeminiLLMConfigEntry
-        | GroqLLMConfigEntry
-        | MistralLLMConfigEntry
-        | OllamaLLMConfigEntry
-        | TogetherLLMConfigEntry
-        | OpenAIResponsesV2LLMConfigEntry
-    )
+    ConfigEntries: TypeAlias = Union[
+        AnthropicLLMConfigEntry,
+        CerebrasLLMConfigEntry,
+        BedrockLLMConfigEntry,
+        AzureOpenAILLMConfigEntry,
+        DeepSeekLLMConfigEntry,
+        OpenAILLMConfigEntry,
+        OpenAIResponsesLLMConfigEntry,
+        OpenAIV2LLMConfigEntry,
+        CohereLLMConfigEntry,
+        GeminiLLMConfigEntry,
+        GroqLLMConfigEntry,
+        MistralLLMConfigEntry,
+        OllamaLLMConfigEntry,
+        TogetherLLMConfigEntry,
+        OpenAIResponsesV2LLMConfigEntry,
+    ]
 else:
     ConfigEntries = LLMConfigEntry
 
@@ -72,7 +72,8 @@ def parse_entry(value: Any) -> LLMConfigEntry:
             f"got {type(value).__name__}"
         )
     api_type = value.get("api_type", "openai")
-    return get_entry_class(api_type).model_validate(value)
+    cls = get_entry_class(api_type)
+    return cls.model_validate(value)  # type: ignore[no-any-return]
 
 
 __all__ = ["ConfigEntries", "parse_entry"]

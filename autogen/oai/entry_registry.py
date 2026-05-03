@@ -9,7 +9,10 @@ register custom api_types via `register_entry()`.
 """
 
 from importlib import import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from autogen.llm_config.entry import LLMConfigEntry
 
 # api_type literal -> (module path, class name).
 # Keys must match the Literal declarations on each entry class — Pydantic uses
@@ -36,11 +39,11 @@ _BUILTIN: dict[str, tuple[str, str]] = {
     "together": ("autogen.oai.together", "TogetherLLMConfigEntry"),
 }
 
-_resolved: dict[str, type] = {}
-_external: dict[str, type] = {}
+_resolved: dict[str, type["LLMConfigEntry"]] = {}
+_external: dict[str, type["LLMConfigEntry"]] = {}
 
 
-def register_entry(api_type: str, entry_cls: type) -> None:
+def register_entry(api_type: str, entry_cls: type["LLMConfigEntry"]) -> None:
     """Register a custom LLMConfigEntry subclass for an api_type.
 
     Use this from a third-party plugin to make LLMConfig accept your api_type
@@ -49,7 +52,7 @@ def register_entry(api_type: str, entry_cls: type) -> None:
     _external[api_type] = entry_cls
 
 
-def get_entry_class(api_type: str) -> type:
+def get_entry_class(api_type: str) -> type["LLMConfigEntry"]:
     """Resolve api_type -> LLMConfigEntry subclass, importing the provider
     module on first call."""
     if api_type in _external:
@@ -64,7 +67,7 @@ def get_entry_class(api_type: str) -> type:
             f"autogen.oai.entry_registry.register_entry(api_type, EntryClass)."
         )
     mod_name, cls_name = _BUILTIN[api_type]
-    cls: Any = getattr(import_module(mod_name), cls_name)
+    cls: type["LLMConfigEntry"] = getattr(import_module(mod_name), cls_name)
     _resolved[api_type] = cls
     return cls
 

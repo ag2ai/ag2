@@ -11,6 +11,15 @@ Provider-specific entry classes (AnthropicLLMConfigEntry, GeminiLLMConfigEntry,
 etc.) are loaded on first attribute access via PEP 562 __getattr__. The
 TYPE_CHECKING block below mirrors the lazy entries so static type checkers
 still see the real classes.
+
+Adding a new provider requires THREE coordinated edits:
+    1. autogen/oai/entry_registry.py - register api_type -> EntryClass
+       in `_BUILTIN` so LLMConfig validation can dispatch to it.
+    2. THIS FILE - add the EntryClass name to `_LAZY_ENTRIES` and to
+       the `TYPE_CHECKING` block below, so `from autogen.oai import
+       NewProviderEntry` resolves both at runtime and for type checkers.
+    3. autogen/llm_config/types.py - add the EntryClass to the
+       `ConfigEntries` Union under `TYPE_CHECKING` for type narrowing.
 """
 
 from typing import TYPE_CHECKING, Any

@@ -17,25 +17,32 @@ import sys
 import pytest
 
 # Provider SDK names that must NOT be in sys.modules after `import autogen`.
+# Limited to the gemini/vertexai chain — the heaviest by far (3+ seconds of
+# google-cloud SDK) and the only one where this PR fully eliminates the eager
+# load. Other provider SDKs may still be loaded by error-type aliases at
+# module top of autogen/oai/client.py — see KNOWN_RESIDUAL_LEAKS below.
 HEAVY_PROVIDER_SDKS = (
-    # Heavy: gemini's vertexai chain pulls in 3+ seconds of google-cloud SDK.
     "vertexai",
     "google.genai",
     "google.cloud.aiplatform",
-    # SDKs whose Client classes are now imported lazily inside the dispatcher.
-    "mistralai",
-    "together",
-    "groq",
-    "ollama",
-    "boto3",
-    "cerebras",
 )
 
 # Known residual leaks — these SDK packages still load via error-type aliases
-# referenced at module top of autogen/oai/client.py for the per-call retry
-# `except` clause. Dropping these requires deferring the error-type imports
-# too (separate change with wider impact on the dispatcher's exception flow).
-KNOWN_RESIDUAL_LEAKS = ("anthropic", "cohere")
+# (e.g. `from anthropic import RateLimitError`) referenced at module top of
+# autogen/oai/client.py for the per-call retry `except` clause. Dropping
+# these requires deferring the error-type imports too — separate change with
+# wider impact on the dispatcher's exception flow.
+KNOWN_RESIDUAL_LEAKS = (
+    "anthropic",
+    "cohere",
+    "mistralai",
+    "groq",
+    "ollama",
+    "together",
+    "cerebras",
+    "boto3",
+    "botocore",
+)
 
 
 def _modules_after(snippet: str) -> set[str]:
