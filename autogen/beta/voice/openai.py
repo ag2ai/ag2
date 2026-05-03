@@ -16,7 +16,11 @@ from openai.types.audio.speech_create_params import Voice
 from openai.types.beta.realtime import Session
 
 from autogen.beta.context import ConversationContext
-from autogen.beta.events import TranscriptionChunkEvent, TranscriptionCompletedEvent
+from autogen.beta.events import (
+    SynthesizedAudioEvent,
+    TranscriptionChunkEvent,
+    TranscriptionCompletedEvent,
+)
 
 from .protocols import TTSConfig as TTSConfigProtocol
 from .stt import STTConfig as STTConfigProtocol
@@ -158,6 +162,8 @@ async def _pump_events(conn: AsyncRealtimeConnection, context: ConversationConte
             await context.send(TranscriptionChunkEvent(event.delta))
         elif event.type == "conversation.item.input_audio_transcription.completed":
             await context.send(TranscriptionCompletedEvent(event.transcript))
+        elif event.type == "response.audio.delta":
+            await context.send(SynthesizedAudioEvent(base64.b64decode(event.delta)))
 
 
 def _voice_to_wav_buffer(voice: "VoiceInput") -> io.BytesIO:
