@@ -147,7 +147,7 @@ flaml = [
 ]
 
 # code execution backends
-docker = ["docker>=6.0.0"]
+docker = ["docker>=6.0.0,<8"]
 
 jupyter-executor = [
     "jupyter-kernel-gateway",
@@ -287,7 +287,7 @@ long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "ag2[docker]"]
-daytona = ["daytona>=0.1.0"]
+daytona = ["daytona>=0.171.0,<1"]
 cohere = ["cohere>=5.13.5"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
@@ -335,6 +335,7 @@ docs = [
     "ag2[tracing]", # Tracing is exposed in the public API by the optional `autogen.opentelemetry` / `autogen.beta.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `autogen.ag_ui` module
     "ag2[docker]",  # Docker-backed executors (autogen.coding.DockerCommandLineCodeExecutor, autogen.coding.jupyter.DockerJupyterServer)
+    "ag2[daytona]", # Daytona-backed executors (autogen.coding.DaytonaCodeExecutor)
     # Beta optional dependencies
     "ag2[openai]",                  # OpenAI is exposed in the public API by the optional `autogen.beta.config` module
     "ag2[anthropic]",               # Anthropic is exposed in the public API by the optional `autogen.beta.config` module
@@ -402,6 +403,8 @@ optionals = [
     "ag2[ag-ui]",
     "ag2[tracing]",
     "ag2[watchdog]",  # DiskKnowledgeStore
+    # code execution extensions
+    "ag2[daytona,docker]",
     # search tools
     "ag2[tavily,ddgs,exa,perplexity]",
     # providers

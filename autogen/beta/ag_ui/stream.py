@@ -147,6 +147,9 @@ async def run_stream(
         nonlocal streaming_msg_id
 
         if isinstance(event, events.ModelMessageChunk):
+            if not event.content:
+                return
+
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
                 await write_events_stream.send(
@@ -174,7 +177,7 @@ async def run_stream(
                 )
                 streaming_msg_id = None
 
-            else:
+            elif event.content:
                 await write_events_stream.send(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
