@@ -8,8 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-docker = pytest.importorskip("docker")
-
 from autogen.beta import Context, Variable
 from autogen.beta.extensions.docker import DockerCodeEnvironment
 

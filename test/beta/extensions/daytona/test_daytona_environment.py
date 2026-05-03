@@ -8,8 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-daytona = pytest.importorskip("daytona")
-
 from autogen.beta import Context, Variable
 from autogen.beta.extensions.daytona import DaytonaCodeEnvironment, DaytonaResources
 
