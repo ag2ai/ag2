@@ -287,7 +287,7 @@ long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "ag2[docker]"]
-daytona = ["daytona>=0.1.0"]
+daytona = ["daytona>=0.171.0"]
 cohere = ["cohere>=5.13.5"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.7"]
