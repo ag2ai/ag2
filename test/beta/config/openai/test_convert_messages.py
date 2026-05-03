@@ -217,31 +217,84 @@ class TestBinaryInput:
             SerializerCls,
         )
 
-        assert result[1] == IsPartialDict({
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result[1] == {
             "role": "user",
-            "content": [IsPartialDict({"type": "image_url", "detail": "low"})],
-        })
+            "content": [{"type": "image_url", "image_url": {"url": expected_url, "detail": "low"}}],
+        }
+
+    def test_completions_image_path_no_vendor_leak(self, tmp_path) -> None:
+        """ImageInput(path=...) auto-sets vendor_metadata={'filename': ...}; mapper must not leak it."""
+        png = tmp_path / "plot.png"
+        png.write_bytes(self.SAMPLE_BYTES)
+
+        result = convert_messages([], [ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+
+        image_block = result[1]["content"][0]
+        assert image_block == {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"},
+        }
 
     def test_responses(self) -> None:
         result = events_to_responses_input(
-            [ModelRequest([BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
+            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
             SerializerCls,
         )
 
-        expected_data = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
             {
                 "role": "user",
-                "content": [{"type": "input_file", "file_data": expected_data}],
+                "content": [{"type": "input_image", "image_url": expected_url}],
             }
         ]
 
-    def test_responses_with_vendor_metadata(self) -> None:
+    def test_responses_image_path_no_vendor_leak(self, tmp_path) -> None:
+        """ImageInput(path=...) on Responses must produce input_image with no filename leak."""
+        png = tmp_path / "plot.png"
+        png.write_bytes(self.SAMPLE_BYTES)
+
+        result = events_to_responses_input([ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}",
+                    }
+                ],
+            }
+        ]
+
+    def test_responses_image_with_detail(self) -> None:
+        """Responses input_image carries 'detail' as a top-level key (schema differs from Chat Completions)."""
         result = events_to_responses_input(
             [
                 ModelRequest([
                     BinaryInput(
-                        data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"filename": "test.png"}
+                        data=self.SAMPLE_BYTES,
+                        media_type="image/png",
+                        vendor_metadata={"detail": "high"},
+                        kind=BinaryType.IMAGE,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
+
+        assert result[0]["content"][0] == IsPartialDict({"type": "input_image", "detail": "high"})
+
+    def test_responses_document_with_vendor_metadata(self) -> None:
+        result = events_to_responses_input(
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="application/pdf",
+                        vendor_metadata={"filename": "test.pdf"},
                     )
                 ])
             ],
@@ -251,7 +304,7 @@ class TestBinaryInput:
         assert result == [
             IsPartialDict({
                 "role": "user",
-                "content": [IsPartialDict({"type": "input_file", "filename": "test.png"})],
+                "content": [IsPartialDict({"type": "input_file", "filename": "test.pdf"})],
             })
         ]
 

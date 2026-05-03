@@ -384,9 +384,9 @@ All runtime parameters accept `Variable` for deferred context resolution.
 
 ---
 
-## PerplexitySearchTool
+## PerplexitySearchToolkit
 
-`PerplexitySearchTool` gives an agent web search powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}'s Sonar models. Each call returns an LLM-generated answer alongside the search results, citations, and optional images used to ground it.
+`PerplexitySearchToolkit` gives an agent two related tools powered by [Perplexity](https://www.perplexity.ai){.external-link target="_blank"}: raw web search via the Search API and LLM-grounded answers with citations via Sonar — sharing a single client.
 
 !!! note
     Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`
@@ -395,21 +395,55 @@ All runtime parameters accept `Variable` for deferred context resolution.
 import os
 from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import PerplexitySearchTool
+from autogen.beta.tools import PerplexitySearchToolkit
 
 agent = Agent(
     "researcher",
     config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[PerplexitySearchTool(api_key=os.environ["PERPLEXITY_API_KEY"])],
+    tools=[PerplexitySearchToolkit(api_key=os.environ["PERPLEXITY_API_KEY"])],
 )
 ```
 
 If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` environment variable automatically.
 
-### Configuration
+### Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"} — ranked title/url/snippet/date results, no LLM hop |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — also returns search results, citations, and optional images |
+
+### Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.answer()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
 
 ```python linenums="1"
-tool = PerplexitySearchTool(
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search()],
+)
+```
+
+### Per-tool configuration
+
+Per-call parameters live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    max_results=10,
+    max_tokens_per_page=512,
+    search_domain_filter=["arxiv.org", "-medium.com"],  # prefix '-' to exclude
+    search_recency_filter="week",                       # "hour" | "day" | "week" | "month" | "year"
+    search_after_date_filter="1/1/2025",                # MM/DD/YYYY
+    search_before_date_filter="12/31/2025",
+)
+
+answer_tool = toolkit.answer(
     model="sonar-pro",              # "sonar" | "sonar-pro" | "sonar-reasoning" | "sonar-reasoning-pro" | "sonar-deep-research" — default: "sonar"
     max_tokens=2000,                # default: 1000
     search_context_size="high",     # "low" | "medium" | "high" — default: "high"
@@ -419,65 +453,31 @@ tool = PerplexitySearchTool(
     return_related_questions=True,  # include suggested follow-up questions
     search_domain_filter=["arxiv.org", "nature.com"],
 )
+
+agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
 ```
 
-All parameters accept a `Variable` for dynamic values resolved at execution time.
+All runtime parameters accept a `Variable` for deferred context resolution.
 
 ### Result
 
-The tool returns a `SearchResponse` with these fields:
+Both tools return a `PerplexitySearchResponse` with these fields:
 
 | Field | Description |
 | :--- | :--- |
 | `query` | The original search query |
-| `content` | LLM-generated answer grounded in the sources |
-| `search_results` | List of `SearchResult` (`title`, `url`, `date`, `snippet`) used by the model |
-| `citations` | URLs the model cited inline |
-| `images` | List of `ImageMeta` returned when `return_images=True` |
+| `results` | List of `PerplexitySearchResult` (`title`, `url`, `snippet`, `date`) |
+| `content` | LLM-generated answer (filled by `perplexity_answer`; empty for `perplexity_search`) |
+| `citations` | URLs the model cited inline (filled by `perplexity_answer`) |
+| `images` | List of `PerplexityImageMeta` when `return_images=True` on `perplexity_answer` |
 
 When `return_images=True`, image URLs are also surfaced as `ImageInput` parts on the tool result so the next model turn receives them as proper image inputs.
 
-!!! note
-    `PerplexitySearchTool` calls Perplexity's [Sonar API](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — an LLM-grounded answer with citations, not raw search hits. For unprocessed ranked search results, use Perplexity's separate Search API.
+!!! tip
+    Use `perplexity_search` when the agent only needs raw ranked URLs (cheaper, no LLM hop). Use `perplexity_answer` when a grounded answer with citations is helpful.
 
 !!! tip
-    `search_domain_filter` is a Pro-tier feature on the Perplexity API; see [usage tiers](https://docs.perplexity.ai/guides/usage-tiers){.external-link target="_blank"}.
-
----
-
-## PerplexitySearchAPITool
-
-`PerplexitySearchAPITool` gives an agent web search via Perplexity's dedicated [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"}. It returns ranked results (title, URL, snippet, date) without generating an LLM answer, which keeps token usage minimal.
-
-!!! note
-    Requires the `perplexity` extra and an API key: `pip install ag2[perplexity]`. The tool reads `PERPLEXITY_API_KEY` automatically when `api_key` is omitted.
-
-```python linenums="1"
-import os
-from autogen.beta import Agent
-from autogen.beta.config import AnthropicConfig
-from autogen.beta.tools import PerplexitySearchAPITool
-
-agent = Agent(
-    "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
-    tools=[PerplexitySearchAPITool(api_key=os.environ["PERPLEXITY_API_KEY"])],
-)
-```
-
-### Configuration
-
-```python linenums="1"
-tool = PerplexitySearchAPITool(
-    max_results=10,
-    search_domain_filter=["arxiv.org", "-medium.com"],   # prefix '-' to exclude
-    search_recency_filter="month",                        # "hour"|"day"|"week"|"month"|"year"
-    search_after_date_filter="1/1/2025",                  # m/d/yyyy
-    search_before_date_filter="12/31/2025",
-)
-```
-
-Domain filters are either an allowlist or a denylist — do not mix the two; use a leading `-` to negate. All parameters accept a `Variable` for dynamic values resolved at execution time.
+    `search_domain_filter` on `perplexity_answer` is a Pro-tier feature on the Perplexity API; see [usage tiers](https://docs.perplexity.ai/guides/usage-tiers){.external-link target="_blank"}.
 
 ---
 

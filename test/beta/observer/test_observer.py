@@ -8,8 +8,7 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen.beta.annotations import Context as AnnContext
-from autogen.beta.context import ConversationContext as Context
+from autogen.beta import Context
 from autogen.beta.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
 from autogen.beta.observer import BaseObserver
 from autogen.beta.stream import MemoryStream
@@ -150,7 +149,7 @@ class TestObserverExceptionHandling:
 
         signals: list[ObserverAlert] = []
 
-        async def _capture(event: ObserverAlert, _ctx: AnnContext) -> None:
+        async def _capture(event: ObserverAlert, _ctx: Context) -> None:
             signals.append(event)
 
         stream.where(ObserverAlert).subscribe(_capture)
