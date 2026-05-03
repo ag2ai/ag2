@@ -7,3 +7,7 @@ from autogen.beta.events import BaseEvent, Field
 
 class TranscriptionChunkEvent(BaseEvent):
     content: str = Field(kw_only=False)
+
+
+class TranscriptionCompletedEvent(BaseEvent):
+    content: str = Field(kw_only=False)

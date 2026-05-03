@@ -6,30 +6,39 @@ from autogen.beta.exceptions import missing_additional_dependency, missing_optio
 
 from .observer import TTSObserver
 from .protocols import AudioPlayer, TTSConfig
+from .realtime import LiveTranscription, RealtimeSTTConfig
 from .stt import STTConfig, VoiceInput
 
 try:
+    from .sound_device import AudioInputStream
     from .sound_device import Player as SoundDevicePlayer
     from .sound_device import Recorder as SoundDeviceRecorder
 except ImportError as e:
+    AudioInputStream = missing_additional_dependency("AudioInputStream", "sounddevice[numpy]", e)  # type: ignore[misc]
     SoundDevicePlayer = missing_additional_dependency("SoundDevicePlayer", "sounddevice[numpy]", e)  # type: ignore[misc]
     SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)  # type: ignore[misc]
 
 try:
+    from .openai import OpenAIRealTimeConfig
     from .openai import STTConfig as OpenAITranscriber
     from .openai import STTTranslationConfig as OpenAITranslationTranscriber
     from .openai import TTSConfig as OpenAISynthesizer
 except ImportError as e:
+    OpenAIRealTimeConfig = missing_optional_dependency("OpenAIRealTimeConfig", "openai", e)  # type: ignore[misc]
     OpenAITranscriber = missing_optional_dependency("OpenAITranscriber", "openai", e)  # type: ignore[misc]
     OpenAITranslationTranscriber = missing_optional_dependency("OpenAITranslationTranscriber", "openai", e)  # type: ignore[misc]
     OpenAISynthesizer = missing_optional_dependency("OpenAISynthesizer", "openai", e)  # type: ignore[misc]
 
 
 __all__ = (
+    "AudioInputStream",
     "AudioPlayer",
+    "LiveTranscription",
+    "OpenAIRealTimeConfig",
     "OpenAISynthesizer",
     "OpenAITranscriber",
     "OpenAITranslationTranscriber",
+    "RealtimeSTTConfig",
     "STTConfig",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",

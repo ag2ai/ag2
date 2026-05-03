@@ -2,14 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import base64
 import io
 import wave
-from typing import TYPE_CHECKING
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
+from typing import TYPE_CHECKING, Any
 
 from openai import AsyncOpenAI, Omit, omit
 from openai.types.audio.speech_create_params import Voice
+from openai.types.beta.realtime import Session
 
-from autogen.beta.events import TranscriptionChunkEvent
+from autogen.beta.context import ConversationContext
+from autogen.beta.events import TranscriptionChunkEvent, TranscriptionCompletedEvent
 
 from .protocols import TTSConfig as TTSConfigProtocol
 from .stt import STTConfig as STTConfigProtocol
@@ -45,6 +51,8 @@ class STTConfig(STTConfigProtocol):
             if event.type == "transcript.text.delta":
                 text += event.delta
                 await context.send(TranscriptionChunkEvent(event.delta))
+
+        await context.send(TranscriptionCompletedEvent(text))
         return text
 
 
@@ -65,7 +73,7 @@ class STTTranslationConfig(STTConfigProtocol):
             response_format="text",
         )
 
-        await context.send(TranscriptionChunkEvent(result))
+        await context.send(TranscriptionCompletedEvent(result))
         return result
 
 
@@ -93,6 +101,63 @@ class TTSConfig(TTSConfigProtocol[bytes]):
             response_format="pcm",
         )
         return await response.aread()
+
+
+class OpenAIRealTimeConfig:
+    """Realtime STT config backed by OpenAI's bidirectional realtime API.
+
+    Implements the `RealtimeSTTConfig` protocol — call `session(...)` to open
+    a connection that pumps captured audio into the API and emits transcription
+    events on the supplied context.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        session: Session | None = None,
+        client: AsyncOpenAI | None = None,
+    ) -> None:
+        self.model = model
+        self._session_config = session
+        self.client = client or AsyncOpenAI()
+
+    @asynccontextmanager
+    async def session(
+        self,
+        audio_stream: AsyncIterator[bytes],
+        context: ConversationContext,
+    ) -> AsyncIterator[None]:
+        async with self.client.beta.realtime.connect(model=self.model) as conn:
+            if self._session_config:
+                await conn.session.update(session=self._session_config)
+
+            send_task = asyncio.create_task(_pump_audio(audio_stream, conn))
+            recv_task = asyncio.create_task(_pump_events(conn, context))
+
+            try:
+                yield
+
+            finally:
+                for task in (send_task, recv_task):
+                    task.cancel()
+                for task in (send_task, recv_task):
+                    with suppress(asyncio.CancelledError):
+                        await task
+
+
+async def _pump_audio(audio_stream: AsyncIterator[bytes], conn: Any) -> None:
+    async for chunk in audio_stream:
+        await conn.input_audio_buffer.append(audio=base64.b64encode(chunk).decode())
+
+
+async def _pump_events(conn: Any, context: ConversationContext) -> None:
+    async for event in conn:
+        event_type = getattr(event, "type", None)
+        if event_type == "conversation.item.input_audio_transcription.delta":
+            await context.send(TranscriptionChunkEvent(event.delta))
+        elif event_type == "conversation.item.input_audio_transcription.completed":
+            await context.send(TranscriptionCompletedEvent(event.transcript))
 
 
 def _voice_to_wav_buffer(voice: "VoiceInput") -> io.BytesIO:

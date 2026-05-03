@@ -49,7 +49,7 @@ from .types import (
     ModelResponse,
     Usage,
 )
-from .voice import TranscriptionChunkEvent
+from .voice import TranscriptionChunkEvent, TranscriptionCompletedEvent
 
 __all__ = (
     "AggregationCompleted",
@@ -94,6 +94,7 @@ __all__ = (
     "ToolResultEvent",
     "ToolResultsEvent",
     "TranscriptionChunkEvent",
+    "TranscriptionCompletedEvent",
     "UnknownEvent",
     "UrlInput",
     "Usage",
