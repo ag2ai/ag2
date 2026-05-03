@@ -11,3 +11,7 @@ class TranscriptionChunkEvent(BaseEvent):
 
 class TranscriptionCompletedEvent(BaseEvent):
     content: str = Field(kw_only=False)
+
+
+class SynthesizedAudioEvent(BaseEvent):
+    content: bytes = Field(kw_only=False)

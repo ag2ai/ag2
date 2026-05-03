@@ -4,17 +4,15 @@
 
 from autogen.beta.exceptions import missing_additional_dependency, missing_optional_dependency
 
-from .observer import TTSObserver
+from .observer import AudioPlayerObserver, TTSObserver
 from .protocols import AudioPlayer, TTSConfig
 from .realtime import LiveTranscription, RealtimeSTTConfig
 from .stt import STTConfig, VoiceInput
 
 try:
-    from .sound_device import AudioInputStream
     from .sound_device import Player as SoundDevicePlayer
     from .sound_device import Recorder as SoundDeviceRecorder
 except ImportError as e:
-    AudioInputStream = missing_additional_dependency("AudioInputStream", "sounddevice[numpy]", e)  # type: ignore[misc]
     SoundDevicePlayer = missing_additional_dependency("SoundDevicePlayer", "sounddevice[numpy]", e)  # type: ignore[misc]
     SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)  # type: ignore[misc]
 
@@ -31,8 +29,8 @@ except ImportError as e:
 
 
 __all__ = (
-    "AudioInputStream",
     "AudioPlayer",
+    "AudioPlayerObserver",
     "LiveTranscription",
     "OpenAIRealTimeConfig",
     "OpenAISynthesizer",

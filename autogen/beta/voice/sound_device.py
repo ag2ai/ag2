@@ -103,7 +103,7 @@ class Recorder:
             self.channels,
         )
 
-    def __enter__(self) -> AudioInputStream:
+    async def __aenter__(self) -> AudioInputStream:
         self._stream = AudioInputStream(
             sample_rate=self.sample_rate,
             channels=self.channels,
@@ -112,7 +112,7 @@ class Recorder:
         self._stream.open()
         return self._stream
 
-    def __exit__(
+    async def __aexit__(
         self,
         exc_type: type | None,
         exc_value: object | None,

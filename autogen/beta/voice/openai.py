@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
 from openai import AsyncOpenAI, Omit, omit
+from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 from openai.types.audio.speech_create_params import Voice
 from openai.types.beta.realtime import Session
 
@@ -151,12 +152,11 @@ async def _pump_audio(audio_stream: AsyncIterator[bytes], conn: Any) -> None:
         await conn.input_audio_buffer.append(audio=base64.b64encode(chunk).decode())
 
 
-async def _pump_events(conn: Any, context: ConversationContext) -> None:
+async def _pump_events(conn: AsyncRealtimeConnection, context: ConversationContext) -> None:
     async for event in conn:
-        event_type = getattr(event, "type", None)
-        if event_type == "conversation.item.input_audio_transcription.delta":
+        if event.type == "conversation.item.input_audio_transcription.delta":
             await context.send(TranscriptionChunkEvent(event.delta))
-        elif event_type == "conversation.item.input_audio_transcription.completed":
+        elif event.type == "conversation.item.input_audio_transcription.completed":
             await context.send(TranscriptionCompletedEvent(event.transcript))
 
 
