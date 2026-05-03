@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -49,7 +49,7 @@ def _make_config(query: str, final_reply: str = "done", tool_name: str = "tavily
 @pytest.mark.asyncio
 class TestSchema:
     async def test_default_schema(self, context: ConversationContext) -> None:
-        tavily = TavilySearchTool(client=MagicMock())
+        tavily = TavilySearchTool(client=AsyncMock())
 
         [schema] = await tavily.schemas(context)
 
@@ -60,7 +60,7 @@ class TestSchema:
         })
 
     async def test_custom_schema(self, context: ConversationContext) -> None:
-        tavily = TavilySearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
+        tavily = TavilySearchTool(client=AsyncMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await tavily.schemas(context)
 
@@ -74,10 +74,10 @@ class TestSchema:
 
 @pytest.mark.asyncio
 class TestSearchExecution:
-    async def test_search_returns_structured_results(self, mock: MagicMock) -> None:
+    async def test_search_returns_structured_results(self, async_mock: AsyncMock) -> None:
         # arrange tool
-        mock.search.return_value = SAMPLE_RAW
-        tavily = TavilySearchTool(client=mock)
+        async_mock.search.return_value = SAMPLE_RAW
+        tavily = TavilySearchTool(client=async_mock)
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework"))
@@ -109,10 +109,10 @@ class TestSearchExecution:
             )
         )
 
-    async def test_search_empty_results(self, mock: MagicMock) -> None:
+    async def test_search_empty_results(self, async_mock: AsyncMock) -> None:
         # arrange tool
-        mock.search.return_value = {"query": "nothing", "results": []}
-        tavily = TavilySearchTool(client=mock)
+        async_mock.search.return_value = {"query": "nothing", "results": []}
+        tavily = TavilySearchTool(client=async_mock)
 
         # arrange agent
         config = TrackingConfig(_make_config("nothing"))
@@ -129,11 +129,11 @@ class TestSearchExecution:
             )
         )
 
-    async def test_all_params_forwarded_to_client(self, mock: MagicMock) -> None:
-        mock.search.return_value = {"query": "q", "results": []}
+    async def test_all_params_forwarded_to_client(self, async_mock: AsyncMock) -> None:
+        async_mock.search.return_value = {"query": "q", "results": []}
 
         tavily = TavilySearchTool(
-            client=mock,
+            client=async_mock,
             max_results=3,
             search_depth="advanced",
             topic="news",
@@ -153,7 +153,7 @@ class TestSearchExecution:
 
         await agent.ask("search")
 
-        mock.search.assert_called_once_with(
+        async_mock.search.assert_called_once_with(
             "q",
             max_results=3,
             search_depth="advanced",
@@ -171,22 +171,22 @@ class TestSearchExecution:
             include_favicon=True,
         )
 
-    async def test_none_params_omitted(self, mock: MagicMock) -> None:
+    async def test_none_params_omitted(self, async_mock: AsyncMock) -> None:
         # All optional params default to None and must not be forwarded to the SDK
         # so Tavily applies its own server-side defaults.
-        mock.search.return_value = {"query": "q", "results": []}
+        async_mock.search.return_value = {"query": "q", "results": []}
 
-        tavily = TavilySearchTool(client=mock)
+        tavily = TavilySearchTool(client=async_mock)
         agent = Agent("a", config=_make_config("q"), tools=[tavily])
 
         await agent.ask("search")
 
-        mock.search.assert_called_once_with("q")
+        async_mock.search.assert_called_once_with("q")
 
-    async def test_custom_tool_name_in_agent(self, mock: MagicMock) -> None:
+    async def test_custom_tool_name_in_agent(self, async_mock: AsyncMock) -> None:
         # arrange tool
-        mock.search.return_value = {"query": "q", "results": []}
-        ddg = TavilySearchTool(client=mock, name="web_search")
+        async_mock.search.return_value = {"query": "q", "results": []}
+        ddg = TavilySearchTool(client=async_mock, name="web_search")
 
         # arrange agent
         config = TrackingConfig(_make_config("AG2 framework", tool_name="web_search"))
@@ -196,16 +196,16 @@ class TestSearchExecution:
         await agent.ask("search")
 
         # assert tool called
-        mock.search.assert_called_once()
+        async_mock.search.assert_called_once()
 
 
 @pytest.mark.asyncio
 class TestTavilykSearchToolVariable:
-    async def test_resolved(self, mock: MagicMock) -> None:
+    async def test_resolved(self, async_mock: AsyncMock) -> None:
         # arrange tool
-        mock.search.return_value = SAMPLE_RAW
+        async_mock.search.return_value = SAMPLE_RAW
         tavily = TavilySearchTool(
-            client=mock,
+            client=async_mock,
             search_depth=Variable("user_depth"),
             topic=Variable(),
         )
@@ -225,16 +225,16 @@ class TestTavilykSearchToolVariable:
         await agent.ask("search")
 
         # assert variables resolved
-        mock.search.assert_called_once_with(
+        async_mock.search.assert_called_once_with(
             "test query",
             search_depth="basic",
             topic="general",
         )
 
-    async def test_missing_raises(self, mock: MagicMock) -> None:
-        mock.search.return_value = SAMPLE_RAW
+    async def test_missing_raises(self, async_mock: AsyncMock) -> None:
+        async_mock.search.return_value = SAMPLE_RAW
         tavily = TavilySearchTool(
-            client=mock,
+            client=async_mock,
             topic=Variable(),
         )
 

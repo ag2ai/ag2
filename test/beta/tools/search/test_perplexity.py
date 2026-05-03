@@ -4,7 +4,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -114,7 +114,7 @@ def _empty_chat_response() -> SimpleNamespace:
 @pytest.mark.asyncio
 class TestSchema:
     async def test_default_schemas(self, context: ConversationContext) -> None:
-        toolkit = PerplexitySearchToolkit(client=MagicMock())
+        toolkit = PerplexitySearchToolkit(client=AsyncMock())
 
         schemas = list(await toolkit.schemas(context))
 
@@ -122,7 +122,7 @@ class TestSchema:
         assert names == ["perplexity_search", "perplexity_answer"]
 
     async def test_search_schema_has_query_param(self, context: ConversationContext) -> None:
-        toolkit = PerplexitySearchToolkit(client=MagicMock())
+        toolkit = PerplexitySearchToolkit(client=AsyncMock())
 
         schemas = list(await toolkit.schemas(context))
         search_schema = next(s for s in schemas if s.function.name == "perplexity_search")
@@ -133,7 +133,7 @@ class TestSchema:
         })
 
     async def test_answer_schema_has_query_param(self, context: ConversationContext) -> None:
-        toolkit = PerplexitySearchToolkit(client=MagicMock())
+        toolkit = PerplexitySearchToolkit(client=AsyncMock())
 
         schemas = list(await toolkit.schemas(context))
         answer_schema = next(s for s in schemas if s.function.name == "perplexity_answer")
@@ -144,7 +144,7 @@ class TestSchema:
         })
 
     async def test_custom_search_name_and_description(self, context: ConversationContext) -> None:
-        toolkit = PerplexitySearchToolkit(client=MagicMock())
+        toolkit = PerplexitySearchToolkit(client=AsyncMock())
         custom = toolkit.search(name="web_search", description="Custom search.")
 
         [schema] = list(await custom.schemas(context))
@@ -153,7 +153,7 @@ class TestSchema:
         assert schema.function.description == "Custom search."
 
     async def test_custom_answer_name_and_description(self, context: ConversationContext) -> None:
-        toolkit = PerplexitySearchToolkit(client=MagicMock())
+        toolkit = PerplexitySearchToolkit(client=AsyncMock())
         custom = toolkit.answer(name="ask_perplexity", description="Custom answer.")
 
         [schema] = list(await custom.schemas(context))
@@ -164,9 +164,9 @@ class TestSchema:
 
 @pytest.mark.asyncio
 class TestSearch:
-    async def test_returns_structured_results(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = SEARCH_API_RAW
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_returns_structured_results(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = SEARCH_API_RAW
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         config = TrackingConfig(_tool_call_config({"query": "AG2 framework"}, tool_name="perplexity_search"))
         agent = Agent("a", config=config, tools=[toolkit])
@@ -196,9 +196,9 @@ class TestSearch:
             )
         )
 
-    async def test_empty_results(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_empty_results(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         config = TrackingConfig(_tool_call_config({"query": "nothing"}, tool_name="perplexity_search"))
         agent = Agent("a", config=config, tools=[toolkit])
@@ -210,19 +210,19 @@ class TestSearch:
         [part] = tool_result.result.parts
         assert part == DataInput(PerplexitySearchResponse(query="nothing", results=[]))
 
-    async def test_none_params_omitted(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_none_params_omitted(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="perplexity_search"), tools=[toolkit])
 
         await agent.ask("search")
 
-        mock.search.create.assert_called_once_with(query="q")
+        async_mock.search.create.assert_called_once_with(query="q")
 
-    async def test_all_params_forwarded(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_all_params_forwarded(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         search_tool = toolkit.search(
             max_results=5,
             max_tokens_per_page=512,
@@ -239,7 +239,7 @@ class TestSearch:
         )
         await agent.ask("search")
 
-        mock.search.create.assert_called_once_with(
+        async_mock.search.create.assert_called_once_with(
             query="q",
             max_results=5,
             max_tokens_per_page=512,
@@ -249,9 +249,9 @@ class TestSearch:
             search_before_date_filter="12/31/2025",
         )
 
-    async def test_custom_tool_name_in_agent(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_custom_tool_name_in_agent(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         search_tool = toolkit.search(name="web_search")
 
         agent = Agent(
@@ -261,14 +261,14 @@ class TestSearch:
         )
         await agent.ask("search")
 
-        mock.search.create.assert_called_once()
+        async_mock.search.create.assert_called_once()
 
 
 @pytest.mark.asyncio
 class TestAnswer:
-    async def test_returns_structured_results(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = CHAT_RAW
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_returns_structured_results(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = CHAT_RAW
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         config = TrackingConfig(_tool_call_config({"query": "AG2 framework"}, tool_name="perplexity_answer"))
         agent = Agent("a", config=config, tools=[toolkit])
@@ -300,9 +300,9 @@ class TestAnswer:
             )
         )
 
-    async def test_empty_results(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_empty_results(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         config = TrackingConfig(_tool_call_config({"query": "nothing"}, tool_name="perplexity_answer"))
         agent = Agent("a", config=config, tools=[toolkit])
@@ -321,15 +321,15 @@ class TestAnswer:
             )
         )
 
-    async def test_defaults_applied_when_params_omitted(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_defaults_applied_when_params_omitted(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="perplexity_answer"), tools=[toolkit])
 
         await agent.ask("answer")
 
-        mock.chat.completions.create.assert_called_once_with(
+        async_mock.chat.completions.create.assert_called_once_with(
             model="sonar",
             messages=[
                 {"role": "system", "content": "Be precise and concise."},
@@ -339,9 +339,9 @@ class TestAnswer:
             web_search_options={"search_context_size": "high"},
         )
 
-    async def test_all_params_forwarded(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_all_params_forwarded(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(
             model="sonar-pro",
             max_tokens=2000,
@@ -360,7 +360,7 @@ class TestAnswer:
         )
         await agent.ask("answer")
 
-        mock.chat.completions.create.assert_called_once_with(
+        async_mock.chat.completions.create.assert_called_once_with(
             model="sonar-pro",
             messages=[
                 {"role": "system", "content": "Be precise and concise."},
@@ -375,9 +375,9 @@ class TestAnswer:
             return_related_questions=True,
         )
 
-    async def test_custom_tool_name_in_agent(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_custom_tool_name_in_agent(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(name="ask_perplexity")
 
         agent = Agent(
@@ -387,9 +387,9 @@ class TestAnswer:
         )
         await agent.ask("answer")
 
-        mock.chat.completions.create.assert_called_once()
+        async_mock.chat.completions.create.assert_called_once()
 
-    async def test_returns_image_parts_when_api_yields_images(self, mock: MagicMock) -> None:
+    async def test_returns_image_parts_when_api_yields_images(self, async_mock: AsyncMock) -> None:
         # The Perplexity SDK delivers `images` as plain dicts (the field is not
         # declared on StreamChunk's pydantic model). Mirror that here.
         raw = SimpleNamespace(
@@ -422,8 +422,8 @@ class TestAnswer:
                 },
             ],
         )
-        mock.chat.completions.create.return_value = raw
-        toolkit = PerplexitySearchToolkit(client=mock)
+        async_mock.chat.completions.create.return_value = raw
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(return_images=True)
 
         config = TrackingConfig(_tool_call_config({"query": "show me images"}, tool_name="perplexity_answer"))
@@ -462,7 +462,7 @@ class TestAnswer:
         assert image_a == ImageInput(url="https://example.com/a.jpg")
         assert image_b == ImageInput(url="https://example.com/b.png")
 
-    async def test_skips_image_entries_without_image_url(self, mock: MagicMock) -> None:
+    async def test_skips_image_entries_without_image_url(self, async_mock: AsyncMock) -> None:
         raw = SimpleNamespace(
             id="chatcmpl-img",
             model="sonar",
@@ -481,8 +481,8 @@ class TestAnswer:
                 {"image_url": "https://example.com/ok.jpg"},
             ],
         )
-        mock.chat.completions.create.return_value = raw
-        toolkit = PerplexitySearchToolkit(client=mock)
+        async_mock.chat.completions.create.return_value = raw
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(return_images=True)
 
         config = TrackingConfig(_tool_call_config({"query": "q"}, tool_name="perplexity_answer"))
@@ -498,9 +498,9 @@ class TestAnswer:
 
 @pytest.mark.asyncio
 class TestSearchVariable:
-    async def test_resolved(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_resolved(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         search_tool = toolkit.search(
             max_results=Variable("user_max"),
             search_recency_filter=Variable(),
@@ -518,15 +518,15 @@ class TestSearchVariable:
 
         await agent.ask("search")
 
-        mock.search.create.assert_called_once_with(
+        async_mock.search.create.assert_called_once_with(
             query="test query",
             max_results=7,
             search_recency_filter="day",
         )
 
-    async def test_missing_raises(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_missing_raises(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         search_tool = toolkit.search(max_results=Variable())
 
         agent = Agent(
@@ -541,9 +541,9 @@ class TestSearchVariable:
 
 @pytest.mark.asyncio
 class TestAnswerVariable:
-    async def test_resolved(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_resolved(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(
             model=Variable("user_model"),
             search_recency_filter=Variable(),
@@ -561,7 +561,7 @@ class TestAnswerVariable:
 
         await agent.ask("answer")
 
-        mock.chat.completions.create.assert_called_once_with(
+        async_mock.chat.completions.create.assert_called_once_with(
             model="sonar-pro",
             messages=[
                 {"role": "system", "content": "Be precise and concise."},
@@ -572,9 +572,9 @@ class TestAnswerVariable:
             search_recency_filter="day",
         )
 
-    async def test_missing_raises(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_missing_raises(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
         answer_tool = toolkit.answer(search_mode=Variable())
 
         agent = Agent(
@@ -589,9 +589,9 @@ class TestAnswerVariable:
 
 @pytest.mark.asyncio
 class TestIndividualTools:
-    async def test_search_tool_passed_alone(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_search_tool_passed_alone(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         agent = Agent(
             "a",
@@ -600,11 +600,11 @@ class TestIndividualTools:
         )
         await agent.ask("search")
 
-        mock.search.create.assert_called_once_with(query="q")
+        async_mock.search.create.assert_called_once_with(query="q")
 
-    async def test_answer_tool_passed_alone(self, mock: MagicMock) -> None:
-        mock.chat.completions.create.return_value = _empty_chat_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_answer_tool_passed_alone(self, async_mock: AsyncMock) -> None:
+        async_mock.chat.completions.create.return_value = _empty_chat_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         agent = Agent(
             "a",
@@ -613,11 +613,11 @@ class TestIndividualTools:
         )
         await agent.ask("answer")
 
-        mock.chat.completions.create.assert_called_once()
+        async_mock.chat.completions.create.assert_called_once()
 
-    async def test_whole_toolkit_registers_both_tools(self, mock: MagicMock) -> None:
-        mock.search.create.return_value = _empty_search_api_response()
-        toolkit = PerplexitySearchToolkit(client=mock)
+    async def test_whole_toolkit_registers_both_tools(self, async_mock: AsyncMock) -> None:
+        async_mock.search.create.return_value = _empty_search_api_response()
+        toolkit = PerplexitySearchToolkit(client=async_mock)
 
         agent = Agent(
             "a",
@@ -626,4 +626,4 @@ class TestIndividualTools:
         )
         await agent.ask("search")
 
-        mock.search.create.assert_called_once_with(query="q")
+        async_mock.search.create.assert_called_once_with(query="q")

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
-from perplexity import Perplexity
+from perplexity import AsyncPerplexity
 from perplexity.types import APIPublicSearchResult
 from perplexity.types.search_create_response import Result as SearchAPIResult
 from pydantic import Field
@@ -81,19 +81,20 @@ class PerplexitySearchToolkit(Toolkit):
         )
 
     The constructor reads ``PERPLEXITY_API_KEY`` from the environment when
-    ``api_key`` is omitted (handled by the underlying ``perplexity.Perplexity`` SDK).
+    ``api_key`` is omitted (handled by the underlying ``perplexity.AsyncPerplexity`` SDK).
     """
 
-    __slots__ = ("_client",)
+    __slots__ = ("_api_key", "_client")
 
     def __init__(
         self,
         api_key: str | None = None,
         *,
-        client: Perplexity | None = None,
+        client: AsyncPerplexity | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        self._client = client if client is not None else Perplexity(api_key=api_key)
+        self._api_key = api_key
+        self._client = client
 
         super().__init__(
             self.search(),
@@ -103,14 +104,17 @@ class PerplexitySearchToolkit(Toolkit):
         )
 
     def __deepcopy__(self, memo: dict[int, Any]) -> "PerplexitySearchToolkit":
-        # The Perplexity SDK wraps httpx.Client, whose state holds a _thread.RLock
-        # that fails pickle-based deepcopy. Because Agent.add_tool calls deepcopy
-        # on each registered tool (function_tool.py:99), passing the toolkit
-        # whole (tools=[toolkit]) would otherwise raise TypeError: cannot pickle '_thread.RLock' object.
+        # Supports the `client=AsyncPerplexity(...)` use-case (e.g. custom proxied
+        # httpx.AsyncClient) when the toolkit is passed whole (tools=[toolkit]).
+        # The Perplexity SDK wraps httpx.AsyncClient, whose state holds a
+        # _thread.RLock that fails pickle-based deepcopy. Agent.add_tool calls
+        # deepcopy on each registered tool (function_tool.py:99), so without this
+        # override that flow raises TypeError: cannot pickle '_thread.RLock' object.
         # The override copies the _tools dict but shares the SDK client by reference
-        # (the client is thread-safe and stateless across requests)
+        # (the client is thread-safe and stateless across requests).
         new = self.__class__.__new__(self.__class__)
         memo[id(self)] = new
+        new._api_key = self._api_key
         new._client = self._client
         new.name = self.name
         new._middleware = self._middleware
@@ -134,10 +138,11 @@ class PerplexitySearchToolkit(Toolkit):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
+        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
-        def perplexity_search(
+        async def perplexity_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
         ) -> ToolResult:
@@ -158,7 +163,11 @@ class PerplexitySearchToolkit(Toolkit):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            raw = client.search.create(query=query, **kwargs)
+            if user_client is not None:
+                raw = await user_client.search.create(query=query, **kwargs)
+            else:
+                async with AsyncPerplexity(api_key=api_key) as c:
+                    raw = await c.search.create(query=query, **kwargs)
 
             raw_results: list[SearchAPIResult] = getattr(raw, "results", None) or []
             results = [
@@ -194,10 +203,11 @@ class PerplexitySearchToolkit(Toolkit):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
+        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
-        def perplexity_answer(
+        async def perplexity_answer(
             query: Annotated[str, Field(description="The question to answer.")],
             ctx: Context,
         ) -> ToolResult:
@@ -221,16 +231,21 @@ class PerplexitySearchToolkit(Toolkit):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            raw = client.chat.completions.create(
-                model=resolved_model,
-                messages=[
+            create_kwargs: dict[str, Any] = {
+                "model": resolved_model,
+                "messages": [
                     {"role": "system", "content": "Be precise and concise."},
                     {"role": "user", "content": query},
                 ],
-                max_tokens=resolved_max_tokens,
-                web_search_options={"search_context_size": resolved_context_size},
+                "max_tokens": resolved_max_tokens,
+                "web_search_options": {"search_context_size": resolved_context_size},
                 **kwargs,
-            )
+            }
+            if user_client is not None:
+                raw = await user_client.chat.completions.create(**create_kwargs)
+            else:
+                async with AsyncPerplexity(api_key=api_key) as c:
+                    raw = await c.chat.completions.create(**create_kwargs)
 
             content: str | None = None
             choices = getattr(raw, "choices", None) or []

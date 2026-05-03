@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import Field
-from tavily import TavilyClient
+from tavily import AsyncTavilyClient
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.events import ToolResult
@@ -61,7 +61,7 @@ class TavilySearchTool(Tool):
         country: str | Variable | None = None,
         auto_parameters: bool | Variable | None = None,
         include_favicon: bool | Variable | None = None,
-        client: TavilyClient | None = None,
+        client: AsyncTavilyClient | None = None,
         name: str = "tavily_search",
         *,
         description: str = (
@@ -70,14 +70,14 @@ class TavilySearchTool(Tool):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        _client = client if client is not None else TavilyClient(api_key=api_key)
+        user_client = client
 
         @tool(
             name=name,
             description=description,
             middleware=middleware,
         )
-        def tavily_search(
+        async def tavily_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
         ) -> ToolResult:
@@ -101,7 +101,12 @@ class TavilySearchTool(Tool):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            raw = _client.search(query, **kwargs)
+            if user_client is not None:
+                raw = await user_client.search(query, **kwargs)
+            else:
+                async with AsyncTavilyClient(api_key=api_key) as c:
+                    raw = await c.search(query, **kwargs)
+
             results = [
                 SearchResult(
                     title=r.get("title", ""),
