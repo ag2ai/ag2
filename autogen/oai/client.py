@@ -74,7 +74,10 @@ with optional_import_block() as cerebras_result:
         RateLimitError as cerebras_RateLimitError,
     )
 
-    from .cerebras import CerebrasClient
+    # XClient imports for each provider are deferred into _register_default_client.
+    # Importing them here would load the provider's `.py` module at this file's
+    # import time, which transitively loads provider SDKs (vertexai, anthropic, etc.)
+    # and pays for every provider whether the user calls them or not.
 
 if cerebras_result.is_successful:
     cerebras_import_exception: ImportError | None = None
@@ -88,7 +91,6 @@ with optional_import_block() as gemini_result:
         ResourceExhausted as gemini_ResourceExhausted,
     )
 
-    from .gemini import GeminiClient
 
 if gemini_result.is_successful:
     gemini_import_exception: ImportError | None = None
@@ -102,7 +104,6 @@ with optional_import_block() as anthropic_result:
         RateLimitError as anthorpic_RateLimitError,
     )
 
-    from .anthropic import AnthropicClient
 
 if anthropic_result.is_successful:
     anthropic_import_exception: ImportError | None = None
@@ -116,7 +117,6 @@ with optional_import_block() as mistral_result:
     )
     from mistralai.client.errors.sdkerror import SDKError as mistral_SDKError  # noqa
 
-    from .mistral import MistralAIClient
 
 if mistral_result.is_successful:
     mistral_import_exception: ImportError | None = None
@@ -127,7 +127,6 @@ else:
 with optional_import_block() as together_result:
     from together.error import TogetherException as together_TogetherException
 
-    from .together import TogetherClient
 
 if together_result.is_successful:
     together_import_exception: ImportError | None = None
@@ -142,7 +141,6 @@ with optional_import_block() as groq_result:
         RateLimitError as groq_RateLimitError,
     )
 
-    from .groq import GroqClient
 
 if groq_result.is_successful:
     groq_import_exception: ImportError | None = None
@@ -157,7 +155,6 @@ with optional_import_block() as cohere_result:
         TooManyRequestsError as cohere_TooManyRequestsError,
     )
 
-    from .cohere import CohereClient
 
 if cohere_result.is_successful:
     cohere_import_exception: ImportError | None = None
@@ -171,7 +168,6 @@ with optional_import_block() as ollama_result:
         ResponseError as ollama_ResponseError,
     )
 
-    from .ollama import OllamaClient
 
 if ollama_result.is_successful:
     ollama_import_exception: ImportError | None = None
@@ -185,7 +181,6 @@ with optional_import_block() as bedrock_result:
         ClientError as bedrock_ClientError,
     )
 
-    from .bedrock import BedrockClient
 
 if bedrock_result.is_successful:
     bedrock_import_exception: ImportError | None = None
@@ -994,11 +989,15 @@ class OpenAIWrapper:
             elif api_type is not None and api_type.startswith("cerebras"):
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
+                from .cerebras import CerebrasClient
+
                 client = CerebrasClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
+                from .gemini import GeminiClient
+
                 self._configure_openai_config_for_gemini(config, openai_config)
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
@@ -1009,37 +1008,51 @@ class OpenAIWrapper:
                     self._configure_openai_config_for_vertextai(config, openai_config)
                 if anthropic_import_exception:
                     raise ImportError("Please install `anthropic` to use Anthropic API.")
+                from .anthropic import AnthropicClient
+
                 client = AnthropicClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("mistral"):
                 if mistral_import_exception:
                     raise ImportError("Please install `mistralai` to use the Mistral.AI API.")
+                from .mistral import MistralAIClient
+
                 client = MistralAIClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("together"):
                 if together_import_exception:
                     raise ImportError("Please install `together` to use the Together.AI API.")
+                from .together import TogetherClient
+
                 client = TogetherClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("groq"):
                 if groq_import_exception:
                     raise ImportError("Please install `groq` to use the Groq API.")
+                from .groq import GroqClient
+
                 client = GroqClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("cohere"):
                 if cohere_import_exception:
                     raise ImportError("Please install `cohere` to use the Cohere API.")
+                from .cohere import CohereClient
+
                 client = CohereClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("ollama"):
                 if ollama_import_exception:
                     raise ImportError("Please install `ollama` and `fix-busted-json` to use the Ollama API.")
+                from .ollama import OllamaClient
+
                 client = OllamaClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("bedrock"):
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 if bedrock_import_exception:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
+                from .bedrock import BedrockClient
+
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("openai_v2"):

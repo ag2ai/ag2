@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny, field_validator
 from typing_extensions import Self
 
 from autogen.doc_utils import export_module
@@ -304,14 +304,25 @@ class _LLMConfig(ApplicationConfig):
     tools: list[Any]
     functions: list[Any]
 
-    config_list: list[
-        Annotated[
-            ConfigEntries,
-            Field(discriminator="api_type"),
-        ],
-    ] = Field(..., min_length=1)
+    # SerializeAsAny: dump the runtime subclass's full schema (e.g.
+    # OpenAILLMConfigEntry's `stream` field) instead of only LLMConfigEntry's
+    # base fields. Required because the field type is the base class.
+    config_list: list[SerializeAsAny[LLMConfigEntry]] = Field(..., min_length=1)
 
     routing_method: Literal["fixed_order", "round_robin"] | None
 
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("config_list", mode="before")
+    @classmethod
+    def _parse_config_entries(cls, v: Any) -> Any:
+        """Dispatch each entry to the right LLMConfigEntry subclass via the
+        lazy registry. See autogen.llm_config.types.parse_entry."""
+        from .types import parse_entry
+
+        if v is None:
+            return v
+        if not isinstance(v, list):
+            v = [v]
+        return [parse_entry(item) for item in v]
