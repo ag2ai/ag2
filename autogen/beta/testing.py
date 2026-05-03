@@ -10,7 +10,14 @@ from typing_extensions import Self
 
 from autogen.beta import Context
 from autogen.beta.config import LLMClient, ModelConfig
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
+from autogen.beta.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+)
 
 __all__ = (
     "TestConfig",
@@ -21,7 +28,7 @@ __all__ = (
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | BaseEvent | Iterable[ToolCallEvent] | str) -> None:
         self.events = iter(events)
 
     async def __call__(
@@ -47,13 +54,18 @@ class TestClient(LLMClient):
         elif isinstance(next_msg, ToolCallEvent):
             next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
 
+        elif isinstance(next_msg, BaseEvent) and not isinstance(next_msg, ModelResponse):
+            await context.send(next_msg)
+            return await self(messages, context, **kwargs)
+
         return next_msg
 
 
 class TrackingClient(LLMClient):
-    def __init__(self, client: LLMClient, mock: MagicMock) -> None:
+    def __init__(self, client: LLMClient, mock: MagicMock, calls: list[list[BaseEvent]]) -> None:
         self.client = client
         self.mock = mock
+        self.calls = calls
 
     async def __call__(
         self,
@@ -62,6 +74,7 @@ class TrackingClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         self.mock(messages[-1])
+        self.calls.append(list(messages))
         return await self.client(messages, context=context, **kwargs)
 
 
@@ -69,12 +82,13 @@ class TrackingConfig(ModelConfig):
     def __init__(self, config: ModelConfig) -> None:
         self.config = config
         self.mock = MagicMock()
+        self.calls: list[list[BaseEvent]] = []
 
     def copy(self) -> Self:
         return self
 
     def create(self) -> TrackingClient:
-        return TrackingClient(self.config.create(), self.mock)
+        return TrackingClient(self.config.create(), self.mock, self.calls)
 
     def create_files_client(self) -> None:
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
@@ -83,7 +97,7 @@ class TrackingConfig(ModelConfig):
 class TestConfig(ModelConfig):
     __test__ = False
 
-    def __init__(self, *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str) -> None:
+    def __init__(self, *events: ModelResponse | ToolCallEvent | BaseEvent | Iterable[ToolCallEvent] | str) -> None:
         self.events = events
 
     def copy(self) -> Self:

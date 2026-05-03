@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from ..server import A2AServer
 
 
-def build_asgi(
+def build_asgi_factory(
     server: "A2AServer",
     *,
     rpc_url: str = "/",

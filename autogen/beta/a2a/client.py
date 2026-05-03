@@ -190,19 +190,30 @@ class A2AClient(LLMClient):
                     message=self._build_tool_result_followup(tool_result, context_id=context_id, task_id=task_id),
                 )
 
-        request = _last_model_request(messages)
-        if request is None:
+        request_index: int | None = None
+        for idx in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[idx], ModelRequest):
+                request_index = idx
+                break
+        if request_index is None:
             raise ValueError("A2AClient requires at least one ModelRequest in messages")
+        request = messages[request_index]
+        # Everything before the current ModelRequest is the prior turn history
+        # the server needs to reseed its stream — the request itself is sent
+        # via Message.parts, so we skip it here to avoid duplication.
+        prior_history: tuple[BaseEvent, ...] = tuple(messages[:request_index])
 
         wire_tools = schemas_to_wire(tools)
         metadata: dict[str, object] | None = {CLIENT_TOOLS_KEY: wire_tools} if wire_tools else None
         extensions = [CLIENT_TOOLS_EXTENSION_URI] if wire_tools else None
 
+        assert isinstance(request, ModelRequest)
         message = model_request_to_a2a_message(
             request,
             context_id=context.variables.get(CONTEXT_ID_VAR_KEY),
             extensions=extensions,
             metadata=metadata,
+            history=prior_history,
         )
         return SendMessageRequest(message=message)
 
@@ -256,12 +267,18 @@ class A2AClient(LLMClient):
         context.variables[TASK_ID_VAR_KEY] = outcome.task.id
         context.variables.pop(PENDING_TOOL_CALL_ID_VAR_KEY, None)
 
-        result_metadata = _result_artifact_metadata(outcome.task)
+        result_metadata: dict[str, object] | None = None
+        for artifact in outcome.task.artifacts:
+            if artifact.name == RESULT_ARTIFACT_NAME:
+                result_metadata = artifact_metadata_dict(artifact)
+                break
         usage = usage_from_metadata(result_metadata)
         finish_reason = finish_reason_from_metadata(result_metadata) or finish_reason_for(state)
         model = model_from_metadata(result_metadata) or card.name
 
-        text = outcome.text or _final_text(outcome.task)
+        text = outcome.text or "".join(
+            artifact_text(a) for a in outcome.task.artifacts if a.name == RESULT_ARTIFACT_NAME
+        )
         return ModelResponse(
             message=ModelMessage(text) if text else None,
             usage=usage,
@@ -310,21 +327,3 @@ class A2AClient(LLMClient):
                     break
                 await asyncio.sleep(self._reconnect_backoff)
         raise A2AReconnectError(attempts=attempts, last_error=last_error)
-
-
-def _last_model_request(messages: Sequence[BaseEvent]) -> ModelRequest | None:
-    for ev in reversed(messages):
-        if isinstance(ev, ModelRequest):
-            return ev
-    return None
-
-
-def _final_text(task: Task) -> str:
-    return "".join(artifact_text(a) for a in task.artifacts if a.name == RESULT_ARTIFACT_NAME)
-
-
-def _result_artifact_metadata(task: Task) -> dict[str, object] | None:
-    for artifact in task.artifacts:
-        if artifact.name == RESULT_ARTIFACT_NAME:
-            return artifact_metadata_dict(artifact)
-    return None

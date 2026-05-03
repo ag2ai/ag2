@@ -2,17 +2,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 from uuid import uuid4
 
 from a2a.types import Message, Part, Role
 
-from autogen.beta.events import ModelRequest
+from autogen.beta.events import BaseEvent, ModelRequest
+from autogen.beta.events._serialization import (
+    deserialize_value,
+    event_to_dict,
+    import_event_class,
+    qualified_name,
+)
 from autogen.beta.events.input_events import Input
 
 from ._proto import dict_to_struct, struct_to_dict
 from .parts import a2a_parts_to_inputs, inputs_to_a2a_parts
+from .wire import HISTORY_KEY
 
 
 def model_request_to_a2a_message(
@@ -22,8 +29,21 @@ def model_request_to_a2a_message(
     task_id: str | None = None,
     extensions: Iterable[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    history: Sequence[BaseEvent] = (),
 ) -> Message:
-    """Build an A2A user ``Message`` from a beta ``ModelRequest``."""
+    """Build an A2A user ``Message`` from a beta ``ModelRequest``.
+
+    ``history`` is the client's accumulated event stream prior to this turn —
+    serialized into ``Message.metadata[HISTORY_KEY]`` so the server can
+    reseed its stream without keeping per-context state.
+    """
+    merged_metadata: dict[str, Any] = dict(metadata) if metadata else {}
+    if history:
+        # Tag each event with its qualified name so ``decode_history`` can
+        # look up the class — ``event_to_dict`` itself only emits the field
+        # payload (the ``__event__`` wrapper is added by ``serialize_value``
+        # for nested events but not at the top level).
+        merged_metadata[HISTORY_KEY] = [{"__event__": qualified_name(ev), **event_to_dict(ev)} for ev in history]
     return Message(
         role=Role.ROLE_USER,
         parts=inputs_to_a2a_parts(req.parts),
@@ -31,8 +51,35 @@ def model_request_to_a2a_message(
         context_id=context_id or "",
         task_id=task_id or "",
         extensions=list(extensions) if extensions else [],
-        metadata=dict_to_struct(metadata),
+        metadata=dict_to_struct(merged_metadata or None),
     )
+
+
+def decode_history(metadata: dict[str, Any] | None) -> list[BaseEvent]:
+    """Reconstruct the client-supplied ``BaseEvent`` stream from message metadata.
+
+    The inverse of the ``history=`` argument to ``model_request_to_a2a_message``.
+    Items that fail to resolve to a known event class are dropped (forward
+    compatibility — newer client may know event types this server doesn't).
+    """
+    if not metadata:
+        return []
+    raw = metadata.get(HISTORY_KEY)
+    if not isinstance(raw, list):
+        return []
+    decoded: list[BaseEvent] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        event_type_name = item.get("__event__")
+        if not isinstance(event_type_name, str):
+            continue
+        cls = import_event_class(event_type_name)
+        if cls is None:
+            continue
+        fields = {k: deserialize_value(v) for k, v in item.items() if k != "__event__"}
+        decoded.append(cls(**fields))
+    return decoded
 
 
 def a2a_message_to_inputs(msg: Message) -> list[Input]:

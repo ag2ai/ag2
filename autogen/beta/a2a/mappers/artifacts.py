@@ -8,13 +8,12 @@ from typing import Any
 
 from a2a.types import Artifact, TaskArtifactUpdateEvent
 
-from autogen.beta.events import ModelMessageChunk, ModelReasoning, Usage
+from autogen.beta.events import ModelMessageChunk, Usage
 
 from ._proto import struct_to_dict, value_to_python
 from .wire import (
     FINISH_REASON_METADATA_KEY,
     MODEL_METADATA_KEY,
-    REASONING_ARTIFACT_NAME,
     USAGE_METADATA_KEY,
 )
 
@@ -24,20 +23,17 @@ def artifact_text(artifact: Artifact) -> str:
     return "".join(_iter_artifact_text(artifact))
 
 
-def task_artifact_update_to_events(event: TaskArtifactUpdateEvent) -> Iterator[ModelMessageChunk | ModelReasoning]:
-    """Yield ``ModelMessageChunk`` or ``ModelReasoning`` events for an artifact update.
+def task_artifact_update_to_events(event: TaskArtifactUpdateEvent) -> Iterator[ModelMessageChunk]:
+    """Yield ``ModelMessageChunk`` events for an artifact update.
 
-    Reasoning artifacts are routed to ``ModelReasoning``; everything else
-    (default ``result`` artifact) becomes ``ModelMessageChunk``.
+    Reasoning is no longer carried via artifacts (A2A spec reserves artifacts
+    for produced outputs); it now rides the ``status_update`` channel — see
+    ``REASONING_KEY`` and ``streams.drain``.
     """
-    is_reasoning = event.artifact.name == REASONING_ARTIFACT_NAME
     for text in _iter_artifact_text(event.artifact):
         if not text:
             continue
-        if is_reasoning:
-            yield ModelReasoning(text)
-        else:
-            yield ModelMessageChunk(text)
+        yield ModelMessageChunk(text)
 
 
 def usage_to_metadata(usage: Usage) -> dict[str, Any]:

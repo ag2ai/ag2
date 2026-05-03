@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from ..server import A2AServer
 
 
-def build_grpc(
+def build_grpc_factory(
     server: "A2AServer",
     *,
     host: str | None = None,

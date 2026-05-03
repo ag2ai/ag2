@@ -17,9 +17,10 @@ from a2a.types import (
 )
 
 from autogen.beta.context import ConversationContext
+from autogen.beta.events import ModelReasoning
 
 from .errors import A2AAuthRequiredError, A2AReconnectError
-from .mappers import REASONING_ARTIFACT_NAME, message_metadata, task_artifact_update_to_events
+from .mappers import REASONING_KEY, message_metadata, task_artifact_update_to_events, text_from_parts
 from .types import TERMINAL_TASK_STATES, TRANSPORT_ERRORS
 
 
@@ -68,17 +69,14 @@ async def drain(
                     outcome.task = Task(id=upd.task_id, context_id=upd.context_id, status=upd.status, history=[])
                 else:
                     outcome.task.status.CopyFrom(upd.status)
+                await _maybe_emit_reasoning(upd.status, outcome, context)
 
             elif payload == "artifact_update":
                 upd = response.artifact_update
                 if outcome.task is None:
                     outcome.task = Task(id=upd.task_id, context_id=upd.context_id, history=[])
-                is_reasoning = upd.artifact.name == REASONING_ARTIFACT_NAME
                 for ev in task_artifact_update_to_events(upd):
-                    if is_reasoning:
-                        outcome.reasoning += ev.content
-                    else:
-                        outcome.text += ev.content
+                    outcome.text += ev.content
                     await context.send(ev)
 
             if outcome.task is not None:
@@ -151,3 +149,23 @@ def _read_input_prompt(task: Task, outcome: StreamOutcome) -> None:
     msg = task.status.message
     outcome.input_prompt = "".join(p.text for p in msg.parts if p.WhichOneof("content") == "text")
     outcome.input_metadata = message_metadata(msg)
+
+
+async def _maybe_emit_reasoning(status: Any, outcome: StreamOutcome, context: ConversationContext) -> None:
+    """Decode a ``ModelReasoning`` chunk from a working-state status update.
+
+    Server emits reasoning content as ``TaskStatusUpdateEvent`` with state
+    ``WORKING`` and a ``REASONING_KEY``-tagged message. Plain working updates
+    without that marker are ignored here (regular state sync only).
+    """
+    if not status.HasField("message"):
+        return
+    msg = status.message
+    metadata = message_metadata(msg)
+    if not metadata.get(REASONING_KEY):
+        return
+    text = text_from_parts(msg.parts)
+    if not text:
+        return
+    outcome.reasoning += text
+    await context.send(ModelReasoning(text))

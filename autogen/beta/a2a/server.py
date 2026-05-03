@@ -18,15 +18,7 @@ from a2a.types import AgentCapabilities, AgentCard, AgentExtension
 from .cards import build_card
 from .executor import AG2AgentExecutor
 from .server_middleware import ExecutorMiddleware
-from .transports import (
-    build_asgi as _build_asgi,
-)
-from .transports import (
-    build_grpc as _build_grpc,
-)
-from .transports import (
-    build_rest as _build_rest,
-)
+from .transports import build_asgi_factory, build_grpc_factory, build_rest_factory
 
 if TYPE_CHECKING:
     from grpc.aio import Server as GrpcServer
@@ -168,11 +160,11 @@ class A2AServer:
 
     def build_asgi(self, **kwargs: Any) -> "Starlette":
         """Starlette ASGI app speaking JSON-RPC."""
-        return _build_asgi(self, **kwargs)
+        return build_asgi_factory(self, **kwargs)
 
     def build_rest(self, **kwargs: Any) -> "Starlette":
         """Starlette ASGI app speaking the HTTP+JSON/REST binding (A2A spec §11)."""
-        return _build_rest(self, **kwargs)
+        return build_rest_factory(self, **kwargs)
 
     def build_grpc(self, **kwargs: Any) -> "GrpcServer":
         """``grpc.aio.Server`` speaking the gRPC binding (A2A spec §10).
@@ -182,7 +174,7 @@ class A2AServer:
         Pass ``host`` + ``port`` to bind, or ``grpc_server=existing`` to register
         the A2A service on an already-built server.
         """
-        return _build_grpc(self, **kwargs)
+        return build_grpc_factory(self, **kwargs)
 
 
 def _warn_ignored_card_kwargs(

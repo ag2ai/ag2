@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from ..server import A2AServer
 
 
-def build_rest(
+def build_rest_factory(
     server: "A2AServer",
     *,
     path_prefix: str = "",

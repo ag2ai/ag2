@@ -8,12 +8,10 @@ import pytest
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface
 from a2a.utils.constants import TransportProtocol
 
-from autogen.beta import MemoryStream
+from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 from autogen.beta.a2a.client import A2AClient
 from autogen.beta.a2a.errors import A2AResponseSchemaNotSupportedError
-from autogen.beta.context import ConversationContext
-from autogen.beta.events import ModelRequest, TextInput
 from autogen.beta.response.proto import ResponseProto
 
 
@@ -59,8 +57,6 @@ class TestCreate:
         assert isinstance(client, A2AClient)
 
     def test_create_is_synchronous(self) -> None:
-        # Creation must not be a coroutine — the LLMClient protocol guarantees
-        # a sync `create()`. Network I/O is deferred until the first __call__.
         config = A2AConfig("http://localhost:8000")
 
         assert not inspect.iscoroutine(config.create())
@@ -103,16 +99,8 @@ class _PassthroughSchema(ResponseProto[str]):
 
 
 @pytest.mark.asyncio
-class TestResponseSchemaValidation:
-    async def test_raises_when_response_schema_passed(self) -> None:
-        client = A2AConfig("http://x").create()
-        ctx = ConversationContext(stream=MemoryStream())
+async def test_a2a_client_rejects_response_schema() -> None:
+    agent = Agent("client", config=A2AConfig("http://x"))
 
-        with pytest.raises(A2AResponseSchemaNotSupportedError):
-            await client(
-                [ModelRequest([TextInput("hi")])],
-                ctx,
-                tools=[],
-                response_schema=_PassthroughSchema(),
-                serializer=None,  # type: ignore[arg-type]
-            )
+    with pytest.raises(A2AResponseSchemaNotSupportedError):
+        await agent.ask("hi", response_schema=_PassthroughSchema())

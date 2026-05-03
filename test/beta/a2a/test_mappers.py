@@ -2,119 +2,95 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa
-# (everything below is dead code kept as a starting point for the 1.0 rewrite)
-import pytest
+from a2a.types import Artifact, Part, Role, TaskArtifactUpdateEvent
 
-# TODO(a2a-beta): rewrite for proto-native a2a 1.0 Part oneof. Body asserts
-# .model_dump() on what is now a protobuf message; uses TextPart/DataPart
-# wrappers and `Part(root=...)` shape that no longer exist.
-pytest.skip("test_mappers.py uses legacy a2a 0.3 API — pending rewrite for 1.0", allow_module_level=True)
-
-
-class TestTextRoundTrip:
-    def test_text_input_to_text_part(self) -> None:
-        [part] = inputs_to_a2a_parts([TextInput("hello")])
-
-        assert part.model_dump(by_alias=False) == IsPartialDict({
-            "kind": "text",
-            "text": "hello",
-            "metadata": {"ag2_beta_kind": "text"},
-        })
-
-    def test_round_trip_preserves_content(self) -> None:
-        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([TextInput("hello")]))
-
-        assert restored == TextInput("hello")
-
-    def test_user_metadata_is_preserved(self) -> None:
-        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([TextInput("hi", metadata={"locale": "en"})]))
-
-        assert restored == TextInput("hi", metadata={"locale": "en"})
+from autogen.beta.a2a.mappers import (
+    a2a_message_to_inputs,
+    a2a_parts_to_inputs,
+    artifact_text,
+    followup_user_message,
+    input_required_message,
+    inputs_to_a2a_parts,
+    model_request_to_a2a_message,
+    task_artifact_update_to_events,
+)
+from autogen.beta.events import (
+    BinaryInput,
+    DataInput,
+    FileIdInput,
+    ModelMessageChunk,
+    ModelRequest,
+    TextInput,
+    UrlInput,
+)
+from autogen.beta.events.input_events import BinaryType
 
 
-class TestBinaryRoundTrip:
-    def test_binary_input_to_file_part_with_bytes(self) -> None:
-        [part] = inputs_to_a2a_parts([BinaryInput(b"\x00\xff", media_type="image/png", kind=BinaryType.IMAGE)])
-
-        assert part.model_dump(by_alias=False) == IsPartialDict({
-            "kind": "file",
-            "file": IsPartialDict({"bytes": b64encode(b"\x00\xff").decode("ascii"), "mime_type": "image/png"}),
-            "metadata": IsPartialDict({"ag2_beta_kind": "binary", "ag2_beta_binary_type": "image"}),
-        })
-
-    def test_round_trip_preserves_data_media_type_and_kind(self) -> None:
-        original = BinaryInput(b"raw-bytes", media_type="audio/wav", kind=BinaryType.AUDIO)
+class TestPartRoundTrip:
+    def test_text_input(self) -> None:
+        original = TextInput("hello")
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-    def test_vendor_metadata_is_preserved(self) -> None:
+    def test_text_input_preserves_user_metadata(self) -> None:
+        original = TextInput("hi", metadata={"locale": "en"})
+
+        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
+
+        assert restored == original
+
+    def test_binary_input_image(self) -> None:
+        original = BinaryInput(b"\x00\xff", media_type="image/png", kind=BinaryType.IMAGE)
+
+        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
+
+        assert restored == original
+
+    def test_binary_input_preserves_vendor_metadata(self) -> None:
         original = BinaryInput(b"data", media_type="image/png", vendor_metadata={"filename": "x.png"})
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-
-class TestFileIdRoundTrip:
-    def test_file_id_input_to_data_part(self) -> None:
-        [part] = inputs_to_a2a_parts([FileIdInput("file_123", filename="report.pdf")])
-
-        assert part.model_dump(by_alias=False) == IsPartialDict({
-            "kind": "data",
-            "data": {"file_id": "file_123", "filename": "report.pdf"},
-            "metadata": IsPartialDict({"ag2_beta_kind": "file_id", "ag2_beta_filename": "report.pdf"}),
-        })
-
-    def test_round_trip_preserves_id_and_filename(self) -> None:
+    def test_file_id_input_with_filename(self) -> None:
         original = FileIdInput("file_123", filename="report.pdf")
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-    def test_round_trip_without_filename(self) -> None:
-        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([FileIdInput("file_xyz")]))
+    def test_file_id_input_without_filename(self) -> None:
+        original = FileIdInput("file_xyz")
 
-        assert restored == FileIdInput("file_xyz")
+        [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
+        assert restored == original
 
-class TestUrlRoundTrip:
-    def test_url_input_to_file_part_with_uri(self) -> None:
-        [part] = inputs_to_a2a_parts([UrlInput("https://x.com/a.png", kind=BinaryType.IMAGE)])
-
-        assert part.model_dump(by_alias=False) == IsPartialDict({
-            "kind": "file",
-            "file": IsPartialDict({"uri": "https://x.com/a.png"}),
-            "metadata": IsPartialDict({"ag2_beta_kind": "url", "ag2_beta_binary_type": "image"}),
-        })
-
-    def test_round_trip_preserves_url_and_kind(self) -> None:
+    def test_url_input(self) -> None:
         original = UrlInput("https://x.com/a.png", kind=BinaryType.IMAGE)
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-
-class TestDataInputRoundTrip:
-    def test_dict_data_round_trip(self) -> None:
+    def test_data_input_dict(self) -> None:
         original = DataInput({"k": "v", "n": 1})
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-    def test_string_data_round_trip(self) -> None:
+    def test_data_input_string(self) -> None:
         original = DataInput("simple-string")
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
 
         assert restored == original
 
-    def test_int_data_round_trip(self) -> None:
+    def test_data_input_int(self) -> None:
         original = DataInput(42)
 
         [restored] = a2a_parts_to_inputs(inputs_to_a2a_parts([original]))
@@ -123,50 +99,61 @@ class TestDataInputRoundTrip:
 
 
 class TestModelRequestRoundTrip:
-    def test_model_request_to_message(self) -> None:
-        req = ModelRequest([TextInput("hi"), DataInput({"k": "v"})])
-
-        msg = model_request_to_a2a_message(req, context_id="ctx-1", task_id="task-9")
-
-        assert msg.model_dump(by_alias=False) == IsPartialDict({
-            "role": Role.user,
-            "context_id": "ctx-1",
-            "task_id": "task-9",
-            "parts": [
-                IsPartialDict({"kind": "text", "text": "hi"}),
-                IsPartialDict({"kind": "data", "data": {"k": "v"}}),
-            ],
-        })
-
-    def test_message_to_inputs(self) -> None:
+    def test_text_only_request(self) -> None:
         req = ModelRequest([TextInput("hi"), TextInput("there")])
-        msg = model_request_to_a2a_message(req, context_id=None)
+
+        msg = model_request_to_a2a_message(req, context_id="ctx-1")
 
         assert a2a_message_to_inputs(msg) == [TextInput("hi"), TextInput("there")]
+
+    def test_role_is_user(self) -> None:
+        msg = model_request_to_a2a_message(ModelRequest([TextInput("hi")]), context_id="ctx-1")
+
+        assert msg.role == Role.ROLE_USER
+
+    def test_context_and_task_ids_propagate(self) -> None:
+        msg = model_request_to_a2a_message(ModelRequest([TextInput("hi")]), context_id="ctx-1", task_id="task-9")
+
+        assert (msg.context_id, msg.task_id) == ("ctx-1", "task-9")
+
+    def test_mixed_part_types_round_trip(self) -> None:
+        req = ModelRequest([TextInput("hi"), DataInput({"k": "v"})])
+
+        msg = model_request_to_a2a_message(req, context_id="ctx-1")
+
+        assert a2a_message_to_inputs(msg) == [TextInput("hi"), DataInput({"k": "v"})]
 
 
 class TestArtifactStreaming:
     def test_text_part_yields_chunk(self) -> None:
-        artifact = Artifact(artifact_id=uuid4().hex, parts=[Part(root=TextPart(text="abc"))])
+        artifact = Artifact(artifact_id="a-1", parts=[Part(text="abc")])
         event = TaskArtifactUpdateEvent(
             task_id="t-1", context_id="c-1", artifact=artifact, append=True, last_chunk=False
         )
 
-        assert list(task_artifact_update_to_chunks(event)) == [ModelMessageChunk("abc")]
+        assert list(task_artifact_update_to_events(event)) == [ModelMessageChunk("abc")]
 
-    def test_data_part_with_content_yields_chunk(self) -> None:
-        artifact = Artifact(artifact_id=uuid4().hex, parts=[Part(root=DataPart(data={"content": "x"}))])
+    def test_multiple_text_parts_yield_separate_chunks(self) -> None:
+        artifact = Artifact(artifact_id="a-1", parts=[Part(text="hello "), Part(text="world")])
         event = TaskArtifactUpdateEvent(
             task_id="t-1", context_id="c-1", artifact=artifact, append=True, last_chunk=False
         )
 
-        assert list(task_artifact_update_to_chunks(event)) == [ModelMessageChunk("x")]
+        assert list(task_artifact_update_to_events(event)) == [
+            ModelMessageChunk("hello "),
+            ModelMessageChunk("world"),
+        ]
+
+    def test_empty_text_parts_dropped(self) -> None:
+        artifact = Artifact(artifact_id="a-1", parts=[Part(text=""), Part(text="kept")])
+        event = TaskArtifactUpdateEvent(
+            task_id="t-1", context_id="c-1", artifact=artifact, append=True, last_chunk=False
+        )
+
+        assert list(task_artifact_update_to_events(event)) == [ModelMessageChunk("kept")]
 
     def test_artifact_text_concatenates_text_parts(self) -> None:
-        artifact = Artifact(
-            artifact_id=uuid4().hex,
-            parts=[Part(root=TextPart(text="hello ")), Part(root=TextPart(text="world"))],
-        )
+        artifact = Artifact(artifact_id="a-1", parts=[Part(text="hello "), Part(text="world")])
 
         assert artifact_text(artifact) == "hello world"
 
@@ -175,28 +162,17 @@ class TestControlMessages:
     def test_input_required_uses_agent_role(self) -> None:
         msg = input_required_message("Please confirm", context_id="c-1", task_id="t-1")
 
-        assert msg.model_dump(by_alias=False) == IsPartialDict({
-            "role": Role.agent,
-            "context_id": "c-1",
-            "task_id": "t-1",
-            "parts": [IsPartialDict({"kind": "text", "text": "Please confirm"})],
-        })
+        assert msg.role == Role.ROLE_AGENT
+        assert (msg.context_id, msg.task_id) == ("c-1", "t-1")
 
     def test_followup_uses_user_role(self) -> None:
         msg = followup_user_message("yes", context_id="c-1", task_id="t-1")
 
-        assert msg.model_dump(by_alias=False) == IsPartialDict({
-            "role": Role.user,
-            "context_id": "c-1",
-            "task_id": "t-1",
-            "parts": [IsPartialDict({"kind": "text", "text": "yes"})],
-        })
+        assert msg.role == Role.ROLE_USER
+        assert (msg.context_id, msg.task_id) == ("c-1", "t-1")
 
 
-def test_user_metadata_keys_with_reserved_prefix_are_dropped() -> None:
-    # The `ag2_beta_*` prefix is reserved for the mapper's internal markers.
-    # User metadata using that prefix is silently dropped on round-trip —
-    # documented contract; non-prefixed keys survive untouched.
+def test_user_metadata_with_reserved_prefix_is_dropped() -> None:
     [restored] = a2a_parts_to_inputs(
         inputs_to_a2a_parts([TextInput("hi", metadata={"ag2_beta_kind": "user-supplied", "locale": "en"})])
     )

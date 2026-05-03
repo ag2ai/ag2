@@ -15,7 +15,6 @@ from a2a.utils.errors import InternalError
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from autogen.beta.events import (
-    BaseEvent,
     HumanInputRequest,
     HumanMessage,
     ModelMessageChunk,
@@ -32,11 +31,13 @@ from .client_tools import (
 )
 from .mappers import (
     CLIENT_TOOLS_KEY,
-    REASONING_ARTIFACT_NAME,
+    REASONING_KEY,
     RESULT_ARTIFACT_NAME,
     TOOL_CALL_REQUEST_KEY,
     a2a_message_to_inputs,
     build_result_metadata,
+    decode_history,
+    dict_to_struct,
     finish_reason_for,
     hitl_replay_queue,
     initial_inputs,
@@ -81,7 +82,7 @@ class AG2AgentExecutor(AgentExecutor):
     :mod:`autogen.beta.a2a.server_middleware`.
     """
 
-    __slots__ = ("_agent", "_committed_history", "_run")
+    __slots__ = ("_agent", "_run")
 
     def __init__(
         self,
@@ -91,11 +92,6 @@ class AG2AgentExecutor(AgentExecutor):
     ) -> None:
         self._agent = agent
         self._run = compose(middleware, self._run_bare)
-        # Per-``context_id`` committed history. Updated only when an
-        # ``execute()`` call completes successfully — suspended turns
-        # (HITL / client-side tool requests) do not leak partial events
-        # here, so resumption can replay the turn from a clean baseline.
-        self._committed_history: dict[str, list[BaseEvent]] = {}
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         await self._run(context, event_queue)
@@ -136,18 +132,19 @@ class AG2AgentExecutor(AgentExecutor):
         stub_tools = build_client_tool_stubs(client_tool_schemas)
 
         result_forwarder = _ArtifactForwarder(updater, name=RESULT_ARTIFACT_NAME)
-        reasoning_forwarder = _ArtifactForwarder(updater, name=REASONING_ARTIFACT_NAME)
+        reasoning_forwarder = _ReasoningStatusForwarder(updater, task=task)
 
-        # Multi-turn replay: seed the per-request stream with the events
-        # committed by previous successful turns sharing this ``context_id``.
-        # Suspended turns (HITL / client-tool requests) do not commit, so
-        # resumption replays the in-flight turn from this same clean baseline
-        # — partial events from the previous attempt never leak in.
-        seed_events = self._committed_history.get(task.context_id, [])
+        # Stateless multi-turn: the client serializes its accumulated
+        # ``BaseEvent`` stream into ``Message.metadata[HISTORY_KEY]`` on
+        # every initial turn. We reseed the request-scoped stream from
+        # there and never persist anything between calls. Suspended turns
+        # carry no history (the in-flight task lives in the TaskStore and
+        # ``hitl_replay_queue`` replays it through ``_ReplayHook``).
+        seed_events = decode_history(message_metadata(context.message))
         storage = MemoryStorage()
         stream = MemoryStream(storage=storage)
         if seed_events:
-            await storage.set_history(stream.id, list(seed_events))
+            await storage.set_history(stream.id, seed_events)
         stream.where(ModelMessageChunk).subscribe(result_forwarder)
         stream.where(ModelReasoning).subscribe(reasoning_forwarder)
 
@@ -188,11 +185,6 @@ class AG2AgentExecutor(AgentExecutor):
                 model=reply.response.model,
             ),
         )
-        # Commit only after the turn fully succeeds. Suspended turns return
-        # earlier and leave ``_committed_history`` untouched, so the next
-        # ``execute()`` for this ``context_id`` re-seeds from the same
-        # clean baseline and replays the in-flight turn deterministically.
-        self._committed_history[task.context_id] = list(await stream.history.get_events())
         await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -222,8 +214,8 @@ class AG2AgentExecutor(AgentExecutor):
 
 
 class _ArtifactForwarder:
-    """Forward streamed ``ModelMessageChunk`` / ``ModelReasoning`` content as
-    appended ``TaskArtifactUpdate`` events under a fixed artifact ``name``.
+    """Forward streamed ``ModelMessageChunk`` content as appended
+    ``TaskArtifactUpdate`` events under a fixed artifact ``name``.
     """
 
     __slots__ = ("_name", "_updater", "streaming_started")
@@ -233,7 +225,7 @@ class _ArtifactForwarder:
         self._name = name
         self.streaming_started = False
 
-    async def __call__(self, chunk: ModelMessageChunk | ModelReasoning) -> None:
+    async def __call__(self, chunk: ModelMessageChunk) -> None:
         await self._updater.add_artifact(
             parts=text_parts(chunk.content),
             name=self._name,
@@ -241,6 +233,36 @@ class _ArtifactForwarder:
             last_chunk=False,
         )
         self.streaming_started = True
+
+
+class _ReasoningStatusForwarder:
+    """Forward streamed ``ModelReasoning`` content as ``TaskStatusUpdateEvent``
+    frames with state ``WORKING`` and a ``REASONING_KEY``-tagged message.
+
+    A2A spec reserves artifacts for produced outputs; reasoning is process
+    state, so it rides the status-update channel instead. Clients filter
+    by ``Message.metadata[REASONING_KEY]`` to distinguish reasoning chunks
+    from regular working-state messages.
+    """
+
+    __slots__ = ("_updater", "_task")
+
+    def __init__(self, updater: TaskUpdater, *, task: Task) -> None:
+        self._updater = updater
+        self._task = task
+
+    async def __call__(self, chunk: ModelReasoning) -> None:
+        await self._updater.update_status(
+            state=TaskState.TASK_STATE_WORKING,
+            message=Message(
+                role=Role.ROLE_AGENT,
+                parts=text_parts(chunk.content),
+                message_id=uuid4().hex,
+                context_id=self._task.context_id,
+                task_id=self._task.id,
+                metadata=dict_to_struct({REASONING_KEY: True}),
+            ),
+        )
 
 
 class _ReplayHook:

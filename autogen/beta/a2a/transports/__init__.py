@@ -5,24 +5,24 @@
 from autogen.beta.exceptions import missing_optional_dependency
 
 try:
-    from .asgi import build_asgi
+    from .asgi import build_asgi_factory
 except ImportError as e:
-    build_asgi = missing_optional_dependency("build_asgi", "a2a-http", e)  # type: ignore[misc]
+    build_asgi_factory = missing_optional_dependency("build_asgi_factory", "a2a-http", e)  # type: ignore[misc]
 
 try:
-    from .rest import build_rest
+    from .rest import build_rest_factory
 except ImportError as e:
-    build_rest = missing_optional_dependency("build_rest", "a2a-http", e)  # type: ignore[misc]
+    build_rest_factory = missing_optional_dependency("build_rest_factory", "a2a-http", e)  # type: ignore[misc]
 
 try:
-    from .grpc import build_grpc, make_servicer
+    from .grpc import build_grpc_factory, make_servicer
 except ImportError as e:
-    build_grpc = missing_optional_dependency("build_grpc", "a2a-grpc", e)  # type: ignore[misc]
+    build_grpc_factory = missing_optional_dependency("build_grpc_factory", "a2a-grpc", e)  # type: ignore[misc]
     make_servicer = missing_optional_dependency("make_servicer", "a2a-grpc", e)  # type: ignore[misc]
 
 __all__ = (
-    "build_asgi",
-    "build_grpc",
-    "build_rest",
+    "build_asgi_factory",
+    "build_grpc_factory",
+    "build_rest_factory",
     "make_servicer",
 )

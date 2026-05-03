@@ -31,12 +31,23 @@ FINISH_REASON_METADATA_KEY = METADATA_PREFIX + "finish_reason"
 MODEL_METADATA_KEY = METADATA_PREFIX + "model"
 """``Artifact.metadata`` key carrying the upstream model identifier string."""
 
-REASONING_ARTIFACT_NAME = "reasoning"
-"""Dedicated ``Artifact.name`` used to stream ``ModelReasoning`` content
-parallel to the main ``result`` artifact."""
-
 RESULT_ARTIFACT_NAME = "result"
 """Default ``Artifact.name`` for the main response body."""
+
+REASONING_KEY = METADATA_PREFIX + "reasoning"
+"""``Message.metadata`` boolean marker on agent messages emitted via
+``TaskStatusUpdateEvent`` that carry ``ModelReasoning`` content. A2A spec
+treats artifacts as final products, so reasoning rides the working-state
+status channel instead of producing an artifact."""
+
+HISTORY_KEY = METADATA_PREFIX + "history"
+"""``Message.metadata`` key carrying the client's pre-turn ``BaseEvent``
+stream serialized via ``autogen.beta.events._serialization.event_to_dict``.
+
+Schema: ``list[dict]`` — each dict is one event. The server reseeds its
+in-process stream from this list on every turn so it can stay stateless
+(no per-context history kept in memory between calls). Only sent on the
+initial message of a turn; HITL follow-ups omit it."""
 
 CLIENT_TOOLS_EXTENSION_URI = "https://ag2.dev/a2a/client-tools/v1"
 """URI of the AG2 client-side tools extension. Servers that understand it accept
