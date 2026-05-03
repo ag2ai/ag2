@@ -21,13 +21,7 @@ from .builtin import (
 )
 from .code import SandboxCodeTool
 from .final import Toolkit, tool
-from .search import (
-    DuckDuckSearchTool,
-    ExaToolkit,
-    PerplexitySearchAPITool,
-    PerplexitySearchTool,
-    TavilySearchTool,
-)
+from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
 from .toolkits import FilesystemToolkit
@@ -44,9 +38,8 @@ __all__ = (
     "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
-    "PerplexitySearchAPITool",
-    "PerplexitySearchTool",
     "SandboxCodeTool",
+    "PerplexitySearchToolkit",
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",
