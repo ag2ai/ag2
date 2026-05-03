@@ -103,6 +103,12 @@ class PerplexitySearchToolkit(Toolkit):
         )
 
     def __deepcopy__(self, memo: dict[int, Any]) -> "PerplexitySearchToolkit":
+        # The Perplexity SDK wraps httpx.Client, whose state holds a _thread.RLock
+        # that fails pickle-based deepcopy. Because Agent.add_tool calls deepcopy 
+        # on each registered tool (function_tool.py:99), passing the toolkit
+        # whole (tools=[toolkit]) would otherwise raise TypeError: cannot pickle '_thread.RLock' object.
+        # The override copies the _tools dict but shares the SDK client by reference
+        # (the client is thread-safe and stateless across requests)
         new = self.__class__.__new__(self.__class__)
         memo[id(self)] = new
         new._client = self._client
