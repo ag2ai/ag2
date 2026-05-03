@@ -328,6 +328,7 @@ test = [
     "mcp>=1.11.0",
     # test utilities
     "aiofiles>=24.1.0,<26.0.0",
+    "respx>=0.23.0,<0.24.0"
 ]
 
 docs = [

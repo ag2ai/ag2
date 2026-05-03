@@ -6,6 +6,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
+import httpx
 from perplexity import AsyncPerplexity
 from perplexity.types import APIPublicSearchResult
 from perplexity.types.search_create_response import Result as SearchAPIResult
@@ -84,17 +85,21 @@ class PerplexitySearchToolkit(Toolkit):
     ``api_key`` is omitted (handled by the underlying ``perplexity.AsyncPerplexity`` SDK).
     """
 
-    __slots__ = ("_api_key", "_client")
+    __slots__ = ("_api_key", "_proxy", "_verify", "_timeout")
 
     def __init__(
         self,
         api_key: str | None = None,
         *,
-        client: AsyncPerplexity | None = None,
+        proxy: str | None = None,
+        verify: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._api_key = api_key
-        self._client = client
+        self._proxy = proxy
+        self._verify = verify
+        self._timeout = timeout
 
         super().__init__(
             self.search(),
@@ -102,24 +107,6 @@ class PerplexitySearchToolkit(Toolkit):
             name="perplexity_toolkit",
             middleware=middleware,
         )
-
-    def __deepcopy__(self, memo: dict[int, Any]) -> "PerplexitySearchToolkit":
-        # Supports the `client=AsyncPerplexity(...)` use-case (e.g. custom proxied
-        # httpx.AsyncClient) when the toolkit is passed whole (tools=[toolkit]).
-        # The Perplexity SDK wraps httpx.AsyncClient, whose state holds a
-        # _thread.RLock that fails pickle-based deepcopy. Agent.add_tool calls
-        # deepcopy on each registered tool (function_tool.py:99), so without this
-        # override that flow raises TypeError: cannot pickle '_thread.RLock' object.
-        # The override copies the _tools dict but shares the SDK client by reference
-        # (the client is thread-safe and stateless across requests).
-        new = self.__class__.__new__(self.__class__)
-        memo[id(self)] = new
-        new._api_key = self._api_key
-        new._client = self._client
-        new.name = self.name
-        new._middleware = self._middleware
-        new._tools = dict(self._tools)
-        return new
 
     def search(
         self,
@@ -139,7 +126,9 @@ class PerplexitySearchToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
+        proxy = self._proxy
+        verify = self._verify
+        timeout = self._timeout
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_search(
@@ -163,11 +152,9 @@ class PerplexitySearchToolkit(Toolkit):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            if user_client is not None:
-                raw = await user_client.search.create(query=query, **kwargs)
-            else:
-                async with AsyncPerplexity(api_key=api_key) as c:
-                    raw = await c.search.create(query=query, **kwargs)
+            async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
+                sdk = AsyncPerplexity(api_key=api_key, http_client=http)
+                raw = await sdk.search.create(query=query, **kwargs)
 
             raw_results: list[SearchAPIResult] = getattr(raw, "results", None) or []
             results = [
@@ -204,7 +191,9 @@ class PerplexitySearchToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
+        proxy = self._proxy
+        verify = self._verify
+        timeout = self._timeout
 
         @tool(name=name, description=description, middleware=middleware)
         async def perplexity_answer(
@@ -241,11 +230,9 @@ class PerplexitySearchToolkit(Toolkit):
                 "web_search_options": {"search_context_size": resolved_context_size},
                 **kwargs,
             }
-            if user_client is not None:
-                raw = await user_client.chat.completions.create(**create_kwargs)
-            else:
-                async with AsyncPerplexity(api_key=api_key) as c:
-                    raw = await c.chat.completions.create(**create_kwargs)
+            async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
+                sdk = AsyncPerplexity(api_key=api_key, http_client=http)
+                raw = await sdk.chat.completions.create(**create_kwargs)
 
             content: str | None = None
             choices = getattr(raw, "choices", None) or []

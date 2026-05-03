@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
+import httpx
 from pydantic import Field
 from tavily import AsyncTavilyClient
 
@@ -61,7 +62,9 @@ class TavilySearchTool(Tool):
         country: str | Variable | None = None,
         auto_parameters: bool | Variable | None = None,
         include_favicon: bool | Variable | None = None,
-        client: AsyncTavilyClient | None = None,
+        proxy: str | None = None,
+        verify: bool = True,
+        timeout: float | None = None,
         name: str = "tavily_search",
         *,
         description: str = (
@@ -70,8 +73,6 @@ class TavilySearchTool(Tool):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        user_client = client
-
         @tool(
             name=name,
             description=description,
@@ -101,11 +102,9 @@ class TavilySearchTool(Tool):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
 
-            if user_client is not None:
-                raw = await user_client.search(query, **kwargs)
-            else:
-                async with AsyncTavilyClient(api_key=api_key) as c:
-                    raw = await c.search(query, **kwargs)
+            async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
+                sdk = AsyncTavilyClient(api_key=api_key, client=http)
+                raw = await sdk.search(query, **kwargs)
 
             results = [
                 SearchResult(

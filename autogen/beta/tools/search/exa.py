@@ -103,7 +103,7 @@ class ExaToolkit(Toolkit):
     is omitted (handled by the underlying ``exa_py.AsyncExa`` SDK).
     """
 
-    __slots__ = ("_api_key", "_client")
+    __slots__ = ("_api_key",)
 
     def __init__(
         self,
@@ -111,11 +111,9 @@ class ExaToolkit(Toolkit):
         *,
         num_results: int | Variable | None = None,
         max_characters: int | Variable | None = None,
-        client: AsyncExa | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._api_key = api_key
-        self._client = client
 
         super().__init__(
             self.search(num_results=num_results, max_characters=max_characters),
@@ -139,7 +137,6 @@ class ExaToolkit(Toolkit):
         end_published_date: str | Variable | None = None,
         start_crawl_date: str | Variable | None = None,
         end_crawl_date: str | Variable | None = None,
-        use_autoprompt: bool | Variable | None = None,
         livecrawl: Livecrawl | Variable | None = None,
         name: str = "exa_search",
         description: str = (
@@ -149,7 +146,6 @@ class ExaToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
         async def exa_search(
@@ -167,28 +163,24 @@ class ExaToolkit(Toolkit):
                 "end_published_date": resolve_variable(end_published_date, ctx, param_name="end_published_date"),
                 "start_crawl_date": resolve_variable(start_crawl_date, ctx, param_name="start_crawl_date"),
                 "end_crawl_date": resolve_variable(end_crawl_date, ctx, param_name="end_crawl_date"),
-                "use_autoprompt": resolve_variable(use_autoprompt, ctx, param_name="use_autoprompt"),
-                "livecrawl": resolve_variable(livecrawl, ctx, param_name="livecrawl"),
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
+
+            contents: dict[str, Any] = {}
             resolved_max_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
             if resolved_max_chars is not None:
-                kwargs["text"] = {"maxCharacters": resolved_max_chars}
+                contents["text"] = {"maxCharacters": resolved_max_chars}
+            resolved_livecrawl = resolve_variable(livecrawl, ctx, param_name="livecrawl")
+            if resolved_livecrawl is not None:
+                contents["livecrawl"] = resolved_livecrawl
+            if contents:
+                kwargs["contents"] = contents
 
-            if user_client is not None:
-                if resolved_max_chars is not None:
-                    raw = await user_client.search_and_contents(query, **kwargs)
-                else:
-                    raw = await user_client.search(query, **kwargs)
-            else:
-                c = AsyncExa(api_key=api_key)
-                try:
-                    if resolved_max_chars is not None:
-                        raw = await c.search_and_contents(query, **kwargs)
-                    else:
-                        raw = await c.search(query, **kwargs)
-                finally:
-                    await c.client.aclose()
+            c = AsyncExa(api_key=api_key)
+            try:
+                raw = await c.search(query, **kwargs)
+            finally:
+                await c.client.aclose()
 
             return ToolResult(
                 ExaSearchResponse(
@@ -223,7 +215,6 @@ class ExaToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
         async def exa_find_similar(
@@ -238,14 +229,11 @@ class ExaToolkit(Toolkit):
                 ),
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
-            if user_client is not None:
-                raw = await user_client.find_similar(url, **kwargs)
-            else:
-                c = AsyncExa(api_key=api_key)
-                try:
-                    raw = await c.find_similar(url, **kwargs)
-                finally:
-                    await c.client.aclose()
+            c = AsyncExa(api_key=api_key)
+            try:
+                raw = await c.find_similar(url, **kwargs)
+            finally:
+                await c.client.aclose()
             results = [
                 ExaSearchResult(
                     title=r.title or "",
@@ -272,7 +260,6 @@ class ExaToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
         async def exa_get_contents(
@@ -280,14 +267,11 @@ class ExaToolkit(Toolkit):
             ctx: Context,
         ) -> ToolResult:
             """Fetch the full text content of specific URLs."""
-            if user_client is not None:
-                raw = await user_client.get_contents(urls, text=True)
-            else:
-                c = AsyncExa(api_key=api_key)
-                try:
-                    raw = await c.get_contents(urls, text=True)
-                finally:
-                    await c.client.aclose()
+            c = AsyncExa(api_key=api_key)
+            try:
+                raw = await c.get_contents(urls, text=True)
+            finally:
+                await c.client.aclose()
             results = [
                 ExaContentResult(
                     url=r.url,
@@ -310,7 +294,6 @@ class ExaToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         api_key = self._api_key
-        user_client = self._client
 
         @tool(name=name, description=description, middleware=middleware)
         async def exa_answer(
@@ -318,14 +301,11 @@ class ExaToolkit(Toolkit):
             ctx: Context,
         ) -> ToolResult:
             """Generate an AI answer with citations."""
-            if user_client is not None:
-                raw = await user_client.answer(query, text=True)
-            else:
-                c = AsyncExa(api_key=api_key)
-                try:
-                    raw = await c.answer(query, text=True)
-                finally:
-                    await c.client.aclose()
+            c = AsyncExa(api_key=api_key)
+            try:
+                raw = await c.answer(query, text=True)
+            finally:
+                await c.client.aclose()
             return ToolResult(
                 ExaAnswerResult(
                     answer=raw.answer,
