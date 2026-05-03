@@ -49,11 +49,12 @@ in-process stream from this list on every turn so it can stay stateless
 (no per-context history kept in memory between calls). Only sent on the
 initial message of a turn; HITL follow-ups omit it."""
 
-CLIENT_TOOLS_EXTENSION_URI = "https://ag2.dev/a2a/client-tools/v1"
-"""URI of the AG2 client-side tools extension. Servers that understand it accept
+CLIENT_TOOLS_EXTENSION_URI = "https://docs.ag2.ai/latest/docs/beta/a2a/extensions/client_tools_v1"
+"""URI of the AG2 client-side tools extension. The URI is the URL of the
+extension's specification page. Servers that support it accept
 ``Message.metadata[CLIENT_TOOLS_KEY]`` on inbound messages and emit
-``ToolCallEvent`` payloads via the ``tool_calls`` artifact + ``input_required``
-state when the LLM picks one of the declared client-side tools."""
+``tool_call_request`` payloads on ``INPUT_REQUIRED`` task transitions when the
+LLM picks one of the declared client-side tools."""
 
 CLIENT_TOOLS_KEY = METADATA_PREFIX + "client_tools"
 """``Message.metadata`` key carrying the client-declared tool schemas.

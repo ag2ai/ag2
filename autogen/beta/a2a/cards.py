@@ -67,6 +67,10 @@ def build_card(
 
     ``supports_extended=True`` flips ``capabilities.extended_agent_card`` so
     A2A clients know to also fetch the authenticated extended card.
+
+    ``supports_client_tools=True`` advertises the AG2 client-side tools
+    extension in ``capabilities.extensions``. The extension URI points to the
+    public specification page at ``CLIENT_TOOLS_EXTENSION_URI``.
     """
     interfaces = list(_default_interfaces(url=url, rest_url=rest_url, grpc_url=grpc_url))
     base_caps = capabilities if capabilities is not None else AgentCapabilities(streaming=True)

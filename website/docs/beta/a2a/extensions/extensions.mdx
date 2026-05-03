@@ -1,0 +1,31 @@
+---
+title: "AG2 A2A Extensions"
+sidebarTitle: "Extensions"
+description: "Protocol extensions AG2 layers on top of A2A v1.0."
+---
+
+A2A v1.0 ships with an extension mechanism so frameworks can add capabilities the base spec does not model — without forking the protocol. Servers declare extensions in their `AgentCard.capabilities.extensions`, and clients opt in by recognising the extension's URI.
+
+AG2 maintains the extensions listed below. Each one has a stable URI, a versioned wire format, and a reference implementation in `autogen.beta.a2a`.
+
+## Available extensions
+
+| Extension | URI | Status |
+| --- | --- | --- |
+| [Client-side tools v1](/docs/beta/a2a/extensions/client_tools_v1) | `https://docs.ag2.ai/latest/docs/beta/a2a/extensions/client_tools_v1` | Stable |
+
+## Versioning
+
+Extension URIs are versioned in their last path segment (`_v1`, `_v2`, ...). A new major version gets a new URI; the previous URI keeps pointing to the previous specification page indefinitely so that older clients/servers continue to interop.
+
+## Authoring conventions
+
+Each AG2 extension specification page documents:
+
+- The exact URI (which is the URL of the page itself).
+- Status, version, and reference implementation pointer.
+- Wire format — every metadata key, its carrier, and its JSON Schema.
+- Protocol flow — task-state transitions and message sequencing.
+- Compatibility — what AG2 ↔ non-AG2 peers can expect.
+
+See the [client-tools v1](/docs/beta/a2a/extensions/client_tools_v1) page for the canonical layout.

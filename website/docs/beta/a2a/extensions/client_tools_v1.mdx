@@ -1,0 +1,199 @@
+---
+title: "AG2 Client-Side Tools Extension v1"
+sidebarTitle: "client-tools v1"
+description: "A2A protocol extension that adds client-declared tool calls on top of the INPUT_REQUIRED task transition."
+---
+
+This page is the canonical specification for the AG2 client-side tools A2A extension. The extension URI is the URL of this page:
+
+```text
+https://docs.ag2.ai/latest/docs/beta/a2a/extensions/client_tools_v1
+```
+
+A server that supports this extension declares it in its `AgentCard.capabilities.extensions`. A client that supports it sends client-declared tool schemas via the wire keys defined below.
+
+## Status
+
+| Field | Value |
+| --- | --- |
+| URI | `https://docs.ag2.ai/latest/docs/beta/a2a/extensions/client_tools_v1` |
+| Version | `v1` |
+| Status | Stable |
+| Defined by | AG2ai |
+| Reference impl | [`autogen/beta/a2a/client_tools.py`](https://github.com/ag2ai/ag2/blob/main/autogen/beta/a2a/client_tools.py){.external-link target="_blank"} |
+
+## Purpose
+
+A2A v1.0 has no native primitive for letting a server invoke tools that live on the client. This extension layers that capability on top of the existing `TASK_STATE_INPUT_REQUIRED` task transition: the server suspends the task with a structured tool-call request, the client executes the tool locally, then resumes the task with the tool's result.
+
+## Wire format
+
+All keys are namespaced under the `ag2_beta_` prefix and carried in `Message.metadata` (encoded as a protobuf `Struct`).
+
+### `ag2_beta_client_tools` — client → server
+
+Sent on the **initial** user message of a turn. Declares the tools the client is willing to execute on the server's behalf.
+
+**Carrier:** `Message.metadata["ag2_beta_client_tools"]` on the inbound user `Message`.
+
+**Schema:**
+
+```json
+[
+  {
+    "name": "string",
+    "description": "string",
+    "parameters": { /* JSON Schema (object type) */ }
+  }
+]
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `name` | string | yes | Tool identifier the LLM will reference. |
+| `description` | string | yes | Human-readable summary the LLM uses to pick the tool. |
+| `parameters` | object | yes | JSON Schema with `type: "object"`. May omit `properties` for zero-arg tools. |
+
+A server that doesn't recognise this key MUST ignore it and proceed as if no client tools were declared.
+
+### `ag2_beta_tool_call_request` — server → client
+
+Sent when the LLM picks one of the client-declared tools. The server suspends the task in `TASK_STATE_INPUT_REQUIRED` and stamps the tool-call payload onto the status message metadata.
+
+**Carrier:** `TaskStatusUpdateEvent` with `status.state = TASK_STATE_INPUT_REQUIRED` and `status.message.metadata["ag2_beta_tool_call_request"]`.
+
+**Schema:**
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "arguments": "string"
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | string | yes | Unique tool-call identifier the client will echo on resume. |
+| `name` | string | yes | Tool name from the original `ag2_beta_client_tools` declaration. |
+| `arguments` | string | yes | JSON-encoded argument object the LLM produced. The client decodes per its own schema. |
+
+A `status.message` carrying this metadata MUST NOT be interpreted as a free-form human-input prompt — its `parts` are advisory only.
+
+### `ag2_beta_tool_call_result` — client → server
+
+Sent by the client to resume the suspended task with the tool's outcome.
+
+**Carrier:** follow-up user `Message.metadata["ag2_beta_tool_call_result"]`. The follow-up message reuses the original `task_id` and `context_id`.
+
+**Schema (success):**
+
+```json
+{
+  "id": "string",
+  "output": "string"
+}
+```
+
+**Schema (error):**
+
+```json
+{
+  "id": "string",
+  "error": "string"
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | string | yes | Must match the `id` from the corresponding `tool_call_request`. |
+| `output` | string | yes (on success) | Tool's textual result. Multi-part results are joined with newlines. |
+| `error` | string | yes (on failure) | Human-readable error description. Mutually exclusive with `output`. |
+
+If the resumed message carries no `ag2_beta_tool_call_result`, the server MAY treat the message as a regular user reply (e.g. plain HITL answer).
+
+## Protocol flow
+
+```text
+CLIENT                                              SERVER
+──────                                              ──────
+  │
+  │ initial user message
+  │   metadata.ag2_beta_client_tools = [{name, description, parameters}, ...]
+  ├──── send_message ───────────────────────────►   build stub tools from schemas
+  │                                                   pass to Agent.ask
+  │                                                   LLM picks a client tool
+  │                                                   suspend task:
+  │                                                     state = INPUT_REQUIRED
+  │                                                     status.message.metadata
+  │                                                       .ag2_beta_tool_call_request
+  │                                                       = {id, name, arguments}
+  │ ◄──── status_update INPUT_REQUIRED ──────────────┘
+  │
+  │ decode tool_call_request, execute locally
+  │
+  │ follow-up user message (same task_id)
+  │   metadata.ag2_beta_tool_call_result = {id, output}
+  ├──── send_message ───────────────────────────►   match id, deliver output to
+  │                                                   suspended stub, resume Agent.ask
+  │                                                   continues to completion or
+  │                                                   another tool_call_request
+  │
+  │ ◄──── artifact_update streaming ──────────────────
+  │ ◄──── status COMPLETED + result artifact ─────────
+  ▼
+final response
+```
+
+## Task state semantics
+
+| State transition | Meaning |
+| --- | --- |
+| `WORKING → INPUT_REQUIRED` carrying `ag2_beta_tool_call_request` | Server is waiting for the client to execute a tool. |
+| `INPUT_REQUIRED → WORKING` (after follow-up with `ag2_beta_tool_call_result`) | Client returned the tool result; server resumed processing. |
+| `INPUT_REQUIRED → INPUT_REQUIRED` carrying a new `ag2_beta_tool_call_request` | The LLM decided to make another tool call after consuming the previous result. |
+| Any → `COMPLETED` / `FAILED` / `CANCELED` / `REJECTED` | Standard A2A terminal states. |
+
+A client that detects a `WORKING → INPUT_REQUIRED` transition without `ag2_beta_tool_call_request` metadata MUST treat the suspension as a plain human-input request, not a tool call.
+
+## Constraints
+
+The following are **out of scope** for this extension:
+
+- **Server-side builtin tools** (e.g. web-search, code-execution capability flags). Those are server-only capabilities; this extension only models tools that physically live on the client side. Reference clients silently drop such schemas before sending.
+- **Structured-output (JSON Schema) responses.** Orthogonal A2A limitation — A2A v1.0 does not model constrained output. Use plain text response artifacts.
+- **Argument coercion / validation on the server.** The server treats `arguments` as opaque per the LLM's choice; argument shape must match the client-declared `parameters` schema. A mismatch is the client's responsibility to surface as a tool error.
+
+## Discovery
+
+Servers that support this extension SHOULD declare it in their `AgentCard`:
+
+```json
+{
+  "capabilities": {
+    "extensions": [
+      {
+        "uri": "https://docs.ag2.ai/latest/docs/beta/a2a/extensions/client_tools_v1",
+        "description": "AG2 client-side tools — server invokes tools declared on the client."
+      }
+    ]
+  }
+}
+```
+
+Declaration in the card is informative. The actual handshake is **detection-by-presence**: a server that sees `ag2_beta_client_tools` in inbound message metadata SHOULD process it regardless of whether the client also opted into the extension URI explicitly.
+
+## Compatibility
+
+| Peer | Behaviour |
+| --- | --- |
+| AG2 client ↔ AG2 server | Full extension support. |
+| AG2 client ↔ non-AG2 server | Server ignores `ag2_beta_client_tools`; LLM proceeds without client tools. |
+| Non-AG2 client ↔ AG2 server | Server has no tools to invoke; behaves as a normal A2A agent. |
+| Non-AG2 client ↔ AG2 server (with HITL) | Plain `INPUT_REQUIRED` transitions without tool-call metadata are surfaced to the human as usual. |
+
+## See also
+
+- [A2A v1.0 specification](https://a2a-protocol.org/latest/specification){.external-link target="_blank"}
+- [A2A extensions overview](https://a2a-protocol.org/latest/topics/extensions){.external-link target="_blank"}
+- [AG2 A2A integration](/docs/beta/a2a/a2a)

@@ -1,0 +1,67 @@
+---
+title: "A2A Protocol Integration"
+sidebarTitle: "A2A"
+description: "Talk to and host Agent-to-Agent (A2A) v1.0 agents from autogen.beta."
+---
+
+`autogen.beta.a2a` bridges the [Agent-to-Agent (A2A) v1.0 protocol](https://a2a-protocol.org/latest/specification){.external-link target="_blank"} to AG2 beta agents. It lets an `Agent` either consume a remote A2A server as if it were a regular LLM provider, or expose itself as an A2A server reachable over JSON-RPC, REST, or gRPC.
+
+## Two roles, one module
+
+| Role | What it gives you |
+| --- | --- |
+| Client | `Agent(config=A2AConfig(url))` — the remote A2A agent looks like any other LLM provider in the agent loop, with streaming, reasoning, usage, and tool calls all surfaced as normal events. |
+| Server | `A2AServer(agent)` — a transport-agnostic factory that builds Starlette ASGI (JSON-RPC), Starlette ASGI (HTTP+JSON/REST), or `grpc.aio.Server` apps backed by the same in-process executor. |
+
+## Quickstart
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.a2a import A2AConfig, A2AServer
+
+# Connect: A2A is just another LLM provider.
+remote = Agent("worker", config=A2AConfig("http://remote:8000"))
+reply = await remote.ask("hello!")
+
+# Serve: pick any of the three bindings.
+server = A2AServer(local_agent, url="http://0.0.0.0:8000")
+uvicorn.run(server.build_asgi(), host="0.0.0.0", port=8000, lifespan="off")
+```
+
+## Install
+
+```bash
+pip install ag2[a2a]          # base a2a-sdk — client + protocol types only
+pip install ag2[a2a-http]     # adds the Starlette-based JSON-RPC + REST server transports
+pip install ag2[a2a-grpc]     # adds gRPC transport
+```
+
+The plain `a2a` extra is enough for client-only use against a remote server. Install `a2a-http` and/or `a2a-grpc` when you need to **serve** over those bindings.
+
+## Coverage of the A2A spec
+
+The integration implements the full spec surface that makes sense for an agent framework:
+
+| Area | Status |
+| --- | --- |
+| Discovery via `/.well-known/agent-card.json` | Full |
+| Three transports (JSON-RPC / REST / gRPC) | Full, sharing one executor and `TaskStore` |
+| All 11 RPC operations on the server | Full |
+| All 9 `TaskState` values | Full |
+| All 4 `Part` types (`text`, `raw`, `url`, `data`) | Full |
+| Streaming + reconnect (`subscribe` → `get_task` fallback) | Full |
+| Push notifications (webhooks) | Optional, opt-in via `push_config_store` + `push_sender` |
+| Authentication | Client via `client_factory` + `interceptors`; server via `context_builder` + executor middleware |
+| Extensions | Used to layer in capabilities A2A doesn't model natively (see below) |
+
+## Extensions
+
+A2A v1.0 has no native primitive for tool calls that physically live on the client. AG2 layers that capability via an extension that suspends the task with a structured `tool_call_request` and resumes it on the matching `tool_call_result` follow-up.
+
+See [AG2 Client-Side Tools Extension v1](/docs/beta/a2a/extensions/client_tools_v1) for the formal wire specification.
+
+## See also
+
+- [A2A v1.0 protocol specification](https://a2a-protocol.org/latest/specification){.external-link target="_blank"}
+- [A2A SDK Python reference](https://a2a-protocol.org/latest/sdk/python){.external-link target="_blank"}
+- Module README in the source tree: [`autogen/beta/a2a/README.md`](https://github.com/ag2ai/ag2/blob/main/autogen/beta/a2a/README.md){.external-link target="_blank"}
