@@ -16,17 +16,22 @@ from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
-SearchType: TypeAlias = Literal["neural", "keyword", "hybrid", "auto", "fast", "deep"]
+SearchType: TypeAlias = Literal[
+    "auto",
+    "neural",
+    "fast",
+    "instant",
+    "deep",
+    "deep-lite",
+    "deep-reasoning",
+]
 Category: TypeAlias = Literal[
     "company",
     "research paper",
     "news",
-    "pdf",
-    "github",
-    "tweet",
     "personal site",
-    "linkedin profile",
     "financial report",
+    "people",
 ]
 Livecrawl: TypeAlias = Literal["never", "fallback", "always", "preferred"]
 
@@ -109,6 +114,8 @@ class ExaToolkit(Toolkit):
 
     __slots__ = ("_client",)
 
+    INTEGRATION_NAME = "ag2"
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -119,6 +126,8 @@ class ExaToolkit(Toolkit):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._client = client if client is not None else Exa(api_key=api_key)
+        if hasattr(self._client, "headers") and isinstance(self._client.headers, dict):
+            self._client.headers["x-exa-integration"] = self.INTEGRATION_NAME
 
         super().__init__(
             self.search(num_results=num_results, max_characters=max_characters),

@@ -64,6 +64,23 @@ def _tool_call_config(
     )
 
 
+class TestIntegrationHeader:
+    def test_header_set_on_dict_headers(self) -> None:
+        client = MagicMock()
+        client.headers = {"x-api-key": "secret"}
+
+        ExaToolkit(client=client)
+
+        assert client.headers["x-exa-integration"] == "ag2"
+
+    def test_header_skipped_when_headers_not_a_dict(self) -> None:
+        client = MagicMock(spec=[])
+
+        ExaToolkit(client=client)
+
+        assert not hasattr(client, "headers") or not isinstance(client.headers, dict)
+
+
 @pytest.mark.asyncio
 class TestSchema:
     async def test_default_schemas(self, context: ConversationContext) -> None:
@@ -358,11 +375,11 @@ class TestExaToolkitVariable:
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
-            variables={"user_limit": 10, "search_type": "keyword"},
+            variables={"user_limit": 10, "search_type": "neural"},
         )
         await agent.ask("search")
 
-        mock.search.assert_called_once_with("q", num_results=10, type="keyword")
+        mock.search.assert_called_once_with("q", num_results=10, type="neural")
 
     async def test_missing_raises(self, mock: MagicMock) -> None:
         mock.search.return_value = _response([])
