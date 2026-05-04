@@ -202,7 +202,7 @@ rag = [
 
 crawl4ai = ["crawl4ai>=0.5.0,<0.9"]
 
-tinyfish = ["tinyfish>=0.2.3"]
+tinyfish = ["tinyfish>=0.2.3; python_version>='3.11'"]
 
 quick-research = [
     "tavily-python>=0.7.4",
@@ -213,7 +213,7 @@ quick-research = [
 ]
 
 browser-use = [
-    "browser-use>=0.3.1,<1.0",
+    "browser-use>=0.3.1,<1.0; python_version>='3.11'",
     "langchain-google-vertexai>=2.0,<3.0",
 ]
 
@@ -285,7 +285,7 @@ websockets = ["websockets>=14.0,<17"]
 watchdog = ["watchdog>=4.0,<7"]
 long-context = ["llmlingua<0.3"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
-yepcode = ["yepcode-run>=1.6.1", "python-dotenv"]
+yepcode = ["yepcode-run>=1.6.1; python_version>='3.11'", "python-dotenv"]
 remyx = ["remyxai>=0.2.0", "ag2[docker]"]
 daytona = ["daytona>=0.171.0,<1"]
 cohere = ["cohere>=5.13.5"]
@@ -394,6 +394,7 @@ dev = [
     "prek==0.3.8",
     "detect-secrets==1.5.0",
     "uv==0.11.6",
+    "pre-commit>=4.0.1",
 ]
 
 [dependency-groups]
