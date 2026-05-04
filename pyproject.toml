@@ -394,7 +394,6 @@ dev = [
     "prek==0.3.8",
     "detect-secrets==1.5.0",
     "uv==0.11.6",
-    "pre-commit>=4.0.1",
 ]
 
 [dependency-groups]
