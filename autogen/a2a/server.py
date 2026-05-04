@@ -6,10 +6,13 @@ import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from a2a.compat.v0_3 import conversions as _v03_conversions
+from a2a.compat.v0_3.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentExtension, AgentSkill
 from pydantic import Field
+from starlette.applications import Starlette
 
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
@@ -18,12 +21,11 @@ from .agent_executor import AutogenAgentExecutor
 
 if TYPE_CHECKING:
     from a2a.server.agent_execution import RequestContextBuilder
-    from a2a.server.apps import CallContextBuilder
     from a2a.server.context import ServerCallContext
     from a2a.server.events import QueueManager
     from a2a.server.request_handlers import RequestHandler
+    from a2a.server.routes.common import ServerCallContextBuilder
     from a2a.server.tasks import PushNotificationConfigStore, PushNotificationSender, TaskStore
-    from starlette.applications import Starlette
     from starlette.middleware.base import BaseHTTPMiddleware
 
     from autogen import ConversableAgent
@@ -226,21 +228,35 @@ class A2aAgentServer:
         Returns:
             A configured RequestHandler instance.
         """
+        # Apply user-supplied modifiers once at handler-build time, then hand the
+        # finalised cards to the SDK as plain proto values. This keeps our public
+        # sync v0.3 callback contract while letting us drop the proto<->compat
+        # async bridge that the SDK's per-request hook would otherwise demand.
+        extended_card = self.extended_agent_card
+        if extended_card is not None and self.extended_card_modifier is not None:
+            # extended_card_modifier(card, ctx) — without an inbound request we
+            # can't synthesise a meaningful ServerCallContext, so call with None.
+            extended_card = self.extended_card_modifier(extended_card, None)  # type: ignore[arg-type]
+
         return DefaultRequestHandler(
             agent_executor=self.executor,
             task_store=task_store or InMemoryTaskStore(),
+            agent_card=_v03_conversions.to_core_agent_card(self.card),
             queue_manager=queue_manager,
             push_config_store=push_config_store,
             push_sender=push_sender,
             request_context_builder=request_context_builder,
+            extended_agent_card=(
+                _v03_conversions.to_core_agent_card(extended_card) if extended_card is not None else None
+            ),
         )
 
     def build_starlette_app(
         self,
         *,
         request_handler: "RequestHandler | None" = None,
-        context_builder: "CallContextBuilder | None" = None,
-    ) -> "Starlette":
+        context_builder: "ServerCallContextBuilder | None" = None,
+    ) -> Starlette:
         """Build a Starlette A2A application for ASGI server.
 
         Args:
@@ -250,20 +266,24 @@ class A2aAgentServer:
         Returns:
             A configured Starlette application instance.
         """
-        from a2a.server.apps import A2AStarletteApplication
+        handler = request_handler or self.build_request_handler()
 
-        app = A2AStarletteApplication(
-            agent_card=self.card,
-            extended_agent_card=self.extended_agent_card,
-            http_handler=request_handler
-            or DefaultRequestHandler(
-                agent_executor=self.executor,
-                task_store=InMemoryTaskStore(),
-            ),
-            context_builder=context_builder,
-            card_modifier=self.card_modifier,
-            extended_card_modifier=self.extended_card_modifier,
-        ).build()
+        # Apply card_modifier once at app-build time (see note in build_request_handler).
+        card = self.card
+        if self.card_modifier is not None:
+            card = self.card_modifier(card)
+
+        routes = list(create_agent_card_routes(_v03_conversions.to_core_agent_card(card)))
+        routes.extend(
+            create_jsonrpc_routes(
+                handler,
+                rpc_url="/",
+                context_builder=context_builder,
+                enable_v0_3_compat=True,
+            )
+        )
+
+        app = Starlette(routes=routes)
 
         for middleware, kwargs in self.middlewares:
             app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]

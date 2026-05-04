@@ -7,8 +7,17 @@ import typing
 from typing import Any, Protocol
 from uuid import uuid4
 
-from a2a.types import AgentCapabilities, AgentCard, DataPart, Message, Part, Role, SendMessageSuccessResponse, TextPart
-from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from a2a.compat.v0_3.types import (
+    AgentCapabilities,
+    AgentCard,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    SendMessageSuccessResponse,
+    TextPart,
+)
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from httpx import MockTransport, Request, Response
 from httpx._client import AsyncClient, Client, EventHook
 from httpx._config import DEFAULT_LIMITS, DEFAULT_MAX_REDIRECTS, DEFAULT_TIMEOUT_CONFIG, Limits
@@ -167,11 +176,16 @@ def MockClient(  # noqa: N802
         raise ValueError(f"Invalid message type: {type(response_message)}")
 
     async def mock_handler(request: Request) -> Response:
-        if (
-            request.url.path == AGENT_CARD_WELL_KNOWN_PATH
-            or request.url.path == EXTENDED_AGENT_CARD_PATH
-            or request.url.path == PREV_AGENT_CARD_WELL_KNOWN_PATH
-        ):
+        # Accept the well-known path advertised by a2a-sdk 1.0 plus the SDK's
+        # current `/extendedAgentCard` route and legacy v0.3 paths so this mock
+        # works across SDK generations.
+        agent_card_paths = (
+            AGENT_CARD_WELL_KNOWN_PATH,  # 1.0 well-known
+            "/extendedAgentCard",  # 1.0 extended card
+            "/.well-known/agent.json",  # v0.3 legacy well-known
+            "/agent/authenticatedExtendedCard",  # v0.3 legacy extended
+        )
+        if request.url.path in agent_card_paths:
             return Response(
                 status_code=200,
                 content=AgentCard(

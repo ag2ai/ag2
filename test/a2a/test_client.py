@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from a2a.types import AgentCapabilities, AgentCard, DataPart, Message, Role, TextPart  # type: ignore
+from a2a.compat.v0_3.types import AgentCapabilities, AgentCard, DataPart, Message, Role, TextPart  # type: ignore
 
 from autogen import ConversableAgent
 from autogen.a2a import A2aRemoteAgent, MockClient

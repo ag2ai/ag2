@@ -23,15 +23,18 @@ from uuid import uuid4
 from ....import_utils import optional_import_block
 
 with optional_import_block():
+    from a2a.compat.v0_3 import conversions as _v03_conversions
+    from a2a.compat.v0_3.types import DataPart, Message, Part, Task, TaskState, TaskStatus, TextPart
     from a2a.server.agent_execution import AgentExecutor, RequestContext
     from a2a.server.events import EventQueue
     from a2a.server.tasks import TaskUpdater
-    from a2a.types import DataPart, InternalError, Message, Part, Task, TaskState, TaskStatus, TextPart
-    from a2a.utils.errors import ServerError
+    from a2a.utils.errors import InternalError
 
     from ....a2a.utils import (  # type: ignore[attr-defined]
         make_input_required_message,
         request_message_from_a2a,
+        to_core_message,
+        to_core_task_state,
     )
     from ....agentchat.remote import AgentService
 
@@ -79,7 +82,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         2. genui v0.9 DataPart (no MIME): ``{"version": "v0.9", "action": {...}}``
         """
         assert context.message
-        for part in context.message.parts:
+        compat_message = _v03_conversions.to_compat_message(context.message)
+        for part in compat_message.parts:
             if isinstance(part.root, DataPart):
                 data = part.root.data
                 # Format 1: A2UI MIME-typed DataPart with messages wrapper
@@ -147,7 +151,10 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
             # Publish text-only result via status update
             text_part = Part(root=TextPart(text=result_text))
             message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
-            await updater.update_status(state=TaskState.completed, message=message, final=True)
+            await updater.update_status(
+                state=to_core_task_state(TaskState.completed),  # type: ignore[arg-type]
+                message=to_core_message(message),
+            )
             return True
 
         else:
@@ -179,9 +186,8 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
     async def _setup_task(self, context: RequestContext, event_queue: EventQueue) -> tuple[Task, TaskUpdater]:
         """Create or retrieve the task and return it with a TaskUpdater."""
         assert context.message
-        task = context.current_task
-        if not task:
-            request = context.message
+        if context.current_task is None:
+            request = _v03_conversions.to_compat_message(context.message)
             task = Task(
                 status=TaskStatus(
                     state=TaskState.submitted,
@@ -191,10 +197,12 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                 context_id=request.context_id or str(uuid4()),
                 history=[request],
             )
-            await event_queue.enqueue_event(task)
+            await event_queue.enqueue_event(_v03_conversions.to_core_task(task))
+        else:
+            task = _v03_conversions.to_compat_task(context.current_task)
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
-        await updater.update_status(state=TaskState.working)
+        await updater.update_status(state=to_core_task_state(TaskState.working))  # type: ignore[arg-type]
         return task, updater
 
     async def _stream_agent_response(
@@ -209,16 +217,18 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         streaming_started = False
         assert context.message
 
-        async for response in self._agent_service(request_message_from_a2a(context.message)):
+        compat_message = _v03_conversions.to_compat_message(context.message)
+        async for response in self._agent_service(request_message_from_a2a(compat_message)):
             if response.input_required:
                 await updater.requires_input(
-                    message=make_input_required_message(
-                        context_id=task.context_id,
-                        task_id=task.id,
-                        text=response.input_required,
-                        context=response.context,
+                    message=to_core_message(
+                        make_input_required_message(
+                            context_id=task.context_id,
+                            task_id=task.id,
+                            text=response.input_required,
+                            context=response.context,
+                        )
                     ),
-                    final=True,
                 )
                 return "", False  # Caller should return early
 
@@ -226,7 +236,10 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
                 full_response_text += response.streaming_text
                 text_part = Part(root=TextPart(text=response.streaming_text))
                 message = Message(role="agent", message_id=str(uuid4()), parts=[text_part])
-                await updater.update_status(state=TaskState.working, message=message)
+                await updater.update_status(
+                    state=to_core_task_state(TaskState.working),  # type: ignore[arg-type]
+                    message=to_core_message(message),
+                )
                 streaming_started = True
 
             elif response.message:
@@ -284,7 +297,7 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
         try:
             full_response_text, streaming_started = await self._stream_agent_response(context, task, updater)
         except Exception as e:
-            raise ServerError(error=InternalError()) from e
+            raise InternalError(str(e)) from e
 
         # input_required was handled inside _stream_agent_response
         if not full_response_text and not streaming_started:
@@ -296,7 +309,10 @@ class A2UIAgentExecutor(AgentExecutor):  # type: ignore[misc]
 
         # Send final response via status update so genui_a2a connector can process it
         message = Message(role="agent", message_id=str(uuid4()), parts=final_parts)
-        await updater.update_status(state=TaskState.completed, message=message, final=True)
+        await updater.update_status(
+            state=to_core_task_state(TaskState.completed),  # type: ignore[arg-type]
+            message=to_core_message(message),
+        )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass

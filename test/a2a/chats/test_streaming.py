@@ -80,9 +80,12 @@ async def test_non_streaming_unchanged() -> None:
 @pytest.mark.asyncio()
 async def test_streaming_through_executor() -> None:
     """Verify streaming text is sent as artifact-update events, not status-update events."""
+    from a2a.compat.v0_3 import conversions as _v03_conversions
+    from a2a.compat.v0_3.types import Message, MessageSendParams, Part, Role, TaskArtifactUpdateEvent, TextPart
+    from a2a.compat.v0_3.types import SendMessageRequest as CompatSendMessageRequest
     from a2a.server.agent_execution import RequestContext
+    from a2a.server.context import ServerCallContext
     from a2a.server.events import EventQueue
-    from a2a.types import Message, MessageSendParams, Part, Role, TaskArtifactUpdateEvent, TextPart
 
     agent = ConversableAgent("test-agent")
 
@@ -99,7 +102,7 @@ async def test_streaming_through_executor() -> None:
 
     executor = AutogenAgentExecutor(agent)
     event_queue = EventQueue()
-    child_queue = event_queue.tap()
+    child_queue = await event_queue.tap()
 
     a2a_message = Message(
         role=Role.user,
@@ -108,20 +111,31 @@ async def test_streaming_through_executor() -> None:
         context_id="ctx-1",
     )
 
-    params = MessageSendParams(message=a2a_message)
-    context = RequestContext(request=params)
+    compat_req = CompatSendMessageRequest(id="req-1", params=MessageSendParams(message=a2a_message))
+    core_req = _v03_conversions.to_core_send_message_request(compat_req)
+    context = RequestContext(call_context=ServerCallContext(), request=core_req)
     await executor.execute(context, event_queue)
 
-    # Collect all events
-    events = []
+    # Collect all events (1.0 SDK queues protobuf events; convert back for assertions)
+    raw_events = []
     while not child_queue.is_closed():
         try:
-            event = await asyncio.wait_for(child_queue.dequeue_event(no_wait=True), timeout=0.1)
-            events.append(event)
+            raw = await asyncio.wait_for(child_queue.dequeue_event(no_wait=True), timeout=0.1)
+            raw_events.append(raw)
         except Exception:
             break
 
-    from a2a.types import TaskState, TaskStatusUpdateEvent
+    from a2a.compat.v0_3.types import TaskState, TaskStatusUpdateEvent
+
+    events: list[Any] = []
+    for raw in raw_events:
+        cls_name = type(raw).__name__
+        if cls_name == "TaskStatusUpdateEvent":
+            events.append(_v03_conversions.to_compat_task_status_update_event(raw))
+        elif cls_name == "TaskArtifactUpdateEvent":
+            events.append(_v03_conversions.to_compat_task_artifact_update_event(raw))
+        else:
+            events.append(raw)
 
     artifact_events = [e for e in events if isinstance(e, TaskArtifactUpdateEvent)]
     status_events = [e for e in events if isinstance(e, TaskStatusUpdateEvent)]
