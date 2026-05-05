@@ -25,6 +25,15 @@ from autogen.beta.tools.search.exa import (
 )
 
 
+def _mock_client() -> MagicMock:
+    """Return a MagicMock that behaves like an Exa client.
+
+    Using this instead of bare ``MagicMock()`` skips the real
+    ``Exa.__init__`` (which would try to set up HTTP sessions).
+    """
+    return MagicMock(spec_set=["search", "find_similar", "get_contents", "answer"])
+
+
 def _result(
     *,
     title: str = "AG2 Framework",
@@ -44,8 +53,8 @@ def _result(
     )
 
 
-def _response(results: list[SimpleNamespace], autoprompt_string: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(results=results, autoprompt_string=autoprompt_string)
+def _response(results: list[SimpleNamespace]) -> SimpleNamespace:
+    return SimpleNamespace(results=results)
 
 
 def _tool_call_config(
@@ -131,7 +140,6 @@ class TestSearchExecution:
                         text=None,
                     ),
                 ],
-                autoprompt_string=None,
             )
         )
 
@@ -145,9 +153,7 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].result.parts[0] == DataInput(
-            ExaSearchResponse(query="nothing", results=[])
-        )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(ExaSearchResponse(query="nothing"))
 
     async def test_none_params_omitted(self, mock: MagicMock) -> None:
         mock.search.return_value = _response([])
@@ -170,10 +176,9 @@ class TestSearchExecution:
             exclude_domains=["medium.com"],
             start_published_date="2024-01-01",
             end_published_date="2024-12-31",
-            start_crawl_date="2024-01-01",
-            end_crawl_date="2024-12-31",
-            use_autoprompt=True,
             livecrawl="always",
+            user_location="US",
+            moderation=True,
         )
 
         agent = Agent(
@@ -192,14 +197,13 @@ class TestSearchExecution:
             exclude_domains=["medium.com"],
             start_published_date="2024-01-01",
             end_published_date="2024-12-31",
-            start_crawl_date="2024-01-01",
-            end_crawl_date="2024-12-31",
-            use_autoprompt=True,
             livecrawl="always",
+            user_location="US",
+            moderation=True,
         )
 
-    async def test_search_and_contents_when_max_characters_set_on_method(self, mock: MagicMock) -> None:
-        mock.search_and_contents.return_value = _response([_result(text="full article text")])
+    async def test_contents_requested_when_max_characters_set_on_method(self, mock: MagicMock) -> None:
+        mock.search.return_value = _response([_result(text="full article text")])
         toolkit = ExaToolkit(client=mock)
 
         agent = Agent(
@@ -209,11 +213,10 @@ class TestSearchExecution:
         )
         await agent.ask("search")
 
-        mock.search.assert_not_called()
-        mock.search_and_contents.assert_called_once_with("q", text={"maxCharacters": 500})
+        mock.search.assert_called_once_with("q", contents={"text": {"max_characters": 500}})
 
     async def test_toolkit_level_max_characters_applied_to_default_search(self, mock: MagicMock) -> None:
-        mock.search_and_contents.return_value = _response([])
+        mock.search.return_value = _response([])
         toolkit = ExaToolkit(client=mock, max_characters=800)
 
         agent = Agent(
@@ -223,8 +226,7 @@ class TestSearchExecution:
         )
         await agent.ask("search")
 
-        mock.search.assert_not_called()
-        mock.search_and_contents.assert_called_once_with("q", text={"maxCharacters": 800})
+        mock.search.assert_called_once_with("q", contents={"text": {"max_characters": 800}})
 
     async def test_toolkit_level_num_results_applied_to_default_search(self, mock: MagicMock) -> None:
         mock.search.return_value = _response([])
@@ -358,11 +360,11 @@ class TestExaToolkitVariable:
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
-            variables={"user_limit": 10, "search_type": "keyword"},
+            variables={"user_limit": 10, "search_type": "neural"},
         )
         await agent.ask("search")
 
-        mock.search.assert_called_once_with("q", num_results=10, type="keyword")
+        mock.search.assert_called_once_with("q", num_results=10, type="neural")
 
     async def test_missing_raises(self, mock: MagicMock) -> None:
         mock.search.return_value = _response([])
