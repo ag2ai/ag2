@@ -400,7 +400,7 @@ class TestExaToolkitVariable:
         await agent.ask("search")
 
         body = json.loads(route.calls.last.request.content)
-        assert body == IsPartialDict({"query": "q", "numResults": 10, "type": "keyword"})
+        assert body == IsPartialDict({"query": "q", "numResults": 10, "type": "neural"})
 
     @respx.mock
     async def test_missing_raises(self) -> None:
@@ -419,18 +419,60 @@ class TestExaToolkitVariable:
 
 
 @pytest.mark.asyncio
-class TestClientConstruction:
-    async def test_default_client_sets_integration_header(self) -> None:
-        """When no ``client`` is passed, the toolkit creates one with the ag2 header."""
-        toolkit = ExaToolkit(api_key="test-key")
-        assert toolkit._client.headers["x-exa-integration"] == "ag2"
+class TestIntegrationHeader:
+    @respx.mock
+    async def test_search_sets_header(self) -> None:
+        route = respx.post(f"{EXA_BASE_URL}/search").mock(return_value=httpx.Response(200, json={"results": []}))
+        toolkit = ExaToolkit(api_key="test")
 
-    async def test_explicit_client_is_used_as_is(self) -> None:
-        """When ``client`` is passed, it is used without modification."""
-        custom = MagicMock()
-        custom.headers = {"x-api-key": "k"}
-        toolkit = ExaToolkit(client=custom)
-        assert toolkit._client is custom
+        agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="exa_search"), tools=[toolkit])
+        await agent.ask("search")
+
+        assert route.calls.last.request.headers["x-exa-integration"] == "ag2"
+
+    @respx.mock
+    async def test_find_similar_sets_header(self) -> None:
+        route = respx.post(f"{EXA_BASE_URL}/findSimilar").mock(return_value=httpx.Response(200, json={"results": []}))
+        toolkit = ExaToolkit(api_key="test")
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"url": "https://ag2.ai"}, tool_name="exa_find_similar"),
+            tools=[toolkit],
+        )
+        await agent.ask("find similar")
+
+        assert route.calls.last.request.headers["x-exa-integration"] == "ag2"
+
+    @respx.mock
+    async def test_get_contents_sets_header(self) -> None:
+        route = respx.post(f"{EXA_BASE_URL}/contents").mock(return_value=httpx.Response(200, json={"results": []}))
+        toolkit = ExaToolkit(api_key="test")
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"urls": ["https://ag2.ai"]}, tool_name="exa_get_contents"),
+            tools=[toolkit],
+        )
+        await agent.ask("get contents")
+
+        assert route.calls.last.request.headers["x-exa-integration"] == "ag2"
+
+    @respx.mock
+    async def test_answer_sets_header(self) -> None:
+        route = respx.post(f"{EXA_BASE_URL}/answer").mock(
+            return_value=httpx.Response(200, json={"answer": "ok", "citations": []})
+        )
+        toolkit = ExaToolkit(api_key="test")
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "What is AG2?"}, tool_name="exa_answer"),
+            tools=[toolkit],
+        )
+        await agent.ask("answer")
+
+        assert route.calls.last.request.headers["x-exa-integration"] == "ag2"
 
 
 @pytest.mark.asyncio

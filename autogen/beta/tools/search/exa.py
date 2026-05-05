@@ -234,6 +234,7 @@ class ExaToolkit(Toolkit):
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
             c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
             try:
                 raw = await c.find_similar(url, **kwargs)
             finally:
@@ -272,6 +273,7 @@ class ExaToolkit(Toolkit):
         ) -> ToolResult:
             """Fetch the full text content of specific URLs."""
             c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
             try:
                 raw = await c.get_contents(urls, text=True)
             finally:
@@ -306,6 +308,7 @@ class ExaToolkit(Toolkit):
         ) -> ToolResult:
             """Generate an AI answer with citations."""
             c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
             try:
                 raw = await c.answer(query, text=True)
             finally:
