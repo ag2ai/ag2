@@ -6,6 +6,21 @@ import asyncio
 from typing import Any
 
 import pytest
+from a2a.compat.v0_3 import conversions as _v03_conversions
+from a2a.compat.v0_3.types import (
+    Message,
+    MessageSendParams,
+    Part,
+    Role,
+    TaskArtifactUpdateEvent,
+    TaskState,
+    TaskStatusUpdateEvent,
+    TextPart,
+)
+from a2a.compat.v0_3.types import SendMessageRequest as CompatSendMessageRequest
+from a2a.server.agent_execution import RequestContext
+from a2a.server.context import ServerCallContext
+from a2a.server.events import EventQueue
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a.agent_executor import AutogenAgentExecutor
@@ -80,12 +95,6 @@ async def test_non_streaming_unchanged() -> None:
 @pytest.mark.asyncio()
 async def test_streaming_through_executor() -> None:
     """Verify streaming text is sent as artifact-update events, not status-update events."""
-    from a2a.compat.v0_3 import conversions as _v03_conversions
-    from a2a.compat.v0_3.types import Message, MessageSendParams, Part, Role, TaskArtifactUpdateEvent, TextPart
-    from a2a.compat.v0_3.types import SendMessageRequest as CompatSendMessageRequest
-    from a2a.server.agent_execution import RequestContext
-    from a2a.server.context import ServerCallContext
-    from a2a.server.events import EventQueue
 
     agent = ConversableAgent("test-agent")
 
@@ -126,8 +135,6 @@ async def test_streaming_through_executor() -> None:
             raw_events.append(raw)
         except (TimeoutError, asyncio.TimeoutError):
             break
-
-    from a2a.compat.v0_3.types import TaskState, TaskStatusUpdateEvent
 
     events: list[Any] = []
     for raw in raw_events:
