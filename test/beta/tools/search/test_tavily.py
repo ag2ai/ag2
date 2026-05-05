@@ -181,6 +181,18 @@ class TestSearchExecution:
         assert body == IsPartialDict({"query": "q"})
 
     @respx.mock
+    async def test_client_kwargs_forwarded_to_sdk(self) -> None:
+        custom_url = "https://custom.tavily.example"
+        route = respx.post(f"{custom_url}/search").mock(
+            return_value=httpx.Response(200, json={"query": "q", "results": []})
+        )
+        tavily = TavilySearchTool(api_key="test", client_kwargs={"api_base_url": custom_url})
+        agent = Agent("a", config=_make_config("q"), tools=[tavily])
+        await agent.ask("search")
+
+        assert route.called
+
+    @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
         route = respx.post(f"{TAVILY_BASE_URL}/search").mock(
             return_value=httpx.Response(200, json={"query": "q", "results": []})

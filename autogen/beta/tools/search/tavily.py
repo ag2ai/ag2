@@ -65,6 +65,7 @@ class TavilySearchTool(Tool):
         proxy: str | None = None,
         verify: bool = True,
         timeout: float | None = None,
+        client_kwargs: dict[str, Any] | None = None,
         name: str = "tavily_search",
         *,
         description: str = (
@@ -73,6 +74,8 @@ class TavilySearchTool(Tool):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
+        client_kwargs = client_kwargs or {}
+
         @tool(
             name=name,
             description=description,
@@ -103,7 +106,7 @@ class TavilySearchTool(Tool):
             kwargs = {k: v for k, v in params.items() if v is not None}
 
             async with httpx.AsyncClient(proxy=proxy, verify=verify, timeout=timeout) as http:
-                sdk = AsyncTavilyClient(api_key=api_key, client=http)
+                sdk = AsyncTavilyClient(api_key=api_key, client=http, **client_kwargs)
                 raw = await sdk.search(query, **kwargs)
 
             results = [

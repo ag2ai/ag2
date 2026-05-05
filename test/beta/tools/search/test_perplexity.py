@@ -236,6 +236,21 @@ class TestSearch:
         }
 
     @respx.mock
+    async def test_client_kwargs_forwarded_to_sdk(self) -> None:
+        custom_url = "https://custom.perplexity.example"
+        route = respx.post(f"{custom_url}/search").mock(return_value=httpx.Response(200, json=_search_response()))
+        toolkit = PerplexitySearchToolkit(api_key="test", client_kwargs={"base_url": custom_url})
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "q"}, tool_name="perplexity_search"),
+            tools=[toolkit],
+        )
+        await agent.ask("search")
+
+        assert route.called
+
+    @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
         route = respx.post(f"{PERPLEXITY_BASE_URL}/search").mock(
             return_value=httpx.Response(200, json=_search_response())
@@ -372,6 +387,23 @@ class TestAnswer:
             "return_images": True,
             "return_related_questions": True,
         }
+
+    @respx.mock
+    async def test_client_kwargs_forwarded_to_sdk(self) -> None:
+        custom_url = "https://custom.perplexity.example"
+        route = respx.post(f"{custom_url}/chat/completions").mock(
+            return_value=httpx.Response(200, json=_chat_response())
+        )
+        toolkit = PerplexitySearchToolkit(api_key="test", client_kwargs={"base_url": custom_url})
+
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "q"}, tool_name="perplexity_answer"),
+            tools=[toolkit],
+        )
+        await agent.ask("answer")
+
+        assert route.called
 
     @respx.mock
     async def test_custom_tool_name_in_agent(self) -> None:
