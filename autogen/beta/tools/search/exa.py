@@ -16,17 +16,15 @@ from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 
-SearchType: TypeAlias = Literal["neural", "keyword", "hybrid", "auto", "fast", "deep"]
+SearchType: TypeAlias = Literal["auto", "neural", "fast", "deep-lite", "deep", "deep-reasoning", "instant"]
 Category: TypeAlias = Literal[
     "company",
     "research paper",
     "news",
     "pdf",
-    "github",
-    "tweet",
     "personal site",
-    "linkedin profile",
     "financial report",
+    "people",
 ]
 Livecrawl: TypeAlias = Literal["never", "fallback", "always", "preferred"]
 
@@ -45,7 +43,6 @@ class ExaSearchResult:
 class ExaSearchResponse:
     query: str
     results: list[ExaSearchResult] = field(default_factory=list)
-    autoprompt_string: str | None = None
 
 
 @dataclass(slots=True)
@@ -75,7 +72,7 @@ class ExaToolkit(Toolkit):
     sharing one HTTP client.
 
     The four tools mirror Exa's primary endpoints:
-      - ``exa_search``: neural/keyword/hybrid web search with optional text content
+      - ``exa_search``: web search with optional text content
       - ``exa_find_similar``: find pages similar to a given URL
       - ``exa_get_contents``: fetch full text for specific URLs
       - ``exa_answer``: get an AI-generated answer with citations
@@ -138,6 +135,8 @@ class ExaToolkit(Toolkit):
         start_crawl_date: str | Variable | None = None,
         end_crawl_date: str | Variable | None = None,
         livecrawl: Livecrawl | Variable | None = None,
+        user_location: str | Variable | None = None,
+        moderation: bool | Variable | None = None,
         name: str = "exa_search",
         description: str = (
             "Search the web using Exa's neural search engine. "
@@ -189,14 +188,13 @@ class ExaToolkit(Toolkit):
                         ExaSearchResult(
                             title=r.title or "",
                             url=r.url,
-                            score=getattr(r, "score", None),
-                            published_date=getattr(r, "published_date", None),
-                            author=getattr(r, "author", None),
-                            text=getattr(r, "text", None),
+                            score=r.score,
+                            published_date=r.published_date,
+                            author=r.author,
+                            text=r.text,
                         )
                         for r in raw.results
                     ],
-                    autoprompt_string=getattr(raw, "autoprompt_string", None) or getattr(raw, "autoprompt", None),
                 )
             )
 
@@ -206,7 +204,10 @@ class ExaToolkit(Toolkit):
         self,
         *,
         num_results: int | Variable | None = None,
+        include_domains: Sequence[str] | Variable | None = None,
+        exclude_domains: Sequence[str] | Variable | None = None,
         exclude_source_domain: bool | Variable | None = None,
+        category: Category | Variable | None = None,
         name: str = "exa_find_similar",
         description: str = (
             "Find web pages similar to a given URL. Useful for discovering "
@@ -224,6 +225,8 @@ class ExaToolkit(Toolkit):
             """Find pages similar to a given URL."""
             params: dict[str, Any] = {
                 "num_results": resolve_variable(num_results, ctx, param_name="num_results"),
+                "include_domains": resolve_variable(include_domains, ctx, param_name="include_domains"),
+                "exclude_domains": resolve_variable(exclude_domains, ctx, param_name="exclude_domains"),
                 "exclude_source_domain": resolve_variable(
                     exclude_source_domain, ctx, param_name="exclude_source_domain"
                 ),
@@ -238,10 +241,10 @@ class ExaToolkit(Toolkit):
                 ExaSearchResult(
                     title=r.title or "",
                     url=r.url,
-                    score=getattr(r, "score", None),
-                    published_date=getattr(r, "published_date", None),
-                    author=getattr(r, "author", None),
-                    text=getattr(r, "text", None),
+                    score=r.score,
+                    published_date=r.published_date,
+                    author=r.author,
+                    text=r.text,
                 )
                 for r in raw.results
             ]
@@ -277,8 +280,8 @@ class ExaToolkit(Toolkit):
                     url=r.url,
                     title=r.title or "",
                     text=r.text or "",
-                    author=getattr(r, "author", None),
-                    published_date=getattr(r, "published_date", None),
+                    author=r.author,
+                    published_date=r.published_date,
                 )
                 for r in raw.results
             ]

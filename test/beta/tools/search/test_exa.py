@@ -152,9 +152,7 @@ class TestSearchExecution:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].result.parts[0] == DataInput(
-            ExaSearchResponse(query="nothing", results=[])
-        )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(ExaSearchResponse(query="nothing"))
 
     @respx.mock
     async def test_none_params_omitted(self) -> None:
@@ -182,6 +180,8 @@ class TestSearchExecution:
             start_crawl_date="2024-01-01",
             end_crawl_date="2024-12-31",
             livecrawl="always",
+            user_location="US",
+            moderation=True,
         )
 
         agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="exa_search"), tools=[search_tool])
@@ -395,7 +395,7 @@ class TestExaToolkitVariable:
             "a",
             config=_tool_call_config({"query": "q"}, tool_name="exa_search"),
             tools=[search_tool],
-            variables={"user_limit": 10, "search_type": "keyword"},
+            variables={"user_limit": 10, "search_type": "neural"},
         )
         await agent.ask("search")
 
