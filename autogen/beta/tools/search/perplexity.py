@@ -95,7 +95,7 @@ class PerplexitySearchToolkit(Toolkit):
         verify: bool = True,
         timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-        **client_kwargs: dict[str, Any] | None = None,
+        **client_kwargs: Any,
     ) -> None:
         self._api_key = api_key
         self._proxy = proxy
