@@ -461,7 +461,7 @@ All runtime parameters accept a `Variable` for deferred context resolution.
 
 ### HTTP and SDK options
 
-The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Anything in `client_kwargs` is forwarded as keyword arguments to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):
+The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Any extra keyword arguments are forwarded directly to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):
 
 ```python linenums="1"
 toolkit = PerplexitySearchToolkit(
@@ -469,11 +469,10 @@ toolkit = PerplexitySearchToolkit(
     proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
     verify=False,                            # disable TLS verification (httpx)
     timeout=30.0,                            # httpx timeout in seconds
-    client_kwargs={                          # forwarded to AsyncPerplexity
-        "base_url": "https://custom.perplexity.example",
-        "max_retries": 5,
-        "default_headers": {"X-Trace-Id": "abc-123"},
-    },
+    # extra kwargs below are forwarded to AsyncPerplexity
+    base_url="https://custom.perplexity.example",
+    max_retries=5,
+    default_headers={"X-Trace-Id": "abc-123"},
 )
 ```
 
@@ -547,7 +546,7 @@ All search parameters accept a `Variable` for dynamic values resolved at executi
 
 ### HTTP and SDK options
 
-The constructor also accepts options for the underlying `httpx.AsyncClient` and the Tavily SDK client. Anything in `client_kwargs` is forwarded as keyword arguments to `AsyncTavilyClient(...)` (e.g. `api_base_url`, `company_info_tags`, `project_id`):
+The constructor also accepts options for the underlying `httpx.AsyncClient` and the Tavily SDK client. Any extra keyword arguments are forwarded directly to `AsyncTavilyClient(...)` (e.g. `api_base_url`, `company_info_tags`, `project_id`):
 
 ```python linenums="1"
 tool = TavilySearchTool(
@@ -555,10 +554,9 @@ tool = TavilySearchTool(
     proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
     verify=False,                            # disable TLS verification (httpx)
     timeout=30.0,                            # httpx timeout in seconds
-    client_kwargs={                          # forwarded to AsyncTavilyClient
-        "api_base_url": "https://custom.tavily.example",
-        "company_info_tags": ("news", "finance"),
-    },
+    # extra kwargs below are forwarded to AsyncTavilyClient
+    api_base_url="https://custom.tavily.example",
+    company_info_tags=("news", "finance"),
 )
 ```
 

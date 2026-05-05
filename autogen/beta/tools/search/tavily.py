@@ -72,7 +72,7 @@ class TavilySearchTool(Tool):
             "and optional LLM-generated answer, raw content, and images."
         ),
         middleware: Iterable[ToolMiddleware] = (),
-        **client_kwargs: Any
+        **client_kwargs: Any,
     ) -> None:
         @tool(
             name=name,

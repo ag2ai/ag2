@@ -239,7 +239,7 @@ class TestSearch:
     async def test_client_kwargs_forwarded_to_sdk(self) -> None:
         custom_url = "https://custom.perplexity.example"
         route = respx.post(f"{custom_url}/search").mock(return_value=httpx.Response(200, json=_search_response()))
-        toolkit = PerplexitySearchToolkit(api_key="test", client_kwargs={"base_url": custom_url})
+        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
 
         agent = Agent(
             "a",
@@ -394,7 +394,7 @@ class TestAnswer:
         route = respx.post(f"{custom_url}/chat/completions").mock(
             return_value=httpx.Response(200, json=_chat_response())
         )
-        toolkit = PerplexitySearchToolkit(api_key="test", client_kwargs={"base_url": custom_url})
+        toolkit = PerplexitySearchToolkit(api_key="test", base_url=custom_url)
 
         agent = Agent(
             "a",

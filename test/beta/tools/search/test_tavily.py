@@ -186,7 +186,7 @@ class TestSearchExecution:
         route = respx.post(f"{custom_url}/search").mock(
             return_value=httpx.Response(200, json={"query": "q", "results": []})
         )
-        tavily = TavilySearchTool(api_key="test", client_kwargs={"api_base_url": custom_url})
+        tavily = TavilySearchTool(api_key="test", api_base_url=custom_url)
         agent = Agent("a", config=_make_config("q"), tools=[tavily])
         await agent.ask("search")
 
