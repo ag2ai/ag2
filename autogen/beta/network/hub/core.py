@@ -27,9 +27,10 @@ imports tenant modules — the trust boundary runs through ``HubClient``
 """
 
 import asyncio
+import contextlib
 import fnmatch
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from autogen.beta.knowledge import KnowledgeStore
@@ -58,10 +59,9 @@ from ..errors import (
     NotFoundError,
     ProtocolError,
 )
-from ..identity import ObservedStat, Passport, Resume, ResumeExample
+from ..identity import ObservedStat, Passport, Resume
 from ..ids import make_id
 from ..rule import Rule, parse_duration
-from ..views.base import ViewPolicy
 from ..session import (
     Participant,
     ParticipantRole,
@@ -81,19 +81,7 @@ from ..transport.frames import (
     WelcomeFrame,
 )
 from ..transport.link import LinkEndpoint
-from .layout import (
-    agents_root,
-    by_capability_path,
-    passport_path,
-    resume_path,
-    rule_path,
-    session_metadata_path,
-    sessions_root,
-    skill_path,
-    task_metadata_path,
-    tasks_root,
-    wal_path,
-)
+from ..views.base import ViewPolicy
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -114,6 +102,19 @@ from .expectations import (
     ViolationHandler,
     default_evaluators,
     default_handlers,
+)
+from .layout import (
+    agents_root,
+    by_capability_path,
+    passport_path,
+    resume_path,
+    rule_path,
+    session_metadata_path,
+    sessions_root,
+    skill_path,
+    task_metadata_path,
+    tasks_root,
+    wal_path,
 )
 from .sweepers import _IntervalSweeper
 
@@ -410,9 +411,7 @@ class Hub:
     def _adapter_for(self, manifest_type: str, manifest_version: int) -> SessionAdapter:
         adapter = self._adapters.get((manifest_type, manifest_version))
         if adapter is None:
-            raise NotFoundError(
-                f"no adapter registered for {manifest_type!r}@v{manifest_version}"
-            )
+            raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
         return adapter
 
     # ── Expectation registry ────────────────────────────────────────────────
@@ -471,13 +470,11 @@ class Hub:
                     if key in fired:
                         continue
                     fired.add(key)
-                    try:
+                    # Sweeper must survive handler exceptions — they
+                    # leave the violation marked as fired so we don't
+                    # spin on a bad handler.
+                    with contextlib.suppress(Exception):
                         await handler.handle(self, session_id, violation)
-                    except Exception:
-                        # Sweeper must survive handler exceptions — they
-                        # leave the violation marked as fired so we don't
-                        # spin on a bad handler.
-                        pass
                     if expectation.on_violation == "auto_close":
                         # Session is terminal — no further violations on
                         # this session are meaningful this tick. Other
@@ -658,9 +655,7 @@ class Hub:
         if agent_id not in self._passports:
             raise NotFoundError(f"agent not registered: {agent_id}")
         resume.last_updated = self._clock()
-        resume.version = (
-            (self._resumes[agent_id].version + 1) if agent_id in self._resumes else resume.version
-        )
+        resume.version = (self._resumes[agent_id].version + 1) if agent_id in self._resumes else resume.version
 
         # Diff capabilities so the index stays in sync. Without this,
         # a tenant adding a new claim via ``set_resume`` would not
@@ -717,9 +712,7 @@ class Hub:
     async def set_rule(self, agent_id: str, rule: Rule) -> None:
         if agent_id not in self._passports:
             raise NotFoundError(f"agent not registered: {agent_id}")
-        rule.version = (
-            (self._rules[agent_id].version + 1) if agent_id in self._rules else rule.version
-        )
+        rule.version = (self._rules[agent_id].version + 1) if agent_id in self._rules else rule.version
         await self._persist_rule(agent_id, rule)
         self._rules[agent_id] = rule
         await self._audit_log.append({
@@ -846,13 +839,10 @@ class Hub:
         # synchronously and on-disk state stays clean.
         max_sessions = creator_rule.limits.max_concurrent_sessions
         if max_sessions > 0:
-            active = sum(
-                1 for m in self._active_sessions.values() if m.creator_id == creator_id
-            )
+            active = sum(1 for m in self._active_sessions.values() if m.creator_id == creator_id)
             if active >= max_sessions:
                 raise AccessDeniedError(
-                    f"creator {creator_id!r} exceeded max_concurrent_sessions "
-                    f"({active} >= {max_sessions})"
+                    f"creator {creator_id!r} exceeded max_concurrent_sessions ({active} >= {max_sessions})"
                 )
 
         session_id = make_id()
@@ -870,9 +860,7 @@ class Hub:
                 role = ParticipantRole.RESPONDENT
             else:
                 role = ParticipantRole.PARTICIPANT
-            metadata_participants.append(
-                Participant(agent_id=p_id, role=role, order=index, joined_at=now)
-            )
+            metadata_participants.append(Participant(agent_id=p_id, role=role, order=index, joined_at=now))
 
         final_labels: dict[str, str] = dict(labels) if labels else {}
         if intent:
@@ -1079,8 +1067,7 @@ class Hub:
             )
             if active >= max_tasks:
                 raise AccessDeniedError(
-                    f"owner {metadata.owner_id!r} exceeded max_concurrent_tasks "
-                    f"({active} >= {max_tasks})"
+                    f"owner {metadata.owner_id!r} exceeded max_concurrent_tasks ({active} >= {max_tasks})"
                 )
 
         self._tasks[metadata.task_id] = metadata
@@ -1195,9 +1182,7 @@ class Hub:
                 if recipient is None:
                     continue
                 if not _match_any(recipient.name, sender_rule.access.outbound_to):
-                    raise AccessDeniedError(
-                        f"sender {sender.name!r} not permitted to send to {recipient.name!r}"
-                    )
+                    raise AccessDeniedError(f"sender {sender.name!r} not permitted to send to {recipient.name!r}")
 
         # Delegation-depth check. ``0`` disables the cap. Hub rejects
         # before the WAL append so the outer caller sees the limit
@@ -1205,24 +1190,16 @@ class Hub:
         depth_cap = sender_rule.limits.delegation_depth
         if depth_cap > 0 and envelope.depth > depth_cap:
             raise AccessDeniedError(
-                f"sender {sender.name!r} exceeded delegation_depth "
-                f"({envelope.depth} > {depth_cap})"
+                f"sender {sender.name!r} exceeded delegation_depth ({envelope.depth} > {depth_cap})"
             )
 
         metadata = self._sessions.get(envelope.session_id)
         if metadata is None:
             raise NotFoundError(f"session not found: {envelope.session_id}")
         if metadata.is_terminal():
-            raise ProtocolError(
-                f"session {envelope.session_id!r} is {metadata.state.value}"
-            )
-        if (
-            not _is_protocol_event(envelope.event_type)
-            and metadata.state != SessionState.ACTIVE
-        ):
-            raise ProtocolError(
-                f"session {envelope.session_id!r} not active (state={metadata.state.value})"
-            )
+            raise ProtocolError(f"session {envelope.session_id!r} is {metadata.state.value}")
+        if not _is_protocol_event(envelope.event_type) and metadata.state != SessionState.ACTIVE:
+            raise ProtocolError(f"session {envelope.session_id!r} not active (state={metadata.state.value})")
 
         # Inbox capacity check (substantive events only — protocol
         # invites / acks / opens / closes must always reach
@@ -1231,11 +1208,7 @@ class Hub:
             if envelope.audience is not None:
                 inbox_audience: list[str] = list(envelope.audience)
             else:
-                inbox_audience = [
-                    p.agent_id
-                    for p in metadata.participants
-                    if p.agent_id != envelope.sender_id
-                ]
+                inbox_audience = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
             for recipient_id in inbox_audience:
                 if recipient_id == envelope.sender_id:
                     continue
@@ -1246,10 +1219,7 @@ class Hub:
                 if max_pending > 0:
                     current = self._inbox_pending.get(recipient_id, 0)
                     if current >= max_pending:
-                        raise InboxFull(
-                            f"recipient {recipient_id!r} inbox at capacity "
-                            f"({current} >= {max_pending})"
-                        )
+                        raise InboxFull(f"recipient {recipient_id!r} inbox at capacity ({current} >= {max_pending})")
 
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
@@ -1338,9 +1308,7 @@ class Hub:
     async def _dispatch(self, envelope: Envelope, metadata: SessionMetadata) -> None:
         """Send NotifyFrames to the audience (or all participants if broadcast)."""
         if envelope.audience is None:
-            recipients = [
-                p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id
-            ]
+            recipients = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
         else:
             recipients = list(envelope.audience)
 
@@ -1350,20 +1318,14 @@ class Hub:
 
         for recipient_id in recipients:
             recipient_rule = self._rules.get(recipient_id)
-            if recipient_rule is not None and not _match_any(
-                sender_name, recipient_rule.access.inbound_from
-            ):
+            if recipient_rule is not None and not _match_any(sender_name, recipient_rule.access.inbound_from):
                 continue
             endpoint = self._endpoint_for(recipient_id)
             if endpoint is None:
                 continue
             if substantive:
-                self._inbox_pending[recipient_id] = (
-                    self._inbox_pending.get(recipient_id, 0) + 1
-                )
-            await endpoint.send_frame(
-                NotifyFrame(envelope=envelope, recipient_id=recipient_id)
-            )
+                self._inbox_pending[recipient_id] = self._inbox_pending.get(recipient_id, 0) + 1
+            await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
 
     def _endpoint_for(self, agent_id: str) -> LinkEndpoint | None:
         endpoint_id = self._agent_to_endpoint.get(agent_id)
@@ -1386,34 +1348,24 @@ class Hub:
                 envelope_id = await self.post_envelope(frame.envelope)
                 await endpoint.send_frame(AcceptFrame(envelope_id=envelope_id))
             except NetworkError as exc:
-                await endpoint.send_frame(
-                    ErrorFrame(code=_error_code(exc), message=str(exc))
-                )
+                await endpoint.send_frame(ErrorFrame(code=_error_code(exc), message=str(exc)))
         elif isinstance(frame, HelloFrame):
             agent_id = self._name_to_id.get(frame.name)
             if agent_id is None:
-                await endpoint.send_frame(
-                    ErrorFrame(code="not_found", message=f"unknown name: {frame.name}")
-                )
+                await endpoint.send_frame(ErrorFrame(code="not_found", message=f"unknown name: {frame.name}"))
                 return
             try:
                 self.bind_endpoint(endpoint.endpoint_id, agent_id)
             except NetworkError as exc:
-                await endpoint.send_frame(
-                    ErrorFrame(code=_error_code(exc), message=str(exc))
-                )
+                await endpoint.send_frame(ErrorFrame(code=_error_code(exc), message=str(exc)))
                 return
-            await endpoint.send_frame(
-                WelcomeFrame(endpoint_id=endpoint.endpoint_id, hub_time=self._clock())
-            )
+            await endpoint.send_frame(WelcomeFrame(endpoint_id=endpoint.endpoint_id, hub_time=self._clock()))
         elif isinstance(frame, PingFrame):
             await endpoint.send_frame(PongFrame())
 
     # ── Session transition helpers ──────────────────────────────────────────
 
-    async def _handle_invite_ack(
-        self, envelope: Envelope, metadata: SessionMetadata
-    ) -> None:
+    async def _handle_invite_ack(self, envelope: Envelope, metadata: SessionMetadata) -> None:
         if metadata.state != SessionState.PENDING:
             return
         if envelope.sender_id in metadata.pending_acks:
@@ -1422,9 +1374,7 @@ class Hub:
         if not metadata.pending_acks and not metadata.rejected_by:
             await self._activate_session(metadata.session_id)
 
-    async def _handle_invite_reject(
-        self, envelope: Envelope, metadata: SessionMetadata
-    ) -> None:
+    async def _handle_invite_reject(self, envelope: Envelope, metadata: SessionMetadata) -> None:
         if metadata.state != SessionState.PENDING:
             return
         if envelope.sender_id in metadata.pending_acks:
@@ -1433,14 +1383,10 @@ class Hub:
             metadata.rejected_by.append(envelope.sender_id)
         await self._persist_session_metadata(metadata)
         # All-or-nothing handshake: any reject fails the session.
-        await self._transition_session(
-            metadata.session_id, SessionState.CLOSED, "invite_rejected"
-        )
+        await self._transition_session(metadata.session_id, SessionState.CLOSED, "invite_rejected")
         waiter = self._session_open_waiters.get(metadata.session_id)
         if waiter is not None and not waiter.done():
-            waiter.set_exception(
-                ProtocolError(f"session rejected by {envelope.sender_id}")
-            )
+            waiter.set_exception(ProtocolError(f"session rejected by {envelope.sender_id}"))
 
     async def _activate_session(self, session_id: str) -> None:
         metadata = self._sessions.get(session_id)
@@ -1491,18 +1437,12 @@ class Hub:
             if was_pending:
                 waiter = self._session_open_waiters.get(session_id)
                 if waiter is not None and not waiter.done():
-                    waiter.set_exception(
-                        ProtocolError(
-                            f"session {session_id!r} closed during handshake: {reason}"
-                        )
-                    )
+                    waiter.set_exception(ProtocolError(f"session {session_id!r} closed during handshake: {reason}"))
 
         await self._persist_session_metadata(metadata)
 
         if is_terminal_session_state(new_state):
-            event_type = (
-                EV_SESSION_EXPIRED if new_state == SessionState.EXPIRED else EV_SESSION_CLOSED
-            )
+            event_type = EV_SESSION_EXPIRED if new_state == SessionState.EXPIRED else EV_SESSION_CLOSED
             close_envelope = Envelope(
                 session_id=session_id,
                 sender_id=metadata.creator_id,
@@ -1518,9 +1458,7 @@ class Hub:
             await self._audit_log.append({
                 "at": metadata.closed_at,
                 "kind": (
-                    AUDIT_KIND_SESSION_EXPIRED
-                    if new_state == SessionState.EXPIRED
-                    else AUDIT_KIND_SESSION_CLOSED
+                    AUDIT_KIND_SESSION_EXPIRED if new_state == SessionState.EXPIRED else AUDIT_KIND_SESSION_CLOSED
                 ),
                 "session_id": session_id,
                 "reason": reason,

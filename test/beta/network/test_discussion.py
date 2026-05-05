@@ -21,14 +21,14 @@ Covers:
 This suite uses ``ScriptedConfig`` so it runs offline and fast.
 """
 
-from typing import Awaitable, Callable
+import contextlib
+from collections.abc import Awaitable, Callable
 
 import pytest
 
 from autogen.beta import Agent
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
     EV_SESSION_INVITE,
     EV_SESSION_INVITE_ACK,
     EV_SESSION_INVITE_REJECT,
@@ -81,10 +81,8 @@ def _make_rejecter(client: AgentClient) -> Callable[[Envelope], Awaitable[None]]
             event_data={"reason": "not interested"},
             causation_id=envelope.envelope_id,
         )
-        try:
+        with contextlib.suppress(Exception):
             await client.send_envelope(rejection)
-        except Exception:
-            pass
 
     return _reject
 
@@ -150,9 +148,7 @@ async def test_discussion_5_way_handshake_transitions_to_active() -> None:
     assert session.state == SessionState.ACTIVE
     assert session.metadata.pending_acks == []
     assert session.metadata.rejected_by == []
-    assert {p.agent_id for p in session.metadata.participants} == {
-        c.agent_id for c in clients
-    }
+    assert {p.agent_id for p in session.metadata.participants} == {c.agent_id for c in clients}
 
     wal = await hub.read_wal(session.session_id)
     invite_count = sum(1 for e in wal if e.event_type == EV_SESSION_INVITE)
@@ -462,9 +458,7 @@ def _make_auto_acker(client: AgentClient) -> Callable[[Envelope], Awaitable[None
             event_data={"session_id": envelope.session_id},
             causation_id=envelope.envelope_id,
         )
-        try:
+        with contextlib.suppress(Exception):
             await client.send_envelope(ack)
-        except Exception:
-            pass
 
     return _ack

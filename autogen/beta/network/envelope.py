@@ -12,7 +12,7 @@ a list targets a subset.
 """
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 __all__ = (

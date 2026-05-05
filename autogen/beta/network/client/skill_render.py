@@ -71,14 +71,14 @@ def parse_skill_frontmatter(md: str) -> ParsedSkill:
     if not md.startswith(_FENCE):
         return ParsedSkill(frontmatter={}, body=md)
     # Find the closing fence on its own line after the opening one.
-    rest = md[len(_FENCE):]
+    rest = md[len(_FENCE) :]
     if rest.startswith("\n"):
         rest = rest[1:]
     closing = rest.find(f"\n{_FENCE}")
     if closing == -1:
         return ParsedSkill(frontmatter={}, body=md)
     header = rest[:closing]
-    body = rest[closing + len(_FENCE) + 1:]  # skip "\n---"
+    body = rest[closing + len(_FENCE) + 1 :]  # skip "\n---"
     if body.startswith("\n"):
         body = body[1:]
 
@@ -124,8 +124,7 @@ def render_fallback_skill(passport: Passport, resume: Resume) -> str:
         for cap in sorted(resume.observed.keys()):
             stat = resume.observed[cap]
             lines.append(
-                f"- {cap}: {stat.completed} completed / {stat.failed} failed "
-                f"/ {stat.expired} expired (n={stat.n})"
+                f"- {cap}: {stat.completed} completed / {stat.failed} failed / {stat.expired} expired (n={stat.n})"
             )
         lines.append("")
     if resume.examples:

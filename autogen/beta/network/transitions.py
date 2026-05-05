@@ -153,9 +153,7 @@ class StayTarget:
     name: ClassVar[str] = "stay"
 
     def resolve(self, state: "WorkflowState", envelope: Envelope) -> TransitionDecision:
-        return TransitionDecision(
-            next_speaker=state.last_speaker_id or envelope.sender_id
-        )
+        return TransitionDecision(next_speaker=state.last_speaker_id or envelope.sender_id)
 
 
 @dataclass(slots=True)
@@ -253,12 +251,8 @@ class TransitionRegistry:
     _DEFAULT: ClassVar["TransitionRegistry | None"] = None
 
     def __init__(self) -> None:
-        self._targets: dict[str, type[TransitionTarget]] = {
-            cls.name: cls for cls in _BUILTIN_TARGETS
-        }
-        self._conditions: dict[str, type[TransitionCondition]] = {
-            cls.name: cls for cls in _BUILTIN_CONDITIONS
-        }
+        self._targets: dict[str, type[TransitionTarget]] = {cls.name: cls for cls in _BUILTIN_TARGETS}
+        self._conditions: dict[str, type[TransitionCondition]] = {cls.name: cls for cls in _BUILTIN_CONDITIONS}
 
     @classmethod
     def default(cls) -> "TransitionRegistry":
@@ -286,17 +280,13 @@ class TransitionRegistry:
             return TerminateTarget()
         cls = self._targets.get(data["name"])
         if cls is None:
-            raise WorkflowGraphError(
-                f"no transition target registered for {data['name']!r}"
-            )
+            raise WorkflowGraphError(f"no transition target registered for {data['name']!r}")
         return cls(**data.get("args", {}))
 
     def condition_from_dict(self, data: dict[str, Any]) -> TransitionCondition:
         cls = self._conditions.get(data["name"])
         if cls is None:
-            raise WorkflowGraphError(
-                f"no transition condition registered for {data['name']!r}"
-            )
+            raise WorkflowGraphError(f"no transition condition registered for {data['name']!r}")
         return cls(**data.get("args", {}))
 
 
@@ -362,9 +352,7 @@ class TransitionGraph:
         reg = registry if registry is not None else TransitionRegistry.default()
         return cls(
             initial_speaker=data["initial_speaker"],
-            transitions=[
-                _transition_from_dict(t, reg) for t in data.get("transitions", [])
-            ],
+            transitions=[_transition_from_dict(t, reg) for t in data.get("transitions", [])],
             default_target=reg.target_from_dict(data.get("default_target")),
             max_turns=data.get("max_turns"),
         )
@@ -428,9 +416,7 @@ def _transition_to_dict(transition: Transition) -> dict[str, Any]:
     }
 
 
-def _transition_from_dict(
-    data: dict[str, Any], registry: TransitionRegistry
-) -> Transition:
+def _transition_from_dict(data: dict[str, Any], registry: TransitionRegistry) -> Transition:
     return Transition(
         when=registry.condition_from_dict(data["when"]),
         then=registry.target_from_dict(data["then"]),

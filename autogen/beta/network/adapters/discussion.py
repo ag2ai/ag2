@@ -127,10 +127,7 @@ class DiscussionAdapter:
     # ── Adapter Protocol ────────────────────────────────────────────────────
 
     def initial_state(self, metadata: SessionMetadata) -> DiscussionState:
-        order = [
-            p.agent_id
-            for p in sorted(metadata.participants, key=lambda p: p.order)
-        ]
+        order = [p.agent_id for p in sorted(metadata.participants, key=lambda p: p.order)]
         return DiscussionState(
             participant_order=order,
             expected_next_speaker=metadata.creator_id,
@@ -158,14 +155,11 @@ class DiscussionAdapter:
 
     def validate_create(self, metadata: SessionMetadata) -> None:
         if len(metadata.participants) < 2:
-            raise ProtocolError(
-                f"discussion requires at least 2 participants, got {len(metadata.participants)}"
-            )
+            raise ProtocolError(f"discussion requires at least 2 participants, got {len(metadata.participants)}")
         ordering = metadata.knobs.get("ordering", _DEFAULT_ORDERING)
         if ordering not in _SUPPORTED_ORDERINGS:
             raise ProtocolError(
-                f"discussion knobs.ordering={ordering!r} not supported; "
-                f"choose from {sorted(_SUPPORTED_ORDERINGS)}"
+                f"discussion knobs.ordering={ordering!r} not supported; choose from {sorted(_SUPPORTED_ORDERINGS)}"
             )
 
     def validate_send(

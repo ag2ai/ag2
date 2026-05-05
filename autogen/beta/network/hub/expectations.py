@@ -32,6 +32,7 @@ never re-tries, substitutes content, or makes outcome decisions for
 the agent.
 """
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
@@ -45,8 +46,8 @@ if TYPE_CHECKING:
 
 __all__ = (
     "AcksWithinEvaluator",
-    "AutoCloseHandler",
     "AuditHandler",
+    "AutoCloseHandler",
     "ExpectationContext",
     "ExpectationEvaluator",
     "MaxSilenceEvaluator",
@@ -134,9 +135,7 @@ def _is_content_event(event_type: str) -> bool:
         return False
     if event_type.startswith("ag2.task."):
         return False
-    if event_type == EV_EXPECTATION_VIOLATED:
-        return False
-    return True
+    return event_type != EV_EXPECTATION_VIOLATED
 
 
 class AcksWithinEvaluator:
@@ -328,12 +327,10 @@ class NotifySessionHandler:
                 "detail": dict(violation.detail),
             },
         )
-        try:
+        # Posting violations is best-effort — a closed/closing
+        # session shouldn't crash the sweeper.
+        with contextlib.suppress(Exception):
             await hub.post_envelope(envelope)
-        except Exception:
-            # Posting violations is best-effort — a closed/closing
-            # session shouldn't crash the sweeper.
-            pass
 
 
 class AutoCloseHandler:
@@ -351,13 +348,11 @@ class AutoCloseHandler:
         metadata = hub._sessions.get(session_id)
         if metadata is None or metadata.is_terminal():
             return
-        try:
+        with contextlib.suppress(Exception):
             await hub.close_session(
                 session_id,
                 reason=f"expectation_violated:{violation.expectation.name}",
             )
-        except Exception:
-            pass
 
 
 # ── Factories ───────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ the expectation sweeper).
 """
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 
 __all__ = ("_IntervalSweeper",)
@@ -70,8 +71,6 @@ class _IntervalSweeper:
         if self._task is None:
             return
         self._task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await self._task
-        except (asyncio.CancelledError, Exception):
-            pass
         self._task = None

@@ -43,5 +43,5 @@ class ProtocolError(NetworkError):
     """
 
 
-class InboxFull(NetworkError):
+class InboxFull(NetworkError):  # noqa: N818  # historical name; kept for API stability
     """Recipient inbox is at capacity and overflow policy is ``reject``."""

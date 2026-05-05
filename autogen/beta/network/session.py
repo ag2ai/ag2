@@ -122,9 +122,7 @@ class SessionManifest:
         if isinstance(payload.get("participants"), dict):
             payload["participants"] = ParticipantSchema(**payload["participants"])
         if "expectations" in payload:
-            payload["expectations"] = [
-                Expectation(**e) if isinstance(e, dict) else e for e in payload["expectations"]
-            ]
+            payload["expectations"] = [Expectation(**e) if isinstance(e, dict) else e for e in payload["expectations"]]
         return cls(**payload)
 
 
@@ -214,8 +212,7 @@ class SessionMetadata:
             payload["manifest"] = SessionManifest.from_dict(manifest)
         if "participants" in payload:
             payload["participants"] = [
-                Participant.from_dict(p) if isinstance(p, dict) else p
-                for p in payload["participants"]
+                Participant.from_dict(p) if isinstance(p, dict) else p for p in payload["participants"]
             ]
         state = payload.get("state")
         if isinstance(state, str):

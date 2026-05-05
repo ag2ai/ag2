@@ -10,8 +10,6 @@ disk. No sessions, no LLM, no expectation sweeper — those are
 exercised in the higher-level adapter tests.
 """
 
-import asyncio
-
 import pytest
 
 from autogen.beta import Agent

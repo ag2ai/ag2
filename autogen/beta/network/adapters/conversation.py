@@ -132,9 +132,7 @@ class ConversationAdapter:
         if ParticipantRole.RESPONDENT not in roles:
             raise ProtocolError("conversation requires exactly one respondent")
         if len(metadata.participants) != 2:
-            raise ProtocolError(
-                f"conversation requires exactly 2 participants, got {len(metadata.participants)}"
-            )
+            raise ProtocolError(f"conversation requires exactly 2 participants, got {len(metadata.participants)}")
 
     def validate_send(
         self,

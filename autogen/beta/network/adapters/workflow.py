@@ -147,23 +147,16 @@ class WorkflowAdapter:
         graph_data = metadata.knobs.get("graph")
         if not isinstance(graph_data, dict):
             raise ProtocolError(
-                "workflow requires knobs['graph'] as a dict — call "
-                "TransitionGraph.to_dict() before passing"
+                "workflow requires knobs['graph'] as a dict — call TransitionGraph.to_dict() before passing"
             )
         try:
             graph = TransitionGraph.loads(graph_data)
         except WorkflowGraphError as exc:
             raise ProtocolError(f"invalid workflow graph: {exc}") from exc
 
-        order = [
-            p.agent_id
-            for p in sorted(metadata.participants, key=lambda p: p.order)
-        ]
+        order = [p.agent_id for p in sorted(metadata.participants, key=lambda p: p.order)]
         if graph.initial_speaker not in order:
-            raise ProtocolError(
-                f"workflow initial_speaker {graph.initial_speaker!r} not in "
-                f"participants {order!r}"
-            )
+            raise ProtocolError(f"workflow initial_speaker {graph.initial_speaker!r} not in participants {order!r}")
         return WorkflowState(
             participant_order=order,
             expected_next_speaker=graph.initial_speaker,
@@ -198,15 +191,11 @@ class WorkflowAdapter:
 
     def validate_create(self, metadata: SessionMetadata) -> None:
         if len(metadata.participants) < 2:
-            raise ProtocolError(
-                f"workflow requires at least 2 participants, got "
-                f"{len(metadata.participants)}"
-            )
+            raise ProtocolError(f"workflow requires at least 2 participants, got {len(metadata.participants)}")
         graph_data = metadata.knobs.get("graph")
         if not isinstance(graph_data, dict):
             raise ProtocolError(
-                "workflow requires knobs['graph'] as a dict — call "
-                "TransitionGraph.to_dict() before passing"
+                "workflow requires knobs['graph'] as a dict — call TransitionGraph.to_dict() before passing"
             )
         try:
             graph = TransitionGraph.loads(graph_data)
@@ -215,8 +204,7 @@ class WorkflowAdapter:
         order = {p.agent_id for p in metadata.participants}
         if graph.initial_speaker not in order:
             raise ProtocolError(
-                f"workflow initial_speaker {graph.initial_speaker!r} not "
-                f"in participants {sorted(order)!r}"
+                f"workflow initial_speaker {graph.initial_speaker!r} not in participants {sorted(order)!r}"
             )
 
     def validate_send(
@@ -227,10 +215,7 @@ class WorkflowAdapter:
     ) -> None:
         if not _is_substantive(envelope):
             return
-        if (
-            state.expected_next_speaker
-            and envelope.sender_id != state.expected_next_speaker
-        ):
+        if state.expected_next_speaker and envelope.sender_id != state.expected_next_speaker:
             raise ProtocolError(
                 f"workflow {metadata.session_id!r} expects "
                 f"{state.expected_next_speaker!r} to speak, got "

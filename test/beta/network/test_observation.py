@@ -25,8 +25,6 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_TEXT,
-    Envelope,
     Hub,
     HubClient,
     LocalLink,
@@ -45,7 +43,7 @@ from autogen.beta.network.identity import (
 from autogen.beta.task import TaskState
 from autogen.beta.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import ScriptedConfig
 
 
 def _agent(name: str, *events: object) -> Agent:
@@ -57,16 +55,7 @@ def _agent(name: str, *events: object) -> Agent:
 
 class TestParseSkillFrontmatter:
     def test_parses_basic_frontmatter_and_body(self) -> None:
-        md = (
-            "---\n"
-            "name: alice\n"
-            "description: Senior policy analyst.\n"
-            "---\n"
-            "\n"
-            "## What I do\n"
-            "\n"
-            "Cost-benefit framing.\n"
-        )
+        md = "---\nname: alice\ndescription: Senior policy analyst.\n---\n\n## What I do\n\nCost-benefit framing.\n"
         parsed = parse_skill_frontmatter(md)
         assert parsed.frontmatter == {
             "name": "alice",
@@ -162,12 +151,8 @@ async def test_unregister_removes_from_capability_index() -> None:
 
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume(claimed_capabilities=["debate"])
-    )
-    bob = await bob_hc.register(
-        _agent("bob"), Passport(name="bob"), Resume(claimed_capabilities=["debate"])
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(claimed_capabilities=["debate"]))
+    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(claimed_capabilities=["debate"]))
 
     assert set(hub.agents_with_capability("debate")) == {alice.agent_id, bob.agent_id}
 
@@ -288,7 +273,9 @@ async def test_record_observation_adds_unclaimed_capability_to_index() -> None:
 
     alice_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume()  # no claims
+        _agent("alice"),
+        Passport(name="alice"),
+        Resume(),  # no claims
     )
 
     assert hub.agents_with_capability("emergent") == []
@@ -312,9 +299,7 @@ async def test_record_observation_ignores_non_terminal_state() -> None:
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume()
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
 
     await hub.record_observation(
         owner_id=alice.agent_id,
@@ -339,9 +324,7 @@ async def test_agent_client_set_resume_refreshes_local_cache() -> None:
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume(summary="initial")
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(summary="initial"))
 
     await alice.set_resume(Resume(summary="updated", claimed_capabilities=["x"]))
 
@@ -367,17 +350,11 @@ async def test_agent_client_add_example_appends() -> None:
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume()
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     assert alice.resume.examples == []
 
-    await alice.add_example(
-        ResumeExample(title="reviewed PR #42", outcome="completed")
-    )
-    await alice.add_example(
-        ResumeExample(title="triaged incident #7", outcome="completed")
-    )
+    await alice.add_example(ResumeExample(title="reviewed PR #42", outcome="completed"))
+    await alice.add_example(ResumeExample(title="triaged incident #7", outcome="completed"))
 
     fresh = await hub.get_resume(alice.agent_id)
     titles = [e.title for e in fresh.examples]
@@ -536,9 +513,7 @@ async def test_task_capability_survives_hub_hydrate() -> None:
 
         # Restart: new Hub, same store. ``_load_task`` rehydrates
         # TaskMetadata; the spec must preserve ``capability``.
-        hub2 = await Hub.open(
-            store, ttl_sweep_interval=0, expectation_sweep_interval=0
-        )
+        hub2 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
         rehydrated = hub2._tasks[task_id]
         assert rehydrated.spec.capability == "analysis"
         await hub2.close()

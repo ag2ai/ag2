@@ -19,8 +19,6 @@ Covers:
 This suite uses ``TestConfig`` so it runs offline and fast.
 """
 
-import asyncio
-
 import pytest
 
 from autogen.beta import Agent
@@ -59,7 +57,7 @@ async def test_consulting_handshake_transitions_to_active() -> None:
     bob_hc = HubClient(link, hub=hub)
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="consulting", target="bob")
     assert session.state == SessionState.ACTIVE
@@ -276,5 +274,3 @@ async def test_default_consulting_adapter_registered_on_open() -> None:
     adapter = hub._adapters.get(("consulting", 1))
     assert isinstance(adapter, ConsultingAdapter)
     await hub.close()
-
-

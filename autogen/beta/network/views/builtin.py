@@ -152,7 +152,4 @@ def _to_event(envelope: Envelope, text: str, participant_id: str) -> BaseEvent:
 def _summarize_older(older: list[Envelope]) -> str:
     speakers = sorted({e.sender_id for e in older})
     plural = "s" if len(older) != 1 else ""
-    return (
-        f"Earlier in this session: {len(older)} message{plural} "
-        f"from {', '.join(speakers)}."
-    )
+    return f"Earlier in this session: {len(older)} message{plural} from {', '.join(speakers)}."

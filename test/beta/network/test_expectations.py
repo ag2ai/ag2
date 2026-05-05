@@ -155,9 +155,7 @@ class TestAcksWithinEvaluator:
             on_violation="auto_close",
             params={"seconds": 30},
         )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, now="2026-01-01T00:01:00+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:01:00+00:00"))
         assert violation is not None
         assert violation.violator_ids == ["bob"]
         assert violation.detail["threshold_seconds"] == 30
@@ -174,9 +172,7 @@ class TestAcksWithinEvaluator:
             params={"seconds": 60},
         )
         # 30s elapsed, threshold 60s → no violation
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, now="2026-01-01T00:00:30+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:00:30+00:00"))
         assert violation is None
 
     def test_silent_when_no_pending_acks(self) -> None:
@@ -185,24 +181,16 @@ class TestAcksWithinEvaluator:
             pending_acks=[],
         )
         evaluator = AcksWithinEvaluator()
-        expectation = Expectation(
-            name="acks_within", on_violation="auto_close", params={"seconds": 30}
-        )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00")
-        )
+        expectation = Expectation(name="acks_within", on_violation="auto_close", params={"seconds": 30})
+        violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00"))
         assert violation is None
 
     def test_silent_when_session_active(self) -> None:
         # Active session (acks already collected) — evaluator skips.
         metadata = _conv_metadata(state=SessionState.ACTIVE, pending_acks=[])
         evaluator = AcksWithinEvaluator()
-        expectation = Expectation(
-            name="acks_within", on_violation="auto_close", params={"seconds": 30}
-        )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00")
-        )
+        expectation = Expectation(name="acks_within", on_violation="auto_close", params={"seconds": 30})
+        violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00"))
         assert violation is None
 
 
@@ -216,9 +204,7 @@ class TestReplyWithinEvaluator:
             on_violation="audit",
             params={"seconds": 60},
         )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00"))
         assert violation is not None
         assert violation.violator_ids == ["bob"]
 
@@ -231,14 +217,10 @@ class TestReplyWithinEvaluator:
             _envelope("bob", "hi back", "2026-01-01T00:00:30+00:00"),
         ]
         evaluator = ReplyWithinEvaluator()
-        expectation = Expectation(
-            name="reply_within", on_violation="audit", params={"seconds": 60}
-        )
+        expectation = Expectation(name="reply_within", on_violation="audit", params={"seconds": 60})
         # Now = 00:00:45 → bob's reply is 15s old; alice's outstanding
         # incoming (bob's broadcast) is 15s old — both within 60s window.
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:00:45+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:00:45+00:00"))
         assert violation is None
 
     def test_originally_addressed_party_not_violator_after_reply(self) -> None:
@@ -250,13 +232,9 @@ class TestReplyWithinEvaluator:
             _envelope("bob", "hi back", "2026-01-01T00:00:30+00:00", audience=["alice"]),
         ]
         evaluator = ReplyWithinEvaluator()
-        expectation = Expectation(
-            name="reply_within", on_violation="audit", params={"seconds": 60}
-        )
+        expectation = Expectation(name="reply_within", on_violation="audit", params={"seconds": 60})
         # Long after — alice will be flagged but bob will not.
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:10:00+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:10:00+00:00"))
         assert violation is not None
         assert "bob" not in violation.violator_ids
         assert "alice" in violation.violator_ids
@@ -272,9 +250,7 @@ class TestMaxSilenceEvaluator:
             on_violation="audit",
             params={"seconds": 60},
         )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00")
-        )
+        violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00"))
         assert violation is not None
         assert violation.violator_ids == []  # session-wide
 
@@ -282,12 +258,8 @@ class TestMaxSilenceEvaluator:
         metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
         wal = [_envelope("alice", "hello", "2026-01-01T00:01:30+00:00")]
         evaluator = MaxSilenceEvaluator()
-        expectation = Expectation(
-            name="max_silence", on_violation="audit", params={"seconds": 60}
-        )
-        violation = evaluator.evaluate(
-            expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00")
-        )
+        expectation = Expectation(name="max_silence", on_violation="audit", params={"seconds": 60})
+        violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00"))
         assert violation is None
 
 
@@ -314,17 +286,13 @@ async def test_auto_close_handler_terminates_session_with_audit() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     # Bob registers without the auto-ack default handler — install a
     # silent handler explicitly so invites are never acked.
-    bob = await bob_hc.register(
-        _agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False
-    )
+    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
     bob.on_envelope(_silent_handler)
 
     # Open in background; the sweeper auto_closes via ProtocolError on the waiter.
     import asyncio as _asyncio
 
-    open_task = _asyncio.create_task(
-        alice.open(type=CONSULTING_TYPE, target=bob.agent_id)
-    )
+    open_task = _asyncio.create_task(alice.open(type=CONSULTING_TYPE, target=bob.agent_id))
     # Let the invite dispatch.
     await _asyncio.sleep(0.05)
 
@@ -358,9 +326,7 @@ async def test_audit_handler_records_without_envelope_or_close() -> None:
     """``audit`` handler logs the violation and nothing else."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
@@ -399,13 +365,10 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
     # Use a custom session with a notify_session expectation we can drive.
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
     # Register a custom adapter with notify_session on max_silence so we
     # don't have to wait for conversation's 1h default.
-    from autogen.beta.network.adapters.base import AdapterResult
     from autogen.beta.network.adapters.conversation import ConversationAdapter
     from autogen.beta.network.views.builtin import WindowedSummary
 
@@ -415,9 +378,7 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
             self.manifest = SessionManifest(
                 type="conversation_notify",
                 version=1,
-                participants=ParticipantSchema(
-                    min=2, max=2, roles=["initiator", "respondent"]
-                ),
+                participants=ParticipantSchema(min=2, max=2, roles=["initiator", "respondent"]),
                 knobs_schema={},
                 default_view_policy=WindowedSummary.name,
                 expectations=[
@@ -461,9 +422,7 @@ async def test_violation_dedup_within_session_lifetime() -> None:
     """Two consecutive ticks fire the same violation only once."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
@@ -471,7 +430,7 @@ async def test_violation_dedup_within_session_lifetime() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+    await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     pre_audit = len(await hub._audit_log.read_all())
 
     clock.advance(3700)
@@ -480,9 +439,7 @@ async def test_violation_dedup_within_session_lifetime() -> None:
     await hub._expectation_tick()
 
     audit = await hub._audit_log.read_all()
-    violations = [
-        r for r in audit[pre_audit:] if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED
-    ]
+    violations = [r for r in audit[pre_audit:] if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED]
     assert len(violations) == 1  # deduped across 3 ticks
 
     await alice_hc.close()
@@ -496,9 +453,7 @@ async def test_violation_dedup_within_session_lifetime() -> None:
 @pytest.mark.asyncio
 async def test_audit_log_records_register_and_unregister() -> None:
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)
@@ -517,9 +472,7 @@ async def test_audit_log_records_register_and_unregister() -> None:
 @pytest.mark.asyncio
 async def test_audit_log_records_set_resume_skill_rule() -> None:
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
     alice_hc = HubClient(link, hub=hub)

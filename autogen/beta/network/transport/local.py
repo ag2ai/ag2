@@ -150,8 +150,8 @@ class LocalLink:
     def client(self) -> LocalLinkClient:
         """Create a fresh client+endpoint pair; attach to the hub."""
         endpoint_id = make_id()
-        c2h: "asyncio.Queue[Frame | None]" = asyncio.Queue()
-        h2c: "asyncio.Queue[Frame | None]" = asyncio.Queue()
+        c2h: asyncio.Queue[Frame | None] = asyncio.Queue()
+        h2c: asyncio.Queue[Frame | None] = asyncio.Queue()
         endpoint = LocalLinkEndpoint(endpoint_id=endpoint_id, client_to_hub=c2h, hub_to_client=h2c)
         client = LocalLinkClient(endpoint_id=endpoint_id, client_to_hub=c2h, hub_to_client=h2c)
         self._hub.attach_endpoint(endpoint)

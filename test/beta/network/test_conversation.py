@@ -17,8 +17,6 @@ Covers:
 This suite uses ``TestConfig`` so it runs offline and fast.
 """
 
-import asyncio
-
 import pytest
 
 from autogen.beta import Agent
@@ -26,7 +24,6 @@ from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import ModelMessage, ModelRequest, TextInput
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
     EV_SESSION_INVITE,
     EV_SESSION_INVITE_ACK,
     EV_SESSION_OPENED,
@@ -197,7 +194,7 @@ async def test_conversation_rejects_send_from_non_participant() -> None:
     eve_hc = HubClient(link, hub=hub)
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
     eve = await eve_hc.register(_agent("eve"), Passport(name="eve"), Resume())
 
     session = await alice.open(type=CONVERSATION_TYPE, target="bob")
@@ -229,7 +226,7 @@ async def test_conversation_hydrate_refolds_active_session(tmp_path) -> None:
     bob_hc = HubClient(link1, hub=hub1)
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type=CONVERSATION_TYPE, target="bob")
     await session.send("first turn")
@@ -319,9 +316,7 @@ async def test_windowed_summary_respects_audience_visibility() -> None:
     ]
 
     view = WindowedSummary(recent_n=10)
-    carol_projection = await view.project(
-        wal, participant_id="carol", session=metadata
-    )
+    carol_projection = await view.project(wal, participant_id="carol", session=metadata)
 
     # Carol cannot see alice's private message to bob.
     assert carol_projection == [
@@ -368,9 +363,7 @@ def _three_party_metadata(initiator: str, *others: str) -> SessionMetadata:
         Participant(agent_id=initiator, role=ParticipantRole.INITIATOR, order=0),
     ]
     for i, name in enumerate(others, start=1):
-        participants.append(
-            Participant(agent_id=name, role=ParticipantRole.PARTICIPANT, order=i)
-        )
+        participants.append(Participant(agent_id=name, role=ParticipantRole.PARTICIPANT, order=i))
     return SessionMetadata(
         session_id="session-1",
         manifest=ConversationAdapter().manifest,

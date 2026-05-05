@@ -11,6 +11,7 @@ and driven by the agent itself, and the mirror simply subscribes to
 ``TaskMetadata`` updates to the hub.
 """
 
+import contextlib
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -64,13 +65,9 @@ class TaskMirror:
     ) -> None:
         # __init__ stores params; subscription happens in attach().
         if hub_client is None and hub is None:
-            raise TypeError(
-                "TaskMirror requires either hub_client= or hub= (legacy)"
-            )
+            raise TypeError("TaskMirror requires either hub_client= or hub= (legacy)")
         self._hub_client = hub_client
-        self._hub = hub if hub is not None else (
-            hub_client._hub if hub_client is not None else None
-        )
+        self._hub = hub if hub is not None else (hub_client._hub if hub_client is not None else None)
         self._owner_id = owner_id
         self._session_id = session_id
 
@@ -145,10 +142,8 @@ class TaskMirror:
     def detach(self, stream: "Stream", sub_ids: list[object]) -> None:
         """Unsubscribe the previously-attached subscriptions."""
         for sid in sub_ids:
-            try:
+            with contextlib.suppress(Exception):
                 stream.unsubscribe(sid)  # type: ignore[arg-type]
-            except Exception:
-                pass
 
     async def _on_started(self, event: TaskStarted) -> None:
         spec = event.spec if event.spec is not None else TaskSpec(title=event.objective or "")
@@ -162,10 +157,8 @@ class TaskMirror:
             started_at=now,
             session_id=self._session_id,
         )
-        try:
+        with contextlib.suppress(Exception):
             await self._observe(metadata)
-        except Exception:
-            pass
 
     async def _on_progress(self, event: TaskProgress) -> None:
         try:
@@ -213,9 +206,7 @@ class TaskMirror:
             pass
         await self._record_observation_if_tagged(event.task_id, TaskState.EXPIRED)
 
-    async def _record_observation_if_tagged(
-        self, task_id: str, outcome: TaskState
-    ) -> None:
+    async def _record_observation_if_tagged(self, task_id: str, outcome: TaskState) -> None:
         """If the task's spec carried a ``capability`` tag, push the
         observation through so the owner's ``Resume.observed`` updates.
 
@@ -238,7 +229,7 @@ class TaskMirror:
                 latency_ms = int(max(0.0, now - started) * 1000)
             except Exception:
                 latency_ms = None
-        try:
+        with contextlib.suppress(Exception):
             await self._record(
                 owner_id=task_meta.owner_id,
                 capability=task_meta.spec.capability,
@@ -246,5 +237,3 @@ class TaskMirror:
                 latency_ms=latency_ms,
                 task_id=task_id,
             )
-        except Exception:
-            pass

@@ -133,13 +133,10 @@ class Resume:
     def from_dict(cls, data: dict[str, Any]) -> "Resume":
         payload = dict(data)
         if "examples" in payload:
-            payload["examples"] = [
-                ResumeExample(**e) if isinstance(e, dict) else e for e in payload["examples"]
-            ]
+            payload["examples"] = [ResumeExample(**e) if isinstance(e, dict) else e for e in payload["examples"]]
         if "observed" in payload:
             payload["observed"] = {
-                k: ObservedStat(**v) if isinstance(v, dict) else v
-                for k, v in payload["observed"].items()
+                k: ObservedStat(**v) if isinstance(v, dict) else v for k, v in payload["observed"].items()
             }
         return cls(**payload)
 

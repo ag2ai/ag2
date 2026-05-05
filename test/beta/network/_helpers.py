@@ -20,7 +20,6 @@ from typing import Any
 from autogen.beta import Context
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse
-
 from autogen.beta.network import EV_TEXT, Envelope, Hub
 
 __all__ = ("ScriptedConfig", "_MockClock", "wait_for_text_count")
@@ -113,6 +112,4 @@ async def wait_for_text_count(
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(
-        f"session {session_id!r} never reached {expected} EV_TEXT envelopes"
-    )
+    raise asyncio.TimeoutError(f"session {session_id!r} never reached {expected} EV_TEXT envelopes")

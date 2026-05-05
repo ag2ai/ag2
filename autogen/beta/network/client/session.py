@@ -91,9 +91,7 @@ class Session:
 
     async def close(self, reason: str = "") -> SessionMetadata:
         """Close the session. Auto-cascades expiry to non-terminal tasks."""
-        return await self._client._hub_client.close_session(
-            self.session_id, reason=reason
-        )
+        return await self._client._hub_client.close_session(self.session_id, reason=reason)
 
     def is_terminal(self) -> bool:
         return self._metadata.is_terminal()

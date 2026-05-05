@@ -15,6 +15,7 @@ every operation through frames.
 """
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from autogen.beta.agent import Agent
@@ -131,9 +132,7 @@ class HubClient:
         client_link = self._ensure_connected()
 
         effective_rule = rule if rule is not None else Rule()
-        passport = await self._hub.register(
-            passport, resume, skill_md=skill_md, rule=effective_rule
-        )
+        passport = await self._hub.register(passport, resume, skill_md=skill_md, rule=effective_rule)
         assert passport.agent_id is not None
         self._hub.bind_endpoint(client_link.endpoint_id, passport.agent_id)
 
@@ -234,23 +233,16 @@ class HubClient:
     ) -> list[SessionMetadata]:
         results = await self._hub.list_sessions(agent_id=agent_id, limit=limit * 4)
         if not include_terminal:
-            results = [
-                m for m in results
-                if m.state not in (SessionState.CLOSED, SessionState.EXPIRED)
-            ]
+            results = [m for m in results if m.state not in (SessionState.CLOSED, SessionState.EXPIRED)]
         return results[:limit]
 
-    async def close_session(
-        self, session_id: str, *, reason: str = ""
-    ) -> SessionMetadata:
+    async def close_session(self, session_id: str, *, reason: str = "") -> SessionMetadata:
         return await self._hub.close_session(session_id, reason=reason)
 
     async def post_envelope(self, envelope: Envelope) -> str:
         return await self._hub.post_envelope(envelope)
 
-    async def read_wal(
-        self, session_id: str, *, since: int = 0, until: int | None = None
-    ) -> list[Envelope]:
+    async def read_wal(self, session_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
         return await self._hub.read_wal(session_id, since=since, until=until)
 
     def can_send(
@@ -262,9 +254,7 @@ class HubClient:
     ) -> bool:
         return self._hub.can_send(session_id, sender_id, event_type=event_type)
 
-    def default_view_policy(
-        self, session_id: str, participant_id: str
-    ) -> ViewPolicy:
+    def default_view_policy(self, session_id: str, participant_id: str) -> ViewPolicy:
         return self._hub.default_view_policy(session_id, participant_id)
 
     # — Task observation (network is one observer) —
@@ -335,17 +325,13 @@ class HubClient:
             await self._client_link.close()
         if self._receive_task is not None:
             self._receive_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._receive_task
-            except (asyncio.CancelledError, Exception):
-                pass
 
     async def shutdown(self) -> None:
         """Unregister every ``AgentClient`` then ``close()``."""
         for client in list(self._clients.values()):
-            try:
+            with contextlib.suppress(Exception):
                 await client.unregister()
-            except Exception:
-                pass
         self._clients.clear()
         await self.close()

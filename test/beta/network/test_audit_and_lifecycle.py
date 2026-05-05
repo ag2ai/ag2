@@ -14,8 +14,6 @@ Covers:
 * Task lifecycle audit record (``task_terminated``).
 """
 
-import asyncio
-
 import pytest
 
 from autogen.beta import Agent
@@ -69,9 +67,7 @@ async def test_post_envelope_rejects_envelope_above_delegation_depth() -> None:
     capped_rule = Rule(limits=LimitsBlock(delegation_depth=2))
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume(), rule=capped_rule
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=capped_rule)
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target=bob.agent_id)
@@ -114,9 +110,7 @@ async def test_delegation_depth_zero_disables_cap() -> None:
     no_cap = Rule(limits=LimitsBlock(delegation_depth=0))
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(
-        _agent("alice"), Passport(name="alice"), Resume(), rule=no_cap
-    )
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=no_cap)
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target=bob.agent_id)
@@ -161,9 +155,7 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
             self.manifest = custom_manifest
 
     # First boot: register custom adapter, open session, persist.
-    hub1 = await Hub.open(
-        store, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     hub1.register_adapter(_CustomAdapter())
     link1 = LocalLink(hub1)
     alice_hc = HubClient(link1, hub=hub1)
@@ -180,9 +172,7 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
 
     # Second boot: hydrate WITHOUT the custom adapter. Session is
     # dormant: metadata loaded, but no adapter state, not active.
-    hub2 = await Hub.open(
-        store, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub2 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     assert session_id in hub2._sessions
     assert session_id not in hub2._active_sessions
     assert session_id not in hub2._adapter_states
@@ -220,9 +210,7 @@ async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() ->
     """
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
     # Custom conversation manifest with an aggressive max_silence that
     # auto_closes — so two sessions both violate at the same tick.
@@ -264,11 +252,7 @@ async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() ->
     await hub._expectation_tick()
 
     audit = await hub._audit_log.read_all()
-    closed_session_ids = {
-        r["session_id"]
-        for r in audit
-        if r["kind"] == AUDIT_KIND_SESSION_CLOSED
-    }
+    closed_session_ids = {r["session_id"] for r in audit if r["kind"] == AUDIT_KIND_SESSION_CLOSED}
     # Both sessions auto-closed in a single tick.
     assert sess_ab.session_id in closed_session_ids
     assert sess_cd.session_id in closed_session_ids
@@ -324,9 +308,7 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
     """``EXPIRED`` transitions emit ``session_expired`` (not ``session_closed``)."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
-    hub = await Hub.open(
-        store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0
-    )
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
     a_hc = HubClient(link, hub=hub)
@@ -334,9 +316,7 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
     alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(
-        type="conversation", target=bob.agent_id, ttl="60s"
-    )
+    session = await alice.open(type="conversation", target=bob.agent_id, ttl="60s")
     pre_audit = len(await hub._audit_log.read_all())
     clock.advance(120)
     await hub.expire_due()
@@ -344,9 +324,7 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
     audit = await hub._audit_log.read_all()
     new_records = audit[pre_audit:]
     expired = [
-        r for r in new_records
-        if r["kind"] == AUDIT_KIND_SESSION_EXPIRED
-        and r["session_id"] == session.session_id
+        r for r in new_records if r["kind"] == AUDIT_KIND_SESSION_EXPIRED and r["session_id"] == session.session_id
     ]
     assert len(expired) == 1
     assert expired[0]["reason"] == "ttl_expired"

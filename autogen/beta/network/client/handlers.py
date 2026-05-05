@@ -19,6 +19,7 @@ The handler is decomposed into small public hooks
 so user-supplied overrides can replace only the parts they care about.
 """
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from autogen.beta.events import BaseEvent
@@ -73,9 +74,7 @@ def resolve_view_policy(
     metadata: SessionMetadata,
 ) -> ViewPolicy:
     """Return the adapter's default view policy for this participant."""
-    return client._hub_client.default_view_policy(
-        metadata.session_id, client.agent_id
-    )
+    return client._hub_client.default_view_policy(metadata.session_id, client.agent_id)
 
 
 def stamp_dependencies(
@@ -105,12 +104,10 @@ async def _auto_ack_invite(envelope: Envelope, client: "AgentClient") -> None:
         event_data={"session_id": envelope.session_id},
         causation_id=envelope.envelope_id,
     )
-    try:
+    # An ack failure shouldn't crash the agent — the hub will time
+    # out and close the session via ``invite_ack_timeout``.
+    with contextlib.suppress(Exception):
         await client.send_envelope(ack)
-    except Exception:
-        # An ack failure shouldn't crash the agent — the hub will time
-        # out and close the session via ``invite_ack_timeout``.
-        pass
 
 
 def _extract_turn_text(envelope: Envelope) -> str:

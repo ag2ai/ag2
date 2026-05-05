@@ -17,8 +17,6 @@ Correctness benchmark, not a perf benchmark. Default: 100 sessions ×
 ``ENVELOPES_PER_SESSION`` locally to exercise larger sweeps.
 """
 
-import asyncio
-
 import pytest
 
 from autogen.beta import Agent

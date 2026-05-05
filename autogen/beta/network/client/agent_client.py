@@ -69,14 +69,12 @@ class AgentClient:
         self._rule = rule
         self._hub = hub
         self._hub_client = hub_client
-        self._on_envelope: EnvelopeHandler | None = (
-            self._run_default_handler if attach_default_handler else None
-        )
+        self._on_envelope: EnvelopeHandler | None = self._run_default_handler if attach_default_handler else None
         self._disconnected = False
 
         # Per-session inbox queues for ``wait_for_session_event``
         # (used by the ``delegate`` tool to await consulting replies).
-        self._session_inboxes: dict[str, "asyncio.Queue[Envelope]"] = {}
+        self._session_inboxes: dict[str, asyncio.Queue[Envelope]] = {}
 
         # Sessions where the default notify handler should NOT run —
         # used by ``delegate`` while it owns the session lifecycle.

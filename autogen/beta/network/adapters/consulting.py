@@ -163,9 +163,7 @@ class ConsultingAdapter:
         if ParticipantRole.RESPONDENT not in roles:
             raise ProtocolError("consulting requires exactly one respondent")
         if len(metadata.participants) != 2:
-            raise ProtocolError(
-                f"consulting requires exactly 2 participants, got {len(metadata.participants)}"
-            )
+            raise ProtocolError(f"consulting requires exactly 2 participants, got {len(metadata.participants)}")
 
     def validate_send(
         self,
@@ -181,9 +179,7 @@ class ConsultingAdapter:
             # session.
             return
         if state.initiator_sent and state.respondent_replied:
-            raise ProtocolError(
-                f"consulting session {metadata.session_id!r} already complete"
-            )
+            raise ProtocolError(f"consulting session {metadata.session_id!r} already complete")
         if not state.initiator_sent:
             initiator_id = self._initiator_id(metadata)
             if envelope.sender_id != initiator_id:
