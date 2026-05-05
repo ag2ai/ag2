@@ -65,7 +65,6 @@ class TavilySearchTool(Tool):
         proxy: str | None = None,
         verify: bool = True,
         timeout: float | None = None,
-        client_kwargs: dict[str, Any] | None = None,
         name: str = "tavily_search",
         *,
         description: str = (
@@ -73,9 +72,8 @@ class TavilySearchTool(Tool):
             "and optional LLM-generated answer, raw content, and images."
         ),
         middleware: Iterable[ToolMiddleware] = (),
+        **client_kwargs: Any
     ) -> None:
-        client_kwargs = client_kwargs or {}
-
         @tool(
             name=name,
             description=description,
