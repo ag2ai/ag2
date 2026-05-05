@@ -176,6 +176,7 @@ class ExaToolkit(Toolkit):
                 kwargs["contents"] = contents
 
             c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
             try:
                 raw = await c.search(query, **kwargs)
             finally:

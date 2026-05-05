@@ -419,6 +419,21 @@ class TestExaToolkitVariable:
 
 
 @pytest.mark.asyncio
+class TestClientConstruction:
+    async def test_default_client_sets_integration_header(self) -> None:
+        """When no ``client`` is passed, the toolkit creates one with the ag2 header."""
+        toolkit = ExaToolkit(api_key="test-key")
+        assert toolkit._client.headers["x-exa-integration"] == "ag2"
+
+    async def test_explicit_client_is_used_as_is(self) -> None:
+        """When ``client`` is passed, it is used without modification."""
+        custom = MagicMock()
+        custom.headers = {"x-api-key": "k"}
+        toolkit = ExaToolkit(client=custom)
+        assert toolkit._client is custom
+
+
+@pytest.mark.asyncio
 class TestIndividualTools:
     @respx.mock
     async def test_search_tool_passed_alone(self) -> None:

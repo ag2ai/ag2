@@ -297,7 +297,7 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 ddgs = ["ddgs>=9.0.0,<10"]
 tavily = ["tavily-python>=0.7.4,<0.8"]
-exa = ["exa-py>=2.0.0,<3"]
+exa = ["exa-py>=2.12.1,<3"]
 perplexity = ["perplexityai>=0.30.0,<1"]
 
 nlip = [
