@@ -42,12 +42,12 @@ from autogen.beta.network.adapters.discussion import (
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
 from autogen.beta.network.client.plugin import NetworkPlugin
+from autogen.beta.network.client.session import Session
 from autogen.beta.network.policies import (
     AGENT_CLIENT_DEP,
     HUB_DEP,
     SESSION_DEP,
 )
-from autogen.beta.network.client.session import Session
 from autogen.beta.network.transitions import (
     AgentTarget,
     FromSpeaker,
@@ -72,9 +72,7 @@ def _require_all_keys() -> tuple[str, str, str]:
     openai = os.getenv("OPENAI_API_KEY")
     gemini = os.getenv("GEMINI_API_KEY")
     if not (anthropic and openai and gemini):
-        pytest.skip(
-            "mixed-provider tests require ANTHROPIC_API_KEY, OPENAI_API_KEY, and GEMINI_API_KEY"
-        )
+        pytest.skip("mixed-provider tests require ANTHROPIC_API_KEY, OPENAI_API_KEY, and GEMINI_API_KEY")
     return anthropic, openai, gemini
 
 
@@ -92,9 +90,7 @@ async def _wait_for_text_count(
         if count >= expected:
             return count
         await asyncio.sleep(0.2)
-    return sum(
-        1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT
-    )
+    return sum(1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT)
 
 
 @pytest.mark.anthropic
@@ -128,26 +124,17 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
     )
     bob = Agent(
         name="bob",
-        prompt=(
-            "You are a math specialist. Answer with just the numeric result, "
-            "no explanation."
-        ),
+        prompt=("You are a math specialist. Answer with just the numeric result, no explanation."),
         config=OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
     )
 
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
 
-    alice_c = await alice_hc.register(
-        alice, Passport(name="alice"), Resume(summary="multi-agent coordinator")
-    )
-    await bob_hc.register(
-        bob, Passport(name="bob"), Resume(claimed_capabilities=["math"], summary="math")
-    )
+    alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume(summary="multi-agent coordinator"))
+    await bob_hc.register(bob, Passport(name="bob"), Resume(claimed_capabilities=["math"], summary="math"))
 
-    reply = await alice_c.agent.ask(
-        "Find a math specialist on the network and ask them: what is 14 times 19?"
-    )
+    reply = await alice_c.agent.ask("Find a math specialist on the network and ask them: what is 14 times 19?")
 
     assert reply.body is not None
     assert "266" in reply.body, f"expected 266 in alice's reply, got: {reply.body!r}"
@@ -207,26 +194,19 @@ async def test_3way_discussion_one_per_provider() -> None:
         intent="quick mixed-provider debate",
     )
 
-    await session.send(
-        "Quick debate: should new web apps default to server-side rendering?"
-    )
+    await session.send("Quick debate: should new web apps default to server-side rendering?")
 
-    count = await _wait_for_text_count(
-        hub, session.session_id, expected=3, timeout=180.0
-    )
+    count = await _wait_for_text_count(hub, session.session_id, expected=3, timeout=180.0)
     assert count >= 3, f"expected 3 turns, got {count}"
 
     wal = await hub.read_wal(session.session_id)
     speakers = [e.sender_id for e in wal if e.event_type == EV_TEXT][:3]
     expected_order = [c.agent_id for c in clients]
     assert speakers == expected_order, (
-        f"round-robin order broken across providers; "
-        f"expected {expected_order}, got {speakers}"
+        f"round-robin order broken across providers; expected {expected_order}, got {speakers}"
     )
 
-    contributions = [
-        e.event_data.get("text", "") for e in wal if e.event_type == EV_TEXT
-    ][:3]
+    contributions = [e.event_data.get("text", "") for e in wal if e.event_type == EV_TEXT][:3]
     for i, text in enumerate(contributions):
         assert len(text) > 5, f"turn {i} from {list(configs)[i]} was empty/trivial: {text!r}"
 
@@ -271,22 +251,14 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
 
     triage_hc = HubClient(link, hub=hub)
     eng_hc = HubClient(link, hub=hub)
-    triage = await triage_hc.register(
-        triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"])
-    )
-    eng = await eng_hc.register(
-        eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"])
-    )
+    triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"]))
+    eng = await eng_hc.register(eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"]))
 
     graph = TransitionGraph(
         initial_speaker=triage.agent_id,
         transitions=[
-            Transition(
-                when=ToolCalled("transfer_to_eng"), then=AgentTarget(eng.agent_id)
-            ),
-            Transition(
-                when=FromSpeaker(eng.agent_id), then=RevertToInitiatorTarget()
-            ),
+            Transition(when=ToolCalled("transfer_to_eng"), then=AgentTarget(eng.agent_id)),
+            Transition(when=FromSpeaker(eng.agent_id), then=RevertToInitiatorTarget()),
         ],
         default_target=TerminateTarget(reason="triage_done"),
         max_turns=6,

@@ -50,7 +50,6 @@ from autogen.beta.network.session import SessionState
 from autogen.beta.network.transitions import (
     AgentTarget,
     StayTarget,
-    TerminateTarget,
     ToolCalled,
     Transition,
     TransitionGraph,
@@ -87,9 +86,7 @@ async def _wait_for_text_count(
         if count >= expected:
             return count
         await asyncio.sleep(0.2)
-    return sum(
-        1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT
-    )
+    return sum(1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT)
 
 
 @pytest.mark.anthropic
@@ -132,9 +129,7 @@ async def test_conversation_adapter_bidirectional_two_turns(
     await session.send("Hi bob. What's a good Python web framework for tiny APIs?")
 
     # Wait for bob's reply to land.
-    count = await _wait_for_text_count(
-        hub, session.session_id, expected=2, timeout=60.0
-    )
+    count = await _wait_for_text_count(hub, session.session_id, expected=2, timeout=60.0)
     assert count >= 2, f"expected 2 turns (alice + bob), got {count}"
 
     # Conversation is still active — no auto-close.
@@ -267,9 +262,7 @@ async def test_sessions_close_invoked_by_llm(
         await asyncio.sleep(0.2)
 
     metadata = await hub.get_session(session.session_id)
-    assert metadata.state == SessionState.CLOSED, (
-        f"expected session to be CLOSED, got {metadata.state}"
-    )
+    assert metadata.state == SessionState.CLOSED, f"expected session to be CLOSED, got {metadata.state}"
 
     await alice_hc.close()
     await bob_hc.close()
@@ -370,12 +363,8 @@ async def test_workflow_graph_with_two_handoff_tools(
         ),
         config=anthropic_config,
     )
-    eng = Agent(
-        name="eng", prompt="You are engineering.", config=anthropic_config
-    )
-    billing = Agent(
-        name="billing", prompt="You are billing.", config=anthropic_config
-    )
+    eng = Agent(name="eng", prompt="You are engineering.", config=anthropic_config)
+    billing = Agent(name="billing", prompt="You are billing.", config=anthropic_config)
 
     triage_hc = HubClient(link, hub=hub)
     eng_hc = HubClient(link, hub=hub)
@@ -429,9 +418,7 @@ async def test_workflow_graph_with_two_handoff_tools(
     handoffs = [e for e in wal if e.event_type == EV_HANDOFF]
     assert handoffs, "triage did not call any handoff tool"
     chosen_tool = handoffs[0].event_data.get("tool")
-    assert chosen_tool == "transfer_to_billing", (
-        f"expected billing routing, got tool={chosen_tool!r}"
-    )
+    assert chosen_tool == "transfer_to_billing", f"expected billing routing, got tool={chosen_tool!r}"
 
     await triage_hc.close()
     await eng_hc.close()

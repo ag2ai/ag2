@@ -625,7 +625,7 @@ async def test_register_workflow_attaches_handoff_tools_per_tool_called() -> Non
             Transition(when=FromSpeaker("eng"), then=RevertToInitiatorTarget()),
         ],
     )
-    plugin = alice.agent._plugins[-1] if hasattr(alice.agent, "_plugins") else None
+    alice.agent._plugins[-1] if hasattr(alice.agent, "_plugins") else None
     # Locate the NetworkPlugin to call register_workflow.
     from autogen.beta.network.client.plugin import NetworkPlugin
 

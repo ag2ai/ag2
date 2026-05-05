@@ -141,12 +141,6 @@ async def test_workflow_swarm_handoff_revert_close(
         intent="triage routes deep questions to engineering",
     )
 
-    # Seed the workflow with the user question (manual send from triage's
-    # initial turn). The workflow's expected_next_speaker starts at triage,
-    # so this is allowed; triage's notify handler will then pick up eng's
-    # reply when it lands.
-    await triage.session if False else None  # noqa: keep imports happy
-
     # Drive the first turn directly via triage.agent.ask so we can
     # observe the handoff tool call. The session is in the LLM's
     # context via the plugin's NetworkContextPolicy.

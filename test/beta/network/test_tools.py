@@ -14,6 +14,7 @@ A final integration test wires the full network plugin to two agents
 and exercises the tools through real ``Agent.ask`` turns.
 """
 
+import contextlib
 import json
 from typing import Any
 
@@ -81,12 +82,12 @@ async def test_peers_find_returns_other_peers_summary() -> None:
     carol_hc = HubClient(link, hub=hub)
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(claimed_capabilities=["debate"]))
-    bob = await bob_hc.register(
+    await bob_hc.register(
         _agent("bob"),
         Passport(name="bob"),
         Resume(summary="senior coder", claimed_capabilities=["coding"]),
     )
-    carol = await carol_hc.register(
+    await carol_hc.register(
         _agent("carol"),
         Passport(name="carol"),
         Resume(summary="qa lead", claimed_capabilities=["testing"]),
@@ -117,7 +118,7 @@ async def test_peers_find_filters_by_capability() -> None:
     bob_hc = HubClient(link, hub=hub)
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(
+    await bob_hc.register(
         _agent("bob"),
         Passport(name="bob"),
         Resume(claimed_capabilities=["coding"]),
@@ -148,14 +149,14 @@ async def test_peers_describe_returns_skill_md_or_fallback() -> None:
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     # Bob has an explicit SKILL.md.
-    bob = await bob_hc.register(
+    await bob_hc.register(
         _agent("bob"),
         Passport(name="bob"),
         Resume(claimed_capabilities=["coding"]),
         skill_md="---\nname: bob\ndescription: hand-written\n---\n## Notes\n",
     )
     # Carol falls back to the rendered version.
-    carol = await carol_hc.register(
+    await carol_hc.register(
         _agent("carol"),
         Passport(name="carol"),
         Resume(claimed_capabilities=["qa"], summary="qa lead"),
@@ -234,7 +235,7 @@ async def test_context_search_finds_substring_in_session_wal() -> None:
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target="bob")
     await session.send("policy framework adoption")
@@ -276,10 +277,8 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
             event_data={"session_id": envelope.session_id},
             causation_id=envelope.envelope_id,
         )
-        try:
+        with contextlib.suppress(Exception):
             await bob.send_envelope(ack)
-        except Exception:
-            pass
 
     bob.on_envelope(_ack)
 

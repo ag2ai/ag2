@@ -111,7 +111,7 @@ async def test_peers_then_delegate_consults_a_specialist(
         Passport(name="alice"),
         Resume(summary="multi-agent coordinator"),
     )
-    bob = await bob_hc.register(
+    await bob_hc.register(
         bob_agent,
         Passport(name="bob"),
         Resume(claimed_capabilities=["math"], summary="math specialist"),

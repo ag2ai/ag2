@@ -66,9 +66,7 @@ async def _wait_for_text_count(
         if count >= expected:
             return count
         await asyncio.sleep(0.2)
-    return sum(
-        1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT
-    )
+    return sum(1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT)
 
 
 @pytest.mark.openai
@@ -100,10 +98,7 @@ async def test_peers_then_delegate_consults_a_specialist(
     )
     bob_agent = Agent(
         name="bob",
-        prompt=(
-            "You are a math specialist. Answer with just the numeric result, "
-            "no explanation."
-        ),
+        prompt=("You are a math specialist. Answer with just the numeric result, no explanation."),
         config=openai_config,
     )
 
@@ -118,9 +113,7 @@ async def test_peers_then_delegate_consults_a_specialist(
         Resume(claimed_capabilities=["math"], summary="math specialist"),
     )
 
-    reply = await alice.agent.ask(
-        "Find a math specialist on the network and ask them: what is 12 times 17?"
-    )
+    reply = await alice.agent.ask("Find a math specialist on the network and ask them: what is 12 times 17?")
 
     assert reply.body is not None
     assert "204" in reply.body, f"expected 204 in alice's reply, got: {reply.body!r}"
@@ -173,25 +166,17 @@ async def test_3way_discussion_round_robin_via_say_tool(
         intent="discuss whether type hints should be mandatory in new Python projects",
     )
 
-    await session.send(
-        "Quick debate: should type hints be mandatory in new Python projects?"
-    )
+    await session.send("Quick debate: should type hints be mandatory in new Python projects?")
 
-    count = await _wait_for_text_count(
-        hub, session.session_id, expected=3, timeout=120.0
-    )
+    count = await _wait_for_text_count(hub, session.session_id, expected=3, timeout=120.0)
     assert count >= 3, f"expected 3 turns, got {count}"
 
     wal = await hub.read_wal(session.session_id)
     speakers = [e.sender_id for e in wal if e.event_type == EV_TEXT][:3]
     expected_order = [c.agent_id for c in clients]
-    assert speakers == expected_order, (
-        f"round-robin order broken; expected {expected_order}, got {speakers}"
-    )
+    assert speakers == expected_order, f"round-robin order broken; expected {expected_order}, got {speakers}"
 
-    contributions = [
-        e.event_data.get("text", "") for e in wal if e.event_type == EV_TEXT
-    ][:3]
+    contributions = [e.event_data.get("text", "") for e in wal if e.event_type == EV_TEXT][:3]
     for i, text in enumerate(contributions):
         assert len(text) > 5, f"{names[i]}'s turn was empty/trivial: {text!r}"
 

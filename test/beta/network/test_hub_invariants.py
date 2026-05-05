@@ -28,6 +28,7 @@ Covers:
 """
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -128,10 +129,8 @@ def _ack_only_handler(client: "HubClient | object"):
             event_data={"session_id": env.session_id},
             causation_id=env.envelope_id,
         )
-        try:
+        with contextlib.suppress(Exception):
             await client.send_envelope(ack)
-        except Exception:
-            pass
 
     return _handle
 

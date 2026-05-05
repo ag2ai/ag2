@@ -65,11 +65,7 @@ def _strip_additional_properties(node: Any) -> Any:
     everywhere is safe.
     """
     if isinstance(node, dict):
-        return {
-            k: _strip_additional_properties(v)
-            for k, v in node.items()
-            if k != "additionalProperties"
-        }
+        return {k: _strip_additional_properties(v) for k, v in node.items() if k != "additionalProperties"}
     if isinstance(node, list):
         return [_strip_additional_properties(v) for v in node]
     return node
