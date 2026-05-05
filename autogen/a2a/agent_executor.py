@@ -105,7 +105,7 @@ class AutogenAgentExecutor(AgentExecutor):
                     )
 
         except Exception as e:
-            raise InternalError(str(e)) from e
+            raise InternalError(repr(e)) from e
 
         await updater.add_artifact(
             artifact_id=artifact.artifact_id,
