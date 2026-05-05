@@ -27,6 +27,8 @@ from httpx._urls import URL
 
 from autogen.doc_utils import export_module
 
+from .utils import EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+
 
 class ClientFactory(Protocol):
     def __call__(self) -> AsyncClient: ...
@@ -147,6 +149,8 @@ class EmptyClientFactory(ClientFactory):
 @export_module("autogen.a2a")
 def MockClient(  # noqa: N802
     response_message: str | dict[str, Any] | TextPart | DataPart | Part,
+    *,
+    extended_agent_card: AgentCard | None = None,
 ) -> HttpxClientFactory:
     """Create a mock HTTP client for testing A2A agent interactions.
 
@@ -155,6 +159,10 @@ def MockClient(  # noqa: N802
 
     Args:
         response_message: The message to return in response to SendMessage requests.
+        extended_agent_card: Optional extended agent card to serve at the
+            authenticated extended-card endpoint. When provided, the public
+            card advertises ``supports_authenticated_extended_card=True`` so
+            clients fetch the extended one.
 
     Returns:
         An HttpxClientFactory configured with a mock transport that handles requests
@@ -175,31 +183,35 @@ def MockClient(  # noqa: N802
     else:
         raise ValueError(f"Invalid message type: {type(response_message)}")
 
+    public_card = AgentCard(
+        capabilities=AgentCapabilities(streaming=False),
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        name="mock_agent",
+        description="mock_agent",
+        url="http://localhost:8000",
+        supports_authenticated_extended_card=extended_agent_card is not None,
+        version="0.1.0",
+        skills=[],
+    )
+
+    public_card_paths = (
+        AGENT_CARD_WELL_KNOWN_PATH,  # 1.0 well-known
+        PREV_AGENT_CARD_WELL_KNOWN_PATH,  # v0.3 legacy well-known
+    )
+    extended_card_paths = (
+        EXTENDED_AGENT_CARD_PATH,  # 1.0 extended card
+        "/agent/authenticatedExtendedCard",  # v0.3 legacy extended
+    )
+
     async def mock_handler(request: Request) -> Response:
-        # Accept the well-known path advertised by a2a-sdk 1.0 plus the SDK's
-        # current `/extendedAgentCard` route and legacy v0.3 paths so this mock
-        # works across SDK generations.
-        agent_card_paths = (
-            AGENT_CARD_WELL_KNOWN_PATH,  # 1.0 well-known
-            "/extendedAgentCard",  # 1.0 extended card
-            "/.well-known/agent.json",  # v0.3 legacy well-known
-            "/agent/authenticatedExtendedCard",  # v0.3 legacy extended
-        )
-        if request.url.path in agent_card_paths:
-            return Response(
-                status_code=200,
-                content=AgentCard(
-                    capabilities=AgentCapabilities(streaming=False),
-                    default_input_modes=["text"],
-                    default_output_modes=["text"],
-                    name="mock_agent",
-                    description="mock_agent",
-                    url="http://localhost:8000",
-                    supports_authenticated_extended_card=False,
-                    version="0.1.0",
-                    skills=[],
-                ).model_dump_json(),
-            )
+        if request.url.path in public_card_paths:
+            return Response(status_code=200, content=public_card.model_dump_json())
+
+        if request.url.path in extended_card_paths:
+            if extended_agent_card is None:
+                return Response(status_code=404)
+            return Response(status_code=200, content=extended_agent_card.model_dump_json())
 
         return Response(
             status_code=200,

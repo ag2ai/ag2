@@ -23,7 +23,6 @@ from .utils import (
     request_message_from_a2a,
     to_core_message,
     to_core_parts,
-    to_core_task_state,
 )
 
 
@@ -61,7 +60,7 @@ class AutogenAgentExecutor(AgentExecutor):
             task = _v03_conversions.to_compat_task(context.current_task)
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
-        await updater.update_status(state=to_core_task_state(TaskState.working))  # type: ignore[arg-type]
+        await updater.start_work()
 
         artifact = make_artifact(message=None)
 

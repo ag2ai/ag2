@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from typing import Any, cast
 from uuid import uuid4
 
@@ -29,7 +29,6 @@ from a2a.compat.v0_3.types import (
 from a2a.compat.v0_3.types import (
     TaskResubscriptionRequest as _CompatResubscriptionRequest,
 )
-from a2a.types import TaskState as _CoreTaskState
 from a2a.types.a2a_pb2 import (
     AgentCard as _CoreAgentCard,
 )
@@ -48,6 +47,16 @@ from a2a.types.a2a_pb2 import (
 
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.events.client_events import StreamEvent
+
+# In a2a-sdk 1.0 the extended agent card is served at this REST path (see
+# `a2a.server.routes.rest_routes`); the SDK does not export a constant for it,
+# so we keep one here for both server and client side use.
+EXTENDED_AGENT_CARD_PATH = "/extendedAgentCard"
+
+# A2A v0.3 served the public agent card at `/.well-known/agent.json`; the 1.0
+# spec moved it to `/.well-known/agent-card.json`. We keep the legacy path so
+# clients can fall back to v0.3 servers that have not migrated yet.
+PREV_AGENT_CARD_WELL_KNOWN_PATH = "/.well-known/agent.json"
 
 
 def get_message_text(message: Message, delimiter: str = "\n") -> str:
@@ -462,28 +471,6 @@ def to_compat_agent_card(card: _CoreAgentCard) -> AgentCard:
     return _v03_conversions.to_compat_agent_card(card)
 
 
-_TASK_STATE_TO_CORE: dict[TaskState, int] = {
-    TaskState.submitted: _CoreTaskState.TASK_STATE_SUBMITTED,
-    TaskState.working: _CoreTaskState.TASK_STATE_WORKING,
-    TaskState.completed: _CoreTaskState.TASK_STATE_COMPLETED,
-    TaskState.failed: _CoreTaskState.TASK_STATE_FAILED,
-    TaskState.canceled: _CoreTaskState.TASK_STATE_CANCELED,
-    TaskState.input_required: _CoreTaskState.TASK_STATE_INPUT_REQUIRED,
-    TaskState.rejected: _CoreTaskState.TASK_STATE_REJECTED,
-    TaskState.auth_required: _CoreTaskState.TASK_STATE_AUTH_REQUIRED,
-}
-
-
-def to_core_task_state(state: TaskState) -> int:
-    """Map a v0.3 pydantic TaskState enum to its v1.0 protobuf int value.
-
-    ``TaskUpdater.update_status`` annotates ``state`` as the protobuf enum
-    class itself, but at runtime it accepts the underlying int value — that's
-    what we return.
-    """
-    return _TASK_STATE_TO_CORE[state]
-
-
 def to_core_message(message: Message) -> _CoreMessage:
     """Convert a v0.3 pydantic Message into a v1.0 protobuf Message."""
     return _v03_conversions.to_core_message(message)
@@ -492,3 +479,40 @@ def to_core_message(message: Message) -> _CoreMessage:
 def to_core_parts(parts: list[Part]) -> list[_CorePart]:
     """Convert a list of v0.3 pydantic Parts into v1.0 protobuf Parts."""
     return [_v03_conversions.to_core_part(p) for p in parts]
+
+
+def make_async_card_modifier(
+    sync_modifier: Callable[[AgentCard], AgentCard],
+) -> Callable[[_CoreAgentCard], Awaitable[_CoreAgentCard]]:
+    """Wrap a sync v0.3-pydantic card_modifier as an async proto-pydantic-proto bridge.
+
+    The SDK 1.0 hooks (`create_agent_card_routes(card_modifier=...)`) expect an
+    async callable that takes/returns the proto AgentCard. AG2's public API
+    keeps the v0.3-pydantic sync signature, so on each request we translate
+    proto → v0.3, run the user callback, translate v0.3 → proto.
+    """
+
+    async def _bridge(core_card: _CoreAgentCard) -> _CoreAgentCard:
+        compat_card = _v03_conversions.to_compat_agent_card(core_card)
+        modified = sync_modifier(compat_card)
+        return _v03_conversions.to_core_agent_card(modified)
+
+    return _bridge
+
+
+def make_async_extended_card_modifier(
+    sync_modifier: Callable[[AgentCard, Any], AgentCard],
+) -> Callable[[_CoreAgentCard, Any], Awaitable[_CoreAgentCard]]:
+    """Wrap a sync v0.3-pydantic extended_card_modifier as an async proto bridge.
+
+    Mirrors `make_async_card_modifier` but preserves the second positional
+    argument (`ServerCallContext` per the SDK signature) so per-request user
+    code can inspect headers, auth state, etc.
+    """
+
+    async def _bridge(core_card: _CoreAgentCard, ctx: Any) -> _CoreAgentCard:
+        compat_card = _v03_conversions.to_compat_agent_card(core_card)
+        modified = sync_modifier(compat_card, ctx)
+        return _v03_conversions.to_core_agent_card(modified)
+
+    return _bridge

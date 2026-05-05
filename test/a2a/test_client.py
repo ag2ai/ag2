@@ -209,3 +209,43 @@ async def test_polling_raises_when_no_task_and_no_agent_card() -> None:
     with pytest.raises(A2aClientError, match="agent card not found"):
         async for _ in agent._ask_polling(NoEventClient(), message):
             pass
+
+
+@pytest.mark.asyncio
+async def test_get_extended_agent_card_when_advertised() -> None:
+    extended = AgentCard(
+        name="extended-mock",
+        description="extended description",
+        url="http://localhost:8000",
+        version="0.1.0",
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        capabilities=AgentCapabilities(streaming=False),
+        skills=[],
+        supports_authenticated_extended_card=True,
+    )
+
+    remote_agent = A2aRemoteAgent(
+        url="http://fake",
+        name="mock-agent",
+        client=MockClient("hi", extended_agent_card=extended),
+    )
+
+    card = await remote_agent._get_agent_card(auth_http_kwargs={"headers": {"Authorization": "Bearer x"}})
+
+    assert card.name == "extended-mock"
+    assert card.description == "extended description"
+
+
+@pytest.mark.asyncio
+async def test_skip_extended_card_when_not_advertised() -> None:
+    remote_agent = A2aRemoteAgent(
+        url="http://fake",
+        name="mock-agent",
+        client=MockClient("hi"),
+    )
+
+    card = await remote_agent._get_agent_card()
+
+    assert card.name == "mock_agent"
+    assert not card.supports_authenticated_extended_card

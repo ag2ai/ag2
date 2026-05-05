@@ -12,6 +12,7 @@ from uuid import uuid4
 import httpx
 from a2a.client import A2ACardResolver, A2AClientError, Client, ClientCallInterceptor, ClientConfig
 from a2a.client import ClientFactory as A2AClientFactory
+from a2a.client.errors import AgentCardResolutionError
 from a2a.compat.v0_3.types import (
     AgentCard,
     Message,
@@ -32,6 +33,8 @@ from autogen.oai.client import OpenAIWrapper
 from .client_factory import ClientFactory, EmptyClientFactory
 from .errors import A2aAgentNotFoundError, A2aClientError
 from .utils import (
+    EXTENDED_AGENT_CARD_PATH,
+    PREV_AGENT_CARD_WELL_KNOWN_PATH,
     ClientStreamEvent,
     compat_get_task,
     compat_send_message,
@@ -351,20 +354,54 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
+        # `auth_http_kwargs` is forwarded to every card request so the same
+        # auth/tenant headers reach all endpoints — useful when the agent sits
+        # behind a reverse proxy/API gateway that requires auth even for the
+        # discovery endpoint. Try the 1.0 well-known path; on 404 fall back to
+        # the v0.3 path for servers that have not migrated yet.
+        logger.info(
+            f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+        )
         try:
-            logger.info(
-                f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
-            )
-            core_card = await self._card_resolver.get_agent_card(
-                relative_card_path=AGENT_CARD_WELL_KNOWN_PATH,
-                http_kwargs=auth_http_kwargs,
-            )
+            try:
+                core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=AGENT_CARD_WELL_KNOWN_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
+            except AgentCardResolutionError as e_public:
+                if e_public.status_code != 404:
+                    raise
+                logger.info(
+                    f"Falling back to legacy v0.3 path: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
+                )
+                core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
         except Exception as e:
             raise A2aAgentNotFoundError(f"{self.name}: {self._card_resolver.base_url}") from e
 
         # `A2ACardResolver` returns a proto AgentCard; the rest of this module works
         # against the v0.3 pydantic shape, so translate at the boundary.
-        return to_compat_agent_card(core_card)
+        card = to_compat_agent_card(core_card)
+
+        # If the agent advertises an authenticated extended card, fetch it and
+        # let it supersede the public card. Failure to retrieve the extended
+        # card is non-fatal — we keep the public card and continue.
+        if card.supports_authenticated_extended_card:
+            try:
+                extended_core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=EXTENDED_AGENT_CARD_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
+                card = to_compat_agent_card(extended_core_card)
+            except Exception as e_extended:
+                logger.warning(
+                    f"Failed to fetch extended agent card: {e_extended}. Will proceed with public card.",
+                    exc_info=True,
+                )
+
+        return card
 
 
 def _is_event_completed(event: ClientStreamEvent) -> bool:

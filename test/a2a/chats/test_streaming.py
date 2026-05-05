@@ -116,13 +116,15 @@ async def test_streaming_through_executor() -> None:
     context = RequestContext(call_context=ServerCallContext(), request=core_req)
     await executor.execute(context, event_queue)
 
-    # Collect all events (1.0 SDK queues protobuf events; convert back for assertions)
+    # Collect all events (1.0 SDK queues protobuf events; convert back for assertions).
+    # `dequeue_event` in a2a-sdk 1.0 has no `no_wait` parameter — rely on the
+    # outer `wait_for` timeout to bail out once the executor stops emitting.
     raw_events = []
-    while not child_queue.is_closed():
+    while True:
         try:
-            raw = await asyncio.wait_for(child_queue.dequeue_event(no_wait=True), timeout=0.1)
+            raw = await asyncio.wait_for(child_queue.dequeue_event(), timeout=0.1)
             raw_events.append(raw)
-        except Exception:
+        except (TimeoutError, asyncio.TimeoutError):
             break
 
     from a2a.compat.v0_3.types import TaskState, TaskStatusUpdateEvent
