@@ -115,14 +115,11 @@ class ExaToolkit(Toolkit):
         client: Exa | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        self._client = (
-            client
-            if client is not None
-            else Exa(
-                api_key=api_key,
-                integration_source="ag2",
-            )
-        )
+        if client is not None:
+            self._client = client
+        else:
+            self._client = Exa(api_key=api_key)
+            self._client.headers["x-exa-integration"] = "ag2"
 
         super().__init__(
             self.search(num_results=num_results, max_characters=max_characters),
