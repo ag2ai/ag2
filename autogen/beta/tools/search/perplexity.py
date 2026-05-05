@@ -94,14 +94,14 @@ class PerplexitySearchToolkit(Toolkit):
         proxy: str | None = None,
         verify: bool = True,
         timeout: float | None = None,
-        client_kwargs: dict[str, Any] | None = None,
         middleware: Iterable[ToolMiddleware] = (),
+        **client_kwargs: dict[str, Any] | None = None,
     ) -> None:
         self._api_key = api_key
         self._proxy = proxy
         self._verify = verify
         self._timeout = timeout
-        self._client_kwargs = client_kwargs or {}
+        self._client_kwargs = client_kwargs
 
         super().__init__(
             self.search(),
