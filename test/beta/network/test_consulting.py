@@ -274,3 +274,49 @@ async def test_default_consulting_adapter_registered_on_open() -> None:
     adapter = hub._adapters.get(("consulting", 1))
     assert isinstance(adapter, ConsultingAdapter)
     await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_tool_end_to_end() -> None:
+    """End-to-end: Alice's LLM uses ``delegate`` to consult Bob.
+
+    Alice's TestConfig delivers a ``delegate`` tool call followed by a
+    final user-facing response. Bob's TestConfig delivers a single
+    string reply. The full chain — open consulting, invite/ack, send
+    prompt, run Bob's LLM via the default handler, return Bob's reply
+    to Alice, Alice's second LLM call to incorporate the reply — runs
+    without any real LLM calls.
+    """
+    from autogen.beta.events import ToolCallEvent
+
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    alice_agent = Agent(
+        name="alice",
+        config=TestConfig(
+            [
+                ToolCallEvent(
+                    name="delegate",
+                    arguments='{"target": "bob", "prompt": "what is 2+2?"}',
+                ),
+            ],
+            "The answer is 4.",
+        ),
+    )
+    bob_agent = Agent(name="bob", config=TestConfig("4"))
+
+    await alice_hc.register(alice_agent, Passport(name="alice"), Resume())
+    await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
+
+    reply = await alice_agent.ask("ask bob to do math for me")
+
+    assert reply.body == "The answer is 4."
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()

@@ -30,6 +30,7 @@ from ..transport.frames import NotifyFrame
 from ..transport.local import LocalLink, LocalLinkClient
 from ..views.base import ViewPolicy
 from .agent_client import AgentClient
+from .plugin import NetworkPlugin
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -140,9 +141,10 @@ class HubClient:
         dispatched ``NotifyFrame``s reach the right ``AgentClient``. A
         cross-process transport binds via ``HelloFrame`` instead.
 
-        ``attach_plugin`` is accepted for forward compatibility but
-        does nothing here — the LLM-facing tool surface that it
-        attaches lives in a layer that is not part of this module.
+        ``attach_plugin=True`` (default) attaches the ``NetworkPlugin``
+        which adds ``say`` and ``delegate`` to ``agent.tools`` and
+        appends ``NetworkContextPolicy`` to the assembly chain. Pass
+        ``False`` for tests that need a bare agent without LLM tools.
         """
         if self._closed:
             raise RuntimeError("HubClient is closed")
@@ -163,6 +165,10 @@ class HubClient:
             hub_client=self,
         )
         self._clients[passport.agent_id] = client
+
+        if attach_plugin:
+            plugin = NetworkPlugin(client)
+            plugin.register(agent)
 
         return client
 

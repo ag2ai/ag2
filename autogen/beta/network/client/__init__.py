@@ -19,6 +19,7 @@ from .handlers import (
 from .hub_client import HubClient
 from .inject import AgentClientInject, HubInject, SessionInject, SessionStateInject, TaskInject
 from .network_client import NetworkClient
+from .plugin import NetworkContextPolicy, NetworkPlugin
 from .session import Session
 from .skill_render import ParsedSkill, parse_skill_frontmatter, render_fallback_skill
 from .task import ClientTask
@@ -30,6 +31,8 @@ __all__ = (
     "HubClient",
     "HubInject",
     "NetworkClient",
+    "NetworkContextPolicy",
+    "NetworkPlugin",
     "ParsedSkill",
     "Session",
     "SessionInject",
