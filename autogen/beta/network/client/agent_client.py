@@ -306,3 +306,9 @@ class AgentClient:
         if not self._disconnected:
             await self._hub_client.unregister_agent(self.agent_id)
             self._disconnected = True
+
+    async def __aenter__(self) -> "AgentClient":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.unregister()

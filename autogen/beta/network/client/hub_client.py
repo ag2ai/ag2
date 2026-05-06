@@ -335,3 +335,9 @@ class HubClient:
                 await client.unregister()
         self._clients.clear()
         await self.close()
+
+    async def __aenter__(self) -> "HubClient":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()
