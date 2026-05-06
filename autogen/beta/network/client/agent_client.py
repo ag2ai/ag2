@@ -114,9 +114,8 @@ class AgentClient:
 
     async def receive(self, envelope: Envelope) -> None:
         """Hub delivery → fan out to inbox + (suppressible) handler."""
-        inbox = self._session_inboxes.get(envelope.session_id)
-        if inbox is not None:
-            await inbox.put(envelope)
+        inbox = self.ensure_session_inbox(envelope.session_id)
+        await inbox.put(envelope)
         if envelope.session_id in self._handler_suppressed_sessions:
             return
         if self._on_envelope is not None:
@@ -199,6 +198,7 @@ class AgentClient:
             intent=intent,
             labels=labels,
         )
+        self.ensure_session_inbox(metadata.session_id)
         return Session(metadata=metadata, client=self)
 
     def ensure_session_inbox(self, session_id: str) -> "asyncio.Queue[Envelope]":
