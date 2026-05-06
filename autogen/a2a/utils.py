@@ -2,16 +2,88 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from typing import Any, cast
 from uuid import uuid4
 
-from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskArtifactUpdateEvent, TaskState, TextPart
-from a2a.utils import get_message_text, new_artifact
-from a2a.utils.message import new_agent_text_message
+from a2a.client import Client
+from a2a.compat.v0_3 import conversions as _v03_conversions
+from a2a.compat.v0_3.types import (
+    AgentCard,
+    Artifact,
+    DataPart,
+    Message,
+    MessageSendParams,
+    Part,
+    Role,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskIdParams,
+    TaskState,
+    TaskStatusUpdateEvent,
+    TextPart,
+)
+from a2a.compat.v0_3.types import (
+    SendMessageRequest as _CompatSendMessageRequest,
+)
+from a2a.compat.v0_3.types import (
+    TaskResubscriptionRequest as _CompatResubscriptionRequest,
+)
+from a2a.types.a2a_pb2 import (
+    AgentCard as _CoreAgentCard,
+)
+from a2a.types.a2a_pb2 import (
+    GetTaskRequest as _CoreGetTaskRequest,
+)
+from a2a.types.a2a_pb2 import (
+    Message as _CoreMessage,
+)
+from a2a.types.a2a_pb2 import (
+    Part as _CorePart,
+)
+from a2a.types.a2a_pb2 import (
+    StreamResponse as _CoreStreamResponse,
+)
 
 from autogen.agentchat.remote import RequestMessage, ResponseMessage
 from autogen.events.client_events import StreamEvent
+
+# In a2a-sdk 1.0 the extended agent card is served at this REST path (see
+# `a2a.server.routes.rest_routes`); the SDK does not export a constant for it,
+# so we keep one here for both server and client side use.
+EXTENDED_AGENT_CARD_PATH = "/extendedAgentCard"
+
+# A2A v0.3 served the public agent card at `/.well-known/agent.json`; the 1.0
+# spec moved it to `/.well-known/agent-card.json`. We keep the legacy path so
+# clients can fall back to v0.3 servers that have not migrated yet.
+PREV_AGENT_CARD_WELL_KNOWN_PATH = "/.well-known/agent.json"
+
+
+def get_message_text(message: Message, delimiter: str = "\n") -> str:
+    """Join text from all TextPart parts in a Message (compat-shim)."""
+    return delimiter.join(p.root.text for p in message.parts if isinstance(p.root, TextPart))
+
+
+def new_artifact(name: str, parts: list[Part], description: str | None = None) -> Artifact:
+    """Construct an Artifact with a fresh id (compat-shim)."""
+    return Artifact(artifact_id=uuid4().hex, name=name, parts=parts, description=description)
+
+
+def new_agent_text_message(
+    text: str,
+    *,
+    context_id: str | None = None,
+    task_id: str | None = None,
+) -> Message:
+    """Construct a Message from agent with a single TextPart (compat-shim)."""
+    return Message(
+        role=Role.agent,
+        parts=[Part(root=TextPart(text=text))],
+        message_id=uuid4().hex,
+        context_id=context_id,
+        task_id=task_id,
+    )
+
 
 AG2_METADATA_KEY_PREFIX = "ag2_"
 CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
@@ -286,3 +358,161 @@ def message_from_part(part: Part) -> dict[str, Any]:
 
     else:
         raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
+
+
+ClientStreamEvent = Message | tuple[Task, TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None]
+"""What our compat send_message/subscribe iterators yield: either a standalone
+Message (message-only flow) or a (Task, optional update event) tuple
+(task-lifecycle flow). Mirrors the v0.3 ClientEvent shape so client.py keeps
+working unchanged."""
+
+
+def stream_chunk_to_compat(
+    chunk: _CoreStreamResponse,
+    last_task: Task | None,
+) -> tuple[ClientStreamEvent | None, Task | None]:
+    """Translate one v1.0 protobuf StreamResponse into a v0.3-shaped event.
+
+    Returns ``(event, new_last_task)``. The caller threads ``new_last_task``
+    back in on the next call so that streamed status/artifact updates inherit
+    the most recent Task snapshot (state for completion checks, accumulated
+    artifacts for the final response builder).
+    """
+    if chunk.HasField("message"):
+        return _v03_conversions.to_compat_message(chunk.message), last_task
+
+    if chunk.HasField("task"):
+        task = _v03_conversions.to_compat_task(chunk.task)
+        return (task, None), task
+
+    if chunk.HasField("status_update"):
+        status_ev: TaskStatusUpdateEvent = _v03_conversions.to_compat_task_status_update_event(chunk.status_update)
+        if last_task is not None:
+            task = last_task.model_copy(update={"status": status_ev.status})
+        else:
+            task = Task(id=status_ev.task_id, context_id=status_ev.context_id, status=status_ev.status, history=[])
+        return (task, status_ev), task
+
+    if chunk.HasField("artifact_update"):
+        artifact_ev: TaskArtifactUpdateEvent = _v03_conversions.to_compat_task_artifact_update_event(
+            chunk.artifact_update
+        )
+        # Accumulate streamed artifacts on the carried Task snapshot so the
+        # final response builder sees the complete artifact list when the task
+        # reaches a terminal state.
+        if last_task is not None:
+            artifacts = list(last_task.artifacts or [])
+            incoming = artifact_ev.artifact
+            for i, art in enumerate(artifacts):
+                if art.artifact_id == incoming.artifact_id:
+                    artifacts[i] = (
+                        art.model_copy(update={"parts": list(art.parts) + list(incoming.parts)})
+                        if artifact_ev.append
+                        else incoming
+                    )
+                    break
+            else:
+                artifacts.append(incoming)
+            task = last_task.model_copy(update={"artifacts": artifacts})
+        else:
+            task = Task(
+                id=artifact_ev.task_id,
+                context_id=artifact_ev.context_id,
+                status=None,  # type: ignore[arg-type]
+                artifacts=[artifact_ev.artifact],
+                history=[],
+            )
+        return (task, artifact_ev), task
+
+    return None, last_task
+
+
+async def compat_send_message(
+    client: Client,
+    message: Message,
+) -> AsyncIterator[ClientStreamEvent]:
+    core_req = _v03_conversions.to_core_send_message_request(
+        _CompatSendMessageRequest(id=uuid4().hex, params=MessageSendParams(message=message))
+    )
+    last_task: Task | None = None
+    async for chunk in client.send_message(core_req):
+        event, last_task = stream_chunk_to_compat(chunk, last_task)
+        if event is not None:
+            yield event
+
+
+async def compat_subscribe_to_task(
+    client: Client,
+    task_id: str,
+) -> AsyncIterator[ClientStreamEvent]:
+    core_req = _v03_conversions.to_core_subscribe_to_task_request(
+        _CompatResubscriptionRequest(id=uuid4().hex, params=TaskIdParams(id=task_id))
+    )
+    last_task: Task | None = None
+    async for chunk in client.subscribe(core_req):
+        event, last_task = stream_chunk_to_compat(chunk, last_task)
+        if event is not None:
+            yield event
+
+
+async def compat_get_task(client: Client, task_id: str) -> Task:
+    """Fetch a task via the v1.0 Client, returning a v0.3-shaped pydantic Task."""
+    core_task = await client.get_task(_CoreGetTaskRequest(id=task_id))
+    return _v03_conversions.to_compat_task(core_task)
+
+
+def to_core_agent_card(card: AgentCard) -> _CoreAgentCard:
+    """Convert a v0.3 pydantic AgentCard into a v1.0 protobuf AgentCard."""
+    return _v03_conversions.to_core_agent_card(card)
+
+
+def to_compat_agent_card(card: _CoreAgentCard) -> AgentCard:
+    """Convert a v1.0 protobuf AgentCard into a v0.3 pydantic AgentCard."""
+    return _v03_conversions.to_compat_agent_card(card)
+
+
+def to_core_message(message: Message) -> _CoreMessage:
+    """Convert a v0.3 pydantic Message into a v1.0 protobuf Message."""
+    return _v03_conversions.to_core_message(message)
+
+
+def to_core_parts(parts: list[Part]) -> list[_CorePart]:
+    """Convert a list of v0.3 pydantic Parts into v1.0 protobuf Parts."""
+    return [_v03_conversions.to_core_part(p) for p in parts]
+
+
+def make_async_card_modifier(
+    sync_modifier: Callable[[AgentCard], AgentCard],
+) -> Callable[[_CoreAgentCard], Awaitable[_CoreAgentCard]]:
+    """Wrap a sync v0.3-pydantic card_modifier as an async proto-pydantic-proto bridge.
+
+    The SDK 1.0 hooks (`create_agent_card_routes(card_modifier=...)`) expect an
+    async callable that takes/returns the proto AgentCard. AG2's public API
+    keeps the v0.3-pydantic sync signature, so on each request we translate
+    proto → v0.3, run the user callback, translate v0.3 → proto.
+    """
+
+    async def _bridge(core_card: _CoreAgentCard) -> _CoreAgentCard:
+        compat_card = _v03_conversions.to_compat_agent_card(core_card)
+        modified = sync_modifier(compat_card)
+        return _v03_conversions.to_core_agent_card(modified)
+
+    return _bridge
+
+
+def make_async_extended_card_modifier(
+    sync_modifier: Callable[[AgentCard, Any], AgentCard],
+) -> Callable[[_CoreAgentCard, Any], Awaitable[_CoreAgentCard]]:
+    """Wrap a sync v0.3-pydantic extended_card_modifier as an async proto bridge.
+
+    Mirrors `make_async_card_modifier` but preserves the second positional
+    argument (`ServerCallContext` per the SDK signature) so per-request user
+    code can inspect headers, auth state, etc.
+    """
+
+    async def _bridge(core_card: _CoreAgentCard, ctx: Any) -> _CoreAgentCard:
+        compat_card = _v03_conversions.to_compat_agent_card(core_card)
+        modified = sync_modifier(compat_card, ctx)
+        return _v03_conversions.to_core_agent_card(modified)
+
+    return _bridge

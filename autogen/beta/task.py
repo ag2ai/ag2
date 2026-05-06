@@ -319,4 +319,4 @@ class Task:
             self._previous_dep = None
 
 
-TaskInject = Annotated[Task, Inject(_TASK_DEP_KEY, default=None)]
+TaskInject = Annotated[Task | None, Inject(_TASK_DEP_KEY, default=None)]

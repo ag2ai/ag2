@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from a2a.types import (
+from a2a.compat.v0_3.types import (
     Artifact,
     DataPart,
     Message,
