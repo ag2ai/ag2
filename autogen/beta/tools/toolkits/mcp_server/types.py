@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from dataclasses import dataclass
-from typing import Any, NotRequired, TypedDict
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from autogen.beta.annotations import Variable
 
@@ -12,7 +12,7 @@ from autogen.beta.annotations import Variable
 @dataclass
 class MCPServerConfig:
     """
-    Configuration for a single MCP server.
+    Configuration for a remote (HTTP / streamable-http) MCP server.
     It's important to specify AUTH headers as most MCP servers force auth nowadays.
     """
 
@@ -26,26 +26,23 @@ class MCPServerConfig:
     connection_timeout: float = 30.0
 
 
-class JsonRpcResponse(TypedDict):
-    jsonrpc: str
-    id: str
-    result: NotRequired[dict[str, Any]]
-    error: NotRequired[dict[str, Any]]
+@dataclass
+class MCPStdioServerConfig:
+    """
+    Configuration for a local MCP server that communicates over stdin/stdout.
 
+    The server is launched as a subprocess (``command`` + ``args``) and the
+    MCP protocol is spoken across its stdio pipes. Use this for locally
+    installed MCP servers shipped as CLIs (e.g. ``npx -y @some/mcp-server``,
+    ``uvx some-mcp-server``, or a script in your project).
+    """
 
-class RawMCPTool(TypedDict):
-    name: str
-    description: NotRequired[str]
-    inputSchema: NotRequired[dict[str, Any]]
-
-
-class JsonRpcRequest(TypedDict):
-    id: str
-    jsonrpc: str
-    method: str
-    params: dict[str, Any]
-
-
-class JsonRpcNotification(TypedDict):
-    jsonrpc: str
-    method: str
+    command: str | Variable
+    args: list[str] | Variable = field(default_factory=list)
+    env: dict[str, str] | Variable | None = None
+    cwd: str | Path | Variable | None = None
+    server_label: str | Variable = ""
+    description: str | Variable | None = None
+    allowed_tools: list[str] | Variable | None = None
+    blocked_tools: list[str] | Variable | None = None
+    encoding: str = "utf-8"

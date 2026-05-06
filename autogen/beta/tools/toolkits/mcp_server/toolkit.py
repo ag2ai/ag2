@@ -2,11 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
-from collections.abc import Iterable
-from contextlib import ExitStack
+from collections.abc import AsyncIterator, Iterable
+from contextlib import ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any
+
+from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.types import CallToolResult, TextContent
+from mcp.types import Tool as MCPTool
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.events.tool_events import (
@@ -19,29 +24,62 @@ from autogen.beta.tools.final import Toolkit
 from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 from autogen.beta.tools.tool import Tool
 
-from .connection import MCPConnection
-from .types import MCPServerConfig, RawMCPTool
+from .types import MCPServerConfig, MCPStdioServerConfig
+
+AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
+
+
+@asynccontextmanager
+async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
+    """Open a short-lived MCP ``ClientSession`` for one operation.
+
+    Dispatches on the config type — HTTP/streamable-http for
+    :class:`MCPServerConfig`, stdio subprocess for :class:`MCPStdioServerConfig`.
+    """
+    if isinstance(config, MCPStdioServerConfig):
+        params = StdioServerParameters(
+            command=config.command,  # type: ignore[arg-type]
+            args=list(config.args or []),  # type: ignore[arg-type]
+            env=config.env,  # type: ignore[arg-type]
+            cwd=config.cwd,  # type: ignore[arg-type]
+            encoding=config.encoding,
+        )
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
+    else:
+        async with (
+            streamable_http_client(
+                config.server_url,
+                headers=config.headers,
+                timeout=config.connection_timeout,
+            ) as (read_stream, write_stream, _),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session
 
 
 class _MCPProxyTool(Tool):
     """A function-tool-shaped proxy that forwards calls to a remote MCP server."""
 
-    __slots__ = ("name", "schema", "_connection", "_middleware")
+    __slots__ = ("name", "schema", "_config", "_middleware")
 
     def __init__(
         self,
-        connection: MCPConnection,
-        raw_tool: RawMCPTool,
+        config: AnyMCPConfig,
+        raw_tool: MCPTool,
         middleware: tuple[ToolMiddleware, ...] = (),
     ) -> None:
-        self._connection = connection
+        self._config = config
         self._middleware = middleware
-        self.name = raw_tool["name"]
+        self.name = raw_tool.name
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
-                description=raw_tool.get("description", ""),
-                parameters=dict(raw_tool.get("inputSchema") or {}),
+                description=raw_tool.description or "",
+                parameters=dict(raw_tool.inputSchema or {}),
             )
         )
 
@@ -69,23 +107,26 @@ class _MCPProxyTool(Tool):
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:
-            response = await self._connection.call_tool(self.name, event.serialized_arguments)
+            async with _mcp_session(self._config) as session:
+                result = await session.call_tool(self.name, event.serialized_arguments)
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
 
-        if err := response.get("error"):
-            message = err.get("message", str(err)) if isinstance(err, dict) else str(err)
-            return ToolErrorEvent.from_call(event, error=RuntimeError(message))
-
-        result = response.get("result", {})
-        if result.get("isError"):
+        if result.isError:
             return ToolErrorEvent.from_call(event, error=RuntimeError(_extract_content(result)))
 
         return ToolResultEvent.from_call(event, result=_extract_content(result))
 
 
 class MCPServer(Toolkit):
-    """Expose the tools of a remote MCP server as ordinary local tools.
+    """Expose the tools of an MCP server as ordinary local tools.
+
+    Accepts either:
+
+    * a URL string or :class:`MCPServerConfig` for a remote (streamable-http)
+      server, or
+    * an :class:`MCPStdioServerConfig` for a locally-launched server
+      communicating over stdin/stdout.
 
     Tool discovery is lazy: the first call to :meth:`schemas` performs the
     MCP handshake, lists the server's tools, and registers a proxy for each
@@ -93,18 +134,17 @@ class MCPServer(Toolkit):
     like ordinary :class:`FunctionTool` instances.
     """
 
-    __slots__ = ("config", "_connection", "_discovered")
+    __slots__ = ("config", "_discovered")
 
     def __init__(
         self,
-        server: str | MCPServerConfig,
+        server: str | MCPServerConfig | MCPStdioServerConfig,
         *,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         if isinstance(server, str):
             server = MCPServerConfig(server_url=server)
-        self.config = server
-        self._connection: MCPConnection | None = None
+        self.config: AnyMCPConfig = server
         self._discovered = False
 
         label = server.server_label if isinstance(server.server_label, str) else ""
@@ -122,21 +162,21 @@ class MCPServer(Toolkit):
             return
 
         resolved = _resolve_config(self.config, context)
-        self._connection = MCPConnection(config=resolved)
 
-        raw_tools = await self._connection.get_tools()
+        async with _mcp_session(resolved) as session:
+            raw_tools = (await session.list_tools()).tools
+
         allowed = resolved.allowed_tools
         blocked = set(resolved.blocked_tools or [])
 
         for raw in raw_tools:
-            name = raw["name"]
-            if allowed is not None and name not in allowed:
+            if allowed is not None and raw.name not in allowed:
                 continue
-            if name in blocked:
+            if raw.name in blocked:
                 continue
             self.tools.append(
                 _MCPProxyTool(
-                    connection=self._connection,
+                    config=resolved,
                     raw_tool=raw,
                     middleware=self._middleware,
                 )
@@ -152,18 +192,18 @@ def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExe
     return call
 
 
-def _extract_content(result: dict[str, Any]) -> str:
+def _extract_content(result: CallToolResult) -> str:
     """Flatten an MCP ``tools/call`` result into a string for the model."""
-    parts = result.get("content")
+    parts = result.content
     if not parts:
-        return json.dumps(result)
+        return result.model_dump_json(exclude_none=True)
 
     chunks: list[str] = []
     for p in parts:
-        if isinstance(p, dict) and p.get("type") == "text":
-            chunks.append(p.get("text", ""))
+        if isinstance(p, TextContent):
+            chunks.append(p.text)
         else:
-            chunks.append(json.dumps(p))
+            chunks.append(p.model_dump_json(exclude_none=True))
     return "\n".join(chunks)
 
 
@@ -180,7 +220,20 @@ def _resolve_value(value: Any, context: "Context") -> Any:
     raise KeyError(f"Context variable {name!r} not found and no default provided")
 
 
-def _resolve_config(config: MCPServerConfig, context: "Context") -> MCPServerConfig:
+def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
+    if isinstance(config, MCPStdioServerConfig):
+        return replace(
+            config,
+            command=_resolve_value(config.command, context),
+            args=list(_resolve_value(config.args, context) or []),
+            env=_resolve_value(config.env, context),
+            cwd=_resolve_value(config.cwd, context),
+            server_label=_resolve_value(config.server_label, context) or "",
+            description=_resolve_value(config.description, context),
+            allowed_tools=_resolve_value(config.allowed_tools, context),
+            blocked_tools=_resolve_value(config.blocked_tools, context),
+        )
+
     headers = dict(_resolve_value(config.headers, context) or {})
     auth = _resolve_value(config.authorization_token, context)
     if auth and "Authorization" not in headers:

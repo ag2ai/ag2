@@ -22,7 +22,7 @@ from .builtin import (
 from .final import Toolkit, tool
 from .shell import LocalShellTool
 from .skills import SkillSearchToolkit, SkillsToolkit
-from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig
+from .toolkits import FilesystemToolkit, MCPServer, MCPServerConfig, MCPStdioServerConfig
 
 __all__ = (
     "CodeExecutionTool",
@@ -34,6 +34,7 @@ __all__ = (
     "MCPServer",
     "MCPServerConfig",
     "MCPServerTool",
+    "MCPStdioServerConfig",
     "MemoryTool",
     "NetworkPolicy",
     "ShellTool",

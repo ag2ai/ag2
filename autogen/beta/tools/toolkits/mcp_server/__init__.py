@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .connection import MCPConnection
 from .toolkit import MCPServer
-from .types import MCPServerConfig
+from .types import MCPServerConfig, MCPStdioServerConfig
 
 __all__ = (
-    "MCPConnection",
     "MCPServer",
     "MCPServerConfig",
+    "MCPStdioServerConfig",
 )
