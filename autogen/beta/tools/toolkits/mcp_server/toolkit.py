@@ -44,10 +44,12 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
             cwd=config.cwd,  # type: ignore[arg-type]
             encoding=config.encoding,
         )
-        async with stdio_client(params) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
+        async with (
+            stdio_client(params) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session
     else:
         async with (
             streamable_http_client(
