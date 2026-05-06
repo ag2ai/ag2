@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
-from exa_py import Exa
+from exa_py import AsyncExa
 from pydantic import Field
 
 from autogen.beta.annotations import Context, Variable
@@ -67,10 +67,6 @@ class ExaAnswerResult:
     citations: list[ExaAnswerCitation] = field(default_factory=list)
 
 
-def _clean(d: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in d.items() if v is not None}
-
-
 class ExaToolkit(Toolkit):
     """Toolkit that exposes the Exa neural search engine as four related tools
     sharing one HTTP client.
@@ -101,10 +97,10 @@ class ExaToolkit(Toolkit):
         )
 
     The constructor reads ``EXA_API_KEY`` from the environment when ``api_key``
-    is omitted (handled by the underlying ``exa_py.Exa`` SDK).
+    is omitted (handled by the underlying ``exa_py.AsyncExa`` SDK).
     """
 
-    __slots__ = ("_client",)
+    __slots__ = ("_api_key",)
 
     def __init__(
         self,
@@ -112,14 +108,9 @@ class ExaToolkit(Toolkit):
         *,
         num_results: int | Variable | None = None,
         max_characters: int | Variable | None = None,
-        client: Exa | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if client is not None:
-            self._client = client
-        else:
-            self._client = Exa(api_key=api_key)
-            self._client.headers["x-exa-integration"] = "ag2"
+        self._api_key = api_key
 
         super().__init__(
             self.search(num_results=num_results, max_characters=max_characters),
@@ -141,6 +132,8 @@ class ExaToolkit(Toolkit):
         exclude_domains: Sequence[str] | Variable | None = None,
         start_published_date: str | Variable | None = None,
         end_published_date: str | Variable | None = None,
+        start_crawl_date: str | Variable | None = None,
+        end_crawl_date: str | Variable | None = None,
         livecrawl: Livecrawl | Variable | None = None,
         user_location: str | Variable | None = None,
         moderation: bool | Variable | None = None,
@@ -151,15 +144,15 @@ class ExaToolkit(Toolkit):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
 
         @tool(name=name, description=description, middleware=middleware)
-        def exa_search(
+        async def exa_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
         ) -> ToolResult:
             """Search the web using Exa and return ranked results."""
-            kwargs = _clean({
+            params: dict[str, Any] = {
                 "num_results": resolve_variable(num_results, ctx, param_name="num_results"),
                 "type": resolve_variable(search_type, ctx, param_name="search_type"),
                 "category": resolve_variable(category, ctx, param_name="category"),
@@ -167,15 +160,27 @@ class ExaToolkit(Toolkit):
                 "exclude_domains": resolve_variable(exclude_domains, ctx, param_name="exclude_domains"),
                 "start_published_date": resolve_variable(start_published_date, ctx, param_name="start_published_date"),
                 "end_published_date": resolve_variable(end_published_date, ctx, param_name="end_published_date"),
-                "livecrawl": resolve_variable(livecrawl, ctx, param_name="livecrawl"),
-                "user_location": resolve_variable(user_location, ctx, param_name="user_location"),
-                "moderation": resolve_variable(moderation, ctx, param_name="moderation"),
-            })
+                "start_crawl_date": resolve_variable(start_crawl_date, ctx, param_name="start_crawl_date"),
+                "end_crawl_date": resolve_variable(end_crawl_date, ctx, param_name="end_crawl_date"),
+            }
+            kwargs = {k: v for k, v in params.items() if v is not None}
+
+            contents: dict[str, Any] = {}
             resolved_max_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
             if resolved_max_chars is not None:
-                kwargs["contents"] = {"text": {"max_characters": resolved_max_chars}}
+                contents["text"] = {"maxCharacters": resolved_max_chars}
+            resolved_livecrawl = resolve_variable(livecrawl, ctx, param_name="livecrawl")
+            if resolved_livecrawl is not None:
+                contents["livecrawl"] = resolved_livecrawl
+            if contents:
+                kwargs["contents"] = contents
 
-            raw = client.search(query, **kwargs)
+            c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
+            try:
+                raw = await c.search(query, **kwargs)
+            finally:
+                await c.client.aclose()
 
             return ToolResult(
                 ExaSearchResponse(
@@ -211,24 +216,29 @@ class ExaToolkit(Toolkit):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
 
         @tool(name=name, description=description, middleware=middleware)
-        def exa_find_similar(
+        async def exa_find_similar(
             url: Annotated[str, Field(description="The URL to find similar pages for.")],
             ctx: Context,
         ) -> ToolResult:
             """Find pages similar to a given URL."""
-            kwargs = _clean({
+            params: dict[str, Any] = {
                 "num_results": resolve_variable(num_results, ctx, param_name="num_results"),
                 "include_domains": resolve_variable(include_domains, ctx, param_name="include_domains"),
                 "exclude_domains": resolve_variable(exclude_domains, ctx, param_name="exclude_domains"),
                 "exclude_source_domain": resolve_variable(
                     exclude_source_domain, ctx, param_name="exclude_source_domain"
                 ),
-                "category": resolve_variable(category, ctx, param_name="category"),
-            })
-            raw = client.find_similar(url, **kwargs)
+            }
+            kwargs = {k: v for k, v in params.items() if v is not None}
+            c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
+            try:
+                raw = await c.find_similar(url, **kwargs)
+            finally:
+                await c.client.aclose()
             results = [
                 ExaSearchResult(
                     title=r.title or "",
@@ -254,15 +264,20 @@ class ExaToolkit(Toolkit):
         ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
 
         @tool(name=name, description=description, middleware=middleware)
-        def exa_get_contents(
+        async def exa_get_contents(
             urls: Annotated[list[str], Field(description="URLs to fetch content for.")],
             ctx: Context,
         ) -> ToolResult:
             """Fetch the full text content of specific URLs."""
-            raw = client.get_contents(urls, text=True)
+            c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
+            try:
+                raw = await c.get_contents(urls, text=True)
+            finally:
+                await c.client.aclose()
             results = [
                 ExaContentResult(
                     url=r.url,
@@ -284,15 +299,20 @@ class ExaToolkit(Toolkit):
         description: str = ("Generate an AI-powered answer to a question with citations from web sources."),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
-        client = self._client
+        api_key = self._api_key
 
         @tool(name=name, description=description, middleware=middleware)
-        def exa_answer(
+        async def exa_answer(
             query: Annotated[str, Field(description="The question to answer.")],
             ctx: Context,
         ) -> ToolResult:
             """Generate an AI answer with citations."""
-            raw = client.answer(query, text=True)
+            c = AsyncExa(api_key=api_key)
+            c.headers["x-exa-integration"] = "ag2"
+            try:
+                raw = await c.answer(query, text=True)
+            finally:
+                await c.client.aclose()
             return ToolResult(
                 ExaAnswerResult(
                     answer=raw.answer,
