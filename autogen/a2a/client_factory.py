@@ -7,8 +7,17 @@ import typing
 from typing import Any, Protocol
 from uuid import uuid4
 
-from a2a.types import AgentCapabilities, AgentCard, DataPart, Message, Part, Role, SendMessageSuccessResponse, TextPart
-from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from a2a.compat.v0_3.types import (
+    AgentCapabilities,
+    AgentCard,
+    DataPart,
+    Message,
+    Part,
+    Role,
+    SendMessageSuccessResponse,
+    TextPart,
+)
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from httpx import MockTransport, Request, Response
 from httpx._client import AsyncClient, Client, EventHook
 from httpx._config import DEFAULT_LIMITS, DEFAULT_MAX_REDIRECTS, DEFAULT_TIMEOUT_CONFIG, Limits
@@ -17,6 +26,8 @@ from httpx._types import AuthTypes, CertTypes, CookieTypes, HeaderTypes, ProxyTy
 from httpx._urls import URL
 
 from autogen.doc_utils import export_module
+
+from .utils import EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
 
 
 class ClientFactory(Protocol):
@@ -138,6 +149,8 @@ class EmptyClientFactory(ClientFactory):
 @export_module("autogen.a2a")
 def MockClient(  # noqa: N802
     response_message: str | dict[str, Any] | TextPart | DataPart | Part,
+    *,
+    extended_agent_card: AgentCard | None = None,
 ) -> HttpxClientFactory:
     """Create a mock HTTP client for testing A2A agent interactions.
 
@@ -146,6 +159,10 @@ def MockClient(  # noqa: N802
 
     Args:
         response_message: The message to return in response to SendMessage requests.
+        extended_agent_card: Optional extended agent card to serve at the
+            authenticated extended-card endpoint. When provided, the public
+            card advertises ``supports_authenticated_extended_card=True`` so
+            clients fetch the extended one.
 
     Returns:
         An HttpxClientFactory configured with a mock transport that handles requests
@@ -166,26 +183,35 @@ def MockClient(  # noqa: N802
     else:
         raise ValueError(f"Invalid message type: {type(response_message)}")
 
+    public_card = AgentCard(
+        capabilities=AgentCapabilities(streaming=False),
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        name="mock_agent",
+        description="mock_agent",
+        url="http://localhost:8000",
+        supports_authenticated_extended_card=extended_agent_card is not None,
+        version="0.1.0",
+        skills=[],
+    )
+
+    public_card_paths = (
+        AGENT_CARD_WELL_KNOWN_PATH,  # 1.0 well-known
+        PREV_AGENT_CARD_WELL_KNOWN_PATH,  # v0.3 legacy well-known
+    )
+    extended_card_paths = (
+        EXTENDED_AGENT_CARD_PATH,  # 1.0 extended card
+        "/agent/authenticatedExtendedCard",  # v0.3 legacy extended
+    )
+
     async def mock_handler(request: Request) -> Response:
-        if (
-            request.url.path == AGENT_CARD_WELL_KNOWN_PATH
-            or request.url.path == EXTENDED_AGENT_CARD_PATH
-            or request.url.path == PREV_AGENT_CARD_WELL_KNOWN_PATH
-        ):
-            return Response(
-                status_code=200,
-                content=AgentCard(
-                    capabilities=AgentCapabilities(streaming=False),
-                    default_input_modes=["text"],
-                    default_output_modes=["text"],
-                    name="mock_agent",
-                    description="mock_agent",
-                    url="http://localhost:8000",
-                    supports_authenticated_extended_card=False,
-                    version="0.1.0",
-                    skills=[],
-                ).model_dump_json(),
-            )
+        if request.url.path in public_card_paths:
+            return Response(status_code=200, content=public_card.model_dump_json())
+
+        if request.url.path in extended_card_paths:
+            if extended_agent_card is None:
+                return Response(status_code=404)
+            return Response(status_code=200, content=extended_agent_card.model_dump_json())
 
         return Response(
             status_code=200,

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -119,10 +120,7 @@ class TestExtensionNegotiation:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions = {A2UI_EXTENSION_URI}
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         use_a2ui = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
@@ -143,10 +141,7 @@ class TestExtensionNegotiation:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions = {"https://a2ui.org/a2a-extension/a2ui/v1.0"}
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         use_a2ui = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
@@ -167,10 +162,7 @@ class TestExtensionNegotiation:
         class MockContext:
             def __init__(self) -> None:
                 self.requested_extensions: set[str] = set()
-                self._activated: set[str] = set()
-
-            def add_activated_extension(self, uri: str) -> None:
-                self._activated.add(uri)
+                self.metadata: dict[str, Any] = {}
 
         ctx = MockContext()
         use_a2ui = try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
@@ -287,7 +279,7 @@ class TestAgentCardAutoDetection:
 
     def test_no_duplicate_extension_if_manually_added(self) -> None:
         """If A2UI extension is already in the card, don't add it again."""
-        from a2a.types import AgentExtension
+        from a2a.compat.v0_3.types import AgentExtension
 
         from autogen.a2a import A2aAgentServer, CardSettings
 
