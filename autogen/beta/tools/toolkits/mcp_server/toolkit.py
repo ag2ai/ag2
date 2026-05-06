@@ -7,6 +7,7 @@ from contextlib import ExitStack, asynccontextmanager
 from dataclasses import replace
 from typing import Any
 
+import httpx
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
@@ -54,8 +55,10 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
         async with (
             streamable_http_client(
                 config.server_url,
-                headers=config.headers,
-                timeout=config.connection_timeout,
+                http_client=httpx.AsyncClient(
+                    headers=config.headers,
+                    timeout=config.connection_timeout,
+                ),
             ) as (read_stream, write_stream, _),
             ClientSession(read_stream, write_stream) as session,
         ):
