@@ -56,6 +56,12 @@ class TestIsUrl:
 
 
 class TestDownloadUrl:
+    @pytest.fixture(autouse=True)
+    def _disable_ssrf_guard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        noop = lambda url: None  # noqa: E731
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.document_utils.validate_url", noop)
+        monkeypatch.setattr("autogen.agents.experimental.document_agent.url_utils.validate_url", noop)
+
     @pytest.fixture
     def mock_chrome(self) -> Iterable[MagicMock]:
         with patch("selenium.webdriver.Chrome") as mock:
