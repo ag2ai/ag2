@@ -8,12 +8,19 @@ import io
 import wave
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal
 
 from openai import AsyncOpenAI, Omit, omit
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 from openai.types.audio.speech_create_params import Voice
-from openai.types.beta.realtime import session_update_event_param
+from openai.types.beta.realtime.session_update_event_param import (
+    Session,
+    SessionInputAudioNoiseReduction,
+    SessionInputAudioTranscription,
+    SessionTracing,
+    SessionTurnDetection,
+)
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
@@ -35,6 +42,36 @@ if TYPE_CHECKING:
     from openai.types.audio_model import AudioModel
 
     from autogen.beta.annotations import Context
+
+
+AudioFormat = Literal["pcm16", "g711_ulaw", "g711_alaw"]
+RealtimeVoice = Literal["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"]
+
+
+@dataclass(slots=True)
+class AudioConfig:
+    """Output-side audio knobs for the realtime session."""
+
+    voice: RealtimeVoice | str = "alloy"
+    output_audio_format: AudioFormat = "pcm16"
+    speed: float = 1.0
+
+
+@dataclass(slots=True)
+class InputConfig:
+    """Input-side audio knobs for the realtime session."""
+
+    input_audio_format: AudioFormat = "pcm16"
+    transcribe_text: bool = False
+    input_audio_transcription: SessionInputAudioTranscription | None = None
+    input_audio_noise_reduction: SessionInputAudioNoiseReduction | None = None
+    turn_detection: SessionTurnDetection = field(
+        default_factory=lambda: {
+            "type": "semantic_vad",
+            "create_response": True,
+            "interrupt_response": True,
+        }
+    )
 
 
 class STTConfig(STTConfigProtocol):
@@ -124,21 +161,62 @@ class OpenAIRealTimeConfig:
         self,
         model: str,
         *,
-        session: session_update_event_param.Session | None = None,
+        audio: AudioConfig | None = None,
+        input: InputConfig | None = None,
+        temperature: float | None = None,
+        max_response_output_tokens: int | Literal["inf"] | None = None,
+        tool_choice: str | None = None,
+        tracing: SessionTracing | None = None,
+        session: Session | None = None,
         client: AsyncOpenAI | None = None,
     ) -> None:
         self.model = model
-        self._session_config = session
+
+        self._session: Session = {}
+        if temperature is not None:
+            self._session["temperature"] = temperature
+        if max_response_output_tokens is not None:
+            self._session["max_response_output_tokens"] = max_response_output_tokens
+        if tool_choice is not None:
+            self._session["tool_choice"] = tool_choice
+        if tracing is not None:
+            self._session["tracing"] = tracing
+        if audio is not None:
+            self._session["modalities"] = list(set(self._session.get("modalities", []) + ["audio"]))
+            self._session |= {
+                "voice": audio.voice,
+                "output_audio_format": audio.output_audio_format,
+                "speed": audio.speed,
+            }
+        if input is not None:
+            self._session |= {
+                "input_audio_format": input.input_audio_format,
+                "turn_detection": input.turn_detection,
+            }
+            if input.transcribe_text:
+                self._session["modalities"] = list(set(self._session.get("modalities", []) + ["text"]))
+            if input.input_audio_transcription is not None:
+                self._session["input_audio_transcription"] = input.input_audio_transcription
+            if input.input_audio_noise_reduction is not None:
+                self._session["input_audio_noise_reduction"] = input.input_audio_noise_reduction
+        self._session_overrides: Session = session or {}
+
         self.client = client or AsyncOpenAI()
+
+    def _build_session(self, *, instructions: str | None = None) -> Session:
+        return self._session | ({"instructions": instructions} if instructions else {}) | self._session_overrides
 
     @asynccontextmanager
     async def session(
         self,
         context: ConversationContext,
+        *,
+        instructions: str | None = None,
     ) -> AsyncIterator[None]:
+        final_session = self._build_session(instructions=instructions)
+
         async with self.client.beta.realtime.connect(model=self.model) as conn:
-            if self._session_config:
-                await conn.session.update(session=self._session_config)
+            await conn.session.update(session=final_session)
 
             async def _pump_audio(event: RecordedAudioEvent) -> None:
                 await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())

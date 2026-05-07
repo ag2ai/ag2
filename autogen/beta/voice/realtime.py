@@ -18,29 +18,40 @@ class RealtimeSTTConfig(Protocol):
     `RecordedAudioEvent` on the supplied context's stream, pumps captured
     audio into the provider, and emits transcription events back onto the
     same stream.
+
+    Framework-level concepts (such as the agent's prompt) flow in via the
+    keyword parameters of `session()`, allowing `LiveAgent` to inject them
+    into the provider's session payload at startup.
     """
 
     def session(
         self,
         context: ConversationContext,
+        *,
+        instructions: str | None = None,
     ) -> AbstractAsyncContextManager[None]: ...
 
 
-class LiveTranscription:
+class LiveAgent:
     """Async context manager that opens a realtime STT session.
 
     If `stream` is omitted, owns a fresh `MemoryStream`; otherwise binds to
     the supplied one. Entering yields the owned `ConversationContext` so
     peers (Player, Recorder) can share it.
+
+    `prompt` is lowered into the provider's session as `instructions` when
+    the session is opened.
     """
 
     def __init__(
         self,
         config: RealtimeSTTConfig,
         *,
+        prompt: str | None = None,
         stream: Stream | None = None,
     ) -> None:
         self._config = config
+        self._prompt = prompt
         self._stream = stream
         self._session: AbstractAsyncContextManager[None] | None = None
 
@@ -48,7 +59,7 @@ class LiveTranscription:
         if self._stream is None:
             self._stream = MemoryStream()
         context = ConversationContext(stream=self._stream)
-        self._session = self._config.session(context)
+        self._session = self._config.session(context, instructions=self._prompt)
         await self._session.__aenter__()
         return context
 

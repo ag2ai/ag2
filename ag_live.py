@@ -1,8 +1,9 @@
 import asyncio
 
-from autogen.beta.events import ModelResponse
+from autogen.beta.events import ModelMessageChunk, TranscriptionChunkEvent
 from autogen.beta.voice import (
-    LiveTranscription,
+    AudioConfig,
+    LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,
     SoundDeviceRecorder,
@@ -11,32 +12,20 @@ from autogen.beta.voice import (
 
 async def main() -> None:
     async with (
-        LiveTranscription(
-            OpenAIRealTimeConfig(
+        LiveAgent(
+            prompt="You are a helpful voice assistant.",
+            config=OpenAIRealTimeConfig(
                 "gpt-4o-realtime-preview",
-                session={
-                    "modalities": ["audio", "text"],
-                    "voice": "ash",
-                    "input_audio_format": "pcm16",
-                    "output_audio_format": "pcm16",
-                    "speed": 1.2,
-                    "input_audio_transcription": {"model": "whisper-1"},
-                    "turn_detection": {
-                        "type": "semantic_vad",
-                        "create_response": True,
-                        "interrupt_response": True,
-                    },
-                },
+                audio=AudioConfig(voice="ash", speed=1.2),
             ),
         ) as context,
         SoundDevicePlayer(context=context),
         SoundDeviceRecorder(context=context),
     ):
         print("Starting...")
-        with context.stream.where(ModelResponse).join() as events:
+        with context.stream.where(ModelMessageChunk | TranscriptionChunkEvent).join() as events:
             async for event in events:
-                # print(event)
-                pass
+                print(event)
 
 
 if __name__ == "__main__":
