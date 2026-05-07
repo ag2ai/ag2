@@ -8,7 +8,7 @@ import io
 import wave
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI, Omit, omit
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
@@ -17,6 +17,7 @@ from openai.types.beta.realtime import Session
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
+    RecordedAudioEvent,
     SynthesizedAudioEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
@@ -130,33 +131,31 @@ class OpenAIRealTimeConfig:
     @asynccontextmanager
     async def session(
         self,
-        audio_stream: AsyncIterator[bytes],
         context: ConversationContext,
     ) -> AsyncIterator[None]:
         async with self.client.beta.realtime.connect(model=self.model) as conn:
             if self._session_config:
                 await conn.session.update(session=self._session_config)
 
-            send_task = asyncio.create_task(_pump_audio(audio_stream, conn))
-            recv_task = asyncio.create_task(_pump_events(conn, context))
+            async def _pump_audio(event: RecordedAudioEvent) -> None:
+                await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())
 
-            try:
-                yield
+            with context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio):
+                recv_task = asyncio.create_task(_pump_events(conn, context))
 
-            finally:
-                for task in (send_task, recv_task):
-                    task.cancel()
-                for task in (send_task, recv_task):
+                try:
+                    yield
+
+                finally:
+                    recv_task.cancel()
                     with suppress(asyncio.CancelledError):
-                        await task
+                        await recv_task
 
 
-async def _pump_audio(audio_stream: AsyncIterator[bytes], conn: Any) -> None:
-    async for chunk in audio_stream:
-        await conn.input_audio_buffer.append(audio=base64.b64encode(chunk).decode())
-
-
-async def _pump_events(conn: AsyncRealtimeConnection, context: ConversationContext) -> None:
+async def _pump_events(
+    conn: AsyncRealtimeConnection,
+    context: ConversationContext,
+) -> None:
     async for event in conn:
         if event.type == "conversation.item.input_audio_transcription.delta":
             await context.send(TranscriptionChunkEvent(event.delta))

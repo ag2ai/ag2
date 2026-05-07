@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from autogen.beta.types import SendableMessage
 
-from .base import BaseEvent, Field
+from .base import BaseEvent, Field, truncate_repr
 from .input_events import Input
 
 
@@ -85,7 +85,7 @@ class ToolCallEvent(ToolEvent):
     def __repr__(self) -> str:
         text = f"id={self.id}, name='{self.name}'"
         if c := self.arguments:
-            text += f", arguments='{c}'"
+            text += f", arguments={truncate_repr(c)}"
         return f"{self.__class__.__name__}({text})"
 
     def to_api(self) -> dict[str, Any]:

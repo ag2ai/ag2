@@ -15,3 +15,7 @@ class TranscriptionCompletedEvent(BaseEvent):
 
 class SynthesizedAudioEvent(BaseEvent):
     content: bytes = Field(kw_only=False)
+
+
+class RecordedAudioEvent(BaseEvent):
+    content: bytes = Field(kw_only=False)
