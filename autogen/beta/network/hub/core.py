@@ -832,6 +832,26 @@ class Hub:
         adapter = self._adapter_for(manifest_type, manifest_version)
 
         creator_rule = self._rules.get(creator_id, Rule())
+        creator_name = self._passports[creator_id].name
+
+        # Pre-flight invitee inbound-access check. The dispatch path
+        # silently filters envelopes whose sender is not in the
+        # recipient's ``inbound_from`` whitelist; without this
+        # pre-check, an invite to a recipient who blocks the creator
+        # would be dropped on the floor and the creator would hang on
+        # the ack waiter until ``invite_ack_timeout``. Surface the
+        # access denial synchronously instead.
+        for p_id in participants:
+            if p_id == creator_id:
+                continue
+            invitee_rule = self._rules.get(p_id)
+            if invitee_rule is None:
+                continue
+            if not _match_any(creator_name, invitee_rule.access.inbound_from):
+                invitee_name = self._passports[p_id].name
+                raise AccessDeniedError(
+                    f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}"
+                )
 
         # Concurrency cap: count active sessions where this agent is
         # the creator. ``0`` disables the cap. Hub rejects before any
@@ -1175,9 +1195,16 @@ class Hub:
 
         sender_rule = self._rules.get(envelope.sender_id, Rule())
 
-        # Outbound access check.
+        # Outbound access check. Self-routing is always allowed —
+        # protocol broadcasts (``EV_SESSION_OPENED`` / ``EV_SESSION_CLOSED``)
+        # include the creator in their own audience so the creator's
+        # ``Session`` handle receives the lifecycle notification, and the
+        # sender's ``outbound_to`` should never block their own
+        # state-sync envelopes.
         if envelope.audience is not None:
             for recipient_id in envelope.audience:
+                if recipient_id == envelope.sender_id:
+                    continue
                 recipient = self._passports.get(recipient_id)
                 if recipient is None:
                     continue
@@ -1200,6 +1227,20 @@ class Hub:
             raise ProtocolError(f"session {envelope.session_id!r} is {metadata.state.value}")
         if not _is_protocol_event(envelope.event_type) and metadata.state != SessionState.ACTIVE:
             raise ProtocolError(f"session {envelope.session_id!r} not active (state={metadata.state.value})")
+
+        # Adapter must be registered to dispatch on this session.
+        # Distinct from create_session's NotFoundError (where the user
+        # is asking for an unknown manifest at session-creation time):
+        # here the session exists but its manifest's adapter is no
+        # longer loaded — typically a hydrate where the manifest type
+        # wasn't re-registered before ``hub.start()``. Surface as a
+        # ProtocolError so callers can distinguish "session is down"
+        # from "session never existed."
+        if (metadata.manifest.type, metadata.manifest.version) not in self._adapters:
+            raise ProtocolError(
+                f"session {envelope.session_id!r} has no registered adapter "
+                f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version})"
+            )
 
         # Inbox capacity check (substantive events only — protocol
         # invites / acks / opens / closes must always reach
