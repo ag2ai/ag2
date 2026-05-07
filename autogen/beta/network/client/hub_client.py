@@ -16,6 +16,7 @@ every operation through frames.
 
 import asyncio
 import contextlib
+import logging
 from typing import TYPE_CHECKING
 
 from autogen.beta.agent import Agent
@@ -34,6 +35,9 @@ if TYPE_CHECKING:
     from ..hub import Hub
 
 __all__ = ("HubClient",)
+
+
+logger = logging.getLogger(__name__)
 
 
 class HubClient:
@@ -73,15 +77,29 @@ class HubClient:
         try:
             async for frame in self._client_link.frames():
                 if isinstance(frame, NotifyFrame):
-                    await self._dispatch_notify(frame)
+                    try:
+                        await self._dispatch_notify(frame)
+                    except Exception:
+                        # Per-frame dispatch failure (handler/observer/middleware
+                        # bug). Log with traceback so the failure is diagnosable
+                        # instead of silently hanging the awaiter, then keep the
+                        # loop alive so other sessions still flow.
+                        logger.exception(
+                            "receive loop dispatch failed: session=%s event=%s recipient=%s",
+                            frame.envelope.session_id,
+                            frame.envelope.event_type,
+                            frame.recipient_id,
+                        )
                 # Other frame kinds (Accept/Error/Pong/Event) bypass the
                 # demuxer — the in-process send path goes direct via
                 # ``Hub.post_envelope`` so ``AcceptFrame`` is unused here.
         except asyncio.CancelledError:
             raise
         except Exception:
-            # Receive loops must not propagate.
-            pass
+            # Iterator-level failure (transport teardown, decode error).
+            # Receive loops must not propagate, but we log so the cause
+            # of a dead loop is at least discoverable.
+            logger.exception("receive loop terminated unexpectedly")
 
     async def _dispatch_notify(self, frame: NotifyFrame) -> None:
         """Route the envelope to the recipient stamped on the frame.
