@@ -849,9 +849,7 @@ class Hub:
                 continue
             if not _match_any(creator_name, invitee_rule.access.inbound_from):
                 invitee_name = self._passports[p_id].name
-                raise AccessDeniedError(
-                    f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}"
-                )
+                raise AccessDeniedError(f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}")
 
         # Concurrency cap: count active sessions where this agent is
         # the creator. ``0`` disables the cap. Hub rejects before any

@@ -30,7 +30,7 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.consulting import ConsultingAdapter, ConsultingState
-from autogen.beta.network.adapters.conversation import ConversationAdapter, ConversationState
+from autogen.beta.network.adapters.conversation import ConversationAdapter
 from autogen.beta.network.adapters.discussion import DiscussionAdapter, DiscussionState
 from autogen.beta.network.session import (
     Participant,
@@ -238,9 +238,15 @@ class TestConversationAdapter:
         )
         state = adapter.initial_state(meta)
         envelopes = [
-            Envelope(session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "1"}),
-            Envelope(session_id="s1", sender_id="bob", audience=["alice"], event_type=EV_TEXT, event_data={"text": "2"}),
-            Envelope(session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "3"}),
+            Envelope(
+                session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "1"}
+            ),
+            Envelope(
+                session_id="s1", sender_id="bob", audience=["alice"], event_type=EV_TEXT, event_data={"text": "2"}
+            ),
+            Envelope(
+                session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "3"}
+            ),
         ]
         for i, env in enumerate(envelopes, 1):
             env.envelope_id = f"e{i}"
@@ -426,8 +432,9 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
 async def test_hydrate_refolds_discussion_state_deterministically() -> None:
     """Close hub, reopen → refolded DiscussionState matches what fold
     would produce live."""
-    from autogen.beta.knowledge import DiskKnowledgeStore
     import tempfile
+
+    from autogen.beta.knowledge import DiskKnowledgeStore
 
     with tempfile.TemporaryDirectory() as tmp:
         store = DiskKnowledgeStore(tmp)
@@ -444,14 +451,24 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
         await session.send("a-1", audience=None)
         # bob's default handler does NOT auto-respond (ScriptedConfig
         # returns ""), so we send manually for each speaker in turn.
-        await bob._hub_client.post_envelope(Envelope(
-            session_id=sid, sender_id=bob.agent_id, audience=None,
-            event_type=EV_TEXT, event_data={"text": "b-1"},
-        ))
-        await carol._hub_client.post_envelope(Envelope(
-            session_id=sid, sender_id=carol.agent_id, audience=None,
-            event_type=EV_TEXT, event_data={"text": "c-1"},
-        ))
+        await bob._hub_client.post_envelope(
+            Envelope(
+                session_id=sid,
+                sender_id=bob.agent_id,
+                audience=None,
+                event_type=EV_TEXT,
+                event_data={"text": "b-1"},
+            )
+        )
+        await carol._hub_client.post_envelope(
+            Envelope(
+                session_id=sid,
+                sender_id=carol.agent_id,
+                audience=None,
+                event_type=EV_TEXT,
+                event_data={"text": "c-1"},
+            )
+        )
 
         live_state: DiscussionState = hub1._adapter_states[sid]
         live_summary = (

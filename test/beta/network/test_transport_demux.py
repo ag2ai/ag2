@@ -28,7 +28,6 @@ from autogen.beta.network import (
     Passport,
     Resume,
 )
-from autogen.beta.network.envelope import EV_SESSION_OPENED
 
 from ._helpers import ScriptedConfig
 

@@ -47,7 +47,6 @@ from autogen.beta.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
-    Violation,
 )
 from autogen.beta.network.session import (
     Expectation,
@@ -195,6 +194,8 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
     from autogen.beta.network.adapters.base import AdapterResult
     from autogen.beta.network.session import (
         ParticipantSchema as PS,
+    )
+    from autogen.beta.network.session import (
         SessionManifest as SM,
     )
 
@@ -226,6 +227,7 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
 
         def default_view_policy(self, _meta, _pid):
             from autogen.beta.network.views.builtin import FullTranscript
+
             return FullTranscript()
 
     hub.register_adapter(TestAdapter())
@@ -310,6 +312,8 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
     from autogen.beta.network.adapters.base import AdapterResult
     from autogen.beta.network.session import (
         ParticipantSchema as PS,
+    )
+    from autogen.beta.network.session import (
         SessionManifest as SM,
     )
 
@@ -342,6 +346,7 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
 
         def default_view_policy(self, _meta, _pid):
             from autogen.beta.network.views.builtin import FullTranscript
+
             return FullTranscript()
 
     hub.register_adapter(DualExpAdapter())
@@ -402,6 +407,8 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
     from autogen.beta.network.adapters.base import AdapterResult
     from autogen.beta.network.session import (
         ParticipantSchema as PS,
+    )
+    from autogen.beta.network.session import (
         SessionManifest as SM,
     )
 
@@ -433,6 +440,7 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
 
         def default_view_policy(self, _meta, _pid):
             from autogen.beta.network.views.builtin import FullTranscript
+
             return FullTranscript()
 
     hub.register_adapter(BogusAdapter())
@@ -477,6 +485,8 @@ async def test_unknown_handler_name_silently_ignored() -> None:
     from autogen.beta.network.adapters.base import AdapterResult
     from autogen.beta.network.session import (
         ParticipantSchema as PS,
+    )
+    from autogen.beta.network.session import (
         SessionManifest as SM,
     )
 
@@ -508,6 +518,7 @@ async def test_unknown_handler_name_silently_ignored() -> None:
 
         def default_view_policy(self, _meta, _pid):
             from autogen.beta.network.views.builtin import FullTranscript
+
             return FullTranscript()
 
     hub.register_adapter(GhostHandlerAdapter())

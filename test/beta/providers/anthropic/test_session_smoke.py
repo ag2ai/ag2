@@ -25,7 +25,6 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
     EV_TEXT,
     Hub,
     HubClient,

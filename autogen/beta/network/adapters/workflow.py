@@ -231,18 +231,19 @@ class WorkflowAdapter:
         if not _is_substantive(envelope):
             return AdapterResult()
 
-        graph = TransitionGraph.loads(state.graph_data)
-        if graph.max_turns is not None and state.turn_count >= graph.max_turns:
-            return AdapterResult(
-                next_state=SessionState.CLOSED,
-                auto_close_reason="max_turns",
-            )
-
+        # Prefer graph-emitted termination reason over max_turns
         if state.expected_next_speaker is None:
             reason = state.pending_close_reason or "workflow_terminated"
             return AdapterResult(
                 next_state=SessionState.CLOSED,
                 auto_close_reason=reason,
+            )
+
+        graph = TransitionGraph.loads(state.graph_data)
+        if graph.max_turns is not None and state.turn_count >= graph.max_turns:
+            return AdapterResult(
+                next_state=SessionState.CLOSED,
+                auto_close_reason="max_turns",
             )
         return AdapterResult()
 

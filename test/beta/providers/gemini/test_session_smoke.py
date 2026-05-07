@@ -32,7 +32,6 @@ from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_SESSION_CLOSED,
     EV_TEXT,
-    Envelope,
     Hub,
     HubClient,
     LocalLink,
