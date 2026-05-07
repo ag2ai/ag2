@@ -3,16 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Iterable, Sequence
-from dataclasses import replace as dataclass_replace
+from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 import httpx
-from a2a.client import Client, ClientCallInterceptor, ClientConfig, ClientFactory
+from a2a.client import Client, ClientCallInterceptor
+from a2a.client.errors import A2AClientError
 from a2a.types import (
     AgentCard,
+    GetExtendedAgentCardRequest,
     GetTaskRequest,
     Message,
+    Part,
+    SendMessageConfiguration,
     SendMessageRequest,
+    StreamResponse,
+    SubscribeToTaskRequest,
     Task,
     TaskState,
 )
@@ -22,80 +29,127 @@ from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
+    Input,
     ModelMessage,
+    ModelMessageChunk,
     ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
-    ToolErrorEvent,
-    ToolResultEvent,
+    ToolResultsEvent,
+    Usage,
 )
 from autogen.beta.response import ResponseProto
+from autogen.beta.tools.final.function_tool import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
-from .cards import fetch_card
-from .client_tools import (
-    PENDING_TOOL_CALL_ID_VAR_KEY,
-    find_pending_tool_result,
-    parse_tool_call_request,
-    schemas_to_wire,
-    tool_result_payload,
-)
 from .errors import (
-    A2AAuthRequiredError,
-    A2ANoTaskError,
+    A2AClientToolsNotSupportedError,
     A2AReconnectError,
-    A2AResponseSchemaNotSupportedError,
     A2ATaskFailedError,
     A2ATaskRejectedError,
 )
-from .mappers import (
-    CLIENT_TOOLS_EXTENSION_URI,
-    CLIENT_TOOLS_KEY,
-    RESULT_ARTIFACT_NAME,
-    TOOL_CALL_RESULT_KEY,
-    artifact_metadata_dict,
-    artifact_text,
-    finish_reason_for,
-    finish_reason_from_metadata,
-    followup_user_message,
-    model_from_metadata,
-    model_request_to_a2a_message,
-    usage_from_metadata,
+from .extension import EXTENSION_URI, EXTRA_PARTS_DEPENDENCY_KEY, MIME_TOOL_CALL
+from .mappers.messages import (
+    build_input_response_message,
+    build_tool_result_message,
+    build_user_message,
+    extract_context_update,
 )
-from .streams import StreamOutcome, drain, reconnect
-from .types import TRANSPORT_ERRORS, HttpxClientFactory
+from .mappers.parts import is_data_part_with_mime, part_data_to_python
+from .mappers.tools import payload_to_call
+from .transports.jsonrpc import fetch_card, make_a2a_client, make_httpx_client
 
-CONTEXT_ID_VAR_KEY = "ag:a2a:context_id"
-"""``Context.variables`` key for the server-issued A2A ``context_id``."""
+_PROVIDER = "a2a"
+_CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{url}"
 
-TASK_ID_VAR_KEY = "ag:a2a:task_id"
-"""``Context.variables`` key for the current A2A ``task_id``."""
+_TERMINAL_STATES = frozenset({
+    TaskState.TASK_STATE_COMPLETED,
+    TaskState.TASK_STATE_CANCELED,
+    TaskState.TASK_STATE_FAILED,
+    TaskState.TASK_STATE_REJECTED,
+    TaskState.TASK_STATE_INPUT_REQUIRED,
+})
+
+
+@dataclass(slots=True)
+class _DriveState:
+    """State accumulated across driving one ``ask`` to its terminal task.
+
+    Survives ``input_required`` continuations: each loop appends to
+    ``accumulated_text`` and ``pending_calls``, so the final
+    ``ModelResponse`` reflects the entire interaction.
+    """
+
+    accumulated_text: str = ""
+    pending_calls: list[ToolCallEvent] = field(default_factory=list)
+    finish_reason: str = "completed"
+    failed_task: Task | None = None
+    rejected_task: Task | None = None
+
+
+@dataclass(slots=True)
+class _TurnOutcome:
+    """Per-turn result handed back from a streaming/polling drain.
+
+    ``input_required`` signals the caller to ask the HITL hook for
+    ``input_prompt`` and continue the same task with the user reply.
+    """
+
+    input_required: bool = False
+    input_prompt: str | None = None
 
 
 class A2AClient(LLMClient):
+    """``LLMClient`` implementation that delegates to a remote A2A agent.
+
+    Lifecycle: one ``A2AClient`` instance per ``Agent.ask()`` call.
+    Within that ask, ``self._task_id`` carries the server-issued task id
+    across multiple ``__call__`` invocations (for client-side tool
+    round-trips). Across asks, ``contextId`` lives in
+    ``context.variables`` so the server can stitch the conversation.
+    """
+
     def __init__(
         self,
-        url: str,
         *,
-        client_factory: HttpxClientFactory | None,
-        client_config: ClientConfig | None,
-        interceptors: list[ClientCallInterceptor],
-        max_reconnects: int,
-        reconnect_backoff: float,
-        agent_card: AgentCard | None,
+        url: str,
+        transports: Sequence[Literal["jsonrpc", "rest", "grpc"]] = ("jsonrpc",),
+        streaming: bool = True,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = 60.0,
+        max_reconnects: int = 3,
+        reconnect_backoff: float = 0.5,
+        polling_interval: float = 0.5,
+        input_required_timeout: float | None = None,
+        httpx_client_factory: Callable[[], httpx.AsyncClient] | None = None,
+        interceptors: Sequence[ClientCallInterceptor] = (),
+        grpc_channel_factory: Callable[[str], Any] | None = None,
+        preset_card: AgentCard | None = None,
     ) -> None:
+        transports_tuple = tuple(transports)
+        if not transports_tuple:
+            raise ValueError("transports must contain at least one of 'jsonrpc', 'rest', 'grpc'")
+
         self._url = url
-        self._client_factory = client_factory
-        self._user_client_config = client_config
-        self._interceptors = interceptors
+        self._transports = transports_tuple
+        self._streaming = streaming
+        self._headers = dict(headers) if headers else None
+        self._timeout = timeout
         self._max_reconnects = max_reconnects
         self._reconnect_backoff = reconnect_backoff
-        self._agent_card = agent_card
+        self._polling_interval = polling_interval
+        self._input_required_timeout = input_required_timeout
+        self._httpx_client_factory = httpx_client_factory
+        self._interceptors = list(interceptors)
+        self._grpc_channel_factory = grpc_channel_factory
+        self._preset_card = preset_card
 
         self._httpx_client: httpx.AsyncClient | None = None
-        self._a2a_client: Client | None = None
-        self._init_lock = asyncio.Lock()
+        self._sdk_client: Client | None = None
+        self._agent_card: AgentCard | None = preset_card
+        self._task_id: str | None = None
 
     async def __call__(
         self,
@@ -107,223 +161,364 @@ class A2AClient(LLMClient):
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema is not None:
-            raise A2AResponseSchemaNotSupportedError()
+            raise NotImplementedError("response_schema is not yet supported with A2AConfig")
 
-        card, client = await self._ensure_client()
-        outgoing = self._build_outgoing(messages, context, tuple(tools))
+        await self._ensure_connected()
+        assert self._agent_card is not None
+        assert self._sdk_client is not None
 
-        outcome = StreamOutcome()
+        function_schemas = self._validate_and_extract_tools(tools)
+        outgoing = self._build_outgoing(messages, function_schemas, context)
+
+        state = _DriveState()
         while True:
-            outcome = await self._exchange(client, outgoing, context, outcome)
+            outcome = await self._drive_task(outgoing, context, state)
+            if not outcome.input_required:
+                break
 
-            tool_call = parse_tool_call_request(outcome)
-            if tool_call is not None:
-                return self._build_tool_call_response(card, outcome, tool_call, context)
+            user_text = await self._await_user_input(context, outcome.input_prompt)
+            outgoing = build_input_response_message(
+                user_text,
+                task_id=self._task_id or "",
+                context_id=self._read_context_id(context),
+            )
 
-            if outcome.input_required and outcome.task is not None:
-                user_text = await context.input(outcome.input_prompt or "")
-                outgoing = SendMessageRequest(
-                    message=followup_user_message(
-                        user_text,
-                        context_id=outcome.task.context_id,
-                        task_id=outcome.task.id,
-                    ),
-                )
-                outcome = StreamOutcome(text=outcome.text, reasoning=outcome.reasoning)
-                continue
-            break
+        if state.failed_task is not None:
+            raise A2ATaskFailedError(state.failed_task)
+        if state.rejected_task is not None:
+            raise A2ATaskRejectedError(state.rejected_task)
 
-        return self._build_final_response(card, outcome, context)
+        message = ModelMessage(state.accumulated_text) if state.accumulated_text else None
 
-    async def aclose(self) -> None:
-        # Httpx clients produced by a user-supplied ``client_factory`` remain
-        # the caller's responsibility — the factory contract is "you own what
-        # you build". We only close clients we created ourselves.
-        async with self._init_lock:
-            if self._httpx_client is not None and self._client_factory is None:
-                await self._httpx_client.aclose()
-            self._httpx_client = None
-            self._a2a_client = None
-
-    async def _ensure_client(self) -> tuple[AgentCard, Client]:
-        async with self._init_lock:
-            if self._httpx_client is None:
-                self._httpx_client = (
-                    self._client_factory()
-                    if self._client_factory
-                    else httpx.AsyncClient(
-                        # A2A is a streaming long-poll protocol — the default 5s
-                        # read timeout aborts mid-SSE on any non-trivial reply.
-                        timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0),
-                    )
-                )
-            if self._agent_card is None:
-                self._agent_card = await fetch_card(self._httpx_client, self._url)
-            if self._a2a_client is None:
-                self._a2a_client = self._build_a2a_client(self._agent_card)
-            return self._agent_card, self._a2a_client
-
-    def _build_a2a_client(self, card: AgentCard) -> Client:
-        streaming = bool(card.capabilities.streaming)
-        config = self._user_client_config or ClientConfig(
-            httpx_client=self._httpx_client,
-            streaming=streaming,
-            polling=not streaming,
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCallsEvent(state.pending_calls),
+            usage=Usage(),
+            model=self._agent_card.name if self._agent_card else None,
+            provider=_PROVIDER,
+            finish_reason=state.finish_reason,
         )
-        if config.httpx_client is None:
-            config = dataclass_replace(config, httpx_client=self._httpx_client)
-        return ClientFactory(config).create(card, interceptors=self._interceptors)
+
+    async def _ensure_connected(self) -> None:
+        if self._sdk_client is not None:
+            return
+        self._httpx_client = make_httpx_client(
+            headers=self._headers,
+            timeout=self._timeout,
+            factory=self._httpx_client_factory,
+        )
+        if self._preset_card is None:
+            self._agent_card = await fetch_card(self._httpx_client, url=self._url)
+        self._sdk_client = make_a2a_client(
+            card=self._agent_card,
+            httpx_client=self._httpx_client,
+            streaming=self._streaming,
+            transports=self._transports,
+            interceptors=self._interceptors,
+            grpc_channel_factory=self._grpc_channel_factory,
+        )
+        if self._agent_card.capabilities.extended_agent_card:
+            self._agent_card = await self._sdk_client.get_extended_agent_card(GetExtendedAgentCardRequest())
+
+    def _validate_and_extract_tools(
+        self,
+        tools: Iterable[ToolSchema],
+    ) -> list[FunctionToolSchema]:
+        function_schemas = [t for t in tools if isinstance(t, FunctionToolSchema)]
+        if not function_schemas:
+            return []
+        if not self._card_advertises_extension():
+            raise A2AClientToolsNotSupportedError(
+                f"Server at {self._url!r} does not advertise extension "
+                f"{EXTENSION_URI!r}; remove tools= or use a server that supports it."
+            )
+        return function_schemas
+
+    def _card_advertises_extension(self) -> bool:
+        if self._agent_card is None or self._agent_card.capabilities is None:
+            return False
+        return any(ext.uri == EXTENSION_URI for ext in self._agent_card.capabilities.extensions)
+
+    def _streaming_enabled(self) -> bool:
+        if self._agent_card is None:
+            return False
+        return self._streaming and self._agent_card.capabilities.streaming
 
     def _build_outgoing(
         self,
         messages: Sequence[BaseEvent],
+        function_schemas: Sequence[FunctionToolSchema],
         context: ConversationContext,
-        tools: tuple[ToolSchema, ...],
-    ) -> SendMessageRequest:
-        pending_id = context.variables.get(PENDING_TOOL_CALL_ID_VAR_KEY)
-        if pending_id is not None:
-            tool_result = find_pending_tool_result(messages, pending_id)
-            task_id = context.variables.get(TASK_ID_VAR_KEY)
-            context_id = context.variables.get(CONTEXT_ID_VAR_KEY)
-            if tool_result is not None and task_id and context_id:
-                return SendMessageRequest(
-                    message=self._build_tool_result_followup(tool_result, context_id=context_id, task_id=task_id),
-                )
-
-        request_index: int | None = None
-        for idx in range(len(messages) - 1, -1, -1):
-            if isinstance(messages[idx], ModelRequest):
-                request_index = idx
-                break
-        if request_index is None:
-            raise ValueError("A2AClient requires at least one ModelRequest in messages")
-        request = messages[request_index]
-        # Everything before the current ModelRequest is the prior turn history
-        # the server needs to reseed its stream — the request itself is sent
-        # via Message.parts, so we skip it here to avoid duplication.
-        prior_history: tuple[BaseEvent, ...] = tuple(messages[:request_index])
-
-        wire_tools = schemas_to_wire(tools)
-        metadata: dict[str, object] | None = {CLIENT_TOOLS_KEY: wire_tools} if wire_tools else None
-        extensions = [CLIENT_TOOLS_EXTENSION_URI] if wire_tools else None
-
-        assert isinstance(request, ModelRequest)
-        message = model_request_to_a2a_message(
-            request,
-            context_id=context.variables.get(CONTEXT_ID_VAR_KEY),
-            extensions=extensions,
-            metadata=metadata,
-            history=prior_history,
-        )
-        return SendMessageRequest(message=message)
-
-    @staticmethod
-    def _build_tool_result_followup(
-        tool_result: ToolResultEvent | ToolErrorEvent,
-        *,
-        context_id: str,
-        task_id: str,
     ) -> Message:
-        return followup_user_message(
-            text="",
+        context_id = self._read_context_id(context)
+        last = messages[-1] if messages else None
+
+        if isinstance(last, ToolResultsEvent) and self._task_id is not None:
+            return build_tool_result_message(
+                last.results,
+                task_id=self._task_id,
+                context_id=context_id,
+                context_update=dict(context.variables) or None,
+            )
+
+        inputs = self._collect_user_inputs(messages)
+        extra_parts = _read_extra_parts(context)
+        return build_user_message(
+            inputs,
+            tool_schemas=function_schemas,
+            task_id=self._task_id,
             context_id=context_id,
-            task_id=task_id,
-            metadata={TOOL_CALL_RESULT_KEY: tool_result_payload(tool_result)},
+            advertise_extension=bool(function_schemas) or self._task_id is not None,
+            context_update=dict(context.variables) or None,
+            extra_parts=extra_parts,
         )
 
     @staticmethod
-    def _build_tool_call_response(
-        card: AgentCard,
-        outcome: StreamOutcome,
-        tool_call: ToolCallEvent,
-        context: ConversationContext,
-    ) -> ModelResponse:
-        assert outcome.task is not None
-        context.variables[CONTEXT_ID_VAR_KEY] = outcome.task.context_id
-        context.variables[TASK_ID_VAR_KEY] = outcome.task.id
-        context.variables[PENDING_TOOL_CALL_ID_VAR_KEY] = tool_call.id
-        return ModelResponse(
-            tool_calls=ToolCallsEvent([tool_call]),
-            model=card.name,
-            provider="a2a",
-            finish_reason="tool_calls",
-        )
+    def _collect_user_inputs(messages: Sequence[BaseEvent]) -> list[Input]:
+        for ev in reversed(messages):
+            if isinstance(ev, ModelRequest):
+                return list(ev.parts)
+        return [TextInput("")]
 
-    def _build_final_response(
+    async def _drive_task(
         self,
-        card: AgentCard,
-        outcome: StreamOutcome,
+        message: Message,
         context: ConversationContext,
-    ) -> ModelResponse:
-        if outcome.task is None:
-            raise A2ANoTaskError()
-        state = outcome.task.status.state
-        if state == TaskState.TASK_STATE_FAILED:
-            raise A2ATaskFailedError(outcome.task)
-        if state == TaskState.TASK_STATE_REJECTED:
-            raise A2ATaskRejectedError(outcome.task)
+        state: _DriveState,
+    ) -> _TurnOutcome:
+        if self._streaming_enabled():
+            return await self._consume_streaming(message, context, state)
+        return await self._consume_polling(message, context, state)
 
-        context.variables[CONTEXT_ID_VAR_KEY] = outcome.task.context_id
-        context.variables[TASK_ID_VAR_KEY] = outcome.task.id
-        context.variables.pop(PENDING_TOOL_CALL_ID_VAR_KEY, None)
-
-        result_metadata: dict[str, object] | None = None
-        for artifact in outcome.task.artifacts:
-            if artifact.name == RESULT_ARTIFACT_NAME:
-                result_metadata = artifact_metadata_dict(artifact)
-                break
-        usage = usage_from_metadata(result_metadata)
-        finish_reason = finish_reason_from_metadata(result_metadata) or finish_reason_for(state)
-        model = model_from_metadata(result_metadata) or card.name
-
-        text = outcome.text or "".join(
-            artifact_text(a) for a in outcome.task.artifacts if a.name == RESULT_ARTIFACT_NAME
-        )
-        return ModelResponse(
-            message=ModelMessage(text) if text else None,
-            usage=usage,
-            model=model,
-            provider="a2a",
-            finish_reason=finish_reason,
-        )
-
-    async def _exchange(
+    async def _consume_streaming(
         self,
-        client: Client,
-        request: SendMessageRequest,
+        message: Message,
         context: ConversationContext,
-        outcome: StreamOutcome,
-    ) -> StreamOutcome:
-        await drain(client.send_message(request), context, outcome)
-        await reconnect(
-            client,
-            outcome=outcome,
-            context=context,
-            max_attempts=self._max_reconnects,
-            backoff=self._reconnect_backoff,
-        )
+        state: _DriveState,
+    ) -> _TurnOutcome:
+        assert self._sdk_client is not None
 
-        # Some servers complete the task without ever streaming an artifact —
-        # pull the final task once so we can read accumulated artifacts/metadata.
-        if outcome.task is not None and not outcome.input_required and not outcome.text:
-            assert self._a2a_client is not None
-            outcome.task = await self._fetch_task_with_retry(outcome.task.id)
-            if outcome.task.status.state == TaskState.TASK_STATE_AUTH_REQUIRED:
-                raise A2AAuthRequiredError(outcome.task)
+        request = self._build_send_request(message)
+        stream: AsyncIterator[Any] = self._sdk_client.send_message(request)
+
+        attempt = 0
+        while True:
+            try:
+                return await self._drain_stream(stream, context, state)
+            except A2AClientError as exc:
+                if self._task_id is None or attempt >= self._max_reconnects:
+                    raise A2AReconnectError(attempt) from exc
+                await asyncio.sleep(self._reconnect_backoff * (2**attempt))
+                attempt += 1
+                stream = self._sdk_client.subscribe(SubscribeToTaskRequest(id=self._task_id))
+
+    async def _consume_polling(
+        self,
+        message: Message,
+        context: ConversationContext,
+        state: _DriveState,
+    ) -> _TurnOutcome:
+        assert self._sdk_client is not None
+
+        request = self._build_send_request(message)
+        outcome = await self._drain_stream(self._sdk_client.send_message(request), context, state)
+        if state.finish_reason in ("failed", "rejected") or outcome.input_required:
+            return outcome
+
+        if self._task_id is None:
+            return outcome
+
+        while True:
+            task = await self._sdk_client.get_task(GetTaskRequest(id=self._task_id))
+            self._absorb_task_artifacts(task, context, state)
+            if task.status.state in _TERMINAL_STATES:
+                return self._terminal_outcome(task, state)
+            await asyncio.sleep(self._polling_interval)
+
+    async def _drain_stream(
+        self,
+        stream: AsyncIterator[Any],
+        context: ConversationContext,
+        state: _DriveState,
+    ) -> _TurnOutcome:
+        outcome = _TurnOutcome()
+        async for event in stream:
+            response = _ensure_stream_response(event)
+            payload = response.WhichOneof("payload")
+
+            if payload == "task":
+                self._task_id = response.task.id
+                self._save_context_id(context, response.task.context_id)
+                continue
+
+            if payload == "status_update":
+                self._save_context_id(context, response.status_update.context_id)
+                if response.status_update.task_id:
+                    self._task_id = response.status_update.task_id
+                stop = self._handle_status_update(response.status_update, state, outcome)
+                if stop:
+                    return outcome
+                continue
+
+            if payload == "artifact_update":
+                self._save_context_id(context, response.artifact_update.context_id)
+                text_chunk, calls = await self._handle_artifact_parts(
+                    response.artifact_update.artifact.parts,
+                    context,
+                )
+                state.accumulated_text += text_chunk
+                state.pending_calls.extend(calls)
+                continue
+
+            if payload == "message":
+                msg = response.message
+                self._save_context_id(context, msg.context_id)
+                if msg.task_id:
+                    self._task_id = msg.task_id
+                self._merge_context_update(context, extract_context_update(msg))
+                text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
+                state.accumulated_text += text_chunk
+                state.pending_calls.extend(calls)
+                continue
 
         return outcome
 
-    async def _fetch_task_with_retry(self, task_id: str) -> Task:
-        assert self._a2a_client is not None
-        attempts = 0
-        last_error: BaseException | None = None
-        while attempts <= self._max_reconnects:
-            try:
-                return await self._a2a_client.get_task(GetTaskRequest(id=task_id))
-            except TRANSPORT_ERRORS as exc:
-                last_error = exc
-                attempts += 1
-                if attempts > self._max_reconnects:
-                    break
-                await asyncio.sleep(self._reconnect_backoff)
-        raise A2AReconnectError(attempts=attempts, last_error=last_error)
+    def _handle_status_update(self, status_update: Any, state: _DriveState, outcome: _TurnOutcome) -> bool:
+        sd_state = status_update.status.state
+        if sd_state == TaskState.TASK_STATE_FAILED:
+            state.failed_task = self._fake_task_for_status(status_update)
+            state.finish_reason = "failed"
+            return True
+        if sd_state == TaskState.TASK_STATE_REJECTED:
+            state.rejected_task = self._fake_task_for_status(status_update)
+            state.finish_reason = "rejected"
+            return True
+        if sd_state == TaskState.TASK_STATE_INPUT_REQUIRED:
+            state.finish_reason = "input_required"
+            outcome.input_required = True
+            outcome.input_prompt = _extract_status_prompt(status_update.status)
+            return True
+        return False
+
+    def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: _DriveState) -> None:
+        # Polling mode: we don't get incremental artifact-update deltas;
+        # rebuild text/tool-calls from the latest task snapshot. We
+        # blindly overwrite ``accumulated_text`` from the snapshot —
+        # ``Task.artifacts`` already contains the cumulative output.
+        new_text = ""
+        new_calls: list[ToolCallEvent] = []
+        for artifact in task.artifacts:
+            for part in artifact.parts:
+                if part.text:
+                    new_text += part.text
+                    continue
+                if is_data_part_with_mime(part, MIME_TOOL_CALL):
+                    new_calls.append(payload_to_call(part_data_to_python(part)))
+        state.accumulated_text = new_text or state.accumulated_text
+        if new_calls:
+            state.pending_calls = new_calls
+        if task.status.HasField("message"):
+            self._merge_context_update(context, extract_context_update(task.status.message))
+
+    def _terminal_outcome(self, task: Task, state: _DriveState) -> _TurnOutcome:
+        sd_state = task.status.state
+        if sd_state == TaskState.TASK_STATE_FAILED:
+            state.failed_task = task
+            state.finish_reason = "failed"
+        elif sd_state == TaskState.TASK_STATE_REJECTED:
+            state.rejected_task = task
+            state.finish_reason = "rejected"
+        elif sd_state == TaskState.TASK_STATE_INPUT_REQUIRED:
+            state.finish_reason = "input_required"
+            return _TurnOutcome(
+                input_required=True,
+                input_prompt=_extract_status_prompt(task.status),
+            )
+        return _TurnOutcome()
+
+    async def _handle_artifact_parts(
+        self,
+        parts: Iterable[Any],
+        context: ConversationContext,
+    ) -> tuple[str, list[ToolCallEvent]]:
+        text_acc = ""
+        calls: list[ToolCallEvent] = []
+        for part in parts:
+            if part.text:
+                text_acc += part.text
+                await context.send(ModelMessageChunk(part.text))
+                continue
+            if is_data_part_with_mime(part, MIME_TOOL_CALL):
+                calls.append(payload_to_call(part_data_to_python(part)))
+                continue
+        return text_acc, calls
+
+    async def _await_user_input(self, context: ConversationContext, prompt: str | None) -> str:
+        # Defers to the agent's HITL hook. If none is wired up the beta
+        # default raises ``HumanInputNotProvidedError`` — that's the
+        # signal to the caller that this server requires HITL but the
+        # client side isn't set up for it.
+        return await context.input(prompt or "Please provide input:", timeout=self._input_required_timeout)
+
+    def _build_send_request(self, message: Message) -> SendMessageRequest:
+        assert self._agent_card is not None
+        return SendMessageRequest(
+            message=message,
+            configuration=SendMessageConfiguration(
+                accepted_output_modes=list(self._agent_card.default_output_modes) or ["text/plain", "application/json"],
+            ),
+        )
+
+    def _read_context_id(self, context: ConversationContext) -> str | None:
+        return context.variables.get(_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url))
+
+    def _save_context_id(self, context: ConversationContext, context_id: str) -> None:
+        if not context_id:
+            return
+        context.variables[_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url)] = context_id
+
+    @staticmethod
+    def _merge_context_update(context: ConversationContext, payload: Mapping[str, Any]) -> None:
+        if not payload:
+            return
+        context.variables.update(payload)
+
+    @staticmethod
+    def _fake_task_for_status(status_update: Any) -> Task:
+        # Build a minimal Task surrogate carrying the failure status so the
+        # error type can be raised consistently with the spec'd terminal flow.
+        return Task(id=status_update.task_id, status=status_update.status, context_id=status_update.context_id)
+
+
+def _ensure_stream_response(event: Any) -> StreamResponse:
+    if isinstance(event, StreamResponse):
+        return event
+    # SDK can yield bare protobuf payload objects for individual oneof
+    # fields — wrap them so the consumer always sees a uniform type.
+    if isinstance(event, Task):
+        return StreamResponse(task=event)
+    if isinstance(event, Message):
+        return StreamResponse(message=event)
+    raise TypeError(f"Unexpected stream event type: {type(event).__name__}")
+
+
+def _extract_status_prompt(status: Any) -> str | None:
+    if not status.HasField("message"):
+        return None
+    chunks = [part.text for part in status.message.parts if part.text]
+    if not chunks:
+        return None
+    return "".join(chunks)
+
+
+def _read_extra_parts(context: ConversationContext) -> list[Part]:
+    """Read user-provided extra ``Part``s from context dependencies.
+
+    Accepts either a list of ``Part`` instances directly, or anything
+    iterable that yields ``Part`` instances. Anything else is silently
+    ignored — extra parts are advisory.
+    """
+    raw = context.dependencies.get(EXTRA_PARTS_DEPENDENCY_KEY)
+    if not raw:
+        return []
+    return [p for p in raw if isinstance(p, Part)]

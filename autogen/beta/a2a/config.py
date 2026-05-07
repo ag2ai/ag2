@@ -2,72 +2,122 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
-from uuid import uuid4
+from typing import Any, Literal, TypedDict
 
-from a2a.client import ClientCallInterceptor, ClientConfig
+import httpx
+from a2a.client import ClientCallInterceptor
 from a2a.types import AgentCard
-from typing_extensions import Self
+from typing_extensions import Self, Unpack
 
 from autogen.beta.config.config import ModelConfig
 
-from .cards import url_from_card
-from .client import CONTEXT_ID_VAR_KEY, A2AClient
-from .types import HttpxClientFactory
+from .client import A2AClient
+
+TransportName = Literal["jsonrpc", "rest", "grpc"]
+
+
+class A2AConfigOverrides(TypedDict, total=False):
+    url: str
+    transports: Sequence[TransportName]
+    streaming: bool
+    headers: Mapping[str, str] | None
+    timeout: float | None
+    max_reconnects: int
+    reconnect_backoff: float
+    polling_interval: float
+    input_required_timeout: float | None
+    httpx_client_factory: Callable[[], httpx.AsyncClient] | None
+    interceptors: Sequence[ClientCallInterceptor]
+    grpc_channel_factory: Callable[[str], Any] | None
 
 
 @dataclass(slots=True)
 class A2AConfig(ModelConfig):
-    """``ModelConfig`` connecting an AG2 ``Agent`` to a remote A2A server.
+    """Connection config for an A2A agent acting as an LLM provider.
 
-    From the agent loop's point of view, ``Agent(config=A2AConfig(url))`` behaves
-    like any other ``LLMClient`` — streaming text and reasoning, ``tool_calls``
-    via the optional client-side-tools extension, populated ``Usage``.
+    ``url`` is the base address of the remote A2A server (the agent card
+    is fetched from ``{url}/.well-known/agent-card.json`` per spec).
 
-    ``client_factory`` ownership: clients returned from the factory remain the
-    **caller's** responsibility — ``A2AClient.aclose()`` will not close them.
-    Use this when you want to share a single ``httpx.AsyncClient`` across
-    multiple ``A2AClient`` instances (e.g. in tests with ``ASGITransport``).
+    ``transports`` is the ordered preference list of protocol bindings
+    the client is willing to negotiate. The SDK picks the first one the
+    server card declares as supported. Default ``("jsonrpc",)``.
+
+    ``polling_interval`` is used when the server card declares
+    ``capabilities.streaming=False`` or when the user opts into
+    ``streaming=False``: ``Task`` state is polled via ``get_task`` every
+    ``polling_interval`` seconds until terminal.
+
+    ``input_required_timeout`` caps how long the client waits on the
+    HITL hook when the server transitions a task into
+    ``TASK_STATE_INPUT_REQUIRED``. ``None`` means wait indefinitely
+    (matches ``ConversationContext.input``).
+
+    ``grpc_channel_factory`` builds a ``grpc.aio.Channel`` for a given
+    URL when the negotiated transport is gRPC. Required only if
+    ``"grpc"`` is in ``transports`` and the server actually picks it.
     """
 
     url: str
-    client_factory: HttpxClientFactory | None = None
-    client_config: ClientConfig | None = None
-    interceptors: tuple[ClientCallInterceptor, ...] = field(default_factory=tuple)
+    transports: Sequence[TransportName] = ("jsonrpc",)
+    streaming: bool = True
+    headers: Mapping[str, str] | None = None
+    timeout: float | None = 60.0
     max_reconnects: int = 3
     reconnect_backoff: float = 0.5
-    agent_card: AgentCard | None = None
+    polling_interval: float = 0.5
+    input_required_timeout: float | None = None
+    httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
+    interceptors: Sequence[ClientCallInterceptor] = ()
+    grpc_channel_factory: Callable[[str], Any] | None = field(default=None, repr=False)
+    preset_card: AgentCard | None = field(default=None, repr=False)
 
-    def copy(self, /, **overrides: Any) -> Self:
+    def copy(self, /, **overrides: Unpack[A2AConfigOverrides]) -> Self:
         return replace(self, **overrides)
+
+    @classmethod
+    def from_card(
+        cls,
+        card: AgentCard,
+        *,
+        url: str | None = None,
+        **overrides: Any,
+    ) -> Self:
+        """Construct a config from a pre-fetched ``AgentCard``.
+
+        Useful when the card has already been resolved (e.g. via a
+        discovery service) and a network round-trip on connect can be
+        skipped. ``url`` defaults to the first interface declared on
+        the card; raises ``ValueError`` if neither is available.
+        """
+        resolved_url = url or _first_interface_url(card)
+        if not resolved_url:
+            raise ValueError(
+                "AgentCard has no supported_interfaces and no `url` override was provided",
+            )
+        return cls(url=resolved_url, preset_card=card, **overrides)
 
     def create(self) -> A2AClient:
         return A2AClient(
             url=self.url,
-            client_factory=self.client_factory,
-            client_config=self.client_config,
-            interceptors=list(self.interceptors),
+            transports=tuple(self.transports),
+            streaming=self.streaming,
+            headers=dict(self.headers) if self.headers else None,
+            timeout=self.timeout,
             max_reconnects=self.max_reconnects,
             reconnect_backoff=self.reconnect_backoff,
-            agent_card=self.agent_card,
+            polling_interval=self.polling_interval,
+            input_required_timeout=self.input_required_timeout,
+            httpx_client_factory=self.httpx_client_factory,
+            interceptors=tuple(self.interceptors),
+            grpc_channel_factory=self.grpc_channel_factory,
+            preset_card=self.preset_card,
         )
 
-    def seed_subtask_variables(self, parent_vars: dict[str, Any]) -> None:
-        """Implements :class:`SubtaskContextSeeder`.
 
-        Ensures every sub-task spawned from a parent agent backed by this
-        config shares the same A2A ``context_id`` — so the server sees parallel
-        and serial calls as one conversation.
-        """
-        parent_vars.setdefault(CONTEXT_ID_VAR_KEY, uuid4().hex)
-
-    @classmethod
-    def from_card(cls, card: AgentCard, /, **overrides: Any) -> Self:
-        """Build an ``A2AConfig`` from a pre-fetched ``AgentCard``.
-
-        Saves the ``/.well-known/agent-card.json`` round-trip when the card has
-        already been obtained from a discovery registry or static catalog.
-        """
-        url = overrides.pop("url") if "url" in overrides else url_from_card(card)
-        return cls(url=url, agent_card=card, **overrides)
+def _first_interface_url(card: AgentCard) -> str | None:
+    interfaces = card.supported_interfaces
+    if not interfaces:
+        return None
+    return interfaces[0].url or None

@@ -2,161 +2,160 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from base64 import b64decode
-from collections.abc import Iterable
-from enum import Enum
-from typing import Any, cast
+import base64
+import json
+from dataclasses import asdict, is_dataclass
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
 from a2a.types import Part
+from google.protobuf import json_format, struct_pb2
 
 from autogen.beta.events import (
     BinaryInput,
+    BinaryType,
     DataInput,
     FileIdInput,
+    Input,
     TextInput,
     UrlInput,
 )
-from autogen.beta.events.input_events import BinaryType, Input
 
-from ._proto import dict_to_struct, dict_to_value, struct_to_dict, value_to_python
-from .wire import (
-    BINARY_TYPE_KEY,
-    FILENAME_KEY,
-    METADATA_PREFIX,
-    PART_KIND_KEY,
-    VENDOR_METADATA_KEY,
-)
-
-
-class PartKind(str, Enum):
-    """Marker for the original beta ``Input`` subtype, recorded in ``Part.metadata``."""
-
-    TEXT = "text"
-    BINARY = "binary"
-    URL = "url"
-    FILE_ID = "file_id"
-    DATA_DICT = "data_dict"
-    DATA_VALUE = "data_value"
-
-
-def inputs_to_a2a_parts(inputs: Iterable[Input]) -> list[Part]:
-    return [input_to_part(inp) for inp in inputs]
-
-
-def a2a_parts_to_inputs(parts: Iterable[Part]) -> list[Input]:
-    return [part_to_input(p) for p in parts]
+_FILE_ID_METADATA_KEY = "ag2.file_id"
+_BINARY_KIND_METADATA_KEY = "ag2.binary_kind"
+_FILENAME_METADATA_KEY = "filename"
 
 
 def input_to_part(inp: Input) -> Part:
+    """Convert an AG2 ``Input`` event to an A2A ``Part`` (protobuf, v1.x).
+
+    A ``Part`` in A2A 1.x is a flat protobuf message — exactly one of
+    ``text`` / ``raw`` / ``url`` / ``data`` is meaningful, plus optional
+    ``filename``, ``media_type``, ``metadata``.
+    """
     if isinstance(inp, TextInput):
-        return Part(
-            text=inp.content,
-            metadata=dict_to_struct(merge_metadata({PART_KIND_KEY: PartKind.TEXT.value}, inp.metadata)),
-        )
+        return Part(text=inp.content)
+
     if isinstance(inp, BinaryInput):
-        meta = merge_metadata(
-            {
-                PART_KIND_KEY: PartKind.BINARY.value,
-                BINARY_TYPE_KEY: inp.kind.value,
-                VENDOR_METADATA_KEY: dict(inp.vendor_metadata) or None,
-            },
-            inp.metadata,
-        )
-        # ``BinaryInput.data`` is bytes; the wire stores the raw payload directly
-        # rather than base64-encoding it, since proto bytes fields are binary-safe.
-        # Some upstreams pre-encode; we accept either by detecting non-bytes input.
-        raw = inp.data if isinstance(inp.data, (bytes, bytearray)) else b64decode(inp.data)
-        return Part(raw=bytes(raw), media_type=str(inp.media_type), metadata=dict_to_struct(meta))
-    if isinstance(inp, FileIdInput):
+        filename = str(inp.vendor_metadata.get("filename", "")) if inp.vendor_metadata else ""
+        metadata = struct_from_dict({_BINARY_KIND_METADATA_KEY: inp.kind.value})
         return Part(
-            data=dict_to_value({"file_id": inp.file_id, "filename": inp.filename}),
-            filename=inp.filename or None,
-            metadata=dict_to_struct(
-                merge_metadata({PART_KIND_KEY: PartKind.FILE_ID.value, FILENAME_KEY: inp.filename}, inp.metadata)
-            ),
+            raw=inp.data,
+            media_type=str(inp.media_type),
+            filename=filename,
+            metadata=metadata,
         )
+
     if isinstance(inp, UrlInput):
         return Part(
             url=inp.url,
-            metadata=dict_to_struct(
-                merge_metadata(
-                    {PART_KIND_KEY: PartKind.URL.value, BINARY_TYPE_KEY: inp.kind.value},
-                    inp.metadata,
-                )
-            ),
+            metadata=struct_from_dict({_BINARY_KIND_METADATA_KEY: inp.kind.value}),
         )
-    if isinstance(inp, DataInput):
-        if isinstance(inp.data, dict):
-            return Part(
-                data=dict_to_value(cast(dict[str, Any], inp.data)),
-                metadata=dict_to_struct(merge_metadata({PART_KIND_KEY: PartKind.DATA_DICT.value}, inp.metadata)),
-            )
+
+    if isinstance(inp, FileIdInput):
         return Part(
-            data=dict_to_value({"value": inp.data}),
-            metadata=dict_to_struct(merge_metadata({PART_KIND_KEY: PartKind.DATA_VALUE.value}, inp.metadata)),
+            filename=inp.filename or "",
+            metadata=struct_from_dict({_FILE_ID_METADATA_KEY: inp.file_id}),
         )
-    raise TypeError(f"Unsupported Input type: {type(inp).__name__}")
+
+    if isinstance(inp, DataInput):
+        return Part(data=_value_from(inp.data), media_type="application/json")
+
+    raise TypeError(f"Cannot map {type(inp).__name__} to A2A Part")
 
 
 def part_to_input(part: Part) -> Input:
-    raw_metadata = struct_to_dict(part.metadata) if part.HasField("metadata") else {}
-    kind_marker = raw_metadata.get(PART_KIND_KEY)
-    user_metadata = strip_internal_metadata(raw_metadata)
-    content_field = part.WhichOneof("content")
+    """Convert an A2A ``Part`` to an AG2 ``Input`` event.
 
-    if content_field == "text":
-        return TextInput(part.text, metadata=user_metadata)
+    Picks the field that is populated. For data parts whose ``media_type``
+    is one of our extension MIME types, the caller (mappers.tools) is
+    expected to handle the part *before* falling through to this function.
+    """
+    if part.text:
+        return TextInput(part.text)
 
-    if content_field == "raw":
+    metadata = struct_to_dict(part.metadata)
+    file_id = metadata.get(_FILE_ID_METADATA_KEY)
+    if file_id:
+        return FileIdInput(str(file_id), filename=part.filename or None)
+
+    kind = _binary_kind(metadata)
+
+    if part.raw:
         return BinaryInput(
-            bytes(part.raw),
+            part.raw,
             media_type=part.media_type or "application/octet-stream",
-            kind=coerce_binary_type(raw_metadata.get(BINARY_TYPE_KEY)),
-            vendor_metadata=dict(raw_metadata.get(VENDOR_METADATA_KEY) or {}),
-            metadata=user_metadata,
+            vendor_metadata={_FILENAME_METADATA_KEY: part.filename} if part.filename else {},
+            kind=kind,
         )
 
-    if content_field == "url":
-        return UrlInput(
-            part.url,
-            kind=coerce_binary_type(raw_metadata.get(BINARY_TYPE_KEY)),
-            metadata=user_metadata,
-        )
+    if part.url:
+        return UrlInput(part.url, kind=kind)
 
-    if content_field == "data":
-        decoded = value_to_python(part.data)
-        if kind_marker == PartKind.FILE_ID.value and isinstance(decoded, dict):
-            return FileIdInput(
-                str(decoded.get("file_id")),
-                filename=cast(str | None, decoded.get("filename") or part.filename or None),
-                metadata=user_metadata,
-            )
-        if kind_marker == PartKind.DATA_VALUE.value and isinstance(decoded, dict):
-            return DataInput(decoded.get("value"), metadata=user_metadata)
-        return DataInput(decoded, metadata=user_metadata)
+    if part.HasField("data"):
+        return DataInput(_value_to_python(part.data))
 
-    raise TypeError(f"Part has no content set (oneof empty): {part!r}")
+    raise ValueError("A2A Part has no populated content field")
 
 
-def merge_metadata(internal: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Merge AG2-internal markers with caller-supplied user metadata. Drops ``None`` values."""
-    merged: dict[str, Any] = {k: v for k, v in internal.items() if v is not None}
-    if user:
-        merged.update(user)
-    return merged or None
+def text_part(text: str) -> Part:
+    return Part(text=text)
 
 
-def strip_internal_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Remove all AG2-internal markers from a metadata dict."""
-    return {k: v for k, v in metadata.items() if not k.startswith(METADATA_PREFIX)}
+def data_part(payload: Any, *, media_type: str) -> Part:
+    """Build a Part carrying structured data with the given MIME type.
+
+    Used by mappers.tools to wrap our extension payloads
+    (tool-schemas+json, tool-call+json, tool-result+json).
+    """
+    return Part(data=_value_from(payload), media_type=media_type)
 
 
-def coerce_binary_type(value: Any) -> BinaryType:
-    if isinstance(value, BinaryType):
-        return value
-    if isinstance(value, str):
-        try:
-            return BinaryType(value)
-        except ValueError:
-            return BinaryType.BINARY
-    return BinaryType.BINARY
+def is_data_part_with_mime(part: Part, media_type: str) -> bool:
+    return part.HasField("data") and part.media_type == media_type
+
+
+def part_data_to_python(part: Part) -> Any:
+    """Decode a data Part's ``data`` field into a native Python value."""
+    return _value_to_python(part.data)
+
+
+def _value_from(value: Any) -> struct_pb2.Value:
+    target = struct_pb2.Value()
+    json_format.Parse(json.dumps(value, default=_json_default), target)
+    return target
+
+
+def _value_to_python(v: struct_pb2.Value) -> Any:
+    return json_format.MessageToDict(v, preserving_proto_field_name=True)
+
+
+def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:
+    s = struct_pb2.Struct()
+    json_format.ParseDict(payload, s)
+    return s
+
+
+def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:
+    if not s or not s.fields:
+        return {}
+    return json_format.MessageToDict(s, preserving_proto_field_name=True)
+
+
+def _binary_kind(metadata: dict[str, Any]) -> BinaryType:
+    raw = metadata.get(_BINARY_KIND_METADATA_KEY, BinaryType.BINARY.value)
+    try:
+        return BinaryType(raw)
+    except ValueError:
+        return BinaryType.BINARY
+
+
+def _json_default(obj: Any) -> Any:
+    if isinstance(obj, (datetime, Decimal)):
+        return str(obj)
+    if isinstance(obj, bytes):
+        return base64.b64encode(obj).decode("ascii")
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return asdict(obj)
+    raise TypeError(f"Cannot JSON-serialize {type(obj).__name__}")

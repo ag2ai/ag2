@@ -8,7 +8,7 @@ from typing import Any
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.routes.agent_card_routes import create_agent_card_routes
-from a2a.server.routes.rest_routes import create_rest_routes
+from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
 from a2a.server.tasks import (
     InMemoryTaskStore,
     PushNotificationConfigStore,
@@ -20,25 +20,24 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 
-from ._http import DEFAULT_AGENT_CARD_PATH, LEGACY_AGENT_CARD_PATH
-from .jsonrpc import CardModifier, ExtendedCardModifier
+from ._http import (
+    DEFAULT_AGENT_CARD_PATH,
+    LEGACY_AGENT_CARD_PATH,
+    CardModifier,
+    ExtendedCardModifier,
+)
 
 
-def build_rest_routes(
+def build_jsonrpc_routes(
     *,
     handler: DefaultRequestHandlerV2,
-    path_prefix: str = "",
+    rpc_url: str = "/",
 ) -> list[BaseRoute]:
-    """Return Starlette routes that dispatch A2A REST requests to ``handler``.
-
-    REST exposes one route per A2A method (e.g. ``POST /v1/message:send``,
-    ``POST /v1/tasks/{id}:cancel``) — different from JSON-RPC which uses a
-    single envelope endpoint.
-    """
-    return list(create_rest_routes(handler, path_prefix=path_prefix))
+    """Return Starlette routes that dispatch JSON-RPC 2.0 requests to ``handler``."""
+    return list(create_jsonrpc_routes(handler, rpc_url=rpc_url))
 
 
-def build_rest_asgi(
+def build_jsonrpc_asgi(
     *,
     agent_executor: AgentExecutor,
     agent_card: AgentCard,
@@ -49,22 +48,30 @@ def build_rest_asgi(
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
-    path_prefix: str = "",
+    rpc_url: str = "/",
     card_url: str = DEFAULT_AGENT_CARD_PATH,
     legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
 ) -> Starlette:
-    """Assemble a Starlette ASGI app exposing REST routes for an A2A agent.
+    """Assemble a Starlette ASGI app exposing JSON-RPC routes for an A2A agent.
 
-    The REST counterpart to ``build_jsonrpc_asgi``. Same handler shape
-    (``DefaultRequestHandlerV2`` over ``AgentExecutor``), different
-    dispatcher — one HTTP route per A2A method instead of a single
-    JSON-RPC envelope endpoint.
+    This is the server-side counterpart to ``make_a2a_client``. It wires up
+    ``DefaultRequestHandlerV2`` with our ``AgentExecutor`` and registers the
+    JSON-RPC dispatcher plus the agent-card discovery endpoint.
 
-    ``path_prefix`` lets callers mount REST under e.g. ``/api/v1`` if they
-    need it; default is empty (routes live at the application root).
+    ``extended_agent_card``, when supplied, flips ``capabilities.extended_agent_card``
+    on the public card and is served via the JSON-RPC ``GetExtendedAgentCard``
+    method (the SDK 1.x flow — there is no separate REST endpoint for it).
 
-    See ``build_jsonrpc_asgi`` for parameter semantics; everything except
-    ``rpc_url``/``path_prefix`` and the dispatcher is identical.
+    ``card_modifier`` is awaited per-request before serving the public
+    card; ``extended_card_modifier`` is awaited per-request before
+    serving the extended card.
+
+    ``legacy_card_url`` registers a second card route on the v0.x path
+    for backward compatibility. Pass ``None`` to disable.
+
+    ``middlewares`` is a list of ``(class, kwargs)`` pairs applied to
+    the resulting Starlette app at runtime — accumulated by
+    ``A2AServer.add_middleware``.
     """
     if extended_agent_card is not None:
         agent_card.capabilities.extended_agent_card = True
@@ -81,7 +88,7 @@ def build_rest_asgi(
         push_config_store=push_config_store,
         push_sender=push_sender,
     )
-    routes: list[BaseRoute] = build_rest_routes(handler=handler, path_prefix=path_prefix)
+    routes: list[BaseRoute] = build_jsonrpc_routes(handler=handler, rpc_url=rpc_url)
     routes.extend(
         create_agent_card_routes(agent_card, card_modifier=card_modifier, card_url=card_url),
     )
