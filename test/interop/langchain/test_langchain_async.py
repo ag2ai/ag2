@@ -166,7 +166,7 @@ class TestLangChainAsyncDetection:
         """Tools that override _arun should be detected as async."""
         from autogen.interop.langchain.langchain_tool import _langchain_tool_has_async_implementation
 
-        class AsyncTool(LangchainBaseTool):
+        class AsyncTool(LangchainBaseTool):  # type: ignore[misc, no-any-unimported]
             name: str = "async-tool"
             description: str = "test"
 
@@ -183,7 +183,7 @@ class TestLangChainAsyncDetection:
         """Tools using the @tool decorator (no _arun override) should be detected as sync."""
         from autogen.interop.langchain.langchain_tool import _langchain_tool_has_async_implementation
 
-        @langchain_tool
+        @langchain_tool  # type: ignore[misc]
         def my_sync_tool(query: str) -> str:
             """A sync tool."""
             return "result"
@@ -199,7 +199,7 @@ class TestLangChainAsyncDetection:
         """
         from autogen.interop.langchain.langchain_tool import _langchain_tool_has_async_implementation
 
-        class ToolWithExplicitAsync(LangchainBaseTool):
+        class ToolWithExplicitAsync(LangchainBaseTool):  # type: ignore[misc, no-any-unimported]
             name: str = "explicit-async-tool"
             description: str = "test"
 
