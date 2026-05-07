@@ -1,9 +1,8 @@
 import asyncio
 
-from autogen.beta.agent import Agent
 from autogen.beta.events import ModelMessageChunk, TranscriptionChunkEvent
+from autogen.beta.tools import tool
 from autogen.beta.voice import (
-    AudioConfig,
     LiveAgent,
     OpenAIRealTimeConfig,
     SoundDevicePlayer,
@@ -11,21 +10,23 @@ from autogen.beta.voice import (
 )
 
 
+@tool
+async def sum_numbers(a: int, b: int) -> int:
+    """You can use this tool to sum two numbers."""
+    print(f"Summing {a} and {b}")
+    return a + b
+
+
 async def main() -> None:
-    agent = Agent(
+    agent = LiveAgent(
         name="assistant",
         prompt="You are a helpful voice assistant.",
+        tools=[sum_numbers],
+        config=OpenAIRealTimeConfig("gpt-4o-realtime-preview"),
     )
 
     async with (
-        LiveAgent(
-            name="assistant",
-            prompt="You are a helpful voice assistant.",
-            config=OpenAIRealTimeConfig(
-                "gpt-4o-realtime-preview",
-                audio=AudioConfig(voice="ash", speed=1.2),
-            ),
-        ) as context,
+        agent.run() as context,
         SoundDevicePlayer(context=context),
         SoundDeviceRecorder(context=context),
     ):

@@ -5,6 +5,7 @@
 import asyncio
 import base64
 import io
+import json
 import wave
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager, suppress
@@ -18,20 +19,27 @@ from openai.types.beta.realtime.session_update_event_param import (
     Session,
     SessionInputAudioNoiseReduction,
     SessionInputAudioTranscription,
+    SessionTool,
     SessionTracing,
     SessionTurnDetection,
 )
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
+    DataInput,
     ModelMessage,
     ModelMessageChunk,
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
 )
+from autogen.beta.tools.final import FunctionToolSchema
+from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.voice.realtime import RealtimeSTTConfig
 
 from .protocols import TTSConfig as TTSConfigProtocol
@@ -204,9 +212,20 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
 
         self.client = client or AsyncOpenAI()
 
-    def _build_session(self, *, instructions: Iterable[str] = ()) -> Session:
+    def _build_session(
+        self,
+        *,
+        instructions: Iterable[str] = (),
+        tools: Iterable[ToolSchema] = (),
+    ) -> Session:
         joined = "\n".join(instructions)
-        return self._session | ({"instructions": joined} if joined else {}) | self._session_overrides
+        session_tools = [_tool_schema_to_session_tool(t) for t in tools]
+        overlay: Session = {}
+        if joined:
+            overlay["instructions"] = joined
+        if session_tools:
+            overlay["tools"] = session_tools
+        return self._session | overlay | self._session_overrides
 
     @asynccontextmanager
     async def session(
@@ -214,8 +233,9 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
         context: ConversationContext,
         *,
         instructions: Iterable[str] = (),
+        tools: Iterable[ToolSchema] = (),
     ) -> AsyncIterator[None]:
-        final_session = self._build_session(instructions=instructions)
+        final_session = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.beta.realtime.connect(model=self.model) as conn:
             await conn.session.update(session=final_session)
@@ -223,7 +243,13 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
             async def _pump_audio(event: RecordedAudioEvent) -> None:
                 await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())
 
-            with context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio):
+            async def _forward_tool_result(event: ToolResultEvent) -> None:
+                await _send_tool_result(conn, event)
+
+            with (
+                context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
+                context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
+            ):
                 recv_task = asyncio.create_task(_pump_events(conn, context))
 
                 try:
@@ -233,6 +259,43 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
                     recv_task.cancel()
                     with suppress(asyncio.CancelledError):
                         await recv_task
+
+
+def _tool_schema_to_session_tool(t: ToolSchema) -> SessionTool:
+    if isinstance(t, FunctionToolSchema):
+        return SessionTool(
+            type="function",
+            name=t.function.name,
+            description=t.function.description,
+            parameters=t.function.parameters,
+        )
+    raise NotImplementedError(f"OpenAI realtime does not support tool type {t.type!r}")
+
+
+async def _send_tool_result(
+    conn: AsyncRealtimeConnection,
+    event: ToolResultEvent,
+) -> None:
+    parts = event.result.parts
+    if not parts:
+        output = ""
+    else:
+        part = parts[0]
+        if isinstance(part, TextInput):
+            output = part.content
+        elif isinstance(part, DataInput):
+            output = json.dumps(part.data, default=str)
+        else:
+            output = str(part)
+
+    await conn.conversation.item.create(
+        item={
+            "type": "function_call_output",
+            "call_id": event.parent_id,
+            "output": output,
+        },
+    )
+    await conn.response.create()
 
 
 async def _pump_events(
@@ -251,6 +314,16 @@ async def _pump_events(
         elif event.type == "response.text.delta":
             text += event.delta
             await context.send(ModelMessageChunk(event.delta))
+        elif event.type == "response.output_item.done":
+            item = event.item
+            if item.type == "function_call" and item.call_id and item.name:
+                await context.send(
+                    ToolCallEvent(
+                        id=item.call_id,
+                        name=item.name,
+                        arguments=item.arguments or "{}",
+                    ),
+                )
         elif event.type == "response.done":
             # done event emits after all text and audio chunks are emitted
             # so, we can emit the final message and usage here

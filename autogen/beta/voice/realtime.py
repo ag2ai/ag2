@@ -2,17 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
-from types import TracebackType
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from typing import Any, Protocol
 
 from fast_depends import Provider
+from fast_depends.pydantic import PydanticSerializer
 
 from autogen.beta.agent import HumanHook, PromptType, _wrap_prompt_hook, wrap_hitl
 from autogen.beta.context import ConversationContext, Stream
 from autogen.beta.events import HumanInputRequest, ModelRequest
 from autogen.beta.stream import MemoryStream
+from autogen.beta.tools.executor import ToolExecutor
+from autogen.beta.tools.final import FunctionTool, FunctionToolSchema
+from autogen.beta.tools.schemas import ToolSchema
+from autogen.beta.tools.tool import Tool
 
 
 class RealtimeSTTConfig(Protocol):
@@ -34,15 +38,16 @@ class RealtimeSTTConfig(Protocol):
         context: ConversationContext,
         *,
         instructions: Iterable[str] = (),
+        tools: Iterable[ToolSchema] = (),
     ) -> AbstractAsyncContextManager[None]: ...
 
 
 class LiveAgent:
-    """Async context manager that opens a realtime STT session.
+    """Realtime STT agent. Open a session via `agent.run()`.
 
     If `stream` is omitted, owns a fresh `MemoryStream`; otherwise binds to
-    the supplied one. Entering yields the owned `ConversationContext` so
-    peers (Player, Recorder) can share it.
+    the supplied one. `run()` is an async context manager that yields the
+    owned `ConversationContext` so peers (Player, Recorder) can share it.
 
     `prompt` accepts the same shapes as `Agent.prompt` — a string, a
     `PromptHook` callable, or any iterable mixing both. Callable hooks are
@@ -62,58 +67,75 @@ class LiveAgent:
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         hitl_hook: HumanHook | None = None,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
     ) -> None:
         self.name = name
 
         self._config = config
         self._stream = stream
-        self._session: AsyncExitStack | None = None
 
         self._dependencies: dict[Any, Any] = dependencies or {}
         self._variables: dict[Any, Any] = variables or {}
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
 
+        self._dependency_provider = Provider()
+        self._tools: list[Tool] = [FunctionTool.ensure_tool(t, provider=self._dependency_provider) for t in tools]
+        self._tool_executor = ToolExecutor(
+            PydanticSerializer(
+                pydantic_config={"arbitrary_types_allowed": True},
+                use_fastdepends_errors=False,
+            ),
+        )
+
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
         self._prompt: list[PromptType] = list(prompt)
 
-    async def __aenter__(self) -> ConversationContext:
-        if self._stream is None:
-            self._stream = MemoryStream()
+    @asynccontextmanager
+    async def run(self) -> AsyncIterator[ConversationContext]:
+        stream = self._stream if self._stream is not None else MemoryStream()
 
         context = ConversationContext(
-            stream=self._stream,
-            dependency_provider=Provider(),
+            stream=stream,
+            dependency_provider=self._dependency_provider,
             dependencies=self._dependencies,
             variables=self._variables,
         )
 
-        s = self._session = await AsyncExitStack().__aenter__()
+        async with AsyncExitStack() as s:
+            if self._hitl_hook is not None:
+                s.enter_context(
+                    stream.where(HumanInputRequest).sub_scope(
+                        self._hitl_hook(()),
+                        interrupt=True,
+                    ),
+                )
 
-        if self._hitl_hook is not None:
-            s.enter_context(
-                self._stream.where(HumanInputRequest).sub_scope(
-                    self._hitl_hook(()),
-                    interrupt=True,
-                ),
+            all_schemas: list[ToolSchema] = []
+            known_tools: set[str] = set()
+            for t in self._tools:
+                schemas = await t.schemas(context)
+                all_schemas.extend(schemas)
+                for schema in schemas:
+                    if isinstance(schema, FunctionToolSchema):
+                        known_tools.add(schema.function.name)
+                    else:
+                        known_tools.add(schema.type)
+
+            if self._tools:
+                self._tool_executor.register(
+                    s,
+                    context,
+                    tools=self._tools,
+                    known_tools=known_tools,
+                )
+
+            instructions = await self._resolve_instructions(context)
+            await s.enter_async_context(
+                self._config.session(context, instructions=instructions, tools=all_schemas),
             )
 
-        instructions = await self._resolve_instructions(context)
-        await s.enter_async_context(self._config.session(context, instructions=instructions))
-
-        return context
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        if self._session is None:
-            return
-
-        session, self._session = self._session, None
-        await session.__aexit__(exc_type, exc_value, traceback)
+            yield context
 
     async def _resolve_instructions(self, context: ConversationContext) -> list[str]:
         request = ModelRequest([])
