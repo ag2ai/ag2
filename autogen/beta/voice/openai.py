@@ -6,7 +6,7 @@ import asyncio
 import base64
 import io
 import wave
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
@@ -32,6 +32,7 @@ from autogen.beta.events import (
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
 )
+from autogen.beta.voice.realtime import RealtimeSTTConfig
 
 from .protocols import TTSConfig as TTSConfigProtocol
 from .stt import STTConfig as STTConfigProtocol
@@ -149,7 +150,7 @@ class TTSConfig(TTSConfigProtocol[bytes]):
         return await response.aread()
 
 
-class OpenAIRealTimeConfig:
+class OpenAIRealTimeConfig(RealtimeSTTConfig):
     """Realtime STT config backed by OpenAI's bidirectional realtime API.
 
     Implements the `RealtimeSTTConfig` protocol — call `session(...)` to open
@@ -203,15 +204,16 @@ class OpenAIRealTimeConfig:
 
         self.client = client or AsyncOpenAI()
 
-    def _build_session(self, *, instructions: str | None = None) -> Session:
-        return self._session | ({"instructions": instructions} if instructions else {}) | self._session_overrides
+    def _build_session(self, *, instructions: Iterable[str] = ()) -> Session:
+        joined = "\n".join(instructions)
+        return self._session | ({"instructions": joined} if joined else {}) | self._session_overrides
 
     @asynccontextmanager
     async def session(
         self,
         context: ConversationContext,
         *,
-        instructions: str | None = None,
+        instructions: Iterable[str] = (),
     ) -> AsyncIterator[None]:
         final_session = self._build_session(instructions=instructions)
 

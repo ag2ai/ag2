@@ -1,5 +1,6 @@
 import asyncio
 
+from autogen.beta.agent import Agent
 from autogen.beta.events import ModelMessageChunk, TranscriptionChunkEvent
 from autogen.beta.voice import (
     AudioConfig,
@@ -11,8 +12,14 @@ from autogen.beta.voice import (
 
 
 async def main() -> None:
+    agent = Agent(
+        name="assistant",
+        prompt="You are a helpful voice assistant.",
+    )
+
     async with (
         LiveAgent(
+            name="assistant",
             prompt="You are a helpful voice assistant.",
             config=OpenAIRealTimeConfig(
                 "gpt-4o-realtime-preview",

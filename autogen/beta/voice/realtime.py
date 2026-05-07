@@ -2,11 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import AbstractAsyncContextManager
+from collections.abc import Iterable
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from types import TracebackType
-from typing import Protocol
+from typing import Any, Protocol
 
+from fast_depends import Provider
+
+from autogen.beta.agent import HumanHook, PromptType, _wrap_prompt_hook, wrap_hitl
 from autogen.beta.context import ConversationContext, Stream
+from autogen.beta.events import HumanInputRequest, ModelRequest
 from autogen.beta.stream import MemoryStream
 
 
@@ -28,7 +33,7 @@ class RealtimeSTTConfig(Protocol):
         self,
         context: ConversationContext,
         *,
-        instructions: str | None = None,
+        instructions: Iterable[str] = (),
     ) -> AbstractAsyncContextManager[None]: ...
 
 
@@ -39,28 +44,63 @@ class LiveAgent:
     the supplied one. Entering yields the owned `ConversationContext` so
     peers (Player, Recorder) can share it.
 
-    `prompt` is lowered into the provider's session as `instructions` when
-    the session is opened.
+    `prompt` accepts the same shapes as `Agent.prompt` — a string, a
+    `PromptHook` callable, or any iterable mixing both. Callable hooks are
+    resolved once at session open against the `ConversationContext` (no
+    `ModelRequest` — realtime is session-scoped, not request-scoped). The
+    resulting iterable of strings is forwarded as `instructions` to the
+    provider's session, which is responsible for joining them.
     """
 
     def __init__(
         self,
-        config: RealtimeSTTConfig,
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = (),
         *,
-        prompt: str | None = None,
+        config: RealtimeSTTConfig,
         stream: Stream | None = None,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        hitl_hook: HumanHook | None = None,
     ) -> None:
+        self.name = name
+
         self._config = config
-        self._prompt = prompt
         self._stream = stream
-        self._session: AbstractAsyncContextManager[None] | None = None
+        self._session: AsyncExitStack | None = None
+
+        self._dependencies: dict[Any, Any] = dependencies or {}
+        self._variables: dict[Any, Any] = variables or {}
+        self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
+
+        if isinstance(prompt, str) or callable(prompt):
+            prompt = [prompt]
+        self._prompt: list[PromptType] = list(prompt)
 
     async def __aenter__(self) -> ConversationContext:
         if self._stream is None:
             self._stream = MemoryStream()
-        context = ConversationContext(stream=self._stream)
-        self._session = self._config.session(context, instructions=self._prompt)
-        await self._session.__aenter__()
+
+        context = ConversationContext(
+            stream=self._stream,
+            dependency_provider=Provider(),
+            dependencies=self._dependencies,
+            variables=self._variables,
+        )
+
+        s = self._session = await AsyncExitStack().__aenter__()
+
+        if self._hitl_hook is not None:
+            s.enter_context(
+                self._stream.where(HumanInputRequest).sub_scope(
+                    self._hitl_hook(()),
+                    interrupt=True,
+                ),
+            )
+
+        instructions = await self._resolve_instructions(context)
+        await s.enter_async_context(self._config.session(context, instructions=instructions))
+
         return context
 
     async def __aexit__(
@@ -71,5 +111,16 @@ class LiveAgent:
     ) -> None:
         if self._session is None:
             return
+
         session, self._session = self._session, None
         await session.__aexit__(exc_type, exc_value, traceback)
+
+    async def _resolve_instructions(self, context: ConversationContext) -> list[str]:
+        request = ModelRequest([])
+        parts: list[str] = []
+        for p in self._prompt:
+            if isinstance(p, str):
+                parts.append(p)
+            else:
+                parts.append(await _wrap_prompt_hook(p)(request, context))
+        return parts
