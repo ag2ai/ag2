@@ -459,6 +459,23 @@ agent = Agent("researcher", config=config, tools=[search_tool, answer_tool])
 
 All runtime parameters accept a `Variable` for deferred context resolution.
 
+### HTTP and SDK options
+
+The toolkit constructor accepts options for the underlying `httpx.AsyncClient` and the Perplexity SDK client. Any extra keyword arguments are forwarded directly to `AsyncPerplexity(...)` (e.g. `base_url`, `max_retries`, `default_headers`):
+
+```python linenums="1"
+toolkit = PerplexitySearchToolkit(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncPerplexity
+    base_url="https://custom.perplexity.example",
+    max_retries=5,
+    default_headers={"X-Trace-Id": "abc-123"},
+)
+```
+
 ### Result
 
 Both tools return a `PerplexitySearchResponse` with these fields:
@@ -514,12 +531,34 @@ tool = TavilySearchTool(
     include_raw_content=True,  # include full page text alongside the snippet
     include_images=True,       # include image URLs in the response
     time_range="week",         # "day" | "week" | "month" | "year"
+    start_date="2024-01-01",   # YYYY-MM-DD
+    end_date="2024-12-31",     # YYYY-MM-DD
+    days=7,
     include_domains=["reuters.com", "bbc.com"],
     exclude_domains=["example.com"],
+    country="US",              # ISO country code for localized results
+    auto_parameters=True,      # let Tavily auto-tune query parameters
+    include_favicon=True,      # include result favicons in the response
 )
 ```
 
-All parameters accept a `Variable` for dynamic values resolved at execution time.
+All search parameters accept a `Variable` for dynamic values resolved at execution time.
+
+### HTTP and SDK options
+
+The constructor also accepts options for the underlying `httpx.AsyncClient` and the Tavily SDK client. Any extra keyword arguments are forwarded directly to `AsyncTavilyClient(...)` (e.g. `api_base_url`, `company_info_tags`, `project_id`):
+
+```python linenums="1"
+tool = TavilySearchTool(
+    api_key=...,
+    proxy="http://proxy.company.com:8080",  # passed to httpx.AsyncClient
+    verify=False,                            # disable TLS verification (httpx)
+    timeout=30.0,                            # httpx timeout in seconds
+    # extra kwargs below are forwarded to AsyncTavilyClient
+    api_base_url="https://custom.tavily.example",
+    company_info_tags=("news", "finance"),
+)
+```
 
 ---
 

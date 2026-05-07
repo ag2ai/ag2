@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from unittest.mock import MagicMock
+from typing import Any
 
+import httpx
 import pytest
+import respx
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("tavily")
@@ -15,7 +17,9 @@ from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, To
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
 
-SAMPLE_RAW = {
+TAVILY_BASE_URL = "https://api.tavily.com"
+
+SAMPLE_RAW: dict[str, Any] = {
     "query": "AG2 framework",
     "answer": "AG2 is an open-source multi-agent framework.",
     "results": [
@@ -40,15 +44,15 @@ SAMPLE_RAW = {
 }
 
 
-def _make_config(query: str, final_reply: str = "done", tool_name: str = "tavily_search") -> TestConfig:
+def _make_config(query: str, *, final_reply: str = "done", tool_name: str = "tavily_search") -> TestConfig:
     call = ToolCallEvent(arguments=json.dumps({"query": query}), name=tool_name)
     return TestConfig(ModelResponse(tool_calls=ToolCallsEvent([call])), final_reply)
 
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schema(self, context: Context) -> None:
-        tavily = TavilySearchTool(client=MagicMock())
+    async def test_default_schema(self, context: ConversationContext) -> None:
+        tavily = TavilySearchTool(api_key="test")
 
         [schema] = await tavily.schemas(context)
 
@@ -58,8 +62,8 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_schema(self, context: Context) -> None:
-        tavily = TavilySearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
+    async def test_custom_schema(self, context: ConversationContext) -> None:
+        tavily = TavilySearchTool(api_key="test", name="my_search", description="Custom search tool.")
 
         [schema] = await tavily.schemas(context)
 
@@ -73,16 +77,13 @@ class TestSchema:
 
 @pytest.mark.asyncio
 class TestSearchExecution:
-    async def test_search_returns_structured_results(self, mock: MagicMock) -> None:
-        # arrange tool
-        mock.search.return_value = SAMPLE_RAW
-        tavily = TavilySearchTool(client=mock)
+    @respx.mock
+    async def test_search_returns_structured_results(self) -> None:
+        respx.post(f"{TAVILY_BASE_URL}/search").mock(return_value=httpx.Response(200, json=SAMPLE_RAW))
+        tavily = TavilySearchTool(api_key="test")
 
-        # arrange agent
         config = TrackingConfig(_make_config("AG2 framework"))
         agent = Agent("a", config=config, tools=[tavily])
-
-        # act
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
@@ -108,31 +109,27 @@ class TestSearchExecution:
             )
         )
 
-    async def test_search_empty_results(self, mock: MagicMock) -> None:
-        # arrange tool
-        mock.search.return_value = {"query": "nothing", "results": []}
-        tavily = TavilySearchTool(client=mock)
+    @respx.mock
+    async def test_search_empty_results(self) -> None:
+        respx.post(f"{TAVILY_BASE_URL}/search").mock(
+            return_value=httpx.Response(200, json={"query": "nothing", "results": []})
+        )
+        tavily = TavilySearchTool(api_key="test")
 
-        # arrange agent
         config = TrackingConfig(_make_config("nothing"))
         agent = Agent("a", config=config, tools=[tavily])
-
-        # act
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].result.parts[0] == DataInput(
-            SearchResponse(
-                query="nothing",
-                results=[],
-            )
+        assert tool_results_event.results[0].result.parts[0] == DataInput(SearchResponse(query="nothing", results=[]))
+
+    @respx.mock
+    async def test_all_params_forwarded_to_client(self) -> None:
+        route = respx.post(f"{TAVILY_BASE_URL}/search").mock(
+            return_value=httpx.Response(200, json={"query": "q", "results": []})
         )
-
-    async def test_all_params_forwarded_to_client(self, mock: MagicMock) -> None:
-        mock.search.return_value = {"query": "q", "results": []}
-
         tavily = TavilySearchTool(
-            client=mock,
+            api_key="test",
             max_results=3,
             search_depth="advanced",
             topic="news",
@@ -149,93 +146,95 @@ class TestSearchExecution:
             include_favicon=True,
         )
         agent = Agent("a", config=_make_config("q"), tools=[tavily])
-
         await agent.ask("search")
 
-        mock.search.assert_called_once_with(
-            "q",
-            max_results=3,
-            search_depth="advanced",
-            topic="news",
-            include_answer=True,
-            include_raw_content="markdown",
-            include_images=True,
-            time_range="week",
-            start_date="2024-01-01",
-            end_date="2024-12-31",
-            include_domains=["arxiv.org"],
-            exclude_domains=["medium.com"],
-            country="US",
-            auto_parameters=True,
-            include_favicon=True,
+        body = json.loads(route.calls.last.request.content)
+        assert body == IsPartialDict({
+            "query": "q",
+            "max_results": 3,
+            "search_depth": "advanced",
+            "topic": "news",
+            "include_answer": True,
+            "include_raw_content": "markdown",
+            "include_images": True,
+            "time_range": "week",
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31",
+            "include_domains": ["arxiv.org"],
+            "exclude_domains": ["medium.com"],
+            "country": "US",
+            "auto_parameters": True,
+            "include_favicon": True,
+        })
+
+    @respx.mock
+    async def test_none_params_omitted(self) -> None:
+        route = respx.post(f"{TAVILY_BASE_URL}/search").mock(
+            return_value=httpx.Response(200, json={"query": "q", "results": []})
         )
-
-    async def test_none_params_omitted(self, mock: MagicMock) -> None:
-        # All optional params default to None and must not be forwarded to the SDK
-        # so Tavily applies its own server-side defaults.
-        mock.search.return_value = {"query": "q", "results": []}
-
-        tavily = TavilySearchTool(client=mock)
+        tavily = TavilySearchTool(api_key="test")
         agent = Agent("a", config=_make_config("q"), tools=[tavily])
-
         await agent.ask("search")
 
-        mock.search.assert_called_once_with("q")
+        body = json.loads(route.calls.last.request.content)
+        assert body == IsPartialDict({"query": "q"})
 
-    async def test_custom_tool_name_in_agent(self, mock: MagicMock) -> None:
-        # arrange tool
-        mock.search.return_value = {"query": "q", "results": []}
-        ddg = TavilySearchTool(client=mock, name="web_search")
+    @respx.mock
+    async def test_client_kwargs_forwarded_to_sdk(self) -> None:
+        custom_url = "https://custom.tavily.example"
+        route = respx.post(f"{custom_url}/search").mock(
+            return_value=httpx.Response(200, json={"query": "q", "results": []})
+        )
+        tavily = TavilySearchTool(api_key="test", api_base_url=custom_url)
+        agent = Agent("a", config=_make_config("q"), tools=[tavily])
+        await agent.ask("search")
 
-        # arrange agent
+        assert route.called
+
+    @respx.mock
+    async def test_custom_tool_name_in_agent(self) -> None:
+        route = respx.post(f"{TAVILY_BASE_URL}/search").mock(
+            return_value=httpx.Response(200, json={"query": "q", "results": []})
+        )
+        tavily = TavilySearchTool(api_key="test", name="web_search")
+
         config = TrackingConfig(_make_config("AG2 framework", tool_name="web_search"))
-        agent = Agent("a", config=config, tools=[ddg])
-
-        # act
+        agent = Agent("a", config=config, tools=[tavily])
         await agent.ask("search")
 
-        # assert tool called
-        mock.search.assert_called_once()
+        assert route.called
 
 
 @pytest.mark.asyncio
-class TestTavilykSearchToolVariable:
-    async def test_resolved(self, mock: MagicMock) -> None:
-        # arrange tool
-        mock.search.return_value = SAMPLE_RAW
+class TestTavilySearchToolVariable:
+    @respx.mock
+    async def test_resolved(self) -> None:
+        route = respx.post(f"{TAVILY_BASE_URL}/search").mock(return_value=httpx.Response(200, json=SAMPLE_RAW))
         tavily = TavilySearchTool(
-            client=mock,
+            api_key="test",
             search_depth=Variable("user_depth"),
             topic=Variable(),
         )
 
-        # arrange agent
         agent = Agent(
             "a",
             config=_make_config("test query"),
             tools=[tavily],
-            variables={
-                "user_depth": "basic",
-                "topic": "general",
-            },
+            variables={"user_depth": "basic", "topic": "general"},
         )
-
-        # act
         await agent.ask("search")
 
-        # assert variables resolved
-        mock.search.assert_called_once_with(
-            "test query",
-            search_depth="basic",
-            topic="general",
-        )
+        body = json.loads(route.calls.last.request.content)
+        assert body == IsPartialDict({
+            "query": "test query",
+            "search_depth": "basic",
+            "topic": "general",
+        })
 
-    async def test_missing_raises(self, mock: MagicMock) -> None:
-        mock.search.return_value = SAMPLE_RAW
-        tavily = TavilySearchTool(
-            client=mock,
-            topic=Variable(),
-        )
+    @respx.mock
+    async def test_missing_raises(self) -> None:
+        respx.post(f"{TAVILY_BASE_URL}/search").mock(return_value=httpx.Response(200, json=SAMPLE_RAW))
+        tavily = TavilySearchTool(api_key="test", topic=Variable())
 
         agent = Agent("a", config=_make_config("test query"), tools=[tavily])
 
