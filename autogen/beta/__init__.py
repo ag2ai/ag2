@@ -21,6 +21,7 @@ from .observers import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .spec import AgentSpec
 from .stream import MemoryStream
+from .task import Task, TaskInject, TaskSpec
 from .tools import ToolResult, Toolkit, tool
 
 __all__ = (
@@ -41,7 +42,10 @@ __all__ = (
     "Middleware",
     "PromptedSchema",
     "ResponseSchema",
+    "Task",
     "TaskConfig",
+    "TaskInject",
+    "TaskSpec",
     "TextInput",
     "ToolResult",
     "Toolkit",

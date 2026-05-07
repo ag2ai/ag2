@@ -6,12 +6,13 @@ from dataclasses import dataclass, replace
 from typing import TypedDict
 
 import google.auth
+from google.genai import types
 from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
 from .files import GeminiFilesClient
-from .gemini_client import CreateConfig, GeminiClient
+from .gemini_client import CreateConfig, GeminiClient, ThinkingLevel
 
 
 class GeminiBaseConfigOverrides(TypedDict, total=False):
@@ -26,6 +27,9 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     frequency_penalty: float | None
     seed: int | None
     cached_content: str | None
+    thinking_config: types.ThinkingConfig | None
+    thinking_level: ThinkingLevel | None
+    thinking_budget: int | None
 
 
 class GeminiConfigOverrides(GeminiBaseConfigOverrides, total=False):
@@ -51,6 +55,9 @@ class GeminiBaseConfig:
     frequency_penalty: float | None = None
     seed: int | None = None
     cached_content: str | None = None
+    thinking_config: types.ThinkingConfig | None = None
+    thinking_level: ThinkingLevel | None = None
+    thinking_budget: int | None = None
 
     def _build_create_config(self) -> CreateConfig:
         config = CreateConfig()
@@ -72,7 +79,23 @@ class GeminiBaseConfig:
         if self.seed is not None:
             config["seed"] = self.seed
 
+        thinking = self._resolve_thinking_config()
+        if thinking is not None:
+            config["thinking_config"] = thinking
+
         return config
+
+    def _resolve_thinking_config(self) -> types.ThinkingConfig | None:
+        if self.thinking_config is not None:
+            return self.thinking_config
+        if self.thinking_level is None and self.thinking_budget is None:
+            return None
+        kwargs: dict[str, object] = {}
+        if self.thinking_level is not None:
+            kwargs["thinking_level"] = self.thinking_level
+        if self.thinking_budget is not None:
+            kwargs["thinking_budget"] = self.thinking_budget
+        return types.ThinkingConfig(**kwargs)
 
 
 @dataclass(slots=True)

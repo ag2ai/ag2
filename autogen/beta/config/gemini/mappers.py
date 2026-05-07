@@ -285,11 +285,13 @@ def normalize_usage(metadata: Any) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
     cache_read = _to_float(metadata.cached_content_token_count) or None
+    thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
     return Usage(
         prompt_tokens=_to_float(metadata.prompt_token_count),
         completion_tokens=_to_float(metadata.candidates_token_count),
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
+        thinking_tokens=thinking,
     )
 
 
