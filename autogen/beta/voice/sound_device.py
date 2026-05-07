@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 import queue
 import threading
 from types import TracebackType
@@ -15,6 +16,11 @@ from autogen.beta.events import RecordedAudioEvent, SynthesizedAudioEvent
 
 from .protocols import AudioPlayer
 from .stt import VoiceInput
+
+# Bounded buffer between the audio thread and the asyncio bus. Drop-oldest
+# when full — stale mic bytes are useless for STT, so we keep the most
+# recent ~1 second (10 × 100ms blocks) under sustained load.
+_AUDIO_BUFFER_CHUNKS = 10
 
 
 class Recorder:
@@ -35,6 +41,8 @@ class Recorder:
         self._context = context
         self._loop: asyncio.AbstractEventLoop | None = None
         self._input: sd.InputStream | None = None
+        self._queue: asyncio.Queue[bytes] | None = None
+        self._drain_task: asyncio.Task[None] | None = None
 
     def record(self, duration: float) -> VoiceInput:
         recording = sd.rec(
@@ -55,6 +63,8 @@ class Recorder:
 
     async def __aenter__(self) -> "Recorder":
         self._loop = asyncio.get_running_loop()
+        self._queue = asyncio.Queue(maxsize=_AUDIO_BUFFER_CHUNKS)
+        self._drain_task = self._loop.create_task(self._drain_to_bus())
         self._input = sd.InputStream(
             samplerate=self.sample_rate,
             channels=self.channels,
@@ -75,18 +85,36 @@ class Recorder:
             self._input.stop()
             self._input.close()
             self._input = None
+        if self._drain_task is not None:
+            self._drain_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._drain_task
+            self._drain_task = None
+        self._queue = None
         self._loop = None
 
     def _callback(self, indata: np.ndarray, _frames: int, _time, _status) -> None:
-        # Runs on sounddevice's audio thread; bridge to the asyncio loop.
-        # Frames captured before __aenter__ finishes are dropped.
+        # Runs on sounddevice's audio thread; hand off to the loop thread.
+        # asyncio.Queue is NOT thread-safe, so we MUST go via call_soon_threadsafe.
         if self._loop is None:
             return
-        chunk = indata.copy().tobytes()
-        asyncio.run_coroutine_threadsafe(
-            self._context.send(RecordedAudioEvent(chunk)),
-            self._loop,
-        )
+        self._loop.call_soon_threadsafe(self._enqueue, indata.copy().tobytes())
+
+    def _enqueue(self, chunk: bytes) -> None:
+        # Runs on the loop thread. Drop-oldest if the buffer is full so we
+        # always carry the freshest audio into the bus.
+        if self._queue is None:
+            return
+        if self._queue.full():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._queue.get_nowait()
+        self._queue.put_nowait(chunk)
+
+    async def _drain_to_bus(self) -> None:
+        assert self._queue is not None
+        while True:
+            chunk = await self._queue.get()
+            await self._context.send(RecordedAudioEvent(chunk))
 
 
 class Player(AudioPlayer[bytes]):

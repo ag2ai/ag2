@@ -117,6 +117,4 @@ class OpenAIServerToolResultEvent(BuiltinToolResultEvent):
 
 
 class OpenAIReasoningEvent(ModelReasoning):
-    __transient__ = False
-
     item: ResponseReasoningItem = Field(repr=False)

@@ -13,10 +13,13 @@ from typing import TYPE_CHECKING
 from openai import AsyncOpenAI, Omit, omit
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 from openai.types.audio.speech_create_params import Voice
-from openai.types.beta.realtime import Session
+from openai.types.beta.realtime import session_update_event_param
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
+    ModelMessage,
+    ModelMessageChunk,
+    ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
     TranscriptionChunkEvent,
@@ -121,7 +124,7 @@ class OpenAIRealTimeConfig:
         self,
         model: str,
         *,
-        session: Session | None = None,
+        session: session_update_event_param.Session | None = None,
         client: AsyncOpenAI | None = None,
     ) -> None:
         self.model = model
@@ -156,13 +159,31 @@ async def _pump_events(
     conn: AsyncRealtimeConnection,
     context: ConversationContext,
 ) -> None:
+    text = ""
     async for event in conn:
         if event.type == "conversation.item.input_audio_transcription.delta":
             await context.send(TranscriptionChunkEvent(event.delta))
         elif event.type == "conversation.item.input_audio_transcription.completed":
+            # TODO: process usage
             await context.send(TranscriptionCompletedEvent(event.transcript))
         elif event.type == "response.audio.delta":
             await context.send(SynthesizedAudioEvent(base64.b64decode(event.delta)))
+        elif event.type == "response.text.delta":
+            text += event.delta
+            await context.send(ModelMessageChunk(event.delta))
+        elif event.type == "response.done":
+            # done event emits after all text and audio chunks are emitted
+            # so, we can emit the final message and usage here
+            # without `response.text.done` event processing
+            await context.send(
+                ModelResponse(
+                    # text always none for audio output
+                    message=ModelMessage(text) if text else None,
+                    # TODO: map usage
+                    # usage=event.response.usage,
+                )
+            )
+            text = ""
 
 
 def _voice_to_wav_buffer(voice: "VoiceInput") -> io.BytesIO:
