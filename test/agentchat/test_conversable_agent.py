@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import unittest
+import warnings
 from collections.abc import Callable
 from typing import Annotated, Any, Literal
 from unittest.mock import MagicMock, patch
@@ -2243,6 +2244,36 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+def test_run_method_passing_pre_registered_tool_no_warning_or_loss(mock_credentials: Credentials):
+    """Regression for #1770: passing tools=agent.tools to run() must not warn,
+    must not duplicate the tool entry, and must leave pre-registered tools intact
+    on the agent after the executor context exits.
+    """
+
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def pre_registered_tool(message: str) -> str:
+        return f"Pre-registered: {message}"
+
+    pre_tool = Tool(name="pre_tool", description="Pre-registered tool", func_or_tool=pre_registered_tool)
+    agent.register_for_llm()(pre_tool)
+
+    assert len(agent.llm_config.get("tools", [])) == 1
+
+    # Mirrors the user-facing pattern that triggers the bug (e.g., DeepResearchAgent
+    # called as agent.run(tools=agent.tools, ...)).
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        with agent._create_or_get_executor(tools=agent.tools) as executor:
+            tool_names = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+            assert tool_names == ["pre_tool"]
+            assert "pre_tool" in executor.function_map
+
+    # Pre-existing tool must remain registered on the agent after the context exits.
+    tool_names_after = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    assert tool_names_after == ["pre_tool"]
 
 
 class TestAsyncReplyFunctionSkipping:
