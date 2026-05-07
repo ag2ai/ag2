@@ -128,11 +128,14 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
-        reply = await agent.ask("run it")
-        # Command was allowed — output must contain the echoed text
-        assert "hello" in str(reply)
+        output = tmp_path / "out.txt"
+        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["touch"]))
+        # "touch" is allowed and the command contains no shell operators —
+        # the file MUST be created. Mirrors test_allowed_blocks_non_matching_command,
+        # which uses the same touch pattern to assert rejection.
+        agent = Agent("a", config=self._make_config(f"touch {output}"), tools=[shell])
+        await agent.ask("run it")
+        assert output.exists(), "touch was allowed but file was not created"
 
     @pytest.mark.asyncio
     async def test_allowed_blocks_shell_redirect_bypass(self, tmp_path: Path) -> None:
