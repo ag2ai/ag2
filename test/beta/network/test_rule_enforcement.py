@@ -148,7 +148,7 @@ async def test_outbound_to_self_send_always_allowed() -> None:
     # outbound_to=["nobody-*"] doesn't match "bob" → invite denied).
     # So instead, register bob under a name matching the whitelist:
     await hc.unregister_agent(bob.agent_id)
-    bob2 = await hc.register(_agent("nobody-bob"), Passport(name="nobody-bob"), Resume())
+    await hc.register(_agent("nobody-bob"), Passport(name="nobody-bob"), Resume())
 
     session = await alice.open(type="conversation", target="nobody-bob")
     # Audience includes alice — without the self-skip fix, opening would fail.
@@ -309,13 +309,13 @@ async def test_max_concurrent_sessions_cap_blocks_new_creates() -> None:
         Resume(),
         rule=Rule(limits=LimitsBlock(max_concurrent_sessions=2)),
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
-    dave = await hc.register(_agent("dave"), Passport(name="dave"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    await hc.register(_agent("dave"), Passport(name="dave"), Resume())
 
     # 2 concurrent sessions ok.
     s1 = await alice.open(type="conversation", target="bob")
-    s2 = await alice.open(type="conversation", target="carol")
+    await alice.open(type="conversation", target="carol")
 
     # Third attempt → AccessDeniedError before any persistence.
     with pytest.raises(AccessDeniedError, match="max_concurrent_sessions"):
@@ -458,7 +458,7 @@ async def test_inbox_protocol_events_bypass_capacity() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     # Cap of 1 — easy to overflow with substantive but invites must
     # still be dispatched.
-    bob = await hc.register(
+    await hc.register(
         _agent("bob"),
         Passport(name="bob"),
         Resume(),
@@ -489,7 +489,7 @@ async def test_session_ttl_default_drives_expires_at() -> None:
         Resume(),
         rule=Rule(limits=LimitsBlock(session_ttl_default="1h")),
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target="bob")
     assert session.metadata.expires_at is not None
@@ -515,7 +515,7 @@ async def test_session_ttl_per_session_override_wins() -> None:
         Resume(),
         rule=Rule(limits=LimitsBlock(session_ttl_default="1h")),
     )
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target="bob", ttl="30m")
     expires = datetime.fromisoformat(session.metadata.expires_at)
@@ -535,7 +535,7 @@ async def test_session_ttl_zero_no_expiry() -> None:
     hc = HubClient(link, hub=hub)
 
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     session = await alice.open(type="conversation", target="bob", ttl=0)
     assert session.metadata.expires_at is None

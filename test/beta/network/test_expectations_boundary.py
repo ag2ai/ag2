@@ -28,17 +28,13 @@ from datetime import datetime
 
 import pytest
 
-from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_TEXT,
     Envelope,
     Hub,
-    HubClient,
-    LocalLink,
-    Passport,
-    Resume,
 )
+from autogen.beta.network.adapters.base import AdapterResult
 from autogen.beta.network.adapters.conversation import ConversationAdapter
 from autogen.beta.network.hub import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
@@ -52,15 +48,45 @@ from autogen.beta.network.session import (
     Expectation,
     Participant,
     ParticipantRole,
+    ParticipantSchema,
+    SessionManifest,
     SessionMetadata,
     SessionState,
 )
+from autogen.beta.network.views.builtin import FullTranscript
 
-from ._helpers import ScriptedConfig, _MockClock
+from ._helpers import _MockClock
 
 
-def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+class _NoOpAdapter:
+    """Drives expectation tests with custom manifests.
+
+    The expectation sweeper only reads ``manifest.expectations`` and
+    walks ``_active_sessions`` — it never calls ``validate_send`` /
+    ``fold`` / ``on_accepted``. This stand-in covers the adapter
+    surface without exercising any choreography.
+    """
+
+    def __init__(self, manifest: SessionManifest) -> None:
+        self.manifest = manifest
+
+    def initial_state(self, _meta: SessionMetadata) -> dict:
+        return {}
+
+    def fold(self, _envelope: Envelope, state: dict) -> dict:
+        return state
+
+    def validate_create(self, _meta: SessionMetadata) -> None:
+        return
+
+    def validate_send(self, _meta: SessionMetadata, _envelope: Envelope, _state: dict) -> None:
+        return
+
+    def on_accepted(self, _meta: SessionMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
+        return AdapterResult()
+
+    def default_view_policy(self, _meta: SessionMetadata, _participant_id: str) -> FullTranscript:
+        return FullTranscript()
 
 
 def _conv_meta(
@@ -84,7 +110,7 @@ def _conv_meta(
     )
 
 
-def _ctx(meta: SessionMetadata, *, now: str, wal=None) -> ExpectationContext:
+def _ctx(meta: SessionMetadata, *, now: str, wal: list[Envelope] | None = None) -> ExpectationContext:
     now_dt = datetime.fromisoformat(now)
     return ExpectationContext(
         metadata=meta,
@@ -93,6 +119,38 @@ def _ctx(meta: SessionMetadata, *, now: str, wal=None) -> ExpectationContext:
         now_iso=now,
         now_seconds=now_dt.timestamp(),
     )
+
+
+def _inject_pending_session(
+    hub: Hub,
+    *,
+    session_id: str,
+    adapter_key: tuple[str, int],
+    clock: _MockClock,
+    pending_acks: tuple[str, ...] = ("bob",),
+) -> SessionMetadata:
+    """Inject a PENDING session metadata directly into the hub caches.
+
+    ``create_session`` would block on ``invite_ack_timeout`` waiting
+    for acks that never arrive; these tests need the session to stay
+    PENDING long enough for the sweeper to evaluate.
+    """
+    meta = SessionMetadata(
+        session_id=session_id,
+        manifest=hub._adapters[adapter_key].manifest,
+        creator_id="alice",
+        participants=[
+            Participant(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
+            Participant(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
+        ],
+        state=SessionState.PENDING,
+        created_at=clock(),
+        pending_acks=list(pending_acks),
+    )
+    hub._sessions[session_id] = meta
+    hub._active_sessions[session_id] = meta
+    hub._adapter_states[session_id] = {}
+    return meta
 
 
 class TestEvaluatorExactBoundary:
@@ -179,88 +237,30 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
         clock=clock,
     )
 
-    handler_calls: list[str] = []
+    handler_calls: list[tuple[str, str]] = []
 
     class CrashHandler:
         name = "crash"
 
-        async def handle(self, _hub, session_id: str, _violation) -> None:
+        async def handle(self, _hub: Hub, session_id: str, _violation: object) -> None:
             handler_calls.append(("crash", session_id))
             raise RuntimeError("boom")
 
     hub.register_violation_handler(CrashHandler())
-
-    # Custom adapter with a one-expectation manifest pointing at "crash".
-    from autogen.beta.network.adapters.base import AdapterResult
-    from autogen.beta.network.session import (
-        ParticipantSchema as PS,
-    )
-    from autogen.beta.network.session import (
-        SessionManifest as SM,
-    )
-
-    class TestAdapter:
-        def __init__(self) -> None:
-            self.manifest = SM(
+    hub.register_adapter(
+        _NoOpAdapter(
+            SessionManifest(
                 type="crash_test",
                 version=1,
-                participants=PS(min=2),
+                participants=ParticipantSchema(min=2),
                 expectations=[
                     Expectation(name="acks_within", on_violation="crash", params={"seconds": 0}),
                 ],
             )
-
-        def initial_state(self, _meta):
-            return {}
-
-        def fold(self, _env, state):
-            return state
-
-        def validate_create(self, _meta) -> None:
-            return
-
-        def validate_send(self, _meta, _env, _state) -> None:
-            return
-
-        def on_accepted(self, _meta, _env, _state):
-            return AdapterResult()
-
-        def default_view_policy(self, _meta, _pid):
-            from autogen.beta.network.views.builtin import FullTranscript
-
-            return FullTranscript()
-
-    hub.register_adapter(TestAdapter())
-
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
-    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-
-    # Setup: pending session with bob never acking → triggers the
-    # zero-timeout acks_within → CrashHandler fires → raises → sweeper
-    # MUST survive.
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    await bob.disconnect()  # bob ignores invites — guarantees session stays PENDING
-    # We need to construct the session in PENDING state. The standard
-    # create_session would block on ack timeout; instead we drive the
-    # sweeper after manually injecting the metadata.
-    from autogen.beta.network.session import Participant as P
-
-    meta = SessionMetadata(
-        session_id="s-crash",
-        manifest=hub._adapters[("crash_test", 1)].manifest,
-        creator_id=hc._clients[next(iter(hc._clients.keys()))].agent_id if hc._clients else "alice",
-        participants=[
-            P(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
-            P(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
-        ],
-        state=SessionState.PENDING,
-        created_at=clock(),
-        pending_acks=["bob"],
+        )
     )
-    hub._sessions["s-crash"] = meta
-    hub._active_sessions["s-crash"] = meta
-    hub._adapter_states["s-crash"] = {}
+
+    _inject_pending_session(hub, session_id="s-crash", adapter_key=("crash_test", 1), clock=clock)
 
     # First tick: handler raises but sweeper survives.
     clock.advance(1)  # 1s elapsed > 0s threshold
@@ -272,7 +272,6 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
     await hub._expectation_tick()
     assert len(handler_calls) == 1  # no re-fire
 
-    await hc.close()
     await hub.close()
 
 
@@ -296,82 +295,32 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
     class WarnHandler:
         name = "warn"
 
-        async def handle(self, _hub, session_id: str, violation) -> None:
+        async def handle(self, _hub: Hub, _session_id: str, _violation: object) -> None:
             fired.append((0, "warn"))
 
     class AuditHandler2:
         name = "audit2"
 
-        async def handle(self, _hub, session_id: str, violation) -> None:
+        async def handle(self, _hub: Hub, _session_id: str, _violation: object) -> None:
             fired.append((1, "audit2"))
 
     hub.register_violation_handler(WarnHandler())
     hub.register_violation_handler(AuditHandler2())
-
-    # Adapter with two acks_within expectations, different handlers.
-    from autogen.beta.network.adapters.base import AdapterResult
-    from autogen.beta.network.session import (
-        ParticipantSchema as PS,
-    )
-    from autogen.beta.network.session import (
-        SessionManifest as SM,
-    )
-
-    class DualExpAdapter:
-        def __init__(self) -> None:
-            self.manifest = SM(
+    hub.register_adapter(
+        _NoOpAdapter(
+            SessionManifest(
                 type="dual_test",
                 version=1,
-                participants=PS(min=2),
+                participants=ParticipantSchema(min=2),
                 expectations=[
                     Expectation(name="acks_within", on_violation="warn", params={"seconds": 30}),
                     Expectation(name="acks_within", on_violation="audit2", params={"seconds": 60}),
                 ],
             )
-
-        def initial_state(self, _meta):
-            return {}
-
-        def fold(self, _env, state):
-            return state
-
-        def validate_create(self, _meta) -> None:
-            return
-
-        def validate_send(self, _meta, _env, _state) -> None:
-            return
-
-        def on_accepted(self, _meta, _env, _state):
-            return AdapterResult()
-
-        def default_view_policy(self, _meta, _pid):
-            from autogen.beta.network.views.builtin import FullTranscript
-
-            return FullTranscript()
-
-    hub.register_adapter(DualExpAdapter())
-
-    link = LocalLink(hub)
-    hc = HubClient(link, hub=hub)
-    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-
-    from autogen.beta.network.session import Participant as P
-
-    meta = SessionMetadata(
-        session_id="s-dual",
-        manifest=hub._adapters[("dual_test", 1)].manifest,
-        creator_id="alice",
-        participants=[
-            P(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
-            P(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
-        ],
-        state=SessionState.PENDING,
-        created_at=clock(),
-        pending_acks=["bob"],
+        )
     )
-    hub._sessions["s-dual"] = meta
-    hub._active_sessions["s-dual"] = meta
-    hub._adapter_states["s-dual"] = {}
+
+    _inject_pending_session(hub, session_id="s-dual", adapter_key=("dual_test", 1), clock=clock)
 
     # 35s in: only the 30s expectation fires.
     clock.advance(35)
@@ -388,7 +337,6 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
     assert sum(1 for x in fired if x == (0, "warn")) == 1
     assert sum(1 for x in fired if x == (1, "audit2")) == 1
 
-    await hc.close()
     await hub.close()
 
 
@@ -403,65 +351,20 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
         expectation_sweep_interval=0,
         clock=clock,
     )
-
-    from autogen.beta.network.adapters.base import AdapterResult
-    from autogen.beta.network.session import (
-        ParticipantSchema as PS,
-    )
-    from autogen.beta.network.session import (
-        SessionManifest as SM,
-    )
-
-    class BogusAdapter:
-        def __init__(self) -> None:
-            self.manifest = SM(
+    hub.register_adapter(
+        _NoOpAdapter(
+            SessionManifest(
                 type="bogus",
                 version=1,
-                participants=PS(min=2),
+                participants=ParticipantSchema(min=2),
                 expectations=[
                     Expectation(name="nonexistent_evaluator", on_violation="audit", params={}),
                 ],
             )
-
-        def initial_state(self, _meta):
-            return {}
-
-        def fold(self, _env, state):
-            return state
-
-        def validate_create(self, _meta) -> None:
-            return
-
-        def validate_send(self, _meta, _env, _state) -> None:
-            return
-
-        def on_accepted(self, _meta, _env, _state):
-            return AdapterResult()
-
-        def default_view_policy(self, _meta, _pid):
-            from autogen.beta.network.views.builtin import FullTranscript
-
-            return FullTranscript()
-
-    hub.register_adapter(BogusAdapter())
-
-    from autogen.beta.network.session import Participant as P
-
-    meta = SessionMetadata(
-        session_id="s-bogus",
-        manifest=hub._adapters[("bogus", 1)].manifest,
-        creator_id="alice",
-        participants=[
-            P(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
-            P(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
-        ],
-        state=SessionState.PENDING,
-        created_at=clock(),
-        pending_acks=["bob"],
+        )
     )
-    hub._sessions["s-bogus"] = meta
-    hub._active_sessions["s-bogus"] = meta
-    hub._adapter_states["s-bogus"] = {}
+
+    _inject_pending_session(hub, session_id="s-bogus", adapter_key=("bogus", 1), clock=clock)
 
     clock.advance(60)
     # Must not raise.
@@ -481,65 +384,20 @@ async def test_unknown_handler_name_silently_ignored() -> None:
         expectation_sweep_interval=0,
         clock=clock,
     )
-
-    from autogen.beta.network.adapters.base import AdapterResult
-    from autogen.beta.network.session import (
-        ParticipantSchema as PS,
-    )
-    from autogen.beta.network.session import (
-        SessionManifest as SM,
-    )
-
-    class GhostHandlerAdapter:
-        def __init__(self) -> None:
-            self.manifest = SM(
+    hub.register_adapter(
+        _NoOpAdapter(
+            SessionManifest(
                 type="ghost",
                 version=1,
-                participants=PS(min=2),
+                participants=ParticipantSchema(min=2),
                 expectations=[
                     Expectation(name="acks_within", on_violation="ghost_handler", params={"seconds": 0}),
                 ],
             )
-
-        def initial_state(self, _meta):
-            return {}
-
-        def fold(self, _env, state):
-            return state
-
-        def validate_create(self, _meta) -> None:
-            return
-
-        def validate_send(self, _meta, _env, _state) -> None:
-            return
-
-        def on_accepted(self, _meta, _env, _state):
-            return AdapterResult()
-
-        def default_view_policy(self, _meta, _pid):
-            from autogen.beta.network.views.builtin import FullTranscript
-
-            return FullTranscript()
-
-    hub.register_adapter(GhostHandlerAdapter())
-
-    from autogen.beta.network.session import Participant as P
-
-    meta = SessionMetadata(
-        session_id="s-ghost",
-        manifest=hub._adapters[("ghost", 1)].manifest,
-        creator_id="alice",
-        participants=[
-            P(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
-            P(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
-        ],
-        state=SessionState.PENDING,
-        created_at=clock(),
-        pending_acks=["bob"],
+        )
     )
-    hub._sessions["s-ghost"] = meta
-    hub._active_sessions["s-ghost"] = meta
-    hub._adapter_states["s-ghost"] = {}
+
+    _inject_pending_session(hub, session_id="s-ghost", adapter_key=("ghost", 1), clock=clock)
 
     clock.advance(1)
     # Must not raise. Audit log should also stay empty since no

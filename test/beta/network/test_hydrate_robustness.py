@@ -276,7 +276,7 @@ async def test_hydrate_session_metadata_with_no_adapter_state_not_active(tmp_pat
     link = LocalLink(hub1)
     hc = HubClient(link, hub=hub1)
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
     session = await alice.open(type="conversation", target="bob")
     session_id = session.session_id
     await hc.close()
@@ -346,7 +346,7 @@ async def test_hydrate_terminal_session_not_in_active_cache(tmp_path) -> None:
     link = LocalLink(hub1)
     hc = HubClient(link, hub=hub1)
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     closed_session = await alice.open(type="conversation", target="bob")
     closed_id = closed_session.session_id

@@ -402,7 +402,7 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
 
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
+    await hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
     session = await alice.open(type="discussion", target=["bob", "carol"])
     pre_wal = await hub.read_wal(session.session_id)

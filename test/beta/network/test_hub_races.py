@@ -441,7 +441,7 @@ async def test_hub_close_with_active_sessions_clean_shutdown() -> None:
     hc = HubClient(link, hub=hub)
 
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     await alice.open(type="conversation", target="bob")
     assert hub._endpoint_tasks, "expected at least one endpoint task"
