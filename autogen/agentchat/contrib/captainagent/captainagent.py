@@ -28,7 +28,11 @@ class CaptainAgent(ConversableAgent):
             "agent_model": "gpt-4o",
         },
         "autobuild_build_config": {
-            "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 2048},
+            # Only one of `temperature` or `top_p` should be set per provider guidance
+            # (e.g. OpenAI / Anthropic both document this); some providers reject both
+            # at once. See issue #2102. Keep `temperature=1` (OpenAI's default) so
+            # behavior for users on the OpenAI default path is unchanged.
+            "default_llm_config": {"temperature": 1, "max_tokens": 2048},
             "code_execution_config": {
                 "timeout": 300,
                 "work_dir": "groupchat",

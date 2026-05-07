@@ -101,6 +101,20 @@ def test_captain_agent_with_library(credentials_all: Credentials):
     print(result)
 
 
+def test_default_nested_config_does_not_set_both_temperature_and_top_p():
+    """Regression for #2102: the autobuild default applied to expert agents must not
+    silently set both ``temperature`` and ``top_p`` — provider docs (OpenAI, Anthropic)
+    recommend tuning only one, and some providers reject both being set together.
+    """
+    default_llm_config = CaptainAgent.DEFAULT_NESTED_CONFIG["autobuild_build_config"]["default_llm_config"]
+
+    has_temperature = "temperature" in default_llm_config
+    has_top_p = "top_p" in default_llm_config
+    assert not (has_temperature and has_top_p), (
+        f"DEFAULT_NESTED_CONFIG sets both temperature and top_p: {default_llm_config}. Pick one — see issue #2102."
+    )
+
+
 if __name__ == "__main__":
     test_captain_agent_from_scratch()
     test_captain_agent_with_library()
