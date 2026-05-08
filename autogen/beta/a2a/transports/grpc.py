@@ -3,47 +3,24 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import grpc
+from a2a.server.agent_execution import AgentExecutor
 from a2a.server.request_handlers import DefaultRequestHandlerV2
+from a2a.server.request_handlers.grpc_handler import GrpcHandler
 from a2a.server.tasks import (
     InMemoryTaskStore,
     PushNotificationConfigStore,
     PushNotificationSender,
     TaskStore,
 )
-from a2a.types import AgentCard
+from a2a.types import AgentCard, a2a_pb2_grpc
 
-if TYPE_CHECKING:
-    import grpc as _grpc_t  # noqa: F401  # for type hints only
-    from a2a.server.agent_execution import AgentExecutor
-
-    from ._http import ExtendedCardModifier  # noqa: F401  # forward-ref string annotation
-
-try:
-    import grpc
-    from a2a.server.request_handlers.grpc_handler import GrpcHandler
-    from a2a.types import a2a_pb2_grpc
-
-    _GRPC_AVAILABLE = True
-except ImportError:
-    _GRPC_AVAILABLE = False
-
-__all__ = (
-    "build_grpc_server",
-    "default_grpc_channel_factory",
-)
+from ._http import ExtendedCardModifier
 
 
-def _require_grpc() -> None:
-    if not _GRPC_AVAILABLE:
-        raise ImportError(
-            "gRPC transport requires 'grpcio', 'grpcio-tools', and 'grpcio-status'. "
-            "Install with: pip install 'a2a-sdk[grpc]'"
-        )
-
-
-def default_grpc_channel_factory(url: str) -> "_grpc_t.aio.Channel":
+def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:
     """Default insecure ``grpc.aio.Channel`` factory.
 
     Strips ``grpc://`` / ``grpc+insecure://`` scheme prefixes if present —
@@ -53,7 +30,6 @@ def default_grpc_channel_factory(url: str) -> "_grpc_t.aio.Channel":
 
     Insecure only — TLS lands in a follow-up alongside cert handling.
     """
-    _require_grpc()
     for prefix in ("grpc+insecure://", "grpc://"):
         if url.startswith(prefix):
             url = url[len(prefix) :]
@@ -63,7 +39,7 @@ def default_grpc_channel_factory(url: str) -> "_grpc_t.aio.Channel":
 
 def build_grpc_server(
     *,
-    agent_executor: "AgentExecutor",
+    agent_executor: AgentExecutor,
     agent_card: AgentCard,
     bind: str,
     extended_agent_card: AgentCard | None = None,
@@ -72,7 +48,7 @@ def build_grpc_server(
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
     options: Sequence[tuple[str, Any]] = (),
-) -> "_grpc_t.aio.Server":
+) -> grpc.aio.Server:
     """Assemble a ``grpc.aio.Server`` exposing the A2A service for an agent.
 
     Counterpart to ``build_jsonrpc_asgi`` / ``build_rest_asgi`` for the
@@ -87,8 +63,6 @@ def build_grpc_server(
     Insecure binding only in this iteration; TLS support is a follow-up
     that will land alongside cert handling.
     """
-    _require_grpc()
-
     if extended_agent_card is not None:
         agent_card.capabilities.extended_agent_card = True
     if push_config_store is not None:

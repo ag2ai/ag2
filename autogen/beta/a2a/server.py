@@ -11,7 +11,8 @@ from a2a.server.tasks import (
     TaskStore,
 )
 from a2a.types import AgentCard
-from starlette.applications import Starlette
+
+from autogen.beta.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
@@ -26,9 +27,9 @@ from .transports.jsonrpc import (
 from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
-    import grpc as _grpc_t
+    from grpc.aio import Server
+    from starlette.applications import Starlette
 
-    from autogen.beta.agent import Agent
 
 TransportName = Literal["jsonrpc", "rest", "grpc"]
 
@@ -83,7 +84,7 @@ class A2AServer:
 
     def __init__(
         self,
-        agent: "Agent",
+        agent: Agent,
         *,
         url: str = "http://localhost:8000",
         card: AgentCard | None = None,
@@ -126,7 +127,7 @@ class A2AServer:
         self._executor = AgentExecutor(agent)
 
     @property
-    def agent(self) -> "Agent":
+    def agent(self) -> Agent:
         return self._agent
 
     @property
@@ -159,7 +160,7 @@ class A2AServer:
         *,
         rpc_url: str = "/",
         card_url: str = DEFAULT_AGENT_CARD_PATH,
-    ) -> Starlette:
+    ) -> "Starlette":
         """Build a Starlette ASGI app exposing JSON-RPC routes + agent card."""
         self._require_transport("jsonrpc")
         return build_jsonrpc_asgi(
@@ -181,7 +182,7 @@ class A2AServer:
         self,
         *,
         card_url: str = DEFAULT_AGENT_CARD_PATH,
-    ) -> Starlette:
+    ) -> "Starlette":
         """Build a Starlette ASGI app exposing REST routes + agent card."""
         self._require_transport("rest")
         return build_rest_asgi(
@@ -204,7 +205,7 @@ class A2AServer:
         *,
         bind: str,
         options: Sequence[tuple[str, Any]] = (),
-    ) -> "_grpc_t.aio.Server":
+    ) -> "Server":
         """Build a ``grpc.aio.Server`` bound to ``bind`` (e.g. ``"0.0.0.0:50051"``).
 
         Insecure binding only. Caller is responsible for ``await server.start()``
@@ -223,12 +224,6 @@ class A2AServer:
             push_sender=self._push_sender,
             options=options,
         )
-
-    def _require_transport(self, name: TransportName) -> None:
-        if name not in self._transports:
-            raise RuntimeError(
-                f"transport {name!r} not enabled — pass transports={(name,)!r} (or include {name!r}) to A2AServer"
-            )
 
     def _snapshot_middlewares(self) -> list[tuple[type, Mapping[str, Any]]]:
         return [(cls, dict(kwargs)) for cls, kwargs in self._middlewares]

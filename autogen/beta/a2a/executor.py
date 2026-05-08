@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import logging
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
@@ -14,8 +13,10 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Part
 
-from autogen.beta.annotations import Context as ContextWithInput
+from autogen.beta.agent import Agent
+from autogen.beta.annotations import Context
 from autogen.beta.events import (
+    BaseEvent,
     ClientToolCallEvent,
     ModelMessageChunk,
     ModelRequest,
@@ -33,12 +34,6 @@ from .extension import CONTEXT_UPDATE_METADATA_KEY, MIME_TOOL_CALL
 from .mappers.messages import ParsedMessage, parse_message
 from .mappers.parts import data_part
 from .mappers.tools import call_to_payload
-
-if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
-    from autogen.beta.events import BaseEvent
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -69,7 +64,7 @@ class AgentExecutor(A2AAgentExecutorBase):
     via ``Agent._execute(ToolResultsEvent(...))`` to continue the turn.
     """
 
-    def __init__(self, agent: "Agent") -> None:
+    def __init__(self, agent: Agent) -> None:
         self._agent = agent
         self._sessions: dict[str, _Session] = {}
 
@@ -103,7 +98,6 @@ class AgentExecutor(A2AAgentExecutorBase):
             await self._run_one_turn(session, parsed, updater)
         except Exception:
             self._sessions.pop(task_id, None)
-            logger.exception("A2A AgentExecutor failed for task=%s", task_id)
             await updater.failed()
             return
 
@@ -216,7 +210,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         client = agent.config.create()
 
         merged_variables = {**dict(agent._agent_variables), **incoming_variables}
-        ctx = ContextWithInput(
+        ctx = Context(
             session.stream,
             prompt=list(agent._system_prompt),
             dependencies=dict(agent._agent_dependencies),
@@ -238,7 +232,7 @@ def _make_chunk_handler(
     text_artifact_id: str,
     text_pieces: list[str],
 ):
-    async def handler(ev: "ModelMessageChunk", _: ContextWithInput) -> None:
+    async def handler(ev: "ModelMessageChunk", _: Context) -> None:
         text_pieces.append(ev.content)
         await updater.add_artifact(
             parts=[Part(text=ev.content)],
@@ -250,7 +244,7 @@ def _make_chunk_handler(
 
 
 def _make_client_tool_call_handler(updater: TaskUpdater, session: _Session):
-    async def handler(ev: "ClientToolCallEvent", _: ContextWithInput) -> None:
+    async def handler(ev: "ClientToolCallEvent", _: Context) -> None:
         session.pending_calls[ev.id] = ev
         payload = call_to_payload(ToolCallEvent(id=ev.id, name=ev.name, arguments=ev.arguments))
         await updater.add_artifact(

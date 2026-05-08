@@ -3,21 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 import httpx
 from a2a.client import A2ACardResolver, Client, ClientCallInterceptor, ClientConfig, ClientFactory
 from a2a.client.client_factory import TransportProtocol
 from a2a.client.errors import AgentCardResolutionError
+from a2a.server.context import ServerCallContext
 from a2a.types import AgentCard
 
 from .grpc import default_grpc_channel_factory
 
-if TYPE_CHECKING:
-    from a2a.server.context import ServerCallContext
-
 CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
-ExtendedCardModifier: TypeAlias = Callable[[AgentCard, "ServerCallContext"], Awaitable[AgentCard]]
+ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
 
 # Legacy A2A v0.x agent-card path. SDK 1.x dropped this constant; we keep
 # it for backward compatibility with old clients/servers that still rely

@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from a2a.server.agent_execution import AgentExecutor
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.routes.agent_card_routes import create_agent_card_routes
 from a2a.server.routes.rest_routes import create_rest_routes
@@ -21,14 +22,6 @@ from starlette.routing import BaseRoute
 
 from ._http import DEFAULT_AGENT_CARD_PATH, LEGACY_AGENT_CARD_PATH
 from .jsonrpc import CardModifier, ExtendedCardModifier
-
-if TYPE_CHECKING:
-    from a2a.server.agent_execution import AgentExecutor
-
-__all__ = (
-    "build_rest_asgi",
-    "build_rest_routes",
-)
 
 
 def build_rest_routes(
@@ -47,7 +40,7 @@ def build_rest_routes(
 
 def build_rest_asgi(
     *,
-    agent_executor: "AgentExecutor",
+    agent_executor: AgentExecutor,
     agent_card: AgentCard,
     extended_agent_card: AgentCard | None = None,
     card_modifier: CardModifier | None = None,

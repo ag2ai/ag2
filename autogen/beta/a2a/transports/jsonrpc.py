@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from a2a.server.agent_execution import AgentExecutor
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.routes.agent_card_routes import create_agent_card_routes
 from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
@@ -24,24 +25,6 @@ from ._http import (
     LEGACY_AGENT_CARD_PATH,
     CardModifier,
     ExtendedCardModifier,
-    fetch_card,
-    make_a2a_client,
-    make_httpx_client,
-)
-
-if TYPE_CHECKING:
-    from a2a.server.agent_execution import AgentExecutor
-
-__all__ = (
-    "DEFAULT_AGENT_CARD_PATH",
-    "LEGACY_AGENT_CARD_PATH",
-    "CardModifier",
-    "ExtendedCardModifier",
-    "build_jsonrpc_asgi",
-    "build_jsonrpc_routes",
-    "fetch_card",
-    "make_a2a_client",
-    "make_httpx_client",
 )
 
 
@@ -56,7 +39,7 @@ def build_jsonrpc_routes(
 
 def build_jsonrpc_asgi(
     *,
-    agent_executor: "AgentExecutor",
+    agent_executor: AgentExecutor,
     agent_card: AgentCard,
     extended_agent_card: AgentCard | None = None,
     card_modifier: CardModifier | None = None,

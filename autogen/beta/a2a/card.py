@@ -3,16 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCapabilities, AgentCard, AgentExtension, AgentInterface, AgentSkill
 
+from autogen.beta.agent import Agent
+
 from .extension import EXTENSION_URI
-
-if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
-
 
 _DEFAULT_VERSION = "1.0.0"
 _DEFAULT_INPUT_MODES = ("text/plain", "application/json")
@@ -22,7 +20,7 @@ TransportName = Literal["jsonrpc", "rest", "grpc"]
 
 
 def build_card(
-    agent: "Agent",
+    agent: Agent,
     *,
     url: str,
     transports: Sequence[TransportName] = ("jsonrpc",),
@@ -103,7 +101,7 @@ def _build_interfaces(
     return interfaces
 
 
-def _agent_description(agent: "Agent") -> str:
+def _agent_description(agent: Agent) -> str:
     prompt = agent._system_prompt if agent._system_prompt else None
     if prompt:
         return prompt[0]
