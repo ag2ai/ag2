@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import inspect
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +17,7 @@ from test.credentials import Credentials
 
 with optional_import_block():
     from langchain.tools import tool as langchain_tool
+    from langchain_core.tools import BaseTool as LangchainBaseTool
 
 
 # skip if python version is not >= 3.9
@@ -123,3 +126,71 @@ When using the search tool, input should be:
         user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain, Use max 100 characters", max_turns=5)
 
         self.mock.assert_called()
+
+
+# Regression for #1402: async Langchain tools must be wrapped with an async
+# function so AG2 awaits `arun` instead of synchronously calling `run`, which
+# would block the event loop when invoked from `a_initiate_chat`.
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityAsyncTool:
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.mock = MagicMock()
+
+        @langchain_tool  # type: ignore[misc]
+        async def async_search_tool(query: str) -> str:
+            """Async lookup."""
+            self.mock(query)
+            return f"async result: {query}"
+
+        self.async_search_tool = async_search_tool
+        self.tool = LangChainInteroperability.convert_tool(async_search_tool)
+
+    def test_wrapper_is_async(self) -> None:
+        # The Tool's underlying callable must be a coroutine function so that
+        # AG2's async tool dispatch path awaits it instead of calling it
+        # synchronously.
+        assert inspect.iscoroutinefunction(self.tool.func), (
+            "expected an async wrapper around langchain_tool.arun for an async tool"
+        )
+
+    def test_arun_is_invoked(self) -> None:
+        model_type = self.async_search_tool.get_input_schema()
+        tool_input = model_type(query="ag2")  # type: ignore[misc]
+
+        result = asyncio.run(self.tool.func(tool_input=tool_input))
+
+        assert result == "async result: ag2"
+        self.mock.assert_called_once_with("ag2")
+
+
+# Direct BaseTool subclasses do not expose `coroutine`, so async detection has
+# to fall through to the `_arun` override check.
+@run_for_optional_imports("langchain", "interop-langchain")
+class TestLangChainInteroperabilityBaseToolAsync:
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.mock = MagicMock()
+        outer_mock = self.mock
+
+        class AsyncEcho(LangchainBaseTool):  # type: ignore[no-any-unimported,misc]
+            name: str = "async_echo"
+            description: str = "Echo the input asynchronously."
+
+            def _run(self, query: str) -> str:  # type: ignore[override]
+                raise RuntimeError("sync path must not be invoked for async-native tools")
+
+            async def _arun(self, query: str) -> str:  # type: ignore[override]
+                outer_mock(query)
+                return f"echo: {query}"
+
+        self.langchain_tool = AsyncEcho()
+        self.tool = LangChainInteroperability.convert_tool(self.langchain_tool)
+
+    def test_async_wrapper(self) -> None:
+        assert inspect.iscoroutinefunction(self.tool.func)
+
+        result = asyncio.run(self.tool.func(tool_input={"query": "hello"}))
+
+        assert result == "echo: hello"
+        self.mock.assert_called_once_with("hello")

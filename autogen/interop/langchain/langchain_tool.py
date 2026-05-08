@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from typing import Any
 
 from ...doc_utils import export_module
@@ -13,6 +14,29 @@ __all__ = ["LangChainInteroperability"]
 
 with optional_import_block():
     from langchain_core.tools import BaseTool as LangchainTool
+
+
+def _is_async_langchain_tool(tool: Any) -> bool:
+    """Return True when the Langchain tool implements an async path.
+
+    Two cases qualify:
+    1. Langchain's StructuredTool / Tool exposes a `coroutine` attribute that
+       holds the original async function. It is `None` when the wrapped
+       function is sync, and a coroutine function when it is async.
+    2. BaseTool subclasses that override `_arun` directly (without going via
+       StructuredTool's `coroutine` indirection) are async-native; the default
+       `BaseTool._arun` only delegates back to `_run` in a worker thread, so
+       routing those through `arun` would not buy us anything.
+    """
+    if hasattr(tool, "coroutine"):
+        # StructuredTool / Tool path: the only reliable signal is the coroutine
+        # field. The class always overrides `_arun`, so the class-level check
+        # below would mis-classify sync tools as async.
+        return getattr(tool, "coroutine") is not None
+
+    base_arun = getattr(LangchainTool, "_arun", None)
+    cls_arun = getattr(type(tool), "_arun", None)
+    return cls_arun is not base_arun and asyncio.iscoroutinefunction(cls_arun)
 
 
 @register_interoperable_class("langchain")
@@ -56,8 +80,17 @@ class LangChainInteroperability:
 
         model_type = langchain_tool.get_input_schema()
 
-        def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
-            return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
+        if _is_async_langchain_tool(langchain_tool):
+            # Use Langchain's async entry point so that async-native tools
+            # don't block the event loop when invoked from `a_initiate_chat`
+            # or any other async caller. AG2's Tool already accepts coroutine
+            # functions as `func_or_tool`. See issue #1402.
+            async def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+                return await langchain_tool.arun(tool_input.model_dump())  # type: ignore[attr-defined]
+        else:
+
+            def func(tool_input: model_type) -> Any:  # type: ignore[valid-type, no-redef]
+                return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
 
         return Tool(
             name=langchain_tool.name,
