@@ -6,7 +6,7 @@ from autogen.beta.exceptions import missing_additional_dependency, missing_optio
 
 from .observer import AudioPlayerObserver, TTSObserver
 from .protocols import AudioPlayer, TTSConfig
-from .realtime import LiveAgent, RealtimeSTTConfig
+from .realtime import LiveAgent, RealtimeConfig
 from .stt import STTConfig, VoiceInput
 
 try:
@@ -17,21 +17,25 @@ except ImportError as e:
     SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)  # type: ignore[misc]
 
 try:
-    from .openai import AudioConfig, InputConfig, OpenAIRealTimeConfig
+    from . import openai
+    from .openai import AudioOutput, InputConfig, TextOutput
+    from .openai import RealTimeConfig as OpenAIRealTimeConfig
     from .openai import STTConfig as OpenAITranscriber
     from .openai import STTTranslationConfig as OpenAITranslationTranscriber
     from .openai import TTSConfig as OpenAISynthesizer
 except ImportError as e:
-    AudioConfig = missing_optional_dependency("AudioConfig", "openai", e)  # type: ignore[misc]
+    openai = missing_optional_dependency("openai", "openai", e)  # type: ignore[misc,assignment]
+    AudioOutput = missing_optional_dependency("AudioOutput", "openai", e)  # type: ignore[misc]
+    TextOutput = missing_optional_dependency("TextOutput", "openai", e)  # type: ignore[misc]
     InputConfig = missing_optional_dependency("InputConfig", "openai", e)  # type: ignore[misc]
-    OpenAIRealTimeConfig = missing_optional_dependency("OpenAIRealTimeConfig", "openai", e)  # type: ignore[misc]
+    OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)  # type: ignore[misc]
     OpenAITranscriber = missing_optional_dependency("OpenAITranscriber", "openai", e)  # type: ignore[misc]
     OpenAITranslationTranscriber = missing_optional_dependency("OpenAITranslationTranscriber", "openai", e)  # type: ignore[misc]
     OpenAISynthesizer = missing_optional_dependency("OpenAISynthesizer", "openai", e)  # type: ignore[misc]
 
 
 __all__ = (
-    "AudioConfig",
+    "AudioOutput",
     "AudioPlayer",
     "AudioPlayerObserver",
     "InputConfig",
@@ -40,11 +44,13 @@ __all__ = (
     "OpenAISynthesizer",
     "OpenAITranscriber",
     "OpenAITranslationTranscriber",
-    "RealtimeSTTConfig",
+    "RealtimeConfig",
     "STTConfig",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",
     "TTSConfig",
     "TTSObserver",
+    "TextOutput",
     "VoiceInput",
+    "openai",
 )

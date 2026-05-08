@@ -47,7 +47,7 @@ from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 from .protocols import TTSConfig as TTSConfigProtocol
-from .realtime import RealtimeSTTConfig
+from .realtime import RealtimeConfig
 from .stt import STTConfig as STTConfigProtocol
 from .stt import VoiceInput
 
@@ -92,8 +92,8 @@ ModelName = Literal[
 
 
 @dataclass(slots=True)
-class AudioConfig:
-    """Output-side audio knobs for the realtime session.
+class AudioOutput:
+    """Audio output config for the realtime session.
 
     Mirrors ``openai.types.realtime.RealtimeAudioConfigOutputParam``.
     """
@@ -106,18 +106,23 @@ class AudioConfig:
 
 
 @dataclass(slots=True)
+class TextOutput:
+    """Text-only output for the realtime session.
+
+    Disables audio output; the model returns raw text via ``ModelMessageChunk``.
+    """
+
+
+@dataclass(slots=True)
 class InputConfig:
     """Input-side audio knobs for the realtime session.
 
-    Mirrors ``openai.types.realtime.RealtimeAudioConfigInputParam``, with the
-    extra ``transcribe_text`` flag that opts the session into the ``text``
-    output modality.
+    Mirrors ``openai.types.realtime.RealtimeAudioConfigInputParam``.
     """
 
     format: RealtimeAudioFormatsParam = field(
         default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
     )
-    transcribe_text: bool = False
     transcription: AudioTranscriptionParam | None = None
     noise_reduction: NoiseReduction | None = None
     turn_detection: RealtimeAudioInputTurnDetectionParam | None = field(
@@ -204,10 +209,10 @@ class TTSConfig(TTSConfigProtocol[bytes]):
         return await response.aread()
 
 
-class OpenAIRealTimeConfig(RealtimeSTTConfig):
+class RealTimeConfig(RealtimeConfig):
     """Realtime STT config backed by OpenAI's bidirectional realtime API.
 
-    Implements the `RealtimeSTTConfig` protocol — call `session(...)` to open
+    Implements the `RealtimeConfig` protocol — call `session(...)` to open
     a connection that pumps captured audio into the API and emits transcription
     events on the supplied context.
     """
@@ -216,7 +221,7 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
         self,
         model: "ModelName | str",
         *,
-        audio: AudioConfig | None = None,
+        output: AudioOutput | TextOutput | None = None,
         input: InputConfig | None = None,
         max_output_tokens: int | Literal["inf"] | None = None,
         tool_choice: RealtimeToolChoiceConfigParam | None = None,
@@ -226,6 +231,11 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
     ) -> None:
         self.model = model
 
+        if output is None:
+            output = AudioOutput()
+        if input is None:
+            input = InputConfig()
+
         self._session: RealtimeSessionCreateRequestParam = {"type": "realtime"}
         if max_output_tokens is not None:
             self._session["max_output_tokens"] = max_output_tokens
@@ -234,32 +244,31 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
         if tracing is not None:
             self._session["tracing"] = tracing
 
-        modalities: list[Literal["text", "audio"]] = []
         audio_config: RealtimeAudioConfigParam = {}
-        if audio is not None:
-            modalities.append("audio")
-            audio_config["output"] = RealtimeAudioConfigOutputParam(
-                voice=audio.voice,
-                format=audio.format,
-                speed=audio.speed,
-            )
-        if input is not None:
-            input_param: RealtimeAudioConfigInputParam = {
-                "format": input.format,
-                "turn_detection": input.turn_detection,
-            }
-            if input.transcribe_text:
-                modalities.append("text")
-            if input.transcription is not None:
-                input_param["transcription"] = input.transcription
-            if input.noise_reduction is not None:
-                input_param["noise_reduction"] = input.noise_reduction
-            audio_config["input"] = input_param
 
-        if audio_config:
-            self._session["audio"] = audio_config
-        if modalities:
-            self._session["output_modalities"] = list(dict.fromkeys(modalities))
+        modality: Literal["text", "audio"]
+        if isinstance(output, AudioOutput):
+            modality = "audio"
+            audio_config["output"] = RealtimeAudioConfigOutputParam(
+                voice=output.voice,
+                format=output.format,
+                speed=output.speed,
+            )
+        else:
+            modality = "text"
+
+        input_param: RealtimeAudioConfigInputParam = {
+            "format": input.format,
+            "turn_detection": input.turn_detection,
+        }
+        if input.transcription is not None:
+            input_param["transcription"] = input.transcription
+        if input.noise_reduction is not None:
+            input_param["noise_reduction"] = input.noise_reduction
+        audio_config["input"] = input_param
+
+        self._session["audio"] = audio_config
+        self._session["output_modalities"] = [modality]
 
         self._session_overrides: RealtimeSessionCreateRequestParam = session or {"type": "realtime"}
 
@@ -361,7 +370,13 @@ async def _pump_events(
             await context.send(TranscriptionCompletedEvent(event.transcript))
         elif event.type == "response.output_audio.delta":
             await context.send(SynthesizedAudioEvent(base64.b64decode(event.delta)))
-        elif event.type == "response.output_text.delta":
+        elif (
+            # voice + text output
+            event.type == "response.output_audio_transcript.delta"
+            or
+            # raw text output
+            event.type == "response.output_text.delta"
+        ):
             text += event.delta
             await context.send(ModelMessageChunk(event.delta))
         elif event.type == "response.output_item.done":

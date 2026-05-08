@@ -25,7 +25,7 @@ from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
 
-class RealtimeSTTConfig(Protocol):
+class RealtimeConfig(Protocol):
     """A speech-to-text config that holds an open bidirectional session.
 
     Unlike `STTConfig` (one-shot transcribe), realtime configs run for the
@@ -69,7 +69,7 @@ class LiveAgent:
         name: str,
         prompt: PromptType | Iterable[PromptType] = (),
         *,
-        config: RealtimeSTTConfig,
+        config: RealtimeConfig,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
         middleware: Iterable[MiddlewareFactory] = (),
@@ -234,7 +234,7 @@ class LiveAgent:
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         prompt: Iterable[str] = (),
-        config: RealtimeSTTConfig | None = None,
+        config: RealtimeConfig | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
