@@ -3,15 +3,15 @@ import asyncio
 from autogen.beta.events import ModelMessageChunk
 from autogen.beta.live import (
     LiveAgent,
+    OpenAIRealTimeConfig,
     SoundDevicePlayer,
     SoundDeviceRecorder,
-    openai,
 )
 
 agent = LiveAgent(
     name="assistant",
     prompt="You are a helpful voice assistant.",
-    config=openai.RealTimeConfig("gpt-realtime-2"),
+    config=OpenAIRealTimeConfig("gpt-realtime-2"),
 )
 
 
