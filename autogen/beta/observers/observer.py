@@ -24,7 +24,7 @@ can register either kind via a single ``register(stack, ctx)`` call.
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass
 from typing import Any, Protocol, overload, runtime_checkable
 
@@ -47,14 +47,14 @@ __all__ = (
 class Observer(Protocol):
     """Registers stream subscriptions under the caller's ExitStack."""
 
-    def register(self, stack: ExitStack, context: Context) -> None: ...
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None: ...
 
 
 class CompositeObserver(Observer):
     def __init__(self, *observers: Observer) -> None:
         self._observers = observers
 
-    def register(self, stack: ExitStack, context: Context) -> None:
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         for observer in self._observers:
             observer.register(stack, context)
 
@@ -76,7 +76,7 @@ class SimpleObserver:
     interrupt: bool = False
     sync_to_thread: bool = True
 
-    def register(self, stack: ExitStack, context: Context) -> None:
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         stack.enter_context(
             context.stream.sub_scope(
                 self.callback,
@@ -98,7 +98,7 @@ class StreamObserver(SimpleObserver):
 
     condition: Condition
 
-    def register(self, stack: ExitStack, context: Context) -> None:
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         stack.enter_context(
             context.stream.where(self.condition).sub_scope(
                 self.callback,
@@ -129,7 +129,7 @@ class BaseObserver(ABC):
         self._watch = watch
         self._ctx: Context | None = None
 
-    def register(self, stack: ExitStack, context: Context) -> None:
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         if self._watch.is_armed:
             self._watch.disarm()
         self._ctx = context

@@ -51,7 +51,7 @@ def _make_config(query: str, *, final_reply: str = "done", tool_name: str = "tav
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schema(self, context: ConversationContext) -> None:
+    async def test_default_schema(self, context: Context) -> None:
         tavily = TavilySearchTool(api_key="test")
 
         [schema] = await tavily.schemas(context)
@@ -62,7 +62,7 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_schema(self, context: ConversationContext) -> None:
+    async def test_custom_schema(self, context: Context) -> None:
         tavily = TavilySearchTool(api_key="test", name="my_search", description="Custom search tool.")
 
         [schema] = await tavily.schemas(context)

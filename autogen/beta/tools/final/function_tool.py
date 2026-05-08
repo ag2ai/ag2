@@ -102,7 +102,7 @@ class FunctionTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),

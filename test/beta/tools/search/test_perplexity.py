@@ -91,7 +91,7 @@ SAMPLE_SEARCH_RESULTS = [
 
 @pytest.mark.asyncio
 class TestSchema:
-    async def test_default_schemas(self, context: ConversationContext) -> None:
+    async def test_default_schemas(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
         schemas = list(await toolkit.schemas(context))
@@ -99,7 +99,7 @@ class TestSchema:
         names = [s.function.name for s in schemas]
         assert names == ["perplexity_search", "perplexity_answer"]
 
-    async def test_search_schema_has_query_param(self, context: ConversationContext) -> None:
+    async def test_search_schema_has_query_param(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
         schemas = list(await toolkit.schemas(context))
@@ -110,7 +110,7 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_answer_schema_has_query_param(self, context: ConversationContext) -> None:
+    async def test_answer_schema_has_query_param(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
         schemas = list(await toolkit.schemas(context))
@@ -121,7 +121,7 @@ class TestSchema:
             "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
         })
 
-    async def test_custom_search_name_and_description(self, context: ConversationContext) -> None:
+    async def test_custom_search_name_and_description(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
         custom = toolkit.search(name="web_search", description="Custom search.")
 
@@ -130,7 +130,7 @@ class TestSchema:
         assert schema.function.name == "web_search"
         assert schema.function.description == "Custom search."
 
-    async def test_custom_answer_name_and_description(self, context: ConversationContext) -> None:
+    async def test_custom_answer_name_and_description(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
         custom = toolkit.answer(name="ask_perplexity", description="Custom answer.")
 

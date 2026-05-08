@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import AsyncIterator, Callable, Iterable
-from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Protocol
 
 from fast_depends import Provider
@@ -11,7 +11,8 @@ from fast_depends.pydantic import PydanticSerializer
 
 from autogen.beta.agent import HumanHook, PromptType, _wrap_prompt_hook, wrap_hitl
 from autogen.beta.context import ConversationContext, Stream
-from autogen.beta.events import HumanInputRequest, ModelRequest
+from autogen.beta.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
+from autogen.beta.observers import Observer
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.executor import ToolExecutor
 from autogen.beta.tools.final import FunctionTool, FunctionToolSchema
@@ -63,11 +64,12 @@ class LiveAgent:
         prompt: PromptType | Iterable[PromptType] = (),
         *,
         config: RealtimeSTTConfig,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         hitl_hook: HumanHook | None = None,
-        tools: Iterable[Callable[..., Any] | Tool] = (),
+        observers: Iterable[Observer] = (),
     ) -> None:
         self.name = name
 
@@ -80,6 +82,7 @@ class LiveAgent:
 
         self._dependency_provider = Provider()
         self._tools: list[Tool] = [FunctionTool.ensure_tool(t, provider=self._dependency_provider) for t in tools]
+        self._observers: list[Observer] = list(observers)
         self._tool_executor = ToolExecutor(
             PydanticSerializer(
                 pydantic_config={"arbitrary_types_allowed": True},
@@ -135,7 +138,21 @@ class LiveAgent:
                 self._config.session(context, instructions=instructions, tools=all_schemas),
             )
 
-            yield context
+            for obs in self._observers:
+                obs.register(s, context)
+
+            for obs in self._observers:
+                await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
+
+            try:
+                yield context
+
+            finally:
+                for obs in self._observers:
+                    with suppress(Exception):
+                        await context.send(
+                            ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)),
+                        )
 
     async def _resolve_instructions(self, context: ConversationContext) -> list[str]:
         request = ModelRequest([])

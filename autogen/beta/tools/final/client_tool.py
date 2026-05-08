@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from functools import partial
 from typing import Any
 
@@ -30,7 +30,7 @@ class ClientTool(Tool):
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         middleware: Iterable["BaseMiddleware"] = (),
