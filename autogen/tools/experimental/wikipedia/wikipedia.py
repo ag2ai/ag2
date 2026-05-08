@@ -96,7 +96,7 @@ class WikipediaClient:
             "srprop": "size|wordcount|timestamp",
         }
 
-        response = requests.get(url=self.base_url, params=params, headers=self.headers)
+        response = requests.get(url=self.base_url, params=params, headers=self.headers, timeout=30)
         response.raise_for_status()
         data = response.json()
         search_data = data.get("query", {}).get("search", [])

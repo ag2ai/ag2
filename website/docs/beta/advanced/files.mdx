@@ -1,0 +1,106 @@
+---
+title: Files API
+---
+
+The Beta Files API provides a provider-agnostic interface for uploading, listing, reading, and deleting files used by multimodal workflows. It wraps each provider's native files endpoint behind a single async client.
+
+## When to use Files API
+
+Use `#!python FilesAPI` when you want to:
+
+- Upload large assets once, then reference them by `#!python file_id`
+- Manage file lifecycle in your app (list and delete stale files)
+- Keep file handling logic consistent across supported providers
+
+## Supported providers
+
+`#!python FilesAPI` is available for:
+
+- `#!python OpenAIConfig`
+- `#!python OpenAIResponsesConfig`
+- `#!python AnthropicConfig`
+- `#!python GeminiConfig`
+
+!!! note
+    Gemini does not support downloading file bytes via its Files API. `#!python FilesAPI.read()` raises `#!python NotImplementedError` for Gemini.
+
+## Create a Files API client
+
+```python linenums="1"
+from autogen.beta import FilesAPI
+from autogen.beta.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(
+    model="gpt-5-mini",
+    api_key="YOUR_API_KEY",
+)
+files = FilesAPI(config)
+```
+
+## Upload files
+
+You can upload from a local path or from in-memory bytes.
+
+### Upload from local path
+
+```python linenums="1"
+uploaded = await files.upload(path="report.pdf", purpose="assistants")
+print(uploaded.file_id)
+```
+
+### Upload from bytes
+
+```python linenums="1"
+content = b"hello from ag2 beta"
+uploaded = await files.upload(
+    data=content,
+    filename="hello.txt",
+    purpose="assistants",
+)
+print(uploaded.file_id)
+```
+
+If `#!python data` is provided without `#!python filename`, `#!python upload()` raises `#!python ValueError`.
+
+## Read, list, and delete
+
+```python linenums="1"
+# list all uploaded files for this provider/account
+all_files = await files.list()
+
+# download bytes for one file (not supported by Gemini)
+file_data = await files.read(all_files[0].file_id)
+print(file_data.name, len(file_data.data), file_data.media_type)
+
+# delete by file ID
+await files.delete(all_files[0].file_id)
+```
+
+You can also call `#!python read()` from an `#!python UploadedFile`:
+
+```python linenums="1"
+uploaded = await files.upload(path="report.pdf")
+content = await uploaded.read(files)
+```
+
+## Use uploaded files in agent requests
+
+After upload, pass the returned `#!python file_id` to an input event.
+
+```python linenums="1"
+from autogen.beta import Agent
+from autogen.beta.events import DocumentInput
+
+agent = Agent(
+    "assistant",
+    config=config,
+)
+
+uploaded = await files.upload(path="report.pdf")
+doc = DocumentInput(file_id=uploaded.file_id)
+
+reply = await agent.ask("Summarize this report.", doc)
+print(reply.body)
+```
+
+For more multimodal details, see [Multimodal Inputs](/docs/beta/inputs/inputs).

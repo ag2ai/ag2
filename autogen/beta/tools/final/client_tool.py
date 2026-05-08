@@ -44,9 +44,7 @@ class ClientTool(Tool):
             await context.send(result)
 
         stack.enter_context(
-            context.stream.where(
-                (ToolCallEvent.name == self.schema.function.name) & ClientToolCallEvent.not_()
-            ).sub_scope(execute),
+            context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute),
         )
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ClientToolCallEvent":

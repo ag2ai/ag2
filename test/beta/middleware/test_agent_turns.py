@@ -74,8 +74,8 @@ class TestAgentTurnMiddleware:
                 event: BaseEvent,
                 ctx: Context,
             ) -> ModelResponse:
-                if isinstance(event, ModelRequest) and isinstance(event.inputs[0], TextInput):
-                    event = ModelRequest([TextInput(event.inputs[0].content * 2)])
+                if isinstance(event, ModelRequest) and isinstance(event.parts[0], TextInput):
+                    event = ModelRequest([TextInput(event.parts[0].content * 2)])
                 result = await call_next(event, ctx)
                 return ModelResponse(ModelMessage(result.content * 2))
 

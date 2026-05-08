@@ -10,10 +10,17 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientCallInterceptor, ClientConfig, ClientEvent
+from a2a.client import A2ACardResolver, A2AClientError, Client, ClientCallInterceptor, ClientConfig
 from a2a.client import ClientFactory as A2AClientFactory
-from a2a.types import AgentCard, Message, Task, TaskArtifactUpdateEvent, TaskIdParams, TaskQueryParams, TaskState
-from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from a2a.client.errors import AgentCardResolutionError
+from a2a.compat.v0_3.types import (
+    AgentCard,
+    Message,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskState,
+)
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from typing_extensions import Self
 
 from autogen import ConversableAgent
@@ -26,9 +33,17 @@ from autogen.oai.client import OpenAIWrapper
 from .client_factory import ClientFactory, EmptyClientFactory
 from .errors import A2aAgentNotFoundError, A2aClientError
 from .utils import (
+    EXTENDED_AGENT_CARD_PATH,
+    PREV_AGENT_CARD_WELL_KNOWN_PATH,
+    ClientStreamEvent,
+    compat_get_task,
+    compat_send_message,
+    compat_subscribe_to_task,
     request_message_to_a2a,
     response_message_from_a2a_message,
     response_message_from_a2a_task,
+    to_compat_agent_card,
+    to_core_agent_card,
     update_artifact_to_streaming,
 )
 
@@ -164,7 +179,7 @@ class A2aRemoteAgent(ConversableAgent):
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
             agent_client = A2AClientFactory(self._client_config).create(
-                self._agent_card,
+                to_core_agent_card(self._agent_card),
                 interceptors=self._interceptors,
             )
 
@@ -234,17 +249,17 @@ class A2aRemoteAgent(ConversableAgent):
             return None
         return [ext.uri for ext in self._agent_card.capabilities.extensions]
 
-    async def _ask_streaming(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
+    async def _ask_streaming(self, client: Client, message: Message) -> AsyncIterator[ClientStreamEvent]:
         started_task: Task | None = None
         completed = False
         try:
-            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
+            async for event in compat_send_message(client, message):
                 if not isinstance(event, Message):
                     started_task = event[0]
                 yield event
                 completed = _is_event_completed(event)
 
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
+        except (httpx.ConnectError, A2AClientError) as e:
             if not started_task:
                 if not self._agent_card:
                     raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
@@ -263,11 +278,11 @@ class A2aRemoteAgent(ConversableAgent):
             connection_attempts = 1
             while not completed and connection_attempts < self._max_reconnects:
                 try:
-                    async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
+                    async for event in compat_subscribe_to_task(client, started_task.id):
                         yield event
                         completed = _is_event_completed(event)
 
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
+                except (httpx.ConnectError, A2AClientError) as e:
                     connection_attempts += 1
                     if connection_attempts >= self._max_reconnects:
                         if not self._agent_card:
@@ -276,18 +291,18 @@ class A2aRemoteAgent(ConversableAgent):
                             f"Failed to connect to the agent {self._agent_card.name!r} at {self._agent_card.url}: {e}"
                         ) from e
 
-    async def _ask_polling(self, client: Client, message: Message) -> AsyncIterator[ClientEvent | Message]:
+    async def _ask_polling(self, client: Client, message: Message) -> AsyncIterator[ClientStreamEvent]:
         started_task: Task | None = None
         completed = False
         try:
-            async for event in client.send_message(message, extensions=self._get_requested_extensions()):
+            async for event in compat_send_message(client, message):
                 if not isinstance(event, Message):
                     started_task = event[0]
                 yield event
                 if _is_event_completed(event):
                     completed = True
 
-        except (httpx.ConnectError, A2AClientHTTPError) as e:
+        except (httpx.ConnectError, A2AClientError) as e:
             if not started_task:
                 if not self._agent_card:
                     raise A2aClientError(f"Failed to connect to the agent: agent card not found. {e}") from e
@@ -306,10 +321,10 @@ class A2aRemoteAgent(ConversableAgent):
             connection_attempts = 1
             while not completed and connection_attempts < self._max_reconnects:
                 try:
-                    task = await client.get_task(TaskQueryParams(id=started_task.id))
+                    task = await compat_get_task(client, started_task.id)
                     completed = _is_task_completed(task)
 
-                except (httpx.ConnectError, A2AClientHTTPError) as e:
+                except (httpx.ConnectError, A2AClientError) as e:
                     connection_attempts += 1
                     if connection_attempts >= self._max_reconnects:
                         if not self._agent_card:
@@ -339,43 +354,57 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
-        card: AgentCard | None = None
-
+        # `auth_http_kwargs` is forwarded to every card request so the same
+        # auth/tenant headers reach all endpoints — useful when the agent sits
+        # behind a reverse proxy/API gateway that requires auth even for the
+        # discovery endpoint. Try the 1.0 well-known path; on 404 fall back to
+        # the v0.3 path for servers that have not migrated yet.
+        logger.info(
+            f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+        )
         try:
-            logger.info(
-                f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
-            )
-
             try:
-                card = await self._card_resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
-            except A2AClientHTTPError as e_public:
-                if e_public.status_code == 404:
-                    logger.info(
-                        f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
-                    )
-                    card = await self._card_resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
-                else:
-                    raise e_public
-
-            if card.supports_authenticated_extended_card:
-                try:
-                    card = await self._card_resolver.get_agent_card(
-                        relative_card_path=EXTENDED_AGENT_CARD_PATH,
-                        http_kwargs=auth_http_kwargs,
-                    )
-                except Exception as e_extended:
-                    logger.warning(
-                        f"Failed to fetch extended agent card: {e_extended}. Will proceed with public card.",
-                        exc_info=True,
-                    )
-
+                core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=AGENT_CARD_WELL_KNOWN_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
+            except AgentCardResolutionError as e_public:
+                if e_public.status_code != 404:
+                    raise
+                logger.info(
+                    f"Falling back to legacy v0.3 path: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
+                )
+                core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
         except Exception as e:
             raise A2aAgentNotFoundError(f"{self.name}: {self._card_resolver.base_url}") from e
+
+        # `A2ACardResolver` returns a proto AgentCard; the rest of this module works
+        # against the v0.3 pydantic shape, so translate at the boundary.
+        card = to_compat_agent_card(core_card)
+
+        # If the agent advertises an authenticated extended card, fetch it and
+        # let it supersede the public card. Failure to retrieve the extended
+        # card is non-fatal — we keep the public card and continue.
+        if card.supports_authenticated_extended_card:
+            try:
+                extended_core_card = await self._card_resolver.get_agent_card(
+                    relative_card_path=EXTENDED_AGENT_CARD_PATH,
+                    http_kwargs=auth_http_kwargs,
+                )
+                card = to_compat_agent_card(extended_core_card)
+            except Exception as e_extended:
+                logger.warning(
+                    f"Failed to fetch extended agent card: {e_extended}. Will proceed with public card.",
+                    exc_info=True,
+                )
 
         return card
 
 
-def _is_event_completed(event: ClientEvent | Message) -> bool:
+def _is_event_completed(event: ClientStreamEvent) -> bool:
     if isinstance(event, Message):
         return True
     return _is_task_completed(event[0])

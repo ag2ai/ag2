@@ -5,16 +5,18 @@
 from dataclasses import dataclass, replace
 from typing import TypedDict
 
+import google.auth
+from google.genai import types
 from typing_extensions import Unpack
 
 from autogen.beta.config.config import ModelConfig
 
-from .gemini_client import CreateConfig, GeminiClient
+from .files import GeminiFilesClient
+from .gemini_client import CreateConfig, GeminiClient, ThinkingLevel
 
 
-class GeminiConfigOverrides(TypedDict, total=False):
+class GeminiBaseConfigOverrides(TypedDict, total=False):
     model: str
-    api_key: str | None
     temperature: float | None
     top_p: float | None
     top_k: int | None
@@ -25,12 +27,24 @@ class GeminiConfigOverrides(TypedDict, total=False):
     frequency_penalty: float | None
     seed: int | None
     cached_content: str | None
+    thinking_config: types.ThinkingConfig | None
+    thinking_level: ThinkingLevel | None
+    thinking_budget: int | None
+
+
+class GeminiConfigOverrides(GeminiBaseConfigOverrides, total=False):
+    api_key: str | None
+
+
+class VertexAIConfigOverrides(GeminiBaseConfigOverrides, total=False):
+    credentials: google.auth.credentials.Credentials | str | None
+    project: str | None
+    location: str | None
 
 
 @dataclass(slots=True)
-class GeminiConfig(ModelConfig):
+class GeminiBaseConfig:
     model: str
-    api_key: str | None = None
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
@@ -41,11 +55,11 @@ class GeminiConfig(ModelConfig):
     frequency_penalty: float | None = None
     seed: int | None = None
     cached_content: str | None = None
+    thinking_config: types.ThinkingConfig | None = None
+    thinking_level: ThinkingLevel | None = None
+    thinking_budget: int | None = None
 
-    def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
-        return replace(self, **overrides)
-
-    def create(self) -> GeminiClient:
+    def _build_create_config(self) -> CreateConfig:
         config = CreateConfig()
 
         if self.temperature is not None:
@@ -65,10 +79,63 @@ class GeminiConfig(ModelConfig):
         if self.seed is not None:
             config["seed"] = self.seed
 
+        thinking = self._resolve_thinking_config()
+        if thinking is not None:
+            config["thinking_config"] = thinking
+
+        return config
+
+    def _resolve_thinking_config(self) -> types.ThinkingConfig | None:
+        if self.thinking_config is not None:
+            return self.thinking_config
+        if self.thinking_level is None and self.thinking_budget is None:
+            return None
+        kwargs: dict[str, object] = {}
+        if self.thinking_level is not None:
+            kwargs["thinking_level"] = self.thinking_level
+        if self.thinking_budget is not None:
+            kwargs["thinking_budget"] = self.thinking_budget
+        return types.ThinkingConfig(**kwargs)
+
+
+@dataclass(slots=True)
+class GeminiConfig(GeminiBaseConfig, ModelConfig):
+    api_key: str | None = None
+
+    def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> GeminiClient:
         return GeminiClient(
             model=self.model,
             api_key=self.api_key,
+            vertexai=False,
             streaming=self.streaming,
-            create_config=config,
+            create_config=self._build_create_config(),
+            cached_content=self.cached_content,
+        )
+
+    def create_files_client(self) -> GeminiFilesClient:
+        return GeminiFilesClient(self)
+
+
+@dataclass(slots=True)
+class VertexAIConfig(GeminiBaseConfig, ModelConfig):
+    credentials: google.auth.credentials.Credentials | str | None = None
+    project: str | None = None
+    location: str | None = None
+
+    def copy(self, /, **overrides: Unpack[VertexAIConfigOverrides]) -> "VertexAIConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> GeminiClient:
+        return GeminiClient(
+            model=self.model,
+            vertexai=True,
+            credentials=self.credentials,
+            project=self.project,
+            location=self.location,
+            streaming=self.streaming,
+            create_config=self._build_create_config(),
             cached_content=self.cached_content,
         )

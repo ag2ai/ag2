@@ -82,6 +82,7 @@ jobs:
           - "websockets"
           - "google-api"
           - "wikipedia-api"
+          - "ag-ui"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.10, 3.14
         python-version: ["3.10", "3.14"]

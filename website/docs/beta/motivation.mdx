@@ -3,11 +3,6 @@ sidebarTitle: AG2 Beta
 title: AG2 Beta
 ---
 
-<Warning>
-`autogen.beta` is under active development and may introduce breaking changes between releases.
-For production workloads, use the stable APIs documented in the [User Guide](/docs/user-guide/basic-concepts/installing-ag2/) and [API References](/docs/api-reference/autogen/Agent/).
-</Warning>
-
 ## Why did we create AG2 Beta?
 
 The original **AutoGen** project released with its first public preview in September 2023, and **AG2** later diverged from that codebase in November 2024 to continue building on its core ideas.
@@ -32,7 +27,41 @@ Not every part of the ecosystem is standardized yet, but the direction is clear.
 
 **AG2 Beta** is a new development track inside **AG2** where we build capabilities that would be difficult or impractical to introduce on the original framework architecture.
 
-As the beta matures, we expect it to become the primary foundation for future AG2 agent development and production-ready multi-agent systems.
+We expect it to become the primary foundation for future AG2 agent development and production-ready multi-agent systems. Therefore, it will become V1.0 of AG2.
+
+## Why use AG2 Beta?
+
+**AG2 Beta** is built around a small, predictable, core and a set of opt-in primitives you compose to fit your application. Here is what you get out of the box.
+
+### 1. A clean, async-first agent API
+
+Two methods cover the conversational surface — `agent.ask(...)` to start a turn and `reply.ask(...)` to continue one. The agent loop, tool execution, and LLM calls are async throughout, with streaming enabled by default on supported providers.
+
+### 2. A composable harness for capable, long-running, agents
+
+AG2's harness layers on powerful primitives to the base Agent — **assembly policies** for context shaping, a **knowledge store** for persistent memory, **sub-task delegation** with isolated streams, and **middleware** for retries, logging, token limits, and history management. Build up the agent you need with the harness doing the heavy lifting for you.
+
+The Agent's ability to fan out work, in parallel, to a team of specialist agents (seen as tools), or as subtasks, provides natural orchestration within each agent.
+
+### 3. Production and Scalability
+
+**Human-in-the-loop** hooks, **structured output** (static, callable, prompted, and transformable), **OpenTelemetry** tracing, **persistent backends** for history and streams (e.g. Redis), and a **testing utility** that mocks LLMs and tool calls without hitting the network — the primitives you need to take an Agent from prototype to production.
+
+The runtime is async end-to-end, so a single process can drive many concurrent agents, tool calls, and provider streams without blocking, and sub-tasks fan out in parallel via `asyncio.gather`. State is externalised behind protocols — `History`, `Storage`, and `Stream` can be backed by Redis, a database, or anything you build — so agents stay effectively stateless and horizontal scaling is straightforward. Cross-cutting concerns like retries, rate limits, token budgets, and history compaction are middleware you compose onto an Agent.
+
+### 4. UI and external integration
+
+Every event in the agent loop — model requests and responses, tool calls and results, human-input requests, observer alerts — flows through an event stream. Streams, with natural filtering capabilities, can power UIs, logging, metrics, or approvals without touching the agent itself.
+
+The stream is bidirectional: **AG-UI** renders model output and tool calls in real time while user responses come back as `HumanMessage` events, and persistent backends like Redis let separate processes — a web frontend and a background worker — share the same live conversation.
+
+### 5. Tools, toolkits, and built-in tools
+
+Define tools with a `@tool` decorator on plain functions. Use **type hints**, **dependency injection** (`Context`, `Inject`, `Variable`), and **toolkits** to organize related capabilities. Wire in **built-in tools** (web search, code execution, shell, memory) or expose any agent as a tool with `Agent.as_tool(...)`.
+
+### 6. One configuration model across providers
+
+A single, type-safe, interface spans **OpenAI**, **OpenAI Responses**, **Anthropic**, **Gemini**, **Vertex AI**, **Ollama**, and **DashScope**. Switching providers is a config change, not a rewrite, and structured output, multimodality (images, audio, video), and built-in tools work consistently across them.
 
 ## Compatibility with AG2
 

@@ -228,9 +228,11 @@ This example demonstrates how a real-world support system might use handoffs to 
 
 First, let's create our context variables, tool functions, and agents:
 ```python
+import os
+import pprint
 from typing import Annotated
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
+from autogen.agentchat import run_group_chat_iter
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import (
     ContextVariables, ReplyResult, AgentTarget,
@@ -238,8 +240,8 @@ from autogen.agentchat.group import (
     OnContextCondition, ExpressionContextCondition, ContextExpression,
     RevertToUserTarget
 )
+from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
 from dotenv import load_dotenv
-import os
 load_dotenv()
 
 # Initialize context variables for our support system
@@ -531,12 +533,30 @@ pattern = AutoPattern(
     group_manager_args = {"llm_config": llm_config},
 )
 
-# Run the chat
-result, final_context, last_agent = initiate_group_chat(
+# Run the chat event
+for event in run_group_chat_iter(
     pattern=pattern,
     messages="My laptop keeps shutting down randomly. Can you help?",
-    max_rounds=15
-)
+    max_rounds=20,
+):
+    if isinstance(event, InputRequestEvent):
+        user_input = input("  Input requested: ")
+        event.content.respond(user_input)
+        continue
+
+    if isinstance(event, GroupChatRunChatEvent):
+        print(f"\n=== {event.content.speaker}'s turn ===")
+        pprint.pprint(event.content)
+        print("-" * 80)
+
+    if isinstance(event, ToolResponseEvent):
+        print(f"\n=== {event.content} tool response ===")
+        print("-" * 80)
+
+    if hasattr(event, "content") and hasattr(event.content, "content"):
+        content = str(event.content.content)
+        pprint.pprint(content)
+        print("-" * 80)
 ```
 
 
@@ -552,9 +572,11 @@ By combining different handoff types, we've created a support system that can:
 ???+ info "Complete Code Example"
 
     ```python
+    import os
+    import pprint
     from typing import Annotated
     from autogen import ConversableAgent, LLMConfig
-    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat import run_group_chat_iter
     from autogen.agentchat.group.patterns import AutoPattern
     from autogen.agentchat.group import (
         ContextVariables, ReplyResult, AgentTarget,
@@ -562,8 +584,8 @@ By combining different handoff types, we've created a support system that can:
         OnContextCondition, ExpressionContextCondition, ContextExpression,
         RevertToUserTarget
     )
+    from autogen.events.agent_events import GroupChatRunChatEvent, InputRequestEvent, ToolResponseEvent
     from dotenv import load_dotenv
-    import os
     load_dotenv()
 
     # Initialize context variables for our support system
@@ -764,11 +786,29 @@ By combining different handoff types, we've created a support system that can:
     )
 
     # Run the chat
-    result, final_context, last_agent = initiate_group_chat(
+    for event in run_group_chat_iter(
         pattern=pattern,
         messages="My laptop keeps shutting down randomly. Can you help?",
-        max_rounds=15
-    )
+        max_rounds=20,
+    ):
+        if isinstance(event, InputRequestEvent):
+            user_input = input("  Input requested: ")
+            event.content.respond(user_input)
+            continue
+
+        if isinstance(event, GroupChatRunChatEvent):
+            print(f"\n=== {event.content.speaker}'s turn ===")
+            pprint.pprint(event.content)
+            print("-" * 80)
+
+        if isinstance(event, ToolResponseEvent):
+            print(f"\n=== {event.content} tool response ===")
+            print("-" * 80)
+
+        if hasattr(event, "content") and hasattr(event.content, "content"):
+            content = str(event.content.content)
+            pprint.pprint(content)
+            print("-" * 80)
 
     ```
 

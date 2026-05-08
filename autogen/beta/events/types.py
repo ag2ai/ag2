@@ -20,6 +20,7 @@ class Usage:
     total_tokens: float | None = None
     cache_read_input_tokens: float | None = None
     cache_creation_input_tokens: float | None = None
+    thinking_tokens: float | None = None
 
     def __bool__(self) -> bool:
         return any((
@@ -28,6 +29,7 @@ class Usage:
             self.total_tokens,
             self.cache_read_input_tokens,
             self.cache_creation_input_tokens,
+            self.thinking_tokens,
         ))
 
 
@@ -36,13 +38,24 @@ class ModelEvent(BaseEvent):
 
 
 class ModelReasoning(ModelEvent):
-    """Intermediate reasoning content emitted by the model."""
+    """Intermediate reasoning content emitted by the model.
+
+    Transient: intermediate thinking content, not part of the final response.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
 
 
 class ModelMessage(ModelEvent):
-    """Single message emitted by the model."""
+    """Single message emitted by the model.
+
+    Transient: already embedded in ``ModelResponse.message``.
+    Not persisted to durable storage by default.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
 
@@ -55,6 +68,13 @@ class BinaryResult:
 
     data: bytes
     metadata: dict[str, Any] = dataclass_field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.metadata.get("filename", "generated_file")
+
+    async def content(self) -> bytes:
+        return self.data
 
 
 class ModelResponse(ModelEvent):
@@ -106,7 +126,13 @@ class ModelResponse(ModelEvent):
 
 
 class ModelMessageChunk(ModelEvent):
-    """Chunk of a streamed model message."""
+    """Chunk of a streamed model message.
+
+    Transient: superseded by the final ``ModelResponse`` which carries the
+    complete content.  Not persisted to durable storage by default.
+    """
+
+    __transient__ = True
 
     content: str = Field(kw_only=False)
 

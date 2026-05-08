@@ -14,6 +14,7 @@ from autogen.beta.events import (
     ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolResultEvent,
 )
 from autogen.beta.middleware.base import (
     AgentTurn,
@@ -155,7 +156,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                     inp.to_api()
                     for event in events
                     if isinstance(event, ModelRequest)
-                    for inp in event.inputs
+                    for inp in event.parts
                     if isinstance(inp, TextInput)
                 ])
                 span.set_attribute("gen_ai.input.messages", input_messages)
@@ -190,6 +191,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
             if usage.cache_read_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
+            if usage.thinking_tokens:
+                span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
             if self._capture_content and response.message:
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
@@ -225,8 +228,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             if isinstance(result, ToolErrorEvent):
                 span.record_exception(result.error)
                 span.set_status(StatusCode.ERROR, str(result.error))
-            elif self._capture_content and hasattr(result, "content"):
-                span.set_attribute("gen_ai.tool.call.result", result.content)
+            elif self._capture_content and isinstance(result, ToolResultEvent) and result.result.parts:
+                part = result.result.parts[0]
+                if isinstance(part, TextInput):
+                    span.set_attribute("gen_ai.tool.call.result", part.content)
 
             return result
 

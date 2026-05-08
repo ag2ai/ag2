@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from autogen.beta.annotations import Context, Variable
+from autogen.beta.events import BuiltinToolCallEvent, ToolCallEvent
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -90,4 +91,9 @@ class ImageGenerationTool(Tool):
         *,
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        pass
+        async def execute(event: "ToolCallEvent", context: "Context") -> None:
+            pass
+
+        stack.enter_context(
+            context.stream.where(BuiltinToolCallEvent.name == IMAGE_GENERATION_TOOL_NAME).sub_scope(execute),
+        )

@@ -5,11 +5,10 @@
 import json
 from unittest.mock import patch
 
-from autogen.beta.events.tool_events import (
+from autogen.beta.events import (
     ClientToolCallEvent,
     ToolCallEvent,
     ToolErrorEvent,
-    ToolResult,
 )
 
 
@@ -19,7 +18,7 @@ class TestClientToolCallEventFromCall:
     def test_parent_id_matches_original_id(self) -> None:
         original = ToolCallEvent(name="search", arguments='{"q": "test"}')
         client_call = ClientToolCallEvent.from_call(original)
-        assert client_call.parent_id == original.id
+        assert client_call.id == original.id
 
     def test_name_and_arguments_preserved(self) -> None:
         original = ToolCallEvent(name="calc", arguments='{"x": 1}')
@@ -29,35 +28,27 @@ class TestClientToolCallEventFromCall:
 
 
 class TestToolErrorEventContent:
-    """content must capture the traceback from self.error, not sys.exc_info()."""
+    """Traceback must be stored in result.parts[0] via from_call."""
 
     def test_content_contains_original_error(self) -> None:
+        call = ToolCallEvent(name="test_tool")
         try:
             raise ValueError("test error message")
         except Exception as e:
-            event = ToolErrorEvent(
-                parent_id="call-123",
-                name="test_tool",
-                error=e,
-                result=ToolResult(),
-            )
+            event = ToolErrorEvent.from_call(call, e)
 
-        # Access content OUTSIDE the except block
-        assert "ValueError" in event.content
-        assert "test error message" in event.content
+        traceback_text = event.result.parts[0].content  # type: ignore[union-attr]
+        assert "ValueError" in traceback_text
+        assert "test error message" in traceback_text
 
     def test_content_does_not_return_none_type(self) -> None:
+        call = ToolCallEvent(name="t")
         try:
             raise RuntimeError("something broke")
         except Exception as e:
-            event = ToolErrorEvent(
-                parent_id="x",
-                name="t",
-                error=e,
-                result=ToolResult(),
-            )
+            event = ToolErrorEvent.from_call(call, e)
 
-        assert "NoneType" not in event.content
+        assert "NoneType" not in event.result.parts[0].content  # type: ignore[union-attr]
 
 
 class TestSerializedArgumentsCache:

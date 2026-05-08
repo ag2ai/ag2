@@ -95,11 +95,6 @@ def test_parse_frontmatter_multiline_description() -> None:
     assert "A long" in str(result["description"])
 
 
-# ---------------------------------------------------------------------------
-# SkillLoader — discover
-# ---------------------------------------------------------------------------
-
-
 def test_loader_discover_names(skill_tree: Path) -> None:
     loader = SkillLoader(skill_tree)
 

@@ -7,11 +7,15 @@ from collections.abc import Callable, Iterable
 from contextlib import ExitStack
 from typing import Any
 
+from fast_depends.library.serializer import SerializerProto
+
 from autogen.beta.annotations import Context
 from autogen.beta.events import (
     ClientToolCallEvent,
+    DataInput,
     ModelMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,
@@ -26,6 +30,9 @@ from .tool import Tool
 
 
 class ToolExecutor:
+    def __init__(self, serializer: SerializerProto) -> None:
+        self.__serializer = serializer
+
     def register(
         self,
         stack: "ExitStack",
@@ -60,10 +67,20 @@ class ToolExecutor:
 
                 case ToolResultEvent(result=result) as ev:
                     if result.final:
+                        if len(result.parts) != 1:
+                            raise ValueError("ToolResult with final=True must have exactly one part")
+                        part = result.parts[0]
+                        if isinstance(part, TextInput):
+                            content = part.content
+                        elif isinstance(part, DataInput):
+                            content = self.__serializer.encode(part.data).decode()
+                        else:
+                            raise ValueError(f"Unsupported part type: {type(part)}")
+
                         await context.send(
                             ModelResponse(
                                 message=ModelMessage(
-                                    ev.content,
+                                    content,
                                     metadata=result.metadata,
                                 ),
                                 response_force=True,
@@ -92,7 +109,9 @@ async def _execute_call(
     context: Context, call: ToolCallEvent
 ) -> ToolErrorEvent | ToolResultEvent | ClientToolCallEvent:
     async with context.stream.get(
-        (ToolErrorEvent.parent_id == call.id) | (ToolResultEvent.parent_id == call.id) | ClientToolCallEvent
+        (ToolErrorEvent.parent_id == call.id)
+        | (ToolResultEvent.parent_id == call.id)
+        | (ClientToolCallEvent.id == call.id)
     ) as result:
         await context.send(call)
         return await result

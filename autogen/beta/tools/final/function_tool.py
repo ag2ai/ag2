@@ -13,7 +13,7 @@ from fast_depends.core import CallModel
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
-from autogen.beta.events.tool_events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from autogen.beta.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
 from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
@@ -169,7 +169,11 @@ def tool(
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
-        call_model = build_model(f, sync_to_thread=sync_to_thread)
+        call_model = build_model(
+            f,
+            sync_to_thread=sync_to_thread,
+            serialize_result=False,
+        )
 
         return FunctionTool(
             call_model,
