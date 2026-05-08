@@ -2,12 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from a2a.client import Client
 from a2a.types import (
     AuthenticationInfo,
     DeleteTaskPushNotificationConfigRequest,
@@ -16,8 +13,8 @@ from a2a.types import (
     TaskPushNotificationConfig,
 )
 
+from ._session import open_session
 from .config import A2AConfig
-from .transports._http import fetch_card, make_a2a_client, make_httpx_client
 
 
 @dataclass(slots=True, kw_only=True)
@@ -56,7 +53,7 @@ async def create_push_notification_config(
     tenant: str | None = None,
 ) -> A2APushConfig:
     """Register a push-notification webhook for a task."""
-    async with _open_client(config) as sdk:
+    async with open_session(config) as sdk:
         request = _to_proto(config, tenant, task_id=task_id, push=push_config)
         response = await sdk.create_task_push_notification_config(request)
         return _from_proto(response)
@@ -70,7 +67,7 @@ async def get_push_notification_config(
     tenant: str | None = None,
 ) -> A2APushConfig:
     """Fetch a previously-registered push config by id."""
-    async with _open_client(config) as sdk:
+    async with open_session(config) as sdk:
         kwargs: dict[str, Any] = {"task_id": task_id, "id": config_id}
         resolved_tenant = tenant if tenant is not None else config.tenant
         if resolved_tenant:
@@ -96,7 +93,7 @@ async def list_push_notification_configs(
     surfaced through this helper — callers tracking pagination should
     use the SDK directly.
     """
-    async with _open_client(config) as sdk:
+    async with open_session(config) as sdk:
         kwargs: dict[str, Any] = {"task_id": task_id}
         resolved_tenant = tenant if tenant is not None else config.tenant
         if resolved_tenant:
@@ -119,7 +116,7 @@ async def delete_push_notification_config(
     tenant: str | None = None,
 ) -> None:
     """Delete a registered push-notification config."""
-    async with _open_client(config) as sdk:
+    async with open_session(config) as sdk:
         kwargs: dict[str, Any] = {"task_id": task_id, "id": config_id}
         resolved_tenant = tenant if tenant is not None else config.tenant
         if resolved_tenant:
@@ -168,28 +165,6 @@ def _from_proto(proto: TaskPushNotificationConfig) -> A2APushConfig:
         authentication=auth,
         id=proto.id or None,
     )
-
-
-@asynccontextmanager
-async def _open_client(config: A2AConfig) -> AsyncIterator[Client]:
-    httpx_client = make_httpx_client(
-        headers=dict(config.headers) if config.headers else None,
-        timeout=config.timeout,
-        factory=config.httpx_client_factory,
-    )
-    try:
-        card = config.preset_card or await fetch_card(httpx_client, url=config.url)
-        sdk: Client = make_a2a_client(
-            card=card,
-            httpx_client=httpx_client,
-            streaming=False,
-            transports=tuple(config.transports),
-            interceptors=tuple(config.interceptors),
-            grpc_channel_factory=config.grpc_channel_factory,
-        )
-        yield sdk
-    finally:
-        await httpx_client.aclose()
 
 
 __all__ = (
