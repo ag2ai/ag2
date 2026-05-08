@@ -17,11 +17,13 @@ __all__ = (
     "AGENT_CLIENT_DEP",
     "HUB_DEP",
     "SESSION_DEP",
+    "SESSION_STATE_DEP",
     "TASK_DEP",
 )
 
 
 SESSION_DEP = "ag2.network.session"
+SESSION_STATE_DEP = "ag2.network.session_state"
 AGENT_CLIENT_DEP = "ag2.network.agent_client"
 HUB_DEP = "ag2.network.hub"
 TASK_DEP = "ag2.task"  # framework-core key; re-exported for symmetry

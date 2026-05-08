@@ -10,10 +10,16 @@ is what view policies produce.
 
 Built-ins: ``FullTranscript`` (verbatim) and ``WindowedSummary``
 (bounded tail + head summary, composes with framework-core
-``compact.py``).
+``compact.py``). Envelope rendering is supplied per-call by the
+session's adapter via ``SessionAdapter.render_envelope``.
 """
 
-from .base import ViewPolicy
+from .base import EnvelopeRenderer, ViewPolicy
 from .builtin import FullTranscript, WindowedSummary
 
-__all__ = ("FullTranscript", "ViewPolicy", "WindowedSummary")
+__all__ = (
+    "EnvelopeRenderer",
+    "FullTranscript",
+    "ViewPolicy",
+    "WindowedSummary",
+)

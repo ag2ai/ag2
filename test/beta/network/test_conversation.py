@@ -35,6 +35,7 @@ from autogen.beta.network import (
     Passport,
     Resume,
 )
+from autogen.beta.network.adapters.base import default_render_envelope
 from autogen.beta.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
@@ -274,7 +275,12 @@ async def test_windowed_summary_short_history_passes_through() -> None:
     ]
 
     view = WindowedSummary(recent_n=10)
-    projection = await view.project(wal, participant_id="bob", session=metadata)
+    projection = await view.project(
+        wal,
+        participant_id="bob",
+        session=metadata,
+        render_envelope=default_render_envelope,
+    )
 
     assert projection == [
         ModelRequest([TextInput("hi")]),
@@ -290,7 +296,12 @@ async def test_windowed_summary_long_history_prepends_compaction_summary() -> No
     wal = [_text_envelope("alice", "bob", f"msg {i}") for i in range(8)]
 
     view = WindowedSummary(recent_n=3)
-    projection = await view.project(wal, participant_id="bob", session=metadata)
+    projection = await view.project(
+        wal,
+        participant_id="bob",
+        session=metadata,
+        render_envelope=default_render_envelope,
+    )
 
     assert len(projection) == 4  # 1 summary + 3 recent
     head = projection[0]
@@ -316,7 +327,12 @@ async def test_windowed_summary_respects_audience_visibility() -> None:
     ]
 
     view = WindowedSummary(recent_n=10)
-    carol_projection = await view.project(wal, participant_id="carol", session=metadata)
+    carol_projection = await view.project(
+        wal,
+        participant_id="carol",
+        session=metadata,
+        render_envelope=default_render_envelope,
+    )
 
     # Carol cannot see alice's private message to bob.
     assert carol_projection == [

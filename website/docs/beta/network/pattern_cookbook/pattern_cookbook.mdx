@@ -1,0 +1,195 @@
+---
+title: Pattern Cookbook
+sidebarTitle: Overview
+---
+
+Side-by-side translations of the canonical multi-agent orchestration
+patterns from classic (non-beta) AG2 (`#!python autogen.agentchat.group`) onto the
+beta `#!python WorkflowAdapter`. Each pattern lists the classic primitives
+it used, a beta translation, the full runnable source, and any gaps
+that don't yet have a clean equivalent.
+
+For the classic (non-beta) versions and their conceptual background, see the
+[Pattern Cookbook in the user guide](/docs/user-guide/advanced-concepts/pattern-cookbook/overview).
+
+## Status Legend
+
+| Status | Meaning |
+|---|---|
+| **Clean** | Maps one-to-one onto existing beta primitives. Code below works as written. |
+| **Partial** | Translates with one or more named gaps. Workaround included; gap tracked on roadmap. |
+
+## Quick Reference
+
+| # | Pattern | Status | Beta primitives | Notable gap |
+|---|---|---|---|---|
+| 1 | [Pipeline](/docs/beta/network/pattern_cookbook/pipeline) | Clean | `#!python TransitionGraph.sequence` or `#!python FromSpeaker → AgentTarget` chain | — |
+| 2 | [Hierarchical](/docs/beta/network/pattern_cookbook/hierarchical) | Partial | `#!python Handoff` returns from delegate tools + `#!python ContextEquals` for terminate | No `#!python NestedChatTarget`; sub-flows via separate sessions |
+| 3 | [Star](/docs/beta/network/pattern_cookbook/star) | Clean | `#!python ToolCalled` graph rule for spoke selection + WAL-reading synthesis tool | — |
+| 4 | [Escalation](/docs/beta/network/pattern_cookbook/escalation) | Clean | `#!python Handoff` returns from escalate tools + `#!python ToolCalled("resolve")` for terminate | — |
+| 5 | [Redundant](/docs/beta/network/pattern_cookbook/redundant) | Partial | Sequential fan-out via `#!python TransitionGraph.sequence` | No parallel dispatch; one specialist at a time |
+| 6 | [Feedback Loop](/docs/beta/network/pattern_cookbook/feedback_loop) | Clean | `#!python ContextEquals` on a `done` flag with `#!python max_turns` cap | — |
+| 7 | [Context-Aware Routing](/docs/beta/network/pattern_cookbook/context_aware_routing) | Partial | Router agent's tool sets `#!python category` → `#!python ContextEquals` per branch | No `#!python LLMCondition`; routing reasoning lives inside the coordinator's LLM, not the framework |
+| 8 | [Triage with Tasks](/docs/beta/network/pattern_cookbook/triage_with_tasks) | Clean | `#!python TransitionGraph.sequence` over a triage-produced plan; `#!python knobs["context_vars"]` seeds the queue | — |
+
+The "Organic" pattern from classic AG2 (LLM-driven `#!python AutoPattern` group-manager auto-selection) is not currently translatable — the beta workflow is graph-first by design — and is omitted. See [Roadmap](#roadmap) for what's tracked.
+
+## Routing idioms
+
+Every cookbook page below uses one of three composable routing idioms.
+Picking the right one is the most common decision when porting a
+classic pattern.
+
+**1. Static routing, graph-centralised.** Plain `#!python @tool` returning
+a string; the graph holds the routing edge.
+
+```python linenums="1"
+async def delegate_researcher(reason: str) -> str:
+    """Send the work to the research specialist."""
+    return f"routing: {reason}"
+
+# in the graph:
+Transition(when=ToolCalled("delegate_researcher"),
+           then=AgentTarget(researcher.agent_id))
+```
+
+When to use: many routing edges across multiple agents and you want
+one place (the graph) to read the topology. Used by `03_star.py`.
+
+**2. Static routing, tool-local.** `#!python @tool` returning a fixed-target
+`#!python Handoff`. No graph rule needed — the framework reads
+`#!python Handoff.target` from the agent's local `#!python ToolResultEvent`
+stream and stamps it onto the packet's routing field directly.
+
+```python linenums="1"
+async def delegate_researcher(reason: str) -> Handoff:
+    """Send the work to the research specialist."""
+    return Handoff(target="researcher", reason=reason)
+```
+
+When to use: simple workflows where the routing target is obvious
+from the tool's name and you'd rather not maintain a parallel graph
+rule. Used by `02_hierarchical.py` and `04_escalation.py`.
+
+**3. Dynamic routing.** `#!python @tool` returning a *computed-target*
+`#!python Handoff`. The case that wasn't cleanly expressible before
+the typed return shape.
+
+```python linenums="1"
+async def smart_route(query: str, state: SessionStateInject) -> Handoff:
+    target = pick_best_specialist(query, state.context_vars)
+    return Handoff(target=target, reason="routed by load")
+```
+
+When to use: target depends on runtime state, load balancing, or any
+condition the graph can't express declaratively.
+
+## State updates
+
+State mutations are independent of routing and use the workflow-scoped
+helpers `#!python set_context(session, key, value)` and
+`#!python delete_context(session, key)`. They live in
+`#!python autogen.beta.network.workflow_helpers` rather than the
+top-level `#!python autogen.beta.network` namespace — they only operate
+on `#!python WorkflowState.context_vars` and raise `#!python RuntimeError`
+on a non-workflow session, so the import path itself signals the
+adapter scope.
+
+The helpers emit a non-substantive `#!python EV_CONTEXT_SET` envelope
+that lands in the WAL *before* the round's `#!python EV_PACKET` commits,
+so when the packet folds, `#!python ContextEquals(key, value)` already
+sees the just-set value. A single tool can call `#!python set_context`
+*and* return a `#!python Handoff` if a workflow needs both effects in
+one round.
+
+```python linenums="1" hl_lines="1"
+from autogen.beta.network.workflow_helpers import set_context
+
+
+async def classify_as_billing(reason: str, session: SessionInject) -> str:
+    """Classify the request as billing. Sets context_vars['category']."""
+    await set_context(session, "category", "billing")
+    return f"classified as billing: {reason}"
+```
+
+## Knowing when the workflow is finished
+
+Every cookbook page below uses the same close-detection primitive in
+its demo `#!python main`:
+
+```python linenums="1"
+close_env = await intake_hc.wait_for_session_event(
+    session_id=session.session_id,
+    predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    timeout=180.0,
+)
+print(f"closed: reason={close_env.event_data.get('reason')!r}")
+```
+
+`#!python HubClient.wait_for_session_event` blocks on the per-session
+inbox until an envelope matching the predicate arrives — here, the
+`#!python EV_SESSION_CLOSED` envelope every termination route emits.
+The reason string distinguishes the close (e.g. `'sequence_complete'`,
+`'approved'`, `'resolved'`, `'fall_through'`, `'max_iterations'`,
+`'ttl_expired'`).
+
+To print the transcript, dump the WAL once after close — no polling
+helper needed (this is the pattern used in each cookbook page below).
+
+For the full picture of the five close routes (application close,
+agent-side tool, adapter sentinel, workflow `#!python TerminateTarget`,
+TTL / expectations), see
+[Closing Sessions → Watching for Close](/docs/beta/network/termination#watching-for-close).
+
+## Runnable demos
+
+Every Clean and Partial pattern ships as a runnable demo under
+[`#!python ms_code/network/cookbook/`](https://github.com/ag2ai/ag2/tree/main/ms_code/network/cookbook){.external-link target="_blank"}.
+All eight use `#!python AnthropicConfig(model="claude-sonnet-4-6")` for
+the agents that make decisions; `ANTHROPIC_API_KEY` must be set. A
+small `#!python intake` (or `#!python user`) agent in each demo uses
+`#!python TestConfig` purely as a session opener (it never speaks) so
+the first real LLM turn lands on the agent the graph routes to.
+
+!!! note "Live streaming vs. post-close dump"
+    The cookbook pages below dump the WAL once after close — clean
+    for docs, but you wait until the run finishes to see anything.
+    The runnable `.py` files in `ms_code/network/cookbook/` instead
+    poll the WAL during the run via a small `stream_until_closed`
+    helper so you can watch each turn unfold while real Sonnet is
+    thinking. Both patterns are valid; the post-close form is
+    simpler, the live form is friendlier when each turn takes
+    seconds.
+
+| File | Pattern | What it shows |
+|---|---|---|
+| [`01_pipeline.py`](/docs/beta/network/pattern_cookbook/pipeline) | Pipeline | `#!python TransitionGraph.sequence` chaining intake → validator → enricher → fulfilment, each Sonnet agent doing real domain work on the prior reply |
+| [`02_hierarchical.py`](/docs/beta/network/pattern_cookbook/hierarchical) | Hierarchical | Coord's `#!python delegate_<spoke>` tools each return `#!python Handoff(target=...)` so the framework routes the next turn directly from the typed return; `#!python finish_delegate` flips a context flag so a `#!python ContextEquals` rule terminates |
+| [`03_star.py`](/docs/beta/network/pattern_cookbook/star) | Star | Sonnet hub + `#!python TestConfig` spokes (deterministic replies) — `#!python ask_<spoke>` are plain `#!python @tool` functions matched by `#!python ToolCalled` graph rules; the `#!python synthesise` tool reads spoke replies from the WAL via `#!python HubInject` |
+| [`04_escalation.py`](/docs/beta/network/pattern_cookbook/escalation) | Escalation | Tier1 → tier2 → senior; `#!python escalate_to_*` tools return `#!python Handoff(target="tier2"/"senior")` for routing, and `#!python resolve` calls `#!python set_context` so the graph's `#!python ToolCalled("resolve")` rule terminates |
+| [`05_redundant.py`](/docs/beta/network/pattern_cookbook/redundant) | Redundant | `#!python TransitionGraph.sequence` with three differentiated proposers (safe / clever / nerdy) plus an evaluator that picks the winner — sequential fan-out (no parallel dispatch yet) |
+| [`06_feedback_loop.py`](/docs/beta/network/pattern_cookbook/feedback_loop) | Feedback Loop | Drafter ↔ reviewer alternation; reviewer's `#!python approve` tool calls `#!python set_context(session, "done", True)` and `#!python ContextEquals("done", True)` terminates with reason `'approved'` |
+| [`07_context_aware_routing.py`](/docs/beta/network/pattern_cookbook/context_aware_routing) | Context-Aware Routing | Router classifies into billing/technical/general via plain `#!python @tool` functions that call `#!python set_context`; `#!python ContextEquals("category", ...)` routes to the matching specialist |
+| [`08_triage_with_tasks.py`](/docs/beta/network/pattern_cookbook/triage_with_tasks) | Triage with Tasks | Triage produces a real LLM-generated plan, then a sequence graph executes researcher → writer → reviewer; `#!python knobs["context_vars"]` seeds the task plan and survives the entire run |
+
+## Roadmap
+
+The gaps surfaced in each pattern page are tracked. None block the
+patterns; each either has a working workaround or is currently
+deferred:
+
+* **`#!python LLMCondition`** — declarative routing where the framework asks an LLM whether a transition fires. Unblocks the cleanest version of Context-Aware Routing.
+* **`#!python NestedChatTarget`** — first-class sub-flow target. Unblocks Hierarchical and Redundant fully.
+* **Parallel dispatch** — fan out to multiple speakers within a single workflow turn, gather their replies, advance once all are in. Unblocks parallel Redundant.
+* **Auto-merge of tool-return fields into context** — the `#!python ReplyResult.context_variables` analogue. Cuts the boilerplate for Escalation and Triage-with-Tasks.
+* **`#!python AllOf` / `#!python AnyOf` condition composers** — useful sugar across most patterns; today the conjunction is encoded via transition order.
+
+For the broader scope of what the workflow adapter does and doesn't
+yet ship versus classic, see [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat).
+
+## See Also
+
+- [Workflow Adapter](/docs/beta/network/workflow) — the underlying graph machinery and built-in conditions.
+- [Context Variables](/docs/beta/network/context_variables) — `#!python set_context` / `#!python delete_context`, `#!python ContextEquals`, custom conditions.
+- [Closing Sessions](/docs/beta/network/termination) — termination patterns; many cookbook entries lean on `#!python TerminateTarget` with informative reasons.
+- [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat) — concept-level translation table.

@@ -26,13 +26,11 @@ from autogen.beta.events import BaseEvent
 from autogen.beta.stream import MemoryStream
 
 from ..envelope import (
-    EV_HANDOFF,
     EV_SESSION_INVITE,
     EV_SESSION_INVITE_ACK,
-    EV_TEXT,
     Envelope,
 )
-from ..policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP
+from ..policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP, SESSION_STATE_DEP
 from ..session import SessionMetadata, SessionState
 from ..task_mirror import TaskMirror
 from ..views.base import ViewPolicy
@@ -81,11 +79,18 @@ def stamp_dependencies(
     client: "AgentClient",
     session: Session,
 ) -> dict[object, object]:
-    """Build the ``context.dependencies`` dict for the LLM turn."""
+    """Build the ``context.dependencies`` dict for the LLM turn.
+
+    ``SESSION_STATE_DEP`` resolves to the adapter's current State
+    object (``WorkflowState`` / ``DiscussionState`` / ...). Tools that
+    need to read session-scoped state (e.g. ``context_vars`` on a
+    workflow session) inject it via ``SessionStateInject``.
+    """
     return {
         SESSION_DEP: session,
         AGENT_CLIENT_DEP: client,
         HUB_DEP: client._hub,
+        SESSION_STATE_DEP: client._hub._adapter_states.get(session.session_id),
     }
 
 
@@ -110,36 +115,15 @@ async def _auto_ack_invite(envelope: Envelope, client: "AgentClient") -> None:
         await client.send_envelope(ack)
 
 
-def _extract_turn_text(envelope: Envelope) -> str:
-    """Pull the user-message body out of a substantive envelope.
+async def _process_substantive(envelope: Envelope, client: "AgentClient") -> None:
+    """Run the agent's LLM on an inbound substantive envelope and
+    post the round-end envelope built by the adapter.
 
-    ``EV_TEXT`` carries the text in ``event_data['text']``.
-    ``EV_HANDOFF`` carries the reason in ``event_data['reason']`` and
-    the tool name in ``event_data['tool']``; we synthesise a short
-    handoff prompt so the next speaker's LLM has context.
-    """
-    if envelope.event_type == EV_TEXT:
-        text = envelope.event_data.get("text", "")
-        return text if isinstance(text, str) else ""
-    if envelope.event_type == EV_HANDOFF:
-        tool = envelope.event_data.get("tool", "handoff")
-        reason = envelope.event_data.get("reason", "")
-        if reason:
-            return f"[Handed off via {tool}] {reason}"
-        return f"[Handed off via {tool}]"
-    return ""
-
-
-async def _process_text(envelope: Envelope, client: "AgentClient") -> None:
-    """Run the agent's LLM on the inbound substantive envelope and
-    send its reply.
-
-    Handles ``EV_TEXT`` and ``EV_HANDOFF``. Only engages the LLM when
-    the adapter would accept a reply from this agent right now — for
-    consulting, that means we're the respondent and haven't replied
-    yet; for workflow, that we're ``expected_next_speaker``. After
-    each turn the adapter rotates so this same handler firing for a
-    different participant's notify is a no-op via the probe.
+    Adapter-agnostic: dispatches both inbound decoding (envelope →
+    LLM prompt input) and outbound encoding (round result → envelope)
+    through ``adapter.extract_turn_input`` /
+    ``adapter.build_round_envelope`` so this handler stays free of
+    adapter-specific knowledge.
     """
     metadata = await client._hub_client.get_session(envelope.session_id)
     if metadata.is_terminal() or metadata.state != SessionState.ACTIVE:
@@ -150,6 +134,7 @@ async def _process_text(envelope: Envelope, client: "AgentClient") -> None:
     if not client._hub_client.can_send(envelope.session_id, client.agent_id):
         return  # not our turn / session closing — don't engage LLM
 
+    adapter = client._hub._adapter_for(metadata.manifest.type, metadata.manifest.version)
     session = Session(metadata=metadata, client=client)
     view = resolve_view_policy(client, metadata)
 
@@ -158,10 +143,11 @@ async def _process_text(envelope: Envelope, client: "AgentClient") -> None:
         history_envelopes,
         participant_id=client.agent_id,
         session=metadata,
+        render_envelope=adapter.render_envelope,
     )
 
-    current_text = _extract_turn_text(envelope)
-    if not current_text:
+    current_input = adapter.extract_turn_input(envelope)
+    if not current_input:
         return
 
     # Pre-populate a fresh stream's history with the projection so the
@@ -186,15 +172,30 @@ async def _process_text(envelope: Envelope, client: "AgentClient") -> None:
     sub_ids = mirror.attach(stream)
     try:
         reply = await client.agent.ask(
-            current_text,
+            current_input,
             stream=stream,
             dependencies=dependencies,
         )
     finally:
         mirror.detach(stream, sub_ids)
-    body = reply.body
-    if body:
-        await session.send(body, causation_id=envelope.envelope_id)
+
+    # Adapter encodes the round-end envelope.
+    # For example, Workflow returns EV_PACKET.
+    # Default implementations returns EV_TEXT(body) or None.
+    state = client._hub._adapter_states.get(metadata.session_id)
+    events = list(await stream.history.get_events())
+    out_envelope = adapter.build_round_envelope(
+        metadata=metadata,
+        sender_id=client.agent_id,
+        reply=reply,
+        events=events,
+        state=state,
+        hub=client._hub,
+    )
+    if out_envelope is None:
+        return
+    out_envelope.causation_id = envelope.envelope_id
+    await client.send_envelope(out_envelope)
 
 
 async def default_handler(envelope: Envelope, client: "AgentClient") -> None:
@@ -203,14 +204,20 @@ async def default_handler(envelope: Envelope, client: "AgentClient") -> None:
     Override via :meth:`AgentClient.on_envelope` — the default
     delegates to the per-event helpers above which can be composed in
     custom handlers.
+
+    Substantive routing is delegated to the session's adapter via
+    ``adapter.extract_turn_input`` (returns empty for envelope types
+    the adapter doesn't act on, ending the handler chain).
     """
     event_type = envelope.event_type
     if event_type == EV_SESSION_INVITE:
         await _auto_ack_invite(envelope, client)
         return
-    if event_type in (EV_TEXT, EV_HANDOFF):
-        await _process_text(envelope, client)
+    if event_type.startswith("ag2.session.") or event_type.startswith("ag2.task."):
+        # Bookkeeping: state changes are visible via Session.info();
+        # task events are mirrored separately by TaskMirror.
         return
+    await _process_substantive(envelope, client)
     # Other ag2.session.* events (OPENED/CLOSED/EXPIRED) and ag2.task.*
     # events: no LLM action. Session state changes are reflected in
     # the next ``Session.info()`` call; task events are mirrored by

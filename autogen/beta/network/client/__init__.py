@@ -17,7 +17,7 @@ from .handlers import (
     stamp_dependencies,
 )
 from .hub_client import HubClient
-from .inject import AgentClientInject, HubInject, SessionInject, TaskInject
+from .inject import AgentClientInject, HubInject, SessionInject, SessionStateInject, TaskInject
 from .network_client import NetworkClient
 from .session import Session
 from .skill_render import ParsedSkill, parse_skill_frontmatter, render_fallback_skill
@@ -33,6 +33,7 @@ __all__ = (
     "ParsedSkill",
     "Session",
     "SessionInject",
+    "SessionStateInject",
     "TaskInject",
     "default_handler",
     "parse_skill_frontmatter",

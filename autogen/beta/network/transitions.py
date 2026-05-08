@@ -33,7 +33,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
-from .envelope import EV_HANDOFF, Envelope
+from .envelope import EV_PACKET, Envelope
 from .errors import NetworkError
 
 if TYPE_CHECKING:
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 __all__ = (
     "AgentTarget",
     "Always",
+    "ContextEquals",
     "FromSpeaker",
     "RevertToInitiatorTarget",
     "RoundRobinTarget",
@@ -203,16 +204,40 @@ class FromSpeaker:
 
 @dataclass(slots=True)
 class ToolCalled:
-    """Fires when the just-accepted envelope is an ``ag2.handoff``
-    whose ``event_data["tool"]`` matches ``tool_name``."""
+    """Fires when the just-accepted envelope's routing tool matches.
+
+    For ``EV_PACKET`` envelopes (the standard packet-model path),
+    reads ``event_data["routing"]["tool"]``. The packet's routing
+    field is populated by the framework from the agent's local-stream
+    ``ToolCallEvent`` whose name matches a registered routing tool.
+    """
 
     tool_name: str
     name: ClassVar[str] = "tool_called"
 
     def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
-        if envelope.event_type != EV_HANDOFF:
+        if envelope.event_type != EV_PACKET:
             return False
-        return envelope.event_data.get("tool") == self.tool_name
+        routing = envelope.event_data.get("routing", {}) or {}
+        return routing.get("tool") == self.tool_name
+
+
+@dataclass(slots=True)
+class ContextEquals:
+    """Fires when ``state.context_vars[key]`` equals ``value``.
+
+    The session-scoped context dict is mutated by ``ag2.context.set``
+    envelopes; this condition is the read side. Missing keys compare
+    as ``None`` so ``ContextEquals(key="foo", value=None)`` fires
+    when ``foo`` has never been set or was deleted.
+    """
+
+    key: str
+    value: Any
+    name: ClassVar[str] = "context_equals"
+
+    def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
+        return state.context_vars.get(self.key) == self.value
 
 
 # ── Registry ────────────────────────────────────────────────────────────────
@@ -230,6 +255,7 @@ _BUILTIN_CONDITIONS: tuple[type[TransitionCondition], ...] = (
     Always,
     FromSpeaker,
     ToolCalled,
+    ContextEquals,
 )
 
 

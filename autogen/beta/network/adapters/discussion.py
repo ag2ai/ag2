@@ -36,7 +36,12 @@ from ..session import (
 )
 from ..views.base import ViewPolicy
 from ..views.builtin import WindowedSummary
-from .base import AdapterResult
+from .base import (
+    AdapterResult,
+    default_build_round_envelope,
+    default_extract_turn_input,
+    default_render_envelope,
+)
 
 __all__ = (
     "DISCUSSION_TYPE",
@@ -195,3 +200,12 @@ class DiscussionAdapter:
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
         return WindowedSummary(recent_n=recent_n)
+
+    def extract_turn_input(self, envelope):
+        return default_extract_turn_input(envelope)
+
+    def build_round_envelope(self, metadata, sender_id, reply, events, state, hub):
+        return default_build_round_envelope(metadata, sender_id, reply, events, state, hub)
+
+    def render_envelope(self, envelope):
+        return default_render_envelope(envelope)

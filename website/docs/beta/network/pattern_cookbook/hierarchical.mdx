@@ -1,0 +1,294 @@
+---
+title: Hierarchical / Tree
+sidebarTitle: Hierarchical
+---
+
+The Hierarchical pattern places a coordinator above a set of
+specialists. The coordinator delegates work, the specialists return
+their results, the coordinator decides the next move, and finally
+synthesises a closing reply.
+
+**Classic (non-beta) primitives:** `#!python NestedChat` for sub-flows,
+`#!python GroupManager` for delegation, top-level `#!python DefaultPattern`
+for the coordinator graph.
+
+### Key Characteristics
+
+* **Coordinator owns dispatch.** The coordinator decides which
+  specialist to delegate to, never replies as the specialist.
+* **Specialists return to coordinator.** Every specialist's reply
+  routes back to the coordinator via a `#!python FromSpeaker → AgentTarget`
+  rule.
+* **Termination is explicit.** A `#!python finish_delegate` tool flips
+  `#!python context_vars["delegate_to"] = "finish"`; the graph's
+  `#!python ContextEquals("delegate_to", "finish")` rule terminates with
+  `'done'`.
+
+### Routing Mechanics
+
+Two complementary idioms drive routing:
+
+* **Typed `#!python Handoff` return.** Each `#!python delegate_<spoke>` tool
+  returns `#!python Handoff(target="researcher", reason=...)`. The framework
+  reads it from the agent's local `#!python ToolResultEvent` stream after
+  the round and stamps it onto the packet's `#!python routing.target`. No
+  graph rule is needed for the delegation edge.
+* **`#!python set_context` + `#!python ContextEquals`.** `#!python finish_delegate`
+  uses the `#!python set_context` helper to flip `#!python delegate_to=finish`.
+  The helper emits a non-substantive `#!python EV_CONTEXT_SET` envelope
+  that lands in the WAL *before* the round's `#!python EV_PACKET` commits,
+  so the `#!python ContextEquals` rule already sees the just-set value
+  and terminates. Coord can also write a final summary in its body
+  on the same turn — the body flows through the packet as plain text
+  without competing for routing.
+
+## Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant Intake as intake
+    participant Coord as coord
+    participant Researcher as researcher
+    participant Writer as writer
+
+    Intake->>Coord: kickoff (FromSpeaker → AgentTarget)
+    Coord->>Researcher: Handoff(target="researcher")
+    Researcher->>Coord: facts (FromSpeaker → AgentTarget)
+    Coord->>Writer: Handoff(target="writer")
+    Writer->>Coord: 1-line summary (FromSpeaker → AgentTarget)
+    Coord->>Coord: finish_delegate sets delegate_to=finish; coord writes summary body
+    Note over Coord: ContextEquals("delegate_to", "finish") → TerminateTarget("done")
+```
+
+## Migration Notes
+
+| Classic | Beta |
+|---|---|
+| `#!python ReplyResult(target=AgentTarget(researcher))` from a delegate tool | `#!python return Handoff(target="researcher", reason=...)` |
+| `#!python NestedChat` for a specialist that runs its own sub-flow | Specialist tool opens a separate `#!python consulting` session |
+| `#!python ContextVariables[...] = ...` to mark completion | `#!python await set_context(session, "delegate_to", "finish")` |
+| `#!python OnContextCondition(ExpressionContextCondition(...))` | `#!python ContextEquals("delegate_to", "finish")` |
+
+### Gaps & Workarounds
+
+* **No `#!python NestedChatTarget`.** A specialist that needs its own
+  sub-flow can't open a "child workflow" inline. Workaround: the
+  specialist's tool opens a *separate* session (e.g. a `#!python consulting`
+  session via `#!python AgentClient.open(...)`), runs the sub-conversation
+  there, and returns the result to the coordinator session via its
+  reply. Two sessions, one per nesting level — clean WAL per nesting,
+  but the affordance isn't built in.
+
+## Code
+
+!!! tip
+    Coord and both specialists use real Sonnet — the coordinator
+    genuinely decides between researcher and writer, and the writer's
+    summary is a real LLM output.
+
+```python linenums="1"
+"""Cookbook 02 — Hierarchical / Tree pattern.
+
+A coordinator delegates work to specialists. Each specialist returns
+to the coordinator, who decides the next move. The coord finishes by
+quoting the writer's summary.
+"""
+
+import asyncio
+
+from dotenv import load_dotenv
+
+from autogen.beta import Agent
+from autogen.beta.config import AnthropicConfig
+from autogen.beta.knowledge import MemoryKnowledgeStore
+from autogen.beta.network import (
+    EV_PACKET,
+    EV_SESSION_CLOSED,
+    EV_TEXT,
+    WORKFLOW_TYPE,
+    AgentTarget,
+    ContextEquals,
+    FromSpeaker,
+    Handoff,
+    Hub,
+    HubClient,
+    LocalLink,
+    Passport,
+    Resume,
+    SessionInject,
+    TerminateTarget,
+    Transition,
+    TransitionGraph,
+)
+from autogen.beta.network.workflow_helpers import set_context
+from autogen.beta.testing import TestConfig
+
+load_dotenv()
+
+
+async def delegate_researcher(reason: str) -> Handoff:
+    """Send the work to the research specialist. The returned
+    Handoff carries the target name; the framework resolves it
+    and routes the next turn there. No graph rule needed for this
+    edge — Handoff.target is authoritative."""
+    print(f"  [tool] delegate_researcher({reason!r})")
+    return Handoff(target="researcher", reason=reason)
+
+
+async def delegate_writer(reason: str) -> Handoff:
+    """Send the work to the writing specialist."""
+    print(f"  [tool] delegate_writer({reason!r})")
+    return Handoff(target="writer", reason=reason)
+
+
+async def finish_delegate(reason: str, session: SessionInject) -> str:
+    """Mark the workflow done by setting delegate_to=finish. The
+    ContextEquals graph rule fires on the resulting state update to
+    terminate. set_context lands a non-substantive EV_CONTEXT_SET so
+    coord can also write its final summary on the same turn."""
+    if session is None:
+        return "no active session"
+    print(f"  [tool] finish_delegate({reason!r})")
+    await set_context(session, "delegate_to", "finish")
+    return f"finishing: {reason}"
+
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    intake_hc = HubClient(link, hub=hub)
+    coord_hc = HubClient(link, hub=hub)
+    researcher_hc = HubClient(link, hub=hub)
+    writer_hc = HubClient(link, hub=hub)
+
+    intake_agent = Agent("intake", config=TestConfig())
+
+    coord_agent = Agent(
+        "coord",
+        prompt=(
+            "You are the coordinator. You MUST NOT answer the user's "
+            "request yourself — you have specialists for that.\n"
+            "\n"
+            "Workflow:\n"
+            "1. First, call `delegate_researcher` to gather facts.\n"
+            "2. After the researcher replies, call `delegate_writer` "
+            "to draft a summary.\n"
+            "3. After the writer replies, call `finish_delegate` and "
+            "then quote the writer's summary verbatim.\n"
+            "\n"
+            "On each delegation turn, just call the one tool — no "
+            "narration. Only on the final (finish_delegate) turn do "
+            "you write the summary."
+        ),
+        config=config,
+    )
+    coord_agent.tool(delegate_researcher)
+    coord_agent.tool(delegate_writer)
+    coord_agent.tool(finish_delegate)
+
+    researcher_agent = Agent(
+        "researcher",
+        prompt="You are the researcher. Reply in ONE short sentence with three bullet facts.",
+        config=config,
+    )
+    writer_agent = Agent(
+        "writer",
+        prompt="You are the writer. Reply in ONE short sentence summarising the research.",
+        config=config,
+    )
+
+    intake = await intake_hc.register(intake_agent, Passport(name="intake"), Resume())
+    coord = await coord_hc.register(coord_agent, Passport(name="coord"), Resume())
+    researcher = await researcher_hc.register(researcher_agent, Passport(name="researcher"), Resume())
+    writer = await writer_hc.register(writer_agent, Passport(name="writer"), Resume())
+
+    graph = TransitionGraph(
+        initial_speaker=intake.agent_id,
+        transitions=[
+            # delegate_to=finish terminates first.
+            Transition(when=ContextEquals("delegate_to", "finish"), then=TerminateTarget("done")),
+            # Specialists return to coord.
+            Transition(when=FromSpeaker(researcher.agent_id), then=AgentTarget(coord.agent_id)),
+            Transition(when=FromSpeaker(writer.agent_id),     then=AgentTarget(coord.agent_id)),
+            # intake → coord kickoff. Routing FROM coord to a specialist
+            # happens via Handoff returns from delegate_* tools — the
+            # framework reads target from the Handoff and stamps it onto
+            # the packet, so no ToolCalled rules are needed for that edge.
+            Transition(when=FromSpeaker(intake.agent_id), then=AgentTarget(coord.agent_id)),
+        ],
+        default_target=TerminateTarget("fall_through"),
+        max_turns=15,
+    )
+
+    session = await intake.open(
+        type=WORKFLOW_TYPE,
+        target=[coord.agent_id, researcher.agent_id, writer.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+    print(f"session: {session.session_id}\n")
+
+    name_by_id = {
+        intake.agent_id: "intake",
+        coord.agent_id: "coord",
+        researcher.agent_id: "researcher",
+        writer.agent_id: "writer",
+    }
+
+    await session.send("Brief on distributed consensus: research, then write a 1-line summary.")
+
+    # Wait for the workflow to terminate (any of the five close routes
+    # documented in /docs/beta/network/termination — this demo uses
+    # ContextEquals("delegate_to", "finish") → TerminateTarget("done")).
+    close_env = await intake_hc.wait_for_session_event(
+        session_id=session.session_id,
+        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        timeout=180.0,
+    )
+
+    # Print the transcript from the WAL after close.
+    for env in await hub.read_wal(session.session_id):
+        speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
+        if env.event_type == EV_TEXT:
+            print(f"{speaker:>14}: {env.event_data['text']}")
+        elif env.event_type == EV_PACKET:
+            routing = env.event_data.get("routing", {}) or {}
+            if routing.get("kind") == "handoff":
+                line = f"[Handed off via {routing.get('tool', '')}] {routing.get('reason', '')}"
+                print(f"{speaker:>14}: {line.rstrip()}")
+            body = env.event_data.get("body", "")
+            if body:
+                print(f"{speaker:>14}: {body}")
+
+    print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
+
+    await intake_hc.close()
+    await coord_hc.close()
+    await researcher_hc.close()
+    await writer_hc.close()
+    await hub.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Output
+
+```console
+session: 9b7c...
+
+         intake: Brief on distributed consensus: research, then write a 1-line summary.
+  [tool] delegate_researcher('gather facts on distributed consensus')
+          coord: [Handed off via delegate_researcher] gather facts on distributed consensus
+     researcher: Distributed consensus protocols ensure agreement across unreliable nodes — Paxos guarantees safety under partial failure; Raft is leader-based and easier to reason about; FLP impossibility shows no async protocol is both safe and live without timing assumptions.
+  [tool] delegate_writer('summarise the researcher's findings')
+          coord: [Handed off via delegate_writer] summarise the researcher's findings
+         writer: Distributed consensus is the art of getting a fleet of unreliable machines to agree on one truth — Paxos and Raft are the canonical protocols, and FLP impossibility is the price you pay for asynchrony.
+  [tool] finish_delegate('writer has produced the summary')
+          coord: Distributed consensus is the art of getting a fleet of unreliable machines to agree on one truth — Paxos and Raft are the canonical protocols, and FLP impossibility is the price you pay for asynchrony.
+
+closed: reason='done'
+```

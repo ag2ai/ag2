@@ -39,6 +39,7 @@ from .client import (
     ParsedSkill,
     Session,
     SessionInject,
+    SessionStateInject,
     TaskInject,
     default_handler,
     parse_skill_frontmatter,
@@ -48,8 +49,9 @@ from .client import (
     stamp_dependencies,
 )
 from .envelope import (
+    EV_CONTEXT_SET,
     EV_EXPECTATION_VIOLATED,
-    EV_HANDOFF,
+    EV_PACKET,
     EV_SESSION_CLOSED,
     EV_SESSION_EXPIRED,
     EV_SESSION_INVITE,
@@ -69,6 +71,7 @@ from .errors import (
     NotFoundError,
     ProtocolError,
 )
+from .handoff import Handoff
 from .hub import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -107,7 +110,7 @@ from .identity import (
     ResumeExample,
 )
 from .ids import make_id
-from .policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP, TASK_DEP
+from .policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP, SESSION_STATE_DEP, TASK_DEP
 from .rule import (
     AccessBlock,
     InboxBlock,
@@ -130,6 +133,7 @@ from .task_mirror import TaskMirror
 from .transitions import (
     AgentTarget,
     Always,
+    ContextEquals,
     FromSpeaker,
     RevertToInitiatorTarget,
     RoundRobinTarget,
@@ -185,8 +189,9 @@ __all__ = (
     "CONSULTING_TYPE",
     "CONVERSATION_TYPE",
     "DISCUSSION_TYPE",
+    "EV_CONTEXT_SET",
     "EV_EXPECTATION_VIOLATED",
-    "EV_HANDOFF",
+    "EV_PACKET",
     "EV_SESSION_CLOSED",
     "EV_SESSION_EXPIRED",
     "EV_SESSION_INVITE",
@@ -199,6 +204,7 @@ __all__ = (
     "RESUME_SOURCE_OBSERVED",
     "RESUME_SOURCE_TENANT",
     "SESSION_DEP",
+    "SESSION_STATE_DEP",
     "TASK_DEP",
     "WORKFLOW_TYPE",
     "AcceptFrame",
@@ -222,6 +228,7 @@ __all__ = (
     "ClientTask",
     "ConsultingAdapter",
     "ConsultingState",
+    "ContextEquals",
     "ConversationAdapter",
     "ConversationState",
     "CostProfile",
@@ -236,6 +243,7 @@ __all__ = (
     "Frame",
     "FromSpeaker",
     "FullTranscript",
+    "Handoff",
     "HelloFrame",
     "Hub",
     "HubClient",
@@ -280,6 +288,7 @@ __all__ = (
     "SessionManifest",
     "SessionMetadata",
     "SessionState",
+    "SessionStateInject",
     "SessionTypeAccess",
     "StayTarget",
     "SubscribeFrame",

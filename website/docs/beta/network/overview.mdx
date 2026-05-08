@@ -1,0 +1,110 @@
+---
+title: Multi-Agent Network Overview
+sidebarTitle: Overview
+---
+
+The `#!python autogen.beta.network` module turns one or more `#!python Agent` instances into a **multi-agent network** — a hub-and-spoke topology where a central registry coordinates session-based, protocol-driven exchanges between named agents.
+
+It is fully **opt-in**. Bare `#!python Agent` continues to work standalone with no behavioural change when this package is not imported. Adopt the network when you need any of the following:
+
+- Multiple agents coordinating on the same task with **enforceable turn order**, expectations, and audit trails.
+- A **registry of named agents** that can find each other by capability.
+- **Durable messaging** with replayable session transcripts (write-ahead log).
+- **Governance**: per-agent rules (access, rate, inbox, limits), per-adapter expectations, and a hub-side audit log.
+- **Sub-task observability**: PR1's `#!python agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
+
+## The Mental Model
+
+```
+                          ┌────────────────┐
+                          │      Hub       │  ←── audit log, registry,
+                          │ ── adapters ── │       sessions, sweepers,
+                          │ ── sessions ── │       expectation evaluators
+                          │ ── audit log ──│
+                          └────────┬───────┘
+                                   │  in-process duplex (LocalLink)
+                ┌──────────────────┼──────────────────┐
+                ▼                  ▼                  ▼
+          ┌──────────┐       ┌──────────┐       ┌──────────┐
+          │AgentClient│      │AgentClient│      │AgentClient│
+          │  alice    │      │   bob     │      │   carol   │
+          │  Agent    │      │  Agent    │      │  Agent    │
+          └──────────┘       └──────────┘       └──────────┘
+```
+
+Each `#!python Agent` is wrapped by an `#!python AgentClient`, which lives behind a `#!python HubClient` and connects to the hub through a `#!python LinkClient`. The hub holds the authoritative state; clients are thin frontends that send and receive `#!python Envelope`s through framed messages on their link.
+
+!!! note
+    Today's transport is `#!python LocalLink` — same-process duplex queues. The transport layer is a `#!python Protocol` (`#!python LinkClient` / `#!python LinkEndpoint`) so cross-process or cross-host transports are a drop-in replacement.
+
+## Core Concepts
+
+| Concept | Lives in | Purpose |
+|---|---|---|
+| `#!python Hub` | One per network | Authoritative state: registry, audit log, session table, write-ahead logs, expectation evaluators, sweepers |
+| `#!python Passport` | Hub registry | Stable identity (`name`, `agent_id`, owner, model) — identifies who's on the network |
+| `#!python Resume` | Hub registry | Capability claims (`claimed_capabilities`, `domains`, `summary`) plus hub-mutated `observed` track record |
+| `#!python Rule` | Hub registry | Per-agent governance: access lists, rate limits, inbox caps, session-type allowlists |
+| `#!python HubClient` | One per process | Process-side connection to the hub; manages registration and bookkeeping |
+| `#!python AgentClient` | One per agent | Wraps a single `#!python Agent`; sends envelopes, receives notify frames, runs handlers |
+| `#!python Envelope` | The wire format | Hub-stamped record of one event in one session: `event_type`, `event_data`, `sender_id`, `audience`, `causation_id` |
+| `#!python Session` | Created by `agent_client.open(...)` | A bounded multi-party exchange governed by an adapter |
+| Session adapter | One of `#!python ConsultingAdapter` / `#!python ConversationAdapter` / `#!python DiscussionAdapter` / `#!python WorkflowAdapter` | Defines the session's allowed sends, default view policy, expectations, and termination rules |
+| `#!python TransitionGraph` | Workflow only | Declarative orchestration: who speaks first, what conditions fire, when to terminate |
+| `#!python TaskMirror` | Auto-attached per turn | Bridges PR1 `#!python Task` lifecycle events into the hub so capability tags update `#!python Resume.observed` |
+
+## Lifecycle of a Session
+
+```
+agent_client.open(type=..., target=...)
+    │
+    ▼
+INVITED ──┬─ all targets ack ──→ ACTIVE ──┬─ adapter terminates ──→ CLOSED
+          │                                │
+          └─ ack timeout ──→ CLOSED       └─ explicit session.close() ──→ CLOSING ──→ CLOSED
+                  (expectation violation)         or TTL expired
+```
+
+The four built-in adapters differ in how they govern the `ACTIVE → CLOSED` transition:
+
+| Adapter | Participants | Turn order | Termination |
+|---|---|---|---|
+| `#!python conversation` | Exactly 2 | Free-form (either side, any time) | Explicit close or TTL |
+| `#!python consulting` | Exactly 2 | Strict 1Q1R (initiator → respondent) | Auto-closes after respondent's reply |
+| `#!python discussion` | 2+ | Round-robin via `ordering="round_robin"` | Explicit close or TTL |
+| `#!python workflow` | 2+ | Declarative `TransitionGraph` | Graph terminates (`TerminateTarget` / `max_turns`) |
+
+See the [Session Adapters](/docs/beta/network/adapters_overview) overview for the full picture.
+
+## What You'll Build Across the Examples
+
+Eight progressive scripts under `ms_code/network/` (numbered 01–08) take you from a hello-network exchange to a full audit-log inspection. Each one is self-contained and runnable with `#!bash python ms_code/network/0X_*.py` against real Anthropic Sonnet (an Anthropic API key in `.env`):
+
+1. `01_hello_network` — One hub, two agents, a consulting session, a single Q-and-A.
+2. `02_conversation` — Free-form 2-party back-and-forth, halted by explicit close after N exchanges.
+3. `03_discussion_3way` — Round-robin discussion among three agents in character.
+4. `04_workflow_round_robin` — `WorkflowAdapter` cycling N turns with auto-termination.
+5. `05_workflow_sequence` — Pipeline pattern (researcher → writer → editor) with declarative handoffs.
+6. `06_task_mirror` — A worker agent's capability-tagged Tasks update its `#!python Resume.observed` track record.
+7. `07_expectations` — `#!python acks_within` violation auto-closes a stalled handshake; audit trail records it.
+8. `08_audit_inspector` — Run a real-LLM session, then dump every audit record the hub produced.
+
+## Reading Order
+
+If you're new to AG2 Beta:
+
+1. Start with the [Quick Start](/docs/beta/network/quick_start) page. It's the smallest end-to-end network scenario.
+2. Then [Hub & Identity](/docs/beta/network/hub_and_identity) for the registry-side primitives.
+3. Then [Agent Clients](/docs/beta/network/agent_clients) for the agent-side primitives.
+4. Finally choose an adapter from the [Session Adapters](/docs/beta/network/adapters_overview) overview based on what you're building.
+
+If you're migrating from the classic `GroupChat` / handoff orchestrations:
+
+1. Skim the overview and quick start.
+2. Read [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat). It maps every classic concept onto its `#!python WorkflowAdapter` counterpart with side-by-side code.
+
+If you're operating an existing deployment:
+
+- [Expectations & Audit](/docs/beta/network/expectations_and_audit) covers governance.
+- [Task Observation](/docs/beta/network/task_observation) covers per-capability track records.
+- [Views & Skills](/docs/beta/network/views_and_skills) covers what each agent sees of its own session and how its capabilities are advertised.

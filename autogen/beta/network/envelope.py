@@ -16,8 +16,9 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 __all__ = (
+    "EV_CONTEXT_SET",
     "EV_EXPECTATION_VIOLATED",
-    "EV_HANDOFF",
+    "EV_PACKET",
     "EV_SESSION_CLOSED",
     "EV_SESSION_EXPIRED",
     "EV_SESSION_INVITE",
@@ -41,11 +42,21 @@ Priority = Literal["background", "normal", "urgent"]
 
 EV_TEXT = "ag2.msg.text"
 
-# Tool-driven workflow transition signal. ``event_data`` carries
-# ``{"tool": <tool_name>, "reason": <free-form>}``. Read by
-# ``WorkflowAdapter``'s ``ToolCalled`` condition; any adapter that wants
-# tool-driven transitions can read it the same way.
-EV_HANDOFF = "ag2.handoff"
+# For the WorkflowAdapter, this is one agent's full ``Agent.ask`` round,
+# captured atomically. The ``event_data`` shape:
+#
+#   {
+#     "routing": {
+#         "kind": "handoff" | "text",
+#         "tool"?: str,    # the routing tool's name (handoff kind only)
+#         "reason"?: str,  # human-readable trigger reason
+#         "target"?: str,  # resolved next-speaker agent_id (handoff kind)
+#     },
+#     "context_updates": {"set": {...}, "delete": [...]},
+#     "body": str,         # the agent's final text response, if any
+#   }
+#
+EV_PACKET = "ag2.packet"
 
 EV_SESSION_INVITE = "ag2.session.invite"
 EV_SESSION_INVITE_ACK = "ag2.session.invite.ack"
@@ -55,6 +66,11 @@ EV_SESSION_CLOSED = "ag2.session.closed"
 EV_SESSION_EXPIRED = "ag2.session.expired"
 
 EV_EXPECTATION_VIOLATED = "ag2.expectation.violated"
+
+# Session-scoped context variable mutation.
+# The ``event_data`` shape:
+# ``{"set": {<key>: <value>, ...}, "delete": [<key>, ...]}``.
+EV_CONTEXT_SET = "ag2.context.set"
 
 # Idle-detection rides on ``max_silence`` expectations; task lifecycle is
 # mirrored as Python events on the agent's own stream

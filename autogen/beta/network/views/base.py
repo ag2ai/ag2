@@ -13,6 +13,7 @@ appended by the caller.
 Built-ins: :class:`FullTranscript` and :class:`WindowedSummary`.
 """
 
+from collections.abc import Callable
 from typing import Protocol
 
 from autogen.beta.events import BaseEvent
@@ -20,7 +21,14 @@ from autogen.beta.events import BaseEvent
 from ..envelope import Envelope
 from ..session import SessionMetadata
 
-__all__ = ("ViewPolicy",)
+__all__ = ("EnvelopeRenderer", "ViewPolicy")
+
+
+EnvelopeRenderer = Callable[[Envelope], "str | None"]
+"""Project a single envelope to its LLM-visible string, or ``None``
+to skip. Supplied by the session's adapter via
+``SessionAdapter.render_envelope`` so view policies stay
+adapter-neutral."""
 
 
 class ViewPolicy(Protocol):
@@ -39,6 +47,9 @@ class ViewPolicy(Protocol):
         *,
         participant_id: str,
         session: SessionMetadata,
+        render_envelope: EnvelopeRenderer,
     ) -> list[BaseEvent]:
-        """Convert the WAL slice this participant should see into model events."""
+        """Convert the WAL slice this participant should see into model
+        events. ``render_envelope`` is provided by the session's
+        adapter so the view stays adapter-neutral."""
         ...

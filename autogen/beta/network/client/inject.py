@@ -20,12 +20,13 @@ from typing import Annotated, Any
 
 from autogen.beta.annotations import Inject
 
-from ..policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP
+from ..policies import AGENT_CLIENT_DEP, HUB_DEP, SESSION_DEP, SESSION_STATE_DEP
 
 __all__ = (
     "AgentClientInject",
     "HubInject",
     "SessionInject",
+    "SessionStateInject",
     "TaskInject",
 )
 
@@ -37,11 +38,12 @@ __all__ = (
 # Static type is ``Any`` rather than the concrete class so Pydantic
 # (which the ``tool`` decorator uses to schema function signatures) does
 # not try to generate a JSON schema for ``Session`` / ``AgentClient`` /
-# ``Hub`` — these types are not Pydantic-friendly and never appear in
-# the LLM-facing parameter surface anyway (they're injected from
-# ``context.dependencies``). Type-checkers lose precision; document
-# the resolved type in the docstring of any tool that uses these.
+# ``Hub`` / ``WorkflowState`` etc. — these types are not Pydantic-friendly
+# and never appear in the LLM-facing parameter surface anyway (they're
+# injected from ``context.dependencies``). Type-checkers lose precision;
+# document the resolved type in the docstring of any tool that uses these.
 SessionInject = Annotated[Any, Inject(SESSION_DEP, default=None)]
+SessionStateInject = Annotated[Any, Inject(SESSION_STATE_DEP, default=None)]
 AgentClientInject = Annotated[Any, Inject(AGENT_CLIENT_DEP, default=None)]
 HubInject = Annotated[Any, Inject(HUB_DEP, default=None)]
 
