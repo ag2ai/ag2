@@ -16,6 +16,10 @@ class A2AClientToolsNotSupportedError(A2AError):
     """
 
 
+class A2AInvalidCardError(A2AError):
+    """Raised when an ``AgentCard`` is missing data required to connect."""
+
+
 class A2AReconnectError(A2AError):
     """Raised when reconnect attempts on a streaming Task are exhausted."""
 

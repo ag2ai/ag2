@@ -5,7 +5,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from a2a.client import Client, ClientCallInterceptor
@@ -22,6 +22,8 @@ from a2a.types import (
     SubscribeToTaskRequest,
     Task,
     TaskState,
+    TaskStatus,
+    TaskStatusUpdateEvent,
 )
 from fast_depends.library.serializer import SerializerProto
 
@@ -64,7 +66,11 @@ from .mappers.messages import (
 )
 from .mappers.parts import is_data_part_with_mime, part_data_to_python
 from .mappers.tools import payload_to_call
+from .transports import TransportName
 from .transports._http import fetch_card, make_a2a_client, make_httpx_client
+
+if TYPE_CHECKING:
+    import grpc.aio
 
 _PROVIDER = "a2a"
 _CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{url}"
@@ -124,7 +130,7 @@ class A2AClient(LLMClient):
         self,
         *,
         url: str,
-        transports: Sequence[Literal["jsonrpc", "rest", "grpc"]] = ("jsonrpc",),
+        transports: Sequence[TransportName] = ("jsonrpc",),
         streaming: bool = True,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = 60.0,
@@ -134,7 +140,7 @@ class A2AClient(LLMClient):
         input_required_timeout: float | None = None,
         httpx_client_factory: Callable[[], httpx.AsyncClient] | None = None,
         interceptors: Sequence[ClientCallInterceptor] = (),
-        grpc_channel_factory: Callable[[str], Any] | None = None,
+        grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = None,
         preset_card: AgentCard | None = None,
         tenant: str | None = None,
         history_length: int | None = None,
@@ -326,7 +332,7 @@ class A2AClient(LLMClient):
         assert self._sdk_client is not None
 
         request = self._build_send_request(message, context)
-        stream: AsyncIterator[Any] = self._sdk_client.send_message(request)
+        stream = self._sdk_client.send_message(request)
 
         attempt = 0
         while True:
@@ -369,7 +375,7 @@ class A2AClient(LLMClient):
 
     async def _drain_stream(
         self,
-        stream: AsyncIterator[Any],
+        stream: AsyncIterator[StreamResponse],
         context: ConversationContext,
         state: _DriveState,
     ) -> _TurnOutcome:
@@ -422,7 +428,7 @@ class A2AClient(LLMClient):
 
     async def _handle_status_update(
         self,
-        status_update: Any,
+        status_update: TaskStatusUpdateEvent,
         context: ConversationContext,
         state: _DriveState,
         outcome: _TurnOutcome,
@@ -505,7 +511,7 @@ class A2AClient(LLMClient):
 
     async def _handle_artifact_parts(
         self,
-        parts: Iterable[Any],
+        parts: Iterable[Part],
         context: ConversationContext,
     ) -> tuple[str, list[ToolCallEvent]]:
         text_acc = ""
@@ -571,13 +577,13 @@ class A2AClient(LLMClient):
         context.variables.update(payload)
 
     @staticmethod
-    def _fake_task_for_status(status_update: Any) -> Task:
+    def _fake_task_for_status(status_update: TaskStatusUpdateEvent) -> Task:
         # Build a minimal Task surrogate carrying the failure status so the
         # error type can be raised consistently with the spec'd terminal flow.
         return Task(id=status_update.task_id, status=status_update.status, context_id=status_update.context_id)
 
 
-def _ensure_stream_response(event: Any) -> StreamResponse:
+def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamResponse:
     if isinstance(event, StreamResponse):
         return event
     # SDK can yield bare protobuf payload objects for individual oneof
@@ -589,7 +595,7 @@ def _ensure_stream_response(event: Any) -> StreamResponse:
     raise TypeError(f"Unexpected stream event type: {type(event).__name__}")
 
 
-def _extract_status_prompt(status: Any) -> str | None:
+def _extract_status_prompt(status: TaskStatus) -> str | None:
     if not status.HasField("message"):
         return None
     chunks = [part.text for part in status.message.parts if part.text]

@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import httpx
 from a2a.client import ClientCallInterceptor
@@ -14,7 +14,11 @@ from typing_extensions import Self, Unpack
 from autogen.beta.config.config import ModelConfig
 
 from .client import A2AClient
+from .errors import A2AInvalidCardError
 from .transports import TransportName
+
+if TYPE_CHECKING:
+    import grpc.aio
 
 
 class A2AConfigOverrides(TypedDict, total=False):
@@ -29,7 +33,7 @@ class A2AConfigOverrides(TypedDict, total=False):
     input_required_timeout: float | None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
-    grpc_channel_factory: Callable[[str], Any] | None
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None
     tenant: str | None
     history_length: int | None
 
@@ -80,7 +84,7 @@ class A2AConfig(ModelConfig):
     input_required_timeout: float | None = None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
     interceptors: Sequence[ClientCallInterceptor] = ()
-    grpc_channel_factory: Callable[[str], Any] | None = field(default=None, repr=False)
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(default=None, repr=False)
     preset_card: AgentCard | None = field(default=None, repr=False)
     tenant: str | None = None
     history_length: int | None = None
@@ -105,7 +109,7 @@ class A2AConfig(ModelConfig):
         """
         resolved_url = url or _first_interface_url(card)
         if not resolved_url:
-            raise ValueError(
+            raise A2AInvalidCardError(
                 "AgentCard has no supported_interfaces and no `url` override was provided",
             )
         return cls(url=resolved_url, preset_card=card, **overrides)

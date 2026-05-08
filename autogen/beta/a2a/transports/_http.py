@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 import httpx
 from a2a.client import A2ACardResolver, Client, ClientCallInterceptor, ClientConfig, ClientFactory
@@ -12,7 +12,11 @@ from a2a.client.errors import AgentCardResolutionError
 from a2a.server.context import ServerCallContext
 from a2a.types import AgentCard
 
+from . import TransportName
 from .grpc import default_grpc_channel_factory
+
+if TYPE_CHECKING:
+    import grpc.aio
 
 CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
 ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
@@ -22,8 +26,6 @@ ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Await
 # on the pre-v1 well-known path.
 LEGACY_AGENT_CARD_PATH = "/.well-known/agent.json"
 DEFAULT_AGENT_CARD_PATH = "/.well-known/agent-card.json"
-
-TransportName = Literal["jsonrpc", "rest", "grpc"]
 
 # Maps our short transport names to the SDK's protocol-binding strings.
 # The SDK uses these strings both in ``ClientConfig.supported_protocol_bindings``
@@ -81,7 +83,7 @@ def make_a2a_client(
     streaming: bool,
     transports: Sequence[TransportName] = ("jsonrpc",),
     interceptors: Sequence[ClientCallInterceptor] = (),
-    grpc_channel_factory: Callable[[str], Any] | None = None,
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = None,
 ) -> Client:
     """Build an A2A SDK ``Client`` honoring the requested transport preference.
 
@@ -100,9 +102,9 @@ def make_a2a_client(
 
     bindings = [_TRANSPORT_BINDINGS[t] for t in transports]
     config = ClientConfig(
-        httpx_client=httpx_client,
         streaming=streaming and card.capabilities.streaming,
         polling=not (streaming and card.capabilities.streaming),
+        httpx_client=httpx_client,
         supported_protocol_bindings=bindings,
         grpc_channel_factory=grpc_channel_factory,
     )
