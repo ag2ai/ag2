@@ -2,7 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Literal, TypeAlias
+
 from autogen.beta.exceptions import missing_optional_dependency
+
+# Canonical transport identifiers used across server, client, card, and
+# config modules. Centralised here (rather than re-typing the Literal
+# in every module) so we have one source of truth.
+TransportName: TypeAlias = Literal["jsonrpc", "rest", "grpc"]
 
 try:
     from .jsonrpc import build_jsonrpc_asgi
@@ -21,6 +28,7 @@ except ImportError as e:
     default_grpc_channel_factory = missing_optional_dependency("default_grpc_channel_factory", "a2a-grpc", e)  # type: ignore[misc]
 
 __all__ = (
+    "TransportName",
     "build_grpc_server",
     "build_jsonrpc_asgi",
     "build_rest_asgi",

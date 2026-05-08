@@ -50,7 +50,12 @@ from .errors import (
     A2ATaskFailedError,
     A2ATaskRejectedError,
 )
-from .extension import EXTENSION_URI, EXTRA_PARTS_DEPENDENCY_KEY, MIME_TOOL_CALL
+from .extension import (
+    EXTENSION_URI,
+    EXTRA_PARTS_DEPENDENCY_KEY,
+    MIME_TOOL_CALL,
+    TENANT_VARIABLE_KEY,
+)
 from .mappers.messages import (
     build_input_response_message,
     build_tool_result_message,
@@ -59,7 +64,7 @@ from .mappers.messages import (
 )
 from .mappers.parts import is_data_part_with_mime, part_data_to_python
 from .mappers.tools import payload_to_call
-from .transports.jsonrpc import fetch_card, make_a2a_client, make_httpx_client
+from .transports._http import fetch_card, make_a2a_client, make_httpx_client
 
 _PROVIDER = "a2a"
 _CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{url}"
@@ -109,6 +114,10 @@ class A2AClient(LLMClient):
     across multiple ``__call__`` invocations (for client-side tool
     round-trips). Across asks, ``contextId`` lives in
     ``context.variables`` so the server can stitch the conversation.
+
+    The client always ships the **full** AG2 conversation history on
+    every outgoing turn — the server is stateless on AG2 history. See
+    ``mappers/history.py`` for the wire shape.
     """
 
     def __init__(
@@ -127,6 +136,8 @@ class A2AClient(LLMClient):
         interceptors: Sequence[ClientCallInterceptor] = (),
         grpc_channel_factory: Callable[[str], Any] | None = None,
         preset_card: AgentCard | None = None,
+        tenant: str | None = None,
+        history_length: int | None = None,
     ) -> None:
         transports_tuple = tuple(transports)
         if not transports_tuple:
@@ -145,6 +156,8 @@ class A2AClient(LLMClient):
         self._interceptors = list(interceptors)
         self._grpc_channel_factory = grpc_channel_factory
         self._preset_card = preset_card
+        self._tenant = tenant
+        self._history_length = history_length
 
         self._httpx_client: httpx.AsyncClient | None = None
         self._sdk_client: Client | None = None
@@ -163,7 +176,7 @@ class A2AClient(LLMClient):
         if response_schema is not None:
             raise NotImplementedError("response_schema is not yet supported with A2AConfig")
 
-        await self._ensure_connected()
+        await self._ensure_connected(context)
         assert self._agent_card is not None
         assert self._sdk_client is not None
 
@@ -174,6 +187,14 @@ class A2AClient(LLMClient):
         while True:
             outcome = await self._drive_task(outgoing, context, state)
             if not outcome.input_required:
+                break
+            # ``INPUT_REQUIRED`` is overloaded: server emits it both for
+            # client-side tool round-trips (carrying ``tool-call+json``
+            # artifacts) and for genuine human-in-the-loop prompts. When
+            # tool calls are pending we surface them to the outer agent
+            # for local execution; only when there's nothing for the
+            # agent to do do we fall back to the HITL hook.
+            if state.pending_calls:
                 break
 
             user_text = await self._await_user_input(context, outcome.input_prompt)
@@ -199,7 +220,7 @@ class A2AClient(LLMClient):
             finish_reason=state.finish_reason,
         )
 
-    async def _ensure_connected(self) -> None:
+    async def _ensure_connected(self, context: ConversationContext) -> None:
         if self._sdk_client is not None:
             return
         self._httpx_client = make_httpx_client(
@@ -218,7 +239,10 @@ class A2AClient(LLMClient):
             grpc_channel_factory=self._grpc_channel_factory,
         )
         if self._agent_card.capabilities.extended_agent_card:
-            self._agent_card = await self._sdk_client.get_extended_agent_card(GetExtendedAgentCardRequest())
+            kwargs = self._maybe_tenant(context)
+            self._agent_card = await self._sdk_client.get_extended_agent_card(
+                GetExtendedAgentCardRequest(**kwargs),
+            )
 
     def _validate_and_extract_tools(
         self,
@@ -256,6 +280,8 @@ class A2AClient(LLMClient):
         if isinstance(last, ToolResultsEvent) and self._task_id is not None:
             return build_tool_result_message(
                 last.results,
+                history_events=messages,
+                tool_schemas=function_schemas,
                 task_id=self._task_id,
                 context_id=context_id,
                 context_update=dict(context.variables) or None,
@@ -265,6 +291,7 @@ class A2AClient(LLMClient):
         extra_parts = _read_extra_parts(context)
         return build_user_message(
             inputs,
+            history_events=messages,
             tool_schemas=function_schemas,
             task_id=self._task_id,
             context_id=context_id,
@@ -298,7 +325,7 @@ class A2AClient(LLMClient):
     ) -> _TurnOutcome:
         assert self._sdk_client is not None
 
-        request = self._build_send_request(message)
+        request = self._build_send_request(message, context)
         stream: AsyncIterator[Any] = self._sdk_client.send_message(request)
 
         attempt = 0
@@ -308,9 +335,11 @@ class A2AClient(LLMClient):
             except A2AClientError as exc:
                 if self._task_id is None or attempt >= self._max_reconnects:
                     raise A2AReconnectError(attempt) from exc
-                await asyncio.sleep(self._reconnect_backoff * (2**attempt))
                 attempt += 1
-                stream = self._sdk_client.subscribe(SubscribeToTaskRequest(id=self._task_id))
+                backoff = self._reconnect_backoff * (2 ** (attempt - 1))
+                await asyncio.sleep(backoff)
+                resubscribe = SubscribeToTaskRequest(**self._maybe_tenant(context, id=self._task_id))
+                stream = self._sdk_client.subscribe(resubscribe)
 
     async def _consume_polling(
         self,
@@ -320,7 +349,7 @@ class A2AClient(LLMClient):
     ) -> _TurnOutcome:
         assert self._sdk_client is not None
 
-        request = self._build_send_request(message)
+        request = self._build_send_request(message, context)
         outcome = await self._drain_stream(self._sdk_client.send_message(request), context, state)
         if state.finish_reason in ("failed", "rejected") or outcome.input_required:
             return outcome
@@ -329,7 +358,10 @@ class A2AClient(LLMClient):
             return outcome
 
         while True:
-            task = await self._sdk_client.get_task(GetTaskRequest(id=self._task_id))
+            get_kwargs = self._maybe_tenant(context, id=self._task_id)
+            if self._history_length is not None:
+                get_kwargs["history_length"] = self._history_length
+            task = await self._sdk_client.get_task(GetTaskRequest(**get_kwargs))
             self._absorb_task_artifacts(task, context, state)
             if task.status.state in _TERMINAL_STATES:
                 return self._terminal_outcome(task, state)
@@ -355,7 +387,12 @@ class A2AClient(LLMClient):
                 self._save_context_id(context, response.status_update.context_id)
                 if response.status_update.task_id:
                     self._task_id = response.status_update.task_id
-                stop = self._handle_status_update(response.status_update, state, outcome)
+                stop = await self._handle_status_update(
+                    response.status_update,
+                    context,
+                    state,
+                    outcome,
+                )
                 if stop:
                     return outcome
                 continue
@@ -383,7 +420,13 @@ class A2AClient(LLMClient):
 
         return outcome
 
-    def _handle_status_update(self, status_update: Any, state: _DriveState, outcome: _TurnOutcome) -> bool:
+    async def _handle_status_update(
+        self,
+        status_update: Any,
+        context: ConversationContext,
+        state: _DriveState,
+        outcome: _TurnOutcome,
+    ) -> bool:
         sd_state = status_update.status.state
         if sd_state == TaskState.TASK_STATE_FAILED:
             state.failed_task = self._fake_task_for_status(status_update)
@@ -398,13 +441,32 @@ class A2AClient(LLMClient):
             outcome.input_required = True
             outcome.input_prompt = _extract_status_prompt(status_update.status)
             return True
+        # Servers usually attach the final agent text on the
+        # ``status.message`` of the COMPLETED transition rather than
+        # emitting it as a separate ``message`` payload, so we absorb
+        # both here.
+        if sd_state == TaskState.TASK_STATE_COMPLETED and status_update.status.HasField("message"):
+            msg = status_update.status.message
+            self._merge_context_update(context, extract_context_update(msg))
+            text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
+            state.accumulated_text += text_chunk
+            state.pending_calls.extend(calls)
         return False
 
     def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: _DriveState) -> None:
         # Polling mode: we don't get incremental artifact-update deltas;
-        # rebuild text/tool-calls from the latest task snapshot. We
-        # blindly overwrite ``accumulated_text`` from the snapshot —
-        # ``Task.artifacts`` already contains the cumulative output.
+        # rebuild text/tool-calls from the latest task snapshot. The final
+        # agent text usually lives in ``task.status.message`` (emitted by
+        # ``updater.complete(message=...)``); streamed deltas land in
+        # ``task.artifacts``. We absorb both so neither path drops content.
+        #
+        # ``task.artifacts`` is cumulative — it carries tool-call+json
+        # artifacts from earlier turns even after the task has moved past
+        # them. Only surface tool calls when the task is asking for input
+        # right now (``INPUT_REQUIRED``); otherwise the artifacts are
+        # historical and would cause the outer agent loop to re-execute
+        # tools that were already handled.
+        terminal_calls_visible = task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         new_text = ""
         new_calls: list[ToolCallEvent] = []
         for artifact in task.artifacts:
@@ -412,13 +474,18 @@ class A2AClient(LLMClient):
                 if part.text:
                     new_text += part.text
                     continue
-                if is_data_part_with_mime(part, MIME_TOOL_CALL):
+                if terminal_calls_visible and is_data_part_with_mime(part, MIME_TOOL_CALL):
                     new_calls.append(payload_to_call(part_data_to_python(part)))
+        if task.status.HasField("message"):
+            for part in task.status.message.parts:
+                if part.text:
+                    new_text += part.text
+                if terminal_calls_visible and is_data_part_with_mime(part, MIME_TOOL_CALL):
+                    new_calls.append(payload_to_call(part_data_to_python(part)))
+            self._merge_context_update(context, extract_context_update(task.status.message))
         state.accumulated_text = new_text or state.accumulated_text
         if new_calls:
             state.pending_calls = new_calls
-        if task.status.HasField("message"):
-            self._merge_context_update(context, extract_context_update(task.status.message))
 
     def _terminal_outcome(self, task: Task, state: _DriveState) -> _TurnOutcome:
         sd_state = task.status.state
@@ -460,14 +527,19 @@ class A2AClient(LLMClient):
         # client side isn't set up for it.
         return await context.input(prompt or "Please provide input:", timeout=self._input_required_timeout)
 
-    def _build_send_request(self, message: Message) -> SendMessageRequest:
+    def _build_send_request(self, message: Message, context: ConversationContext) -> SendMessageRequest:
         assert self._agent_card is not None
-        return SendMessageRequest(
+        config_kwargs: dict[str, Any] = {
+            "accepted_output_modes": list(self._agent_card.default_output_modes) or ["text/plain", "application/json"],
+        }
+        if self._history_length is not None:
+            config_kwargs["history_length"] = self._history_length
+        request_kwargs = self._maybe_tenant(
+            context,
             message=message,
-            configuration=SendMessageConfiguration(
-                accepted_output_modes=list(self._agent_card.default_output_modes) or ["text/plain", "application/json"],
-            ),
+            configuration=SendMessageConfiguration(**config_kwargs),
         )
+        return SendMessageRequest(**request_kwargs)
 
     def _read_context_id(self, context: ConversationContext) -> str | None:
         return context.variables.get(_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url))
@@ -476,6 +548,21 @@ class A2AClient(LLMClient):
         if not context_id:
             return
         context.variables[_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url)] = context_id
+
+    def _resolve_tenant(self, context: ConversationContext) -> str | None:
+        # Per-call override wins: a single Agent can fan out to multiple
+        # tenants by setting ``a2a:tenant`` on its ``context.variables``.
+        # Falls back to the tenant baked into the config at construction.
+        override = context.variables.get(TENANT_VARIABLE_KEY)
+        if isinstance(override, str) and override:
+            return override
+        return self._tenant
+
+    def _maybe_tenant(self, context: ConversationContext, **kwargs: Any) -> dict[str, Any]:
+        tenant = self._resolve_tenant(context)
+        if tenant:
+            kwargs["tenant"] = tenant
+        return kwargs
 
     @staticmethod
     def _merge_context_update(context: ConversationContext, payload: Mapping[str, Any]) -> None:

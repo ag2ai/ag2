@@ -12,19 +12,20 @@ from .server import A2AServer
 def make_test_client_factory(
     server: A2AServer,
     *,
+    url: str = "http://test",
     timeout: float = 30.0,
 ) -> Callable[[], httpx.AsyncClient]:
     """Build an ``httpx.AsyncClient`` factory that talks to ``server`` in-process.
 
     Uses ``httpx.ASGITransport`` to dispatch directly into the Starlette
-    app produced by ``server.build_jsonrpc()`` — no real socket, no port
-    binding, no SSE proxy in the way. Use it as the ``httpx_client_factory``
-    on ``A2AConfig`` for end-to-end tests:
+    app produced by ``server.build_jsonrpc(url=url)`` — no real socket,
+    no port binding, no SSE proxy in the way. Use it as the
+    ``httpx_client_factory`` on ``A2AConfig`` for end-to-end tests:
 
     .. code-block:: python
 
-        server = A2AServer(agent, url="http://test")
-        factory = make_test_client_factory(server)
+        server = A2AServer(agent)
+        factory = make_test_client_factory(server, url="http://test")
         remote = Agent(
             "remote",
             config=A2AConfig(url="http://test", httpx_client_factory=factory),
@@ -35,11 +36,10 @@ def make_test_client_factory(
     factory hands out, which matches how httpx.ASGITransport is meant to
     be reused.
     """
-    app = server.build_jsonrpc()
+    app = server.build_jsonrpc(url=url)
     transport = httpx.ASGITransport(app=app)
-    base_url = server.url
 
     def factory() -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=transport, base_url=base_url, timeout=timeout)
+        return httpx.AsyncClient(transport=transport, base_url=url, timeout=timeout)
 
     return factory

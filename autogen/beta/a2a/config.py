@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 import httpx
 from a2a.client import ClientCallInterceptor
@@ -14,8 +14,7 @@ from typing_extensions import Self, Unpack
 from autogen.beta.config.config import ModelConfig
 
 from .client import A2AClient
-
-TransportName = Literal["jsonrpc", "rest", "grpc"]
+from .transports import TransportName
 
 
 class A2AConfigOverrides(TypedDict, total=False):
@@ -31,6 +30,8 @@ class A2AConfigOverrides(TypedDict, total=False):
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
     grpc_channel_factory: Callable[[str], Any] | None
+    tenant: str | None
+    history_length: int | None
 
 
 @dataclass(slots=True)
@@ -57,6 +58,15 @@ class A2AConfig(ModelConfig):
     ``grpc_channel_factory`` builds a ``grpc.aio.Channel`` for a given
     URL when the negotiated transport is gRPC. Required only if
     ``"grpc"`` is in ``transports`` and the server actually picks it.
+
+    ``tenant`` scopes every outgoing request to a specific tenant on the
+    remote server (A2A multi-tenancy: a single shared backend can isolate
+    data per tenant). Per-call override is available via
+    ``context.variables["a2a:tenant"]``.
+
+    ``history_length`` truncates the server-side ``Task.history`` echoed
+    back on ``get_task`` / list operations to the most recent N messages.
+    Pure server-side hint — does not change what the client uploads.
     """
 
     url: str
@@ -72,6 +82,8 @@ class A2AConfig(ModelConfig):
     interceptors: Sequence[ClientCallInterceptor] = ()
     grpc_channel_factory: Callable[[str], Any] | None = field(default=None, repr=False)
     preset_card: AgentCard | None = field(default=None, repr=False)
+    tenant: str | None = None
+    history_length: int | None = None
 
     def copy(self, /, **overrides: Unpack[A2AConfigOverrides]) -> Self:
         return replace(self, **overrides)
@@ -113,6 +125,8 @@ class A2AConfig(ModelConfig):
             interceptors=tuple(self.interceptors),
             grpc_channel_factory=self.grpc_channel_factory,
             preset_card=self.preset_card,
+            tenant=self.tenant,
+            history_length=self.history_length,
         )
 
 

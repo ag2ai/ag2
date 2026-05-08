@@ -9,16 +9,18 @@ from uuid import uuid4
 
 from a2a.types import Message, Part, Role
 
-from autogen.beta.events import Input, ToolCallEvent, ToolResultEvent
+from autogen.beta.events import BaseEvent, Input, ToolCallEvent, ToolResultEvent
 from autogen.beta.tools.final.function_tool import FunctionToolSchema
 
 from ..extension import (
     CONTEXT_UPDATE_METADATA_KEY,
     EXTENSION_URI,
+    MIME_HISTORY,
     MIME_TOOL_CALL,
     MIME_TOOL_RESULT,
     MIME_TOOL_SCHEMAS,
 )
+from .history import events_to_payload, payload_to_events
 from .parts import (
     data_part,
     input_to_part,
@@ -58,6 +60,7 @@ class ParsedMessage:
     tool_schemas: list[FunctionToolSchema] = field(default_factory=list)
     tool_calls: list[ToolCallEvent] = field(default_factory=list)
     tool_results: list[dict[str, Any]] = field(default_factory=list)
+    history_events: list[BaseEvent] = field(default_factory=list)
     context_update: dict[str, Any] = field(default_factory=dict)
     reference_task_ids: list[str] = field(default_factory=list)
 
@@ -65,6 +68,7 @@ class ParsedMessage:
 def build_user_message(
     inputs: Iterable[Input],
     *,
+    history_events: Sequence[BaseEvent] = (),
     tool_schemas: Sequence[FunctionToolSchema] = (),
     task_id: str | None = None,
     context_id: str | None = None,
@@ -76,16 +80,21 @@ def build_user_message(
 ) -> Message:
     """Build a ``Message`` from an AG2 client (``role=ROLE_USER``).
 
-    ``tool_schemas`` is included as a ``tool-schemas+json`` data Part —
-    this is how the client tells the server which tools live on the
-    calling side. ``context_update``, when provided, is attached to
-    ``Message.metadata`` so the server can sync into its
-    ``context.variables``. ``extra_parts`` are appended as-is, useful for
-    extension data that doesn't have a dedicated builder argument.
+    ``history_events`` is the full AG2 conversation history seen by the
+    calling Agent up to this turn — serialized as an ``ag2.history+json``
+    DataPart so the stateless server can re-hydrate it on each request.
+    ``tool_schemas`` rides as a ``tool-schemas+json`` data Part on every
+    turn (the server rebuilds ``ClientTool`` instances per execute).
+    ``context_update``, when provided, is attached to ``Message.metadata``
+    so the server can sync into its ``context.variables``. ``extra_parts``
+    are appended as-is, useful for extension data that doesn't have a
+    dedicated builder argument.
     """
     parts: list[Part] = [input_to_part(inp) for inp in inputs]
     if tool_schemas:
         parts.append(data_part(schemas_to_payload(tool_schemas), media_type=MIME_TOOL_SCHEMAS))
+    if history_events:
+        parts.append(data_part(events_to_payload(history_events), media_type=MIME_HISTORY))
     parts.extend(extra_parts)
     return _build_message(
         parts,
@@ -102,6 +111,8 @@ def build_user_message(
 def build_tool_result_message(
     results: Iterable[ToolResultEvent],
     *,
+    history_events: Sequence[BaseEvent] = (),
+    tool_schemas: Sequence[FunctionToolSchema] = (),
     task_id: str,
     context_id: str | None = None,
     message_id: str | None = None,
@@ -112,8 +123,15 @@ def build_tool_result_message(
 
     Used on the second leg of a client-side tool round-trip — after the
     AG2 outer loop locally executed the tools the server requested.
+    Continuation messages also carry the full ``history_events`` and
+    ``tool_schemas`` so the stateless server can rebuild conversation
+    state and tool definitions without any session memory.
     """
-    parts = [data_part(results_to_payload(results), media_type=MIME_TOOL_RESULT)]
+    parts: list[Part] = [data_part(results_to_payload(results), media_type=MIME_TOOL_RESULT)]
+    if tool_schemas:
+        parts.append(data_part(schemas_to_payload(tool_schemas), media_type=MIME_TOOL_SCHEMAS))
+    if history_events:
+        parts.append(data_part(events_to_payload(history_events), media_type=MIME_HISTORY))
     return _build_message(
         parts,
         role=Role.ROLE_USER,
@@ -206,6 +224,9 @@ def parse_message(msg: Message) -> ParsedMessage:
             continue
         if is_data_part_with_mime(part, MIME_TOOL_RESULT):
             parsed.tool_results.extend(payload_to_results(part_data_to_python(part)))
+            continue
+        if is_data_part_with_mime(part, MIME_HISTORY):
+            parsed.history_events.extend(payload_to_events(part_data_to_python(part)))
             continue
         parsed.inputs.append(part_to_input(part))
     parsed.context_update = extract_context_update(msg)

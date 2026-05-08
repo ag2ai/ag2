@@ -3,20 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import Literal
 
 from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCapabilities, AgentCard, AgentExtension, AgentInterface, AgentSkill
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
 from autogen.beta.agent import Agent
 
 from .extension import EXTENSION_URI
+from .transports import TransportName
 
 _DEFAULT_VERSION = "1.0.0"
 _DEFAULT_INPUT_MODES = ("text/plain", "application/json")
 _DEFAULT_OUTPUT_MODES = ("text/plain", "application/json")
-
-TransportName = Literal["jsonrpc", "rest", "grpc"]
 
 
 def build_card(
@@ -90,14 +89,30 @@ def _build_interfaces(
     interfaces: list[AgentInterface] = []
     for name in transports:
         if name == "jsonrpc":
-            interfaces.append(AgentInterface(url=url, protocol_binding=TransportProtocol.JSONRPC.value))
+            interfaces.append(
+                AgentInterface(
+                    url=url,
+                    protocol_binding=TransportProtocol.JSONRPC.value,
+                    protocol_version=PROTOCOL_VERSION_CURRENT,
+                ),
+            )
         elif name == "rest":
             interfaces.append(
-                AgentInterface(url=url + rest_path_prefix, protocol_binding=TransportProtocol.HTTP_JSON.value),
+                AgentInterface(
+                    url=url + rest_path_prefix,
+                    protocol_binding=TransportProtocol.HTTP_JSON.value,
+                    protocol_version=PROTOCOL_VERSION_CURRENT,
+                ),
             )
         elif name == "grpc":
             assert grpc_url is not None  # validated above
-            interfaces.append(AgentInterface(url=grpc_url, protocol_binding=TransportProtocol.GRPC.value))
+            interfaces.append(
+                AgentInterface(
+                    url=grpc_url,
+                    protocol_binding=TransportProtocol.GRPC.value,
+                    protocol_version=PROTOCOL_VERSION_CURRENT,
+                ),
+            )
     return interfaces
 
 

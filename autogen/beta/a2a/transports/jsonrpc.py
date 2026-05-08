@@ -2,9 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Mapping, Sequence
-from typing import Any
-
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.routes.agent_card_routes import create_agent_card_routes
@@ -17,7 +14,6 @@ from a2a.server.tasks import (
 )
 from a2a.types import AgentCard
 from starlette.applications import Starlette
-from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 
 from ._http import (
@@ -44,7 +40,6 @@ def build_jsonrpc_asgi(
     extended_agent_card: AgentCard | None = None,
     card_modifier: CardModifier | None = None,
     extended_card_modifier: ExtendedCardModifier | None = None,
-    middlewares: Sequence[tuple[type, Mapping[str, Any]]] = (),
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
@@ -69,9 +64,9 @@ def build_jsonrpc_asgi(
     ``legacy_card_url`` registers a second card route on the v0.x path
     for backward compatibility. Pass ``None`` to disable.
 
-    ``middlewares`` is a list of ``(class, kwargs)`` pairs applied to
-    the resulting Starlette app at runtime — accumulated by
-    ``A2AServer.add_middleware``.
+    Cross-cutting middleware (CORS, auth, tracing) is *not* a concern of
+    this builder — attach Starlette middleware to the returned app via
+    ``app.add_middleware(...)`` directly.
     """
     if extended_agent_card is not None:
         agent_card.capabilities.extended_agent_card = True
@@ -101,5 +96,4 @@ def build_jsonrpc_asgi(
             ),
         )
 
-    starlette_middleware = [Middleware(cls, **dict(kwargs)) for cls, kwargs in middlewares]
-    return Starlette(routes=routes, middleware=starlette_middleware)
+    return Starlette(routes=routes)

@@ -68,12 +68,15 @@ def results_to_payload(results: Iterable[ToolResultEvent]) -> dict[str, Any]:
     """Serialize tool results for the ``tool-result+json`` Part.
 
     Sent by the client back to the server after locally executing the tools
-    that the server requested via ``tool-call+json`` artifacts.
+    that the server requested via ``tool-call+json`` artifacts. ``name`` is
+    threaded through so the stateless server can rebuild a
+    ``ToolResultEvent`` without consulting any session state.
     """
     return {
         "results": [
             {
                 "id": r.parent_id,
+                "name": r.name,
                 "content": _result_to_text(r.result),
                 "error": str(r.error) if isinstance(r, ToolErrorEvent) else None,
             }
@@ -85,13 +88,14 @@ def results_to_payload(results: Iterable[ToolResultEvent]) -> dict[str, Any]:
 def payload_to_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Decode a ``tool-result+json`` payload to a list of result records.
 
-    Returns raw dicts (``id``/``content``/``error``) rather than
-    ``ToolResultEvent`` objects — the caller has to look up the original
-    ``ToolCallEvent`` (for ``name`` / ``parent_id``) to construct an event.
+    Returns raw dicts (``id``/``name``/``content``/``error``) rather than
+    ``ToolResultEvent`` objects — the executor uses ``name`` directly to
+    construct events without any pending-call lookup.
     """
     return [
         {
             "id": str(r["id"]),
+            "name": r.get("name"),
             "content": r.get("content", "") or "",
             "error": r.get("error"),
         }

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import grpc
 from a2a.server.agent_execution import AgentExecutor
@@ -17,7 +17,11 @@ from a2a.server.tasks import (
 )
 from a2a.types import AgentCard, a2a_pb2_grpc
 
-from ._http import ExtendedCardModifier
+if TYPE_CHECKING:
+    # Type-only import: ``_http`` imports ``default_grpc_channel_factory``
+    # from this module, so importing eagerly creates a cycle. The annotation
+    # uses a string forward-reference to keep the runtime graph acyclic.
+    from ._http import ExtendedCardModifier
 
 
 def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:
