@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Protocol, overload
 
@@ -14,6 +14,7 @@ from autogen.beta.agent import HumanHook, Plugin, PromptHook, PromptType, _wrap_
 from autogen.beta.context import ConversationContext, Stream
 from autogen.beta.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
 from autogen.beta.middleware import ToolMiddleware
+from autogen.beta.middleware.base import BaseMiddleware, MiddlewareFactory
 from autogen.beta.observers import Observer
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.executor import ToolExecutor
@@ -69,7 +70,7 @@ class LiveAgent:
         config: RealtimeSTTConfig,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
-        # middleware
+        middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -85,14 +86,16 @@ class LiveAgent:
         self._config = config
         self._stream = stream
 
-        self._dependencies: dict[Any, Any] = dependencies or {}
-        self._variables: dict[Any, Any] = variables or {}
+        self._agent_dependencies: dict[Any, Any] = dependencies or {}
+        self._agent_variables: dict[Any, Any] = variables or {}
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
 
         self._dependency_provider = Provider()
         self._tools: list[Tool] = []
         for t in tools:
             self.add_tool(t)
+
+        self._middleware: list[MiddlewareFactory] = list(middleware)
 
         self._observers: list[Observer] = []
         for obs in observers:
@@ -105,9 +108,19 @@ class LiveAgent:
             ),
         )
 
+        self._system_prompt: list[str] = []
+        self._dynamic_prompt: list[Callable[[ModelRequest, ConversationContext], Awaitable[str]]] = []
+
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]
-        self._prompt: list[PromptType] = list(prompt)
+        for p in prompt:
+            if isinstance(p, str):
+                self._system_prompt.append(p)
+            else:
+                self._dynamic_prompt.append(_wrap_prompt_hook(p))
+
+        for plg in plugins:
+            plg.register(self)  # type: ignore[arg-type]
 
     def hitl_hook(self, func: HumanHook) -> HumanHook:
         if self._hitl_hook is not None:
@@ -137,7 +150,7 @@ class LiveAgent:
         func: PromptHook | None = None,
     ) -> PromptHook | Callable[[PromptHook], PromptHook]:
         def wrapper(f: PromptHook) -> PromptHook:
-            self._prompt.append(f)
+            self._dynamic_prompt.append(_wrap_prompt_hook(f))
             return f
 
         if func:
@@ -199,6 +212,16 @@ class LiveAgent:
         self._tools.append(FunctionTool.ensure_tool(t, provider=self._dependency_provider))
         return self
 
+    def add_middleware(self, m: MiddlewareFactory) -> "LiveAgent":
+        """Append middleware as the innermost wrapper in the chain."""
+        self._middleware.append(m)
+        return self
+
+    def insert_middleware(self, m: MiddlewareFactory) -> "LiveAgent":
+        """Insert middleware as the outermost wrapper in the chain."""
+        self._middleware.insert(0, m)
+        return self
+
     def add_observer(self, observer: Observer) -> None:
         """Register an observer (before calling run())."""
         self._observers.append(observer)
@@ -212,6 +235,7 @@ class LiveAgent:
         prompt: Iterable[str] = (),
         config: RealtimeSTTConfig | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
     ) -> AsyncIterator[ConversationContext]:
@@ -220,8 +244,8 @@ class LiveAgent:
         context = ConversationContext(
             stream=stream,
             dependency_provider=self._dependency_provider,
-            dependencies=self._dependencies | (dependencies or {}),
-            variables=self._variables | (variables or {}),
+            dependencies=self._agent_dependencies | (dependencies or {}),
+            variables=self._agent_variables | (variables or {}),
         )
 
         active_config = config if config is not None else self._config
@@ -232,11 +256,16 @@ class LiveAgent:
         ]
         all_observers: list[Observer] = self._observers + list(observers)
 
+        initial_event = ModelRequest([])
+        middleware_instances: list[BaseMiddleware] = [
+            m(initial_event, context) for m in (*self._middleware, *middleware)
+        ]
+
         async with AsyncExitStack() as s:
             if active_hitl is not None:
                 s.enter_context(
                     stream.where(HumanInputRequest).sub_scope(
-                        active_hitl(()),
+                        active_hitl(middleware_instances),
                         interrupt=True,
                     ),
                 )
@@ -258,11 +287,18 @@ class LiveAgent:
                     context,
                     tools=all_tools,
                     known_tools=known_tools,
+                    middleware=middleware_instances,
                 )
 
             instructions = list(prompt) if prompt else await self._resolve_instructions(context)
+
+            # enter Provider session
             await s.enter_async_context(
-                active_config.session(context, instructions=instructions, tools=all_schemas),
+                active_config.session(
+                    context,
+                    instructions=instructions,
+                    tools=all_schemas,
+                )
             )
 
             for obs in all_observers:
@@ -283,10 +319,7 @@ class LiveAgent:
 
     async def _resolve_instructions(self, context: ConversationContext) -> list[str]:
         request = ModelRequest([])
-        parts: list[str] = []
-        for p in self._prompt:
-            if isinstance(p, str):
-                parts.append(p)
-            else:
-                parts.append(await _wrap_prompt_hook(p)(request, context))
+        parts: list[str] = list(self._system_prompt)
+        for hook in self._dynamic_prompt:
+            parts.append(await hook(request, context))
         return parts
