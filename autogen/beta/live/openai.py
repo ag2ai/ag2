@@ -45,9 +45,9 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
-from autogen.beta.voice.realtime import RealtimeSTTConfig
 
 from .protocols import TTSConfig as TTSConfigProtocol
+from .realtime import RealtimeSTTConfig
 from .stt import STTConfig as STTConfigProtocol
 from .stt import VoiceInput
 

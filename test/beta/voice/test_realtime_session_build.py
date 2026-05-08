@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.beta.voice import AudioConfig, InputConfig, OpenAIRealTimeConfig
+from autogen.beta.live import AudioConfig, InputConfig, OpenAIRealTimeConfig
 
 
 def _build(config: OpenAIRealTimeConfig, *, instructions: str | None = None) -> dict:
