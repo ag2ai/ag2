@@ -2,20 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import AsyncIterator, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
-from typing import Any, Protocol
+from typing import Any, Protocol, overload
 
 from fast_depends import Provider
 from fast_depends.pydantic import PydanticSerializer
 
-from autogen.beta.agent import HumanHook, PromptType, _wrap_prompt_hook, wrap_hitl
+from autogen.beta.agent import HumanHook, Plugin, PromptHook, PromptType, _wrap_prompt_hook, wrap_hitl
 from autogen.beta.context import ConversationContext, Stream
 from autogen.beta.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
+from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.observers import Observer
 from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.executor import ToolExecutor
-from autogen.beta.tools.final import FunctionTool, FunctionToolSchema
+from autogen.beta.tools.final import FunctionParameters, FunctionTool, FunctionToolSchema
+from autogen.beta.tools.final import tool as _tool
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
@@ -64,12 +67,18 @@ class LiveAgent:
         prompt: PromptType | Iterable[PromptType] = (),
         *,
         config: RealtimeSTTConfig,
+        hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
-        stream: Stream | None = None,
+        # middleware
+        observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
-        hitl_hook: HumanHook | None = None,
-        observers: Iterable[Observer] = (),
+        # response_schema
+        plugins: Iterable[Plugin] = (),
+        # knowledge
+        # tasks
+        # assembly
+        stream: Stream | None = None,
     ) -> None:
         self.name = name
 
@@ -81,8 +90,14 @@ class LiveAgent:
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
 
         self._dependency_provider = Provider()
-        self._tools: list[Tool] = [FunctionTool.ensure_tool(t, provider=self._dependency_provider) for t in tools]
-        self._observers: list[Observer] = list(observers)
+        self._tools: list[Tool] = []
+        for t in tools:
+            self.add_tool(t)
+
+        self._observers: list[Observer] = []
+        for obs in observers:
+            self.add_observer(obs)
+
         self._tool_executor = ToolExecutor(
             PydanticSerializer(
                 pydantic_config={"arbitrary_types_allowed": True},
@@ -94,29 +109,141 @@ class LiveAgent:
             prompt = [prompt]
         self._prompt: list[PromptType] = list(prompt)
 
+    def hitl_hook(self, func: HumanHook) -> HumanHook:
+        if self._hitl_hook is not None:
+            warnings.warn(
+                "You already set HITL hook, provided value overrides it",
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+
+        self._hitl_hook = wrap_hitl(func)
+        return func
+
+    @overload
+    def prompt(
+        self,
+        func: None = None,
+    ) -> Callable[[PromptHook], PromptHook]: ...
+
+    @overload
+    def prompt(
+        self,
+        func: PromptHook,
+    ) -> PromptHook: ...
+
+    def prompt(
+        self,
+        func: PromptHook | None = None,
+    ) -> PromptHook | Callable[[PromptHook], PromptHook]:
+        def wrapper(f: PromptHook) -> PromptHook:
+            self._prompt.append(f)
+            return f
+
+        if func:
+            return wrapper(func)
+        return wrapper
+
+    @overload
+    def tool(
+        self,
+        function: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Tool: ...
+
+    @overload
+    def tool(
+        self,
+        function: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Callable[[Callable[..., Any]], Tool]: ...
+
+    def tool(
+        self,
+        function: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        schema: FunctionParameters | None = None,
+        sync_to_thread: bool = True,
+        middleware: Iterable[ToolMiddleware] = (),
+    ) -> Tool | Callable[[Callable[..., Any]], Tool]:
+        def make_tool(f: Callable[..., Any]) -> Tool:
+            t = _tool(
+                f,
+                name=name,
+                description=description,
+                schema=schema,
+                sync_to_thread=sync_to_thread,
+                middleware=middleware,
+            )
+            self.add_tool(t)
+            return t
+
+        if function:
+            return make_tool(function)
+
+        return make_tool
+
+    def add_tool(self, t: Callable[..., Any] | Tool) -> "LiveAgent":
+        self._tools.append(FunctionTool.ensure_tool(t, provider=self._dependency_provider))
+        return self
+
+    def add_observer(self, observer: Observer) -> None:
+        """Register an observer (before calling run())."""
+        self._observers.append(observer)
+
     @asynccontextmanager
-    async def run(self) -> AsyncIterator[ConversationContext]:
+    async def run(
+        self,
+        *,
+        dependencies: dict[Any, Any] | None = None,
+        variables: dict[Any, Any] | None = None,
+        prompt: Iterable[str] = (),
+        config: RealtimeSTTConfig | None = None,
+        tools: Iterable[Callable[..., Any] | Tool] = (),
+        observers: Iterable[Observer] = (),
+        hitl_hook: HumanHook | None = None,
+    ) -> AsyncIterator[ConversationContext]:
         stream = self._stream if self._stream is not None else MemoryStream()
 
         context = ConversationContext(
             stream=stream,
             dependency_provider=self._dependency_provider,
-            dependencies=self._dependencies,
-            variables=self._variables,
+            dependencies=self._dependencies | (dependencies or {}),
+            variables=self._variables | (variables or {}),
         )
 
+        active_config = config if config is not None else self._config
+        active_hitl = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+
+        all_tools: list[Tool] = self._tools + [
+            FunctionTool.ensure_tool(t, provider=self._dependency_provider) for t in tools
+        ]
+        all_observers: list[Observer] = self._observers + list(observers)
+
         async with AsyncExitStack() as s:
-            if self._hitl_hook is not None:
+            if active_hitl is not None:
                 s.enter_context(
                     stream.where(HumanInputRequest).sub_scope(
-                        self._hitl_hook(()),
+                        active_hitl(()),
                         interrupt=True,
                     ),
                 )
 
             all_schemas: list[ToolSchema] = []
             known_tools: set[str] = set()
-            for t in self._tools:
+            for t in all_tools:
                 schemas = await t.schemas(context)
                 all_schemas.extend(schemas)
                 for schema in schemas:
@@ -125,30 +252,30 @@ class LiveAgent:
                     else:
                         known_tools.add(schema.type)
 
-            if self._tools:
+            if all_tools:
                 self._tool_executor.register(
                     s,
                     context,
-                    tools=self._tools,
+                    tools=all_tools,
                     known_tools=known_tools,
                 )
 
-            instructions = await self._resolve_instructions(context)
+            instructions = list(prompt) if prompt else await self._resolve_instructions(context)
             await s.enter_async_context(
-                self._config.session(context, instructions=instructions, tools=all_schemas),
+                active_config.session(context, instructions=instructions, tools=all_schemas),
             )
 
-            for obs in self._observers:
+            for obs in all_observers:
                 obs.register(s, context)
 
-            for obs in self._observers:
+            for obs in all_observers:
                 await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
             try:
                 yield context
 
             finally:
-                for obs in self._observers:
+                for obs in all_observers:
                     with suppress(Exception):
                         await context.send(
                             ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)),
