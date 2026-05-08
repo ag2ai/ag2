@@ -315,7 +315,6 @@ test-core = [
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
     "freezegun>=1.5.5,<2",
-    "respx>=0.23.0,<0.24.0"
 ]
 
 test = [
@@ -419,6 +418,7 @@ optionals = [
 testing = [
     "ag2[test-core]",
     "starlette",  # AG-UI tests require starlette
+    "respx>=0.23.0,<0.24.0",  # search tests
 ]
 
 lint = [
