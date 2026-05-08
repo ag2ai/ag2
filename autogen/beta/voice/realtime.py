@@ -8,6 +8,7 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from typing import Any, Protocol, overload
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from fast_depends.pydantic import PydanticSerializer
 
 from autogen.beta.agent import HumanHook, Plugin, PromptHook, PromptType, _wrap_prompt_hook, wrap_hitl
@@ -44,6 +45,7 @@ class RealtimeSTTConfig(Protocol):
         *,
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
+        serializer: SerializerProto,
     ) -> AbstractAsyncContextManager[None]: ...
 
 
@@ -101,12 +103,11 @@ class LiveAgent:
         for obs in observers:
             self.add_observer(obs)
 
-        self._tool_executor = ToolExecutor(
-            PydanticSerializer(
-                pydantic_config={"arbitrary_types_allowed": True},
-                use_fastdepends_errors=False,
-            ),
+        self._serializer: SerializerProto = PydanticSerializer(
+            pydantic_config={"arbitrary_types_allowed": True},
+            use_fastdepends_errors=False,
         )
+        self._tool_executor = ToolExecutor(self._serializer)
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, ConversationContext], Awaitable[str]]] = []
@@ -298,6 +299,7 @@ class LiveAgent:
                     context,
                     instructions=instructions,
                     tools=all_schemas,
+                    serializer=self._serializer,
                 )
             )
 

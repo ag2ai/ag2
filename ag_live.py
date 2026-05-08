@@ -1,7 +1,7 @@
 import asyncio
 
 from autogen.beta.events import ModelMessageChunk, TranscriptionChunkEvent
-from autogen.beta.tools import tool
+from autogen.beta.tools import ToolResult, tool
 from autogen.beta.voice import (
     LiveAgent,
     OpenAIRealTimeConfig,
@@ -14,7 +14,10 @@ from autogen.beta.voice import (
 async def sum_numbers(a: int, b: int) -> int:
     """You can use this tool to sum two numbers."""
     print(f"Summing {a} and {b}")
-    return a + b
+    return ToolResult(
+        {"type": "text", "content": str(a + b)},
+        final=True,
+    )
 
 
 async def main() -> None:
@@ -22,7 +25,7 @@ async def main() -> None:
         name="assistant",
         prompt="You are a helpful voice assistant.",
         tools=[sum_numbers],
-        config=OpenAIRealTimeConfig("gpt-4o-realtime-preview"),
+        config=OpenAIRealTimeConfig("gpt-realtime-2"),
     )
 
     async with (

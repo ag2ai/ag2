@@ -5,24 +5,29 @@
 import asyncio
 import base64
 import io
-import json
 import wave
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from fast_depends.library.serializer import SerializerProto
 from openai import AsyncOpenAI, Omit, omit
-from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+from openai.resources.realtime.realtime import AsyncRealtimeConnection
 from openai.types.audio.speech_create_params import Voice
-from openai.types.beta.realtime.session_update_event_param import (
-    Session,
-    SessionInputAudioNoiseReduction,
-    SessionInputAudioTranscription,
-    SessionTool,
-    SessionTracing,
-    SessionTurnDetection,
+from openai.types.realtime import (
+    AudioTranscriptionParam,
+    RealtimeAudioConfigInputParam,
+    RealtimeAudioConfigOutputParam,
+    RealtimeAudioConfigParam,
+    RealtimeAudioFormatsParam,
+    RealtimeAudioInputTurnDetectionParam,
+    RealtimeFunctionToolParam,
+    RealtimeSessionCreateRequestParam,
+    RealtimeToolChoiceConfigParam,
+    RealtimeTracingConfigParam,
 )
+from openai.types.realtime.realtime_audio_config_input_param import NoiseReduction
 
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
@@ -53,28 +58,69 @@ if TYPE_CHECKING:
     from autogen.beta.annotations import Context
 
 
-AudioFormat = Literal["pcm16", "g711_ulaw", "g711_alaw"]
-RealtimeVoice = Literal["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"]
+RealtimeVoice = Literal[
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "sage",
+    "shimmer",
+    "verse",
+    "marin",
+    "cedar",
+]
+ModelName = Literal[
+    "gpt-realtime",
+    "gpt-realtime-1.5",
+    "gpt-realtime-2",
+    "gpt-realtime-2025-08-28",
+    "gpt-4o-realtime-preview",
+    "gpt-4o-realtime-preview-2024-10-01",
+    "gpt-4o-realtime-preview-2024-12-17",
+    "gpt-4o-realtime-preview-2025-06-03",
+    "gpt-4o-mini-realtime-preview",
+    "gpt-4o-mini-realtime-preview-2024-12-17",
+    "gpt-realtime-mini",
+    "gpt-realtime-mini-2025-10-06",
+    "gpt-realtime-mini-2025-12-15",
+    "gpt-audio-1.5",
+    "gpt-audio-mini",
+    "gpt-audio-mini-2025-10-06",
+    "gpt-audio-mini-2025-12-15",
+]
 
 
 @dataclass(slots=True)
 class AudioConfig:
-    """Output-side audio knobs for the realtime session."""
+    """Output-side audio knobs for the realtime session.
+
+    Mirrors ``openai.types.realtime.RealtimeAudioConfigOutputParam``.
+    """
 
     voice: RealtimeVoice | str = "alloy"
-    output_audio_format: AudioFormat = "pcm16"
+    format: RealtimeAudioFormatsParam = field(
+        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+    )
     speed: float = 1.0
 
 
 @dataclass(slots=True)
 class InputConfig:
-    """Input-side audio knobs for the realtime session."""
+    """Input-side audio knobs for the realtime session.
 
-    input_audio_format: AudioFormat = "pcm16"
+    Mirrors ``openai.types.realtime.RealtimeAudioConfigInputParam``, with the
+    extra ``transcribe_text`` flag that opts the session into the ``text``
+    output modality.
+    """
+
+    format: RealtimeAudioFormatsParam = field(
+        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+    )
     transcribe_text: bool = False
-    input_audio_transcription: SessionInputAudioTranscription | None = None
-    input_audio_noise_reduction: SessionInputAudioNoiseReduction | None = None
-    turn_detection: SessionTurnDetection = field(
+    transcription: AudioTranscriptionParam | None = None
+    noise_reduction: NoiseReduction | None = None
+    turn_detection: RealtimeAudioInputTurnDetectionParam | None = field(
         default_factory=lambda: {
             "type": "semantic_vad",
             "create_response": True,
@@ -168,47 +214,54 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
 
     def __init__(
         self,
-        model: str,
+        model: "ModelName | str",
         *,
         audio: AudioConfig | None = None,
         input: InputConfig | None = None,
-        temperature: float | None = None,
-        max_response_output_tokens: int | Literal["inf"] | None = None,
-        tool_choice: str | None = None,
-        tracing: SessionTracing | None = None,
-        session: Session | None = None,
+        max_output_tokens: int | Literal["inf"] | None = None,
+        tool_choice: RealtimeToolChoiceConfigParam | None = None,
+        tracing: RealtimeTracingConfigParam | None = None,
+        session: RealtimeSessionCreateRequestParam | None = None,
         client: AsyncOpenAI | None = None,
     ) -> None:
         self.model = model
 
-        self._session: Session = {}
-        if temperature is not None:
-            self._session["temperature"] = temperature
-        if max_response_output_tokens is not None:
-            self._session["max_response_output_tokens"] = max_response_output_tokens
+        self._session: RealtimeSessionCreateRequestParam = {"type": "realtime"}
+        if max_output_tokens is not None:
+            self._session["max_output_tokens"] = max_output_tokens
         if tool_choice is not None:
             self._session["tool_choice"] = tool_choice
         if tracing is not None:
             self._session["tracing"] = tracing
+
+        modalities: list[Literal["text", "audio"]] = []
+        audio_config: RealtimeAudioConfigParam = {}
         if audio is not None:
-            self._session["modalities"] = list(set(self._session.get("modalities", []) + ["audio"]))
-            self._session |= {
-                "voice": audio.voice,
-                "output_audio_format": audio.output_audio_format,
-                "speed": audio.speed,
-            }
+            modalities.append("audio")
+            audio_config["output"] = RealtimeAudioConfigOutputParam(
+                voice=audio.voice,
+                format=audio.format,
+                speed=audio.speed,
+            )
         if input is not None:
-            self._session |= {
-                "input_audio_format": input.input_audio_format,
+            input_param: RealtimeAudioConfigInputParam = {
+                "format": input.format,
                 "turn_detection": input.turn_detection,
             }
             if input.transcribe_text:
-                self._session["modalities"] = list(set(self._session.get("modalities", []) + ["text"]))
-            if input.input_audio_transcription is not None:
-                self._session["input_audio_transcription"] = input.input_audio_transcription
-            if input.input_audio_noise_reduction is not None:
-                self._session["input_audio_noise_reduction"] = input.input_audio_noise_reduction
-        self._session_overrides: Session = session or {}
+                modalities.append("text")
+            if input.transcription is not None:
+                input_param["transcription"] = input.transcription
+            if input.noise_reduction is not None:
+                input_param["noise_reduction"] = input.noise_reduction
+            audio_config["input"] = input_param
+
+        if audio_config:
+            self._session["audio"] = audio_config
+        if modalities:
+            self._session["output_modalities"] = list(dict.fromkeys(modalities))
+
+        self._session_overrides: RealtimeSessionCreateRequestParam = session or {"type": "realtime"}
 
         self.client = client or AsyncOpenAI()
 
@@ -217,14 +270,12 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
         *,
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
-    ) -> Session:
-        joined = "\n".join(instructions)
-        session_tools = [_tool_schema_to_session_tool(t) for t in tools]
-        overlay: Session = {}
-        if joined:
-            overlay["instructions"] = joined
-        if session_tools:
-            overlay["tools"] = session_tools
+    ) -> RealtimeSessionCreateRequestParam:
+        overlay: RealtimeSessionCreateRequestParam = {"type": "realtime"}
+        if instructions:
+            overlay["instructions"] = "\n".join(instructions)
+        if tools:
+            overlay["tools"] = [_tool_schema_to_session_tool(t) for t in tools]
         return self._session | overlay | self._session_overrides
 
     @asynccontextmanager
@@ -234,17 +285,18 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
         *,
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
+        serializer: SerializerProto,
     ) -> AsyncIterator[None]:
         final_session = self._build_session(instructions=instructions, tools=tools)
 
-        async with self.client.beta.realtime.connect(model=self.model) as conn:
+        async with self.client.realtime.connect(model=self.model) as conn:
             await conn.session.update(session=final_session)
 
             async def _pump_audio(event: RecordedAudioEvent) -> None:
                 await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())
 
             async def _forward_tool_result(event: ToolResultEvent) -> None:
-                await _send_tool_result(conn, event)
+                await _send_tool_result(conn, event, serializer)
 
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
@@ -261,9 +313,9 @@ class OpenAIRealTimeConfig(RealtimeSTTConfig):
                         await recv_task
 
 
-def _tool_schema_to_session_tool(t: ToolSchema) -> SessionTool:
+def _tool_schema_to_session_tool(t: ToolSchema) -> RealtimeFunctionToolParam:
     if isinstance(t, FunctionToolSchema):
-        return SessionTool(
+        return RealtimeFunctionToolParam(
             type="function",
             name=t.function.name,
             description=t.function.description,
@@ -275,24 +327,22 @@ def _tool_schema_to_session_tool(t: ToolSchema) -> SessionTool:
 async def _send_tool_result(
     conn: AsyncRealtimeConnection,
     event: ToolResultEvent,
+    serializer: SerializerProto,
 ) -> None:
-    parts = event.result.parts
-    if not parts:
-        output = ""
-    else:
-        part = parts[0]
+    chunks: list[str] = []
+    for part in event.result.parts:
         if isinstance(part, TextInput):
-            output = part.content
+            chunks.append(part.content)
         elif isinstance(part, DataInput):
-            output = json.dumps(part.data, default=str)
+            chunks.append(serializer.encode(part.data).decode())
         else:
-            output = str(part)
+            chunks.append(str(part))
 
     await conn.conversation.item.create(
         item={
             "type": "function_call_output",
             "call_id": event.parent_id,
-            "output": output,
+            "output": "\n".join(chunks),
         },
     )
     await conn.response.create()
@@ -309,9 +359,9 @@ async def _pump_events(
         elif event.type == "conversation.item.input_audio_transcription.completed":
             # TODO: process usage
             await context.send(TranscriptionCompletedEvent(event.transcript))
-        elif event.type == "response.audio.delta":
+        elif event.type == "response.output_audio.delta":
             await context.send(SynthesizedAudioEvent(base64.b64decode(event.delta)))
-        elif event.type == "response.text.delta":
+        elif event.type == "response.output_text.delta":
             text += event.delta
             await context.send(ModelMessageChunk(event.delta))
         elif event.type == "response.output_item.done":
