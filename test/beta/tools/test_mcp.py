@@ -11,6 +11,7 @@ from mcp.types import CallToolResult, ListToolsResult, TextContent
 from mcp.types import Tool as MCPTool
 
 from autogen.beta import Agent, Context
+from autogen.beta.events.tool_events import ToolCallEvent, ToolResult, ToolResultEvent
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import MCPServer, MCPStdioServerConfig
 from autogen.beta.tools.toolkits.mcp_server import toolkit as _toolkit_module
@@ -179,11 +180,10 @@ async def test_call_tool_returns_text_content(patch_mcp_session, context: Contex
     await toolkit.schemas(context)
 
     proxy = toolkit.tools[0]
-    from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
 
     event = ToolCallEvent(name="echo", arguments="{}")
     result = await proxy(event, context)
 
     assert isinstance(result, ToolResultEvent)
-    assert result.result.content == "hello world"
+    assert result.result == ToolResult("hello world")
     assert session.calls == [("echo", {})]
