@@ -8,8 +8,6 @@ sidebarTitle: Client
 ## Minimal Client
 
 ```python linenums="1"
-import asyncio
-
 from autogen.beta import Agent
 from autogen.beta.a2a import A2AConfig
 
@@ -22,8 +20,6 @@ async def main() -> None:
     reply = await remote.ask("Add 17 and 25 with calc_add. Just the number.")
     print(reply.response.content)  # -> "42"
 
-
-asyncio.run(main())
 ```
 
 `#!python card_url` is the HTTP(S) base where the server publishes `#!python /.well-known/agent-card.json`. The client fetches the card on first use, picks a binding from `#!python supported_interfaces`, and uses the URL declared in the card for every subsequent request — you don't pass transport-specific URLs.
@@ -122,20 +118,20 @@ This composes naturally with several remotes — give each `#!python as_tool()` 
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `card_url` | `#!python str` | required | Base URL where `#!python /.well-known/agent-card.json` is served |
-| `prefer` | `#!python "jsonrpc" \| "rest" \| "grpc" \| None` | `#!python None` | Force a specific binding when the card declares more than one |
+| `prefer` | `#!python Optional[Literal["jsonrpc", "rest", "grpc"]]` | `#!python None` | Force a specific binding when the card declares more than one |
 | `streaming` | `#!python bool` | `#!python True` | Use `#!python sendStreaming` when the server's card opts in. Falls back to polling otherwise |
-| `headers` | `#!python Mapping[str, str] \| None` | `#!python None` | Extra HTTP headers (auth, tracing) |
-| `timeout` | `#!python float \| None` | `#!python 60.0` | Per-request timeout in seconds |
+| `headers` | `#!python Optional[Mapping[str, str]]` | `#!python None` | Extra HTTP headers (auth, tracing) |
+| `timeout` | `#!python Optional[float]` | `#!python 60.0` | Per-request timeout in seconds |
 | `max_reconnects` | `#!python int` | `#!python 3` | Streaming reconnect attempts (see [Advanced](/docs/beta/a2a/advanced#streaming-reconnect)) |
 | `reconnect_backoff` | `#!python float` | `#!python 0.5` | Backoff between reconnect attempts (seconds) |
 | `polling_interval` | `#!python float` | `#!python 0.5` | Poll interval when streaming is off |
-| `input_required_timeout` | `#!python float \| None` | `#!python None` | Cap how long the client waits on a HITL hook |
-| `httpx_client_factory` | `#!python Callable[[], AsyncClient] \| None` | `#!python None` | Custom `#!python httpx.AsyncClient` (proxies, custom TLS, etc.) |
+| `input_required_timeout` | `#!python Optional[float]` | `#!python None` | Cap how long the client waits on a HITL hook |
+| `httpx_client_factory` | `#!python Optional[Callable[[], AsyncClient]]` | `#!python None` | Custom `#!python httpx.AsyncClient` (proxies, custom TLS, etc.) |
 | `interceptors` | `#!python Sequence[ClientCallInterceptor]` | `#!python ()` | A2A SDK call interceptors |
-| `grpc_channel_factory` | `#!python Callable[[str], Channel] \| None` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
-| `preset_card` | `#!python AgentCard \| None` | `#!python None` | Skip the discovery round-trip when the card is already known |
-| `tenant` | `#!python str \| None` | `#!python None` | Multi-tenancy scope on a shared backend |
-| `history_length` | `#!python int \| None` | `#!python None` | Server-side hint to truncate echoed `#!python Task.history` |
+| `grpc_channel_factory` | `#!python Optional[Callable[[str], Channel]]` | `#!python None` | Custom gRPC channel builder (defaults to insecure) |
+| `preset_card` | `#!python Optional[AgentCard]` | `#!python None` | Skip the discovery round-trip when the card is already known |
+| `tenant` | `#!python Optional[str]` | `#!python None` | Multi-tenancy scope on a shared backend |
+| `history_length` | `#!python Optional[int]` | `#!python None` | Server-side hint to truncate echoed `#!python Task.history` |
 
 ### Constructing From a Pre-fetched Card
 

@@ -10,8 +10,6 @@ sidebarTitle: Server
 The smallest end-to-end setup: an `#!python Agent` with a tool, served over JSON-RPC on a single port via `uvicorn`.
 
 ```python linenums="1"
-import asyncio
-
 import uvicorn
 
 from autogen.beta import Agent
@@ -38,8 +36,6 @@ async def main() -> None:
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
 ```
 
 After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `#!python A2AConfig(card_url=...)` — see the [Client](/docs/beta/a2a/client) page.

@@ -64,7 +64,7 @@ Sub-modules:
 |---|---|
 | `#!python autogen.beta.a2a.tasks` | `#!python list_tasks`, `#!python get_task`, `#!python cancel_task` |
 | `#!python autogen.beta.a2a.push` | `#!python A2APushConfig`, `#!python A2APushAuthentication`, CRUD helpers |
-| `#!python autogen.beta.a2a.transports` | `#!python TransportName` (`#!python "jsonrpc" | "rest" | "grpc"`), low-level builders |
+| `#!python autogen.beta.a2a.transports` | `#!python TransportName` — `#!python Literal["jsonrpc", "rest", "grpc"]` — plus low-level builders |
 | `#!python autogen.beta.a2a.testing` | Test helpers — `#!python pick_free_port()` and friends |
 
 !!! note
