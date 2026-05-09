@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import AsyncIterator, Iterable
 from contextlib import ExitStack, asynccontextmanager
 from dataclasses import replace
@@ -20,9 +21,17 @@ from autogen.beta.events.tool_events import (
     ToolErrorEvent,
     ToolResultEvent,
 )
-from autogen.beta.middleware import BaseMiddleware, ToolExecution, ToolMiddleware, ToolResultType
+from autogen.beta.middleware import (
+    BaseMiddleware,
+    ToolExecution,
+    ToolMiddleware,
+    ToolResultType,
+)
 from autogen.beta.tools.final import Toolkit
-from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
+from autogen.beta.tools.final.function_tool import (
+    FunctionDefinition,
+    FunctionToolSchema,
+)
 from autogen.beta.tools.tool import Tool
 
 from .types import MCPServerConfig, MCPStdioServerConfig
@@ -112,7 +121,8 @@ class _MCPProxyTool(Tool):
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:
-            async with _mcp_session(self._config) as session:
+            resolved = _resolve_config(self._config, context)
+            async with _mcp_session(resolved) as session:
                 result = await session.call_tool(self.name, event.serialized_arguments)
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
@@ -139,7 +149,7 @@ class MCPServer(Toolkit):
     like ordinary :class:`FunctionTool` instances.
     """
 
-    __slots__ = ("config", "_discovered")
+    __slots__ = ("config", "_discovered", "_discover_lock")
 
     def __init__(
         self,
@@ -151,6 +161,7 @@ class MCPServer(Toolkit):
             server = MCPServerConfig(server_url=server)
         self.config: AnyMCPConfig = server
         self._discovered = False
+        self._discover_lock = asyncio.Lock()
 
         label = server.server_label if isinstance(server.server_label, str) else ""
         super().__init__(
@@ -166,28 +177,31 @@ class MCPServer(Toolkit):
         if self._discovered:
             return
 
-        resolved = _resolve_config(self.config, context)
+        async with self._discover_lock:
+            if self._discovered:
+                return
 
-        async with _mcp_session(resolved) as session:
-            raw_tools = (await session.list_tools()).tools
+            resolved = _resolve_config(self.config, context)
 
-        allowed = resolved.allowed_tools
-        blocked = set(resolved.blocked_tools or [])
+            async with _mcp_session(resolved) as session:
+                raw_tools = (await session.list_tools()).tools
 
-        for raw in raw_tools:
-            if allowed is not None and raw.name not in allowed:
-                continue
-            if raw.name in blocked:
-                continue
-            self.tools.append(
-                _MCPProxyTool(
-                    config=resolved,
+            allowed = resolved.allowed_tools
+            blocked = set(resolved.blocked_tools or [])
+
+            for raw in raw_tools:
+                if allowed is not None and raw.name not in allowed:
+                    continue
+                if raw.name in blocked:
+                    continue
+                proxy = _MCPProxyTool(
+                    config=self.config,
                     raw_tool=raw,
                     middleware=self._middleware,
                 )
-            )
+                self._tools[proxy.name] = proxy
 
-        self._discovered = True
+            self._discovered = True
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
