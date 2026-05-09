@@ -66,7 +66,7 @@ class TestHttpxLifecycle:
         _SpyAsyncClient.aclose_count = 0
         server = A2AServer(Agent("server", config=TestConfig("hi")))
         url = "http://test"
-        client = Agent("client", config=A2AConfig(url=url, httpx_client_factory=_make_spy_factory(server, url)))
+        client = Agent("client", config=A2AConfig(card_url=url, httpx_client_factory=_make_spy_factory(server, url)))
 
         await client.ask("ping")
 
@@ -81,7 +81,7 @@ class TestHttpxLifecycle:
         url = "http://test"
         client = Agent(
             "client",
-            config=A2AConfig(url=url, httpx_client_factory=_make_spy_factory(server, url), streaming=False),
+            config=A2AConfig(card_url=url, httpx_client_factory=_make_spy_factory(server, url), streaming=False),
         )
 
         with pytest.raises(A2ATaskFailedError):
@@ -91,7 +91,7 @@ class TestHttpxLifecycle:
 
     async def test_aclose_is_idempotent(self) -> None:
         _SpyAsyncClient.aclose_count = 0
-        client = A2AClient(url="http://test")
+        client = A2AClient(card_url="http://test")
         client._httpx_client = _SpyAsyncClient(base_url="http://test")
 
         await client.aclose()
@@ -137,7 +137,7 @@ async def test_streamed_chunks_not_duplicated_in_final_message() -> None:
     factory = make_test_client_factory(server, url=url)
     client = Agent(
         "client",
-        config=A2AConfig(url=url, httpx_client_factory=factory, streaming=True),
+        config=A2AConfig(card_url=url, httpx_client_factory=factory, streaming=True),
     )
 
     reply = await client.ask("ping")

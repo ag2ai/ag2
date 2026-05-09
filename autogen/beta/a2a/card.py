@@ -23,6 +23,7 @@ def build_card(
     *,
     url: str,
     transports: Sequence[TransportName] = ("jsonrpc",),
+    rest_url: str | None = None,
     rest_path_prefix: str = "",
     grpc_url: str | None = None,
     version: str = _DEFAULT_VERSION,
@@ -35,9 +36,10 @@ def build_card(
     plain text exchange when the client doesn't speak the extension.
 
     ``supported_interfaces`` is built from ``transports`` — one
-    ``AgentInterface`` per enabled binding. JSON-RPC and REST share
-    ``url`` (REST optionally prefixed by ``rest_path_prefix``); gRPC
-    lives on its own ``grpc_url`` (different host:port by convention).
+    ``AgentInterface`` per enabled binding. JSON-RPC URL is ``url``;
+    REST URL defaults to ``url + rest_path_prefix`` (same host:port,
+    different path) but can be overridden via ``rest_url`` when REST
+    lives on a different host:port; gRPC lives on its own ``grpc_url``.
     """
     if "grpc" in transports and grpc_url is None:
         raise ValueError("grpc_url is required when 'grpc' is in transports")
@@ -73,6 +75,7 @@ def build_card(
         supported_interfaces=_build_interfaces(
             transports=transports,
             url=url,
+            rest_url=rest_url,
             rest_path_prefix=rest_path_prefix,
             grpc_url=grpc_url,
         ),
@@ -83,6 +86,7 @@ def _build_interfaces(
     *,
     transports: Sequence[TransportName],
     url: str,
+    rest_url: str | None,
     rest_path_prefix: str,
     grpc_url: str | None,
 ) -> list[AgentInterface]:
@@ -99,7 +103,7 @@ def _build_interfaces(
         elif name == "rest":
             interfaces.append(
                 AgentInterface(
-                    url=url + rest_path_prefix,
+                    url=rest_url if rest_url is not None else url + rest_path_prefix,
                     protocol_binding=TransportProtocol.HTTP_JSON.value,
                     protocol_version=PROTOCOL_VERSION_CURRENT,
                 ),

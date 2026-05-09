@@ -178,7 +178,7 @@ def make_pair(
     factory = make_test_client_factory(server, url=server_url)
 
     client_config = A2AConfig(
-        url=server_url,
+        card_url=server_url,
         httpx_client_factory=factory,
         streaming=streaming,
     )
@@ -215,7 +215,7 @@ def make_executor_pair(
 
     client = Agent(
         "client",
-        config=A2AConfig(url=server_url, httpx_client_factory=factory, streaming=streaming),
+        config=A2AConfig(card_url=server_url, httpx_client_factory=factory, streaming=streaming),
         **client_kwargs,
     )
     return ExecutorPair(server=server, executor=executor, client=client)

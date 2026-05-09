@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 class A2AConfigOverrides(TypedDict, total=False):
-    url: str
-    transports: Sequence[TransportName]
+    card_url: str
+    prefer: TransportName | None
     streaming: bool
     headers: Mapping[str, str] | None
     timeout: float | None
@@ -44,12 +44,16 @@ class A2AConfigOverrides(TypedDict, total=False):
 class A2AConfig(ModelConfig):
     """Connection config for an A2A agent acting as an LLM provider.
 
-    ``url`` is the base address of the remote A2A server (the agent card
-    is fetched from ``{url}/.well-known/agent-card.json`` per spec).
+    ``card_url`` is the HTTP(S) URL where the agent card is published
+    (fetched from ``{card_url}/.well-known/agent-card.json`` per spec).
+    The actual transport endpoint for the request/response exchange is
+    read from ``card.supported_interfaces`` — the user does not pass it.
 
-    ``transports`` is the ordered preference list of protocol bindings
-    the client is willing to negotiate. The SDK picks the first one the
-    server card declares as supported. Default ``("jsonrpc",)``.
+    ``prefer`` selects a transport when the server card declares more
+    than one binding. ``None`` (default) auto-picks: if exactly one
+    interface matches ``card_url`` it is used; otherwise the first
+    server-listed interface wins. Pass ``"jsonrpc" | "rest" | "grpc"``
+    to force a specific binding.
 
     ``polling_interval`` is used when the server card declares
     ``capabilities.streaming=False`` or when the user opts into
@@ -62,8 +66,8 @@ class A2AConfig(ModelConfig):
     (matches ``ConversationContext.input``).
 
     ``grpc_channel_factory`` builds a ``grpc.aio.Channel`` for a given
-    URL when the negotiated transport is gRPC. Required only if
-    ``"grpc"`` is in ``transports`` and the server actually picks it.
+    URL when the resolved transport is gRPC. Optional — defaults to
+    insecure_channel via ``default_grpc_channel_factory``.
 
     ``tenant`` scopes every outgoing request to a specific tenant on the
     remote server (A2A multi-tenancy: a single shared backend can isolate
@@ -75,8 +79,8 @@ class A2AConfig(ModelConfig):
     Pure server-side hint — does not change what the client uploads.
     """
 
-    url: str
-    transports: Sequence[TransportName] = ("jsonrpc",)
+    card_url: str
+    prefer: TransportName | None = None
     streaming: bool = True
     headers: Mapping[str, str] | None = None
     timeout: float | None = 60.0
@@ -100,27 +104,28 @@ class A2AConfig(ModelConfig):
         cls,
         card: AgentCard,
         *,
-        url: str | None = None,
+        card_url: str | None = None,
         **overrides: Any,
     ) -> Self:
         """Construct a config from a pre-fetched ``AgentCard``.
 
         Useful when the card has already been resolved (e.g. via a
         discovery service) and a network round-trip on connect can be
-        skipped. ``url`` defaults to the first interface declared on
-        the card; raises ``ValueError`` if neither is available.
+        skipped. ``card_url`` defaults to the first interface declared
+        on the card; raises ``A2AInvalidCardError`` if neither is
+        available.
         """
-        resolved_url = url or _first_interface_url(card)
+        resolved_url = card_url or _first_interface_url(card)
         if not resolved_url:
             raise A2AInvalidCardError(
-                "AgentCard has no supported_interfaces and no `url` override was provided",
+                "AgentCard has no supported_interfaces and no `card_url` override was provided",
             )
-        return cls(url=resolved_url, preset_card=card, **overrides)
+        return cls(card_url=resolved_url, preset_card=card, **overrides)
 
     def create(self) -> A2AClient:
         return A2AClient(
-            url=self.url,
-            transports=tuple(self.transports),
+            card_url=self.card_url,
+            prefer=self.prefer,
             streaming=self.streaming,
             headers=dict(self.headers) if self.headers else None,
             timeout=self.timeout,

@@ -128,7 +128,7 @@ class TestStreamingReconnect:
         ]
         sdk = _ScriptedSdk(first_events=first, drop_after=2, replay_events=replay)
 
-        client = A2AClient(url="http://test", max_reconnects=3, reconnect_backoff=0.0)
+        client = A2AClient(card_url="http://test", max_reconnects=3, reconnect_backoff=0.0)
         _attach_mock(client, sdk)
 
         ctx = _make_context()
@@ -153,7 +153,7 @@ class TestStreamingReconnect:
         ]
         sdk = _ScriptedSdk(first_events=first, drop_after=2, replay_events=replay)
 
-        client = A2AClient(url="http://test", max_reconnects=3, reconnect_backoff=0.0)
+        client = A2AClient(card_url="http://test", max_reconnects=3, reconnect_backoff=0.0)
         _attach_mock(client, sdk)
 
         ctx = _make_context()
@@ -178,7 +178,7 @@ class TestStreamingReconnect:
 
         sdk.subscribe = _failing_subscribe  # type: ignore[assignment]
 
-        client = A2AClient(url="http://test", max_reconnects=2, reconnect_backoff=0.0)
+        client = A2AClient(card_url="http://test", max_reconnects=2, reconnect_backoff=0.0)
         _attach_mock(client, sdk)
 
         ctx = _make_context()

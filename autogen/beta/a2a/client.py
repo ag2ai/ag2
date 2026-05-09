@@ -69,13 +69,13 @@ from .mappers.messages import (
 from .mappers.parts import is_data_part_with_mime, part_data_to_python
 from .mappers.tools import payload_to_call
 from .transports import TransportName
-from .transports._http import fetch_card, make_a2a_client, make_httpx_client
+from .transports._http import fetch_card, make_a2a_client, make_httpx_client, select_transport
 
 if TYPE_CHECKING:
     import grpc.aio
 
 _PROVIDER = "a2a"
-_CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{url}"
+_CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{card_url}"
 
 _TERMINAL_STATES = frozenset({
     TaskState.TASK_STATE_COMPLETED,
@@ -141,8 +141,8 @@ class A2AClient(LLMClient):
     def __init__(
         self,
         *,
-        url: str,
-        transports: Sequence[TransportName] = ("jsonrpc",),
+        card_url: str,
+        prefer: TransportName | None = None,
         streaming: bool = True,
         headers: Mapping[str, str] | None = None,
         timeout: float | None = 60.0,
@@ -158,12 +158,8 @@ class A2AClient(LLMClient):
         tenant: str | None = None,
         history_length: int | None = None,
     ) -> None:
-        transports_tuple = tuple(transports)
-        if not transports_tuple:
-            raise ValueError("transports must contain at least one of 'jsonrpc', 'rest', 'grpc'")
-
-        self._url = url
-        self._transports = transports_tuple
+        self._card_url = card_url
+        self._prefer = prefer
         self._streaming = streaming
         self._headers = dict(headers) if headers else None
         self._timeout = timeout
@@ -268,12 +264,13 @@ class A2AClient(LLMClient):
             factory=self._httpx_client_factory,
         )
         if self._preset_card is None:
-            self._agent_card = await fetch_card(self._httpx_client, url=self._url)
+            self._agent_card = await fetch_card(self._httpx_client, url=self._card_url)
+        transport = select_transport(self._agent_card, url=self._card_url, prefer=self._prefer)
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
             httpx_client=self._httpx_client,
             streaming=self._streaming,
-            transports=self._transports,
+            transport=transport,
             interceptors=self._interceptors,
             grpc_channel_factory=self._grpc_channel_factory,
         )
@@ -292,7 +289,7 @@ class A2AClient(LLMClient):
             return []
         if not self._card_advertises_extension():
             raise A2AClientToolsNotSupportedError(
-                f"Server at {self._url!r} does not advertise extension "
+                f"Server at {self._card_url!r} does not advertise extension "
                 f"{EXTENSION_URI!r}; remove tools= or use a server that supports it."
             )
         return function_schemas
@@ -618,12 +615,12 @@ class A2AClient(LLMClient):
         return SendMessageRequest(**request_kwargs)
 
     def _read_context_id(self, context: ConversationContext) -> str | None:
-        return context.variables.get(_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url))
+        return context.variables.get(_CONTEXT_ID_VAR_TEMPLATE.format(card_url=self._card_url))
 
     def _save_context_id(self, context: ConversationContext, context_id: str) -> None:
         if not context_id:
             return
-        context.variables[_CONTEXT_ID_VAR_TEMPLATE.format(url=self._url)] = context_id
+        context.variables[_CONTEXT_ID_VAR_TEMPLATE.format(card_url=self._card_url)] = context_id
 
     def _resolve_tenant(self, context: ConversationContext) -> str | None:
         # Per-call override wins: a single Agent can fan out to multiple

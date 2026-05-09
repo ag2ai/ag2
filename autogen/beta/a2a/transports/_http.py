@@ -13,6 +13,7 @@ from a2a.client.errors import AgentCardResolutionError
 from a2a.server.context import ServerCallContext
 from a2a.types import AgentCard
 
+from ..errors import A2AInvalidCardError
 from . import TransportName
 from .grpc import default_grpc_channel_factory
 
@@ -36,6 +37,55 @@ _TRANSPORT_BINDINGS: dict[str, str] = {
     "rest": TransportProtocol.HTTP_JSON.value,
     "grpc": TransportProtocol.GRPC.value,
 }
+
+_BINDING_TO_TRANSPORT: dict[str, TransportName] = {v: k for k, v in _TRANSPORT_BINDINGS.items()}  # type: ignore[misc]
+
+
+def binding_to_transport(binding: str) -> TransportName | None:
+    """Map an SDK protocol-binding string back to our short transport name.
+
+    Returns ``None`` if the binding is not one we support — caller can
+    raise a meaningful error then.
+    """
+    return _BINDING_TO_TRANSPORT.get(binding)
+
+
+def select_transport(card: AgentCard, *, url: str, prefer: TransportName | None) -> TransportName:
+    """Pick a transport from ``card.supported_interfaces``.
+
+    Resolution order:
+    1. ``prefer`` set → match it against a declared binding; raise if absent.
+    2. Otherwise → prefer the interface whose ``url`` matches ``url``
+       (the common case: one URL, one binding).
+    3. Fallback → first server-listed interface.
+    """
+    interfaces = list(card.supported_interfaces)
+    if not interfaces:
+        raise A2AInvalidCardError(f"AgentCard at {url!r} has no supported_interfaces")
+
+    if prefer is not None:
+        for iface in interfaces:
+            transport = binding_to_transport(iface.protocol_binding)
+            if transport == prefer:
+                return transport
+        raise A2AInvalidCardError(
+            f"AgentCard at {url!r} does not declare prefer={prefer!r}; "
+            f"available: {[iface.protocol_binding for iface in interfaces]}",
+        )
+
+    for iface in interfaces:
+        if iface.url == url:
+            transport = binding_to_transport(iface.protocol_binding)
+            if transport is not None:
+                return transport
+
+    first = interfaces[0]
+    transport = binding_to_transport(first.protocol_binding)
+    if transport is None:
+        raise A2AInvalidCardError(
+            f"AgentCard at {url!r} declares unsupported binding {first.protocol_binding!r}",
+        )
+    return transport
 
 
 def make_httpx_client(
@@ -90,31 +140,31 @@ def make_a2a_client(
     card: AgentCard,
     httpx_client: httpx.AsyncClient,
     streaming: bool,
-    transports: Sequence[TransportName] = ("jsonrpc",),
+    transport: TransportName,
     interceptors: Sequence[ClientCallInterceptor] = (),
     grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = None,
 ) -> Client:
-    """Build an A2A SDK ``Client`` honoring the requested transport preference.
+    """Build an A2A SDK ``Client`` for the given resolved transport.
 
-    ``transports`` is an ordered preference list — the SDK picks the
-    first one the server card declares as supported. The factory
-    negotiates streaming vs. polling automatically based on
+    ``transport`` is already a single, resolved binding — selection
+    happens upstream by matching the card_url against
+    ``card.supported_interfaces`` (with optional ``prefer`` override).
+    The factory negotiates streaming vs. polling automatically based on
     ``card.capabilities.streaming`` and ``ClientConfig.streaming``.
 
-    When ``"grpc"`` is in ``transports`` and ``grpc_channel_factory`` is
-    not supplied, the insecure default from ``transports.grpc`` is
+    When ``transport == "grpc"`` and ``grpc_channel_factory`` is not
+    supplied, the insecure default from ``transports.grpc`` is
     auto-attached. Importing it lazily here keeps HTTP-only deployments
     from pulling ``grpcio`` at import time.
     """
-    if "grpc" in transports and grpc_channel_factory is None:
+    if transport == "grpc" and grpc_channel_factory is None:
         grpc_channel_factory = default_grpc_channel_factory
 
-    bindings = [_TRANSPORT_BINDINGS[t] for t in transports]
     config = ClientConfig(
         streaming=streaming and card.capabilities.streaming,
         polling=not (streaming and card.capabilities.streaming),
         httpx_client=httpx_client,
-        supported_protocol_bindings=bindings,
+        supported_protocol_bindings=[_TRANSPORT_BINDINGS[transport]],
         grpc_channel_factory=grpc_channel_factory,
     )
     factory = ClientFactory(config)

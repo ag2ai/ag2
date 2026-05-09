@@ -35,17 +35,17 @@ class TestFromCardUrlResolution:
     def test_picks_first_non_empty_interface_url(self) -> None:
         card = _card_with_interfaces("", "http://second.example")
         config = A2AConfig.from_card(card)
-        assert config.url == "http://second.example"
+        assert config.card_url == "http://second.example"
 
     def test_picks_first_when_all_have_urls(self) -> None:
         card = _card_with_interfaces("http://a.example", "http://b.example")
         config = A2AConfig.from_card(card)
-        assert config.url == "http://a.example"
+        assert config.card_url == "http://a.example"
 
     def test_explicit_url_overrides_card(self) -> None:
         card = _card_with_interfaces("http://from-card.example")
-        config = A2AConfig.from_card(card, url="http://override.example")
-        assert config.url == "http://override.example"
+        config = A2AConfig.from_card(card, card_url="http://override.example")
+        assert config.card_url == "http://override.example"
 
     def test_no_interfaces_and_no_override_raises(self) -> None:
         card = _card_with_interfaces()

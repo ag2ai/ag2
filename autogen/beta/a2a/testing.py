@@ -28,7 +28,7 @@ def make_test_client_factory(
         factory = make_test_client_factory(server, url="http://test")
         remote = Agent(
             "remote",
-            config=A2AConfig(url="http://test", httpx_client_factory=factory),
+            config=A2AConfig(card_url="http://test", httpx_client_factory=factory),
         )
         await remote.ask("ping")
 

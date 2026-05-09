@@ -9,7 +9,7 @@ from typing import Any
 from a2a.client import Client
 
 from .config import A2AConfig
-from .transports._http import fetch_card, make_a2a_client, make_httpx_client
+from .transports._http import fetch_card, make_a2a_client, make_httpx_client, select_transport
 
 
 def with_tenant(config: A2AConfig, override: str | None, **kwargs: Any) -> dict[str, Any]:
@@ -40,12 +40,13 @@ async def open_session(config: A2AConfig) -> AsyncIterator[Client]:
         factory=config.httpx_client_factory,
     )
     try:
-        card = config.preset_card or await fetch_card(httpx_client, url=config.url)
+        card = config.preset_card or await fetch_card(httpx_client, url=config.card_url)
+        transport = select_transport(card, url=config.card_url, prefer=config.prefer)
         sdk = make_a2a_client(
             card=card,
             httpx_client=httpx_client,
             streaming=False,
-            transports=tuple(config.transports),
+            transport=transport,
             interceptors=tuple(config.interceptors),
             grpc_channel_factory=config.grpc_channel_factory,
         )
