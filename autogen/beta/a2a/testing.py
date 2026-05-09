@@ -34,7 +34,9 @@ def make_test_client_factory(
 
     The transport is created **once** and shared by every client the
     factory hands out, which matches how httpx.ASGITransport is meant to
-    be reused.
+    be reused. Each client returned by the factory is independent and
+    closed by the caller (``A2AClient`` runs ``aclose()`` after each
+    ``ask``); ``ASGITransport`` itself doesn't need explicit cleanup.
     """
     app = server.build_jsonrpc(url=url)
     transport = httpx.ASGITransport(app=app)

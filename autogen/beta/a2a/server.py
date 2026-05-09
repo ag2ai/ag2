@@ -5,7 +5,9 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
 from a2a.server.tasks import (
+    InMemoryTaskStore,
     PushNotificationConfigStore,
     PushNotificationSender,
     TaskStore,
@@ -85,15 +87,24 @@ class A2AServer:
         task_store: TaskStore | None = None,
         push_config_store: PushNotificationConfigStore | None = None,
         push_sender: PushNotificationSender | None = None,
+        executor: A2AAgentExecutorBase | None = None,
     ) -> None:
         self._agent = agent
         self._extended_card = extended_card
         self._card_modifier = card_modifier
         self._extended_card_modifier = extended_card_modifier
-        self._task_store = task_store
+        # Materialise a default store eagerly so multi-transport setups
+        # (the same ``A2AServer`` exposed via JSON-RPC + REST + gRPC) all
+        # share one task store. Otherwise each ``build_*`` call would
+        # default to its own ``InMemoryTaskStore`` and tasks created via
+        # one transport would be invisible from the others.
+        self._task_store = task_store or InMemoryTaskStore()
         self._push_config_store = push_config_store
         self._push_sender = push_sender
-        self._executor = AgentExecutor(agent)
+        # ``executor`` is escape-hatch for tests and advanced use cases
+        # that need to plug a custom ``AgentExecutor`` (e.g. one that
+        # short-circuits the AG2 agent). Default wraps the supplied agent.
+        self._executor = executor if executor is not None else AgentExecutor(agent)
 
     @property
     def agent(self) -> Agent:
@@ -102,6 +113,11 @@ class A2AServer:
     @property
     def extended_card(self) -> AgentCard | None:
         return self._extended_card
+
+    @property
+    def task_store(self) -> TaskStore:
+        """Return the shared task store used across all transport builders."""
+        return self._task_store
 
     def build_jsonrpc(
         self,
@@ -188,6 +204,13 @@ class A2AServer:
         not when you're behind a load balancer). Insecure binding only.
         Caller is responsible for ``await server.start()`` and
         ``await server.wait_for_termination()``.
+
+        Note: ``card_modifier`` is intentionally not applied in gRPC.
+        A2A v1.x has no ``GetAgentCard`` gRPC method — the public card
+        is served over HTTP at ``/.well-known/agent-card.json`` only —
+        so there is nothing to modify per-request on this transport.
+        ``extended_card_modifier`` does apply (gRPC does expose
+        ``GetExtendedAgentCard``).
         """
         resolved_card = card or build_card(
             self._agent,

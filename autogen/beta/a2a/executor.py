@@ -66,12 +66,17 @@ class AgentExecutor(A2AAgentExecutorBase):
             return
         parsed = parse_message(msg)
 
+        # ``msg.task_id`` is normally populated by the SDK 1.x server-side
+        # request handler (it auto-generates an id when the client didn't
+        # send one). The ``or request_context.task_id or uuid4()`` chain
+        # is a defensive fallback for non-standard handlers and for tests
+        # that bypass the request builder. Same idea for ``context_id``.
         task_id = msg.task_id or request_context.task_id or uuid4().hex
         context_id = msg.context_id or request_context.context_id or uuid4().hex
-        # SDK 1.x always populates ``msg.task_id`` (it generates one if the
-        # client didn't supply it), so ``msg.task_id`` is unreliable as a
-        # first-turn signal. ``request_context.current_task`` is ``None``
-        # exactly when no task has been persisted yet for this id.
+        # ``msg.task_id`` cannot be used as a first-turn signal because it
+        # is set by the SDK on every incoming message. The authoritative
+        # signal is ``request_context.current_task`` — ``None`` exactly
+        # when no task has been persisted yet for this id.
         is_first_turn = request_context.current_task is None
 
         updater = TaskUpdater(event_queue, task_id, context_id)
@@ -95,6 +100,13 @@ class AgentExecutor(A2AAgentExecutorBase):
             raise
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        # Per a2a-sdk contract: the framework already cancels the asyncio
+        # Task running ``execute()`` (raising ``asyncio.CancelledError``)
+        # before this hook is invoked. Our only job is to publish the
+        # CANCELED status update — the running coroutine winds down on
+        # its own. The ``except Exception`` in ``execute`` deliberately
+        # does NOT catch ``CancelledError`` (it's a ``BaseException``),
+        # so a cancel never flips the task to FAILED by accident.
         task_id = request_context.task_id or ""
         context_id = request_context.context_id or ""
         updater = TaskUpdater(event_queue, task_id, context_id)
@@ -119,12 +131,12 @@ class AgentExecutor(A2AAgentExecutorBase):
         with ExitStack() as stack:
             stack.enter_context(
                 stream.where(ModelMessageChunk).sub_scope(
-                    _make_chunk_handler(updater, text_artifact_id, text_pieces),
+                    _ChunkSink(updater, text_artifact_id, text_pieces),
                 ),
             )
             stack.enter_context(
                 stream.where(ClientToolCallEvent).sub_scope(
-                    _make_client_tool_call_handler(updater, pending_client_calls),
+                    _ClientCallSink(updater, pending_client_calls),
                 ),
             )
             response, final_variables = await self._dispatch_to_agent(
@@ -139,8 +151,19 @@ class AgentExecutor(A2AAgentExecutorBase):
             await updater.requires_input()
             return
 
-        final_text = response.message.content if response.message else "".join(text_pieces)
-        agent_msg = self._build_final_message(updater, final_text, final_variables)
+        # Avoid duplicating text that was already streamed via chunk
+        # artifacts. ``response.message.content`` echoes the full assistant
+        # text, but if streaming was active we already pushed it as
+        # ``add_artifact(append=True)`` calls — sending it again on
+        # ``complete(message=...)`` makes the client see it twice.
+        streamed_text = "".join(text_pieces)
+        full_text = response.message.content if response.message else streamed_text
+        if full_text and full_text != streamed_text:
+            agent_msg = self._build_final_message(updater, full_text, final_variables)
+        elif final_variables:
+            agent_msg = self._build_final_message(updater, "", final_variables)
+        else:
+            agent_msg = None
         await updater.complete(message=agent_msg)
 
     @staticmethod
@@ -221,33 +244,44 @@ class AgentExecutor(A2AAgentExecutorBase):
         return reply.response, dict(ctx.variables)
 
 
-def _make_chunk_handler(
-    updater: TaskUpdater,
-    text_artifact_id: str,
-    text_pieces: list[str],
-):
-    async def handler(ev: ModelMessageChunk, _: Context) -> None:
-        text_pieces.append(ev.content)
-        await updater.add_artifact(
+class _ChunkSink:
+    """Stream subscriber that mirrors ``ModelMessageChunk`` events to A2A artifacts.
+
+    Implemented as a class with ``__call__`` rather than a closure-returning
+    factory so the executor's runtime path doesn't define a nested function
+    on every turn (see project CLAUDE.md).
+    """
+
+    __slots__ = ("_updater", "_artifact_id", "_pieces")
+
+    def __init__(self, updater: TaskUpdater, artifact_id: str, pieces: list[str]) -> None:
+        self._updater = updater
+        self._artifact_id = artifact_id
+        self._pieces = pieces
+
+    async def __call__(self, ev: ModelMessageChunk, _: Context) -> None:
+        self._pieces.append(ev.content)
+        await self._updater.add_artifact(
             parts=[Part(text=ev.content)],
-            artifact_id=text_artifact_id,
+            artifact_id=self._artifact_id,
             append=True,
         )
 
-    return handler
 
+class _ClientCallSink:
+    """Stream subscriber that converts ``ClientToolCallEvent`` to a tool-call artifact."""
 
-def _make_client_tool_call_handler(
-    updater: TaskUpdater,
-    pending: list[ClientToolCallEvent],
-):
-    async def handler(ev: ClientToolCallEvent, _: Context) -> None:
-        pending.append(ev)
+    __slots__ = ("_updater", "_pending")
+
+    def __init__(self, updater: TaskUpdater, pending: list[ClientToolCallEvent]) -> None:
+        self._updater = updater
+        self._pending = pending
+
+    async def __call__(self, ev: ClientToolCallEvent, _: Context) -> None:
+        self._pending.append(ev)
         payload = call_to_payload(ToolCallEvent(id=ev.id, name=ev.name, arguments=ev.arguments))
-        await updater.add_artifact(
+        await self._updater.add_artifact(
             parts=[data_part(payload, media_type=MIME_TOOL_CALL)],
             artifact_id=ev.id,
             last_chunk=True,
         )
-
-    return handler

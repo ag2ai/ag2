@@ -43,3 +43,14 @@ class A2ATaskFailedError(A2ATaskTerminalError):
 
 class A2ATaskRejectedError(A2ATaskTerminalError):
     """Task ended in TASK_STATE_REJECTED."""
+
+
+class A2ATaskAuthRequiredError(A2ATaskTerminalError):
+    """Task ended in TASK_STATE_AUTH_REQUIRED.
+
+    Per A2A spec §7.6 the agent expects credentials to arrive out-of-band.
+    AG2 does not currently wire an auth hook, so the client surfaces this
+    state as an error — the application is expected to obtain credentials,
+    apply them (e.g. via interceptor headers or a refreshed config), and
+    retry the request.
+    """

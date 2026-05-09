@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
-from typing import Any
 
 from a2a.types import (
     AuthenticationInfo,
@@ -13,7 +12,7 @@ from a2a.types import (
     TaskPushNotificationConfig,
 )
 
-from ._session import open_session
+from ._session import open_session, with_tenant
 from .config import A2AConfig
 
 
@@ -68,10 +67,7 @@ async def get_push_notification_config(
 ) -> A2APushConfig:
     """Fetch a previously-registered push config by id."""
     async with open_session(config) as sdk:
-        kwargs: dict[str, Any] = {"task_id": task_id, "id": config_id}
-        resolved_tenant = tenant if tenant is not None else config.tenant
-        if resolved_tenant:
-            kwargs["tenant"] = resolved_tenant
+        kwargs = with_tenant(config, tenant, task_id=task_id, id=config_id)
         response = await sdk.get_task_push_notification_config(
             GetTaskPushNotificationConfigRequest(**kwargs),
         )
@@ -94,10 +90,7 @@ async def list_push_notification_configs(
     use the SDK directly.
     """
     async with open_session(config) as sdk:
-        kwargs: dict[str, Any] = {"task_id": task_id}
-        resolved_tenant = tenant if tenant is not None else config.tenant
-        if resolved_tenant:
-            kwargs["tenant"] = resolved_tenant
+        kwargs = with_tenant(config, tenant, task_id=task_id)
         if page_size is not None:
             kwargs["page_size"] = page_size
         if page_token:
@@ -117,10 +110,7 @@ async def delete_push_notification_config(
 ) -> None:
     """Delete a registered push-notification config."""
     async with open_session(config) as sdk:
-        kwargs: dict[str, Any] = {"task_id": task_id, "id": config_id}
-        resolved_tenant = tenant if tenant is not None else config.tenant
-        if resolved_tenant:
-            kwargs["tenant"] = resolved_tenant
+        kwargs = with_tenant(config, tenant, task_id=task_id, id=config_id)
         await sdk.delete_task_push_notification_config(
             DeleteTaskPushNotificationConfigRequest(**kwargs),
         )
@@ -133,10 +123,7 @@ def _to_proto(
     task_id: str,
     push: A2APushConfig,
 ) -> TaskPushNotificationConfig:
-    kwargs: dict[str, Any] = {
-        "task_id": task_id,
-        "url": push.url,
-    }
+    kwargs = with_tenant(config, tenant_override, task_id=task_id, url=push.url)
     if push.id:
         kwargs["id"] = push.id
     if push.token:
@@ -146,9 +133,6 @@ def _to_proto(
             scheme=push.authentication.scheme,
             credentials=push.authentication.credentials or "",
         )
-    resolved_tenant = tenant_override if tenant_override is not None else config.tenant
-    if resolved_tenant:
-        kwargs["tenant"] = resolved_tenant
     return TaskPushNotificationConfig(**kwargs)
 
 

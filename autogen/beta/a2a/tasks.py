@@ -12,7 +12,7 @@ from a2a.types import (
     Task,
 )
 
-from ._session import open_session
+from ._session import open_session, with_tenant
 from .config import A2AConfig
 from .mappers.parts import struct_from_dict
 
@@ -31,7 +31,7 @@ async def cancel_task(
     that need extra context (e.g. operator id, reason).
     """
     async with open_session(config) as sdk:
-        request_kwargs = _with_tenant(config, tenant, id=task_id)
+        request_kwargs = with_tenant(config, tenant, id=task_id)
         if metadata:
             request_kwargs["metadata"] = struct_from_dict(dict(metadata))
         return await sdk.cancel_task(CancelTaskRequest(**request_kwargs))
@@ -51,7 +51,7 @@ async def get_task(
     don't need the full conversation.
     """
     async with open_session(config) as sdk:
-        kwargs = _with_tenant(config, tenant, id=task_id)
+        kwargs = with_tenant(config, tenant, id=task_id)
         resolved_history = history_length if history_length is not None else config.history_length
         if resolved_history is not None:
             kwargs["history_length"] = resolved_history
@@ -76,7 +76,7 @@ async def list_tasks(
     back via ``page_token`` to fetch the next page.
     """
     async with open_session(config) as sdk:
-        kwargs = _with_tenant(config, tenant)
+        kwargs = with_tenant(config, tenant)
         if context_id:
             kwargs["context_id"] = context_id
         if status:
@@ -92,13 +92,6 @@ async def list_tasks(
             kwargs["include_artifacts"] = True
         response = await sdk.list_tasks(ListTasksRequest(**kwargs))
         return list(response.tasks)
-
-
-def _with_tenant(config: A2AConfig, override: str | None, **kwargs: Any) -> dict[str, Any]:
-    tenant = override if override is not None else config.tenant
-    if tenant:
-        kwargs["tenant"] = tenant
-    return kwargs
 
 
 __all__ = ("cancel_task", "get_task", "list_tasks")

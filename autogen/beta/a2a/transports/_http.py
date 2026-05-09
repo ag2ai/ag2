@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, TypeAlias
 
@@ -45,14 +46,22 @@ def make_httpx_client(
 ) -> httpx.AsyncClient:
     """Build an ``httpx.AsyncClient`` for talking to an A2A server.
 
-    A user-supplied ``factory`` wins over our defaults (useful for tests
-    via ``httpx.ASGITransport`` and for custom auth flows).
+    When a ``factory`` is supplied it owns the client entirely — we do not
+    mutate its headers, since the factory may return a shared instance and
+    leaking caller-specific headers into it would contaminate other
+    requests. If you need extra headers on top of a factory-built client,
+    set them inside the factory.
     """
-    client = factory() if factory is not None else httpx.AsyncClient(timeout=timeout)
-    if headers:
-        for k, v in headers.items():
-            client.headers[k] = v
-    return client
+    if factory is not None:
+        if headers:
+            warnings.warn(
+                "`headers` is ignored when `httpx_client_factory` is provided; "
+                "set headers on the client returned by the factory instead.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return factory()
+    return httpx.AsyncClient(headers=dict(headers) if headers else None, timeout=timeout)
 
 
 async def fetch_card(

@@ -8,16 +8,15 @@ from ._helpers import PromptThenAckExecutor, make_executor_pair
 
 
 @pytest.mark.asyncio
-class TestE2EHITL:
-    async def test_input_required_round_trip(self) -> None:
-        executor = PromptThenAckExecutor(prompt="What's your name?")
+async def test_input_required_round_trip() -> None:
+    executor = PromptThenAckExecutor(prompt="What's your name?")
 
-        async def hitl_hook() -> str:
-            return "Semen"
+    async def hitl_hook() -> str:
+        return "Semen"
 
-        pair = make_executor_pair(executor, streaming=False, hitl_hook=hitl_hook)
+    pair = make_executor_pair(executor, streaming=False, hitl_hook=hitl_hook)
 
-        reply = await pair.client.ask("hello")
+    reply = await pair.client.ask("hello")
 
-        assert reply.response.content == "echo: Semen"
-        assert executor.received_user_text == "Semen"
+    assert reply.response.content == "echo: Semen"
+    assert executor.received_user_text == "Semen"

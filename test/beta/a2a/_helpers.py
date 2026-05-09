@@ -49,6 +49,10 @@ class ExecutorPair:
     client: Agent
 
 
+# Stateless mock: A2A executor recreates the LLM client on every turn (per
+# its stateless-flavor design), so an iter-based TestConfig would replay
+# the first event forever. This mock decides what to return based on the
+# message history instead.
 class StatelessScript(ModelConfig):
     def __init__(
         self,
@@ -202,8 +206,7 @@ def make_executor_pair(
     if push_config_store is not None:
         server_kwargs["push_config_store"] = push_config_store
 
-    server = A2AServer(server_agent, **server_kwargs)
-    server._executor = executor  # type: ignore[attr-defined]
+    server = A2AServer(server_agent, executor=executor, **server_kwargs)
     factory = make_test_client_factory(server, url=server_url)
 
     client_kwargs: dict[str, Any] = {}

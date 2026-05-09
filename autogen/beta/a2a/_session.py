@@ -4,11 +4,26 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from a2a.client import Client
 
 from .config import A2AConfig
 from .transports._http import fetch_card, make_a2a_client, make_httpx_client
+
+
+def with_tenant(config: A2AConfig, override: str | None, **kwargs: Any) -> dict[str, Any]:
+    """Inject ``tenant`` into request kwargs from per-call override or config.
+
+    Single source of truth for the tenant-resolution rule used by
+    ``tasks``, ``push``, and (with a wrapping context-variables lookup)
+    the ``A2AClient``. ``override`` wins over ``config.tenant``; both
+    empty means no ``tenant`` key is injected.
+    """
+    tenant = override if override is not None else config.tenant
+    if tenant:
+        kwargs["tenant"] = tenant
+    return kwargs
 
 
 @asynccontextmanager

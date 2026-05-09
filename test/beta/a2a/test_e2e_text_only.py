@@ -30,5 +30,4 @@ class TestE2ETextOnly:
 
         await pair.client.ask("hello server")
 
-        last_seen = pair.tracking.mock.call_args_list[-1].args[0]
-        assert last_seen == ModelRequest([TextInput("hello server")])
+        pair.tracking.mock.assert_called_with(ModelRequest([TextInput("hello server")]))

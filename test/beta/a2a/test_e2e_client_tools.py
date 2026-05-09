@@ -38,8 +38,9 @@ class TestE2EClientTools:
 
         await pair.client.ask("paris?")
 
-        last_seen = pair.tracking.mock.call_args_list[-1].args[0]
-        assert last_seen == ToolResultsEvent([ToolResultEvent.from_call(tool_call, "It is sunny in Paris")])
+        pair.tracking.mock.assert_called_with(
+            ToolResultsEvent([ToolResultEvent.from_call(tool_call, "It is sunny in Paris")]),
+        )
 
     async def test_streaming_tool_round_trip(self) -> None:
         pair = make_pair(

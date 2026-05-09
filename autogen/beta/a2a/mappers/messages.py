@@ -54,6 +54,10 @@ class ParsedMessage:
     ``reference_task_ids`` mirrors ``Message.reference_task_ids`` —
     spec-level field used by callers to link a message to additional
     task ids (typically for inter-task coordination).
+
+    Currently parsed but not consumed by the executor — reserved for
+    future inter-task coordination where the server-side agent needs to
+    fetch state from previously completed tasks. See A2A spec §3.4.3.
     """
 
     inputs: list[Input] = field(default_factory=list)
@@ -252,7 +256,7 @@ def extract_context_update(msg: Message) -> dict[str, Any]:
 def _build_message(
     parts: Sequence[Part],
     *,
-    role: int,
+    role: int,  # ``Role`` enum value (e.g. ``Role.ROLE_USER``); proto enums are ints in Python
     task_id: str | None,
     context_id: str | None,
     message_id: str | None,

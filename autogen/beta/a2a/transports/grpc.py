@@ -17,11 +17,13 @@ from a2a.server.tasks import (
 )
 from a2a.types import AgentCard, a2a_pb2_grpc
 
+from ._card import clone_card_with_capabilities
+
 if TYPE_CHECKING:
     # Type-only import: ``_http`` imports ``default_grpc_channel_factory``
     # from this module, so importing eagerly creates a cycle. The annotation
     # uses a string forward-reference to keep the runtime graph acyclic.
-    from ._http import ExtendedCardModifier
+    from ._http import ExtendedCardModifier  # noqa: F401
 
 
 def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:
@@ -67,10 +69,11 @@ def build_grpc_server(
     Insecure binding only in this iteration; TLS support is a follow-up
     that will land alongside cert handling.
     """
-    if extended_agent_card is not None:
-        agent_card.capabilities.extended_agent_card = True
-    if push_config_store is not None:
-        agent_card.capabilities.push_notifications = True
+    agent_card = clone_card_with_capabilities(
+        agent_card,
+        extended=extended_agent_card is not None,
+        push=push_config_store is not None,
+    )
 
     store = task_store or InMemoryTaskStore()
     handler = DefaultRequestHandlerV2(

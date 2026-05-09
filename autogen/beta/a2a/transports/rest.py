@@ -16,6 +16,7 @@ from a2a.types import AgentCard
 from starlette.applications import Starlette
 from starlette.routing import BaseRoute
 
+from ._card import clone_card_with_capabilities
 from ._http import DEFAULT_AGENT_CARD_PATH, LEGACY_AGENT_CARD_PATH
 from .jsonrpc import CardModifier, ExtendedCardModifier
 
@@ -62,10 +63,11 @@ def build_rest_asgi(
     ``rpc_url``/``path_prefix`` and the dispatcher is identical. Add
     Starlette middleware via ``app.add_middleware(...)`` after building.
     """
-    if extended_agent_card is not None:
-        agent_card.capabilities.extended_agent_card = True
-    if push_config_store is not None:
-        agent_card.capabilities.push_notifications = True
+    agent_card = clone_card_with_capabilities(
+        agent_card,
+        extended=extended_agent_card is not None,
+        push=push_config_store is not None,
+    )
 
     store = task_store or InMemoryTaskStore()
     handler = DefaultRequestHandlerV2(
