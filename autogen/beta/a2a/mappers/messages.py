@@ -31,7 +31,6 @@ from .parts import (
     struct_to_dict,
 )
 from .tools import (
-    call_to_payload,
     payload_to_call,
     payload_to_results,
     payload_to_schemas,
@@ -50,23 +49,14 @@ class ParsedMessage:
     ``context_update`` carries ``context.variables`` deltas piggy-backed
     on ``Message.metadata`` (server -> client on a finalize, client ->
     server on a user turn).
-
-    ``reference_task_ids`` mirrors ``Message.reference_task_ids`` —
-    spec-level field used by callers to link a message to additional
-    task ids (typically for inter-task coordination).
-
-    Currently parsed but not consumed by the executor — reserved for
-    future inter-task coordination where the server-side agent needs to
-    fetch state from previously completed tasks. See A2A spec §3.4.3.
     """
 
     inputs: list[Input] = field(default_factory=list)
     tool_schemas: list[FunctionToolSchema] = field(default_factory=list)
     tool_calls: list[ToolCallEvent] = field(default_factory=list)
-    tool_results: list[dict[str, Any]] = field(default_factory=list)
+    tool_results: list[ToolResultEvent] = field(default_factory=list)
     history_events: list[BaseEvent] = field(default_factory=list)
     context_update: dict[str, Any] = field(default_factory=dict)
-    reference_task_ids: list[str] = field(default_factory=list)
 
 
 def build_user_message(
@@ -79,7 +69,6 @@ def build_user_message(
     message_id: str | None = None,
     advertise_extension: bool = False,
     context_update: Mapping[str, Any] | None = None,
-    reference_task_ids: Sequence[str] = (),
     extra_parts: Sequence[Part] = (),
 ) -> Message:
     """Build a ``Message`` from an AG2 client (``role=ROLE_USER``).
@@ -108,7 +97,6 @@ def build_user_message(
         message_id=message_id,
         advertise_extension=advertise_extension,
         context_update=context_update,
-        reference_task_ids=reference_task_ids,
     )
 
 
@@ -121,7 +109,6 @@ def build_tool_result_message(
     context_id: str | None = None,
     message_id: str | None = None,
     context_update: Mapping[str, Any] | None = None,
-    reference_task_ids: Sequence[str] = (),
 ) -> Message:
     """Build a ``Message`` carrying tool results back to the server.
 
@@ -144,7 +131,6 @@ def build_tool_result_message(
         message_id=message_id,
         advertise_extension=True,
         context_update=context_update,
-        reference_task_ids=reference_task_ids,
     )
 
 
@@ -155,7 +141,6 @@ def build_input_response_message(
     context_id: str | None = None,
     message_id: str | None = None,
     context_update: Mapping[str, Any] | None = None,
-    reference_task_ids: Sequence[str] = (),
 ) -> Message:
     """Build a continuation ``Message`` carrying a HITL response back.
 
@@ -172,42 +157,6 @@ def build_input_response_message(
         message_id=message_id,
         advertise_extension=False,
         context_update=context_update,
-        reference_task_ids=reference_task_ids,
-    )
-
-
-def build_agent_message(
-    *,
-    text: str = "",
-    tool_calls: Iterable[ToolCallEvent] = (),
-    additional_parts: Sequence[Part] = (),
-    task_id: str | None = None,
-    context_id: str | None = None,
-    message_id: str | None = None,
-    context_update: Mapping[str, Any] | None = None,
-    reference_task_ids: Sequence[str] = (),
-) -> Message:
-    """Build a ``Message`` produced by the agent (``role=ROLE_AGENT``).
-
-    Used by the server when emitting a final agent message that contains
-    text and/or pending client-side tool invocations. ``context_update``
-    rides on ``Message.metadata`` for variables sync into the client.
-    """
-    parts: list[Part] = []
-    if text:
-        parts.append(Part(text=text))
-    for call in tool_calls:
-        parts.append(data_part(call_to_payload(call), media_type=MIME_TOOL_CALL))
-    parts.extend(additional_parts)
-    return _build_message(
-        parts,
-        role=Role.ROLE_AGENT,
-        task_id=task_id,
-        context_id=context_id,
-        message_id=message_id,
-        advertise_extension=bool(tool_calls),
-        context_update=context_update,
-        reference_task_ids=reference_task_ids,
     )
 
 
@@ -234,7 +183,6 @@ def parse_message(msg: Message) -> ParsedMessage:
             continue
         parsed.inputs.append(part_to_input(part))
     parsed.context_update = extract_context_update(msg)
-    parsed.reference_task_ids = list(msg.reference_task_ids)
     return parsed
 
 
@@ -262,7 +210,6 @@ def _build_message(
     message_id: str | None,
     advertise_extension: bool,
     context_update: Mapping[str, Any] | None,
-    reference_task_ids: Sequence[str] = (),
 ) -> Message:
     kwargs: dict[str, Any] = {
         "role": role,
@@ -277,6 +224,4 @@ def _build_message(
         kwargs["extensions"] = [EXTENSION_URI]
     if context_update:
         kwargs["metadata"] = struct_from_dict({CONTEXT_UPDATE_METADATA_KEY: dict(context_update)})
-    if reference_task_ids:
-        kwargs["reference_task_ids"] = list(reference_task_ids)
     return Message(**kwargs)

@@ -20,11 +20,13 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
     ToolErrorEvent,
-    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
     UrlInput,
 )
+
+from .parts import tool_result_to_text
+from .tools import call_to_payload, payload_to_call, payload_to_result_event
 
 # Discriminant kinds for the ``ag2.history+json`` payload. Each event in the
 # sequence carries a ``kind`` field; everything else is kind-specific.
@@ -91,7 +93,7 @@ def _event_to_dict(ev: BaseEvent) -> dict[str, Any] | None:
     if isinstance(ev, ToolCallsEvent):
         return {
             "kind": KIND_TOOL_CALLS,
-            "calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in ev.calls],
+            "calls": [call_to_payload(c) for c in ev.calls],
         }
     # ToolErrorEvent is a subclass of ToolResultEvent — check it first so the
     # ``error`` field is captured.
@@ -100,17 +102,12 @@ def _event_to_dict(ev: BaseEvent) -> dict[str, Any] | None:
     if isinstance(ev, ToolResultEvent):
         return _tool_result_event_to_dict(ev)
     if isinstance(ev, ToolCallEvent):
-        return {
-            "kind": KIND_TOOL_CALL,
-            "id": ev.id,
-            "name": ev.name,
-            "arguments": ev.arguments,
-        }
+        return {"kind": KIND_TOOL_CALL, **call_to_payload(ev)}
     if isinstance(ev, ModelResponse):
         return {
             "kind": KIND_MODEL_RESPONSE,
             "content": ev.message.content if ev.message else "",
-            "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in ev.tool_calls.calls],
+            "tool_calls": [call_to_payload(c) for c in ev.tool_calls.calls],
         }
     if isinstance(ev, ModelMessage):
         return {
@@ -125,7 +122,7 @@ def _tool_result_event_to_dict(ev: ToolResultEvent) -> dict[str, Any]:
         "kind": KIND_TOOL_RESULT,
         "parent_id": ev.parent_id,
         "name": ev.name,
-        "content": _tool_result_to_text(ev.result),
+        "content": tool_result_to_text(ev.result),
         "error": str(ev.error) if isinstance(ev, ToolErrorEvent) else None,
     }
 
@@ -137,40 +134,18 @@ def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
         inputs = [_dict_to_input(p) for p in parts if isinstance(p, Mapping)]
         return ModelRequest([inp for inp in inputs if inp is not None])
     if kind == KIND_TOOL_CALL:
-        return ToolCallEvent(
-            id=str(entry.get("id", "")),
-            name=str(entry.get("name", "")),
-            arguments=str(entry.get("arguments", "{}")),
-        )
+        return payload_to_call(entry)
     if kind == KIND_TOOL_CALLS:
         raw_calls = entry.get("calls") or []
-        calls = [
-            ToolCallEvent(
-                id=str(c.get("id", "")),
-                name=str(c.get("name", "")),
-                arguments=str(c.get("arguments", "{}")),
-            )
-            for c in raw_calls
-            if isinstance(c, Mapping)
-        ]
-        return ToolCallsEvent(calls)
+        return ToolCallsEvent([payload_to_call(c) for c in raw_calls if isinstance(c, Mapping)])
     if kind == KIND_TOOL_RESULT:
-        return _dict_to_tool_result_event(entry)
+        return payload_to_result_event(entry)
     if kind == KIND_TOOL_RESULTS:
         raw_results = entry.get("results") or []
-        results = [_dict_to_tool_result_event(r) for r in raw_results if isinstance(r, Mapping)]
-        return ToolResultsEvent(results)
+        return ToolResultsEvent([payload_to_result_event(r) for r in raw_results if isinstance(r, Mapping)])
     if kind == KIND_MODEL_RESPONSE:
-        calls = entry.get("tool_calls") or []
-        tool_calls = [
-            ToolCallEvent(
-                id=str(c.get("id", "")),
-                name=str(c.get("name", "")),
-                arguments=str(c.get("arguments", "{}")),
-            )
-            for c in calls
-            if isinstance(c, Mapping)
-        ]
+        raw_calls = entry.get("tool_calls") or []
+        tool_calls = [payload_to_call(c) for c in raw_calls if isinstance(c, Mapping)]
         message_text = str(entry.get("content", "") or "")
         return ModelResponse(
             message=ModelMessage(message_text) if message_text else None,
@@ -179,34 +154,6 @@ def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
     if kind == KIND_AGENT_MESSAGE:
         return ModelMessage(str(entry.get("content", "") or ""))
     return None
-
-
-def _dict_to_tool_result_event(entry: Mapping[str, Any]) -> ToolResultEvent:
-    content = str(entry.get("content", "") or "")
-    result = ToolResult(content)
-    error = entry.get("error")
-    if error:
-        return ToolErrorEvent(
-            parent_id=str(entry.get("parent_id", "")),
-            name=entry.get("name"),
-            error=_RehydratedToolError(error),
-            result=result,
-        )
-    return ToolResultEvent(
-        parent_id=str(entry.get("parent_id", "")),
-        name=entry.get("name"),
-        result=result,
-    )
-
-
-class _RehydratedToolError(Exception):
-    """Placeholder error type for ``ToolErrorEvent`` reconstructed from history.
-
-    The original exception type is lost in transit — we only carry the
-    rendered string. Subclassing ``Exception`` keeps ``ToolErrorEvent``'s
-    invariants intact (e.g. ``str(ev.error)`` round-trips) without pretending
-    we have the real type.
-    """
 
 
 _BINARY_PART = "binary"
@@ -275,13 +222,3 @@ def _binary_kind_or_default(value: Any) -> BinaryType:
         except ValueError:
             return BinaryType.BINARY
     return BinaryType.BINARY
-
-
-def _tool_result_to_text(result: ToolResult) -> str:
-    chunks: list[str] = []
-    for part in result.parts:
-        if isinstance(part, TextInput):
-            chunks.append(part.content)
-        else:
-            chunks.append(str(part))
-    return "".join(chunks)

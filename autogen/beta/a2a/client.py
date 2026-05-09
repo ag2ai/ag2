@@ -103,6 +103,15 @@ _FAILURE_REASONS: dict[TaskState, str] = {
     TaskState.TASK_STATE_AUTH_REQUIRED: "auth_required",
 }
 
+# Mirror of ``_FAILURE_REASONS`` keyed by the surfaced ``finish_reason`` —
+# turns the terminal-state cascade in ``__call__`` into a one-line lookup
+# and keeps the wire→exception mapping in one place.
+_FAILURE_ERRORS: dict[str, type[Exception]] = {
+    "failed": A2ATaskFailedError,
+    "rejected": A2ATaskRejectedError,
+    "auth_required": A2ATaskAuthRequiredError,
+}
+
 
 @dataclass(slots=True)
 class A2ADriveState:
@@ -254,13 +263,8 @@ class A2AClient(LLMClient):
                     context_id=self._read_context_id(context),
                 )
 
-            if state.terminal_task is not None:
-                if state.finish_reason == "failed":
-                    raise A2ATaskFailedError(state.terminal_task)
-                if state.finish_reason == "rejected":
-                    raise A2ATaskRejectedError(state.terminal_task)
-                if state.finish_reason == "auth_required":
-                    raise A2ATaskAuthRequiredError(state.terminal_task)
+            if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
+                raise exc_cls(state.terminal_task)
 
             message = ModelMessage(state.accumulated_text) if state.accumulated_text else None
 

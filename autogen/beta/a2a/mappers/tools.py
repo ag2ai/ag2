@@ -2,18 +2,29 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from autogen.beta.events import (
-    Input,
-    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResult,
     ToolResultEvent,
 )
 from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
+
+from .parts import tool_result_to_text
+
+
+class RehydratedToolError(Exception):
+    """Placeholder error type for ``ToolErrorEvent`` rebuilt from the wire.
+
+    The original exception type is lost in transit — we only carry the
+    rendered string. Subclassing ``Exception`` keeps ``ToolErrorEvent``'s
+    invariants intact (e.g. ``str(ev.error)`` round-trips) without pretending
+    we have the real type. Used by both ``tool-result+json`` Part decoding
+    and ``ag2.history+json`` event decoding.
+    """
 
 
 def schemas_to_payload(schemas: Iterable[FunctionToolSchema]) -> dict[str, Any]:
@@ -56,12 +67,50 @@ def call_to_payload(call: ToolCallEvent) -> dict[str, Any]:
     }
 
 
-def payload_to_call(payload: dict[str, Any]) -> ToolCallEvent:
+def payload_to_call(payload: Mapping[str, Any]) -> ToolCallEvent:
     return ToolCallEvent(
         id=str(payload["id"]),
         name=str(payload["name"]),
         arguments=str(payload.get("arguments", "{}")),
     )
+
+
+def result_event_to_payload(ev: ToolResultEvent) -> dict[str, Any]:
+    """Serialize one ``ToolResultEvent`` to a wire dict.
+
+    Mirrors :func:`payload_to_result_event`. Wire key is ``id`` to stay
+    aligned with ``tool-call+json`` (server thinks in call ids on the
+    wire, even though AG2 internally calls the field ``parent_id``).
+    """
+    return {
+        "id": ev.parent_id,
+        "name": ev.name,
+        "content": tool_result_to_text(ev.result),
+        "error": str(ev.error) if isinstance(ev, ToolErrorEvent) else None,
+    }
+
+
+def payload_to_result_event(entry: Mapping[str, Any]) -> ToolResultEvent:
+    """Build a ``ToolResultEvent`` (or ``ToolErrorEvent``) from a wire dict.
+
+    Accepts both ``id`` (``tool-result+json`` Part) and ``parent_id``
+    (``ag2.history+json`` event) — the two wire flavours diverged
+    historically; this helper normalises both. ``error`` flips the
+    return type to ``ToolErrorEvent`` carrying ``RehydratedToolError``.
+    """
+    parent_id = str(entry.get("parent_id") or entry.get("id") or "")
+    name = entry.get("name")
+    content = str(entry.get("content", "") or "")
+    result = ToolResult(content)
+    error = entry.get("error")
+    if error:
+        return ToolErrorEvent(
+            parent_id=parent_id,
+            name=name,
+            error=RehydratedToolError(error),
+            result=result,
+        )
+    return ToolResultEvent(parent_id=parent_id, name=name, result=result)
 
 
 def results_to_payload(results: Iterable[ToolResultEvent]) -> dict[str, Any]:
@@ -72,45 +121,14 @@ def results_to_payload(results: Iterable[ToolResultEvent]) -> dict[str, Any]:
     threaded through so the stateless server can rebuild a
     ``ToolResultEvent`` without consulting any session state.
     """
-    return {
-        "results": [
-            {
-                "id": r.parent_id,
-                "name": r.name,
-                "content": _result_to_text(r.result),
-                "error": str(r.error) if isinstance(r, ToolErrorEvent) else None,
-            }
-            for r in results
-        ]
-    }
+    return {"results": [result_event_to_payload(r) for r in results]}
 
 
-def payload_to_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Decode a ``tool-result+json`` payload to a list of result records.
+def payload_to_results(payload: Mapping[str, Any]) -> list[ToolResultEvent]:
+    """Decode a ``tool-result+json`` payload to a list of ``ToolResultEvent``s.
 
-    Returns raw dicts (``id``/``name``/``content``/``error``) rather than
-    ``ToolResultEvent`` objects — the executor uses ``name`` directly to
-    construct events without any pending-call lookup.
+    Returns ready-to-use events (with ``ToolErrorEvent`` for entries
+    carrying ``error``), so the executor doesn't have to hand-roll the
+    rebuild and can't lose the error branch by accident.
     """
-    return [
-        {
-            "id": str(r["id"]),
-            "name": r.get("name"),
-            "content": r.get("content", "") or "",
-            "error": r.get("error"),
-        }
-        for r in payload.get("results", [])
-    ]
-
-
-def _result_to_text(result: ToolResult) -> str:
-    chunks: list[str] = []
-    for part in result.parts:
-        chunks.append(_input_to_text(part))
-    return "".join(chunks)
-
-
-def _input_to_text(part: Input) -> str:
-    if isinstance(part, TextInput):
-        return part.content
-    return str(part)
+    return [payload_to_result_event(r) for r in payload.get("results", []) if isinstance(r, Mapping)]

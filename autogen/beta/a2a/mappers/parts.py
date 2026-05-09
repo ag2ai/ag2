@@ -19,6 +19,7 @@ from autogen.beta.events import (
     FileIdInput,
     Input,
     TextInput,
+    ToolResult,
     UrlInput,
 )
 
@@ -119,6 +120,18 @@ def is_data_part_with_mime(part: Part, media_type: str) -> bool:
 def part_data_to_python(part: Part) -> Any:
     """Decode a data Part's ``data`` field into a native Python value."""
     return _value_to_python(part.data)
+
+
+def tool_result_to_text(result: ToolResult) -> str:
+    """Render a ``ToolResult`` to a flat text payload.
+
+    Used by every wire shape that needs the textual content of a tool
+    result (``tool-result+json`` Part, ``ag2.history+json`` events).
+    Non-text parts fall back to ``str()`` because the wire layer carries
+    text only — binary results must be re-attached at the message level
+    if ever needed.
+    """
+    return "".join(part.content if isinstance(part, TextInput) else str(part) for part in result.parts)
 
 
 def _value_from(value: Any) -> struct_pb2.Value:

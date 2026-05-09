@@ -19,7 +19,14 @@ class A2AEvent(BaseEvent):
     Subclasses wrap the four ``StreamResponse.payload`` oneof variants
     from a2a-sdk v1.x. Filtering on this base type catches all of them
     (e.g. ``stream.where(A2AEvent)`` for a transport-agnostic firehose).
+
+    Marked ``__transient__`` so these wrappers are never persisted into
+    ``stream.history`` — they are wire-format echoes, not AG2 conversation
+    events; if they leaked into history, ``Agent._execute`` would feed
+    them back into the LLM as bogus messages on the next turn.
     """
+
+    __transient__ = True
 
 
 class A2ATaskSnapshot(A2AEvent):
