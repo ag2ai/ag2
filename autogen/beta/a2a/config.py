@@ -30,7 +30,6 @@ class A2AConfigOverrides(TypedDict, total=False):
     max_reconnects: int
     reconnect_backoff: float
     polling_interval: float
-    polling_jitter: float
     input_required_timeout: float | None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
@@ -87,7 +86,6 @@ class A2AConfig(ModelConfig):
     max_reconnects: int = 3
     reconnect_backoff: float = 0.5
     polling_interval: float = 0.5
-    polling_jitter: float = 0.0
     input_required_timeout: float | None = None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
     interceptors: Sequence[ClientCallInterceptor] = ()
@@ -132,7 +130,6 @@ class A2AConfig(ModelConfig):
             max_reconnects=self.max_reconnects,
             reconnect_backoff=self.reconnect_backoff,
             polling_interval=self.polling_interval,
-            polling_jitter=self.polling_jitter,
             input_required_timeout=self.input_required_timeout,
             httpx_client_factory=self.httpx_client_factory,
             interceptors=tuple(self.interceptors),

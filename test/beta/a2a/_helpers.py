@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+import grpc.aio
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
@@ -19,8 +20,12 @@ from a2a.types import Part, Task, TaskState, TaskStatus
 from typing_extensions import Self
 
 from autogen.beta import Agent, Context
-from autogen.beta.a2a import A2AConfig, A2AServer
-from autogen.beta.a2a.testing import make_test_client_factory
+from autogen.beta.a2a import A2AConfig, A2AServer, build_card
+from autogen.beta.a2a.testing import (
+    make_test_client_factory,
+    make_test_rest_client_factory,
+    pick_free_port,
+)
 from autogen.beta.config.client import LLMClient
 from autogen.beta.config.config import ModelConfig
 from autogen.beta.events import (
@@ -47,6 +52,24 @@ class ExecutorPair:
     server: A2AServer
     executor: A2AAgentExecutorBase
     client: Agent
+
+
+@dataclass(slots=True)
+class RecordingPair:
+    server: A2AServer
+    server_agent: Agent
+    client: Agent
+    recording: "RecordingConfig"
+
+
+@dataclass(slots=True)
+class GrpcPair:
+    server: A2AServer
+    server_agent: Agent
+    client: Agent
+    tracking: TrackingConfig
+    grpc_url: str
+    grpc_server: grpc.aio.Server
 
 
 # Stateless mock: A2A executor recreates the LLM client on every turn (per
@@ -219,3 +242,116 @@ def make_executor_pair(
         **client_kwargs,
     )
     return ExecutorPair(server=server, executor=executor, client=client)
+
+
+# Captures the full ``messages`` list per LLM call. ``TrackingConfig`` only
+# records ``messages[-1]``, which is enough for last-input assertions but not
+# for verifying that the full prior-turn history was passed across the wire
+# on a follow-up turn.
+class RecordingConfig(ModelConfig):
+    def __init__(self, response: str) -> None:
+        self.response = response
+        self.calls: list[list[BaseEvent]] = []
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> "RecordingClient":
+        return RecordingClient(self.response, self.calls)
+
+    def create_files_client(self) -> None:
+        raise NotImplementedError
+
+
+class RecordingClient(LLMClient):
+    def __init__(self, response: str, calls: list[list[BaseEvent]]) -> None:
+        self._response = response
+        self._calls = calls
+
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        context: Context,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        self._calls.append(list(messages))
+        msg = ModelMessage(self._response)
+        await context.send(msg)
+        return ModelResponse(message=msg)
+
+
+def make_recording_pair(
+    response: str,
+    *,
+    server_url: str = "http://test",
+    streaming: bool = False,
+) -> RecordingPair:
+    recording = RecordingConfig(response=response)
+    server_agent = Agent("server-agent", config=recording)
+    server = A2AServer(server_agent)
+    factory = make_test_client_factory(server, url=server_url)
+
+    client = Agent(
+        "client-agent",
+        config=A2AConfig(card_url=server_url, httpx_client_factory=factory, streaming=streaming),
+    )
+    return RecordingPair(server=server, server_agent=server_agent, client=client, recording=recording)
+
+
+def make_rest_pair(
+    initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
+    after_tool: ModelResponse | str | None = None,
+    *,
+    server_url: str = "http://test",
+    streaming: bool = False,
+) -> A2APair:
+    tracking = TrackingConfig(StatelessScript(initial, after_tool))
+    server_agent = Agent("server-agent", config=tracking)
+    server = A2AServer(server_agent)
+    factory = make_test_rest_client_factory(server, url=server_url)
+
+    client = Agent(
+        "client-agent",
+        config=A2AConfig(
+            card_url=server_url,
+            httpx_client_factory=factory,
+            prefer="rest",
+            streaming=streaming,
+        ),
+    )
+    return A2APair(server=server, server_agent=server_agent, client=client, tracking=tracking)
+
+
+async def start_grpc_pair(
+    initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
+    after_tool: ModelResponse | str | None = None,
+    *,
+    host: str = "127.0.0.1",
+    streaming: bool = False,
+) -> GrpcPair:
+    tracking = TrackingConfig(StatelessScript(initial, after_tool))
+    server_agent = Agent("server-agent", config=tracking)
+    server = A2AServer(server_agent)
+
+    grpc_url = f"{host}:{pick_free_port(host)}"
+    card = build_card(server_agent, url=grpc_url, transports=("grpc",), grpc_url=grpc_url)
+    grpc_server = server.build_grpc(bind=grpc_url, grpc_url=grpc_url, card=card)
+    await grpc_server.start()
+
+    client = Agent(
+        "client-agent",
+        config=A2AConfig(
+            card_url=grpc_url,
+            preset_card=card,
+            prefer="grpc",
+            streaming=streaming,
+        ),
+    )
+    return GrpcPair(
+        server=server,
+        server_agent=server_agent,
+        client=client,
+        tracking=tracking,
+        grpc_url=grpc_url,
+        grpc_server=grpc_server,
+    )

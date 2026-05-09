@@ -22,6 +22,7 @@ from autogen.beta.events import (
     ToolErrorEvent,
     ToolResult,
     ToolResultEvent,
+    ToolResultsEvent,
     UrlInput,
 )
 
@@ -29,7 +30,9 @@ from autogen.beta.events import (
 # sequence carries a ``kind`` field; everything else is kind-specific.
 KIND_USER_INPUT = "user_input"
 KIND_TOOL_CALL = "tool_call"
+KIND_TOOL_CALLS = "tool_calls"
 KIND_TOOL_RESULT = "tool_result"
+KIND_TOOL_RESULTS = "tool_results"
 KIND_AGENT_MESSAGE = "agent_message"
 KIND_MODEL_RESPONSE = "model_response"
 
@@ -73,24 +76,29 @@ def _event_to_dict(ev: BaseEvent) -> dict[str, Any] | None:
             "kind": KIND_USER_INPUT,
             "parts": [_input_to_dict(p) for p in ev.parts],
         }
+    # ToolResultsEvent / ToolCallsEvent are wrappers around per-tool
+    # leaves. Both the wrappers and the leaves typically appear in the
+    # stream history (the wrapper carries the aggregated batch for
+    # provider mappers; the leaves give per-tool observability). Mirror
+    # both on the wire so the server-side mapper can take its main path
+    # instead of a per-leaf fallback that some providers implement
+    # imperfectly.
+    if isinstance(ev, ToolResultsEvent):
+        return {
+            "kind": KIND_TOOL_RESULTS,
+            "results": [_tool_result_event_to_dict(r) for r in ev.results],
+        }
+    if isinstance(ev, ToolCallsEvent):
+        return {
+            "kind": KIND_TOOL_CALLS,
+            "calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in ev.calls],
+        }
     # ToolErrorEvent is a subclass of ToolResultEvent — check it first so the
     # ``error`` field is captured.
     if isinstance(ev, ToolErrorEvent):
-        return {
-            "kind": KIND_TOOL_RESULT,
-            "parent_id": ev.parent_id,
-            "name": ev.name,
-            "content": _tool_result_to_text(ev.result),
-            "error": str(ev.error),
-        }
+        return _tool_result_event_to_dict(ev)
     if isinstance(ev, ToolResultEvent):
-        return {
-            "kind": KIND_TOOL_RESULT,
-            "parent_id": ev.parent_id,
-            "name": ev.name,
-            "content": _tool_result_to_text(ev.result),
-            "error": None,
-        }
+        return _tool_result_event_to_dict(ev)
     if isinstance(ev, ToolCallEvent):
         return {
             "kind": KIND_TOOL_CALL,
@@ -112,6 +120,16 @@ def _event_to_dict(ev: BaseEvent) -> dict[str, Any] | None:
     return None
 
 
+def _tool_result_event_to_dict(ev: ToolResultEvent) -> dict[str, Any]:
+    return {
+        "kind": KIND_TOOL_RESULT,
+        "parent_id": ev.parent_id,
+        "name": ev.name,
+        "content": _tool_result_to_text(ev.result),
+        "error": str(ev.error) if isinstance(ev, ToolErrorEvent) else None,
+    }
+
+
 def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
     kind = entry.get("kind")
     if kind == KIND_USER_INPUT:
@@ -124,22 +142,24 @@ def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
             name=str(entry.get("name", "")),
             arguments=str(entry.get("arguments", "{}")),
         )
-    if kind == KIND_TOOL_RESULT:
-        content = str(entry.get("content", "") or "")
-        result = ToolResult(content)
-        error = entry.get("error")
-        if error:
-            return ToolErrorEvent(
-                parent_id=str(entry.get("parent_id", "")),
-                name=entry.get("name"),
-                error=_RehydratedToolError(error),
-                result=result,
+    if kind == KIND_TOOL_CALLS:
+        raw_calls = entry.get("calls") or []
+        calls = [
+            ToolCallEvent(
+                id=str(c.get("id", "")),
+                name=str(c.get("name", "")),
+                arguments=str(c.get("arguments", "{}")),
             )
-        return ToolResultEvent(
-            parent_id=str(entry.get("parent_id", "")),
-            name=entry.get("name"),
-            result=result,
-        )
+            for c in raw_calls
+            if isinstance(c, Mapping)
+        ]
+        return ToolCallsEvent(calls)
+    if kind == KIND_TOOL_RESULT:
+        return _dict_to_tool_result_event(entry)
+    if kind == KIND_TOOL_RESULTS:
+        raw_results = entry.get("results") or []
+        results = [_dict_to_tool_result_event(r) for r in raw_results if isinstance(r, Mapping)]
+        return ToolResultsEvent(results)
     if kind == KIND_MODEL_RESPONSE:
         calls = entry.get("tool_calls") or []
         tool_calls = [
@@ -159,6 +179,24 @@ def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
     if kind == KIND_AGENT_MESSAGE:
         return ModelMessage(str(entry.get("content", "") or ""))
     return None
+
+
+def _dict_to_tool_result_event(entry: Mapping[str, Any]) -> ToolResultEvent:
+    content = str(entry.get("content", "") or "")
+    result = ToolResult(content)
+    error = entry.get("error")
+    if error:
+        return ToolErrorEvent(
+            parent_id=str(entry.get("parent_id", "")),
+            name=entry.get("name"),
+            error=_RehydratedToolError(error),
+            result=result,
+        )
+    return ToolResultEvent(
+        parent_id=str(entry.get("parent_id", "")),
+        name=entry.get("name"),
+        result=result,
+    )
 
 
 class _RehydratedToolError(Exception):

@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import random
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -127,11 +126,17 @@ class A2ATurnOutcome:
 class A2AClient(LLMClient):
     """``LLMClient`` implementation that delegates to a remote A2A agent.
 
-    Lifecycle: one ``A2AClient`` instance per ``Agent.ask()`` call.
-    Within that ask, ``self._task_id`` carries the server-issued task id
-    across multiple ``__call__`` invocations (for client-side tool
-    round-trips). Across asks, ``contextId`` lives in
-    ``context.variables`` so the server can stitch the conversation.
+    Lifecycle: ``Agent.ask()`` builds one ``A2AClient`` and reuses it
+    for every ``reply.ask(...)`` follow-up on the same ``AgentReply``.
+    Within a single ``__call__``, ``self._task_id`` carries the
+    server-issued task id across multiple drives (for client-side tool
+    round-trips and HITL continuations). At the start of each new
+    top-level user turn ``self._task_id`` is reset so the server opens
+    a fresh A2A task — the prior task transitioned to a terminal state
+    on completion and rejecting a continuation message is the spec'd
+    server behavior. Across asks, ``contextId`` lives in
+    ``context.variables`` so a long-running conversation keeps the
+    same A2A context across multiple tasks.
 
     The client always ships the **full** AG2 conversation history on
     every outgoing turn — the server is stateless on AG2 history. See
@@ -149,7 +154,6 @@ class A2AClient(LLMClient):
         max_reconnects: int = 3,
         reconnect_backoff: float = 0.5,
         polling_interval: float = 0.5,
-        polling_jitter: float = 0.0,
         input_required_timeout: float | None = None,
         httpx_client_factory: Callable[[], httpx.AsyncClient] | None = None,
         interceptors: Sequence[ClientCallInterceptor] = (),
@@ -166,7 +170,6 @@ class A2AClient(LLMClient):
         self._max_reconnects = max_reconnects
         self._reconnect_backoff = reconnect_backoff
         self._polling_interval = polling_interval
-        self._polling_jitter = max(0.0, polling_jitter)
         self._input_required_timeout = input_required_timeout
         self._httpx_client_factory = httpx_client_factory
         self._interceptors = list(interceptors)
@@ -196,6 +199,15 @@ class A2AClient(LLMClient):
             await self._ensure_connected(context)
             assert self._agent_card is not None
             assert self._sdk_client is not None
+
+            # Reset task id when starting a new top-level user turn. The
+            # prior task is in a terminal state (COMPLETED/CANCELED/...)
+            # and the server will reject a continuation; only client-tool
+            # round-trips (last message is ``ToolResultsEvent``) reuse
+            # the prior task id, since they continue the same task.
+            last = messages[-1] if messages else None
+            if not isinstance(last, ToolResultsEvent):
+                self._task_id = None
 
             function_schemas = self._validate_and_extract_tools(tools)
             outgoing = self._build_outgoing(messages, function_schemas, context)
@@ -313,10 +325,19 @@ class A2AClient(LLMClient):
         context_id = self._read_context_id(context)
         last = messages[-1] if messages else None
 
+        # Wire split: ``inputs`` / ``tool_results`` carry the *current*
+        # turn; ``history_events`` carries everything *before* it. The
+        # AG2 stream stores the current turn as the tail of ``messages``
+        # before this client gets called, so we slice it off — otherwise
+        # the server replays it via ``history.replace`` and then
+        # ``_execute`` re-emits it via ``context.send``, doubling the
+        # event in server-side history.
+        past_events = messages[:-1]
+
         if isinstance(last, ToolResultsEvent) and self._task_id is not None:
             return build_tool_result_message(
                 last.results,
-                history_events=messages,
+                history_events=past_events,
                 tool_schemas=function_schemas,
                 task_id=self._task_id,
                 context_id=context_id,
@@ -327,7 +348,7 @@ class A2AClient(LLMClient):
         extra_parts = _read_extra_parts(context)
         return build_user_message(
             inputs,
-            history_events=messages,
+            history_events=past_events,
             tool_schemas=function_schemas,
             task_id=self._task_id,
             context_id=context_id,
@@ -401,16 +422,7 @@ class A2AClient(LLMClient):
             self._absorb_task_artifacts(task, context, state)
             if task.status.state in _TERMINAL_STATES:
                 return self._terminal_outcome(task, state)
-            await asyncio.sleep(self._next_poll_delay())
-
-    def _next_poll_delay(self) -> float:
-        # Optional jitter de-correlates polling clients hitting the same
-        # server in a thundering herd. ``polling_jitter=0`` (default)
-        # preserves the deterministic interval used by tests.
-        if self._polling_jitter <= 0:
-            return self._polling_interval
-        spread = random.uniform(-self._polling_jitter, self._polling_jitter)
-        return max(0.0, self._polling_interval + spread)
+            await asyncio.sleep(self._polling_interval)
 
     async def _drain_stream(
         self,
