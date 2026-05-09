@@ -4,99 +4,78 @@
 
 """Workflow handoff tools.
 
-Each :class:`ToolCalled` transition in a workflow's :class:`TransitionGraph`
-becomes one LLM tool. When the LLM invokes the tool, it posts an
-``ag2.handoff`` envelope into the active session; the
-:class:`WorkflowAdapter` reads it in ``fold`` and advances
-``expected_next_speaker`` per the matching transition.
+Each ``(tool_name, target_name)`` pair becomes one LLM tool. When the
+LLM invokes the tool, the body returns a typed
+:class:`autogen.beta.network.handoff.Handoff` instance, which the
+:class:`WorkflowAdapter` reads off the agent's local
+``ToolResultEvent`` stream and uses to populate ``routing.target`` on
+the round's ``EV_PACKET`` envelope. The next-speaker decision flows
+straight from the tool body — no matching ``ToolCalled`` graph rule
+is required.
 
-The LLM never sees ``expected_next_speaker`` directly — it sees a
-button labelled with the tool name and a one-line description. The
-protocol does the rest. **Handoffs are a UX over the choreography.**
+The LLM never sees ``Handoff`` directly — it sees a button labelled
+with the tool name and a one-line description. The protocol does
+the rest. **Handoffs are a UX over the choreography.**
 
 Usage:
     from autogen.beta.network.client.tools.handoff import (
-        make_handoff_tools_for_graph,
+        make_handoff_tools,
     )
 
-    graph = TransitionGraph(...)
-    handoff_tools = make_handoff_tools_for_graph(client, graph)
-    for t in handoff_tools:
+    tools = make_handoff_tools({"delegate_bob": "bob", "delegate_carol": "carol"})
+    for t in tools:
         client.agent.tools.append(t)
 
 Or via the convenience method on :class:`NetworkPlugin`:
-    plugin.register_workflow(graph)
+    plugin.register_workflow(graph)  # walks ToolCalled→AgentTarget pairs
 """
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
 from autogen.beta.tools import tool
 
-from ...envelope import EV_HANDOFF
-from ...transitions import ToolCalled, TransitionGraph
-from ..inject import SessionInject
+from ...handoff import Handoff
 
-if TYPE_CHECKING:
-    from ..agent_client import AgentClient
+__all__ = ("make_handoff_tools",)
 
 
-__all__ = ("make_handoff_tool", "make_handoff_tools_for_graph")
+def make_handoff_tools(
+    handoffs: dict[str, str],
+    *,
+    description: Callable[[str, str], str] | None = None,
+) -> list[Any]:
+    """Generate one Handoff-returning tool per ``(tool_name, target_name)``.
 
+    Each generated tool has the body::
 
-def make_handoff_tool(
-    agent_client: "AgentClient",
-    tool_name: str,
-    description: str | None = None,
-) -> Any:
-    """Build one handoff tool that posts ``EV_HANDOFF`` into the
-    current session.
+        async def <tool_name>(reason: str = "") -> Handoff:
+            return Handoff(target="<target_name>", reason=reason)
 
-    The LLM calls ``<tool_name>(reason="...")``; the tool emits an
-    ``ag2.handoff`` envelope tagged with ``tool_name``. The active
-    workflow adapter's ``ToolCalled`` condition matches and routes
-    the next turn accordingly.
+    The workflow adapter sees the :class:`Handoff` in the agent's
+    local ``ToolResultEvent`` stream and routes the next speaker to
+    ``target_name`` — no ``ToolCalled`` graph rule required.
+
+    ``description`` is an optional ``(tool_name, target_name) -> str``
+    callback to customise the LLM-facing description; the default is
+    ``f"Hand off to {target_name}."``.
     """
-    desc = description or f"Hand off the workflow via the {tool_name!r} transition."
+    tools: list[Any] = []
+    for tool_name, target_name in handoffs.items():
+        desc = description(tool_name, target_name) if description is not None else f"Hand off to {target_name}."
+        tools.append(_build_handoff_tool(tool_name, target_name, desc))
+    return tools
+
+
+def _build_handoff_tool(tool_name: str, target_name: str, desc: str) -> Any:
+    """Construct one Handoff-returning ``@tool``-decorated coroutine.
+
+    Defined at module scope so the ``target_name`` is bound through
+    the function argument rather than a loop-late closure.
+    """
 
     @tool(name=tool_name, description=desc)
-    async def _handoff(
-        reason: str = "",
-        session: SessionInject = None,
-    ) -> str:
-        if session is None:
-            return f"Error: {tool_name!r} requires an active session"
-        try:
-            await session.send(
-                content=f"[handoff] {reason}" if reason else "[handoff]",
-                event_type=EV_HANDOFF,
-                event_data={"tool": tool_name, "reason": reason},
-            )
-        except Exception as exc:
-            return f"Error: {tool_name!r} failed to post handoff: {exc}"
-        return f"handoff posted via {tool_name}"
+    async def _handoff(reason: str = "") -> Handoff:
+        return Handoff(target=target_name, reason=reason)
 
     return _handoff
-
-
-def make_handoff_tools_for_graph(
-    agent_client: "AgentClient",
-    graph: TransitionGraph,
-) -> list[Any]:
-    """Materialise one handoff tool per unique ``ToolCalled`` condition
-    in ``graph.transitions``.
-
-    Tool names match ``ToolCalled.tool_name``. Duplicates (same tool
-    name appearing in multiple transitions, e.g. with different
-    priorities) are de-duplicated.
-    """
-    seen: set[str] = set()
-    tools: list[Any] = []
-    for transition in graph.transitions:
-        when = transition.when
-        if not isinstance(when, ToolCalled):
-            continue
-        if when.tool_name in seen:
-            continue
-        seen.add(when.tool_name)
-        tools.append(make_handoff_tool(agent_client, when.tool_name))
-    return tools

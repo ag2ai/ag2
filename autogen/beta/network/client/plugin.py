@@ -20,11 +20,11 @@ from autogen.beta.agent import Plugin
 from autogen.beta.assembly import AssemblyPolicy
 from autogen.beta.events import BaseEvent
 
-from ..transitions import TransitionGraph
+from ..transitions import AgentTarget, ToolCalled, TransitionGraph
 from .tools import (
     make_context_tool,
     make_delegate_tool,
-    make_handoff_tools_for_graph,
+    make_handoff_tools,
     make_peers_tool,
     make_say_tool,
     make_sessions_tool,
@@ -99,24 +99,37 @@ class NetworkPlugin(Plugin):
         agent.add_policy(NetworkContextPolicy(self._client))
 
     def register_workflow(self, graph: TransitionGraph) -> list[object]:
-        """Materialise one LLM tool per :class:`ToolCalled` transition
-        in ``graph`` and append them to the bound agent's ``tools``
-        list. Returns the new tool objects so callers can later remove
-        them if the workflow ends and the surface should be trimmed.
+        """Materialise one LLM tool per ``ToolCalled → AgentTarget``
+        transition in ``graph`` and append them to the bound agent's
+        ``tools`` list. Returns the new tool objects so callers can
+        later remove them if the workflow ends and the surface should
+        be trimmed.
 
-        Tools are scoped **per-agent, not per-session**. Each tool
-        emits its ``ag2.handoff`` envelope on whatever session is
-        currently active when the LLM calls it (resolved via the
-        plugin's ``SessionInject``).
+        Each tool's body returns a typed
+        :class:`autogen.beta.network.handoff.Handoff` carrying the
+        target agent's name. The workflow adapter reads the Handoff
+        from the agent's local ``ToolResultEvent`` stream and routes
+        the next speaker accordingly — no matching ``ToolCalled``
+        graph rule fires (the Handoff carries the routing intent).
+
+        ``ToolCalled`` transitions whose ``then`` is *not* an
+        :class:`AgentTarget` (e.g. ``TerminateTarget``,
+        ``StayTarget``, ``RevertToInitiatorTarget``,
+        ``RoundRobinTarget``) are skipped — those targets cannot be
+        encoded as a typed ``Handoff``. Users wanting tool-driven
+        routing into those targets must hand-write their own tool
+        bodies and rely on the graph's ``ToolCalled`` rule.
+
+        Tools are scoped **per-agent, not per-session**. The same
+        tool object is visible on every session the agent is part of.
 
         ⚠️  **Cross-workflow footgun.** If the same agent registers
         workflows A and B, tool ``foo`` from A is *also* visible while
         the agent is taking its turn in B. If the LLM invokes ``foo``
-        during B's turn, the resulting ``ag2.handoff`` lands in
-        session B. B's graph almost certainly has no
-        ``ToolCalled("foo")`` transition, so it falls through to B's
-        ``default_target`` — which is commonly ``TerminateTarget``,
-        prematurely closing B. Mitigations:
+        during B's turn, the Handoff target may not be a participant
+        of B and routing will fall back to B's ``default_target`` —
+        which is commonly ``TerminateTarget``, prematurely closing B.
+        Mitigations:
 
         * Use distinct, namespaced tool names across workflows
           (e.g. ``triage_to_eng`` vs ``billing_to_eng``).
@@ -127,7 +140,17 @@ class NetworkPlugin(Plugin):
           ``StayTarget()``) on graphs the agent might be running
           alongside other workflows.
         """
-        new_tools = make_handoff_tools_for_graph(self._client, graph)
+        mapping: dict[str, str] = {}
+        for transition in graph.transitions:
+            when = transition.when
+            then = transition.then
+            if not isinstance(when, ToolCalled):
+                continue
+            if not isinstance(then, AgentTarget):
+                continue
+            mapping.setdefault(when.tool_name, then.agent_id)
+
+        new_tools = make_handoff_tools(mapping)
         existing = {t.name for t in self._client.agent.tools}
         attached: list[object] = []
         for t in new_tools:

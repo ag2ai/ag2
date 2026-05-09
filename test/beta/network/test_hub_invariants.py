@@ -23,8 +23,6 @@ Covers:
   terminal events don't double-count ``Resume.observed.n``.
 * ``set_resume`` re-indexes ``claimed_capabilities`` so newly claimed
   caps surface under ``peers(action="find", capability=...)``.
-* ``EV_HANDOFF`` envelopes are projected through ``FullTranscript``
-  and ``WindowedSummary`` so multi-hop workflows preserve the thread.
 """
 
 import asyncio
@@ -38,7 +36,6 @@ from autogen.beta import Agent, Context
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_HANDOFF,
     EV_SESSION_INVITE,
     EV_SESSION_INVITE_ACK,
     EV_TEXT,
@@ -55,7 +52,6 @@ from autogen.beta.network import (
 )
 from autogen.beta.network.adapters.conversation import (
     CONVERSATION_TYPE,
-    ConversationAdapter,
 )
 from autogen.beta.network.client.tools.delegate import make_delegate_tool
 from autogen.beta.network.hub.expectations import (
@@ -78,7 +74,6 @@ from autogen.beta.network.session import (
     SessionMetadata,
     SessionState,
 )
-from autogen.beta.network.views.builtin import FullTranscript, WindowedSummary
 from autogen.beta.stream import MemoryStream
 from autogen.beta.task import (
     TaskMetadata,
@@ -592,94 +587,6 @@ async def test_record_observation_dedups_by_task_id() -> None:
 
     await hc.close()
     await hub.close()
-
-
-# ── Fix #9: EV_HANDOFF visible to view projections ───────────────────────────
-
-
-def _handoff(sender: str, *, tool: str, reason: str = "", session_id: str = "s1") -> Envelope:
-    return Envelope(
-        envelope_id=f"h-{sender}-{tool}",
-        session_id=session_id,
-        sender_id=sender,
-        audience=None,
-        event_type=EV_HANDOFF,
-        event_data={"tool": tool, "reason": reason},
-    )
-
-
-def _text(sender: str, body: str, session_id: str = "s1") -> Envelope:
-    return Envelope(
-        envelope_id=f"t-{sender}-{body}",
-        session_id=session_id,
-        sender_id=sender,
-        audience=None,
-        event_type=EV_TEXT,
-        event_data={"text": body},
-    )
-
-
-def _render(event: object) -> str:
-    """Pull the visible text out of a ``ModelMessage`` or ``ModelRequest``."""
-    content = getattr(event, "content", None)
-    if isinstance(content, str):
-        return content
-    parts = getattr(event, "parts", None)
-    if parts:
-        first = parts[0]
-        first_content = getattr(first, "content", None)
-        if isinstance(first_content, str):
-            return first_content
-    return ""
-
-
-def _two_party_metadata() -> SessionMetadata:
-    return SessionMetadata(
-        session_id="s1",
-        manifest=ConversationAdapter().manifest,
-        creator_id="alice",
-        participants=[
-            Participant(agent_id="alice", role=ParticipantRole.INITIATOR, order=0),
-            Participant(agent_id="bob", role=ParticipantRole.RESPONDENT, order=1),
-        ],
-        state=SessionState.ACTIVE,
-        created_at="2026-01-01T00:00:00+00:00",
-    )
-
-
-@pytest.mark.asyncio
-async def test_full_transcript_projects_handoff_envelopes() -> None:
-    """``EV_HANDOFF`` envelopes render as ``[Handed off via X] reason``
-    in the LLM's projected history so multi-hop workflows preserve the
-    thread on subsequent turns."""
-    metadata = _two_party_metadata()
-    wal = [
-        _text("alice", "hello bob"),
-        _handoff("alice", tool="transfer_to_eng", reason="this needs engineering"),
-        _text("bob", "got it"),
-    ]
-    events = await FullTranscript().project(wal, participant_id="bob", session=metadata)
-    rendered = [_render(ev) for ev in events]
-    assert "hello bob" in rendered
-    handoff_line = next((r for r in rendered if "Handed off via" in r), None)
-    assert handoff_line is not None
-    assert "transfer_to_eng" in handoff_line
-    assert "this needs engineering" in handoff_line
-
-
-@pytest.mark.asyncio
-async def test_windowed_summary_projects_handoff_envelopes() -> None:
-    """``WindowedSummary`` keeps handoff envelopes in the recent tail
-    instead of dropping them."""
-    metadata = _two_party_metadata()
-    wal = [
-        _text("alice", "msg1"),
-        _handoff("alice", tool="transfer_to_eng", reason="route this"),
-        _text("bob", "msg2"),
-    ]
-    events = await WindowedSummary(recent_n=10).project(wal, participant_id="bob", session=metadata)
-    rendered = [_render(ev) for ev in events]
-    assert any("Handed off via transfer_to_eng" in r for r in rendered)
 
 
 # ── Edge cases the per-fix tests above don't reach ───────────────────────────

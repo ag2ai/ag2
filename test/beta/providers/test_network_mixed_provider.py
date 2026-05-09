@@ -28,7 +28,7 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_HANDOFF,
+    EV_PACKET,
     EV_TEXT,
     Hub,
     HubClient,
@@ -223,7 +223,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
 
     triage (Anthropic) calls ``transfer_to_eng`` → eng (OpenAI) replies →
     ``RevertToInitiatorTarget`` rotates back to triage. Verifies the
-    EV_HANDOFF envelope is provider-neutral and that the receiving
+    routing ``EV_PACKET`` is provider-neutral and that the receiving
     agent's notify handler engages regardless of provider.
     """
     anth_key, oai_key, _ = _require_all_keys()
@@ -286,7 +286,9 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
 
     # Confirm the handoff happened.
     wal = await hub.read_wal(session.session_id)
-    handoff_envelopes = [e for e in wal if e.event_type == EV_HANDOFF]
+    handoff_envelopes = [
+        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+    ]
     assert handoff_envelopes, "triage did not call transfer_to_eng"
 
     # Wait up to 60s for eng (OpenAI) to engage and reply.

@@ -20,7 +20,7 @@ Grouped:
 
 from .context import make_context_tool
 from .delegate import make_delegate_tool
-from .handoff import make_handoff_tool, make_handoff_tools_for_graph
+from .handoff import make_handoff_tools
 from .peers import make_peers_tool
 from .say import make_say_tool
 from .sessions import make_sessions_tool
@@ -29,8 +29,7 @@ from .tasks import make_tasks_tool
 __all__ = (
     "make_context_tool",
     "make_delegate_tool",
-    "make_handoff_tool",
-    "make_handoff_tools_for_graph",
+    "make_handoff_tools",
     "make_peers_tool",
     "make_say_tool",
     "make_sessions_tool",

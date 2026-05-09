@@ -29,7 +29,7 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_HANDOFF,
+    EV_PACKET,
     EV_TEXT,
     Hub,
     HubClient,
@@ -338,13 +338,14 @@ async def test_context_search_finds_earlier_turn(
 async def test_workflow_graph_with_two_handoff_tools(
     anthropic_config: AnthropicConfig,
 ) -> None:
-    """A workflow graph with two ``ToolCalled`` transitions materialises
-    two distinct handoff tools and the LLM picks the right one.
+    """A workflow graph with two ``ToolCalled → AgentTarget`` transitions
+    materialises two distinct handoff tools and the LLM picks the right
+    one.
 
     triage routes engineering questions to ``eng`` via ``transfer_to_eng``
     and billing questions to ``billing`` via ``transfer_to_billing``.
-    The LLM is given a billing-flavoured prompt; we assert the EV_HANDOFF
-    in the WAL has tool=transfer_to_billing.
+    The LLM is given a billing-flavoured prompt; we assert the
+    ``EV_PACKET`` in the WAL carries ``routing.tool == transfer_to_billing``.
     """
     hub = await Hub.open(
         MemoryKnowledgeStore(),
@@ -415,9 +416,11 @@ async def test_workflow_graph_with_two_handoff_tools(
     )
 
     wal = await hub.read_wal(session.session_id)
-    handoffs = [e for e in wal if e.event_type == EV_HANDOFF]
+    handoffs = [
+        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+    ]
     assert handoffs, "triage did not call any handoff tool"
-    chosen_tool = handoffs[0].event_data.get("tool")
+    chosen_tool = (handoffs[0].event_data.get("routing", {}) or {}).get("tool")
     assert chosen_tool == "transfer_to_billing", f"expected billing routing, got tool={chosen_tool!r}"
 
     await triage_hc.close()

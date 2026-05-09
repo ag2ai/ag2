@@ -25,7 +25,7 @@ from autogen.beta import Agent
 from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.network import (
-    EV_HANDOFF,
+    EV_PACKET,
     Hub,
     HubClient,
     LocalLink,
@@ -164,7 +164,9 @@ async def test_workflow_swarm_handoff_revert_close(
     # Triage either calls transfer_to_eng (preferred) or answers directly;
     # either way the session should have at least one substantive event.
     wal = await hub.read_wal(session.session_id)
-    handoff_envelopes = [e for e in wal if e.event_type == EV_HANDOFF]
+    handoff_envelopes = [
+        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+    ]
     assert handoff_envelopes, f"triage did not call transfer_to_eng; reply={reply.body!r}"
 
     # After the handoff, expected_next_speaker is eng. Wait for eng's

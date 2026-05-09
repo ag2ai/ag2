@@ -17,19 +17,22 @@ Three layers:
   Each test verifies ``Hub.hydrate()`` re-folds the WAL through the
   adapter and recovers ``expected_next_speaker`` deterministically.
 * **NetworkPlugin.register_workflow** — handoff tools materialised
-  per ``ToolCalled`` transition.
+  per ``ToolCalled → AgentTarget`` transition; each tool returns a
+  typed ``Handoff``.
 """
 
 import json
 
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Context
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_HANDOFF,
+    EV_PACKET,
     EV_TEXT,
     Envelope,
+    Handoff,
     Hub,
     HubClient,
     LocalLink,
@@ -41,8 +44,9 @@ from autogen.beta.network.adapters.workflow import (
     WorkflowAdapter,
     WorkflowState,
 )
+from autogen.beta.network.client.plugin import NetworkPlugin
 from autogen.beta.network.client.tools.handoff import (
-    make_handoff_tool,
+    make_handoff_tools,
 )
 from autogen.beta.network.errors import ProtocolError
 from autogen.beta.network.session import (
@@ -63,6 +67,7 @@ from autogen.beta.network.transitions import (
     WorkflowGraphError,
     register_target,
 )
+from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
 
@@ -85,8 +90,28 @@ def _state(
     )
 
 
+def _routing_packet(tool: str, *, reason: str = "") -> dict:
+    """Construct an ``EV_PACKET`` payload that simulates a tool-driven
+    handoff (the framework normally builds this from the agent's local
+    ``ToolCallEvent``s at round-end)."""
+    return {
+        "routing": {"kind": "handoff", "tool": tool, "reason": reason},
+        "context_updates": {"set": {}, "delete": []},
+        "body": "",
+    }
+
+
 def _envelope(sender: str, *, event_type: str = EV_TEXT, tool: str = "") -> Envelope:
-    data = {"text": "x"} if event_type == EV_TEXT else {"tool": tool}
+    if event_type == EV_TEXT:
+        data: dict = {"text": "x"}
+    elif event_type == EV_PACKET:
+        data = {
+            "routing": {"kind": "handoff", "tool": tool, "reason": ""},
+            "context_updates": {"set": {}, "delete": []},
+            "body": "",
+        }
+    else:
+        data = {"tool": tool}
     return Envelope(
         envelope_id=f"env-{sender}",
         session_id="s1",
@@ -145,12 +170,12 @@ class TestBuiltInConditions:
         assert FromSpeaker("bob").evaluate(_state(order=["alice", "bob"]), _envelope("bob")) is True
         assert FromSpeaker("bob").evaluate(_state(order=["alice", "bob"]), _envelope("alice")) is False
 
-    def test_tool_called_matches_handoff_tool(self) -> None:
-        env = _envelope("alice", event_type=EV_HANDOFF, tool="transfer_to_eng")
+    def test_tool_called_matches_routing_tool_in_packet(self) -> None:
+        env = _envelope("alice", event_type=EV_PACKET, tool="transfer_to_eng")
         assert ToolCalled("transfer_to_eng").evaluate(_state(order=["alice"]), env) is True
         assert ToolCalled("escalate").evaluate(_state(order=["alice"]), env) is False
 
-    def test_tool_called_ignores_non_handoff_envelopes(self) -> None:
+    def test_tool_called_ignores_non_packet_envelopes(self) -> None:
         text_env = _envelope("alice")
         assert ToolCalled("transfer_to_eng").evaluate(_state(order=["alice"]), text_env) is False
 
@@ -349,8 +374,9 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
         knobs={"graph": graph.to_dict()},
     )
 
-    # alice, bob, carol each post once. After carol's post, max_turns=3
-    # is reached and the session closes.
+    # alice, bob, carol each post once. After carol's post, the
+    # sequence factory's TerminateTarget("sequence_complete") fires
+    # and closes the session.
     for sender_client in [alice, bob, carol]:
         env = Envelope(
             session_id=session.session_id,
@@ -364,7 +390,7 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
     # Wait briefly for the close envelope to be dispatched.
     final = await hub.get_session(session.session_id)
     assert final.state == SessionState.CLOSED
-    assert final.close_reason == "max_turns"
+    assert final.close_reason == "sequence_complete"
 
     await a_hc.close()
     await b_hc.close()
@@ -406,13 +432,22 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
         knobs={"graph": graph.to_dict()},
     )
 
-    # 1. triage emits the handoff envelope (simulating LLM tool call).
+    # 1. triage emits the routing packet (simulating LLM tool call →
+    # framework-built EV_PACKET with routing.tool set).
     handoff_env = Envelope(
         session_id=session.session_id,
         sender_id=triage.agent_id,
         audience=None,
-        event_type=EV_HANDOFF,
-        event_data={"tool": "transfer_to_eng", "reason": "needs eng review"},
+        event_type=EV_PACKET,
+        event_data={
+            "routing": {
+                "kind": "handoff",
+                "tool": "transfer_to_eng",
+                "reason": "needs eng review",
+            },
+            "context_updates": {"set": {}, "delete": []},
+            "body": "",
+        },
     )
     await hub.post_envelope(handoff_env)
     state = hub._adapter_states[session.session_id]
@@ -478,9 +513,9 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
 
     # mgr asks alice → alice → revert to mgr → mgr asks bob → bob → revert to mgr
     sequence = [
-        (mgr, EV_HANDOFF, {"tool": "ask_alice"}),
+        (mgr, EV_PACKET, _routing_packet("ask_alice")),
         (alice, EV_TEXT, {"text": "alice answers"}),
-        (mgr, EV_HANDOFF, {"tool": "ask_bob"}),
+        (mgr, EV_PACKET, _routing_packet("ask_bob")),
         (bob, EV_TEXT, {"text": "bob answers"}),
     ]
     expected_next = [alice.agent_id, mgr.agent_id, bob.agent_id, mgr.agent_id]
@@ -541,8 +576,12 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
         session_id=session.session_id,
         sender_id=triage.agent_id,
         audience=None,
-        event_type=EV_HANDOFF,
-        event_data={"tool": "transfer_to_eng"},
+        event_type=EV_PACKET,
+        event_data={
+            "routing": {"kind": "handoff", "tool": "transfer_to_eng", "reason": ""},
+            "context_updates": {"set": {}, "delete": []},
+            "body": "",
+        },
     )
     await hub1.post_envelope(handoff_env)
     pre_state = hub1._adapter_states[session.session_id]
@@ -599,8 +638,10 @@ async def test_workflow_validate_create_rejects_missing_graph() -> None:
 
 @pytest.mark.asyncio
 async def test_register_workflow_attaches_handoff_tools_per_tool_called() -> None:
-    """NetworkPlugin.register_workflow materialises one tool per ToolCalled
-    transition, deduping by tool_name."""
+    """NetworkPlugin.register_workflow materialises one tool per
+    ``ToolCalled → AgentTarget`` transition, deduping by tool_name and
+    skipping ``ToolCalled`` rules whose target isn't an ``AgentTarget``.
+    """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -621,13 +662,12 @@ async def test_register_workflow_attaches_handoff_tools_per_tool_called() -> Non
                 then=AgentTarget("legal"),
                 priority=1,
             ),
+            # ToolCalled → non-AgentTarget is skipped (Handoff can't encode it).
+            Transition(when=ToolCalled("done"), then=TerminateTarget("done")),
             # FromSpeaker doesn't materialise a tool.
             Transition(when=FromSpeaker("eng"), then=RevertToInitiatorTarget()),
         ],
     )
-    alice.agent._plugins[-1] if hasattr(alice.agent, "_plugins") else None
-    # Locate the NetworkPlugin to call register_workflow.
-    from autogen.beta.network.client.plugin import NetworkPlugin
 
     network_plugin = NetworkPlugin(alice)
     attached = network_plugin.register_workflow(graph)
@@ -645,59 +685,24 @@ async def test_register_workflow_attaches_handoff_tools_per_tool_called() -> Non
 
 
 @pytest.mark.asyncio
-async def test_handoff_tool_posts_ev_handoff_envelope() -> None:
-    """The materialised tool body posts an EV_HANDOFF envelope tagged with
-    tool_name + reason into the active session."""
-    from autogen.beta import Context
-    from autogen.beta.events import ToolCallEvent
-    from autogen.beta.network.policies import SESSION_DEP
-    from autogen.beta.stream import MemoryStream
+async def test_handoff_tool_returns_typed_handoff() -> None:
+    """Each generated handoff tool, when invoked, returns a typed
+    ``Handoff`` whose ``target`` matches the graph's ``AgentTarget`` and
+    whose ``reason`` mirrors the LLM-supplied argument. The workflow
+    adapter consumes this from the agent's local ``ToolResultEvent``
+    stream (no envelope is emitted by the tool body itself)."""
+    [tool_obj] = make_handoff_tools({"transfer_to_eng": "eng-id"})
 
-    store = MemoryKnowledgeStore()
-    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-
-    triage_hc = HubClient(link, hub=hub)
-    eng_hc = HubClient(link, hub=hub)
-    triage = await triage_hc.register(_agent("triage"), Passport(name="triage"), Resume())
-    eng = await eng_hc.register(_agent("eng"), Passport(name="eng"), Resume())
-
-    graph = TransitionGraph(
-        initial_speaker=triage.agent_id,
-        transitions=[
-            Transition(
-                when=ToolCalled("transfer_to_eng"),
-                then=AgentTarget(eng.agent_id),
-            ),
-        ],
-        default_target=TerminateTarget(),
-        max_turns=4,
-    )
-    session = await triage.open(
-        type=WORKFLOW_TYPE,
-        target=[eng.agent_id],
-        knobs={"graph": graph.to_dict()},
-    )
-
-    handoff = make_handoff_tool(triage, "transfer_to_eng")
     event = ToolCallEvent(
         name="transfer_to_eng",
         arguments=json.dumps({"reason": "needs domain expert"}),
     )
-    ctx = Context(
-        stream=MemoryStream(),
-        dependencies={SESSION_DEP: session},
-    )
-    result = await handoff(event, ctx)
-    # Either ToolResultEvent or ToolErrorEvent — assert the success path.
-    assert hasattr(result, "result")
+    ctx = Context(stream=MemoryStream(), dependencies={})
+    result = await tool_obj(event, ctx)
+
+    assert hasattr(result, "result"), result
     parts = result.result.parts
-    assert "handoff posted" in parts[0].content
-
-    # Adapter should have advanced to eng.
-    state = hub._adapter_states[session.session_id]
-    assert state.expected_next_speaker == eng.agent_id
-
-    await triage_hc.close()
-    await eng_hc.close()
-    await hub.close()
+    assert len(parts) == 1
+    payload = parts[0].data
+    assert isinstance(payload, Handoff)
+    assert payload == Handoff(target="eng-id", reason="needs domain expert")
