@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import ExitStack
 from typing import Any
 from uuid import uuid4
 
@@ -21,7 +20,6 @@ from autogen.beta.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
-    ToolCallEvent,
     ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
@@ -30,10 +28,10 @@ from autogen.beta.stream import MemoryStream
 from autogen.beta.tools.final.client_tool import ClientTool
 from autogen.beta.tools.final.function_tool import FunctionToolSchema
 
-from .extension import CONTEXT_UPDATE_METADATA_KEY, MIME_TOOL_CALL
+from .events import A2AEvent
+from .extension import CONTEXT_UPDATE_METADATA_KEY
+from .mappers.events import a2a_event_to_sdk, chunk_to_text_artifact, client_call_to_artifact
 from .mappers.messages import ParsedMessage, parse_message
-from .mappers.parts import data_part
-from .mappers.tools import call_to_payload
 
 
 class AgentExecutor(A2AAgentExecutorBase):
@@ -55,6 +53,15 @@ class AgentExecutor(A2AAgentExecutorBase):
     ``ModelRequest``; it cannot resume a turn from a ``ToolResultsEvent``.
     Substituting that with a public wrapper would require core changes,
     which the stateless refactor intentionally avoids.
+
+    Streaming events flow: AG2 events on the per-turn ``MemoryStream``
+    are forwarded into the A2A ``EventQueue`` by a single subscribe-style
+    mapper (``map_ag2_to_a2a`` below). The mapper translates AG2 events
+    into typed ``A2AEvent`` wrappers, then unwraps them to bare protobuf
+    via ``a2a_event_to_sdk`` for the queue. Status-lifecycle transitions
+    (start_work / complete / failed / requires_input / cancel) still go
+    through ``TaskUpdater`` because it builds the boilerplate
+    ``TaskStatus`` / ``Message`` objects that those transitions need.
     """
 
     def __init__(self, agent: Agent) -> None:
@@ -94,7 +101,7 @@ class AgentExecutor(A2AAgentExecutorBase):
             await updater.start_work()
 
         try:
-            await self._run_one_turn(parsed, updater)
+            await self._run_one_turn(parsed, updater, event_queue, task_id, context_id)
         except Exception:
             await updater.failed()
             raise
@@ -116,6 +123,9 @@ class AgentExecutor(A2AAgentExecutorBase):
         self,
         parsed: ParsedMessage,
         updater: TaskUpdater,
+        event_queue: EventQueue,
+        task_id: str,
+        context_id: str,
     ) -> None:
         stream = MemoryStream()
         if parsed.history_events:
@@ -128,23 +138,41 @@ class AgentExecutor(A2AAgentExecutorBase):
         text_pieces: list[str] = []
         pending_client_calls: list[ClientToolCallEvent] = []
 
-        with ExitStack() as stack:
-            stack.enter_context(
-                stream.where(ModelMessageChunk).sub_scope(
-                    _ChunkSink(updater, text_artifact_id, text_pieces),
-                ),
-            )
-            stack.enter_context(
-                stream.where(ClientToolCallEvent).sub_scope(
-                    _ClientCallSink(updater, pending_client_calls),
-                ),
-            )
-            response, final_variables = await self._dispatch_to_agent(
-                initial_event,
-                stream,
-                client_tools,
-                incoming_variables=parsed.context_update,
-            )
+        @stream.subscribe
+        async def map_ag2_to_a2a(event: BaseEvent) -> None:
+            if isinstance(event, ModelMessageChunk):
+                text_pieces.append(event.content)
+                a2a_event = chunk_to_text_artifact(
+                    event,
+                    artifact_id=text_artifact_id,
+                    task_id=task_id,
+                    context_id=context_id,
+                )
+                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                return
+
+            if isinstance(event, ClientToolCallEvent):
+                pending_client_calls.append(event)
+                a2a_event = client_call_to_artifact(
+                    event,
+                    task_id=task_id,
+                    context_id=context_id,
+                )
+                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                return
+
+            # User code may emit A2AEvent objects directly via
+            # ``await ctx.send(A2A...())`` from inside a tool — pass
+            # through unchanged so transports surface them as-is.
+            if isinstance(event, A2AEvent):
+                await event_queue.enqueue_event(a2a_event_to_sdk(event))
+
+        response, final_variables = await self._dispatch_to_agent(
+            initial_event,
+            stream,
+            client_tools,
+            incoming_variables=parsed.context_update,
+        )
 
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
         if has_pending or pending_client_calls:
@@ -242,46 +270,3 @@ class AgentExecutor(A2AAgentExecutorBase):
             additional_tools=client_tools,
         )
         return reply.response, dict(ctx.variables)
-
-
-class _ChunkSink:
-    """Stream subscriber that mirrors ``ModelMessageChunk`` events to A2A artifacts.
-
-    Implemented as a class with ``__call__`` rather than a closure-returning
-    factory so the executor's runtime path doesn't define a nested function
-    on every turn (see project CLAUDE.md).
-    """
-
-    __slots__ = ("_updater", "_artifact_id", "_pieces")
-
-    def __init__(self, updater: TaskUpdater, artifact_id: str, pieces: list[str]) -> None:
-        self._updater = updater
-        self._artifact_id = artifact_id
-        self._pieces = pieces
-
-    async def __call__(self, ev: ModelMessageChunk, _: Context) -> None:
-        self._pieces.append(ev.content)
-        await self._updater.add_artifact(
-            parts=[Part(text=ev.content)],
-            artifact_id=self._artifact_id,
-            append=True,
-        )
-
-
-class _ClientCallSink:
-    """Stream subscriber that converts ``ClientToolCallEvent`` to a tool-call artifact."""
-
-    __slots__ = ("_updater", "_pending")
-
-    def __init__(self, updater: TaskUpdater, pending: list[ClientToolCallEvent]) -> None:
-        self._updater = updater
-        self._pending = pending
-
-    async def __call__(self, ev: ClientToolCallEvent, _: Context) -> None:
-        self._pending.append(ev)
-        payload = call_to_payload(ToolCallEvent(id=ev.id, name=ev.name, arguments=ev.arguments))
-        await self._updater.add_artifact(
-            parts=[data_part(payload, media_type=MIME_TOOL_CALL)],
-            artifact_id=ev.id,
-            last_chunk=True,
-        )

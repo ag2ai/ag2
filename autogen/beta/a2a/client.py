@@ -53,12 +53,21 @@ from .errors import (
     A2ATaskFailedError,
     A2ATaskRejectedError,
 )
+from .events import (
+    A2AMessage,
+    A2ATaskArtifactUpdate,
+    A2ATaskSnapshot,
+    A2ATaskStatusUpdate,
+    A2ATextArtifact,
+    A2AToolCallArtifact,
+)
 from .extension import (
     EXTENSION_URI,
     EXTRA_PARTS_DEPENDENCY_KEY,
     MIME_TOOL_CALL,
     TENANT_VARIABLE_KEY,
 )
+from .mappers.events import parse_stream_response, parse_task_artifact
 from .mappers.messages import (
     build_input_response_message,
     build_tool_result_message,
@@ -84,6 +93,15 @@ _TERMINAL_STATES = frozenset({
     TaskState.TASK_STATE_INPUT_REQUIRED,
     TaskState.TASK_STATE_AUTH_REQUIRED,
 })
+
+# Maps a task-failure terminal state to the ``finish_reason`` we surface
+# in the resulting ``ModelResponse``. Driven from one table so the
+# streaming and polling paths can never disagree on the mapping.
+_FAILURE_REASONS: dict[TaskState, str] = {
+    TaskState.TASK_STATE_FAILED: "failed",
+    TaskState.TASK_STATE_REJECTED: "rejected",
+    TaskState.TASK_STATE_AUTH_REQUIRED: "auth_required",
+}
 
 
 @dataclass(slots=True)
@@ -226,7 +244,10 @@ class A2AClient(LLMClient):
                 if state.pending_calls:
                     break
 
-                user_text = await self._await_user_input(context, outcome.input_prompt)
+                user_text = await context.input(
+                    outcome.input_prompt or "Please provide input:",
+                    timeout=self._input_required_timeout,
+                )
                 outgoing = build_input_response_message(
                     user_text,
                     task_id=self._task_id or "",
@@ -299,22 +320,13 @@ class A2AClient(LLMClient):
         function_schemas = [t for t in tools if isinstance(t, FunctionToolSchema)]
         if not function_schemas:
             return []
-        if not self._card_advertises_extension():
+        assert self._agent_card is not None
+        if not any(ext.uri == EXTENSION_URI for ext in self._agent_card.capabilities.extensions):
             raise A2AClientToolsNotSupportedError(
                 f"Server at {self._card_url!r} does not advertise extension "
                 f"{EXTENSION_URI!r}; remove tools= or use a server that supports it."
             )
         return function_schemas
-
-    def _card_advertises_extension(self) -> bool:
-        if self._agent_card is None or self._agent_card.capabilities is None:
-            return False
-        return any(ext.uri == EXTENSION_URI for ext in self._agent_card.capabilities.extensions)
-
-    def _streaming_enabled(self) -> bool:
-        if self._agent_card is None:
-            return False
-        return self._streaming and self._agent_card.capabilities.streaming
 
     def _build_outgoing(
         self,
@@ -344,7 +356,10 @@ class A2AClient(LLMClient):
                 context_update=dict(context.variables) or None,
             )
 
-        inputs = self._collect_user_inputs(messages)
+        inputs: list[Input] = next(
+            (list(ev.parts) for ev in reversed(messages) if isinstance(ev, ModelRequest)),
+            [TextInput("")],
+        )
         extra_parts = _read_extra_parts(context)
         return build_user_message(
             inputs,
@@ -357,20 +372,14 @@ class A2AClient(LLMClient):
             extra_parts=extra_parts,
         )
 
-    @staticmethod
-    def _collect_user_inputs(messages: Sequence[BaseEvent]) -> list[Input]:
-        for ev in reversed(messages):
-            if isinstance(ev, ModelRequest):
-                return list(ev.parts)
-        return [TextInput("")]
-
     async def _drive_task(
         self,
         message: Message,
         context: ConversationContext,
         state: A2ADriveState,
     ) -> A2ATurnOutcome:
-        if self._streaming_enabled():
+        assert self._agent_card is not None
+        if self._streaming and self._agent_card.capabilities.streaming:
             return await self._consume_streaming(message, context, state)
         return await self._consume_polling(message, context, state)
 
@@ -419,9 +428,19 @@ class A2AClient(LLMClient):
             if self._history_length is not None:
                 get_kwargs["history_length"] = self._history_length
             task = await self._sdk_client.get_task(GetTaskRequest(**get_kwargs))
-            self._absorb_task_artifacts(task, context, state)
+            await self._absorb_task_artifacts(task, context, state)
             if task.status.state in _TERMINAL_STATES:
-                return self._terminal_outcome(task, state)
+                if reason := _FAILURE_REASONS.get(task.status.state):
+                    state.terminal_task = task
+                    state.finish_reason = reason
+                    return A2ATurnOutcome()
+                if task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED:
+                    state.finish_reason = "input_required"
+                    return A2ATurnOutcome(
+                        input_required=True,
+                        input_prompt=_extract_status_prompt(task.status),
+                    )
+                return A2ATurnOutcome()
             await asyncio.sleep(self._polling_interval)
 
     async def _drain_stream(
@@ -431,50 +450,35 @@ class A2AClient(LLMClient):
         state: A2ADriveState,
     ) -> A2ATurnOutcome:
         outcome = A2ATurnOutcome()
-        async for event in stream:
-            response = _ensure_stream_response(event)
-            payload = response.WhichOneof("payload")
+        async for raw in stream:
+            response = _ensure_stream_response(raw)
+            a2a_event = parse_stream_response(response)
+            # Publish the typed A2A event into the user-facing stream so
+            # observers/middleware can subscribe via stream.where(A2A...).
+            await context.send(a2a_event)
 
-            if payload == "task":
-                self._task_id = response.task.id
-                self._save_context_id(context, response.task.context_id)
+            if isinstance(a2a_event, A2ATaskSnapshot):
+                self._task_id = a2a_event.task.id
+                self._save_context_id(context, a2a_event.task.context_id)
                 continue
 
-            if payload == "status_update":
-                self._save_context_id(context, response.status_update.context_id)
-                if response.status_update.task_id:
-                    self._task_id = response.status_update.task_id
-                stop = await self._handle_status_update(
-                    response.status_update,
-                    context,
-                    state,
-                    outcome,
-                )
+            if isinstance(a2a_event, A2ATaskStatusUpdate):
+                update = a2a_event.update
+                self._save_context_id(context, update.context_id)
+                if update.task_id:
+                    self._task_id = update.task_id
+                stop = await self._handle_status_update(update, context, state, outcome)
                 if stop:
                     return outcome
                 continue
 
-            if payload == "artifact_update":
-                self._save_context_id(context, response.artifact_update.context_id)
-                artifact = response.artifact_update.artifact
-                # ``append=True`` chunks reuse the same ``artifact_id``;
-                # only dedup when the artifact is fully delivered. Until
-                # ``last_chunk`` (or a non-append delivery) we keep
-                # appending new chunks to ``accumulated_text``.
-                if artifact.artifact_id in state.seen_artifact_ids:
-                    continue
-                text_chunk, calls = await self._handle_artifact_parts(
-                    artifact.parts,
-                    context,
-                )
-                state.accumulated_text += text_chunk
-                state.pending_calls.extend(calls)
-                if response.artifact_update.last_chunk or not response.artifact_update.append:
-                    state.seen_artifact_ids.add(artifact.artifact_id)
+            if isinstance(a2a_event, A2ATaskArtifactUpdate):
+                self._save_context_id(context, a2a_event.update.context_id)
+                await self._apply_artifact_update(a2a_event, context, state)
                 continue
 
-            if payload == "message":
-                msg = response.message
+            if isinstance(a2a_event, A2AMessage):
+                msg = a2a_event.message
                 self._save_context_id(context, msg.context_id)
                 if msg.task_id:
                     self._task_id = msg.task_id
@@ -498,62 +502,76 @@ class A2AClient(LLMClient):
         outcome: A2ATurnOutcome,
     ) -> bool:
         sd_state = status_update.status.state
-        if sd_state == TaskState.TASK_STATE_FAILED:
-            state.terminal_task = self._synthesize_task_from_status(status_update)
-            state.finish_reason = "failed"
+
+        if reason := _FAILURE_REASONS.get(sd_state):
+            state.terminal_task = Task(
+                id=status_update.task_id,
+                status=status_update.status,
+                context_id=status_update.context_id,
+            )
+            state.finish_reason = reason
             return True
-        if sd_state == TaskState.TASK_STATE_REJECTED:
-            state.terminal_task = self._synthesize_task_from_status(status_update)
-            state.finish_reason = "rejected"
-            return True
-        if sd_state == TaskState.TASK_STATE_AUTH_REQUIRED:
-            state.terminal_task = self._synthesize_task_from_status(status_update)
-            state.finish_reason = "auth_required"
-            return True
+
         if sd_state == TaskState.TASK_STATE_INPUT_REQUIRED:
             state.finish_reason = "input_required"
             outcome.input_required = True
             outcome.input_prompt = _extract_status_prompt(status_update.status)
             return True
+
         # Servers usually attach the final agent text on the
         # ``status.message`` of the COMPLETED transition rather than
         # emitting it as a separate ``message`` payload, so we absorb
         # both here.
         if sd_state == TaskState.TASK_STATE_COMPLETED and status_update.status.HasField("message"):
-            msg = status_update.status.message
-            if not msg.message_id or msg.message_id not in state.seen_message_ids:
-                self._merge_context_update(context, extract_context_update(msg))
-                text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
-                state.accumulated_text += text_chunk
-                state.pending_calls.extend(calls)
-                if msg.message_id:
-                    state.seen_message_ids.add(msg.message_id)
+            await self._absorb_completion_message(status_update.status.message, context, state)
         return False
 
-    def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: A2ADriveState) -> None:
+    async def _absorb_completion_message(
+        self,
+        msg: Message,
+        context: ConversationContext,
+        state: A2ADriveState,
+    ) -> None:
+        """Pull text/tool-calls from a COMPLETED transition's ``status.message``.
+
+        Server-emitted COMPLETED carries the final agent reply on
+        ``status.message`` (not as a separate ``message`` payload), so
+        this helper is invoked both from the streaming status-update
+        path and as a finalisation step. Idempotent on ``message_id``
+        so re-runs (replay on reconnect) don't double-append.
+        """
+        if msg.message_id and msg.message_id in state.seen_message_ids:
+            return
+        self._merge_context_update(context, extract_context_update(msg))
+        text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
+        state.accumulated_text += text_chunk
+        state.pending_calls.extend(calls)
+        if msg.message_id:
+            state.seen_message_ids.add(msg.message_id)
+
+    async def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: A2ADriveState) -> None:
         # Polling mode: every poll re-reads the cumulative ``task.artifacts``
         # snapshot. Within one ``__call__`` the per-state dedup guards
         # against double-appending the same artifact. Across calls (the
         # AG2 outer loop creates a fresh ``A2AClient`` per ask), the state
-        # is empty — so we additionally gate ``tool-call+json`` artifacts
-        # on ``INPUT_REQUIRED``. Historical tool-calls from earlier turns
-        # remain in ``task.artifacts`` after the task moves past them and
-        # would otherwise be re-emitted to the outer agent for execution.
-        # Streaming does not need this gate: ``artifact_update`` events
-        # are incremental, never replayed as part of a cumulative snapshot.
+        # is empty — so we additionally gate ``A2AToolCallArtifact``
+        # absorption on ``INPUT_REQUIRED``. Historical tool-calls from
+        # earlier turns remain in ``task.artifacts`` after the task moves
+        # past them and would otherwise be re-emitted to the outer agent
+        # for execution. Streaming does not need this gate: incremental
+        # ``artifact_update`` events are never replayed as a cumulative
+        # snapshot.
         terminal_calls_visible = task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         for artifact in task.artifacts:
-            if artifact.artifact_id in state.seen_artifact_ids:
+            a2a_event = parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id)
+            if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
+                # Mark as seen so streaming-mode reconnect won't re-deliver,
+                # but skip the call accumulation for non-terminal polls.
+                state.seen_artifact_ids.add(artifact.artifact_id)
                 continue
-            state.seen_artifact_ids.add(artifact.artifact_id)
-            for part in artifact.parts:
-                if part.text:
-                    state.accumulated_text += part.text
-                    continue
-                if terminal_calls_visible and is_data_part_with_mime(part, MIME_TOOL_CALL):
-                    state.pending_calls.append(payload_to_call(part_data_to_python(part)))
+            await self._apply_artifact_update(a2a_event, context, state)
         # ``status.message`` on ``INPUT_REQUIRED`` is the HITL prompt — it
-        # routes through ``_terminal_outcome.input_prompt`` to the hook,
+        # routes through the polling-loop's ``input_prompt`` to the hook,
         # not to the final assistant text. Skip it here to keep parity
         # with the streaming path (``_handle_status_update`` only absorbs
         # ``status.message`` on COMPLETED).
@@ -569,24 +587,41 @@ class A2AClient(LLMClient):
                 if msg.message_id:
                     state.seen_message_ids.add(msg.message_id)
 
-    def _terminal_outcome(self, task: Task, state: A2ADriveState) -> A2ATurnOutcome:
-        sd_state = task.status.state
-        if sd_state == TaskState.TASK_STATE_FAILED:
-            state.terminal_task = task
-            state.finish_reason = "failed"
-        elif sd_state == TaskState.TASK_STATE_REJECTED:
-            state.terminal_task = task
-            state.finish_reason = "rejected"
-        elif sd_state == TaskState.TASK_STATE_AUTH_REQUIRED:
-            state.terminal_task = task
-            state.finish_reason = "auth_required"
-        elif sd_state == TaskState.TASK_STATE_INPUT_REQUIRED:
-            state.finish_reason = "input_required"
-            return A2ATurnOutcome(
-                input_required=True,
-                input_prompt=_extract_status_prompt(task.status),
-            )
-        return A2ATurnOutcome()
+    async def _apply_artifact_update(
+        self,
+        a2a_event: A2ATaskArtifactUpdate,
+        context: ConversationContext,
+        state: A2ADriveState,
+    ) -> None:
+        """Apply a parsed artifact update to the per-turn drive state.
+
+        Routes typed subclasses (``A2ATextArtifact`` / ``A2AToolCallArtifact``)
+        directly to text/calls accumulators; falls back to scanning
+        ``artifact.parts`` for unknown shapes.
+
+        Dedup: ``append=True`` chunks reuse the same ``artifact_id``;
+        only mark seen once the artifact is finalised (``last_chunk`` or
+        non-append delivery). Streaming receives this method via
+        ``_drain_stream``; polling synthesises the same typed events via
+        ``parse_task_artifact`` and reuses this code path.
+        """
+        update = a2a_event.update
+        artifact = update.artifact
+        if artifact.artifact_id in state.seen_artifact_ids:
+            return
+
+        if isinstance(a2a_event, A2ATextArtifact):
+            state.accumulated_text += a2a_event.text
+            await context.send(ModelMessageChunk(a2a_event.text))
+        elif isinstance(a2a_event, A2AToolCallArtifact):
+            state.pending_calls.append(a2a_event.call)
+        else:
+            text_chunk, calls = await self._handle_artifact_parts(artifact.parts, context)
+            state.accumulated_text += text_chunk
+            state.pending_calls.extend(calls)
+
+        if a2a_event.last_chunk or not a2a_event.append:
+            state.seen_artifact_ids.add(artifact.artifact_id)
 
     async def _handle_artifact_parts(
         self,
@@ -604,13 +639,6 @@ class A2AClient(LLMClient):
                 calls.append(payload_to_call(part_data_to_python(part)))
                 continue
         return text_acc, calls
-
-    async def _await_user_input(self, context: ConversationContext, prompt: str | None) -> str:
-        # Defers to the agent's HITL hook. If none is wired up the beta
-        # default raises ``HumanInputNotProvidedError`` — that's the
-        # signal to the caller that this server requires HITL but the
-        # client side isn't set up for it.
-        return await context.input(prompt or "Please provide input:", timeout=self._input_required_timeout)
 
     def _build_send_request(self, message: Message, context: ConversationContext) -> SendMessageRequest:
         assert self._agent_card is not None
@@ -634,19 +662,9 @@ class A2AClient(LLMClient):
             return
         context.variables[_CONTEXT_ID_VAR_TEMPLATE.format(card_url=self._card_url)] = context_id
 
-    def _resolve_tenant(self, context: ConversationContext) -> str | None:
-        # Per-call override wins: a single Agent can fan out to multiple
-        # tenants by setting ``a2a:tenant`` on its ``context.variables``.
-        # Falls back to the tenant baked into the config at construction.
-        override = context.variables.get(TENANT_VARIABLE_KEY)
-        if isinstance(override, str) and override:
-            return override
-        return self._tenant
-
     def _maybe_tenant(self, context: ConversationContext, **kwargs: Any) -> dict[str, Any]:
-        # Mirrors the ``_session.with_tenant`` rule but pulls the override
-        # from ``context.variables`` (per-call) instead of an explicit arg.
-        tenant = self._resolve_tenant(context)
+        override = context.variables.get(TENANT_VARIABLE_KEY)
+        tenant = override if isinstance(override, str) and override else self._tenant
         if tenant:
             kwargs["tenant"] = tenant
         return kwargs
@@ -656,15 +674,6 @@ class A2AClient(LLMClient):
         if not payload:
             return
         context.variables.update(payload)
-
-    @staticmethod
-    def _synthesize_task_from_status(status_update: TaskStatusUpdateEvent) -> Task:
-        # Streaming-mode terminal events carry only ``TaskStatusUpdateEvent``
-        # rather than a full ``Task`` snapshot. Synthesise a minimal Task
-        # surrogate from the status so error types (``A2ATaskFailedError``
-        # etc.) can be raised consistently with the polling path that gets
-        # a real Task from ``get_task``.
-        return Task(id=status_update.task_id, status=status_update.status, context_id=status_update.context_id)
 
 
 def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamResponse:
