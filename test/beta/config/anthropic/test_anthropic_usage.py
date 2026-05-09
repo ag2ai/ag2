@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fast_depends.pydantic import PydanticSerializer
 
 from autogen.beta.config.anthropic import AnthropicClient
 from autogen.beta.events import ModelResponse, Usage
@@ -147,3 +148,64 @@ async def test_process_stream_normalizes_usage():
 async def _async_iter(items):
     for item in items:
         yield item
+
+
+def _call_context() -> AsyncMock:
+    ctx = AsyncMock()
+    ctx.send = AsyncMock()
+    ctx.prompt = []
+    return ctx
+
+
+def _serializer() -> PydanticSerializer:
+    return PydanticSerializer(
+        pydantic_config={"arbitrary_types_allowed": True},
+        use_fastdepends_errors=False,
+    )
+
+
+@pytest.mark.asyncio()
+async def test_extra_body_lands_in_messages_create_kwargs() -> None:
+    extra = {"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}}
+    client = AnthropicClient(api_key="test", prompt_caching=False, extra_body=extra)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_response(_make_usage(input_tokens=1, output_tokens=1))
+
+    client._client.messages.create = fake_create  # type: ignore[method-assign]
+
+    await client(
+        messages=[],
+        context=_call_context(),
+        tools=[],
+        response_schema=None,
+        serializer=_serializer(),
+    )
+
+    assert captured.get("extra_body") == extra
+
+
+@pytest.mark.asyncio()
+async def test_no_extra_body_means_no_extra_body_kwarg() -> None:
+    client = AnthropicClient(api_key="test", prompt_caching=False)
+
+    captured: dict[str, Any] = {}
+
+    async def fake_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _make_response(_make_usage(input_tokens=1, output_tokens=1))
+
+    client._client.messages.create = fake_create  # type: ignore[method-assign]
+
+    await client(
+        messages=[],
+        context=_call_context(),
+        tools=[],
+        response_schema=None,
+        serializer=_serializer(),
+    )
+
+    assert "extra_body" not in captured
