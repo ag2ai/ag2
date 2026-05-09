@@ -10,6 +10,7 @@ from a2a.types import (
     GetTaskRequest,
     ListTasksRequest,
     Task,
+    TaskState,
 )
 
 from ._session import open_session, with_tenant
@@ -63,7 +64,7 @@ async def list_tasks(
     *,
     tenant: str | None = None,
     context_id: str | None = None,
-    status: str | None = None,
+    status: TaskState | None = None,
     page_size: int | None = None,
     page_token: str | None = None,
     history_length: int | None = None,
