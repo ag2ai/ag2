@@ -243,7 +243,7 @@ twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.11.0",
+    "mcp>=1.11.0,<2",
 ]
 
 mcp-proxy-gen = [
