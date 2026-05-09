@@ -5,6 +5,7 @@
 from contextlib import asynccontextmanager
 
 import pytest
+
 pytest.importorskip("mcp")
 from mcp.types import CallToolResult, ListToolsResult, TextContent
 from mcp.types import Tool as MCPTool
