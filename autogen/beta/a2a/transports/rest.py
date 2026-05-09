@@ -79,8 +79,12 @@ def build_rest_asgi(
         push_config_store=push_config_store,
         push_sender=push_sender,
     )
-    routes: list[BaseRoute] = build_rest_routes(handler=handler, path_prefix=path_prefix)
-    routes.extend(
+    # Card routes MUST precede REST routes: the REST router includes a
+    # ``Mount(path='/{tenant}', ...)`` catch-all that swallows any
+    # ``/<segment>/...`` path (including ``/.well-known/agent-card.json``,
+    # treating ``.well-known`` as the tenant) and returns 404 from its
+    # own subroutes before Starlette can fall through to the card route.
+    routes: list[BaseRoute] = list(
         create_agent_card_routes(agent_card, card_modifier=card_modifier, card_url=card_url),
     )
     if legacy_card_url:
@@ -91,5 +95,6 @@ def build_rest_asgi(
                 card_url=legacy_card_url,
             ),
         )
+    routes.extend(build_rest_routes(handler=handler, path_prefix=path_prefix))
 
     return Starlette(routes=routes)
