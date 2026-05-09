@@ -257,7 +257,7 @@ To configure an Agent Card, you can use the `agent_card` and `extended_agent_car
 
 ```python title="server.py" linenums="1" hl_lines="7 11"
 from autogen.a2a import A2aAgentServer, CardSettings
-from a2a.types import AgentSkill
+from a2a.compat.v0_3.types import AgentSkill
 
 server = A2aAgentServer(
     agent,
@@ -305,24 +305,19 @@ request_handler = DefaultRequestHandler(
 app = server.build(request_handler=request_handler)
 ```
 
-### Custom Server Application
+### Mounting into a FastAPI app
 
-You can also use your own server application. For example, `A2AFastAPIApplication` is a FastAPI application that can be used to serve your agent.
+`A2aAgentServer.build()` returns a Starlette ASGI app. Because FastAPI is built on top of Starlette, you can mount the A2A app under any path of an existing FastAPI service.
 
-```python title="server.py" linenums="1" hl_lines="7-13"
-from a2a.server.apps import A2AFastAPIApplication
-from autogen import ConversableAgent
+```python title="server.py" linenums="1" hl_lines="7-8"
+from fastapi import FastAPI
 from autogen.a2a import A2aAgentServer
 
-server = A2aAgentServer(agent)
+a2a_server = A2aAgentServer(agent, url="http://0.0.0.0:8000/a2a/")
 
-app = A2AFastAPIApplication(
-    agent_card=server.card,
-    extended_agent_card=server.extended_agent_card,
-    # use default request handler or
-    # your own request handler from the previous example
-    http_handler=server.build_request_handler(),
-).build()
+app = FastAPI()
+# expose the A2A endpoints (agent card + JSON-RPC) under /a2a
+app.mount("/a2a", a2a_server.build())
 ```
 
 Please refer to the <a href="https://github.com/a2aproject/a2a-python" className="external-link" target="_blank" rel="noopener noreferrer">A2A python sdk</a> documentation for more details on how to use it.

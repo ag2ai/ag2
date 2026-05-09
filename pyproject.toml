@@ -94,7 +94,7 @@ a2ui = [
 ]
 
 a2a = [
-    "a2a-sdk[http-server]>=0.3.11,<0.4",
+    "a2a-sdk[http-server]>=1.0.2,<2",
 ]
 
 ag-ui = [
@@ -297,7 +297,7 @@ commsagent-telegram = ["telethon>=1.38.1, <2"]
 duckduckgo = ["duckduckgo_search>=8.0.2"]
 ddgs = ["ddgs>=9.0.0,<10"]
 tavily = ["tavily-python>=0.7.4,<0.8"]
-exa = ["exa-py>=2.0.0,<3"]
+exa = ["exa-py>=2.12.1,<3"]
 perplexity = ["perplexityai>=0.30.0,<1"]
 
 nlip = [
@@ -315,6 +315,7 @@ test-core = [
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
     "freezegun>=1.5.5,<2",
+    "respx>=0.23.0,<0.24.0"
 ]
 
 test = [
@@ -645,4 +646,4 @@ disallow_any_unimported = true
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb,./notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb,./notebook/agentchat_graph_rag_neo4j.ipynb"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher"
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize,brunch,iif,COO,EHR,ALS,crasher,fulfilment"
