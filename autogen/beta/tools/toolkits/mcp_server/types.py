@@ -5,6 +5,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from autogen.beta.annotations import Variable
 
@@ -24,6 +25,8 @@ class MCPServerConfig:
     blocked_tools: list[str] | Variable | None = None
     headers: dict[str, str] | Variable | None = None
     connection_timeout: float = 30.0
+    proxy: str | None = None
+    verify: bool = True
 
 
 @dataclass
