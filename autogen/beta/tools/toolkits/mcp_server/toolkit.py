@@ -62,12 +62,15 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncIterator[ClientSession]:
             yield session
     else:
         async with (
+            httpx.AsyncClient(
+                headers=config.headers,
+                timeout=config.connection_timeout,
+                proxy=config.proxy,
+                verify=config.verify,
+            ) as client,
             streamable_http_client(
                 config.server_url,
-                http_client=httpx.AsyncClient(
-                    headers=config.headers,
-                    timeout=config.connection_timeout,
-                ),
+                http_client=client,
             ) as (read_stream, write_stream, _),
             ClientSession(read_stream, write_stream) as session,
         ):
