@@ -210,15 +210,7 @@ you want for "agent's tool decides where we go next."
 
 ## Worked Example
 
-`#!python ms_code/network/03b_workflow_context_vars.py` — a triage workflow
-where a moderator agent calls a `#!python set_route` tool to write
-`#!python {"route": "security"}` or `#!python {"route": "legal"}` to context, and a
-`#!python ContextEquals` transition routes to the matching specialist agent.
-End-to-end against real Sonnet:
-
-```bash
-python ms_code/network/03b_workflow_context_vars.py
-```
+For a runnable end-to-end example of context-driven routing — a router agent classifies a request and a `#!python ContextEquals` transition routes to the matching specialist — see the [Context-Aware Routing](/docs/beta/network/pattern_cookbook/context_aware_routing) entry in the Pattern Cookbook.
 
 ## Comparison to Classic `#!python ContextVariables`
 

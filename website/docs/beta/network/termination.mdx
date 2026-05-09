@@ -68,8 +68,6 @@ The reason string flows on `#!python EV_SESSION_CLOSED.event_data["reason"]` —
 
 **When to use:** the termination condition lives in *your* code (a turn cap, a wall-clock deadline, a custom signal from elsewhere in your application).
 
-**Anchor example:** [`ms_code/network/03_discussion_3way.py`](https://github.com/ag2ai/ag2/blob/main/ms_code/network/03_discussion_3way.py){.external-link target="_blank"}.
-
 !!! tip "Race window"
     A reply to the *last* in-flight envelope can land while you're calling `#!python close()`. The default handler short-circuits on `#!python state != ACTIVE`, so most of the time it's a no-op — but an LLM call already in flight will return after the close and its `#!python session.send` is rejected by the hub. The receive loop catches and logs that error (see [Agent Clients](/docs/beta/network/agent_clients)) so the failure is diagnosable, not silent.
 
@@ -99,8 +97,6 @@ carol_agent.tool(end_conversation)
 The default notify handler stamps the active `#!python Session` into `#!python context.dependencies` before each LLM turn (`stamp_dependencies` in `client/handlers.py`), so any tool running inside that turn can resolve it via `#!python SessionInject`. Outside a network turn the inject resolves to `#!python None` — the guard above keeps the tool safe to call from non-network contexts.
 
 **When to use:** any participant should be able to wrap up the session based on its own judgement (the modern analogue of `#!python ConversableAgent.is_termination_msg`, but driven by a tool call instead of a magic substring).
-
-**Anchor example:** [`ms_code/network/03a_discussion_agent_close.py`](https://github.com/ag2ai/ag2/blob/main/ms_code/network/03a_discussion_agent_close.py){.external-link target="_blank"}.
 
 !!! note "Why not just check the message body?"
     Tool calls are visible on the WAL (`#!python EV_HANDOFF` for workflow, or as part of the `#!python ModelResponse` history) and pass typed arguments — pattern 3 (sentinel) is fine for classic parity but tool-call termination is more traceable, robust to multilingual prompts, and resists prompt-injection ("ignore previous instructions and write TERMINATE").
@@ -142,8 +138,6 @@ Three properties this gives you for free:
 
 **When to use:** classic migrations from `#!python ConversableAgent.is_termination_msg`, or applications where termination is fundamentally a message-content concern (debate moderators saying "RECESS", a CLI command pattern).
 
-**Anchor example:** [`ms_code/network/02a_conversation_terminate.py`](https://github.com/ag2ai/ag2/blob/main/ms_code/network/02a_conversation_terminate.py){.external-link target="_blank"}.
-
 ---
 
 ## Pattern 4 — Workflow `#!python TerminateTarget`
@@ -175,8 +169,6 @@ Three paths to close in one graph:
 The convenience factories ship the same shape: `#!python TransitionGraph.round_robin(participants, max_turns=N)` uses `#!python TerminateTarget` as its default; `#!python TransitionGraph.sequence([a, b, c])` uses `#!python TerminateTarget(reason="sequence_complete")` after the last step.
 
 **When to use:** orchestrations with branching, conditional handoffs, or multi-step pipelines — termination is one branch in a graph, not an external decision.
-
-**Anchor examples:** [`ms_code/network/04_workflow_round_robin.py`](https://github.com/ag2ai/ag2/blob/main/ms_code/network/04_workflow_round_robin.py){.external-link target="_blank"} (`#!python max_turns`), [`ms_code/network/05_workflow_sequence.py`](https://github.com/ag2ai/ag2/blob/main/ms_code/network/05_workflow_sequence.py){.external-link target="_blank"} (sequence_complete).
 
 ---
 
@@ -219,7 +211,7 @@ close_env = await alice.wait_for_session_event(
 print(f"reason: {close_env.event_data.get('reason')!r}")
 ```
 
-Or stream live and return on the close envelope (the pattern used in `ms_code/network/04`–`08`):
+Or stream live and return on the close envelope:
 
 ```python linenums="1" hl_lines="11"
 async def stream_until_closed(hub, session_id, name_by_id, *, timeout=180.0):

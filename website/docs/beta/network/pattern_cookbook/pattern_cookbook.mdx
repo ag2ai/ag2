@@ -95,13 +95,6 @@ on `#!python WorkflowState.context_vars` and raise `#!python RuntimeError`
 on a non-workflow session, so the import path itself signals the
 adapter scope.
 
-The helpers emit a non-substantive `#!python EV_CONTEXT_SET` envelope
-that lands in the WAL *before* the round's `#!python EV_PACKET` commits,
-so when the packet folds, `#!python ContextEquals(key, value)` already
-sees the just-set value. A single tool can call `#!python set_context`
-*and* return a `#!python Handoff` if a workflow needs both effects in
-one round.
-
 ```python linenums="1" hl_lines="1"
 from autogen.beta.network.workflow_helpers import set_context
 
@@ -140,37 +133,6 @@ For the full picture of the five close routes (application close,
 agent-side tool, adapter sentinel, workflow `#!python TerminateTarget`,
 TTL / expectations), see
 [Closing Sessions → Watching for Close](/docs/beta/network/termination#watching-for-close).
-
-## Runnable demos
-
-Every Clean and Partial pattern ships as a runnable demo under
-[`#!python ms_code/network/cookbook/`](https://github.com/ag2ai/ag2/tree/main/ms_code/network/cookbook){.external-link target="_blank"}.
-All eight use `#!python AnthropicConfig(model="claude-sonnet-4-6")` for
-the agents that make decisions; `ANTHROPIC_API_KEY` must be set. A
-small `#!python intake` (or `#!python user`) agent in each demo uses
-`#!python TestConfig` purely as a session opener (it never speaks) so
-the first real LLM turn lands on the agent the graph routes to.
-
-!!! note "Live streaming vs. post-close dump"
-    The cookbook pages below dump the WAL once after close — clean
-    for docs, but you wait until the run finishes to see anything.
-    The runnable `.py` files in `ms_code/network/cookbook/` instead
-    poll the WAL during the run via a small `stream_until_closed`
-    helper so you can watch each turn unfold while real Sonnet is
-    thinking. Both patterns are valid; the post-close form is
-    simpler, the live form is friendlier when each turn takes
-    seconds.
-
-| File | Pattern | What it shows |
-|---|---|---|
-| [`01_pipeline.py`](/docs/beta/network/pattern_cookbook/pipeline) | Pipeline | `#!python TransitionGraph.sequence` chaining intake → validator → enricher → fulfilment, each Sonnet agent doing real domain work on the prior reply |
-| [`02_hierarchical.py`](/docs/beta/network/pattern_cookbook/hierarchical) | Hierarchical | Coord's `#!python delegate_<spoke>` tools each return `#!python Handoff(target=...)` so the framework routes the next turn directly from the typed return; `#!python finish_delegate` flips a context flag so a `#!python ContextEquals` rule terminates |
-| [`03_star.py`](/docs/beta/network/pattern_cookbook/star) | Star | Sonnet hub + `#!python TestConfig` spokes (deterministic replies) — `#!python ask_<spoke>` are plain `#!python @tool` functions matched by `#!python ToolCalled` graph rules; the `#!python synthesise` tool reads spoke replies from the WAL via `#!python HubInject` |
-| [`04_escalation.py`](/docs/beta/network/pattern_cookbook/escalation) | Escalation | Tier1 → tier2 → senior; `#!python escalate_to_*` tools return `#!python Handoff(target="tier2"/"senior")` for routing, and `#!python resolve` calls `#!python set_context` so the graph's `#!python ToolCalled("resolve")` rule terminates |
-| [`05_redundant.py`](/docs/beta/network/pattern_cookbook/redundant) | Redundant | `#!python TransitionGraph.sequence` with three differentiated proposers (safe / clever / nerdy) plus an evaluator that picks the winner — sequential fan-out (no parallel dispatch yet) |
-| [`06_feedback_loop.py`](/docs/beta/network/pattern_cookbook/feedback_loop) | Feedback Loop | Drafter ↔ reviewer alternation; reviewer's `#!python approve` tool calls `#!python set_context(session, "done", True)` and `#!python ContextEquals("done", True)` terminates with reason `'approved'` |
-| [`07_context_aware_routing.py`](/docs/beta/network/pattern_cookbook/context_aware_routing) | Context-Aware Routing | Router classifies into billing/technical/general via plain `#!python @tool` functions that call `#!python set_context`; `#!python ContextEquals("category", ...)` routes to the matching specialist |
-| [`08_triage_with_tasks.py`](/docs/beta/network/pattern_cookbook/triage_with_tasks) | Triage with Tasks | Triage produces a real LLM-generated plan, then a sequence graph executes researcher → writer → reviewer; `#!python knobs["context_vars"]` seeds the task plan and survives the entire run |
 
 ## Roadmap
 

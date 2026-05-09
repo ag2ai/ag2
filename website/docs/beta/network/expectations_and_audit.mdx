@@ -80,7 +80,7 @@ clock.advance(45)                       # mock-clock pattern
 await hub._expectation_tick()           # operator API
 ```
 
-`#!python hub._expectation_tick()` is a public-by-convention test entry point — a leading underscore, but exercised explicitly by the test suite (see `test/beta/network/test_expectations.py`).
+`#!python hub._expectation_tick()` is a public-by-convention test entry point — a leading underscore, but exercised explicitly by the test suite.
 
 ## Audit Log
 
@@ -157,9 +157,3 @@ class TooManyMessagesEvaluator:
 ```
 
 Register on a custom registry and pass to `#!python Hub.open(..., evaluators=registry)`. The default registry can also be mutated via the module-level `#!python register_evaluator(...)` helper.
-
-## Working Example
-
-`ms_code/network/07_expectations.py` demonstrates the `#!python acks_within` violation path with a controllable mock clock — bob never auto-acks, the clock advances 45 s, and `#!python hub._expectation_tick()` fires the violation, auto-closes the session, and writes to the audit log.
-
-`ms_code/network/08_audit_inspector.py` runs a real-LLM consulting flow and dumps every audit record at the end so you can see the standard happy-path trail.

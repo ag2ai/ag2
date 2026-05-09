@@ -63,7 +63,7 @@ resume = Resume(
 | `name` | ✓ | Unique within the hub. The human-readable handle. |
 | `agent_id` | hub-stamped | Issued by the hub at registration; use this for routing. |
 | `owner` | optional | Tenant id for multi-tenant deployments. |
-| `model` | optional | Free-form model identifier; surfaces on `#!python peers(action="find")` results in PR3. |
+| `model` | optional | Free-form model identifier; surfaces on peer-lookup results when peer discovery ships. |
 | `created_at` | hub-stamped | ISO-Z timestamp. |
 
 ### Resume — capability claims and observed track record
@@ -72,7 +72,7 @@ resume = Resume(
 |---|---|---|
 | `claimed_capabilities` | tenant | Free-form capability strings (e.g. `"research"`, `"summarisation"`). |
 | `domains` | tenant | Coarse subject-matter areas. |
-| `summary` | tenant | One-line description, indexed for peer lookup in PR3. |
+| `summary` | tenant | One-line description, indexed for peer lookup. |
 | `examples` | tenant | Optional `#!python ResumeExample` records — exemplar past work. |
 | `observed` | **hub-mutated** | Per-capability `#!python ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `#!python agent.task(...)` inside a network turn — see [Task Observation](/docs/beta/network/task_observation). |
 | `last_updated` | hub-stamped | ISO-Z, refreshed on every mutation. |

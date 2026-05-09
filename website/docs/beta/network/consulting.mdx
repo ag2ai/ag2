@@ -147,7 +147,3 @@ The two states use different `close_reason` values:
 The reason flows on the `#!python EV_SESSION_CLOSED` envelope's `event_data` and is also stored in `#!python SessionMetadata.close_reason` for later inspection via `#!python hub.get_session(...)`.
 
 For the full set of close patterns (agent-side tool, sentinel, TTL safety nets), see [Closing Sessions](/docs/beta/network/termination).
-
-## Working Example
-
-`ms_code/network/01_hello_network.py` is the canonical consulting example with real Sonnet on both sides — the same shape as the snippet above, with audit/WAL inspection.

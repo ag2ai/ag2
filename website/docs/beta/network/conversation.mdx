@@ -143,11 +143,7 @@ When closed, the hub posts `#!python EV_SESSION_CLOSED` with whatever reason you
 Three more termination patterns work cleanly with `#!python conversation`:
 
 * **Agent-side tool** — any participant calls a tool that closes the session. Modern analogue of `#!python is_termination_msg`.
-* **Adapter sentinel** — subclass `#!python ConversationAdapter` and watch for a keyword in accepted envelopes (`#!python ms_code/network/02a_conversation_terminate.py`).
+* **Adapter sentinel** — subclass `#!python ConversationAdapter` and watch for a keyword in accepted envelopes.
 * **TTL / expectations** — safety nets only; not the primary stop signal.
 
 See [Closing Sessions](/docs/beta/network/termination) for the worked examples.
-
-## Working Example
-
-The runnable script `ms_code/network/02_conversation.py` shows the full pattern: open the session, kick off, cap by text count, close, then replay the WAL.

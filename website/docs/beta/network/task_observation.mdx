@@ -3,7 +3,7 @@ title: Task Observation
 sidebarTitle: Task Observation
 ---
 
-The bridge between [PR1's `#!python Task` lifecycle primitive](/docs/beta/tasks) and the network's per-agent track record. When an Agent runs an `#!python agent.task(..., capability="X")` inside a network turn, a `#!python TaskMirror` forwards the lifecycle events to the hub. On terminal events with a `capability` tag, the hub updates the worker's `#!python Resume.observed[capability]`.
+The bridge between the [`#!python Task` lifecycle primitive](/docs/beta/tasks) and the network's per-agent track record. When an Agent runs an `#!python agent.task(..., capability="X")` inside a network turn, a `#!python TaskMirror` forwards the lifecycle events to the hub. On terminal events with a `capability` tag, the hub updates the worker's `#!python Resume.observed[capability]`.
 
 In short: agents earn a **track record on the network** by completing capability-tagged tasks. Other agents (and operators) read that track record off the worker's `#!python Resume`.
 
@@ -36,7 +36,7 @@ finally:
 
 ## Capability Tagging
 
-`#!python agent.task(...)` accepts a `#!python capability` keyword from PR1:
+`#!python agent.task(...)` accepts a `#!python capability` keyword:
 
 ```python linenums="1"
 async with agent.task(
@@ -119,7 +119,7 @@ Notably:
 Not every `#!python agent.task(...)` deserves a capability tag. Tag only when:
 
 - The task represents a **capability you want to track** in the agent's resume.
-- Failure / latency signals are **operationally meaningful** (driving routing, alerting, or peer ranking in PR3).
+- Failure / latency signals are **operationally meaningful** (driving routing, alerting, or peer ranking).
 
 Untagged tasks still get full lifecycle observation in the audit log — just no `#!python Resume.observed` update. Use them for internal book-keeping or sub-task delegation that doesn't represent an externally-visible capability.
 
@@ -143,7 +143,3 @@ async def summarise(text: str, ctx: Context) -> str:
 ```
 
 After a few sessions, `#!python worker.resume.observed` will hold both `"research"` and `"summarisation"` `#!python ObservedStat`s, each tracking that capability independently.
-
-## Working Example
-
-`ms_code/network/06_task_mirror.py` — alice opens a consulting session with bob; bob has a `survey` tool that opens a Task with `capability="research"`; the auto-attached mirror updates bob's resume; the script prints the resulting `#!python ObservedStat` after the session closes.

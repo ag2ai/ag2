@@ -233,6 +233,4 @@ A few changes that will affect how you architect the migration:
 5. Wait for termination with `#!python alice.wait_for_session_event(session_id=..., predicate=lambda e: e.event_type == EV_SESSION_CLOSED)`.
 6. Inspect the WAL via `#!python hub.read_wal(session_id)` for replay and the audit log via `#!python hub._audit_log.read_all()` for governance.
 
-## Working Example
-
-`ms_code/network/05_workflow_sequence.py` is the closest to the classic "researcher → writer → editor" handoff pattern, run with three real Sonnet agents.
+For a runnable end-to-end translation of the "researcher → writer → editor" handoff pattern, see the [Pipeline](/docs/beta/network/pattern_cookbook/pipeline) entry in the Pattern Cookbook.

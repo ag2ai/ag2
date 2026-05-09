@@ -157,13 +157,8 @@ Today only `#!python ORDERING_ROUND_ROBIN` ships. The knob is `#!python knobs={"
 `#!python discussion` never auto-closes. The example below caps at 6 turns and calls `#!python session.close()`, but four other patterns work for `#!python discussion` too:
 
 * **App-side cap** — count turns and call `#!python session.close()` (canonical, simplest).
-* **Agent-side tool** — any participant calls a tool that closes the session. See `#!python ms_code/network/03a_discussion_agent_close.py`.
+* **Agent-side tool** — any participant calls a tool that closes the session. See [Closing Sessions → Agent-side tool](/docs/beta/network/termination#pattern-2--agent-side-tool).
 * **Custom adapter** — subclass `#!python DiscussionAdapter` to fold `#!python turn_count` and emit `#!python CLOSING` at a cap (or switch to `#!python workflow` with `#!python TransitionGraph.round_robin(max_turns=N)`).
 * **TTL / expectations** — safety nets only.
 
 See [Closing Sessions](/docs/beta/network/termination) for the full picture.
-
-## Working Examples
-
-* `ms_code/network/03_discussion_3way.py` — three real Sonnet agents in character, six turns, then explicit close.
-* `ms_code/network/03a_discussion_agent_close.py` — same three agents but each has an `#!python end_conversation` tool; the LLM decides when to wrap up.

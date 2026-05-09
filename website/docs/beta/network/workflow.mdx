@@ -391,12 +391,4 @@ Non-speaker substantive sends (e.g. a supervisor injecting a correction via `#!p
 
 ## Working Examples
 
-Three scripts under `ms_code/network/`:
-
-- `04_workflow_round_robin.py` — three real Sonnet agents cycling through 6 turns via `#!python TransitionGraph.round_robin(...)`. Auto-terminates on `max_turns`.
-- `05_workflow_sequence.py` — pipeline pattern (researcher → writer → editor) via `#!python TransitionGraph.sequence(...)`. Auto-terminates on `sequence_complete`.
-- `03b_workflow_context_vars.py` — triage agent uses `#!python set_context` to set `route="security"`, then a `#!python ContextEquals` transition routes to the security expert. Demonstrates context-driven routing end-to-end.
-
 For the canonical multi-agent patterns translated from classic AG2 (Pipeline, Star, Feedback Loop, Triage-with-Tasks, etc.), see the [Pattern Cookbook](/docs/beta/network/pattern_cookbook/pattern_cookbook).
-
-Both run real LLMs end-to-end against the Anthropic API.

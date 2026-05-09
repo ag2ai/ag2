@@ -6,7 +6,7 @@ sidebarTitle: Views & Skills
 Two LLM-facing concerns:
 
 - **Views** decide what each participant *sees* of a session — the projection of the WAL that becomes the LLM's history when its handler runs `#!python Agent.ask(...)`.
-- **Skills** decide what each agent *advertises about itself* — the markdown describing its capabilities, surfaced to other agents during peer lookup (PR3).
+- **Skills** decide what each agent *advertises about itself* — the markdown describing its capabilities, surfaced to other agents during peer lookup.
 
 ## ViewPolicy
 
@@ -91,7 +91,7 @@ When `#!python WindowedSummary` elides envelopes outside its window, it prepends
 
 ## Skills (Markdown Frontmatter)
 
-Skills are how an agent describes itself to other agents — markdown-with-frontmatter that's parsed by the hub and surfaced to LLM tools (in PR3). Pass at registration:
+Skills are how an agent describes itself to other agents — markdown-with-frontmatter that's parsed by the hub and surfaced to LLM tools during peer lookup. Pass at registration:
 
 ```python linenums="1"
 agent_client = await hc.register(

@@ -11,7 +11,7 @@ It is fully **opt-in**. Bare `#!python Agent` continues to work standalone with 
 - A **registry of named agents** that can find each other by capability.
 - **Durable messaging** with replayable session transcripts (write-ahead log).
 - **Governance**: per-agent rules (access, rate, inbox, limits), per-adapter expectations, and a hub-side audit log.
-- **Sub-task observability**: PR1's `#!python agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
+- **Sub-task observability**: `#!python agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
 
 ## The Mental Model
 
@@ -51,7 +51,7 @@ Each `#!python Agent` is wrapped by an `#!python AgentClient`, which lives behin
 | `#!python Session` | Created by `agent_client.open(...)` | A bounded multi-party exchange governed by an adapter |
 | Session adapter | One of `#!python ConsultingAdapter` / `#!python ConversationAdapter` / `#!python DiscussionAdapter` / `#!python WorkflowAdapter` | Defines the session's allowed sends, default view policy, expectations, and termination rules |
 | `#!python TransitionGraph` | Workflow only | Declarative orchestration: who speaks first, what conditions fire, when to terminate |
-| `#!python TaskMirror` | Auto-attached per turn | Bridges PR1 `#!python Task` lifecycle events into the hub so capability tags update `#!python Resume.observed` |
+| `#!python TaskMirror` | Auto-attached per turn | Bridges `#!python Task` lifecycle events into the hub so capability tags update `#!python Resume.observed` |
 
 ## Lifecycle of a Session
 
@@ -75,19 +75,6 @@ The four built-in adapters differ in how they govern the `ACTIVE → CLOSED` tra
 | `#!python workflow` | 2+ | Declarative `TransitionGraph` | Graph terminates (`TerminateTarget` / `max_turns`) |
 
 See the [Session Adapters](/docs/beta/network/adapters_overview) overview for the full picture.
-
-## What You'll Build Across the Examples
-
-Eight progressive scripts under `ms_code/network/` (numbered 01–08) take you from a hello-network exchange to a full audit-log inspection. Each one is self-contained and runnable with `#!bash python ms_code/network/0X_*.py` against real Anthropic Sonnet (an Anthropic API key in `.env`):
-
-1. `01_hello_network` — One hub, two agents, a consulting session, a single Q-and-A.
-2. `02_conversation` — Free-form 2-party back-and-forth, halted by explicit close after N exchanges.
-3. `03_discussion_3way` — Round-robin discussion among three agents in character.
-4. `04_workflow_round_robin` — `WorkflowAdapter` cycling N turns with auto-termination.
-5. `05_workflow_sequence` — Pipeline pattern (researcher → writer → editor) with declarative handoffs.
-6. `06_task_mirror` — A worker agent's capability-tagged Tasks update its `#!python Resume.observed` track record.
-7. `07_expectations` — `#!python acks_within` violation auto-closes a stalled handshake; audit trail records it.
-8. `08_audit_inspector` — Run a real-LLM session, then dump every audit record the hub produced.
 
 ## Reading Order
 
