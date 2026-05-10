@@ -3,33 +3,33 @@ title: Context Variables
 sidebarTitle: Context Variables
 ---
 
-Session-scoped mutable state that any participant can read or write,
+Channel-scoped mutable state that any participant can read or write,
 auto-persisted on the WAL, and visible to transition conditions. The
 modern equivalent of classic `#!python ContextVariables` from
-`#!python autogen.agentchat.group`, scoped to one workflow session.
+`#!python autogen.agentchat.group`, scoped to one workflow channel.
 
 ## The Mechanism
 
 Context variables live on `#!python WorkflowState.context_vars: dict[str, Any]`
-— a field folded under the per-session WAL lock. There's no parallel
+— a field folded under the per-channel WAL lock. There's no parallel
 persistence layer; the dict is a *derivation* of the WAL, rebuilt
 deterministically by `#!python Hub.hydrate()` replaying the recorded envelopes.
 
 Two pieces:
 
-1. **Mutation** — anyone in the session emits an `#!python EV_CONTEXT_SET`
+1. **Mutation** — anyone in the channel emits an `#!python EV_CONTEXT_SET`
    envelope with `#!python event_data = {"set": {...}, "delete": [...]}`. The
    workflow adapter folds it before any substantive turn check, so the
    new values are visible to the *next* fold (typically the speaker's
    text reply).
 2. **Read** — transition conditions get `#!python state` as their first arg, so
    `#!python ContextEquals(key, value)` reads `#!python state.context_vars.get(key)`
-   directly. Tools can also inject `#!python SessionStateInject` to read.
+   directly. Tools can also inject `#!python ChannelStateInject` to read.
 
 ```mermaid
 flowchart LR
-    Tool["agent's tool calls<br/>session.send(EV_CONTEXT_SET, ...)"]
-    Hub["Hub.post_envelope<br/>under per-session WAL lock"]
+    Tool["agent's tool calls<br/>channel.send(EV_CONTEXT_SET, ...)"]
+    Hub["Hub.post_envelope<br/>under per-channel WAL lock"]
     WAL[(WAL append)]
     Fold["WorkflowAdapter.fold<br/>merges into context_vars"]
     State[("WorkflowState.context_vars")]
@@ -40,28 +40,28 @@ flowchart LR
 
 ## Loose semantics
 
-Any participant of the session can write `#!python EV_CONTEXT_SET`, regardless
-of whose turn it is. The per-session WAL lock serialises concurrent
+Any participant of the channel can write `#!python EV_CONTEXT_SET`, regardless
+of whose turn it is. The per-channel WAL lock serialises concurrent
 writes — there's no race even with multiple tools racing on the same
 key. An out-of-turn observer can stamp a flag for the *next* turn's
 routing decision; no need to wait for the floor.
 
-Sender must be a participant of the session — non-participants are
+Sender must be a participant of the channel — non-participants are
 rejected by `#!python validate_send`.
 
 ## Setting Values
 
-Send the envelope from any participant via the existing `#!python Session.send`:
+Send the envelope from any participant via the existing `#!python Channel.send`:
 
 ```python linenums="1" hl_lines="9 10 11 12 13 14"
-from autogen.beta.network import EV_CONTEXT_SET, SessionInject
+from autogen.beta.network import EV_CONTEXT_SET, ChannelInject
 
 
-async def set_route(route: str, session: SessionInject) -> str:
-    """Record the routing decision for this session."""
-    if session is None:
-        return "no active session"
-    await session.send(
+async def set_route(route: str, channel: ChannelInject) -> str:
+    """Record the routing decision for this channel."""
+    if channel is None:
+        return "no active channel"
+    await channel.send(
         "",
         event_type=EV_CONTEXT_SET,
         event_data={"set": {"route": route}},
@@ -112,15 +112,15 @@ For tools that need to read context (e.g. to make their writes
 idempotent), inject the State:
 
 ```python linenums="1"
-from autogen.beta.network import SessionStateInject
+from autogen.beta.network import ChannelStateInject
 
 
-async def increment_counter(session: SessionInject, state: SessionStateInject) -> str:
+async def increment_counter(channel: ChannelInject, state: ChannelStateInject) -> str:
     """Demonstrates reading current state, then writing a new value."""
-    if state is None or session is None:
-        return "no active session"
+    if state is None or channel is None:
+        return "no active channel"
     current = state.context_vars.get("counter", 0)
-    await session.send(
+    await channel.send(
         "",
         event_type=EV_CONTEXT_SET,
         event_data={"set": {"counter": current + 1}},
@@ -162,11 +162,11 @@ and re-loads correctly — same path as the built-in `#!python FromSpeaker` /
 
 ## Initial Values
 
-Pre-populate context at session creation by passing a `#!python context_vars`
+Pre-populate context at channel creation by passing a `#!python context_vars`
 knob alongside the graph:
 
 ```python linenums="1" hl_lines="6"
-session = await alice.open(
+channel = await alice.open(
     type="workflow",
     target=[bob.agent_id, carol.agent_id],
     knobs={
@@ -183,7 +183,7 @@ into the State. Subsequent `#!python EV_CONTEXT_SET` envelopes mutate from there
 
 Adapter state is *not* stored separately on disk. The hub's
 `#!python KnowledgeStore` persists the WAL; on `#!python Hub.hydrate()`, every
-session's adapter state is reconstructed by replaying the WAL through
+channel's adapter state is reconstructed by replaying the WAL through
 `#!python initial_state` then `#!python fold` once per envelope. So the
 `#!python context_vars` dict that exists in memory after a write is always the
 deterministic result of the recorded mutations — survives restart,
@@ -216,10 +216,10 @@ For a runnable end-to-end example of context-driven routing — a router agent c
 
 | Capability | Classic (`autogen.agentchat.group`) | Beta workflow |
 |---|---|---|
-| Mutable session-scoped dict | `#!python ContextVariables(...)` passed to `#!python initiate_chat` | `#!python WorkflowState.context_vars` |
+| Mutable channel-scoped dict | `#!python ContextVariables(...)` passed to `#!python initiate_chat` | `#!python WorkflowState.context_vars` |
 | Tool writes context | `#!python ReplyResult(message, context_variables=...)` | Tool emits `#!python EV_CONTEXT_SET` envelope |
 | Condition reads context | `#!python StringContextCondition`, `#!python ExpressionContextCondition` | `#!python ContextEquals` (and custom-registered conditions) |
-| Auto-render into LLM prompt | Built-in | Not yet — write a middleware that reads `#!python SessionStateInject.context_vars` and prepends to the prompt |
+| Auto-render into LLM prompt | Built-in | Not yet — write a middleware that reads `#!python ChannelStateInject.context_vars` and prepends to the prompt |
 | Persisted across restart | Held in memory only | WAL-replayed on `#!python Hub.hydrate()` |
 | Visible in audit trail | No | Every mutation is a real envelope on the WAL |
 
@@ -230,6 +230,6 @@ top of the existing primitives without framework changes.
 ## See Also
 
 - [Workflow Adapter](/docs/beta/network/workflow) — graphs, transitions, targets, conditions, and a "Context-Driven Transitions" section dedicated to routing patterns.
-- [Closing Sessions](/docs/beta/network/termination) — `#!python ContextEquals` is also useful for context-driven termination, e.g. `#!python Transition(when=ContextEquals("done", True), then=TerminateTarget(reason="user_done"))`.
+- [Closing Channels](/docs/beta/network/termination) — `#!python ContextEquals` is also useful for context-driven termination, e.g. `#!python Transition(when=ContextEquals("done", True), then=TerminateTarget(reason="user_done"))`.
 - [Pattern Cookbook](/docs/beta/network/pattern_cookbook/pattern_cookbook) — eight canonical orchestrations (Pipeline, Star, Feedback Loop, Triage-with-Tasks, etc.) translated from classic AG2.
 - [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat) — side-by-side translation of classic patterns.

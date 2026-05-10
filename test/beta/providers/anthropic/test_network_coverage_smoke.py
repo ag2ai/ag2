@@ -11,7 +11,7 @@ the LLM-driven paths actually work end-to-end:
 
 * ``ConversationAdapter`` — 1+1 bidirectional, multi-turn, manual close.
 * ``peers(action="describe")`` — SKILL.md fallback rendering reaches the LLM.
-* ``sessions(action="close")`` — LLM closes the session it owns.
+* ``channels(action="close")`` — LLM closes the channel it owns.
 * ``context(action="search")`` — LLM finds an earlier turn by substring.
 * Multi-tool workflow graph — graph with two ``ToolCalled`` transitions
   materialises two distinct handoff tools and the LLM picks the right one.
@@ -40,13 +40,13 @@ from autogen.beta.network import (
 )
 from autogen.beta.network.adapters.conversation import CONVERSATION_TYPE
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.beta.network.client.session import Session
+from autogen.beta.network.channel import ChannelState
+from autogen.beta.network.client.channel import Channel
 from autogen.beta.network.policies import (
     AGENT_CLIENT_DEP,
+    CHANNEL_DEP,
     HUB_DEP,
-    SESSION_DEP,
 )
-from autogen.beta.network.session import SessionState
 from autogen.beta.network.transitions import (
     AgentTarget,
     FromSpeaker,
@@ -76,19 +76,19 @@ def anthropic_config() -> AnthropicConfig:
 
 async def _wait_for_text_count(
     hub: Hub,
-    session_id: str,
+    channel_id: str,
     expected: int,
     *,
     timeout: float = 60.0,
 ) -> int:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session_id)
+        wal = await hub.read_wal(channel_id)
         count = sum(1 for e in wal if e.event_type == EV_TEXT)
         if count >= expected:
             return count
         await asyncio.sleep(0.2)
-    return sum(1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT)
+    return sum(1 for e in (await hub.read_wal(channel_id)) if e.event_type == EV_TEXT)
 
 
 @pytest.mark.anthropic
@@ -100,8 +100,8 @@ async def test_conversation_adapter_bidirectional_two_turns(
 
     alice opens a conversation with bob, sends a question, bob's notify
     handler engages bob's LLM and replies. The default adapter does NOT
-    auto-close (unlike consulting), so the session stays ACTIVE. We
-    verify both turns landed and the session is still active.
+    auto-close (unlike consulting), so the channel stays ACTIVE. We
+    verify both turns landed and the channel is still active.
     """
     hub = await Hub.open(
         MemoryKnowledgeStore(),
@@ -126,21 +126,21 @@ async def test_conversation_adapter_bidirectional_two_turns(
     alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
     bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
 
-    session = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
+    channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
-    await session.send("Hi bob. What's a good Python web framework for tiny APIs?")
+    await channel.send("Hi bob. What's a good Python web framework for tiny APIs?")
 
     # Wait for bob's reply to land.
-    count = await _wait_for_text_count(hub, session.session_id, expected=2, timeout=60.0)
+    count = await _wait_for_text_count(hub, channel.channel_id, expected=2, timeout=60.0)
     assert count >= 2, f"expected 2 turns (alice + bob), got {count}"
 
     # Conversation is still active — no auto-close.
-    metadata = await hub.get_session(session.session_id)
-    assert metadata.state == SessionState.ACTIVE
+    metadata = await hub.get_channel(channel.channel_id)
+    assert metadata.state == ChannelState.ACTIVE
 
-    await session.close()
-    metadata = await hub.get_session(session.session_id)
-    assert metadata.state == SessionState.CLOSED
+    await channel.close()
+    metadata = await hub.get_channel(channel.channel_id)
+    assert metadata.state == ChannelState.CLOSED
 
     await alice_hc.close()
     await bob_hc.close()
@@ -210,13 +210,13 @@ async def test_peers_describe_returns_fallback_skill(
 
 @pytest.mark.anthropic
 @pytest.mark.asyncio()
-async def test_sessions_close_invoked_by_llm(
+async def test_channels_close_invoked_by_llm(
     anthropic_config: AnthropicConfig,
 ) -> None:
-    """The LLM uses ``sessions(action='close')`` to terminate a session.
+    """The LLM uses ``channels(action='close')`` to terminate a channel.
 
     alice opens a conversation, sends a final message, then is told to
-    close the session via the tool. We verify the session ends in
+    close the channel via the tool. We verify the channel ends in
     ``CLOSED`` state.
     """
     hub = await Hub.open(
@@ -230,7 +230,7 @@ async def test_sessions_close_invoked_by_llm(
         name="alice",
         prompt=(
             "You are a coordinator. When the user tells you to close the "
-            "current session, call sessions(action='close') and confirm "
+            "current channel, call channels(action='close') and confirm "
             "you closed it in one short sentence."
         ),
         config=anthropic_config,
@@ -243,28 +243,28 @@ async def test_sessions_close_invoked_by_llm(
     alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
     bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
 
-    session = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
+    channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
     deps = {
-        SESSION_DEP: Session(metadata=session.metadata, client=alice_c),
+        CHANNEL_DEP: Channel(metadata=channel.metadata, client=alice_c),
         AGENT_CLIENT_DEP: alice_c,
         HUB_DEP: hub,
     }
     await alice_c.agent.ask(
-        "We're done with this conversation. Please close the current session.",
+        "We're done with this conversation. Please close the current channel.",
         dependencies=deps,
     )
 
     # Allow the close to propagate through the dispatch loop.
     deadline = asyncio.get_event_loop().time() + 30.0
     while asyncio.get_event_loop().time() < deadline:
-        metadata = await hub.get_session(session.session_id)
-        if metadata.state == SessionState.CLOSED:
+        metadata = await hub.get_channel(channel.channel_id)
+        if metadata.state == ChannelState.CLOSED:
             break
         await asyncio.sleep(0.2)
 
-    metadata = await hub.get_session(session.session_id)
-    assert metadata.state == SessionState.CLOSED, f"expected session to be CLOSED, got {metadata.state}"
+    metadata = await hub.get_channel(channel.channel_id)
+    assert metadata.state == ChannelState.CLOSED, f"expected channel to be CLOSED, got {metadata.state}"
 
     await alice_hc.close()
     await bob_hc.close()
@@ -279,7 +279,7 @@ async def test_context_search_finds_earlier_turn(
     """The LLM uses ``context(action="search")`` to locate an earlier turn.
 
     alice opens a conversation, manually sends two distinct messages,
-    then asks alice's LLM (within the same session context) to search
+    then asks alice's LLM (within the same channel context) to search
     for the password phrase and report it.
     """
     hub = await Hub.open(
@@ -293,8 +293,8 @@ async def test_context_search_finds_earlier_turn(
         name="alice",
         prompt=(
             "You are an assistant on a multi-agent network. When asked to "
-            "find something earlier in the session, call "
-            "context(action='search', query=<term>, scope='session') and "
+            "find something earlier in the channel, call "
+            "context(action='search', query=<term>, scope='channel') and "
             "report the matching text in one short sentence."
         ),
         config=anthropic_config,
@@ -307,21 +307,21 @@ async def test_context_search_finds_earlier_turn(
     alice_c = await alice_hc.register(alice, Passport(name="alice"), Resume())
     bob_c = await bob_hc.register(bob, Passport(name="bob"), Resume())
 
-    session = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
+    channel = await alice_c.open(type=CONVERSATION_TYPE, target=bob_c.agent_id)
 
     # Seed the WAL with a unique fact alice can later search for.
-    await session.send("FYI: the project codename is QUARTZSTONE-2026.")
+    await channel.send("FYI: the project codename is QUARTZSTONE-2026.")
     # Wait for bob's reply (1+1 conversation).
-    await _wait_for_text_count(hub, session.session_id, expected=2, timeout=30.0)
+    await _wait_for_text_count(hub, channel.channel_id, expected=2, timeout=30.0)
 
     deps = {
-        SESSION_DEP: Session(metadata=session.metadata, client=alice_c),
+        CHANNEL_DEP: Channel(metadata=channel.metadata, client=alice_c),
         AGENT_CLIENT_DEP: alice_c,
         HUB_DEP: hub,
     }
     reply = await alice_c.agent.ask(
-        "Earlier in this session I mentioned a project codename. "
-        "Search the session for the word 'codename' and tell me the value.",
+        "Earlier in this channel I mentioned a project codename. "
+        "Search the channel for the word 'codename' and tell me the value.",
         dependencies=deps,
     )
 
@@ -415,19 +415,19 @@ async def test_workflow_graph_with_two_handoff_tools(
         max_turns=3,
     )
 
-    session = await user_c.open(
+    channel = await user_c.open(
         type=WORKFLOW_TYPE,
         target=[triage_c.agent_id, eng_c.agent_id, billing_c.agent_id],
         knobs={"graph": graph.to_dict()},
         intent="triage routes to eng or billing",
     )
-    await session.send("I want a refund on a charge from yesterday. Please route me to the right team.")
+    await channel.send("I want a refund on a charge from yesterday. Please route me to the right team.")
 
     # Wait for triage's routing packet to land.
     deadline = asyncio.get_event_loop().time() + 60.0
     handoffs: list = []
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session.session_id)
+        wal = await hub.read_wal(channel.channel_id)
         handoffs = [
             e
             for e in wal

@@ -8,10 +8,10 @@ Validates every enforced field on ``Rule``:
 
 * ``access.outbound_to`` / ``access.inbound_from`` — glob over peer name
 * ``limits.delegation_depth`` — max envelope ``depth`` (0 disables)
-* ``limits.max_concurrent_sessions`` — capped on creator (0 disables)
+* ``limits.max_concurrent_channels`` — capped on creator (0 disables)
 * ``limits.max_concurrent_tasks`` — capped on owner via ``observe_task``
 * ``limits.inbox.max_pending`` — backpressure on dispatch (substantive only)
-* ``limits.session_ttl_default`` — drives ``SessionMetadata.expires_at``
+* ``limits.channel_ttl_default`` — drives ``ChannelMetadata.expires_at``
 
 The per-minute throttle in ``RateBlock`` is stored but not enforced
 by the in-process hub (see ``RateBlock`` docstring), so it isn't
@@ -86,11 +86,11 @@ async def test_outbound_to_glob_allows_pattern() -> None:
     """outbound_to supports glob via fnmatch — `bot-*` matches `bot-bob`.
 
     The sender's own access rule must NOT block protocol broadcasts
-    that include the sender in their audience (``EV_SESSION_OPENED`` /
-    ``EV_SESSION_CLOSED``). The hub skips the outbound check when
+    that include the sender in their audience (``EV_CHANNEL_OPENED`` /
+    ``EV_CHANNEL_CLOSED``). The hub skips the outbound check when
     ``recipient_id == sender_id``, so a creator with restrictive
     ``outbound_to`` (not including themselves) can still create
-    sessions and receive their own session-state notifications.
+    channels and receive their own channel-state notifications.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -106,12 +106,12 @@ async def test_outbound_to_glob_allows_pattern() -> None:
     eve = await hc.register(_agent("user-eve"), Passport(name="user-eve"), Resume())
 
     # Reaching bot-bob is allowed.
-    session_ok = await alice.open(type="conversation", target="bot-bob")
-    await session_ok.send("greetings", audience=[bob.agent_id])
+    channel_ok = await alice.open(type="conversation", target="bot-bob")
+    await channel_ok.send("greetings", audience=[bob.agent_id])
 
     # Reaching user-eve is denied.
     envelope = Envelope(
-        session_id=session_ok.session_id,
+        channel_id=channel_ok.channel_id,
         sender_id=alice.agent_id,
         audience=[eve.agent_id],
         event_type=EV_TEXT,
@@ -143,16 +143,16 @@ async def test_outbound_to_self_send_always_allowed() -> None:
     # Alice can self-only-broadcast (audience contains alice + bob).
     # Without the self-skip in the outbound check, this would raise
     # AccessDeniedError before reaching bob.
-    # Use a session manifest that allows arbitrary text — conversation works.
+    # Use a channel manifest that allows arbitrary text — conversation works.
     # First open with bob (bob is in audience for invite — but alice's
     # outbound_to=["nobody-*"] doesn't match "bob" → invite denied).
     # So instead, register bob under a name matching the whitelist:
     await hc.unregister_agent(bob.agent_id)
     await hc.register(_agent("nobody-bob"), Passport(name="nobody-bob"), Resume())
 
-    session = await alice.open(type="conversation", target="nobody-bob")
+    channel = await alice.open(type="conversation", target="nobody-bob")
     # Audience includes alice — without the self-skip fix, opening would fail.
-    assert session.metadata.state.value == "active"
+    assert channel.metadata.state.value == "active"
 
     await hc.close()
     await hub.close()
@@ -164,8 +164,8 @@ async def test_inbound_from_blocks_dispatch_not_post() -> None:
     succeeds (WAL appends) but no NotifyFrame reaches the blocked-from
     recipient.
 
-    Setup uses ``set_rule`` mid-session because pre-session
-    ``inbound_from`` blocks are now caught at ``create_session`` time
+    Setup uses ``set_rule`` mid-channel because pre-channel
+    ``inbound_from`` blocks are now caught at ``create_channel`` time
     by the fail-fast check. This test specifically validates the
     in-flight dispatch filter.
     """
@@ -189,17 +189,17 @@ async def test_inbound_from_blocks_dispatch_not_post() -> None:
 
     bob.on_envelope(capture)
 
-    session = await alice.open(type="conversation", target="bob")
+    channel = await alice.open(type="conversation", target="bob")
     assert sum(1 for e in received_by_bob if e.event_type == EV_TEXT) == 0
 
     # Tighten bob's inbound filter — alice no longer matches.
     await bob.set_rule(Rule(access=AccessBlock(inbound_from=["nobody-*"])))
 
-    await session.send("filtered text", audience=[bob.agent_id])
+    await channel.send("filtered text", audience=[bob.agent_id])
     await asyncio.sleep(0.05)
 
     # WAL has the text; bob's handler did NOT see it.
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     assert any(e.event_type == EV_TEXT and e.event_data["text"] == "filtered text" for e in wal)
 
     post_text_received = [e for e in received_by_bob if e.event_data.get("text") == "filtered text"]
@@ -210,12 +210,12 @@ async def test_inbound_from_blocks_dispatch_not_post() -> None:
 
 
 @pytest.mark.asyncio
-async def test_inbound_from_blocks_create_session_fast_fails() -> None:
-    """Creating a session with an invitee whose ``inbound_from`` blocks
+async def test_inbound_from_blocks_create_channel_fast_fails() -> None:
+    """Creating a channel with an invitee whose ``inbound_from`` blocks
     the creator must raise ``AccessDeniedError`` immediately, not hang
     until ``invite_ack_timeout``.
 
-    Without the pre-flight check in ``create_session``, the dispatch
+    Without the pre-flight check in ``create_channel``, the dispatch
     path silently filters the invite, the recipient never sees it,
     never acks, and the creator times out with a generic ``ProtocolError``.
     """
@@ -234,8 +234,8 @@ async def test_inbound_from_blocks_create_session_fast_fails() -> None:
     with pytest.raises(AccessDeniedError, match="does not accept inbound"):
         await alice.open(type="conversation", target="bob")
 
-    # No session leaked into the registry.
-    assert await hub.list_sessions() == []
+    # No channel leaked into the registry.
+    assert await hub.list_channels() == []
 
     await hc.close()
     await hub.close()
@@ -259,13 +259,13 @@ async def test_delegation_depth_at_cap_accepted_above_rejected() -> None:
     )
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
+    channel = await alice.open(type="conversation", target="bob")
 
     # depth=3 (== cap) → ok
-    await session.send("at-cap", audience=[bob.agent_id], depth=3)
+    await channel.send("at-cap", audience=[bob.agent_id], depth=3)
     # depth=4 (> cap) → denied
     with pytest.raises(AccessDeniedError, match="delegation_depth"):
-        await session.send("over-cap", audience=[bob.agent_id], depth=4)
+        await channel.send("over-cap", audience=[bob.agent_id], depth=4)
 
     await hc.close()
     await hub.close()
@@ -286,19 +286,19 @@ async def test_delegation_depth_zero_disables_cap() -> None:
     )
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
+    channel = await alice.open(type="conversation", target="bob")
     # Even an absurd depth should pass.
-    await session.send("any-depth", audience=[bob.agent_id], depth=99999)
+    await channel.send("any-depth", audience=[bob.agent_id], depth=99999)
 
     await hc.close()
     await hub.close()
 
 
-# ── max_concurrent_sessions ─────────────────────────────────────────────────
+# ── max_concurrent_channels ─────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_max_concurrent_sessions_cap_blocks_new_creates() -> None:
+async def test_max_concurrent_channels_cap_blocks_new_creates() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -307,18 +307,18 @@ async def test_max_concurrent_sessions_cap_blocks_new_creates() -> None:
         _agent("alice"),
         Passport(name="alice"),
         Resume(),
-        rule=Rule(limits=LimitsBlock(max_concurrent_sessions=2)),
+        rule=Rule(limits=LimitsBlock(max_concurrent_channels=2)),
     )
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
     await hc.register(_agent("carol"), Passport(name="carol"), Resume())
     await hc.register(_agent("dave"), Passport(name="dave"), Resume())
 
-    # 2 concurrent sessions ok.
+    # 2 concurrent channels ok.
     s1 = await alice.open(type="conversation", target="bob")
     await alice.open(type="conversation", target="carol")
 
     # Third attempt → AccessDeniedError before any persistence.
-    with pytest.raises(AccessDeniedError, match="max_concurrent_sessions"):
+    with pytest.raises(AccessDeniedError, match="max_concurrent_channels"):
         await alice.open(type="conversation", target="dave")
 
     # Closing one frees the slot.
@@ -330,7 +330,7 @@ async def test_max_concurrent_sessions_cap_blocks_new_creates() -> None:
 
 
 @pytest.mark.asyncio
-async def test_max_concurrent_sessions_zero_disables() -> None:
+async def test_max_concurrent_channels_zero_disables() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -339,7 +339,7 @@ async def test_max_concurrent_sessions_zero_disables() -> None:
         _agent("alice"),
         Passport(name="alice"),
         Resume(),
-        rule=Rule(limits=LimitsBlock(max_concurrent_sessions=0)),
+        rule=Rule(limits=LimitsBlock(max_concurrent_channels=0)),
     )
     for name in ("bob", "carol", "dave", "erin"):
         await hc.register(_agent(name), Passport(name=name), Resume())
@@ -348,8 +348,8 @@ async def test_max_concurrent_sessions_zero_disables() -> None:
     for name in ("bob", "carol", "dave", "erin"):
         await alice.open(type="conversation", target=name)
 
-    sessions = await hub.list_sessions(agent_id=alice.agent_id)
-    assert len(sessions) == 4
+    channels = await hub.list_channels(agent_id=alice.agent_id)
+    assert len(channels) == 4
 
     await hc.close()
     await hub.close()
@@ -431,16 +431,16 @@ async def test_inbox_max_pending_rejects_when_full() -> None:
         rule=Rule(limits=LimitsBlock(inbox=InboxBlock(max_pending=2))),
     )
 
-    session = await alice.open(type="conversation", target="bob")
-    await asyncio.sleep(0.05)  # let session-protocol dispatch settle
+    channel = await alice.open(type="conversation", target="bob")
+    await asyncio.sleep(0.05)  # let channel-protocol dispatch settle
 
     # Cap=2 means the counter must be < 2 to allow a new send.
     # Protocol envelopes don't increment, so two substantive sends
     # bring bob's count to 2 → third raises.
-    await session.send("msg-1", audience=[bob.agent_id])
-    await session.send("msg-2", audience=[bob.agent_id])
+    await channel.send("msg-1", audience=[bob.agent_id])
+    await channel.send("msg-2", audience=[bob.agent_id])
     with pytest.raises(InboxFull):
-        await session.send("msg-3", audience=[bob.agent_id])
+        await channel.send("msg-3", audience=[bob.agent_id])
 
     await hc.close()
     await hub.close()
@@ -450,7 +450,7 @@ async def test_inbox_max_pending_rejects_when_full() -> None:
 async def test_inbox_protocol_events_bypass_capacity() -> None:
     """Protocol envelopes (invite/ack/open/close) must always reach the
     recipient, regardless of inbox capacity. Otherwise a blocked invite
-    ack would deadlock the session machine."""
+    ack would deadlock the channel machine."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -467,18 +467,18 @@ async def test_inbox_protocol_events_bypass_capacity() -> None:
 
     # If invites failed the inbox cap, this would hang at invite ack
     # timeout. Success here confirms the protocol-event bypass.
-    session = await alice.open(type="conversation", target="bob")
-    assert session.metadata.state.value == "active"
+    channel = await alice.open(type="conversation", target="bob")
+    assert channel.metadata.state.value == "active"
 
     await hc.close()
     await hub.close()
 
 
-# ── session_ttl_default ─────────────────────────────────────────────────────
+# ── channel_ttl_default ─────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_session_ttl_default_drives_expires_at() -> None:
+async def test_channel_ttl_default_drives_expires_at() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -487,14 +487,14 @@ async def test_session_ttl_default_drives_expires_at() -> None:
         _agent("alice"),
         Passport(name="alice"),
         Resume(),
-        rule=Rule(limits=LimitsBlock(session_ttl_default="1h")),
+        rule=Rule(limits=LimitsBlock(channel_ttl_default="1h")),
     )
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
-    assert session.metadata.expires_at is not None
-    created = datetime.fromisoformat(session.metadata.created_at)
-    expires = datetime.fromisoformat(session.metadata.expires_at)
+    channel = await alice.open(type="conversation", target="bob")
+    assert channel.metadata.expires_at is not None
+    created = datetime.fromisoformat(channel.metadata.created_at)
+    expires = datetime.fromisoformat(channel.metadata.expires_at)
     delta = (expires - created).total_seconds()
     # 1h ± 1s
     assert 3599 <= delta <= 3601
@@ -504,7 +504,7 @@ async def test_session_ttl_default_drives_expires_at() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_ttl_per_session_override_wins() -> None:
+async def test_channel_ttl_per_channel_override_wins() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -513,13 +513,13 @@ async def test_session_ttl_per_session_override_wins() -> None:
         _agent("alice"),
         Passport(name="alice"),
         Resume(),
-        rule=Rule(limits=LimitsBlock(session_ttl_default="1h")),
+        rule=Rule(limits=LimitsBlock(channel_ttl_default="1h")),
     )
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob", ttl="30m")
-    expires = datetime.fromisoformat(session.metadata.expires_at)
-    created = datetime.fromisoformat(session.metadata.created_at)
+    channel = await alice.open(type="conversation", target="bob", ttl="30m")
+    expires = datetime.fromisoformat(channel.metadata.expires_at)
+    created = datetime.fromisoformat(channel.metadata.created_at)
     delta = (expires - created).total_seconds()
     assert 1799 <= delta <= 1801
 
@@ -528,7 +528,7 @@ async def test_session_ttl_per_session_override_wins() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_ttl_zero_no_expiry() -> None:
+async def test_channel_ttl_zero_no_expiry() -> None:
     """ttl=0 → no expires_at stamped."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -537,8 +537,8 @@ async def test_session_ttl_zero_no_expiry() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob", ttl=0)
-    assert session.metadata.expires_at is None
+    channel = await alice.open(type="conversation", target="bob", ttl=0)
+    assert channel.metadata.expires_at is None
 
     await hc.close()
     await hub.close()

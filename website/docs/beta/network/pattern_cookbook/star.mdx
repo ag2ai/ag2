@@ -122,7 +122,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
@@ -134,7 +134,7 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
-    SessionInject,
+    ChannelInject,
     TerminateTarget,
     ToolCalled,
     Transition,
@@ -159,18 +159,18 @@ async def ask_spoke(spoke: str, query: str) -> Handoff:
     return Handoff(target=spoke, reason=query)
 
 
-async def synthesise(headline: str, session: SessionInject, hub: HubInject) -> str:
+async def synthesise(headline: str, channel: ChannelInject, hub: HubInject) -> str:
     """Read each spoke's reply from the WAL, build a synthesis, store
     it in context_vars['synthesis']. Refuses with a brief `pending: ...`
     status until all three spokes have replied — this is what makes
     the demo robust to parallel tool calls."""
-    if session is None or hub is None:
-        return "no session or hub"
+    if channel is None or hub is None:
+        return "no channel or hub"
     print(f"  [tool] synthesise(headline={headline!r})")
 
     # Spoke replies are EV_PACKET envelopes whose body starts with
     # the spoke's name marker (e.g. "[weather]: ...").
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     by_spoke: dict[str, str] = {}
     for env in wal:
         if env.event_type == EV_PACKET:
@@ -198,7 +198,7 @@ async def synthesise(headline: str, session: SessionInject, hub: HubInject) -> s
         bullets.append(f"- {by_spoke[spoke]}")
     synthesis = "\n".join(bullets)
 
-    await set_context(session, "synthesis", synthesis)
+    await set_context(channel, "synthesis", synthesis)
     return "synthesis posted"
 
 
@@ -302,12 +302,12 @@ async def main() -> None:
         max_turns=20,
     )
 
-    session = await user.open(
+    channel = await user.open(
         type=WORKFLOW_TYPE,
         target=[central.agent_id, weather.agent_id, sports.agent_id, finance.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         user.agent_id: "user",
@@ -317,7 +317,7 @@ async def main() -> None:
         finance.agent_id: "finance",
     }
 
-    await session.send(
+    await channel.send(
         "What's the weather like and how did the local football team do? "
         "Also a quick word on the markets."
     )
@@ -325,14 +325,14 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # ToolCalled("synthesise") → TerminateTarget("answered")).
-    close_env = await user_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await user_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=240.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub_obj.read_wal(session.session_id):
+    for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -348,7 +348,7 @@ async def main() -> None:
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
     print("\n--- final synthesis ---")
-    state = hub_obj._adapter_states[session.session_id]
+    state = hub_obj._adapter_states[channel.channel_id]
     print(state.context_vars.get("synthesis", "(no synthesis)"))
 
     await user_hc.close()
@@ -366,7 +366,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
-session: 4f2e...
+channel: 4f2e...
 
            user: What's the weather like and how did the local football team do? Also a quick word on the markets.
   [tool] ask_spoke(weather): What is the current weather like?

@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Grouped LLM tool tests (peers, sessions, tasks, context).
+"""Grouped LLM tool tests (peers, channels, tasks, context).
 
 Tools are tested by direct ``FunctionTool.__call__`` invocation with a
 synthesised ``ToolCallEvent`` and a ``Context`` carrying the same
-DI keys (``SESSION_DEP`` / ``AGENT_CLIENT_DEP``) that
+DI keys (``CHANNEL_DEP`` / ``AGENT_CLIENT_DEP``) that
 ``handlers.stamp_dependencies`` populates inside notify handlers. This
 sidesteps the LLM and gives us deterministic per-action coverage.
 
@@ -30,11 +30,11 @@ from autogen.beta.network import (
     Passport,
     Resume,
 )
+from autogen.beta.network.client.tools.channels import make_channels_tool
 from autogen.beta.network.client.tools.context import make_context_tool
 from autogen.beta.network.client.tools.peers import make_peers_tool
-from autogen.beta.network.client.tools.sessions import make_sessions_tool
 from autogen.beta.network.client.tools.tasks import make_tasks_tool
-from autogen.beta.network.policies import AGENT_CLIENT_DEP, SESSION_DEP
+from autogen.beta.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
@@ -179,11 +179,11 @@ async def test_peers_describe_returns_skill_md_or_fallback() -> None:
     await hub.close()
 
 
-# ── sessions tool ───────────────────────────────────────────────────────────
+# ── channels tool ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_sessions_open_and_list_and_close() -> None:
+async def test_channels_open_and_list_and_close() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -193,7 +193,7 @@ async def test_sessions_open_and_list_and_close() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    tool = make_sessions_tool(alice)
+    tool = make_channels_tool(alice)
     deps = {AGENT_CLIENT_DEP: alice}
 
     # Open via tool.
@@ -202,20 +202,20 @@ async def test_sessions_open_and_list_and_close() -> None:
         {"action": "open", "type": "conversation", "target": "bob"},
         dependencies=deps,
     )
-    sid = opened["session_id"]
+    sid = opened["channel_id"]
 
     # List shows it.
     listed = await _invoke(tool, {"action": "list"}, dependencies=deps)
-    assert any(s["session_id"] == sid for s in listed)
+    assert any(s["channel_id"] == sid for s in listed)
 
     # Info returns the full metadata.
-    info = await _invoke(tool, {"action": "info", "session_id": sid}, dependencies=deps)
+    info = await _invoke(tool, {"action": "info", "channel_id": sid}, dependencies=deps)
     assert info["type"] == "conversation"
     assert info["state"] == "active"
     assert any(p["agent_id"] == bob.agent_id for p in info["participants"])
 
     # Close terminates.
-    closed = await _invoke(tool, {"action": "close", "session_id": sid}, dependencies=deps)
+    closed = await _invoke(tool, {"action": "close", "channel_id": sid}, dependencies=deps)
     assert closed["state"] == "closed"
 
     await alice_hc.close()
@@ -227,7 +227,7 @@ async def test_sessions_open_and_list_and_close() -> None:
 
 
 @pytest.mark.asyncio
-async def test_context_search_finds_substring_in_session_wal() -> None:
+async def test_context_search_finds_substring_in_channel_wal() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -237,12 +237,12 @@ async def test_context_search_finds_substring_in_session_wal() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
-    await session.send("policy framework adoption")
-    await session.send("cost-benefit analysis")
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("policy framework adoption")
+    await channel.send("cost-benefit analysis")
 
     tool = make_context_tool(alice)
-    deps = {AGENT_CLIENT_DEP: alice, SESSION_DEP: session}
+    deps = {AGENT_CLIENT_DEP: alice, CHANNEL_DEP: channel}
     results = await _invoke(tool, {"action": "search", "query": "framework"}, dependencies=deps)
     assert len(results) == 1
     assert "framework" in results[0]["excerpt"]
@@ -264,17 +264,17 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
 
     # Auto-ack on bob so the conversation activates.
-    from autogen.beta.network import EV_SESSION_INVITE, EV_SESSION_INVITE_ACK, Envelope
+    from autogen.beta.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
 
     async def _ack(envelope: Envelope) -> None:
-        if envelope.event_type != EV_SESSION_INVITE:
+        if envelope.event_type != EV_CHANNEL_INVITE:
             return
         ack = Envelope(
-            session_id=envelope.session_id,
+            channel_id=envelope.channel_id,
             sender_id=bob.agent_id,
             audience=None,
-            event_type=EV_SESSION_INVITE_ACK,
-            event_data={"session_id": envelope.session_id},
+            event_type=EV_CHANNEL_INVITE_ACK,
+            event_data={"channel_id": envelope.channel_id},
             causation_id=envelope.envelope_id,
         )
         with contextlib.suppress(Exception):
@@ -282,13 +282,13 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
 
     bob.on_envelope(_ack)
 
-    session = await alice.open(type="conversation", target="bob")
-    await session.send("alice 1")
-    await session.send("alice 2")
-    await session.send("alice 3")
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("alice 1")
+    await channel.send("alice 2")
+    await channel.send("alice 3")
 
     tool = make_context_tool(alice)
-    deps = {AGENT_CLIENT_DEP: alice, SESSION_DEP: session}
+    deps = {AGENT_CLIENT_DEP: alice, CHANNEL_DEP: channel}
     quotes = await _invoke(tool, {"action": "quote", "speaker": "alice", "recent_n": 2}, dependencies=deps)
     assert [q["text"] for q in quotes] == ["alice 2", "alice 3"]
 
@@ -377,7 +377,7 @@ async def test_network_plugin_attaches_all_6_tools() -> None:
     alice_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     tool_names = {t.name for t in alice.agent.tools}
-    assert {"say", "delegate", "peers", "sessions", "tasks", "context"} <= tool_names
+    assert {"say", "delegate", "peers", "channels", "tasks", "context"} <= tool_names
 
     await alice_hc.close()
     await hub.close()

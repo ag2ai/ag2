@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``sessions(action)`` — session lifecycle for the LLM.
+"""``channels(action)`` — channel lifecycle for the LLM.
 
 Four actions:
 
-* ``list``  — sessions this agent participates in.
-* ``open``  — create a new session (mirrors :meth:`AgentClient.open`).
-* ``info``  — full ``SessionMetadata`` for a session this agent can see.
-* ``close`` — close the current (or specified) session.
+* ``list``  — channels this agent participates in.
+* ``open``  — create a new channel (mirrors :meth:`AgentClient.open`).
+* ``info``  — full ``ChannelMetadata`` for a channel this agent can see.
+* ``close`` — close the current (or specified) channel.
 
 The grouped surface keeps the LLM's tool list short — discovery,
 state, and lifecycle live behind one tool.
@@ -19,17 +19,17 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from autogen.beta.tools import tool
 
-from ..inject import AgentClientInject, SessionInject
+from ..inject import AgentClientInject, ChannelInject
 
 if TYPE_CHECKING:
     from ..agent_client import AgentClient
 
-__all__ = ("make_sessions_tool",)
+__all__ = ("make_channels_tool",)
 
 
 def _metadata_dict(metadata: Any) -> dict[str, Any]:
     return {
-        "session_id": metadata.session_id,
+        "channel_id": metadata.channel_id,
         "type": metadata.manifest.type,
         "version": metadata.manifest.version,
         "state": metadata.state.value,
@@ -54,11 +54,11 @@ def _metadata_dict(metadata: Any) -> dict[str, Any]:
     }
 
 
-def make_sessions_tool(agent_client: "AgentClient") -> object:
-    """Return a closure-bound ``sessions`` tool."""
+def make_channels_tool(agent_client: "AgentClient") -> object:
+    """Return a closure-bound ``channels`` tool."""
 
     @tool
-    async def sessions(
+    async def channels(
         action: Literal["list", "open", "info", "close"],
         *,
         type: str | None = None,
@@ -66,27 +66,27 @@ def make_sessions_tool(agent_client: "AgentClient") -> object:
         knobs: dict | None = None,
         intent: str | None = None,
         ttl: str | int | None = None,
-        session_id: str | None = None,
+        channel_id: str | None = None,
         state: Literal["active", "all"] = "active",
         client: AgentClientInject = None,
-        current: SessionInject = None,
+        current: ChannelInject = None,
     ) -> list[dict] | dict | str:
-        """Session lifecycle.
+        """Channel lifecycle.
 
         ``list``:  args state="active"|"all"
         ``open``:  args type, target, knobs?, intent?, ttl?
-        ``info``:  args session_id
-        ``close``: args session_id? (defaults to current)
+        ``info``:  args channel_id
+        ``close``: args channel_id? (defaults to current)
         """
         actual = client if client is not None else agent_client
         hub = actual._hub_client
 
         if action == "list":
             include_terminal = state == "all"
-            metas = await hub.list_sessions(agent_id=actual.agent_id, include_terminal=include_terminal)
+            metas = await hub.list_channels(agent_id=actual.agent_id, include_terminal=include_terminal)
             return [
                 {
-                    "session_id": m.session_id,
+                    "channel_id": m.channel_id,
                     "type": m.manifest.type,
                     "state": m.state.value,
                     "participants": [p.agent_id for p in m.participants],
@@ -98,7 +98,7 @@ def make_sessions_tool(agent_client: "AgentClient") -> object:
             if not type or not target:
                 return "Error: open requires `type` and `target`"
             try:
-                session = await actual.open(
+                channel = await actual.open(
                     type=type,
                     target=target,
                     knobs=knobs,
@@ -108,36 +108,36 @@ def make_sessions_tool(agent_client: "AgentClient") -> object:
             except Exception as exc:
                 return f"Error: open failed: {exc}"
             return {
-                "session_id": session.session_id,
+                "channel_id": channel.channel_id,
                 "type": type,
-                "participants": [p.agent_id for p in session.metadata.participants],
+                "participants": [p.agent_id for p in channel.metadata.participants],
             }
 
         if action == "info":
-            if not session_id:
-                return "Error: info requires `session_id`"
+            if not channel_id:
+                return "Error: info requires `channel_id`"
             try:
-                meta = await hub.get_session(session_id)
+                meta = await hub.get_channel(channel_id)
             except Exception:
-                return f"Error: session {session_id!r} not found"
+                return f"Error: channel {channel_id!r} not found"
             if not any(p.agent_id == actual.agent_id for p in meta.participants):
-                return f"Error: not a participant of session {session_id!r}"
+                return f"Error: not a participant of channel {channel_id!r}"
             return _metadata_dict(meta)
 
         if action == "close":
-            sid = session_id or (current.session_id if current is not None else None)
+            sid = channel_id or (current.channel_id if current is not None else None)
             if not sid:
-                return "Error: close requires `session_id` or an active session"
+                return "Error: close requires `channel_id` or an active channel"
             try:
-                closed = await hub.close_session(sid, reason="closed_by_agent")
+                closed = await hub.close_channel(sid, reason="closed_by_agent")
             except Exception as exc:
                 return f"Error: close failed: {exc}"
             return {
-                "session_id": sid,
+                "channel_id": sid,
                 "state": closed.state.value,
                 "close_reason": closed.close_reason,
             }
 
         return f"Error: unknown action {action!r}; choose from list, open, info, close"
 
-    return sessions
+    return channels

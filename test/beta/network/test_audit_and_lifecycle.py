@@ -9,8 +9,8 @@ Covers:
 * ``delegation_depth`` enforcement at hub.
 * Hydrate when an adapter is unregistered no longer raises ``KeyError``
   on the next ``post_envelope`` (clear ``ProtocolError`` instead).
-* Sweeper ``auto_close`` does not bleed across sessions in one tick.
-* Session lifecycle audit records (``session_created`` / ``_closed``).
+* Sweeper ``auto_close`` does not bleed across channels in one tick.
+* Channel lifecycle audit records (``channel_created`` / ``_closed``).
 * Task lifecycle audit record (``task_terminated``).
 """
 
@@ -31,19 +31,19 @@ from autogen.beta.network import (
     Rule,
 )
 from autogen.beta.network.adapters.conversation import ConversationAdapter
+from autogen.beta.network.channel import (
+    ChannelManifest,
+    Expectation,
+    ParticipantSchema,
+)
 from autogen.beta.network.hub.audit import (
+    AUDIT_KIND_CHANNEL_CLOSED,
+    AUDIT_KIND_CHANNEL_CREATED,
+    AUDIT_KIND_CHANNEL_EXPIRED,
     AUDIT_KIND_EXPECTATION_VIOLATED,
-    AUDIT_KIND_SESSION_CLOSED,
-    AUDIT_KIND_SESSION_CREATED,
-    AUDIT_KIND_SESSION_EXPIRED,
     AUDIT_KIND_TASK_TERMINATED,
 )
 from autogen.beta.network.rule import LimitsBlock
-from autogen.beta.network.session import (
-    Expectation,
-    ParticipantSchema,
-    SessionManifest,
-)
 from autogen.beta.testing import TestConfig
 
 from ._helpers import _MockClock
@@ -70,11 +70,11 @@ async def test_post_envelope_rejects_envelope_above_delegation_depth() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=capped_rule)
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target=bob.agent_id)
+    channel = await alice.open(type="conversation", target=bob.agent_id)
 
     # depth=3 exceeds cap of 2.
     too_deep = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -86,7 +86,7 @@ async def test_post_envelope_rejects_envelope_above_delegation_depth() -> None:
 
     # depth=2 is at the cap → accepted.
     at_cap = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -113,9 +113,9 @@ async def test_delegation_depth_zero_disables_cap() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=no_cap)
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target=bob.agent_id)
+    channel = await alice.open(type="conversation", target=bob.agent_id)
     deep = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -134,15 +134,15 @@ async def test_delegation_depth_zero_disables_cap() -> None:
 
 @pytest.mark.asyncio
 async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol_error() -> None:
-    """If a session is loaded by ``hydrate()`` while its adapter is
-    missing, the session is kept dormant — its metadata is read-only,
-    not added to ``_active_sessions``, and ``_adapter_states`` has no
+    """If a channel is loaded by ``hydrate()`` while its adapter is
+    missing, the channel is kept dormant — its metadata is read-only,
+    not added to ``_active_channels``, and ``_adapter_states`` has no
     entry. If an adapter is later registered (so ``_adapter_for``
     succeeds) and a stale envelope arrives, the hub raises a clear
     ``ProtocolError`` instead of bare ``KeyError``."""
     store = MemoryKnowledgeStore()
 
-    custom_manifest = SessionManifest(
+    custom_manifest = ChannelManifest(
         type="custom_recovery",
         version=1,
         participants=ParticipantSchema(min=2),
@@ -154,7 +154,7 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
             super().__init__()
             self.manifest = custom_manifest
 
-    # First boot: register custom adapter, open session, persist.
+    # First boot: register custom adapter, open channel, persist.
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     hub1.register_adapter(_CustomAdapter())
     link1 = LocalLink(hub1)
@@ -162,29 +162,29 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
     bob_hc = HubClient(link1, hub=hub1)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    session = await alice.open(type="custom_recovery", target=bob.agent_id)
-    session_id = session.session_id
+    channel = await alice.open(type="custom_recovery", target=bob.agent_id)
+    channel_id = channel.channel_id
     alice_id = alice.agent_id
 
     await alice_hc.close()
     await bob_hc.close()
     await hub1.close()
 
-    # Second boot: hydrate WITHOUT the custom adapter. Session is
+    # Second boot: hydrate WITHOUT the custom adapter. Channel is
     # dormant: metadata loaded, but no adapter state, not active.
     hub2 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    assert session_id in hub2._sessions
-    assert session_id not in hub2._active_sessions
-    assert session_id not in hub2._adapter_states
+    assert channel_id in hub2._channels
+    assert channel_id not in hub2._active_channels
+    assert channel_id not in hub2._adapter_states
 
     # Now register the adapter post-hydrate (e.g. a recovery script).
     # ``_adapter_for`` will find it; ``_adapter_states`` is still empty.
     hub2.register_adapter(_CustomAdapter())
 
-    # The session metadata says it's ACTIVE (carried over from boot 1)
+    # The channel metadata says it's ACTIVE (carried over from boot 1)
     # but no fold ran. ``post_envelope`` must surface a clear error.
     envelope = Envelope(
-        session_id=session_id,
+        channel_id=channel_id,
         sender_id=alice_id,
         audience=None,
         event_type=EV_TEXT,
@@ -196,16 +196,16 @@ async def test_post_envelope_after_hydrate_without_adapter_state_raises_protocol
     await hub2.close()
 
 
-# ── Sweeper auto_close cross-session bleed ──────────────────────────────────
+# ── Sweeper auto_close cross-channel bleed ──────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() -> None:
-    """When session A's expectation fires ``auto_close``, session B's
+async def test_expectation_tick_processes_all_channels_when_one_auto_closes() -> None:
+    """When channel A's expectation fires ``auto_close``, channel B's
     expectations on the same tick are still evaluated.
 
     Pre-fix: the sweeper ``return``ed out of the whole tick after the
-    first ``auto_close``, so sessions later in the iteration order
+    first ``auto_close``, so channels later in the iteration order
     waited for the next 10s tick.
     """
     clock = _MockClock("2026-01-01T00:00:00+00:00")
@@ -213,8 +213,8 @@ async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() ->
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
     # Custom conversation manifest with an aggressive max_silence that
-    # auto_closes — so two sessions both violate at the same tick.
-    aggressive_manifest = SessionManifest(
+    # auto_closes — so two channels both violate at the same tick.
+    aggressive_manifest = ChannelManifest(
         type="conversation_aggressive",
         version=1,
         participants=ParticipantSchema(min=2),
@@ -252,16 +252,16 @@ async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() ->
     await hub._expectation_tick()
 
     audit = await hub._audit_log.read_all()
-    closed_session_ids = {r["session_id"] for r in audit if r["kind"] == AUDIT_KIND_SESSION_CLOSED}
-    # Both sessions auto-closed in a single tick.
-    assert sess_ab.session_id in closed_session_ids
-    assert sess_cd.session_id in closed_session_ids
+    closed_channel_ids = {r["channel_id"] for r in audit if r["kind"] == AUDIT_KIND_CHANNEL_CLOSED}
+    # Both channels auto-closed in a single tick.
+    assert sess_ab.channel_id in closed_channel_ids
+    assert sess_cd.channel_id in closed_channel_ids
 
     # Both expectation violations were logged.
     violations = [r for r in audit if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED]
-    violation_session_ids = {r["session_id"] for r in violations}
-    assert sess_ab.session_id in violation_session_ids
-    assert sess_cd.session_id in violation_session_ids
+    violation_channel_ids = {r["channel_id"] for r in violations}
+    assert sess_ab.channel_id in violation_channel_ids
+    assert sess_cd.channel_id in violation_channel_ids
 
     await a_hc.close()
     await b_hc.close()
@@ -270,11 +270,11 @@ async def test_expectation_tick_processes_all_sessions_when_one_auto_closes() ->
     await hub.close()
 
 
-# ── Session + task lifecycle audit ──────────────────────────────────────────
+# ── Channel + task lifecycle audit ──────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_audit_log_records_session_created_and_closed() -> None:
+async def test_audit_log_records_channel_created_and_closed() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -285,17 +285,17 @@ async def test_audit_log_records_session_created_and_closed() -> None:
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     pre_audit = len(await hub._audit_log.read_all())
-    session = await alice.open(type="conversation", target=bob.agent_id)
-    await hub.close_session(session.session_id, reason="explicit")
+    channel = await alice.open(type="conversation", target=bob.agent_id)
+    await hub.close_channel(channel.channel_id, reason="explicit")
 
     audit = await hub._audit_log.read_all()
     new_records = audit[pre_audit:]
     kinds = [r["kind"] for r in new_records]
-    assert AUDIT_KIND_SESSION_CREATED in kinds
-    assert AUDIT_KIND_SESSION_CLOSED in kinds
+    assert AUDIT_KIND_CHANNEL_CREATED in kinds
+    assert AUDIT_KIND_CHANNEL_CLOSED in kinds
 
-    closed_record = next(r for r in new_records if r["kind"] == AUDIT_KIND_SESSION_CLOSED)
-    assert closed_record["session_id"] == session.session_id
+    closed_record = next(r for r in new_records if r["kind"] == AUDIT_KIND_CHANNEL_CLOSED)
+    assert closed_record["channel_id"] == channel.channel_id
     assert closed_record["reason"] == "explicit"
 
     await a_hc.close()
@@ -304,8 +304,8 @@ async def test_audit_log_records_session_created_and_closed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
-    """``EXPIRED`` transitions emit ``session_expired`` (not ``session_closed``)."""
+async def test_audit_log_records_channel_expired_on_ttl_sweep() -> None:
+    """``EXPIRED`` transitions emit ``channel_expired`` (not ``channel_closed``)."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -316,7 +316,7 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
     alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target=bob.agent_id, ttl="60s")
+    channel = await alice.open(type="conversation", target=bob.agent_id, ttl="60s")
     pre_audit = len(await hub._audit_log.read_all())
     clock.advance(120)
     await hub.expire_due()
@@ -324,7 +324,7 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
     audit = await hub._audit_log.read_all()
     new_records = audit[pre_audit:]
     expired = [
-        r for r in new_records if r["kind"] == AUDIT_KIND_SESSION_EXPIRED and r["session_id"] == session.session_id
+        r for r in new_records if r["kind"] == AUDIT_KIND_CHANNEL_EXPIRED and r["channel_id"] == channel.channel_id
     ]
     assert len(expired) == 1
     assert expired[0]["reason"] == "ttl_expired"
@@ -335,8 +335,8 @@ async def test_audit_log_records_session_expired_on_ttl_sweep() -> None:
 
 
 @pytest.mark.asyncio
-async def test_audit_log_records_task_terminated_on_session_cascade() -> None:
-    """Tasks under a closing session cascade to ``EXPIRED`` and emit
+async def test_audit_log_records_task_terminated_on_channel_cascade() -> None:
+    """Tasks under a closing channel cascade to ``EXPIRED`` and emit
     ``task_terminated`` audit records carrying ``capability``."""
     from autogen.beta.task import TaskMetadata, TaskSpec, TaskState
 
@@ -348,22 +348,22 @@ async def test_audit_log_records_task_terminated_on_session_cascade() -> None:
     b_hc = HubClient(link, hub=hub)
     alice = await a_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    session = await alice.open(type="conversation", target=bob.agent_id)
+    channel = await alice.open(type="conversation", target=bob.agent_id)
 
-    # Plant a non-terminal capability-tagged task under the session.
+    # Plant a non-terminal capability-tagged task under the channel.
     task_meta = TaskMetadata(
         task_id="task-cap-1",
         owner_id=bob.agent_id,
         spec=TaskSpec(title="analysing", capability="analysis"),
         state=TaskState.RUNNING,
         created_at="2026-01-01T00:00:00+00:00",
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
     )
     hub._tasks[task_meta.task_id] = task_meta
-    hub._session_tasks.setdefault(session.session_id, set()).add(task_meta.task_id)
+    hub._channel_tasks.setdefault(channel.channel_id, set()).add(task_meta.task_id)
 
     pre_audit = len(await hub._audit_log.read_all())
-    await hub.close_session(session.session_id, reason="explicit")
+    await hub.close_channel(channel.channel_id, reason="explicit")
 
     audit = await hub._audit_log.read_all()
     new_records = audit[pre_audit:]

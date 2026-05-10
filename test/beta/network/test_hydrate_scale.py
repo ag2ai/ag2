@@ -6,15 +6,15 @@
 
 Verifies:
 
-* All session metadata round-trips through ``DiskKnowledgeStore``.
-* Every active session's WAL is re-folded through its adapter so the
+* All channel metadata round-trips through ``DiskKnowledgeStore``.
+* Every active channel's WAL is re-folded through its adapter so the
   in-memory ``_adapter_states`` cache matches the on-disk truth.
 * The capability index rebuilds from loaded resumes.
 * Round-trip is deterministic: hydrating twice yields the same state.
 
-Correctness benchmark, not a perf benchmark. Default: 100 sessions ×
+Correctness benchmark, not a perf benchmark. Default: 100 channels ×
 100 envelopes (~10k total) so the test runs in <2s. Bump
-``ENVELOPES_PER_SESSION`` locally to exercise larger sweeps.
+``ENVELOPES_PER_CHANNEL`` locally to exercise larger sweeps.
 """
 
 import pytest
@@ -38,17 +38,17 @@ from autogen.beta.network.adapters.discussion import (
     ORDERING_ROUND_ROBIN,
     DiscussionState,
 )
+from autogen.beta.network.channel import ChannelState
 from autogen.beta.network.envelope import EV_TEXT
-from autogen.beta.network.session import SessionState
 from autogen.beta.testing import TestConfig
 
-# Scale chosen for unit-run speed: 100 sessions × 100 envelopes ≈
+# Scale chosen for unit-run speed: 100 channels × 100 envelopes ≈
 # 10k envelopes, ~1s populate, instant hydrate. Bump
-# ``ENVELOPES_PER_SESSION`` locally for larger sweeps. Hydrate cost
+# ``ENVELOPES_PER_CHANNEL`` locally for larger sweeps. Hydrate cost
 # scales linearly with envelope count and is dwarfed by populate
 # (write throughput) in any realistic setup.
-SESSIONS = 100
-ENVELOPES_PER_SESSION = 100
+CHANNELS = 100
+ENVELOPES_PER_CHANNEL = 100
 
 
 def _agent(name: str) -> Agent:
@@ -56,10 +56,10 @@ def _agent(name: str) -> Agent:
 
 
 @pytest.mark.asyncio
-async def test_hydrate_round_trips_many_sessions(tmp_path) -> None:
+async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
     """Populate disk via a live hub, tear down, re-open, verify state matches."""
-    n_sessions = SESSIONS
-    n_envelopes = ENVELOPES_PER_SESSION
+    n_channels = CHANNELS
+    n_envelopes = ENVELOPES_PER_CHANNEL
 
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -78,20 +78,20 @@ async def test_hydrate_round_trips_many_sessions(tmp_path) -> None:
         Resume(claimed_capabilities=["coding"]),
     )
 
-    # Build conversation sessions in parallel batches; each session
+    # Build conversation channels in parallel batches; each channel
     # fills its WAL with N alternating EV_TEXT envelopes.
     expected_states: dict[str, dict] = {}
-    sessions = []
-    for _ in range(n_sessions):
-        session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
-        sessions.append(session)
+    channels = []
+    for _ in range(n_channels):
+        channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+        channels.append(channel)
 
-    # Fill each session's WAL.
-    for session in sessions:
+    # Fill each channel's WAL.
+    for channel in channels:
         for i in range(n_envelopes):
             sender = alice if (i % 2 == 0) else bob
             envelope = Envelope(
-                session_id=session.session_id,
+                channel_id=channel.channel_id,
                 sender_id=sender.agent_id,
                 audience=None,
                 event_type=EV_TEXT,
@@ -99,8 +99,8 @@ async def test_hydrate_round_trips_many_sessions(tmp_path) -> None:
             )
             await hub1.post_envelope(envelope)
         # Snapshot expected state.
-        cached = hub1._adapter_states[session.session_id]
-        expected_states[session.session_id] = {
+        cached = hub1._adapter_states[channel.channel_id]
+        expected_states[channel.channel_id] = {
             "turn_count": cached.turn_count,
             "last_speaker_id": cached.last_speaker_id,
         }
@@ -121,22 +121,22 @@ async def test_hydrate_round_trips_many_sessions(tmp_path) -> None:
     assert hub2.agents_with_capability("analysis") == [alice.agent_id]
     assert hub2.agents_with_capability("coding") == [bob.agent_id]
 
-    # Every session round-tripped.
-    for session in sessions:
-        meta = await hub2.get_session(session.session_id)
+    # Every channel round-tripped.
+    for channel in channels:
+        meta = await hub2.get_channel(channel.channel_id)
         assert meta.manifest.type == CONVERSATION_TYPE
-        assert meta.state == SessionState.ACTIVE
+        assert meta.state == ChannelState.ACTIVE
 
-        cached = hub2._adapter_states[session.session_id]
+        cached = hub2._adapter_states[channel.channel_id]
         assert isinstance(cached, ConversationState)
-        assert cached.turn_count == expected_states[session.session_id]["turn_count"]
-        assert cached.last_speaker_id == expected_states[session.session_id]["last_speaker_id"]
+        assert cached.turn_count == expected_states[channel.channel_id]["turn_count"]
+        assert cached.last_speaker_id == expected_states[channel.channel_id]["last_speaker_id"]
 
     # Round 2: hydrating twice from the same store is idempotent.
     await hub2.hydrate()
-    for session in sessions:
-        cached = hub2._adapter_states[session.session_id]
-        assert cached.turn_count == expected_states[session.session_id]["turn_count"]
+    for channel in channels:
+        cached = hub2._adapter_states[channel.channel_id]
+        assert cached.turn_count == expected_states[channel.channel_id]["turn_count"]
 
     await hub2.close()
 
@@ -156,7 +156,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
         clients.append(client)
     alice = clients[0]
 
-    session = await alice.open(
+    channel = await alice.open(
         type=DISCUSSION_TYPE,
         target=[c.agent_id for c in clients[1:]],
         knobs={"ordering": ORDERING_ROUND_ROBIN},
@@ -166,7 +166,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
     for i in range(50):
         sender = clients[i % 5]
         envelope = Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=sender.agent_id,
             audience=None,
             event_type=EV_TEXT,
@@ -174,7 +174,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
         )
         await hub1.post_envelope(envelope)
 
-    expected = hub1._adapter_states[session.session_id]
+    expected = hub1._adapter_states[channel.channel_id]
     expected_turn_count = expected.turn_count
     expected_next = expected.expected_next_speaker
     expected_last = expected.last_speaker_id
@@ -186,7 +186,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    rebuilt = hub2._adapter_states[session.session_id]
+    rebuilt = hub2._adapter_states[channel.channel_id]
     assert isinstance(rebuilt, DiscussionState)
     assert rebuilt.turn_count == expected_turn_count
     assert rebuilt.expected_next_speaker == expected_next

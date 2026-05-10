@@ -20,7 +20,7 @@ def make_id() -> str:
 
     Prefers UUID7 (time-ordered, cross-process sortable) when available;
     falls back to UUID4 on older Pythons. The in-process hub stamps every
-    envelope under a per-session lock so process-local ordering is
+    envelope under a per-channel lock so process-local ordering is
     already serialised; the time-ordered prefix matters once the
     transport spans processes.
     """

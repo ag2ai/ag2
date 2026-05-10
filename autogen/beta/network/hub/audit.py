@@ -8,16 +8,16 @@ Writes to a single ``audit.jsonl`` under the hub's ``KnowledgeStore``
 root.
 
 The audit log records hub-cross-cutting events that are not visible
-on per-session WALs:
+on per-channel WALs:
 
 * Identity changes — register, unregister, set_resume (with ``source``:
   ``"tenant"`` for ``set_resume`` calls, ``"observed"`` for
   ``record_observation``), set_skill, set_rule
-* Session lifecycle — created, closed, expired (one record per
+* Channel lifecycle — created, closed, expired (one record per
   terminal transition)
 * Task lifecycle — terminated (completed / failed / expired) for tasks
   the hub observed (mirrored from agent ``Task*`` events)
-* Expectation violations — one record per (session, expectation, violator)
+* Expectation violations — one record per (channel, expectation, violator)
   fire (the sweeper deduplicates so handlers don't re-record)
 
 Each record is a JSON object on its own line with at least
@@ -33,12 +33,12 @@ from .layout import audit_path
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
     "AUDIT_KIND_AGENT_UNREGISTERED",
+    "AUDIT_KIND_CHANNEL_CLOSED",
+    "AUDIT_KIND_CHANNEL_CREATED",
+    "AUDIT_KIND_CHANNEL_EXPIRED",
     "AUDIT_KIND_EXPECTATION_VIOLATED",
     "AUDIT_KIND_RESUME_SET",
     "AUDIT_KIND_RULE_SET",
-    "AUDIT_KIND_SESSION_CLOSED",
-    "AUDIT_KIND_SESSION_CREATED",
-    "AUDIT_KIND_SESSION_EXPIRED",
     "AUDIT_KIND_SKILL_SET",
     "AUDIT_KIND_TASK_TERMINATED",
     "RESUME_SOURCE_OBSERVED",
@@ -53,9 +53,9 @@ AUDIT_KIND_RESUME_SET = "resume_set"
 AUDIT_KIND_RULE_SET = "rule_set"
 AUDIT_KIND_SKILL_SET = "skill_set"
 AUDIT_KIND_EXPECTATION_VIOLATED = "expectation_violated"
-AUDIT_KIND_SESSION_CREATED = "session_created"
-AUDIT_KIND_SESSION_CLOSED = "session_closed"
-AUDIT_KIND_SESSION_EXPIRED = "session_expired"
+AUDIT_KIND_CHANNEL_CREATED = "channel_created"
+AUDIT_KIND_CHANNEL_CLOSED = "channel_closed"
+AUDIT_KIND_CHANNEL_EXPIRED = "channel_expired"
 AUDIT_KIND_TASK_TERMINATED = "task_terminated"
 
 # ``source`` values for ``resume_set`` audit records.

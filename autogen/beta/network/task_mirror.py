@@ -61,7 +61,7 @@ class TaskMirror:
         hub_client: "HubClient | None" = None,
         hub: "Hub | None" = None,
         owner_id: str,
-        session_id: str | None = None,
+        channel_id: str | None = None,
     ) -> None:
         # __init__ stores params; subscription happens in attach().
         if hub_client is None and hub is None:
@@ -69,7 +69,7 @@ class TaskMirror:
         self._hub_client = hub_client
         self._hub = hub if hub is not None else (hub_client._hub if hub_client is not None else None)
         self._owner_id = owner_id
-        self._session_id = session_id
+        self._channel_id = channel_id
 
     async def _observe(self, metadata: TaskMetadata) -> None:
         if self._hub_client is not None:
@@ -155,7 +155,7 @@ class TaskMirror:
             state=TaskState.RUNNING,
             created_at=now,
             started_at=now,
-            session_id=self._session_id,
+            channel_id=self._channel_id,
         )
         with contextlib.suppress(Exception):
             await self._observe(metadata)

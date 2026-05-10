@@ -34,7 +34,7 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE, WorkflowState
-from autogen.beta.network.session import SessionState
+from autogen.beta.network.channel import ChannelState
 from autogen.beta.network.transitions import (
     AgentTarget,
     FromSpeaker,
@@ -64,14 +64,14 @@ def anthropic_config() -> AnthropicConfig:
 
 async def _wait_for_state(
     hub: Hub,
-    session_id: str,
+    channel_id: str,
     *,
     pred,
     timeout: float = 60.0,
 ) -> bool:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        if pred(hub._adapter_states.get(session_id)):
+        if pred(hub._adapter_states.get(channel_id)):
             return True
         await asyncio.sleep(0.2)
     return False
@@ -138,7 +138,7 @@ async def test_workflow_swarm_handoff_revert_close(
         """Transfer the conversation to the engineering specialist."""
         return Handoff(target=eng_agent_id, reason=reason)
 
-    session = await triage.open(
+    channel = await triage.open(
         type=WORKFLOW_TYPE,
         target=[eng.agent_id],
         knobs={"graph": graph.to_dict()},
@@ -146,18 +146,18 @@ async def test_workflow_swarm_handoff_revert_close(
     )
 
     # Drive the first turn directly via triage.agent.ask so we can
-    # observe the handoff tool call. The session is in the LLM's
+    # observe the handoff tool call. The channel is in the LLM's
     # context via the plugin's NetworkContextPolicy.
-    from autogen.beta.network.client.session import Session
+    from autogen.beta.network.client.channel import Channel
     from autogen.beta.network.policies import (
         AGENT_CLIENT_DEP,
+        CHANNEL_DEP,
         HUB_DEP,
-        SESSION_DEP,
     )
 
-    session_handle = Session(metadata=session.metadata, client=triage)
+    channel_handle = Channel(metadata=channel.metadata, client=triage)
     triage_dependencies = {
-        SESSION_DEP: session_handle,
+        CHANNEL_DEP: channel_handle,
         AGENT_CLIENT_DEP: triage,
         HUB_DEP: hub,
     }
@@ -166,8 +166,8 @@ async def test_workflow_swarm_handoff_revert_close(
         dependencies=triage_dependencies,
     )
     # Triage either calls transfer_to_eng (preferred) or answers directly;
-    # either way the session should have at least one substantive event.
-    wal = await hub.read_wal(session.session_id)
+    # either way the channel should have at least one substantive event.
+    wal = await hub.read_wal(channel.channel_id)
     handoff_envelopes = [
         e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
     ]
@@ -177,13 +177,13 @@ async def test_workflow_swarm_handoff_revert_close(
     # notify handler (auto-attached default) to engage and reply.
     settled = await _wait_for_state(
         hub,
-        session.session_id,
+        channel.channel_id,
         pred=lambda s: s is not None and s.last_speaker_id == eng.agent_id,
         timeout=60.0,
     )
     assert settled, "eng never replied within 60s"
 
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     # FromSpeaker(eng) → RevertToInitiator → next is triage.
     assert state.expected_next_speaker == triage.agent_id
 
@@ -194,17 +194,17 @@ async def test_workflow_swarm_handoff_revert_close(
 
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    rebuilt = hub2._adapter_states[session.session_id]
+    rebuilt = hub2._adapter_states[channel.channel_id]
     assert isinstance(rebuilt, WorkflowState)
     assert rebuilt.expected_next_speaker == triage.agent_id
     assert rebuilt.last_speaker_id == eng.agent_id
     assert rebuilt.creator_id == triage.agent_id
 
     # Triage closes via TerminateTarget — equivalent to calling
-    # sessions(action="close"). For the deterministic verification we
+    # channels(action="close"). For the deterministic verification we
     # use the hub directly.
-    closed = await hub2.close_session(session.session_id, reason="triage_done")
-    assert closed.state == SessionState.CLOSED
+    closed = await hub2.close_channel(channel.channel_id, reason="triage_done")
+    assert closed.state == ChannelState.CLOSED
     assert closed.close_reason == "triage_done"
 
     await hub2.close()

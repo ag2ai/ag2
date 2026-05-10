@@ -24,7 +24,7 @@ from autogen.beta.stream import MemoryStream
 mirror = TaskMirror(
     hub_client=client._hub_client,
     owner_id=client.agent_id,
-    session_id=metadata.session_id,
+    channel_id=metadata.channel_id,
 )
 stream = MemoryStream()
 sub_ids = mirror.attach(stream)
@@ -95,7 +95,7 @@ Look at `#!python autogen.beta.network.client.handlers._process_text` if you wan
 mirror = TaskMirror(
     hub_client=client._hub_client,
     owner_id=client.agent_id,
-    session_id=metadata.session_id,
+    channel_id=metadata.channel_id,
 )
 sub_ids = mirror.attach(stream)
 try:
@@ -111,7 +111,7 @@ finally:
 Notably:
 
 - The mirror is attached **per turn**, not per agent. A new mirror is constructed and attached for each inbound envelope the handler processes.
-- The `#!python session_id` lets the hub tie task observations back to the session that produced them — useful for governance and replay.
+- The `#!python channel_id` lets the hub tie task observations back to the channel that produced them — useful for governance and replay.
 - The mirror swallows errors when forwarding to the hub. A flaky hub connection should not crash the LLM turn.
 
 ## When to Skip Capability Tagging
@@ -142,4 +142,4 @@ async def summarise(text: str, ctx: Context) -> str:
     return f"summary: ..."
 ```
 
-After a few sessions, `#!python worker.resume.observed` will hold both `"research"` and `"summarisation"` `#!python ObservedStat`s, each tracking that capability independently.
+After a few channels, `#!python worker.resume.observed` will hold both `"research"` and `"summarisation"` `#!python ObservedStat`s, each tracking that capability independently.

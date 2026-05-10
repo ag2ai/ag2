@@ -6,7 +6,7 @@ sidebarTitle: Network Tools
 When you call `#!python HubClient.register(agent, ...)` with the default `#!python attach_plugin=True`, the framework attaches `#!python NetworkPlugin` to your agent. The plugin does two things:
 
 1. Adds an **assembly policy** that prefixes every LLM call with the agent's name and id plus a one-line list of network tool names.
-2. Adds **six LLM-facing tools** to `#!python agent.tools` so the model can drive network operations directly: `#!python say`, `#!python delegate`, `#!python peers`, `#!python sessions`, `#!python tasks`, `#!python context`.
+2. Adds **six LLM-facing tools** to `#!python agent.tools` so the model can drive network operations directly: `#!python say`, `#!python delegate`, `#!python peers`, `#!python channels`, `#!python tasks`, `#!python context`.
 
 These are the *vocabulary* the LLM uses to participate in the network — discovery, messaging, lifecycle, history — without your code having to interpret tool calls and proxy them.
 
@@ -14,8 +14,8 @@ These are the *vocabulary* the LLM uses to participate in the network — discov
 
 | Tool | Signature | Purpose |
 |---|---|---|
-| `#!python say` | `#!python say(content, audience?, session_id?)` | Post `#!python EV_TEXT` into the active session (or a specified one). `#!python audience` is a list of peer **names** (resolved to ids); `#!python None` broadcasts. |
-| `#!python delegate` | `#!python delegate(target, prompt, capability?, timeout=300)` | One-shot consult: open a `#!python consulting` session with `target`, send `prompt`, await the single reply, return its text. |
+| `#!python say` | `#!python say(content, audience?, channel_id?)` | Post `#!python EV_TEXT` into the active channel (or a specified one). `#!python audience` is a list of peer **names** (resolved to ids); `#!python None` broadcasts. |
+| `#!python delegate` | `#!python delegate(target, prompt, capability?, timeout=300)` | One-shot consult: open a `#!python consulting` channel with `target`, send `prompt`, await the single reply, return its text. |
 
 `#!python say` is the most common verb — every reply on a multi-party turn flows through it. `#!python delegate` is the second-most-common because "ask one specialist a question, take their answer" is the canonical multi-agent pattern.
 
@@ -25,7 +25,7 @@ These are the *vocabulary* the LLM uses to participate in the network — discov
 #   delegate(target="bob", prompt="What's the right way to model X?", capability="modeling")
 ```
 
-The framework resolves `#!python SessionInject` (current session) and `#!python AgentClientInject` (calling agent's hub client) automatically inside the notify handler, so the LLM never sees those parameters.
+The framework resolves `#!python ChannelInject` (current channel) and `#!python AgentClientInject` (calling agent's hub client) automatically inside the notify handler, so the LLM never sees those parameters.
 
 ## Four grouped action-dispatch tools
 
@@ -38,14 +38,14 @@ Each grouped tool takes an `#!python action` literal plus action-specific args, 
 | `#!python "find"` | `#!python query?, capability?, sort_by?, limit=20` | List of peer summaries (excludes the calling agent). |
 | `#!python "describe"` | `#!python name` | One peer's full profile: `#!python {passport, resume, skill_md}`. `skill_md` falls back to a rendered passport+resume when no `#!python SKILL.md` is registered. |
 
-### `sessions(action)` — lifecycle
+### `channels(action)` — lifecycle
 
 | Action | Args | Returns |
 |---|---|---|
-| `#!python "list"` | `#!python state="active"\|"all"` | Sessions this agent participates in. |
-| `#!python "open"` | `#!python type, target, knobs?, intent?, ttl?` | Mirrors `#!python AgentClient.open`. Returns `#!python {session_id, type, participants}`. |
-| `#!python "info"` | `#!python session_id` | Full `#!python SessionMetadata` if the agent is a participant. |
-| `#!python "close"` | `#!python session_id?` (defaults to current) | Closes the session with reason `#!python "closed_by_agent"`. |
+| `#!python "list"` | `#!python state="active"\|"all"` | Channels this agent participates in. |
+| `#!python "open"` | `#!python type, target, knobs?, intent?, ttl?` | Mirrors `#!python AgentClient.open`. Returns `#!python {channel_id, type, participants}`. |
+| `#!python "info"` | `#!python channel_id` | Full `#!python ChannelMetadata` if the agent is a participant. |
+| `#!python "close"` | `#!python channel_id?` (defaults to current) | Closes the channel with reason `#!python "closed_by_agent"`. |
 
 ### `tasks(action)` — task lifecycle
 
@@ -66,25 +66,25 @@ Two halves: **active actions** (the agent is inside its own `#!python agent.task
 
 | Action | Args | Returns |
 |---|---|---|
-| `#!python "search"` | `#!python query, scope="session"\|"knowledge", limit=10` | Excerpts of envelopes whose text matches `#!python query` (case-insensitive substring). |
-| `#!python "quote"` | `#!python speaker, recent_n=1, session_id?` | The last `recent_n` `#!python EV_TEXT` envelopes from `speaker` in the current (or specified) session. |
+| `#!python "search"` | `#!python query, scope="channel"\|"knowledge", limit=10` | Excerpts of envelopes whose text matches `#!python query` (case-insensitive substring). |
+| `#!python "quote"` | `#!python speaker, recent_n=1, channel_id?` | The last `recent_n` `#!python EV_TEXT` envelopes from `speaker` in the current (or specified) channel. |
 
 `#!python scope="knowledge"` reaches into the calling agent's own `#!python KnowledgeStore`. Substring search only — for vector / semantic search, the agent's own loop calls into framework-core `#!python recall` directly.
 
 ## What gets injected, automatically
 
-Every grouped tool accepts `#!python AgentClientInject`, `#!python SessionInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
+Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
 
 If you are testing a tool *outside* the notify-handler context, pass them yourself:
 
 ```python linenums="1"
 from autogen.beta import Context
-from autogen.beta.network import AGENT_CLIENT_DEP, SESSION_DEP, Session
+from autogen.beta.network import AGENT_CLIENT_DEP, CHANNEL_DEP, Channel
 
 ctx = Context(
     dependencies={
         AGENT_CLIENT_DEP: alice,
-        SESSION_DEP: Session(metadata=session.metadata, client=alice),
+        CHANNEL_DEP: Channel(metadata=channel.metadata, client=alice),
     },
 )
 ```

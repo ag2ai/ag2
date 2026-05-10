@@ -10,7 +10,7 @@ Three layers covered:
   ``ReplyWithinEvaluator``, ``MaxSilenceEvaluator`` against synthesised
   ``ExpectationContext`` inputs.
 * **Handlers** (integration) — ``AuditHandler``,
-  ``NotifySessionHandler``, ``AutoCloseHandler`` driven by the hub's
+  ``NotifyChannelHandler``, ``AutoCloseHandler`` driven by the hub's
   manual ``_expectation_tick()`` call with a controllable clock.
 * **Audit log** — ``register`` / ``unregister`` / ``set_*`` write the
   expected records via ``AuditLog.read_all()``.
@@ -43,6 +43,15 @@ from autogen.beta.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
 )
+from autogen.beta.network.channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
+    Expectation,
+    Participant,
+    ParticipantRole,
+    ParticipantSchema,
+)
 from autogen.beta.network.hub import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -55,15 +64,6 @@ from autogen.beta.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
-)
-from autogen.beta.network.session import (
-    Expectation,
-    Participant,
-    ParticipantRole,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
 )
 from autogen.beta.testing import TestConfig
 
@@ -84,14 +84,14 @@ async def _silent_handler(_envelope: Envelope) -> None:
 
 def _conv_metadata(
     *,
-    state: SessionState = SessionState.ACTIVE,
+    state: ChannelState = ChannelState.ACTIVE,
     created_at: str = "2026-01-01T00:00:00+00:00",
     pending_acks: list[str] | None = None,
-) -> SessionMetadata:
-    """Build a 2-party conversation session metadata for evaluator tests."""
+) -> ChannelMetadata:
+    """Build a 2-party conversation channel metadata for evaluator tests."""
     manifest = ConversationAdapter().manifest
-    return SessionMetadata(
-        session_id="s1",
+    return ChannelMetadata(
+        channel_id="s1",
         manifest=manifest,
         creator_id="alice",
         participants=[
@@ -113,7 +113,7 @@ def _envelope(
 ) -> Envelope:
     env = Envelope(
         envelope_id=f"env-{sender}-{text}",
-        session_id="s1",
+        channel_id="s1",
         sender_id=sender,
         audience=audience,
         event_type=EV_TEXT,
@@ -124,7 +124,7 @@ def _envelope(
 
 
 def _ctx(
-    metadata: SessionMetadata,
+    metadata: ChannelMetadata,
     *,
     wal: list[Envelope] | None = None,
     now: str = "2026-01-01T00:01:00+00:00",
@@ -145,7 +145,7 @@ def _ctx(
 class TestAcksWithinEvaluator:
     def test_fires_after_threshold_with_pending_acks(self) -> None:
         metadata = _conv_metadata(
-            state=SessionState.PENDING,
+            state=ChannelState.PENDING,
             created_at="2026-01-01T00:00:00+00:00",
             pending_acks=["bob"],
         )
@@ -162,7 +162,7 @@ class TestAcksWithinEvaluator:
 
     def test_silent_within_threshold(self) -> None:
         metadata = _conv_metadata(
-            state=SessionState.PENDING,
+            state=ChannelState.PENDING,
             pending_acks=["bob"],
         )
         evaluator = AcksWithinEvaluator()
@@ -177,7 +177,7 @@ class TestAcksWithinEvaluator:
 
     def test_silent_when_no_pending_acks(self) -> None:
         metadata = _conv_metadata(
-            state=SessionState.PENDING,
+            state=ChannelState.PENDING,
             pending_acks=[],
         )
         evaluator = AcksWithinEvaluator()
@@ -185,9 +185,9 @@ class TestAcksWithinEvaluator:
         violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00"))
         assert violation is None
 
-    def test_silent_when_session_active(self) -> None:
-        # Active session (acks already collected) — evaluator skips.
-        metadata = _conv_metadata(state=SessionState.ACTIVE, pending_acks=[])
+    def test_silent_when_channel_active(self) -> None:
+        # Active channel (acks already collected) — evaluator skips.
+        metadata = _conv_metadata(state=ChannelState.ACTIVE, pending_acks=[])
         evaluator = AcksWithinEvaluator()
         expectation = Expectation(name="acks_within", on_violation="auto_close", params={"seconds": 30})
         violation = evaluator.evaluate(expectation, _ctx(metadata, now="2026-01-01T00:10:00+00:00"))
@@ -241,7 +241,7 @@ class TestReplyWithinEvaluator:
 
 
 class TestMaxSilenceEvaluator:
-    def test_fires_when_session_silent_past_threshold(self) -> None:
+    def test_fires_when_channel_silent_past_threshold(self) -> None:
         metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
         wal = [_envelope("alice", "hello", "2026-01-01T00:00:30+00:00")]
         evaluator = MaxSilenceEvaluator()
@@ -252,7 +252,7 @@ class TestMaxSilenceEvaluator:
         )
         violation = evaluator.evaluate(expectation, _ctx(metadata, wal=wal, now="2026-01-01T00:02:00+00:00"))
         assert violation is not None
-        assert violation.violator_ids == []  # session-wide
+        assert violation.violator_ids == []  # channel-wide
 
     def test_silent_when_recent_activity(self) -> None:
         metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
@@ -267,9 +267,9 @@ class TestMaxSilenceEvaluator:
 
 
 @pytest.mark.asyncio
-async def test_auto_close_handler_terminates_session_with_audit() -> None:
+async def test_auto_close_handler_terminates_channel_with_audit() -> None:
     """Consulting's ``acks_within(30s, auto_close)`` fires after 30s,
-    transitions session to CLOSED, records to audit log."""
+    transitions channel to CLOSED, records to audit log."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(
@@ -300,16 +300,16 @@ async def test_auto_close_handler_terminates_session_with_audit() -> None:
     clock.advance(45)
     await hub._expectation_tick()
 
-    # Open fails because the session was auto-closed.
+    # Open fails because the channel was auto-closed.
     with pytest.raises(Exception):
         await open_task
 
-    # Find the session id from cached state.
-    sessions = list(hub._sessions.values())
-    assert len(sessions) == 1
-    session_id = sessions[0].session_id
-    final = await hub.get_session(session_id)
-    assert final.state == SessionState.CLOSED
+    # Find the channel id from cached state.
+    channels = list(hub._channels.values())
+    assert len(channels) == 1
+    channel_id = channels[0].channel_id
+    final = await hub.get_channel(channel_id)
+    assert final.state == ChannelState.CLOSED
     assert "expectation_violated:acks_within" in final.close_reason
 
     audit = await hub._audit_log.read_all()
@@ -334,17 +334,17 @@ async def test_audit_handler_records_without_envelope_or_close() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+    channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     pre_audit = len(await hub._audit_log.read_all())
 
     # Conversation declares max_silence(3600s, audit). Advance 1h+.
     clock.advance(3700)
     await hub._expectation_tick()
 
-    # Session still ACTIVE; no EV_EXPECTATION_VIOLATED in WAL.
-    state = await hub.get_session(session.session_id)
-    assert state.state == SessionState.ACTIVE
-    wal = await hub.read_wal(session.session_id)
+    # Channel still ACTIVE; no EV_EXPECTATION_VIOLATED in WAL.
+    state = await hub.get_channel(channel.channel_id)
+    assert state.state == ChannelState.ACTIVE
+    wal = await hub.read_wal(channel.channel_id)
     assert not any(e.event_type == EV_EXPECTATION_VIOLATED for e in wal)
 
     # Audit log has one new violation entry.
@@ -360,14 +360,14 @@ async def test_audit_handler_records_without_envelope_or_close() -> None:
 
 
 @pytest.mark.asyncio
-async def test_notify_session_handler_broadcasts_envelope() -> None:
-    """``notify_session`` handler audits + posts EV_EXPECTATION_VIOLATED."""
-    # Use a custom session with a notify_session expectation we can drive.
+async def test_notify_channel_handler_broadcasts_envelope() -> None:
+    """``notify_channel`` handler audits + posts EV_EXPECTATION_VIOLATED."""
+    # Use a custom channel with a notify_channel expectation we can drive.
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    # Register a custom adapter with notify_session on max_silence so we
+    # Register a custom adapter with notify_channel on max_silence so we
     # don't have to wait for conversation's 1h default.
     from autogen.beta.network.adapters.conversation import ConversationAdapter
     from autogen.beta.network.views.builtin import WindowedSummary
@@ -375,7 +375,7 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
     class _NotifyAdapter(ConversationAdapter):
         def __init__(self) -> None:
             super().__init__()
-            self.manifest = SessionManifest(
+            self.manifest = ChannelManifest(
                 type="conversation_notify",
                 version=1,
                 participants=ParticipantSchema(min=2, max=2, roles=["initiator", "respondent"]),
@@ -384,7 +384,7 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
                 expectations=[
                     Expectation(
                         name="max_silence",
-                        on_violation="notify_session",
+                        on_violation="notify_channel",
                         params={"seconds": 60},
                     ),
                 ],
@@ -398,19 +398,19 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation_notify", target=bob.agent_id)
+    channel = await alice.open(type="conversation_notify", target=bob.agent_id)
 
     clock.advance(120)
     await hub._expectation_tick()
 
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     violation_envelopes = [e for e in wal if e.event_type == EV_EXPECTATION_VIOLATED]
     assert len(violation_envelopes) == 1
     assert violation_envelopes[0].event_data["expectation"] == "max_silence"
 
-    # Session still ACTIVE — notify_session does not close.
-    state = await hub.get_session(session.session_id)
-    assert state.state == SessionState.ACTIVE
+    # Channel still ACTIVE — notify_channel does not close.
+    state = await hub.get_channel(channel.channel_id)
+    assert state.state == ChannelState.ACTIVE
 
     await alice_hc.close()
     await bob_hc.close()
@@ -418,7 +418,7 @@ async def test_notify_session_handler_broadcasts_envelope() -> None:
 
 
 @pytest.mark.asyncio
-async def test_violation_dedup_within_session_lifetime() -> None:
+async def test_violation_dedup_within_channel_lifetime() -> None:
     """Two consecutive ticks fire the same violation only once."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``WorkflowAdapter`` — orchestrated multi-party session driven by a
+"""``WorkflowAdapter`` — orchestrated multi-party channel driven by a
 declarative :class:`TransitionGraph`.
 
 The mechanic reuses what ``DiscussionAdapter(round_robin)`` already
@@ -22,8 +22,8 @@ Default expectations declared on the manifest:
 * ``turn_within(120s, warn)``
 * ``turn_within(600s, auto_close)`` — long stalls fail-fast.
 
-The session-level ``acks_within`` / ``reply_within`` / ``max_silence``
-expectations apply regardless of adapter — workflow sessions inherit
+The channel-level ``acks_within`` / ``reply_within`` / ``max_silence``
+expectations apply regardless of adapter — workflow channels inherit
 them through the expectation sweeper.
 """
 
@@ -34,27 +34,27 @@ from typing import TYPE_CHECKING, Any
 from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
 from autogen.beta.events.input_events import DataInput
 
+from ..channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
+    Expectation,
+    ParticipantSchema,
+)
 from ..envelope import (
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
     EV_CONTEXT_SET,
     EV_PACKET,
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
     EV_TEXT,
     Envelope,
 )
 from ..errors import ProtocolError
 from ..handoff import Handoff
-from ..session import (
-    Expectation,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
-)
 from ..transitions import (
     ToolCalled,
     TransitionDecision,
@@ -76,18 +76,18 @@ __all__ = ("WORKFLOW_TYPE", "WorkflowAdapter", "WorkflowState")
 WORKFLOW_TYPE = "workflow"
 
 
-_SESSION_PROTOCOL_EVENTS: frozenset[str] = frozenset({
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
+_CHANNEL_PROTOCOL_EVENTS: frozenset[str] = frozenset({
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
 })
 
 
-def _is_session_protocol_event(envelope: Envelope) -> bool:
-    return envelope.event_type in _SESSION_PROTOCOL_EVENTS
+def _is_channel_protocol_event(envelope: Envelope) -> bool:
+    return envelope.event_type in _CHANNEL_PROTOCOL_EVENTS
 
 
 def _is_task_event(envelope: Envelope) -> bool:
@@ -96,19 +96,19 @@ def _is_task_event(envelope: Envelope) -> bool:
 
 def _is_substantive(envelope: Envelope) -> bool:
     """A turn-advancing envelope: text or a packet (one Agent.ask round)."""
-    if _is_session_protocol_event(envelope) or _is_task_event(envelope):
+    if _is_channel_protocol_event(envelope) or _is_task_event(envelope):
         return False
     return envelope.event_type in (EV_TEXT, EV_PACKET)
 
 
 @dataclass(slots=True)
 class WorkflowState:
-    """Folded state for a workflow session.
+    """Folded state for a workflow channel.
 
     ``graph_data`` is the JSON-friendly ``TransitionGraph.to_dict()``
     snapshot taken at ``initial_state``. ``fold`` deserialises it on
     each call (cheap; the graph is small) so the adapter stays
-    stateless across sessions.
+    stateless across channels.
 
     ``creator_id`` is snapshotted so ``RevertToInitiatorTarget`` can
     resolve without metadata access (``fold`` has no metadata).
@@ -126,7 +126,7 @@ class WorkflowState:
 
 
 class WorkflowAdapter:
-    """Generic orchestrated multi-party session.
+    """Generic orchestrated multi-party channel.
 
     Knobs: ``{"graph": <TransitionGraph.to_dict()>}``. Participants:
     2+. Default view: :class:`WindowedSummary(recent_n=N*2)` with
@@ -134,7 +134,7 @@ class WorkflowAdapter:
     """
 
     def __init__(self) -> None:
-        self.manifest = SessionManifest(
+        self.manifest = ChannelManifest(
             type=WORKFLOW_TYPE,
             version=1,
             participants=ParticipantSchema(min=2),
@@ -156,7 +156,7 @@ class WorkflowAdapter:
 
     # ── Adapter Protocol ────────────────────────────────────────────────────
 
-    def initial_state(self, metadata: SessionMetadata) -> WorkflowState:
+    def initial_state(self, metadata: ChannelMetadata) -> WorkflowState:
         graph_data = metadata.knobs.get("graph")
         if not isinstance(graph_data, dict):
             raise ProtocolError(
@@ -254,7 +254,7 @@ class WorkflowAdapter:
             new_state.pending_close_reason = decision.close_reason
         return new_state
 
-    def validate_create(self, metadata: SessionMetadata) -> None:
+    def validate_create(self, metadata: ChannelMetadata) -> None:
         if len(metadata.participants) < 2:
             raise ProtocolError(f"workflow requires at least 2 participants, got {len(metadata.participants)}")
         graph_data = metadata.knobs.get("graph")
@@ -274,7 +274,7 @@ class WorkflowAdapter:
 
     def validate_send(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: WorkflowState,
     ) -> None:
@@ -283,7 +283,7 @@ class WorkflowAdapter:
             participant_ids = {p.agent_id for p in metadata.participants}
             if envelope.sender_id not in participant_ids:
                 raise ProtocolError(
-                    f"workflow {metadata.session_id!r} only accepts EV_CONTEXT_SET "
+                    f"workflow {metadata.channel_id!r} only accepts EV_CONTEXT_SET "
                     f"from participants, got {envelope.sender_id!r}"
                 )
             return
@@ -291,14 +291,14 @@ class WorkflowAdapter:
             return
         if state.expected_next_speaker and envelope.sender_id != state.expected_next_speaker:
             raise ProtocolError(
-                f"workflow {metadata.session_id!r} expects "
+                f"workflow {metadata.channel_id!r} expects "
                 f"{state.expected_next_speaker!r} to speak, got "
                 f"{envelope.sender_id!r}"
             )
 
     def on_accepted(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: WorkflowState,
     ) -> AdapterResult:
@@ -309,21 +309,21 @@ class WorkflowAdapter:
         if state.expected_next_speaker is None:
             reason = state.pending_close_reason or "workflow_terminated"
             return AdapterResult(
-                next_state=SessionState.CLOSED,
+                next_state=ChannelState.CLOSED,
                 auto_close_reason=reason,
             )
 
         graph = TransitionGraph.loads(state.graph_data)
         if graph.max_turns is not None and state.turn_count >= graph.max_turns:
             return AdapterResult(
-                next_state=SessionState.CLOSED,
+                next_state=ChannelState.CLOSED,
                 auto_close_reason="max_turns",
             )
         return AdapterResult()
 
     def default_view_policy(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
         recent_n = max(len(metadata.participants) * 2, 4)
@@ -343,7 +343,7 @@ class WorkflowAdapter:
 
     def build_round_envelope(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         sender_id: str,
         reply: "AgentReply",
         events: list[BaseEvent],
@@ -375,7 +375,7 @@ class WorkflowAdapter:
             return None
 
         return Envelope(
-            session_id=metadata.session_id,
+            channel_id=metadata.channel_id,
             sender_id=sender_id,
             audience=None,
             event_type=EV_PACKET,

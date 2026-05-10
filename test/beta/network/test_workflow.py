@@ -37,10 +37,10 @@ from autogen.beta.network.adapters.workflow import (
     WorkflowAdapter,
     WorkflowState,
 )
-from autogen.beta.network.errors import ProtocolError
-from autogen.beta.network.session import (
-    SessionState,
+from autogen.beta.network.channel import (
+    ChannelState,
 )
+from autogen.beta.network.errors import ProtocolError
 from autogen.beta.network.transitions import (
     AgentTarget,
     Always,
@@ -102,7 +102,7 @@ def _envelope(sender: str, *, event_type: str = EV_TEXT, tool: str = "") -> Enve
         data = {"tool": tool}
     return Envelope(
         envelope_id=f"env-{sender}",
-        session_id="s1",
+        channel_id="s1",
         sender_id=sender,
         audience=None,
         event_type=event_type,
@@ -298,21 +298,21 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
     carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
     graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id, carol.agent_id])
-    session = await alice.open(
+    channel = await alice.open(
         type=WORKFLOW_TYPE,
         target=[bob.agent_id, carol.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    assert session.state == SessionState.ACTIVE
+    assert channel.state == ChannelState.ACTIVE
 
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     assert isinstance(state, WorkflowState)
     assert state.expected_next_speaker == alice.agent_id
 
     # Manual sends in turn order.
     for sender_client in [alice, bob, carol]:
         env = Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=sender_client.agent_id,
             audience=None,
             event_type=EV_TEXT,
@@ -320,13 +320,13 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
         )
         await hub.post_envelope(env)
 
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     assert state.expected_next_speaker == alice.agent_id  # cycled back
     assert state.turn_count == 3
 
     # Out-of-turn send is rejected.
     bad = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=bob.agent_id,  # alice is next
         audience=None,
         event_type=EV_TEXT,
@@ -356,7 +356,7 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
     carol = await c_hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
     graph = TransitionGraph.sequence([alice.agent_id, bob.agent_id, carol.agent_id])
-    session = await alice.open(
+    channel = await alice.open(
         type=WORKFLOW_TYPE,
         target=[bob.agent_id, carol.agent_id],
         knobs={"graph": graph.to_dict()},
@@ -364,10 +364,10 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
 
     # alice, bob, carol each post once. After carol's post, the
     # sequence factory's TerminateTarget("sequence_complete") fires
-    # and closes the session.
+    # and closes the channel.
     for sender_client in [alice, bob, carol]:
         env = Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=sender_client.agent_id,
             audience=None,
             event_type=EV_TEXT,
@@ -376,8 +376,8 @@ async def test_workflow_sequence_pipeline_terminates_after_last_step() -> None:
         await hub.post_envelope(env)
 
     # Wait briefly for the close envelope to be dispatched.
-    final = await hub.get_session(session.session_id)
-    assert final.state == SessionState.CLOSED
+    final = await hub.get_channel(channel.channel_id)
+    assert final.state == ChannelState.CLOSED
     assert final.close_reason == "sequence_complete"
 
     await a_hc.close()
@@ -414,7 +414,7 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
         default_target=TerminateTarget(reason="triage_done"),
         max_turns=4,
     )
-    session = await triage.open(
+    channel = await triage.open(
         type=WORKFLOW_TYPE,
         target=[eng.agent_id],
         knobs={"graph": graph.to_dict()},
@@ -423,7 +423,7 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
     # 1. triage emits the routing packet (simulating LLM tool call →
     # framework-built EV_PACKET with routing.tool set).
     handoff_env = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=triage.agent_id,
         audience=None,
         event_type=EV_PACKET,
@@ -438,28 +438,28 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
         },
     )
     await hub.post_envelope(handoff_env)
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     assert state.expected_next_speaker == eng.agent_id
 
     # 2. eng replies with text.
     eng_env = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=eng.agent_id,
         audience=None,
         event_type=EV_TEXT,
         event_data={"text": "eng analysis: looks good"},
     )
     await hub.post_envelope(eng_env)
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     # FromSpeaker(eng) fires → revert to initiator (triage).
     assert state.expected_next_speaker == triage.agent_id
 
-    # 3. triage closes via the explicit close session API (mirrors the
-    # exit criterion's TerminateTarget, but we use close_session for the
+    # 3. triage closes via the explicit close channel API (mirrors the
+    # exit criterion's TerminateTarget, but we use close_channel for the
     # deterministic test). Alternatively triage could send a "done"
     # handoff envelope routed to TerminateTarget in a richer graph.
-    closed = await hub.close_session(session.session_id, reason="triage_done")
-    assert closed.state == SessionState.CLOSED
+    closed = await hub.close_channel(channel.channel_id, reason="triage_done")
+    assert closed.state == ChannelState.CLOSED
     assert closed.close_reason == "triage_done"
 
     await triage_hc.close()
@@ -493,7 +493,7 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
         default_target=RevertToInitiatorTarget(),
         max_turns=20,
     )
-    session = await mgr.open(
+    channel = await mgr.open(
         type=WORKFLOW_TYPE,
         target=[alice.agent_id, bob.agent_id],
         knobs={"graph": graph.to_dict()},
@@ -509,14 +509,14 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
     expected_next = [alice.agent_id, mgr.agent_id, bob.agent_id, mgr.agent_id]
     for (sender, et, ed), exp in zip(sequence, expected_next):
         env = Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=sender.agent_id,
             audience=None,
             event_type=et,
             event_data=ed,
         )
         await hub.post_envelope(env)
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.expected_next_speaker == exp, (
             f"after {sender.agent_id} sent {et}, expected_next was {state.expected_next_speaker}, expected {exp}"
         )
@@ -555,13 +555,13 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
         default_target=TerminateTarget(),
         max_turns=10,
     )
-    session = await triage.open(
+    channel = await triage.open(
         type=WORKFLOW_TYPE,
         target=[eng.agent_id],
         knobs={"graph": graph.to_dict()},
     )
     handoff_env = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=triage.agent_id,
         audience=None,
         event_type=EV_PACKET,
@@ -572,7 +572,7 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
         },
     )
     await hub1.post_envelope(handoff_env)
-    pre_state = hub1._adapter_states[session.session_id]
+    pre_state = hub1._adapter_states[channel.channel_id]
     assert pre_state.expected_next_speaker == eng.agent_id
 
     await triage_hc.close()
@@ -583,11 +583,11 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    refreshed = await hub2.get_session(session.session_id)
+    refreshed = await hub2.get_channel(channel.channel_id)
     assert refreshed.manifest.type == WORKFLOW_TYPE
-    assert refreshed.state == SessionState.ACTIVE
+    assert refreshed.state == ChannelState.ACTIVE
 
-    rebuilt = hub2._adapter_states[session.session_id]
+    rebuilt = hub2._adapter_states[channel.channel_id]
     assert isinstance(rebuilt, WorkflowState)
     assert rebuilt.expected_next_speaker == eng.agent_id
     assert rebuilt.last_speaker_id == triage.agent_id
@@ -609,7 +609,7 @@ async def test_workflow_validate_create_rejects_missing_graph() -> None:
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     with pytest.raises(ProtocolError, match="graph"):
-        await hub.create_session(
+        await hub.create_channel(
             creator_id=alice.agent_id,
             manifest_type=WORKFLOW_TYPE,
             participants=[bob.agent_id],

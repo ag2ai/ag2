@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``SessionAdapter`` Protocol + ``AdapterState`` marker + ``AdapterResult``.
+"""``ChannelAdapter`` Protocol + ``AdapterState`` marker + ``AdapterResult``.
 
 Key invariants:
 
@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Protocol
 
 from autogen.beta.events.input_events import Input
 
+from ..channel import ChannelManifest, ChannelMetadata, ChannelState
 from ..envelope import EV_TEXT, Envelope
-from ..session import SessionManifest, SessionMetadata, SessionState
 from ..views.base import ViewPolicy
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 __all__ = (
     "AdapterResult",
     "AdapterState",
-    "SessionAdapter",
+    "ChannelAdapter",
     "default_build_round_envelope",
     "default_extract_turn_input",
     "default_render_envelope",
@@ -52,28 +52,28 @@ class AdapterState(Protocol):
 class AdapterResult:
     """What an adapter wants the hub to do after accepting an envelope.
 
-    ``next_state=None`` leaves the session in its current state. The
-    hub broadcasts ``EV_SESSION_CLOSED`` / ``EV_SESSION_EXPIRED`` when
+    ``next_state=None`` leaves the channel in its current state. The
+    hub broadcasts ``EV_CHANNEL_CLOSED`` / ``EV_CHANNEL_EXPIRED`` when
     transitioning to a terminal state.
     """
 
-    next_state: SessionState | None = None
+    next_state: ChannelState | None = None
     auto_close_reason: str = ""
 
 
-class SessionAdapter(Protocol):
+class ChannelAdapter(Protocol):
     """Code half of the manifest/adapter split.
 
-    Adapters are looked up at session-create time by
+    Adapters are looked up at channel-create time by
     ``(manifest.type, manifest.version)``. Re-registering an adapter
-    at a new version does not retroactively change in-flight sessions
+    at a new version does not retroactively change in-flight channels
     — they keep their original manifest snapshot.
     """
 
-    manifest: SessionManifest
+    manifest: ChannelManifest
 
-    def initial_state(self, metadata: SessionMetadata) -> AdapterState:
-        """Empty state for a fresh session."""
+    def initial_state(self, metadata: ChannelMetadata) -> AdapterState:
+        """Empty state for a fresh channel."""
         ...
 
     def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState:
@@ -84,13 +84,13 @@ class SessionAdapter(Protocol):
         """
         ...
 
-    def validate_create(self, metadata: SessionMetadata) -> None:
+    def validate_create(self, metadata: ChannelMetadata) -> None:
         """Raise on invalid creation (bad participant count, missing knobs, ...)."""
         ...
 
     def validate_send(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: AdapterState,
     ) -> None:
@@ -102,7 +102,7 @@ class SessionAdapter(Protocol):
 
     def on_accepted(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: AdapterState,
     ) -> AdapterResult:
@@ -114,10 +114,10 @@ class SessionAdapter(Protocol):
 
     def default_view_policy(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
-        """Per-participant default projection for this session type."""
+        """Per-participant default projection for this channel type."""
         ...
 
     def extract_turn_input(self, envelope: Envelope) -> "str | Input | list[Input] | None":
@@ -136,7 +136,7 @@ class SessionAdapter(Protocol):
 
     def build_round_envelope(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         sender_id: str,
         reply: "AgentReply",
         events: "list[BaseEvent]",
@@ -185,7 +185,7 @@ def default_extract_turn_input(envelope: Envelope) -> str | None:
 
 
 def default_build_round_envelope(
-    metadata: SessionMetadata,
+    metadata: ChannelMetadata,
     sender_id: str,
     reply: "AgentReply",
     events: "list[BaseEvent]",
@@ -202,7 +202,7 @@ def default_build_round_envelope(
     if not body:
         return None
     return Envelope(
-        session_id=metadata.session_id,
+        channel_id=metadata.channel_id,
         sender_id=sender_id,
         audience=None,
         event_type=EV_TEXT,

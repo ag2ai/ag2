@@ -9,13 +9,13 @@ Covers:
 * ``Hub.unregister`` deletes on-disk identity files so ``hydrate()``
   does not re-load unregistered agents.
 * Concurrency caps + inbox limits enforced
-  (``max_concurrent_sessions`` / ``max_concurrent_tasks`` /
+  (``max_concurrent_channels`` / ``max_concurrent_tasks`` /
   ``InboxBlock.max_pending``).
 * ``delegate`` pre-creates the inbox before sending so a fast reply
   cannot be dropped (race fix).
 * ``Hub.register`` rejects a duplicate ``name`` so the prior passport
   / resume / rule are not orphaned on disk.
-* ``delegate`` fails fast on session close / reject / expiry rather
+* ``delegate`` fails fast on channel close / reject / expiry rather
   than blocking until the 300s default timeout.
 * Expectation dedup keyed by ``(index, name, violator)`` so two
   same-named expectations don't suppress each other.
@@ -36,8 +36,8 @@ from autogen.beta import Agent, Context
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
     AccessDeniedError,
     Envelope,
@@ -53,6 +53,15 @@ from autogen.beta.network import (
 from autogen.beta.network.adapters.conversation import (
     CONVERSATION_TYPE,
 )
+from autogen.beta.network.channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
+    Expectation,
+    Participant,
+    ParticipantRole,
+    ParticipantSchema,
+)
 from autogen.beta.network.client.tools.delegate import make_delegate_tool
 from autogen.beta.network.hub.expectations import (
     AcksWithinEvaluator,
@@ -65,15 +74,6 @@ from autogen.beta.network.hub.layout import (
     skill_path,
 )
 from autogen.beta.network.rule import InboxBlock, LimitsBlock
-from autogen.beta.network.session import (
-    Expectation,
-    Participant,
-    ParticipantRole,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
-)
 from autogen.beta.stream import MemoryStream
 from autogen.beta.task import (
     TaskMetadata,
@@ -108,20 +108,20 @@ async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) ->
 def _ack_only_handler(client: "HubClient | object"):
     """Build a notify handler that auto-acks invites and ignores everything else.
 
-    Used when a test needs a session to open (handshake completes) but
+    Used when a test needs a channel to open (handshake completes) but
     wants the recipient to not respond to ``EV_TEXT`` so the hub's
     inbox-pending counter stays high.
     """
 
     async def _handle(env: Envelope) -> None:
-        if env.event_type != EV_SESSION_INVITE:
+        if env.event_type != EV_CHANNEL_INVITE:
             return
         ack = Envelope(
-            session_id=env.session_id,
+            channel_id=env.channel_id,
             sender_id=client.agent_id,
             audience=None,
-            event_type=EV_SESSION_INVITE_ACK,
-            event_data={"session_id": env.session_id},
+            event_type=EV_CHANNEL_INVITE_ACK,
+            event_data={"channel_id": env.channel_id},
             causation_id=env.envelope_id,
         )
         with contextlib.suppress(Exception):
@@ -147,7 +147,7 @@ async def test_unregister_deletes_disk_files_so_hydrate_forgets_agent() -> None:
         Passport(name="alice"),
         Resume(claimed_capabilities=["math"]),
         skill_md="# Alice\nDoes math.",
-        rule=Rule(limits=LimitsBlock(session_ttl_default="4h")),
+        rule=Rule(limits=LimitsBlock(channel_ttl_default="4h")),
     )
     agent_id = alice.agent_id
 
@@ -221,14 +221,14 @@ async def test_unregister_then_reregister_with_same_name_works() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_session_enforces_max_concurrent_sessions() -> None:
-    """Hub rejects ``create_session`` when the creator has more active
-    sessions than ``max_concurrent_sessions``. ``0`` disables."""
+async def test_create_channel_enforces_max_concurrent_channels() -> None:
+    """Hub rejects ``create_channel`` when the creator has more active
+    channels than ``max_concurrent_channels``. ``0`` disables."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
-    capped = Rule(limits=LimitsBlock(max_concurrent_sessions=1))
+    capped = Rule(limits=LimitsBlock(max_concurrent_channels=1))
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
     carol_hc = HubClient(link, hub=hub)
@@ -238,7 +238,7 @@ async def test_create_session_enforces_max_concurrent_sessions() -> None:
 
     await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
 
-    with pytest.raises(AccessDeniedError, match="max_concurrent_sessions"):
+    with pytest.raises(AccessDeniedError, match="max_concurrent_channels"):
         await alice.open(type=CONVERSATION_TYPE, target=carol.agent_id)
 
     await alice_hc.close()
@@ -315,15 +315,15 @@ async def test_post_envelope_enforces_inbox_max_pending() -> None:
         rule=bob_capped,
         attach_plugin=False,
     )
-    # Auto-ack invites so the session opens; ignore EV_TEXT so the
+    # Auto-ack invites so the channel opens; ignore EV_TEXT so the
     # hub's pending-inbox counter for bob grows.
     bob.on_envelope(_ack_only_handler(bob))
 
-    session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+    channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
 
     def _make(text: str) -> Envelope:
         return Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=alice.agent_id,
             audience=[bob.agent_id],
             event_type=EV_TEXT,
@@ -339,7 +339,7 @@ async def test_post_envelope_enforces_inbox_max_pending() -> None:
     # Bob sending anything decrements his counter, freeing one slot.
     await hub.post_envelope(
         Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=bob.agent_id,
             audience=[alice.agent_id],
             event_type=EV_TEXT,
@@ -367,10 +367,10 @@ async def test_inbox_pending_cleared_on_unregister() -> None:
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
     bob.on_envelope(_ack_only_handler(bob))
 
-    session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+    channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     await hub.post_envelope(
         Envelope(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=alice.agent_id,
             audience=[bob.agent_id],
             event_type=EV_TEXT,
@@ -394,7 +394,7 @@ async def test_inbox_pending_cleared_on_unregister() -> None:
 @pytest.mark.asyncio
 async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> None:
     """Delegate must not lose the respondent's reply even if it lands
-    immediately after ``session.send`` (the inbox is pre-created)."""
+    immediately after ``channel.send`` (the inbox is pre-created)."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -420,8 +420,8 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
 
 
 @pytest.mark.asyncio
-async def test_delegate_fails_fast_when_session_closes_before_reply() -> None:
-    """If the consulting session closes / expires before the target replies,
+async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
+    """If the consulting channel closes / expires before the target replies,
     delegate returns immediately with an error — not after the 300s timeout."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -433,7 +433,7 @@ async def test_delegate_fails_fast_when_session_closes_before_reply() -> None:
     bob_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), attach_plugin=False)
-    # Bob acks the invite so the session opens, but never replies to
+    # Bob acks the invite so the channel opens, but never replies to
     # the prompt — alice's delegate would block until timeout without
     # the fail-fast path.
     bob.on_envelope(_ack_only_handler(bob))
@@ -442,9 +442,9 @@ async def test_delegate_fails_fast_when_session_closes_before_reply() -> None:
 
     async def _close_after_handshake() -> None:
         for _ in range(100):
-            sessions = await hub.list_sessions(state=SessionState.ACTIVE)
-            if sessions:
-                await hub.close_session(sessions[0].session_id, reason="test_close")
+            channels = await hub.list_channels(state=ChannelState.ACTIVE)
+            if channels:
+                await hub.close_channel(channels[0].channel_id, reason="test_close")
                 return
             await asyncio.sleep(0.01)
 
@@ -462,7 +462,7 @@ async def test_delegate_fails_fast_when_session_closes_before_reply() -> None:
     await closer
     assert isinstance(result, str)
     assert result.startswith("Error:")
-    assert "session closed" in result.lower() or "test_close" in result.lower()
+    assert "channel closed" in result.lower() or "test_close" in result.lower()
 
     await alice_hc.close()
     await bob_hc.close()
@@ -503,9 +503,9 @@ async def test_two_same_name_expectations_both_fire() -> None:
     hub.register_violation_handler(_RecordingAudit())
     hub.register_violation_handler(_AltAudit())
 
-    # Build a session metadata directly — two same-name expectations
+    # Build a channel metadata directly — two same-name expectations
     # with different handlers in a single manifest.
-    manifest = SessionManifest(
+    manifest = ChannelManifest(
         type="dual_acks",
         version=1,
         participants=ParticipantSchema(min=2, max=2),
@@ -514,20 +514,20 @@ async def test_two_same_name_expectations_both_fire() -> None:
             Expectation(name="acks_within", on_violation="alt_audit", params={"seconds": 30}),
         ],
     )
-    metadata = SessionMetadata(
-        session_id="s1",
+    metadata = ChannelMetadata(
+        channel_id="s1",
         manifest=manifest,
         creator_id="alice",
         participants=[
             Participant(agent_id="alice", role=ParticipantRole.INITIATOR, order=0),
             Participant(agent_id="bob", role=ParticipantRole.RESPONDENT, order=1),
         ],
-        state=SessionState.PENDING,
+        state=ChannelState.PENDING,
         created_at="2026-01-01T00:00:00+00:00",
         pending_acks=["bob"],
     )
-    hub._sessions["s1"] = metadata
-    hub._active_sessions["s1"] = metadata
+    hub._channels["s1"] = metadata
+    hub._active_channels["s1"] = metadata
 
     # Advance past the 30s threshold and tick once.
     clock.advance(45)
@@ -594,14 +594,14 @@ async def test_record_observation_dedups_by_task_id() -> None:
 
 @pytest.mark.asyncio
 async def test_concurrency_caps_zero_disables() -> None:
-    """``max_concurrent_sessions=0`` and ``max_concurrent_tasks=0`` both
+    """``max_concurrent_channels=0`` and ``max_concurrent_tasks=0`` both
     disable their respective caps — the documented "0 = unlimited"
     convention used elsewhere (delegation_depth, inbox.max_pending)."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
-    no_caps = Rule(limits=LimitsBlock(max_concurrent_sessions=0, max_concurrent_tasks=0))
+    no_caps = Rule(limits=LimitsBlock(max_concurrent_channels=0, max_concurrent_tasks=0))
     alice_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume(), rule=no_caps)
 
@@ -634,7 +634,7 @@ async def test_concurrency_caps_zero_disables() -> None:
 @pytest.mark.asyncio
 async def test_inbox_capacity_does_not_block_protocol_events() -> None:
     """Protocol envelopes (invite / ack / opened / closed) bypass the
-    inbox-pending counter so a busy agent can still receive new session
+    inbox-pending counter so a busy agent can still receive new channel
     opens. Without this carve-out a recipient at capacity would never
     learn about a new invite."""
     store = MemoryKnowledgeStore()
@@ -656,11 +656,11 @@ async def test_inbox_capacity_does_not_block_protocol_events() -> None:
     bob.on_envelope(_ack_only_handler(bob))
     carol = await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
-    # Saturate bob's substantive-inbox budget via session 1.
+    # Saturate bob's substantive-inbox budget via channel 1.
     s1 = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
     await hub.post_envelope(
         Envelope(
-            session_id=s1.session_id,
+            channel_id=s1.channel_id,
             sender_id=alice.agent_id,
             audience=[bob.agent_id],
             event_type=EV_TEXT,
@@ -669,11 +669,11 @@ async def test_inbox_capacity_does_not_block_protocol_events() -> None:
     )
     assert hub._inbox_pending.get(bob.agent_id, 0) >= 1
 
-    # Carol opens a fresh session with bob — INVITE / ACK / OPENED must
+    # Carol opens a fresh channel with bob — INVITE / ACK / OPENED must
     # not be rejected by the inbox check; bob's auto-ack runs and the
-    # session reaches ACTIVE.
+    # channel reaches ACTIVE.
     s2 = await carol.open(type=CONVERSATION_TYPE, target=bob.agent_id)
-    assert s2.state == SessionState.ACTIVE
+    assert s2.state == ChannelState.ACTIVE
 
     await alice_hc.close()
     await bob_hc.close()
@@ -682,10 +682,10 @@ async def test_inbox_capacity_does_not_block_protocol_events() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fired_violations_cleared_on_terminal_session_transition() -> None:
-    """``_fired_violations[session_id]`` is dropped when the session
+async def test_fired_violations_cleared_on_terminal_channel_transition() -> None:
+    """``_fired_violations[channel_id]`` is dropped when the channel
     transitions to a terminal state. Without this, a long-running hub
-    accumulates dead dedup entries for every session that ever fired
+    accumulates dead dedup entries for every channel that ever fired
     a violation."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
@@ -705,7 +705,7 @@ async def test_fired_violations_cleared_on_terminal_session_transition() -> None
 
     hub.register_violation_handler(_Recorder())
 
-    manifest = SessionManifest(
+    manifest = ChannelManifest(
         type="testtype",
         version=1,
         participants=ParticipantSchema(min=2, max=2),
@@ -713,26 +713,26 @@ async def test_fired_violations_cleared_on_terminal_session_transition() -> None
             Expectation(name="acks_within", on_violation="audit", params={"seconds": 30}),
         ],
     )
-    metadata = SessionMetadata(
-        session_id="s1",
+    metadata = ChannelMetadata(
+        channel_id="s1",
         manifest=manifest,
         creator_id="alice",
         participants=[
             Participant(agent_id="alice", role=ParticipantRole.INITIATOR, order=0),
             Participant(agent_id="bob", role=ParticipantRole.RESPONDENT, order=1),
         ],
-        state=SessionState.PENDING,
+        state=ChannelState.PENDING,
         created_at="2026-01-01T00:00:00+00:00",
         pending_acks=["bob"],
     )
-    hub._sessions["s1"] = metadata
-    hub._active_sessions["s1"] = metadata
+    hub._channels["s1"] = metadata
+    hub._active_channels["s1"] = metadata
 
     clock.advance(45)
     await hub._expectation_tick()
     assert "s1" in hub._fired_violations
 
-    await hub._transition_session("s1", SessionState.CLOSED, "test_reason")
+    await hub._transition_channel("s1", ChannelState.CLOSED, "test_reason")
 
     assert "s1" not in hub._fired_violations
 
@@ -774,14 +774,14 @@ async def test_set_resume_rewrites_by_capability_disk_file() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delegate_fails_fast_on_session_expire() -> None:
-    """If the consulting session expires (TTL fires) while delegate is
+async def test_delegate_fails_fast_on_channel_expire() -> None:
+    """If the consulting channel expires (TTL fires) while delegate is
     awaiting a reply, delegate's terminal-event predicate releases the
-    wait and returns ``Error: ... session closed: ttl_expired`` rather
+    wait and returns ``Error: ... channel closed: ttl_expired`` rather
     than blocking the full 300s timeout. Exercises the
-    ``EV_SESSION_EXPIRED`` branch of ``_TERMINAL_SESSION_EVENTS``
-    (the ``EV_SESSION_CLOSED`` branch is covered by the close test
-    above; ``EV_SESSION_INVITE_REJECT`` is unreachable from delegate's
+    ``EV_CHANNEL_EXPIRED`` branch of ``_TERMINAL_CHANNEL_EVENTS``
+    (the ``EV_CHANNEL_CLOSED`` branch is covered by the close test
+    above; ``EV_CHANNEL_INVITE_REJECT`` is unreachable from delegate's
     wait phase because ``open()`` raises before the wait begins)."""
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
@@ -800,9 +800,9 @@ async def test_delegate_fails_fast_on_session_expire() -> None:
 
     async def _expire_after_handshake() -> None:
         for _ in range(100):
-            sessions = await hub.list_sessions(state=SessionState.ACTIVE)
-            if sessions:
-                # Default session TTL is 2h; advance past it and trigger
+            channels = await hub.list_channels(state=ChannelState.ACTIVE)
+            if channels:
+                # Default channel TTL is 2h; advance past it and trigger
                 # the sweeper manually (interval=0 disables auto-tick).
                 clock.advance(7200 + 60)
                 await hub.expire_due()
@@ -822,7 +822,7 @@ async def test_delegate_fails_fast_on_session_expire() -> None:
 
     assert isinstance(result, str)
     assert result.startswith("Error:")
-    assert "session closed" in result.lower()
+    assert "channel closed" in result.lower()
     assert "ttl_expired" in result.lower()
 
     await alice_hc.close()

@@ -10,7 +10,7 @@ OpenAI, or Gemini, and the choreography (consulting handshake,
 round-robin discussion, workflow handoffs) should not care.
 
 These tests register agents on different providers in the same hub
-session and verify the protocol still flows. They are skipped if any
+channel and verify the protocol still flows. They are skipped if any
 of the three keys are missing.
 
 Marked ``@pytest.mark.anthropic`` so they run alongside the existing
@@ -42,11 +42,11 @@ from autogen.beta.network.adapters.discussion import (
     ORDERING_ROUND_ROBIN,
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.beta.network.client.session import Session
+from autogen.beta.network.client.channel import Channel
 from autogen.beta.network.policies import (
     AGENT_CLIENT_DEP,
+    CHANNEL_DEP,
     HUB_DEP,
-    SESSION_DEP,
 )
 from autogen.beta.network.transitions import (
     AgentTarget,
@@ -78,19 +78,19 @@ def _require_all_keys() -> tuple[str, str, str]:
 
 async def _wait_for_text_count(
     hub: Hub,
-    session_id: str,
+    channel_id: str,
     expected: int,
     *,
     timeout: float = 90.0,
 ) -> int:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session_id)
+        wal = await hub.read_wal(channel_id)
         count = sum(1 for e in wal if e.event_type == EV_TEXT)
         if count >= expected:
             return count
         await asyncio.sleep(0.2)
-    return sum(1 for e in (await hub.read_wal(session_id)) if e.event_type == EV_TEXT)
+    return sum(1 for e in (await hub.read_wal(channel_id)) if e.event_type == EV_TEXT)
 
 
 @pytest.mark.anthropic
@@ -187,19 +187,19 @@ async def test_3way_discussion_one_per_provider() -> None:
 
     alice = clients[0]
 
-    session = await alice.open(
+    channel = await alice.open(
         type=DISCUSSION_TYPE,
         target=[c.agent_id for c in clients[1:]],
         knobs={"ordering": ORDERING_ROUND_ROBIN},
         intent="quick mixed-provider debate",
     )
 
-    await session.send("Quick debate: should new web apps default to server-side rendering?")
+    await channel.send("Quick debate: should new web apps default to server-side rendering?")
 
-    count = await _wait_for_text_count(hub, session.session_id, expected=3, timeout=180.0)
+    count = await _wait_for_text_count(hub, channel.channel_id, expected=3, timeout=180.0)
     assert count >= 3, f"expected 3 turns, got {count}"
 
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     speakers = [e.sender_id for e in wal if e.event_type == EV_TEXT][:3]
     expected_order = [c.agent_id for c in clients]
     assert speakers == expected_order, (
@@ -274,7 +274,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
         """Transfer the conversation to the engineering specialist."""
         return Handoff(target=eng_agent_id, reason=reason)
 
-    session = await triage.open(
+    channel = await triage.open(
         type=WORKFLOW_TYPE,
         target=[eng.agent_id],
         knobs={"graph": graph.to_dict()},
@@ -282,7 +282,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     )
 
     triage_deps = {
-        SESSION_DEP: Session(metadata=session.metadata, client=triage),
+        CHANNEL_DEP: Channel(metadata=channel.metadata, client=triage),
         AGENT_CLIENT_DEP: triage,
         HUB_DEP: hub,
     }
@@ -292,7 +292,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     )
 
     # Confirm the handoff happened.
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     handoff_envelopes = [
         e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
     ]
@@ -302,7 +302,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     deadline = asyncio.get_event_loop().time() + 60.0
     eng_replied = False
     while asyncio.get_event_loop().time() < deadline:
-        state = hub._adapter_states.get(session.session_id)
+        state = hub._adapter_states.get(channel.channel_id)
         if state is not None and state.last_speaker_id == eng.agent_id:
             eng_replied = True
             break
@@ -310,7 +310,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     assert eng_replied, "eng (OpenAI) did not reply to triage's (Anthropic) handoff within 60s"
 
     # After RevertToInitiator, expected_next_speaker should be triage again.
-    state = hub._adapter_states[session.session_id]
+    state = hub._adapter_states[channel.channel_id]
     assert state.expected_next_speaker == triage.agent_id
 
     await triage_hc.close()

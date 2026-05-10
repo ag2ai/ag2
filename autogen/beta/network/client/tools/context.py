@@ -6,10 +6,10 @@
 
 Two actions:
 
-* ``search`` — substring search over the current session's WAL or the
+* ``search`` — substring search over the current channel's WAL or the
   calling agent's ``KnowledgeStore``. Returns up to ``limit`` excerpts.
 * ``quote``  — return the last N envelopes a given speaker posted in
-  the current (or specified) session.
+  the current (or specified) channel.
 
 Substring search only. Vector / semantic search composes via the
 existing ``KnowledgeStore`` infrastructure when configured; the tool
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal
 from autogen.beta.tools import tool
 
 from ...envelope import EV_TEXT, Envelope, visible_to
-from ..inject import AgentClientInject, SessionInject
+from ..inject import AgentClientInject, ChannelInject
 
 if TYPE_CHECKING:
     from ..agent_client import AgentClient
@@ -47,38 +47,38 @@ def make_context_tool(agent_client: "AgentClient") -> object:
         action: Literal["search", "quote"],
         *,
         query: str | None = None,
-        scope: Literal["session", "knowledge"] = "session",
+        scope: Literal["channel", "knowledge"] = "channel",
         speaker: str | None = None,
         recent_n: int = 1,
         limit: int = 10,
-        session_id: str | None = None,
+        channel_id: str | None = None,
         client: AgentClientInject = None,
-        session: SessionInject = None,
+        channel: ChannelInject = None,
     ) -> list[dict] | str:
         """Read from past content.
 
-        ``search``: args query, scope="session"|"knowledge", limit
+        ``search``: args query, scope="channel"|"knowledge", limit
                     Returns excerpts of envelopes whose text matches
                     ``query`` (case-insensitive substring).
-        ``quote``:  args speaker, recent_n=1, session_id?
+        ``quote``:  args speaker, recent_n=1, channel_id?
                     Returns the last ``recent_n`` envelopes from
-                    ``speaker`` in the current (or specified) session.
+                    ``speaker`` in the current (or specified) channel.
         """
         actual = client if client is not None else agent_client
         hub = actual._hub_client
-        sid = session_id or (session.session_id if session is not None else None)
+        sid = channel_id or (channel.channel_id if channel is not None else None)
 
         if action == "search":
             if not query:
                 return "Error: search requires `query`"
             needle = query.lower()
-            if scope == "session":
+            if scope == "channel":
                 if not sid:
-                    return "Error: search scope=session requires an active session"
+                    return "Error: search scope=channel requires an active channel"
                 try:
                     wal = await hub.read_wal(sid)
                 except Exception:
-                    return f"Error: session {sid!r} not found"
+                    return f"Error: channel {sid!r} not found"
                 results: list[dict] = []
                 for env in wal:
                     if env.event_type != EV_TEXT:
@@ -109,7 +109,7 @@ def make_context_tool(agent_client: "AgentClient") -> object:
             if not speaker:
                 return "Error: quote requires `speaker`"
             if not sid:
-                return "Error: quote requires an active session or `session_id`"
+                return "Error: quote requires an active channel or `channel_id`"
             # Resolve speaker name → agent_id (accept both).
             try:
                 speaker_passport = await hub.get_agent(speaker)
@@ -119,7 +119,7 @@ def make_context_tool(agent_client: "AgentClient") -> object:
             try:
                 wal = await hub.read_wal(sid)
             except Exception:
-                return f"Error: session {sid!r} not found"
+                return f"Error: channel {sid!r} not found"
             picks: list[dict] = []
             for env in reversed(wal):
                 if env.event_type != EV_TEXT:

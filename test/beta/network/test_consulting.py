@@ -9,10 +9,10 @@ Covers:
 * Single-recipient consulting handshake (invite → auto-ack → ACTIVE).
 * Full LLM-driven turn: initiator sends prompt → respondent's notify
   handler runs ``Agent.ask`` → respondent replies → adapter
-  ``on_accepted`` returns CLOSING → session auto-closes with
+  ``on_accepted`` returns CLOSING → channel auto-closes with
   ``close_reason="consulting_complete"``.
 * Adapter rejects out-of-order sends (``ProtocolError``).
-* ``Hub.hydrate()`` re-folds an active session's WAL deterministically
+* ``Hub.hydrate()`` re-folds an active channel's WAL deterministically
   through ``adapter.fold`` so the in-memory ``AdapterState`` matches
   what's on disk.
 
@@ -24,10 +24,10 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     Envelope,
     Hub,
@@ -37,8 +37,8 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.consulting import ConsultingAdapter, ConsultingState
+from autogen.beta.network.channel import ChannelState
 from autogen.beta.network.errors import ProtocolError
-from autogen.beta.network.session import SessionState
 from autogen.beta.testing import TestConfig
 
 
@@ -48,7 +48,7 @@ def _agent(name: str, *events: object) -> Agent:
 
 @pytest.mark.asyncio
 async def test_consulting_handshake_transitions_to_active() -> None:
-    """alice.open → hub posts invite → bob auto-acks → session ACTIVE."""
+    """alice.open → hub posts invite → bob auto-acks → channel ACTIVE."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
@@ -59,17 +59,17 @@ async def test_consulting_handshake_transitions_to_active() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="consulting", target="bob")
-    assert session.state == SessionState.ACTIVE
-    assert len(session.metadata.participants) == 2
-    assert session.metadata.creator_id == alice.agent_id
-    assert session.metadata.pending_acks == []
+    channel = await alice.open(type="consulting", target="bob")
+    assert channel.state == ChannelState.ACTIVE
+    assert len(channel.metadata.participants) == 2
+    assert channel.metadata.creator_id == alice.agent_id
+    assert channel.metadata.pending_acks == []
 
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     event_types = [e.event_type for e in wal]
-    assert EV_SESSION_INVITE in event_types
-    assert EV_SESSION_INVITE_ACK in event_types
-    assert EV_SESSION_OPENED in event_types
+    assert EV_CHANNEL_INVITE in event_types
+    assert EV_CHANNEL_INVITE_ACK in event_types
+    assert EV_CHANNEL_OPENED in event_types
 
     await alice_hc.close()
     await bob_hc.close()
@@ -93,22 +93,22 @@ async def test_consulting_full_flow_auto_closes() -> None:
         Resume(),
     )
 
-    session = await alice.open(type="consulting", target="bob")
-    await session.send("Hello bob, can you help?", audience=[bob.agent_id])
+    channel = await alice.open(type="consulting", target="bob")
+    await channel.send("Hello bob, can you help?", audience=[bob.agent_id])
 
-    # Wait for session close to propagate to alice's inbox.
-    close_envelope = await alice.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    # Wait for channel close to propagate to alice's inbox.
+    close_envelope = await alice.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=5.0,
     )
     assert close_envelope.event_data.get("reason") == "consulting_complete"
 
-    final = await hub.get_session(session.session_id)
-    assert final.state == SessionState.CLOSED
+    final = await hub.get_channel(channel.channel_id)
+    assert final.state == ChannelState.CLOSED
     assert final.close_reason == "consulting_complete"
 
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     text_events = [e for e in wal if e.event_type == EV_TEXT]
     assert len(text_events) == 2
     assert text_events[0].sender_id == alice.agent_id
@@ -134,11 +134,11 @@ async def test_consulting_rejects_out_of_order_send() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="consulting", target="bob")
+    channel = await alice.open(type="consulting", target="bob")
 
     # Bob tries to send first — adapter should reject.
     bad = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=bob.agent_id,
         audience=[alice.agent_id],
         event_type=EV_TEXT,
@@ -169,17 +169,17 @@ async def test_consulting_rejects_send_after_complete() -> None:
         Resume(),
     )
 
-    session = await alice.open(type="consulting", target="bob")
-    await session.send("the question", audience=[bob.agent_id])
-    await alice.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    channel = await alice.open(type="consulting", target="bob")
+    await channel.send("the question", audience=[bob.agent_id])
+    await alice.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=5.0,
     )
 
-    # Session is now closed — any further post should fail.
+    # Channel is now closed — any further post should fail.
     extra = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -194,7 +194,7 @@ async def test_consulting_rejects_send_after_complete() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hub_hydrate_refolds_active_session(tmp_path) -> None:
+async def test_hub_hydrate_refolds_active_channel(tmp_path) -> None:
     """Close hub mid-flight, reopen, verify adapter state survives."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0)
@@ -206,8 +206,8 @@ async def test_hub_hydrate_refolds_active_session(tmp_path) -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="consulting", target="bob")
-    await session.send("the question", audience=[bob.agent_id])
+    channel = await alice.open(type="consulting", target="bob")
+    await channel.send("the question", audience=[bob.agent_id])
 
     # Don't wait for bob's reply — close hub mid-flight.
     await alice_hc.close()
@@ -218,13 +218,13 @@ async def test_hub_hydrate_refolds_active_session(tmp_path) -> None:
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0)
 
-    # Session metadata reloaded.
-    refreshed = await hub2.get_session(session.session_id)
-    assert refreshed.session_id == session.session_id
+    # Channel metadata reloaded.
+    refreshed = await hub2.get_channel(channel.channel_id)
+    assert refreshed.channel_id == channel.channel_id
     assert refreshed.manifest.type == "consulting"
 
     # Adapter state cache rebuilt by re-folding the WAL.
-    state = hub2._adapter_states[session.session_id]
+    state = hub2._adapter_states[channel.channel_id]
     assert isinstance(state, ConsultingState)
     # Alice has sent her prompt; bob has not replied yet.
     assert state.initiator_sent is True

@@ -33,21 +33,21 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.conversation import ConversationAdapter
+from autogen.beta.network.channel import (
+    ChannelManifest,
+    Expectation,
+    ParticipantSchema,
+)
 from autogen.beta.network.client.tools import (
+    make_channels_tool,
     make_context_tool,
     make_peers_tool,
-    make_sessions_tool,
     make_tasks_tool,
 )
 from autogen.beta.network.hub.audit import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
 )
 from autogen.beta.network.policies import AGENT_CLIENT_DEP
-from autogen.beta.network.session import (
-    Expectation,
-    ParticipantSchema,
-    SessionManifest,
-)
 from autogen.beta.network.transitions import (
     AgentTarget,
     TransitionDecision,
@@ -93,7 +93,7 @@ async def test_expectation_sweeper_fires_violations_in_background() -> None:
     ``_expectation_tick`` killing the background task) that mock-clock
     tests would miss.
     """
-    immediate_manifest = SessionManifest(
+    immediate_manifest = ChannelManifest(
         type="conversation_immediate",
         version=1,
         participants=ParticipantSchema(min=2),
@@ -123,7 +123,7 @@ async def test_expectation_sweeper_fires_violations_in_background() -> None:
     bob = await b_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     pre_audit = len(await hub._audit_log.read_all())
-    session = await alice.open(type="conversation_immediate", target=bob.agent_id)
+    channel = await alice.open(type="conversation_immediate", target=bob.agent_id)
 
     # Real-clock wait — give the sweeper a few ticks to fire.
     await asyncio.sleep(0.25)
@@ -131,7 +131,7 @@ async def test_expectation_sweeper_fires_violations_in_background() -> None:
     audit = await hub._audit_log.read_all()
     new_records = audit[pre_audit:]
     violations = [
-        r for r in new_records if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED and r["session_id"] == session.session_id
+        r for r in new_records if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED and r["channel_id"] == channel.channel_id
     ]
     assert len(violations) >= 1
     assert violations[0]["expectation"] == "max_silence"
@@ -201,7 +201,7 @@ def test_default_transition_registry_singleton_is_lazy() -> None:
 
 @pytest.mark.asyncio
 async def test_cross_tool_flow_exercises_all_six_tools() -> None:
-    """One alice registers; she uses ``peers(find)``, ``sessions(open)``,
+    """One alice registers; she uses ``peers(find)``, ``channels(open)``,
     ``say``, ``tasks(list)``, ``context(search)``. The grouped+flat
     surface composes via the same DI wiring."""
     from autogen.beta.network.client.tools.delegate import make_delegate_tool
@@ -227,16 +227,16 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     say = make_say_tool(alice)
     delegate = make_delegate_tool(alice)
     peers = make_peers_tool(alice)
-    sessions = make_sessions_tool(alice)
+    channels = make_channels_tool(alice)
     tasks = make_tasks_tool(alice)
     context = make_context_tool(alice)
 
     # All 6 tools created without raising and have the expected names.
-    assert {t.name for t in (say, delegate, peers, sessions, tasks, context)} == {
+    assert {t.name for t in (say, delegate, peers, channels, tasks, context)} == {
         "say",
         "delegate",
         "peers",
-        "sessions",
+        "channels",
         "tasks",
         "context",
     }
@@ -249,19 +249,19 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     assert any(p["name"] == "bob" for p in found)
     assert all(p["name"] != "alice" for p in found)  # excludes self
 
-    # sessions(action="open") → opens a conversation with bob
+    # channels(action="open") → opens a conversation with bob
     opened = await _invoke(
-        sessions,
+        channels,
         {"action": "open", "type": "conversation", "target": bob.agent_id},
         dependencies=deps,
     )
     assert isinstance(opened, dict)
-    session_id = opened["session_id"]
+    channel_id = opened["channel_id"]
 
-    # say(...) — post into the open session.
+    # say(...) — post into the open channel.
     say_result = await _invoke(
         say,
-        {"content": "hello bob", "session_id": session_id},
+        {"content": "hello bob", "channel_id": channel_id},
         dependencies=deps,
     )
     assert "posted envelope" in say_result
@@ -270,14 +270,14 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     listed = await _invoke(tasks, {"action": "list", "scope": "own"}, dependencies=deps)
     assert listed == []
 
-    # context(action="search", query="hello", scope="session")
+    # context(action="search", query="hello", scope="channel")
     found_msgs = await _invoke(
         context,
         {
             "action": "search",
             "query": "hello",
-            "scope": "session",
-            "session_id": session_id,
+            "scope": "channel",
+            "channel_id": channel_id,
         },
         dependencies=deps,
     )
@@ -310,7 +310,7 @@ def test_handlers_module_does_not_touch_hub_privates() -> None:
     forbidden = (
         "_hub._adapter_for",
         "_hub._adapter_states",
-        "_hub._sessions",
+        "_hub._channels",
         "_hub._tasks",
     )
     found = [pat for pat in forbidden if pat in text]

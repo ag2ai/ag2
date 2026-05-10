@@ -5,7 +5,7 @@
 """``NetworkPlugin`` — attaches the network tool surface to an ``Agent``.
 
 * Adds the network tools (``say``, ``delegate``, ``peers``,
-  ``sessions``, ``tasks``, ``context``) to ``agent.tools``.
+  ``channels``, ``tasks``, ``context``) to ``agent.tools``.
 * Appends ``NetworkContextPolicy`` to the agent's assembly chain so
   every LLM call sees a "you are <name>" prefix plus the available
   tool names.
@@ -21,11 +21,11 @@ from autogen.beta.assembly import AssemblyPolicy
 from autogen.beta.events import BaseEvent
 
 from .tools import (
+    make_channels_tool,
     make_context_tool,
     make_delegate_tool,
     make_peers_tool,
     make_say_tool,
-    make_sessions_tool,
     make_tasks_tool,
 )
 
@@ -59,7 +59,7 @@ class NetworkContextPolicy:
         prefix = (
             f"You are {self._client.passport.name} "
             f"(agent_id: {self._client.agent_id}).\n"
-            "Network tools: say, delegate, peers, sessions, tasks, context."
+            "Network tools: say, delegate, peers, channels, tasks, context."
         )
         return [prefix, *prompts], events
 
@@ -79,7 +79,7 @@ class NetworkPlugin(Plugin):
                 make_say_tool(client),
                 make_delegate_tool(client),
                 make_peers_tool(client),
-                make_sessions_tool(client),
+                make_channels_tool(client),
                 make_tasks_tool(client),
                 make_context_tool(client),
             ],
