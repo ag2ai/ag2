@@ -1018,6 +1018,27 @@ class Hub:
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
         return adapter.default_view_policy(metadata, participant_id)
 
+    def adapter_for(self, session_id: str) -> SessionAdapter:
+        """Return the adapter resolved from ``session_id``'s manifest.
+
+        Public surface so callers (notably the default notify handler)
+        don't need to reach into ``_adapter_for(type, version)`` or the
+        ``_sessions`` map directly.
+        """
+        metadata = self._sessions.get(session_id)
+        if metadata is None:
+            raise NotFoundError(f"session not found: {session_id}")
+        return self._adapter_for(metadata.manifest.type, metadata.manifest.version)
+
+    def adapter_state(self, session_id: str) -> object | None:
+        """Return ``session_id``'s current folded adapter state, or
+        ``None`` if the session has none cached.
+
+        Public surface so callers don't need to reach into
+        ``_adapter_states``.
+        """
+        return self._adapter_states.get(session_id)
+
     async def list_sessions(
         self,
         *,

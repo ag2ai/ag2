@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from autogen.beta.agent import Agent
 from autogen.beta.task import TaskMetadata, TaskState
 
+from ..adapters.base import SessionAdapter
 from ..envelope import Envelope
 from ..identity import Passport, Resume
 from ..rule import Rule
@@ -280,6 +281,23 @@ class HubClient:
 
     def default_view_policy(self, session_id: str, participant_id: str) -> ViewPolicy:
         return self._hub.default_view_policy(session_id, participant_id)
+
+    def adapter_for(self, session_id: str) -> SessionAdapter:
+        """Resolve the adapter for ``session_id``.
+
+        Delegates to ``Hub.adapter_for`` so the default notify handler
+        and other client-side code can fetch the adapter without
+        reaching into ``_hub`` privates.
+        """
+        return self._hub.adapter_for(session_id)
+
+    def adapter_state(self, session_id: str) -> object | None:
+        """Return the cached folded ``AdapterState`` for ``session_id``.
+
+        Delegates to ``Hub.adapter_state``. Returns ``None`` when the
+        session has no state yet (e.g. not opened).
+        """
+        return self._hub.adapter_state(session_id)
 
     # — Task observation (network is one observer) —
 

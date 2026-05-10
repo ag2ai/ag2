@@ -90,7 +90,7 @@ def stamp_dependencies(
         SESSION_DEP: session,
         AGENT_CLIENT_DEP: client,
         HUB_DEP: client._hub,
-        SESSION_STATE_DEP: client._hub._adapter_states.get(session.session_id),
+        SESSION_STATE_DEP: client._hub_client.adapter_state(session.session_id),
     }
 
 
@@ -134,7 +134,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
     if not client._hub_client.can_send(envelope.session_id, client.agent_id):
         return  # not our turn / session closing — don't engage LLM
 
-    adapter = client._hub._adapter_for(metadata.manifest.type, metadata.manifest.version)
+    adapter = client._hub_client.adapter_for(metadata.session_id)
     session = Session(metadata=metadata, client=client)
     view = resolve_view_policy(client, metadata)
 
@@ -182,7 +182,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
     # Adapter encodes the round-end envelope.
     # For example, Workflow returns EV_PACKET.
     # Default implementations returns EV_TEXT(body) or None.
-    state = client._hub._adapter_states.get(metadata.session_id)
+    state = client._hub_client.adapter_state(metadata.session_id)
     events = list(await stream.history.get_events())
     out_envelope = adapter.build_round_envelope(
         metadata=metadata,
