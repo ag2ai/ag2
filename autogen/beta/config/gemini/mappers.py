@@ -78,7 +78,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     or ``{}`` — both rejected by Gemini with ``INVALID_ARGUMENT``.
     Normalise to ``{"type": "object", "properties": {}}``.
 
-    Also strips ``additionalProperties`` recursively because Gemini
+    Strips ``additionalProperties`` recursively because Gemini
     rejects it inside ``anyOf`` branches.
     """
     raw_type = str(params.get("type", "")).lower()
