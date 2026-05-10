@@ -153,6 +153,19 @@ graph = TransitionGraph(
 
 For dynamic routing (target depends on runtime state), a tool can return a typed `#!python Handoff(target="<name>", reason="...")` value instead — the framework reads it from the tool's result, resolves the participant name, and stamps `routing.target` on the packet. The matching `#!python ToolCalled` rule is shadowed when a `#!python Handoff` is returned from the same tool: the dynamic target wins.
 
+### Writing a handoff tool
+
+For each `#!python ToolCalled(name) → AgentTarget(agent)` transition, attach an `#!python @tool`-decorated function with that exact name and have it return a typed `#!python Handoff(target=agent.agent_id)`:
+
+```python linenums="1" hl_lines="1 2 3"
+@triage.tool
+async def transfer_to_eng(reason: str = "") -> Handoff:
+    """Transfer the conversation to the engineering specialist."""
+    return Handoff(target=eng.agent_id, reason=reason)
+```
+
+The workflow adapter consumes the `#!python Handoff` from the agent's local-stream `#!python ToolResultEvent` at round-end and routes the next speaker — no separate `#!python ToolCalled` evaluation is needed because the typed return supersedes the graph match. The matching `#!python ToolCalled` rule in the graph remains useful as documentation and as a fallback if you ever want to re-route the same tool name to a different target.
+
 ## Context-Driven Transitions
 
 Most non-trivial group-chat orchestrations in classic AG2 routed on context variables — `#!python OnContextCondition`, `#!python StringContextCondition`, `#!python ExpressionContextCondition`. The beta equivalent is a tool that emits `#!python EV_CONTEXT_SET` and a transition whose `#!python when` is `#!python ContextEquals(key, value)`. The mutation primitive lives on the [Context Variables](/docs/beta/network/context_variables) page; this section is about *using* context to decide who speaks next.

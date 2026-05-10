@@ -26,6 +26,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import DiskKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
+    Handoff,
     Hub,
     HubClient,
     LocalLink,
@@ -33,7 +34,6 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE, WorkflowState
-from autogen.beta.network.client.plugin import NetworkPlugin
 from autogen.beta.network.session import SessionState
 from autogen.beta.network.transitions import (
     AgentTarget,
@@ -128,11 +128,15 @@ async def test_workflow_swarm_handoff_revert_close(
         max_turns=6,
     )
 
-    # Materialise the handoff tool on triage so its LLM can call it.
-    triage_plugin = NetworkPlugin(triage)
-    triage_plugin.register_workflow(graph)
-    eng_plugin = NetworkPlugin(eng)
-    eng_plugin.register_workflow(graph)  # idempotent — eng won't actually call it
+    # Attach a hand-written handoff tool on triage. Returns a typed
+    # ``Handoff(target=eng.agent_id)`` so the workflow adapter folds
+    # the next speaker to eng without needing a matching graph rule.
+    eng_agent_id = eng.agent_id
+
+    @triage.agent.tool
+    async def transfer_to_eng(reason: str = "") -> Handoff:
+        """Transfer the conversation to the engineering specialist."""
+        return Handoff(target=eng_agent_id, reason=reason)
 
     session = await triage.open(
         type=WORKFLOW_TYPE,

@@ -1,0 +1,104 @@
+---
+title: Network-Assigned Tools
+sidebarTitle: Network Tools
+---
+
+When you call `#!python HubClient.register(agent, ...)` with the default `#!python attach_plugin=True`, the framework attaches `#!python NetworkPlugin` to your agent. The plugin does two things:
+
+1. Adds an **assembly policy** that prefixes every LLM call with the agent's name and id plus a one-line list of network tool names.
+2. Adds **six LLM-facing tools** to `#!python agent.tools` so the model can drive network operations directly: `#!python say`, `#!python delegate`, `#!python peers`, `#!python sessions`, `#!python tasks`, `#!python context`.
+
+These are the *vocabulary* the LLM uses to participate in the network — discovery, messaging, lifecycle, history — without your code having to interpret tool calls and proxy them.
+
+## Two flat tools cover the hot path
+
+| Tool | Signature | Purpose |
+|---|---|---|
+| `#!python say` | `#!python say(content, audience?, session_id?)` | Post `#!python EV_TEXT` into the active session (or a specified one). `#!python audience` is a list of peer **names** (resolved to ids); `#!python None` broadcasts. |
+| `#!python delegate` | `#!python delegate(target, prompt, capability?, timeout=300)` | One-shot consult: open a `#!python consulting` session with `target`, send `prompt`, await the single reply, return its text. |
+
+`#!python say` is the most common verb — every reply on a multi-party turn flows through it. `#!python delegate` is the second-most-common because "ask one specialist a question, take their answer" is the canonical multi-agent pattern.
+
+```python linenums="1"
+# The LLM emits, e.g.:
+#   say(content="Here's my answer: …")
+#   delegate(target="bob", prompt="What's the right way to model X?", capability="modeling")
+```
+
+The framework resolves `#!python SessionInject` (current session) and `#!python AgentClientInject` (calling agent's hub client) automatically inside the notify handler, so the LLM never sees those parameters.
+
+## Four grouped action-dispatch tools
+
+Each grouped tool takes an `#!python action` literal plus action-specific args, keeping the LLM's tool list short.
+
+### `peers(action)` — discovery
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "find"` | `#!python query?, capability?, sort_by?, limit=20` | List of peer summaries (excludes the calling agent). |
+| `#!python "describe"` | `#!python name` | One peer's full profile: `#!python {passport, resume, skill_md}`. `skill_md` falls back to a rendered passport+resume when no `#!python SKILL.md` is registered. |
+
+### `sessions(action)` — lifecycle
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "list"` | `#!python state="active"\|"all"` | Sessions this agent participates in. |
+| `#!python "open"` | `#!python type, target, knobs?, intent?, ttl?` | Mirrors `#!python AgentClient.open`. Returns `#!python {session_id, type, participants}`. |
+| `#!python "info"` | `#!python session_id` | Full `#!python SessionMetadata` if the agent is a participant. |
+| `#!python "close"` | `#!python session_id?` (defaults to current) | Closes the session with reason `#!python "closed_by_agent"`. |
+
+### `tasks(action)` — task lifecycle
+
+Two halves: **active actions** (the agent is inside its own `#!python agent.task(...)` block) and **observation actions** (any task the hub has observed).
+
+| Action | Half | Args | Returns |
+|---|---|---|---|
+| `#!python "progress"` | active | `#!python payload` | Emits `#!python TaskProgress` on the active task. |
+| `#!python "complete"` | active | `#!python result?` | Terminal — emits `#!python TaskCompleted`. |
+| `#!python "list"` | observation | `#!python scope="own"\|"all", state="active"\|"all", limit=20` | Task summaries. |
+| `#!python "status"` | observation | `#!python task_id` | Refreshed `#!python TaskMetadata`. |
+| `#!python "wait"` | observation | `#!python task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
+| `#!python "cancel"` | — | — | Not implemented; returns an error placeholder. |
+
+`#!python "start"` is intentionally **not** a tool — calling it from the LLM would bypass the `#!python async with agent.task(...)` lifecycle that scopes `#!python TaskInject` correctly. Owners start tasks in their own code; the LLM uses `#!python "progress"`/`#!python "complete"` once a task is active, and `#!python delegate` for one-shot remote work.
+
+### `context(action)` — past content
+
+| Action | Args | Returns |
+|---|---|---|
+| `#!python "search"` | `#!python query, scope="session"\|"knowledge", limit=10` | Excerpts of envelopes whose text matches `#!python query` (case-insensitive substring). |
+| `#!python "quote"` | `#!python speaker, recent_n=1, session_id?` | The last `recent_n` `#!python EV_TEXT` envelopes from `speaker` in the current (or specified) session. |
+
+`#!python scope="knowledge"` reaches into the calling agent's own `#!python KnowledgeStore`. Substring search only — for vector / semantic search, the agent's own loop calls into framework-core `#!python recall` directly.
+
+## What gets injected, automatically
+
+Every grouped tool accepts `#!python AgentClientInject`, `#!python SessionInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
+
+If you are testing a tool *outside* the notify-handler context, pass them yourself:
+
+```python linenums="1"
+from autogen.beta import Context
+from autogen.beta.network import AGENT_CLIENT_DEP, SESSION_DEP, Session
+
+ctx = Context(
+    dependencies={
+        AGENT_CLIENT_DEP: alice,
+        SESSION_DEP: Session(metadata=session.metadata, client=alice),
+    },
+)
+```
+
+## Opting out
+
+Pass `#!python attach_plugin=False` to `#!python HubClient.register` for a bare agent — useful for headless workers or gateways that handle envelopes entirely in your own code without needing the LLM-facing tool surface.
+
+```python linenums="1"
+worker = await hc.register(agent, passport, resume, attach_plugin=False)
+worker.on_envelope(my_custom_handler)
+```
+
+## See also
+
+* [Agent Clients and Handlers](/docs/beta/network/agent_clients) — what the default handler does and how to replace it.
+* [Workflow](/docs/beta/network/workflow) — hand-written `#!python Handoff`-returning tools complement `#!python ToolCalled → AgentTarget` transitions for graph-driven routing.

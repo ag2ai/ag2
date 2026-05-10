@@ -4,7 +4,7 @@
 
 """Workflow adapter + transition vocabulary tests.
 
-Three layers:
+Two layers:
 
 * **Transitions vocabulary** (unit) — every target / condition resolves
   correctly; ``TransitionGraph.to_dict()`` + ``loads()`` round-trip
@@ -16,23 +16,16 @@ Three layers:
     4. Manager-as-initiator (auto-pattern equivalent).
   Each test verifies ``Hub.hydrate()`` re-folds the WAL through the
   adapter and recovers ``expected_next_speaker`` deterministically.
-* **NetworkPlugin.register_workflow** — handoff tools materialised
-  per ``ToolCalled → AgentTarget`` transition; each tool returns a
-  typed ``Handoff``.
 """
-
-import json
 
 import pytest
 
-from autogen.beta import Agent, Context
-from autogen.beta.events import ToolCallEvent
+from autogen.beta import Agent
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
     EV_TEXT,
     Envelope,
-    Handoff,
     Hub,
     HubClient,
     LocalLink,
@@ -43,10 +36,6 @@ from autogen.beta.network.adapters.workflow import (
     WORKFLOW_TYPE,
     WorkflowAdapter,
     WorkflowState,
-)
-from autogen.beta.network.client.plugin import NetworkPlugin
-from autogen.beta.network.client.tools.handoff import (
-    make_handoff_tools,
 )
 from autogen.beta.network.errors import ProtocolError
 from autogen.beta.network.session import (
@@ -67,7 +56,6 @@ from autogen.beta.network.transitions import (
     WorkflowGraphError,
     register_target,
 )
-from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 
 
@@ -631,78 +619,3 @@ async def test_workflow_validate_create_rejects_missing_graph() -> None:
     await a_hc.close()
     await b_hc.close()
     await hub.close()
-
-
-# ── NetworkPlugin.register_workflow ─────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_register_workflow_attaches_handoff_tools_per_tool_called() -> None:
-    """NetworkPlugin.register_workflow materialises one tool per
-    ``ToolCalled → AgentTarget`` transition, deduping by tool_name and
-    skipping ``ToolCalled`` rules whose target isn't an ``AgentTarget``.
-    """
-    store = MemoryKnowledgeStore()
-    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    link = LocalLink(hub)
-
-    alice_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-
-    pre_count = len(alice.agent.tools)
-
-    graph = TransitionGraph(
-        initial_speaker="alice",
-        transitions=[
-            Transition(when=ToolCalled("transfer_to_eng"), then=AgentTarget("eng")),
-            Transition(when=ToolCalled("escalate"), then=AgentTarget("legal")),
-            # Same tool name in another transition should be deduped.
-            Transition(
-                when=ToolCalled("escalate"),
-                then=AgentTarget("legal"),
-                priority=1,
-            ),
-            # ToolCalled → non-AgentTarget is skipped (Handoff can't encode it).
-            Transition(when=ToolCalled("done"), then=TerminateTarget("done")),
-            # FromSpeaker doesn't materialise a tool.
-            Transition(when=FromSpeaker("eng"), then=RevertToInitiatorTarget()),
-        ],
-    )
-
-    network_plugin = NetworkPlugin(alice)
-    attached = network_plugin.register_workflow(graph)
-
-    new_names = {t.name for t in attached}
-    assert new_names == {"transfer_to_eng", "escalate"}
-    assert len(alice.agent.tools) == pre_count + 2
-
-    # Re-register the same graph: idempotent (no duplicate tools).
-    again = network_plugin.register_workflow(graph)
-    assert again == []
-
-    await alice_hc.close()
-    await hub.close()
-
-
-@pytest.mark.asyncio
-async def test_handoff_tool_returns_typed_handoff() -> None:
-    """Each generated handoff tool, when invoked, returns a typed
-    ``Handoff`` whose ``target`` matches the graph's ``AgentTarget`` and
-    whose ``reason`` mirrors the LLM-supplied argument. The workflow
-    adapter consumes this from the agent's local ``ToolResultEvent``
-    stream (no envelope is emitted by the tool body itself)."""
-    [tool_obj] = make_handoff_tools({"transfer_to_eng": "eng-id"})
-
-    event = ToolCallEvent(
-        name="transfer_to_eng",
-        arguments=json.dumps({"reason": "needs domain expert"}),
-    )
-    ctx = Context(stream=MemoryStream(), dependencies={})
-    result = await tool_obj(event, ctx)
-
-    assert hasattr(result, "result"), result
-    parts = result.result.parts
-    assert len(parts) == 1
-    payload = parts[0].data
-    assert isinstance(payload, Handoff)
-    assert payload == Handoff(target="eng-id", reason="needs domain expert")

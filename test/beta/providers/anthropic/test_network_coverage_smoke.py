@@ -31,6 +31,7 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
     EV_TEXT,
+    Handoff,
     Hub,
     HubClient,
     LocalLink,
@@ -39,7 +40,6 @@ from autogen.beta.network import (
 )
 from autogen.beta.network.adapters.conversation import CONVERSATION_TYPE
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.beta.network.client.plugin import NetworkPlugin
 from autogen.beta.network.client.session import Session
 from autogen.beta.network.policies import (
     AGENT_CLIENT_DEP,
@@ -49,11 +49,13 @@ from autogen.beta.network.policies import (
 from autogen.beta.network.session import SessionState
 from autogen.beta.network.transitions import (
     AgentTarget,
+    FromSpeaker,
     StayTarget,
     ToolCalled,
     Transition,
     TransitionGraph,
 )
+from autogen.beta.testing import TestConfig
 
 try:
     from dotenv import load_dotenv
@@ -338,14 +340,19 @@ async def test_context_search_finds_earlier_turn(
 async def test_workflow_graph_with_two_handoff_tools(
     anthropic_config: AnthropicConfig,
 ) -> None:
-    """A workflow graph with two ``ToolCalled → AgentTarget`` transitions
-    materialises two distinct handoff tools and the LLM picks the right
-    one.
+    """Triage with two hand-written handoff tools picks the right one.
 
-    triage routes engineering questions to ``eng`` via ``transfer_to_eng``
-    and billing questions to ``billing`` via ``transfer_to_billing``.
-    The LLM is given a billing-flavoured prompt; we assert the
-    ``EV_PACKET`` in the WAL carries ``routing.tool == transfer_to_billing``.
+    triage has two ``@tool``-decorated handoff functions that each
+    return a typed ``Handoff``; the matching ``ToolCalled →
+    AgentTarget`` transitions in the graph remain for documentation /
+    auditability. The LLM is given a billing-flavoured prompt; we
+    assert the ``EV_PACKET`` in the WAL carries
+    ``routing.tool == transfer_to_billing``.
+
+    The flow uses a separate ``user`` agent as the workflow's initial
+    speaker so that triage's first turn runs through her notify
+    handler — that's where the framework builds the ``EV_PACKET``
+    capturing her routing decision.
     """
     hub = await Hub.open(
         MemoryKnowledgeStore(),
@@ -354,6 +361,7 @@ async def test_workflow_graph_with_two_handoff_tools(
     )
     link = LocalLink(hub)
 
+    user_agent = Agent(name="user", config=TestConfig())
     triage = Agent(
         name="triage",
         prompt=(
@@ -367,17 +375,33 @@ async def test_workflow_graph_with_two_handoff_tools(
     eng = Agent(name="eng", prompt="You are engineering.", config=anthropic_config)
     billing = Agent(name="billing", prompt="You are billing.", config=anthropic_config)
 
+    user_hc = HubClient(link, hub=hub)
     triage_hc = HubClient(link, hub=hub)
     eng_hc = HubClient(link, hub=hub)
     billing_hc = HubClient(link, hub=hub)
 
+    user_c = await user_hc.register(user_agent, Passport(name="user"), Resume())
     triage_c = await triage_hc.register(triage, Passport(name="triage"), Resume())
     eng_c = await eng_hc.register(eng, Passport(name="eng"), Resume())
     billing_c = await billing_hc.register(billing, Passport(name="billing"), Resume())
 
+    eng_id = eng_c.agent_id
+    billing_id = billing_c.agent_id
+
+    @triage.tool
+    async def transfer_to_eng(reason: str = "") -> Handoff:
+        """Route an engineering/coding/infrastructure question to the engineering team."""
+        return Handoff(target=eng_id, reason=reason)
+
+    @triage.tool
+    async def transfer_to_billing(reason: str = "") -> Handoff:
+        """Route a billing/refund/payment question to the billing team."""
+        return Handoff(target=billing_id, reason=reason)
+
     graph = TransitionGraph(
-        initial_speaker=triage_c.agent_id,
+        initial_speaker=user_c.agent_id,
         transitions=[
+            Transition(when=FromSpeaker(user_c.agent_id), then=AgentTarget(triage_c.agent_id)),
             Transition(
                 when=ToolCalled("transfer_to_eng"),
                 then=AgentTarget(eng_c.agent_id),
@@ -387,42 +411,37 @@ async def test_workflow_graph_with_two_handoff_tools(
                 then=AgentTarget(billing_c.agent_id),
             ),
         ],
-        # StayTarget keeps the workflow alive after the handoff so the
-        # exit assertion only checks the routing tool, not the rest.
         default_target=StayTarget(),
-        max_turns=2,
+        max_turns=3,
     )
 
-    plugin = NetworkPlugin(triage_c)
-    plugin.register_workflow(graph)
-    triage_tool_names = {t.name for t in triage_c.agent.tools}
-    assert "transfer_to_eng" in triage_tool_names
-    assert "transfer_to_billing" in triage_tool_names
-
-    session = await triage_c.open(
+    session = await user_c.open(
         type=WORKFLOW_TYPE,
-        target=[eng_c.agent_id, billing_c.agent_id],
+        target=[triage_c.agent_id, eng_c.agent_id, billing_c.agent_id],
         knobs={"graph": graph.to_dict()},
         intent="triage routes to eng or billing",
     )
-    deps = {
-        SESSION_DEP: Session(metadata=session.metadata, client=triage_c),
-        AGENT_CLIENT_DEP: triage_c,
-        HUB_DEP: hub,
-    }
-    await triage_c.agent.ask(
-        "I want a refund on a charge from yesterday. Please route me to the right team.",
-        dependencies=deps,
-    )
+    await session.send("I want a refund on a charge from yesterday. Please route me to the right team.")
 
-    wal = await hub.read_wal(session.session_id)
-    handoffs = [
-        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
-    ]
+    # Wait for triage's routing packet to land.
+    deadline = asyncio.get_event_loop().time() + 60.0
+    handoffs: list = []
+    while asyncio.get_event_loop().time() < deadline:
+        wal = await hub.read_wal(session.session_id)
+        handoffs = [
+            e
+            for e in wal
+            if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+        ]
+        if handoffs:
+            break
+        await asyncio.sleep(0.2)
+
     assert handoffs, "triage did not call any handoff tool"
     chosen_tool = (handoffs[0].event_data.get("routing", {}) or {}).get("tool")
     assert chosen_tool == "transfer_to_billing", f"expected billing routing, got tool={chosen_tool!r}"
 
+    await user_hc.close()
     await triage_hc.close()
     await eng_hc.close()
     await billing_hc.close()

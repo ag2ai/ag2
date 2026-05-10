@@ -30,6 +30,7 @@ from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
     EV_TEXT,
+    Handoff,
     Hub,
     HubClient,
     LocalLink,
@@ -41,7 +42,6 @@ from autogen.beta.network.adapters.discussion import (
     ORDERING_ROUND_ROBIN,
 )
 from autogen.beta.network.adapters.workflow import WORKFLOW_TYPE
-from autogen.beta.network.client.plugin import NetworkPlugin
 from autogen.beta.network.client.session import Session
 from autogen.beta.network.policies import (
     AGENT_CLIENT_DEP,
@@ -264,8 +264,15 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
         max_turns=6,
     )
 
-    NetworkPlugin(triage).register_workflow(graph)
-    NetworkPlugin(eng).register_workflow(graph)
+    # Attach a hand-written handoff tool on triage. Returns a typed
+    # ``Handoff(target=eng.agent_id)`` so the workflow adapter folds
+    # the next speaker to eng.
+    eng_agent_id = eng.agent_id
+
+    @triage_agent.tool
+    async def transfer_to_eng(reason: str = "") -> Handoff:
+        """Transfer the conversation to the engineering specialist."""
+        return Handoff(target=eng_agent_id, reason=reason)
 
     session = await triage.open(
         type=WORKFLOW_TYPE,
