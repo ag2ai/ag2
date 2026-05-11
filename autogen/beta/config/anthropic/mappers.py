@@ -472,26 +472,12 @@ def convert_messages(
                         {
                             "type": "tool_result",
                             "tool_use_id": parent,
-                            "content": _individual_tool_result_text(message),
+                            "content": message.content,
                         }
                     ],
                 })
 
     return result
-
-
-def _individual_tool_result_text(event: "ToolResultEvent | ToolErrorEvent") -> str:
-    """Render an individual tool result event as plain text for Anthropic."""
-    res = getattr(event, "result", None)
-    if res is None:
-        return ""
-    chunks: list[str] = []
-    for part in res.parts:
-        if isinstance(part, TextInput):
-            chunks.append(part.content)
-        else:
-            chunks.append(str(part))
-    return "".join(chunks)
 
 
 def normalize_usage(raw: dict[str, Any]) -> Usage:
