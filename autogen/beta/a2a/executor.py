@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -28,13 +29,14 @@ from autogen.beta.tools.final.function_tool import FunctionToolSchema
 
 from .events import A2AEvent, A2ATaskStatusUpdate
 from .extension import CONTEXT_UPDATE_METADATA_KEY
-from .mappers.events import (
+from .mappers import (
+    ParsedMessage,
     a2a_event_to_sdk,
     chunk_to_text_artifact,
     client_call_to_artifact,
+    parse_message,
     task_state_to_status_update,
 )
-from .mappers.messages import ParsedMessage, parse_message
 
 
 class AgentExecutor(A2AAgentExecutorBase):
@@ -164,6 +166,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                     TaskState.TASK_STATE_WORKING,
                     task_id=task_id,
                     context_id=context_id,
+                    timestamp=datetime.now(tz=timezone.utc),
                 ),
             )
 
@@ -185,6 +188,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                     TaskState.TASK_STATE_FAILED,
                     task_id=task_id,
                     context_id=context_id,
+                    timestamp=datetime.now(tz=timezone.utc),
                 ),
             )
             raise
@@ -231,6 +235,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                     TaskState.TASK_STATE_INPUT_REQUIRED,
                     task_id=task_id,
                     context_id=context_id,
+                    timestamp=datetime.now(tz=timezone.utc),
                 ),
             )
             return
@@ -255,6 +260,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                 task_id=task_id,
                 context_id=context_id,
                 message=agent_msg,
+                timestamp=datetime.now(tz=timezone.utc),
             ),
         )
 

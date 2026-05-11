@@ -29,12 +29,12 @@ async def test_task_store_persists_across_build_calls() -> None:
     pair = make_pair("hi", streaming=False, task_store=InMemoryTaskStore())
 
     await pair.client.ask("ping")
-    tasks_before = await list_tasks(pair.client.config)
+    tasks_before = (await list_tasks(pair.client.config)).tasks
     assert len(tasks_before) >= 1
 
     store_before = pair.server.task_store
     pair.server.build_jsonrpc(url="http://test")
     assert pair.server.task_store is store_before
 
-    tasks_after = await list_tasks(pair.client.config)
+    tasks_after = (await list_tasks(pair.client.config)).tasks
     assert {t.id for t in tasks_before} == {t.id for t in tasks_after}

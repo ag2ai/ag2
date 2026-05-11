@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 from a2a.types import (
@@ -36,7 +37,7 @@ from autogen.beta.a2a.mappers.events import (
     parse_task_artifact,
     task_state_to_status_update,
 )
-from autogen.beta.a2a.mappers.parts import data_part
+from autogen.beta.a2a.mappers.parts import data_part, struct_to_dict
 from autogen.beta.a2a.mappers.tools import call_to_payload
 from autogen.beta.events import ClientToolCallEvent, ModelMessageChunk, ToolCallEvent
 
@@ -78,6 +79,7 @@ class TestAg2ToA2A:
                 context_id="c-1",
                 artifact=Artifact(
                     artifact_id="call-1",
+                    name="lookup",
                     parts=[data_part(call_to_payload(call), media_type=MIME_TOOL_CALL)],
                 ),
                 append=False,
@@ -286,3 +288,64 @@ class TestRoundTrip:
         reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
 
         assert reparsed == original
+
+
+class TestWireMetadata:
+    def test_status_update_timestamp_propagates(self) -> None:
+        ts = datetime(2026, 5, 11, 12, 30, 45, tzinfo=timezone.utc)
+        ev = task_state_to_status_update(
+            TaskState.TASK_STATE_COMPLETED,
+            task_id="t",
+            context_id="c",
+            timestamp=ts,
+        )
+
+        assert ev.update.status.timestamp.seconds == int(ts.timestamp())
+
+    def test_status_update_omits_timestamp_by_default(self) -> None:
+        ev = task_state_to_status_update(TaskState.TASK_STATE_WORKING, task_id="t", context_id="c")
+
+        assert ev.update.status.timestamp.seconds == 0
+
+    def test_chunk_artifact_optional_name_and_description(self) -> None:
+        ev = chunk_to_text_artifact(
+            ModelMessageChunk("hi"),
+            artifact_id="a",
+            task_id="t",
+            context_id="c",
+            name="streamed-output",
+            description="model text stream",
+        )
+
+        assert ev.update.artifact.name == "streamed-output"
+        assert ev.update.artifact.description == "model text stream"
+
+    def test_chunk_artifact_metadata_round_trips_through_struct(self) -> None:
+        ev = chunk_to_text_artifact(
+            ModelMessageChunk("hi"),
+            artifact_id="a",
+            task_id="t",
+            context_id="c",
+            artifact_metadata={"source": "llm", "chunk_index": 3},
+        )
+
+        assert struct_to_dict(ev.update.artifact.metadata) == {"source": "llm", "chunk_index": 3}
+
+    def test_client_call_artifact_uses_tool_name_by_default(self) -> None:
+        ev = client_call_to_artifact(
+            ClientToolCallEvent(id="c-1", name="search", arguments="{}"),
+            task_id="t",
+            context_id="c",
+        )
+
+        assert ev.update.artifact.name == "search"
+
+    def test_client_call_artifact_name_override(self) -> None:
+        ev = client_call_to_artifact(
+            ClientToolCallEvent(id="c-1", name="search", arguments="{}"),
+            task_id="t",
+            context_id="c",
+            name="custom-label",
+        )
+
+        assert ev.update.artifact.name == "custom-label"

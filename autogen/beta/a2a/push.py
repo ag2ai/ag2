@@ -18,13 +18,7 @@ from .config import A2AConfig
 
 @dataclass(slots=True, kw_only=True)
 class A2APushAuthentication:
-    """Authentication metadata attached to a push-notification webhook.
-
-    ``scheme`` is the auth scheme name (e.g. ``"bearer"``, ``"basic"``);
-    ``credentials`` is the opaque secret the server presents to the
-    receiving webhook. Server-side handlers verify these values when
-    incoming push deliveries arrive.
-    """
+    """Auth metadata attached to a push-notification webhook (scheme + opaque credentials)."""
 
     scheme: str
     credentials: str | None = None
@@ -32,11 +26,7 @@ class A2APushAuthentication:
 
 @dataclass(slots=True, kw_only=True)
 class A2APushConfig:
-    """Push-notification subscription record.
-
-    ``id`` is the server-issued config id (populated on responses; can
-    be left unset on create requests where the server picks the id).
-    """
+    """Push-notification subscription record; ``id`` is server-issued on create."""
 
     url: str
     token: str | None = None
@@ -53,8 +43,9 @@ async def create_push_notification_config(
 ) -> A2APushConfig:
     """Register a push-notification webhook for a task."""
     async with open_session(config) as sdk:
-        request = _to_proto(config, tenant, task_id=task_id, push=push_config)
-        response = await sdk.create_task_push_notification_config(request)
+        response = await sdk.create_task_push_notification_config(
+            _to_proto(config, tenant, task_id=task_id, push=push_config),
+        )
         return _from_proto(response)
 
 
@@ -82,19 +73,11 @@ async def list_push_notification_configs(
     page_size: int | None = None,
     page_token: str | None = None,
 ) -> list[A2APushConfig]:
-    """List push-notification configs registered against ``task_id``.
-
-    Pagination follows the SDK pattern: pass ``page_token`` from the
-    previous response to fetch the next page. The token itself is *not*
-    surfaced through this helper — callers tracking pagination should
-    use the SDK directly.
-    """
+    """List push-notification configs for ``task_id``; caller passes ``page_token`` for next page."""
     async with open_session(config) as sdk:
         kwargs = with_tenant(config, tenant, task_id=task_id)
-        if page_size is not None:
-            kwargs["page_size"] = page_size
-        if page_token:
-            kwargs["page_token"] = page_token
+        optional = {"page_size": page_size, "page_token": page_token}
+        kwargs.update({k: v for k, v in optional.items() if v is not None})
         response = await sdk.list_task_push_notification_configs(
             ListTaskPushNotificationConfigsRequest(**kwargs),
         )

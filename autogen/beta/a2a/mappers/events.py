@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
+
 from a2a.types import (
     Artifact,
     Message,
@@ -26,7 +30,7 @@ from ..events import (
     A2AToolCallArtifact,
 )
 from ..extension import MIME_TOOL_CALL
-from .parts import data_part, is_data_part_with_mime, part_data_to_python
+from .parts import data_part, is_data_part_with_mime, part_data_to_python, struct_from_dict
 from .tools import call_to_payload, payload_to_call
 
 
@@ -38,6 +42,10 @@ def chunk_to_text_artifact(
     context_id: str,
     append: bool = True,
     last_chunk: bool = False,
+    name: str | None = None,
+    description: str | None = None,
+    artifact_metadata: Mapping[str, Any] | None = None,
+    update_metadata: Mapping[str, Any] | None = None,
 ) -> A2ATextArtifact:
     """Map a streaming text chunk to an A2A text-artifact event.
 
@@ -45,14 +53,25 @@ def chunk_to_text_artifact(
     every chunk reuses the same ``artifact_id`` with ``append=True`` so
     the client side can concatenate them. Caller flips ``last_chunk``
     on the final piece.
+
+    ``name`` / ``description`` / ``artifact_metadata`` populate the
+    optional ``Artifact`` fields; ``update_metadata`` rides on the
+    enclosing ``TaskArtifactUpdateEvent``.
     """
-    artifact = Artifact(artifact_id=artifact_id, parts=[Part(text=event.content)])
-    update = TaskArtifactUpdateEvent(
+    artifact = _build_artifact(
+        artifact_id=artifact_id,
+        parts=[Part(text=event.content)],
+        name=name,
+        description=description,
+        artifact_metadata=artifact_metadata,
+    )
+    update = _build_artifact_update(
         task_id=task_id,
         context_id=context_id,
         artifact=artifact,
         append=append,
         last_chunk=last_chunk,
+        update_metadata=update_metadata,
     )
     return A2ATextArtifact(
         update=update,
@@ -67,24 +86,33 @@ def client_call_to_artifact(
     *,
     task_id: str,
     context_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    artifact_metadata: Mapping[str, Any] | None = None,
+    update_metadata: Mapping[str, Any] | None = None,
 ) -> A2AToolCallArtifact:
     """Map a pending client-side tool invocation to a tool-call artifact.
 
     Each call gets a fresh artifact keyed by the call id with
     ``last_chunk=True`` — a tool-call payload is delivered atomically,
-    not streamed in chunks.
+    not streamed in chunks. ``name`` defaults to the tool name so
+    downstream consumers can filter by it without decoding the payload.
     """
     call = ToolCallEvent(id=event.id, name=event.name, arguments=event.arguments)
-    artifact = Artifact(
+    artifact = _build_artifact(
         artifact_id=event.id,
         parts=[data_part(call_to_payload(call), media_type=MIME_TOOL_CALL)],
+        name=name if name is not None else event.name,
+        description=description,
+        artifact_metadata=artifact_metadata,
     )
-    update = TaskArtifactUpdateEvent(
+    update = _build_artifact_update(
         task_id=task_id,
         context_id=context_id,
         artifact=artifact,
         append=False,
         last_chunk=True,
+        update_metadata=update_metadata,
     )
     return A2AToolCallArtifact(
         update=update,
@@ -100,16 +128,65 @@ def task_state_to_status_update(
     task_id: str,
     context_id: str,
     message: Message | None = None,
+    timestamp: datetime | None = None,
 ) -> A2ATaskStatusUpdate:
     """Build an ``A2ATaskStatusUpdate`` for a lifecycle transition.
 
     Used by the executor to surface ``start_work``/``complete``/``failed``
     transitions through the same A2AEvent layer that artifact updates
     use, instead of going through ``TaskUpdater`` directly.
+
+    ``timestamp`` populates ``TaskStatus.timestamp``; pass ``None`` to
+    let the wire stay empty (callers that want a real transition time
+    should supply a ``datetime.now(tz=UTC)``).
     """
-    status = TaskStatus(state=state, message=message) if message is not None else TaskStatus(state=state)
+    status_kwargs: dict[str, Any] = {"state": state}
+    if message is not None:
+        status_kwargs["message"] = message
+    if timestamp is not None:
+        status_kwargs["timestamp"] = timestamp
+    status = TaskStatus(**status_kwargs)
     update = TaskStatusUpdateEvent(task_id=task_id, context_id=context_id, status=status)
     return A2ATaskStatusUpdate(update=update, state=state)
+
+
+def _build_artifact(
+    *,
+    artifact_id: str,
+    parts: list[Part],
+    name: str | None,
+    description: str | None,
+    artifact_metadata: Mapping[str, Any] | None,
+) -> Artifact:
+    kwargs: dict[str, Any] = {"artifact_id": artifact_id, "parts": parts}
+    if name:
+        kwargs["name"] = name
+    if description:
+        kwargs["description"] = description
+    if artifact_metadata:
+        kwargs["metadata"] = struct_from_dict(dict(artifact_metadata))
+    return Artifact(**kwargs)
+
+
+def _build_artifact_update(
+    *,
+    task_id: str,
+    context_id: str,
+    artifact: Artifact,
+    append: bool,
+    last_chunk: bool,
+    update_metadata: Mapping[str, Any] | None,
+) -> TaskArtifactUpdateEvent:
+    kwargs: dict[str, Any] = {
+        "task_id": task_id,
+        "context_id": context_id,
+        "artifact": artifact,
+        "append": append,
+        "last_chunk": last_chunk,
+    }
+    if update_metadata:
+        kwargs["metadata"] = struct_from_dict(dict(update_metadata))
+    return TaskArtifactUpdateEvent(**kwargs)
 
 
 def a2a_event_to_sdk(

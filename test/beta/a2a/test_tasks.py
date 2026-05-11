@@ -14,7 +14,7 @@ from autogen.beta.a2a.push import (
     get_push_notification_config,
     list_push_notification_configs,
 )
-from autogen.beta.a2a.tasks import cancel_task, get_task, list_tasks
+from autogen.beta.a2a.tasks import ListedTasks, cancel_task, get_task, list_tasks
 from autogen.beta.exceptions import HumanInputNotProvidedError
 
 from ._helpers import PromptThenAckExecutor, make_executor_pair, make_pair
@@ -30,10 +30,26 @@ class TestAdmin:
         )
         await pair.client.ask("ping")
 
-        all_tasks = await list_tasks(pair.client.config)
-        task = await get_task(pair.client.config, all_tasks[0].id)
+        listed = await list_tasks(pair.client.config)
+        task = await get_task(pair.client.config, listed.tasks[0].id)
 
-        assert task.id == all_tasks[0].id
+        assert task.id == listed.tasks[0].id
+
+    async def test_list_tasks_returns_listed_tasks_dataclass(self) -> None:
+        pair = make_pair(
+            "hi",
+            streaming=False,
+            task_store=InMemoryTaskStore(),
+        )
+        await pair.client.ask("ping")
+
+        listed = await list_tasks(pair.client.config)
+
+        assert isinstance(listed, ListedTasks)
+        assert len(listed.tasks) >= 1
+        assert isinstance(listed.next_page_token, str)
+        assert isinstance(listed.page_size, int)
+        assert isinstance(listed.total_size, int)
 
     async def test_cancel_active_task_marks_it_cancelled(self) -> None:
         executor = PromptThenAckExecutor(prompt="What's your name?")
@@ -46,7 +62,7 @@ class TestAdmin:
         with pytest.raises(HumanInputNotProvidedError):
             await pair.client.ask("hello")
 
-        [task] = await list_tasks(pair.client.config)
+        [task] = (await list_tasks(pair.client.config)).tasks
         await cancel_task(pair.client.config, task.id)
 
         cancelled = await get_task(pair.client.config, task.id)
@@ -63,7 +79,7 @@ class TestPushCRUD:
             push_config_store=InMemoryPushNotificationConfigStore(),
         )
         await pair.client.ask("ping")
-        [task] = await list_tasks(pair.client.config)
+        [task] = (await list_tasks(pair.client.config)).tasks
 
         push = A2APushConfig(
             url="https://hooks.example.com/a2a",

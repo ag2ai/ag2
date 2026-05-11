@@ -18,14 +18,14 @@ from autogen.beta.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
-from .transports.grpc import build_grpc_server
-from .transports.jsonrpc import (
+from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
     LEGACY_AGENT_CARD_PATH,
     CardModifier,
     ExtendedCardModifier,
-    build_jsonrpc_asgi,
 )
+from .transports.grpc import build_grpc_server
+from .transports.jsonrpc import build_jsonrpc_asgi
 from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
@@ -36,34 +36,21 @@ if TYPE_CHECKING:
 class A2AServer:
     """Wrap an AG2 ``Agent`` as an A2A endpoint.
 
-    The class holds transport-agnostic state — the executor, optional
-    task/push stores, the extended card, and per-card modifier hooks.
-    Transport-specific parameters (URL, ports, paths) live on the
-    ``build_*`` methods, since one server can be exposed on different
-    URLs through different transports.
+    Holds transport-agnostic state (executor, task/push stores, extended
+    card, per-card modifier hooks). Transport-specific parameters (URL,
+    ports, paths) live on the ``build_*`` methods — one server can be
+    exposed on different URLs through different transports.
 
     ``extended_card``, when supplied, is served via the JSON-RPC
-    ``GetExtendedAgentCard`` method (auth-aware extra metadata). The
-    public card automatically flips ``capabilities.extended_agent_card``
-    when an extended card is provided.
+    ``GetExtendedAgentCard`` method; the public card automatically flips
+    ``capabilities.extended_agent_card`` when an extended card is provided.
 
     Each builder returns a ready-to-serve transport object:
+    :py:meth:`build_jsonrpc` and :py:meth:`build_rest` return a Starlette
+    ASGI app; :py:meth:`build_grpc` returns a ``grpc.aio.Server``.
 
-    - :py:meth:`build_jsonrpc` returns a Starlette ASGI app.
-    - :py:meth:`build_rest` returns a Starlette ASGI app.
-    - :py:meth:`build_grpc` returns a ``grpc.aio.Server``.
-
-    A2A spec doesn't define middleware. To add cross-cutting concerns
-    (CORS, auth, tracing) attach them to the returned transport object
-    directly — Starlette has ``app.add_middleware(...)``, gRPC has
-    interceptors on ``grpc.aio.Server``.
-
-    Example::
-
-        server = A2AServer(agent)
-        app = server.build_jsonrpc(url="http://localhost:8000")
-        app.add_middleware(CORSMiddleware, allow_origins=["*"])
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+    A2A spec doesn't define middleware — attach cross-cutting concerns
+    (CORS, auth, tracing) to the returned transport object directly.
     """
 
     __slots__ = (
@@ -93,17 +80,14 @@ class A2AServer:
         self._extended_card = extended_card
         self._card_modifier = card_modifier
         self._extended_card_modifier = extended_card_modifier
-        # Materialise a default store eagerly so multi-transport setups
-        # (the same ``A2AServer`` exposed via JSON-RPC + REST + gRPC) all
-        # share one task store. Otherwise each ``build_*`` call would
-        # default to its own ``InMemoryTaskStore`` and tasks created via
-        # one transport would be invisible from the others.
+        # Materialise the store eagerly so multi-transport setups (same
+        # server exposed via JSON-RPC + REST + gRPC) all share one task
+        # store. Otherwise each builder defaults to its own.
         self._task_store = task_store or InMemoryTaskStore()
         self._push_config_store = push_config_store
         self._push_sender = push_sender
-        # ``executor`` is escape-hatch for tests and advanced use cases
-        # that need to plug a custom ``AgentExecutor`` (e.g. one that
-        # short-circuits the AG2 agent). Default wraps the supplied agent.
+        # ``executor`` is escape-hatch for tests / advanced use cases that
+        # need a custom ``AgentExecutor``. Default wraps the supplied agent.
         self._executor = executor if executor is not None else AgentExecutor(agent)
 
     @property
@@ -116,8 +100,25 @@ class A2AServer:
 
     @property
     def task_store(self) -> TaskStore:
-        """Return the shared task store used across all transport builders."""
+        """The shared task store used across all transport builders."""
         return self._task_store
+
+    def _shared_kwargs(self, *, include_card_modifier: bool) -> dict[str, Any]:
+        """Wiring shared by every ``build_*`` method.
+
+        gRPC has no HTTP card route, so ``card_modifier`` is dropped there.
+        """
+        kwargs: dict[str, Any] = {
+            "agent_executor": self._executor,
+            "extended_agent_card": self._extended_card,
+            "extended_card_modifier": self._extended_card_modifier,
+            "task_store": self._task_store,
+            "push_config_store": self._push_config_store,
+            "push_sender": self._push_sender,
+        }
+        if include_card_modifier:
+            kwargs["card_modifier"] = self._card_modifier
+        return kwargs
 
     def build_jsonrpc(
         self,
@@ -128,28 +129,19 @@ class A2AServer:
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
     ) -> "Starlette":
-        """Build a Starlette ASGI app exposing JSON-RPC routes + agent card.
-
-        ``url`` is the public base URL the server will be reached at.
-        ``card`` defaults to a freshly-built single-transport card for
-        this URL — override when you need to declare additional
-        transports (REST/gRPC) on the same card. ``legacy_card_url``
-        registers a second card route on the v0.x path; pass ``None`` to
-        disable.
-        """
-        resolved_card = card or build_card(self._agent, url=url, transports=("jsonrpc",))
+        """Starlette ASGI app exposing JSON-RPC routes + agent card."""
+        resolved_card = card or build_card(
+            self._agent,
+            url=url,
+            transports=("jsonrpc",),
+            push_notifications=self._push_config_store is not None,
+        )
         return build_jsonrpc_asgi(
-            agent_executor=self._executor,
             agent_card=resolved_card,
-            extended_agent_card=self._extended_card,
-            card_modifier=self._card_modifier,
-            extended_card_modifier=self._extended_card_modifier,
-            task_store=self._task_store,
-            push_config_store=self._push_config_store,
-            push_sender=self._push_sender,
             rpc_url=rpc_url,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            **self._shared_kwargs(include_card_modifier=True),
         )
 
     def build_rest(
@@ -161,31 +153,24 @@ class A2AServer:
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
     ) -> "Starlette":
-        """Build a Starlette ASGI app exposing REST routes + agent card.
+        """Starlette ASGI app exposing REST routes + agent card.
 
-        ``path_prefix`` mounts the REST routes under a sub-path (e.g.
-        ``"/v1"``); both the AgentCard interface URL and the dispatcher
-        respect it. See :py:meth:`build_jsonrpc` for the ``card`` /
-        ``legacy_card_url`` semantics.
+        ``path_prefix`` mounts REST under a sub-path (e.g. ``"/v1"``); both
+        the AgentCard interface URL and the dispatcher respect it.
         """
         resolved_card = card or build_card(
             self._agent,
             url=url,
             transports=("rest",),
             rest_path_prefix=path_prefix,
+            push_notifications=self._push_config_store is not None,
         )
         return build_rest_asgi(
-            agent_executor=self._executor,
             agent_card=resolved_card,
-            extended_agent_card=self._extended_card,
-            card_modifier=self._card_modifier,
-            extended_card_modifier=self._extended_card_modifier,
-            task_store=self._task_store,
-            push_config_store=self._push_config_store,
-            push_sender=self._push_sender,
             path_prefix=path_prefix,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            **self._shared_kwargs(include_card_modifier=True),
         )
 
     def build_grpc(
@@ -196,36 +181,27 @@ class A2AServer:
         card: AgentCard | None = None,
         options: Sequence[tuple[str, Any]] = (),
     ) -> "Server":
-        """Build a ``grpc.aio.Server`` bound to ``bind``.
+        """``grpc.aio.Server`` bound to ``bind``; caller starts/awaits it.
 
         ``bind`` is the listener address (e.g. ``"0.0.0.0:50051"``).
         ``grpc_url`` is the public URL clients will connect to (used in
-        the AgentCard interface entry — usually identical to bind, but
-        not when you're behind a load balancer). Insecure binding only.
-        Caller is responsible for ``await server.start()`` and
-        ``await server.wait_for_termination()``.
+        the AgentCard interface entry — usually identical to ``bind``,
+        but not when behind a load balancer). Insecure binding only.
 
-        Note: ``card_modifier`` is intentionally not applied in gRPC.
-        A2A v1.x has no ``GetAgentCard`` gRPC method — the public card
-        is served over HTTP at ``/.well-known/agent-card.json`` only —
-        so there is nothing to modify per-request on this transport.
-        ``extended_card_modifier`` does apply (gRPC does expose
-        ``GetExtendedAgentCard``).
+        ``card_modifier`` does not apply: A2A v1.x has no ``GetAgentCard``
+        gRPC method — the public card is served over HTTP only.
+        ``extended_card_modifier`` does apply (gRPC has ``GetExtendedAgentCard``).
         """
         resolved_card = card or build_card(
             self._agent,
             url=grpc_url,
             transports=("grpc",),
             grpc_url=grpc_url,
+            push_notifications=self._push_config_store is not None,
         )
         return build_grpc_server(
-            agent_executor=self._executor,
             agent_card=resolved_card,
             bind=bind,
-            extended_agent_card=self._extended_card,
-            extended_card_modifier=self._extended_card_modifier,
-            task_store=self._task_store,
-            push_config_store=self._push_config_store,
-            push_sender=self._push_sender,
             options=options,
+            **self._shared_kwargs(include_card_modifier=False),
         )

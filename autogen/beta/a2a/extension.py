@@ -2,30 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# AG2 client-tools extension: announced via the URI on the AgentCard,
+# wire-tagged via the MIME types below. Private to AG2 — never sent to
+# non-AG2 servers, never inspected by intermediaries.
 EXTENSION_URI = "urn:ag2:client-tools:v1"
 
-# Vendor-tree MIME types for the AG2 client-tools extension. RFC 6838
-# §3.2 reserves ``vnd.`` for IANA-registered names; we use the unregistered
-# form because these are private wire labels for an AG2-internal extension
-# (announced via ``EXTENSION_URI``) — never sent to non-AG2 servers and
-# never inspected by intermediaries. If we ever publish the extension as
-# a public protocol we should register the names with IANA or move to
-# ``application/prs.ag2.<name>+json`` (personal tree, no registration).
 MIME_TOOL_SCHEMAS = "application/vnd.ag2.tool-schemas+json"
 MIME_TOOL_CALL = "application/vnd.ag2.tool-call+json"
 MIME_TOOL_RESULT = "application/vnd.ag2.tool-result+json"
 MIME_HISTORY = "application/vnd.ag2.history+json"
 
 # Bidirectional context-variables sync rides on Message.metadata under this key.
-# Server -> client on the final agent message; client -> server on user messages.
 CONTEXT_UPDATE_METADATA_KEY = "ag2.context_update"
 
-# Dependency key the client reads to splice extra A2A ``Part``s onto the
-# outgoing message. Lets users smuggle protocol-level Parts (e.g. for
-# experimental extensions) without changing public ``A2AConfig`` shape.
+# Dependency key for splicing extra A2A ``Part``s onto the outgoing message.
 EXTRA_PARTS_DEPENDENCY_KEY = "a2a:extra_parts"
 
-# Per-call tenant override. When set in ``context.variables`` it wins over the
-# ``A2AConfig.tenant`` default — lets a single Agent instance fan out to
-# multiple tenants without rebuilding its config.
+# Per-call tenant override in ``context.variables`` — wins over ``A2AConfig.tenant``.
 TENANT_VARIABLE_KEY = "a2a:tenant"

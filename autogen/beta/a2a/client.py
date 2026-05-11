@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from a2a.client import Client, ClientCallInterceptor
+from a2a.client import A2ACardResolver, Client, ClientCallInterceptor
 from a2a.client.errors import A2AClientError
 from a2a.types import (
     AgentCard,
@@ -67,17 +67,19 @@ from .extension import (
     MIME_TOOL_CALL,
     TENANT_VARIABLE_KEY,
 )
-from .mappers.events import parse_stream_response, parse_task_artifact
-from .mappers.messages import (
+from .mappers import (
     build_input_response_message,
     build_tool_result_message,
     build_user_message,
     extract_context_update,
+    is_data_part_with_mime,
+    parse_stream_response,
+    parse_task_artifact,
+    part_data_to_python,
+    payload_to_call,
 )
-from .mappers.parts import is_data_part_with_mime, part_data_to_python
-from .mappers.tools import payload_to_call
 from .transports import TransportName
-from .transports._http import fetch_card, make_a2a_client, make_httpx_client, select_transport
+from .transports._http import make_a2a_client, make_httpx_client, select_transport
 
 if TYPE_CHECKING:
     import grpc.aio
@@ -115,59 +117,37 @@ _FAILURE_ERRORS: dict[str, type[Exception]] = {
 
 @dataclass(slots=True)
 class A2ADriveState:
-    """State accumulated across driving one ``ask`` to its terminal task.
-
-    Survives ``input_required`` continuations: each loop appends to
-    ``accumulated_text`` and ``pending_calls``, so the final
-    ``ModelResponse`` reflects the entire interaction.
-
-    ``terminal_task`` holds the failed/rejected/auth-required Task; the
-    specific kind is disambiguated by ``finish_reason``.
-    """
+    """State accumulated across one ``ask`` to its terminal task; survives ``input_required`` continuations."""
 
     accumulated_text: str = ""
     pending_calls: list[ToolCallEvent] = field(default_factory=list)
     finish_reason: str = "completed"
     terminal_task: Task | None = None
-    # Dedup keys: artifacts and messages can be replayed by the server on
-    # ``SubscribeToTask`` reconnect (per spec §3.5.2 "MAY optionally resend
-    # a final Task snapshot"), and polling re-reads the cumulative
-    # ``task.artifacts`` snapshot on every poll. Without dedup the client
-    # appends the same content twice.
+    # Dedup keys: SDK may replay artifacts/messages on ``SubscribeToTask`` reconnect
+    # (spec §3.5.2), and polling re-reads cumulative ``task.artifacts`` on every poll.
     seen_artifact_ids: set[str] = field(default_factory=set)
     seen_message_ids: set[str] = field(default_factory=set)
 
 
 @dataclass(slots=True)
 class A2ATurnOutcome:
-    """Per-turn result handed back from a streaming/polling drain.
-
-    ``input_required`` signals the caller to ask the HITL hook for
-    ``input_prompt`` and continue the same task with the user reply.
-    """
+    """Per-turn result from a streaming/polling drain; ``input_required`` triggers HITL or tool-call surface."""
 
     input_required: bool = False
     input_prompt: str | None = None
 
 
 class A2AClient(LLMClient):
-    """``LLMClient`` implementation that delegates to a remote A2A agent.
+    """``LLMClient`` that delegates to a remote A2A agent.
 
-    Lifecycle: ``Agent.ask()`` builds one ``A2AClient`` and reuses it
-    for every ``reply.ask(...)`` follow-up on the same ``AgentReply``.
-    Within a single ``__call__``, ``self._task_id`` carries the
-    server-issued task id across multiple drives (for client-side tool
-    round-trips and HITL continuations). At the start of each new
-    top-level user turn ``self._task_id`` is reset so the server opens
-    a fresh A2A task — the prior task transitioned to a terminal state
-    on completion and rejecting a continuation message is the spec'd
-    server behavior. Across asks, ``contextId`` lives in
-    ``context.variables`` so a long-running conversation keeps the
-    same A2A context across multiple tasks.
+    Reused across ``reply.ask(...)`` follow-ups on the same ``AgentReply``.
+    Within one ``__call__``, ``self._task_id`` carries the server-issued
+    id across drives (client-tool round-trips, HITL continuations); it
+    resets on each new top-level user turn since the prior task is
+    terminal. ``contextId`` persists in ``context.variables`` across asks.
 
-    The client always ships the **full** AG2 conversation history on
-    every outgoing turn — the server is stateless on AG2 history. See
-    ``mappers/history.py`` for the wire shape.
+    The client ships the full AG2 history on every turn — the server is
+    stateless on AG2 history (see ``mappers/history.py``).
     """
 
     def __init__(
@@ -280,13 +260,7 @@ class A2AClient(LLMClient):
             await self.aclose()
 
     async def aclose(self) -> None:
-        """Release the underlying httpx and SDK clients.
-
-        Idempotent — safe to call from ``finally`` blocks even when
-        ``_ensure_connected`` never ran. The client lifecycle is one
-        ``__call__`` per instance (see class docstring), so closing in
-        ``finally`` matches the contract.
-        """
+        """Release httpx and SDK clients; idempotent."""
         if self._httpx_client is not None:
             await self._httpx_client.aclose()
             self._httpx_client = None
@@ -301,7 +275,9 @@ class A2AClient(LLMClient):
             factory=self._httpx_client_factory,
         )
         if self._preset_card is None:
-            self._agent_card = await fetch_card(self._httpx_client, url=self._card_url)
+            self._agent_card = await A2ACardResolver(
+                httpx_client=self._httpx_client, base_url=self._card_url
+            ).get_agent_card()
         transport = select_transport(self._agent_card, url=self._card_url, prefer=self._prefer)
         self._sdk_client = make_a2a_client(
             card=self._agent_card,
@@ -536,14 +512,7 @@ class A2AClient(LLMClient):
         context: ConversationContext,
         state: A2ADriveState,
     ) -> None:
-        """Pull text/tool-calls from a COMPLETED transition's ``status.message``.
-
-        Server-emitted COMPLETED carries the final agent reply on
-        ``status.message`` (not as a separate ``message`` payload), so
-        this helper is invoked both from the streaming status-update
-        path and as a finalisation step. Idempotent on ``message_id``
-        so re-runs (replay on reconnect) don't double-append.
-        """
+        """Absorb text/tool-calls from COMPLETED's ``status.message``; idempotent on ``message_id``."""
         if msg.message_id and msg.message_id in state.seen_message_ids:
             return
         self._merge_context_update(context, extract_context_update(msg))
@@ -554,17 +523,10 @@ class A2AClient(LLMClient):
             state.seen_message_ids.add(msg.message_id)
 
     async def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: A2ADriveState) -> None:
-        # Polling mode: every poll re-reads the cumulative ``task.artifacts``
-        # snapshot. Within one ``__call__`` the per-state dedup guards
-        # against double-appending the same artifact. Across calls (the
-        # AG2 outer loop creates a fresh ``A2AClient`` per ask), the state
-        # is empty — so we additionally gate ``A2AToolCallArtifact``
-        # absorption on ``INPUT_REQUIRED``. Historical tool-calls from
-        # earlier turns remain in ``task.artifacts`` after the task moves
-        # past them and would otherwise be re-emitted to the outer agent
-        # for execution. Streaming does not need this gate: incremental
-        # ``artifact_update`` events are never replayed as a cumulative
-        # snapshot.
+        # Polling re-reads cumulative ``task.artifacts`` every poll, and a fresh
+        # ``A2AClient`` per ask means state.seen_* is empty across calls. Gate
+        # tool-call absorption on ``INPUT_REQUIRED`` so historical calls from
+        # earlier turns aren't re-surfaced. Streaming doesn't need this gate.
         terminal_calls_visible = task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         for artifact in task.artifacts:
             a2a_event = parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id)
@@ -574,11 +536,8 @@ class A2AClient(LLMClient):
                 state.seen_artifact_ids.add(artifact.artifact_id)
                 continue
             await self._apply_artifact_update(a2a_event, context, state)
-        # ``status.message`` on ``INPUT_REQUIRED`` is the HITL prompt — it
-        # routes through the polling-loop's ``input_prompt`` to the hook,
-        # not to the final assistant text. Skip it here to keep parity
-        # with the streaming path (``_handle_status_update`` only absorbs
-        # ``status.message`` on COMPLETED).
+        # On INPUT_REQUIRED, status.message is the HITL prompt — routed via
+        # input_prompt, not assistant text. Skip here for parity with streaming.
         if task.status.HasField("message") and task.status.state != TaskState.TASK_STATE_INPUT_REQUIRED:
             msg = task.status.message
             if not msg.message_id or msg.message_id not in state.seen_message_ids:
@@ -597,18 +556,7 @@ class A2AClient(LLMClient):
         context: ConversationContext,
         state: A2ADriveState,
     ) -> None:
-        """Apply a parsed artifact update to the per-turn drive state.
-
-        Routes typed subclasses (``A2ATextArtifact`` / ``A2AToolCallArtifact``)
-        directly to text/calls accumulators; falls back to scanning
-        ``artifact.parts`` for unknown shapes.
-
-        Dedup: ``append=True`` chunks reuse the same ``artifact_id``;
-        only mark seen once the artifact is finalised (``last_chunk`` or
-        non-append delivery). Streaming receives this method via
-        ``_drain_stream``; polling synthesises the same typed events via
-        ``parse_task_artifact`` and reuses this code path.
-        """
+        """Apply an artifact update to drive state; typed subclasses route directly, others scan parts."""
         update = a2a_event.update
         artifact = update.artifact
         if artifact.artifact_id in state.seen_artifact_ids:
@@ -702,12 +650,7 @@ def _extract_status_prompt(status: TaskStatus) -> str | None:
 
 
 def _read_extra_parts(context: ConversationContext) -> list[Part]:
-    """Read user-provided extra ``Part``s from context dependencies.
-
-    Accepts either a list of ``Part`` instances directly, or anything
-    iterable that yields ``Part`` instances. Anything else is silently
-    ignored — extra parts are advisory.
-    """
+    """Read user-supplied extra ``Part``s from context dependencies; advisory, silently filtered."""
     raw = context.dependencies.get(EXTRA_PARTS_DEPENDENCY_KEY)
     if not raw:
         return []

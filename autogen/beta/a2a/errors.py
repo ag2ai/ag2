@@ -54,3 +54,14 @@ class A2ATaskAuthRequiredError(A2ATaskTerminalError):
     apply them (e.g. via interceptor headers or a refreshed config), and
     retry the request.
     """
+
+
+class RehydratedToolError(Exception):
+    """Placeholder error type for ``ToolErrorEvent`` rebuilt from the wire.
+
+    The original exception type is lost in transit — we only carry the
+    rendered string. Subclassing ``Exception`` keeps ``ToolErrorEvent``'s
+    invariants intact (e.g. ``str(ev.error)`` round-trips) without pretending
+    we have the real type. Used by both ``tool-result+json`` Part decoding
+    and ``ag2.history+json`` event decoding.
+    """

@@ -100,10 +100,6 @@ def part_to_input(part: Part) -> Input:
     raise ValueError("A2A Part has no populated content field")
 
 
-def text_part(text: str) -> Part:
-    return Part(text=text)
-
-
 def data_part(payload: Any, *, media_type: str) -> Part:
     """Build a Part carrying structured data with the given MIME type.
 

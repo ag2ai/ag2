@@ -13,18 +13,8 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
+from ..errors import RehydratedToolError
 from .parts import tool_result_to_text
-
-
-class RehydratedToolError(Exception):
-    """Placeholder error type for ``ToolErrorEvent`` rebuilt from the wire.
-
-    The original exception type is lost in transit — we only carry the
-    rendered string. Subclassing ``Exception`` keeps ``ToolErrorEvent``'s
-    invariants intact (e.g. ``str(ev.error)`` round-trips) without pretending
-    we have the real type. Used by both ``tool-result+json`` Part decoding
-    and ``ag2.history+json`` event decoding.
-    """
 
 
 def schemas_to_payload(schemas: Iterable[FunctionToolSchema]) -> dict[str, Any]:
