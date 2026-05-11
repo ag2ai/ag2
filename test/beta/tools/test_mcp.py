@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
@@ -9,11 +10,22 @@ import pytest
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("mcp")
-from mcp.types import CallToolResult, ListToolsResult, TextContent
+from mcp.types import (
+    AudioContent,
+    BlobResourceContents,
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
+    ListToolsResult,
+    ResourceLink,
+    TextContent,
+    TextResourceContents,
+)
 from mcp.types import Tool as MCPTool
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import ToolCallEvent
+from autogen.beta.events import ToolCallEvent, ToolResultEvent
+from autogen.beta.events.input_events import BinaryInput, BinaryType, TextInput, UrlInput
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import MCPServer, MCPStdioServerConfig
 from autogen.beta.tools.toolkits.mcp_server import toolkit as _toolkit_module
@@ -147,6 +159,76 @@ async def test_mcp_tool_result_is_returned_to_agent(
 
     assert result.body == "done"
     assert session.calls == [("echo", {})]
+
+
+@pytest.mark.asyncio
+async def test_extract_maps_content_blocks_to_typed_inputs(
+    patch_mcp_session: MCPSessionPatch, context: Context
+) -> None:
+    """Each MCP ContentBlock variant maps to the matching AG2 Input type."""
+    image_bytes = b"\x89PNG\r\n\x1a\nfake-image-bytes"
+    audio_bytes = b"fake-audio-bytes"
+    blob_bytes = b"fake-blob-bytes"
+
+    patch_mcp_session(
+        [MCPTool(name="multi", description="", inputSchema={"type": "object"})],
+        call_results={
+            "multi": CallToolResult(
+                content=[
+                    TextContent(type="text", text="hello"),
+                    ImageContent(
+                        type="image",
+                        data=base64.b64encode(image_bytes).decode("ascii"),
+                        mimeType="image/png",
+                    ),
+                    AudioContent(
+                        type="audio",
+                        data=base64.b64encode(audio_bytes).decode("ascii"),
+                        mimeType="audio/wav",
+                    ),
+                    ResourceLink(
+                        type="resource_link",
+                        name="doc",
+                        uri="https://example.com/doc.pdf",
+                        mimeType="application/pdf",
+                    ),
+                    EmbeddedResource(
+                        type="resource",
+                        resource=TextResourceContents(
+                            uri="file:///etc/hosts",
+                            text="127.0.0.1 localhost",
+                            mimeType="text/plain",
+                        ),
+                    ),
+                    EmbeddedResource(
+                        type="resource",
+                        resource=BlobResourceContents(
+                            uri="file:///tmp/blob.bin",
+                            blob=base64.b64encode(blob_bytes).decode("ascii"),
+                            mimeType="image/jpeg",
+                        ),
+                    ),
+                ]
+            ),
+        },
+    )
+
+    mcp = MCPServer(MCPStdioServerConfig(command="x"))
+    await mcp.schemas(context)
+    proxy = next(t for t in mcp.tools if t.name == "multi")
+
+    result = await proxy(ToolCallEvent(name="multi", arguments="{}"), context)
+
+    assert isinstance(result, ToolResultEvent)
+    parts = result.result.parts
+    assert parts == [
+        TextInput(content="hello"),
+        BinaryInput(data=image_bytes, media_type="image/png", kind=BinaryType.IMAGE),
+        BinaryInput(data=audio_bytes, media_type="audio/wav", kind=BinaryType.AUDIO),
+        UrlInput("https://example.com/doc.pdf", kind=BinaryType.DOCUMENT),
+        TextInput(content="127.0.0.1 localhost"),
+        BinaryInput(data=blob_bytes, media_type="image/jpeg", kind=BinaryType.IMAGE),
+    ]
 
 
 class _FakeMCPSession:
