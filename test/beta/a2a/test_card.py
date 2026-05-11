@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from pathlib import Path
+
 from a2a.client.client_factory import TransportProtocol
 from a2a.types import (
     AgentCard,
@@ -17,6 +19,7 @@ from autogen.beta import Agent
 from autogen.beta.a2a import build_card
 from autogen.beta.a2a.security import bearer_scheme, oauth2_scheme, require
 from autogen.beta.testing import TestConfig
+from autogen.beta.tools.skills import LocalRuntime, SkillsToolkit
 
 
 def _agent() -> Agent:
@@ -153,6 +156,56 @@ class TestSkills:
         card = build_card(_agent(), url="http://test", skills=[])
 
         assert list(card.skills) == []
+
+
+class TestSkillsAutoDiscovery:
+    def test_skills_picked_up_from_skills_toolkit(self, local_skills_dir: Path) -> None:
+        agent = Agent(
+            "agent-x",
+            config=TestConfig("ok"),
+            tools=[SkillsToolkit(runtime=LocalRuntime(str(local_skills_dir)))],
+        )
+
+        card = build_card(agent, url="http://test")
+
+        assert list(card.skills) == [
+            AgentSkill(id="code-review", name="code-review", description="Review code for bugs and style"),
+            AgentSkill(id="data-analysis", name="data-analysis", description="Analyse CSV/JSON datasets"),
+        ]
+
+    def test_explicit_skills_override_auto_discovery(self, local_skills_dir: Path) -> None:
+        agent = Agent(
+            "agent-x",
+            config=TestConfig("ok"),
+            tools=[SkillsToolkit(runtime=LocalRuntime(str(local_skills_dir)))],
+        )
+        override = [AgentSkill(id="override", name="override", description="custom")]
+
+        card = build_card(agent, url="http://test", skills=override)
+
+        assert list(card.skills) == override
+
+    def test_falls_back_to_default_skill_when_no_toolkit(self) -> None:
+        agent = Agent("agent-x", config=TestConfig("ok"))
+
+        card = build_card(agent, url="http://test")
+
+        assert list(card.skills) == [
+            AgentSkill(id="agent-x", name="agent-x", description="agent-x"),
+        ]
+
+    def test_falls_back_when_toolkit_has_no_skills(self, tmp_path: Path) -> None:
+        agent = Agent(
+            "agent-x",
+            config=TestConfig("ok"),
+            tools=[SkillsToolkit(runtime=LocalRuntime(str(tmp_path)))],
+        )
+
+        card = build_card(agent, url="http://test")
+
+        assert list(card.skills) == [
+            AgentSkill(id="agent-x", name="agent-x", description="agent-x"),
+        ]
 
 
 class TestInterfaceTenants:

@@ -18,6 +18,7 @@ from a2a.types import (
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
 
 from autogen.beta.agent import Agent
+from autogen.beta.tools.skills.local_skills import SkillsToolkit
 
 from .extension import EXTENSION_URI
 from .transports import TransportName
@@ -58,7 +59,13 @@ def build_card(
     different path) but can be overridden via ``rest_url`` when REST
     lives on a different host:port; gRPC lives on its own ``grpc_url``.
 
-    ``skills`` overrides the auto-built single skill when supplied.
+    When ``skills`` is supplied, it replaces all auto-detection. When it
+    is ``None``, ``build_card`` walks ``agent.tools`` for any
+    :class:`SkillsToolkit` and publishes its ``agentskills.io``-style
+    local skills as ``AgentSkill`` entries; if none are found, falls
+    back to a single skill derived from ``agent.name`` /
+    ``agent._system_prompt`` so the card stays spec-compliant.
+
     ``security_schemes`` / ``security_requirements`` advertise auth
     declarations. ``tenants`` maps a transport name to a tenant string
     surfaced on the corresponding ``AgentInterface.tenant``.
@@ -67,18 +74,7 @@ def build_card(
         raise ValueError("grpc_url is required when 'grpc' is in transports")
 
     description_text = description or _agent_description(agent)
-    resolved_skills = (
-        list(skills)
-        if skills is not None
-        else [
-            AgentSkill(
-                id=agent.name,
-                name=agent.name,
-                description=description_text or agent.name,
-                tags=[],
-            ),
-        ]
-    )
+    resolved_skills = _resolve_skills(agent, skills, description_text)
     capabilities = AgentCapabilities(
         streaming=True,
         push_notifications=push_notifications,
@@ -156,3 +152,37 @@ def _agent_description(agent: Agent) -> str:
     if prompt:
         return prompt[0]
     return ""
+
+
+def _resolve_skills(
+    agent: Agent,
+    explicit: Sequence[AgentSkill] | None,
+    description: str,
+) -> list[AgentSkill]:
+    """Pick skills in priority order: explicit → auto-detected → default.
+
+    Auto-detection walks ``agent.tools`` for any :class:`SkillsToolkit`
+    and publishes its ``agentskills.io``-style local skills. The
+    toolkit's own three tools (``list_skills`` / ``load_skill`` /
+    ``run_skill_script``) are implementation detail and do not appear.
+    """
+    if explicit is not None:
+        return list(explicit)
+
+    auto = [
+        AgentSkill(id=meta.name, name=meta.name, description=meta.description or meta.name)
+        for tool in agent.tools
+        if isinstance(tool, SkillsToolkit)
+        for meta in tool.runtime.discover()
+    ]
+    if auto:
+        return auto
+
+    return [
+        AgentSkill(
+            id=agent.name,
+            name=agent.name,
+            description=description or agent.name,
+            tags=[],
+        ),
+    ]
