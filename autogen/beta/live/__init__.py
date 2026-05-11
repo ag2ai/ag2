@@ -16,10 +16,14 @@ except ImportError as e:
 
 try:
     from .openai import RealTimeConfig as OpenAIRealTimeConfig
+    from .openai import STTConfig as OpenAITranscriber
+    from .openai import STTTranslationConfig as OpenAITranslationTranscriber
     from .openai import TTSConfig as OpenAITTSConfig
 except ImportError as e:
     OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)  # type: ignore[misc]
     OpenAITTSConfig = missing_optional_dependency("TTSConfig", "openai", e)  # type: ignore[misc]
+    OpenAITranscriber = missing_optional_dependency("STTConfig", "openai", e)  # type: ignore[misc]
+    OpenAITranslationTranscriber = missing_optional_dependency("STTTranslationConfig", "openai", e)  # type: ignore[misc]
 
 try:
     from .gemini import RealTimeConfig as GeminiRealTimeConfig
@@ -32,6 +36,8 @@ __all__ = (
     "LiveAgent",
     "OpenAIRealTimeConfig",
     "OpenAITTSConfig",
+    "OpenAITranscriber",
+    "OpenAITranslationTranscriber",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",
     "TTSObserver",

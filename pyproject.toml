@@ -389,7 +389,6 @@ optionals = [
     "ag2[ag-ui]",
     "ag2[tracing]",
     "ag2[watchdog]", # DiskKnowledgeStore
-    "sounddevice[numpy]", # SoundDevice is exposed in the public API by the optional `autogen.beta.live` module
     # code execution extensions
     "ag2[daytona,docker]",
     # search tools

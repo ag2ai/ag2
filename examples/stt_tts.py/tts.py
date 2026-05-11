@@ -1,6 +1,6 @@
 import asyncio
 
-from autogen.beta import Agent, Context, MemoryStream, config
+from autogen.beta import Agent, config
 from autogen.beta.live import OpenAITTSConfig, SoundDevicePlayer, TTSObserver
 
 agent = Agent(
@@ -14,11 +14,9 @@ agent = Agent(
 
 
 async def main() -> None:
-    context = Context(stream=MemoryStream())
-
-    async with SoundDevicePlayer(context=context):
+    async with SoundDevicePlayer() as player:
         # pass the same with Player's context stream to play the audio
-        await agent.ask("Hello, agent!", stream=context.stream)
+        await agent.ask("Hello, agent!", stream=player.stream)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,8 @@ from types import TracebackType
 import numpy as np
 import sounddevice as sd
 
-from autogen.beta.context import ConversationContext, SubId
+from autogen.beta import MemoryStream
+from autogen.beta.context import ConversationContext, Stream, SubId
 from autogen.beta.events import RecordedAudioEvent, SynthesizedAudioEvent
 
 from .protocols import AudioPlayer
@@ -27,7 +28,7 @@ class Recorder:
     def __init__(
         self,
         *,
-        context: ConversationContext,
+        context: ConversationContext | None = None,
         sample_rate: int = 24000,
         channels: int = 1,
         block_size: int | None = None,
@@ -38,11 +39,15 @@ class Recorder:
         # enough to keep callback overhead reasonable.
         self.block_size = block_size or int(sample_rate * 0.1)
 
-        self._context = context
+        self.context = context or ConversationContext(stream=MemoryStream())
         self._loop: asyncio.AbstractEventLoop | None = None
         self._input: sd.InputStream | None = None
         self._queue: asyncio.Queue[bytes] | None = None
         self._drain_task: asyncio.Task[None] | None = None
+
+    @property
+    def stream(self) -> Stream:
+        return self.context.stream
 
     def record(self, duration: float) -> VoiceInput:
         recording = sd.rec(
@@ -114,23 +119,27 @@ class Recorder:
         assert self._queue is not None
         while True:
             chunk = await self._queue.get()
-            await self._context.send(RecordedAudioEvent(chunk))
+            await self.context.send(RecordedAudioEvent(chunk))
 
 
 class Player(AudioPlayer[bytes]):
     def __init__(
         self,
         *,
-        context: ConversationContext,
+        context: ConversationContext | None = None,
         output_stream: sd.OutputStream | None = None,
     ) -> None:
-        self._context = context
+        self.context = context or ConversationContext(stream=MemoryStream())
         self._output_stream = output_stream
         self._audio_queue: queue.Queue[bytes | None] = queue.Queue()
         self._worker: threading.Thread | None = None
         self._sub_id: SubId | None = None
 
         self._speaker_lock = threading.Lock()
+
+    @property
+    def stream(self) -> Stream:
+        return self.context.stream
 
     async def __aenter__(self) -> "Player":
         if self._output_stream is None:
@@ -142,7 +151,7 @@ class Player(AudioPlayer[bytes]):
         self._output_stream.__enter__()
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
         self._worker.start()
-        self._sub_id = self._context.stream.where(SynthesizedAudioEvent).subscribe(self._on_audio)
+        self._sub_id = self.context.stream.where(SynthesizedAudioEvent).subscribe(self._on_audio)
         return self
 
     async def __aexit__(
@@ -152,7 +161,7 @@ class Player(AudioPlayer[bytes]):
         traceback: TracebackType | None,
     ) -> None:
         if self._sub_id is not None:
-            self._context.stream.unsubscribe(self._sub_id)
+            self.context.stream.unsubscribe(self._sub_id)
             self._sub_id = None
         self.close()
         if self._output_stream is not None:
