@@ -5,7 +5,7 @@
 """Hub — registry, dispatcher, and state-machine owner.
 
 The hub is the only place that has cross-tenant visibility. It owns
-the registry, session and task state machines, the WAL, the dispatch
+the registry, channel and task state machines, the WAL, the dispatch
 path, the adapter state cache, and the internal sweepers. It never
 calls ``Agent.ask``, executes tenant transforms, or imports tenant
 modules — the trust boundary runs through ``HubClient`` /
@@ -15,12 +15,12 @@ modules — the trust boundary runs through ``HubClient`` /
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
+    AUDIT_KIND_CHANNEL_CLOSED,
+    AUDIT_KIND_CHANNEL_CREATED,
+    AUDIT_KIND_CHANNEL_EXPIRED,
     AUDIT_KIND_EXPECTATION_VIOLATED,
     AUDIT_KIND_RESUME_SET,
     AUDIT_KIND_RULE_SET,
-    AUDIT_KIND_SESSION_CLOSED,
-    AUDIT_KIND_SESSION_CREATED,
-    AUDIT_KIND_SESSION_EXPIRED,
     AUDIT_KIND_SKILL_SET,
     AUDIT_KIND_TASK_TERMINATED,
     RESUME_SOURCE_OBSERVED,
@@ -35,7 +35,7 @@ from .expectations import (
     ExpectationContext,
     ExpectationEvaluator,
     MaxSilenceEvaluator,
-    NotifySessionHandler,
+    NotifyChannelHandler,
     ReplyWithinEvaluator,
     Violation,
     ViolationHandler,
@@ -47,6 +47,9 @@ from .layout import (
     audit_path,
     by_capability_path,
     by_name_path,
+    channel_metadata_path,
+    channel_tasks_index_path,
+    channels_root,
     inbox_cursor_path,
     inbox_nacks_path,
     inbox_overflow_path,
@@ -55,9 +58,6 @@ from .layout import (
     resume_path,
     rule_path,
     runtime_path,
-    session_metadata_path,
-    session_tasks_index_path,
-    sessions_root,
     skill_path,
     task_events_path,
     task_metadata_path,
@@ -68,12 +68,12 @@ from .layout import (
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
     "AUDIT_KIND_AGENT_UNREGISTERED",
+    "AUDIT_KIND_CHANNEL_CLOSED",
+    "AUDIT_KIND_CHANNEL_CREATED",
+    "AUDIT_KIND_CHANNEL_EXPIRED",
     "AUDIT_KIND_EXPECTATION_VIOLATED",
     "AUDIT_KIND_RESUME_SET",
     "AUDIT_KIND_RULE_SET",
-    "AUDIT_KIND_SESSION_CLOSED",
-    "AUDIT_KIND_SESSION_CREATED",
-    "AUDIT_KIND_SESSION_EXPIRED",
     "AUDIT_KIND_SKILL_SET",
     "AUDIT_KIND_TASK_TERMINATED",
     "RESUME_SOURCE_OBSERVED",
@@ -86,7 +86,7 @@ __all__ = (
     "ExpectationEvaluator",
     "Hub",
     "MaxSilenceEvaluator",
-    "NotifySessionHandler",
+    "NotifyChannelHandler",
     "ReplyWithinEvaluator",
     "Violation",
     "ViolationHandler",
@@ -94,6 +94,9 @@ __all__ = (
     "audit_path",
     "by_capability_path",
     "by_name_path",
+    "channel_metadata_path",
+    "channel_tasks_index_path",
+    "channels_root",
     "default_evaluators",
     "default_handlers",
     "inbox_cursor_path",
@@ -104,9 +107,6 @@ __all__ = (
     "resume_path",
     "rule_path",
     "runtime_path",
-    "session_metadata_path",
-    "session_tasks_index_path",
-    "sessions_root",
     "skill_path",
     "task_events_path",
     "task_metadata_path",

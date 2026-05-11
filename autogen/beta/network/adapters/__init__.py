@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Session adapters — code half of the manifest/adapter split.
+"""Channel adapters — code half of the manifest/adapter split.
 
 Adapters are stateless and pure. Every decision derives from
-``(SessionMetadata, AdapterState)`` where ``AdapterState`` is folded
-from the WAL. The hub caches the latest state per session in memory
+``(ChannelMetadata, AdapterState)`` where ``AdapterState`` is folded
+from the WAL. The hub caches the latest state per channel in memory
 and reconstructs it from disk on ``hydrate()`` by re-folding —
 ``validate_send`` and ``on_accepted`` are O(1), not O(WAL).
 
@@ -15,7 +15,7 @@ bidirectional), ``DiscussionAdapter`` (multi-party round-robin), and
 ``WorkflowAdapter`` (transition-graph orchestration).
 """
 
-from .base import AdapterResult, AdapterState, SessionAdapter
+from .base import AdapterResult, AdapterState, ChannelAdapter
 from .consulting import CONSULTING_TYPE, ConsultingAdapter, ConsultingState
 from .conversation import CONVERSATION_TYPE, ConversationAdapter, ConversationState
 from .discussion import (
@@ -34,13 +34,13 @@ __all__ = (
     "WORKFLOW_TYPE",
     "AdapterResult",
     "AdapterState",
+    "ChannelAdapter",
     "ConsultingAdapter",
     "ConsultingState",
     "ConversationAdapter",
     "ConversationState",
     "DiscussionAdapter",
     "DiscussionState",
-    "SessionAdapter",
     "WorkflowAdapter",
     "WorkflowState",
 )

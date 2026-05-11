@@ -1,9 +1,9 @@
 ---
-title: Session Adapters Overview
+title: Channel Adapters Overview
 sidebarTitle: Adapters Overview
 ---
 
-A **session adapter** governs one session's allowed sends, default view policy, expectations, and termination rules. Four built-ins ship with the network module; each has its own page.
+A **channel adapter** governs one channel's allowed sends, default view policy, expectations, and termination rules. Four built-ins ship with the network module; each has its own page.
 
 ## Choosing an Adapter
 
@@ -18,37 +18,37 @@ If you're migrating a classic `GroupChat` orchestration, see [Migrating from Gro
 
 ## The Adapter Protocol
 
-All four adapters implement the same `#!python SessionAdapter` Protocol:
+All four adapters implement the same `#!python ChannelAdapter` Protocol:
 
 ```python
-class SessionAdapter(Protocol):
-    manifest: SessionManifest
+class ChannelAdapter(Protocol):
+    manifest: ChannelManifest
 
-    def initial_state(self, metadata: SessionMetadata) -> AdapterState: ...
+    def initial_state(self, metadata: ChannelMetadata) -> AdapterState: ...
     def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState: ...
-    def validate_create(self, metadata: SessionMetadata) -> None: ...
+    def validate_create(self, metadata: ChannelMetadata) -> None: ...
     def validate_send(
-        self, metadata: SessionMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
     ) -> None: ...
     def on_accepted(
-        self, metadata: SessionMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
     ) -> AdapterResult: ...
 ```
 
-Each method runs at a specific moment in a session's lifecycle:
+Each method runs at a specific moment in a channel's lifecycle:
 
 | Method | When | Purpose |
 |---|---|---|
 | `manifest` | Adapter registration | Static description: type, version, participant counts, knobs schema, default view, default expectations |
-| `initial_state` | Session creation | Build the per-session bookkeeping (e.g. `expected_next_speaker`, turn count) |
-| `validate_create` | Session creation | Reject the create if the manifest's invariants are violated |
-| `fold` | Each accepted envelope | Update the per-session state (turn-taking, flags, last speaker) |
+| `initial_state` | Channel creation | Build the per-channel bookkeeping (e.g. `expected_next_speaker`, turn count) |
+| `validate_create` | Channel creation | Reject the create if the manifest's invariants are violated |
+| `fold` | Each accepted envelope | Update the per-channel state (turn-taking, flags, last speaker) |
 | `validate_send` | Each prospective send | Reject sends that would violate the protocol (out-of-turn, post-terminal) |
 | `on_accepted` | Each accepted envelope | Decide whether to auto-close (`#!python AdapterResult(next_state=CLOSING, ...)`) |
 
-You don't normally implement this protocol yourself — the four built-ins cover most cases, and the workflow adapter is parameterised via `#!python TransitionGraph` for custom orchestrations. The `#!python SessionAdapter` Protocol is exposed for completeness and for advanced use cases.
+You don't normally implement this protocol yourself — the four built-ins cover most cases, and the workflow adapter is parameterised via `#!python TransitionGraph` for custom orchestrations. The `#!python ChannelAdapter` Protocol is exposed for completeness and for advanced use cases.
 
-## Session Lifecycle
+## Channel Lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -57,7 +57,7 @@ stateDiagram-v2
     INVITED --> CLOSED: ack timeout (acks_within violation)
 
     ACTIVE --> CLOSING: adapter.on_accepted → CLOSING
-    ACTIVE --> CLOSING: explicit session.close()
+    ACTIVE --> CLOSING: explicit channel.close()
     ACTIVE --> CLOSED: TTL expired (sweeper)
     ACTIVE --> CLOSED: expectation violation (auto_close)
 
@@ -65,7 +65,7 @@ stateDiagram-v2
     CLOSED --> [*]
 ```
 
-The state lives on `#!python SessionMetadata.state` — read it back via `#!python await hub.get_session(session_id)`.
+The state lives on `#!python ChannelMetadata.state` — read it back via `#!python await hub.get_channel(channel_id)`.
 
 The four adapters differ entirely in what triggers the `ACTIVE → CLOSING` arrow:
 
@@ -77,31 +77,31 @@ flowchart LR
     E[WorkflowAdapter] -->|"TransitionGraph emits<br/>TerminateTarget or max_turns"| C4[CLOSING]
 ```
 
-## SessionMetadata
+## ChannelMetadata
 
 ```python linenums="1"
 from autogen.beta.network import (
     Participant,
     ParticipantRole,
     ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
 )
 ```
 
-The hub-managed record for one session:
+The hub-managed record for one channel:
 
 | Field | Notes |
 |---|---|
-| `session_id` | UUID hex. |
-| `manifest` | Static `SessionManifest` taken from the adapter. |
+| `channel_id` | UUID hex. |
+| `manifest` | Static `ChannelManifest` taken from the adapter. |
 | `creator_id` | Who called `agent_client.open(...)`. |
 | `participants` | List of `#!python Participant(agent_id, role, order)`. The `order` field is set at create time and used by round-robin adapters. |
-| `state` | `SessionState` enum: `INVITED` / `ACTIVE` / `CLOSING` / `CLOSED` / `EXPIRED`. |
+| `state` | `ChannelState` enum: `INVITED` / `ACTIVE` / `CLOSING` / `CLOSED` / `EXPIRED`. |
 | `created_at` | ISO-Z. |
 | `pending_acks` | Agents we're still waiting on. |
-| `close_reason` | Free-form string set when the session terminates. |
+| `close_reason` | Free-form string set when the channel terminates. |
 | `knobs` | Adapter-specific tuning (`{"ordering": "round_robin"}` for discussion, `{"graph": <dict>}` for workflow). |
 
 ## Default Expectations

@@ -46,31 +46,31 @@ async def test_handler_exception_does_not_stop_receive_loop() -> None:
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    # Open the session first under the default handler so bob auto-acks
+    # Open the channel first under the default handler so bob auto-acks
     # the invite. Only then swap in the crashing handler so subsequent
     # text envelopes exercise the per-frame error path.
-    session = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+    channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
 
     async def always_raises(_envelope: Envelope) -> None:
         raise RuntimeError("boom")
 
     bob.on_envelope(always_raises)
 
-    inbox = bob.ensure_session_inbox(session.session_id)
-    # Drain any session-protocol envelopes already queued (invite/opened)
+    inbox = bob.ensure_channel_inbox(channel.channel_id)
+    # Drain any channel-protocol envelopes already queued (invite/opened)
     # so the assertion sees only the two text envelopes we send below.
     while not inbox.empty():
         inbox.get_nowait()
 
     env1 = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
         event_data={"text": "first"},
     )
     env2 = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,

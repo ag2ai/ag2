@@ -18,16 +18,16 @@ from typing import Protocol
 
 from autogen.beta.events import BaseEvent
 
+from ..channel import ChannelMetadata
 from ..envelope import Envelope
-from ..session import SessionMetadata
 
 __all__ = ("EnvelopeRenderer", "ViewPolicy")
 
 
 EnvelopeRenderer = Callable[[Envelope], "str | None"]
 """Project a single envelope to its LLM-visible string, or ``None``
-to skip. Supplied by the session's adapter via
-``SessionAdapter.render_envelope`` so view policies stay
+to skip. Supplied by the channel's adapter via
+``ChannelAdapter.render_envelope`` so view policies stay
 adapter-neutral."""
 
 
@@ -46,10 +46,10 @@ class ViewPolicy(Protocol):
         wal: list[Envelope],
         *,
         participant_id: str,
-        session: SessionMetadata,
+        channel: ChannelMetadata,
         render_envelope: EnvelopeRenderer,
     ) -> list[BaseEvent]:
         """Convert the WAL slice this participant should see into model
-        events. ``render_envelope`` is provided by the session's
+        events. ``render_envelope`` is provided by the channel's
         adapter so the view stays adapter-neutral."""
         ...

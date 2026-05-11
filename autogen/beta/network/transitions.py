@@ -19,7 +19,7 @@ The pieces:
 
 The graph is data: ``to_dict()`` / ``loads()`` round-trip via named
 registries (``register_target`` / ``register_condition``) so it
-persists in ``SessionMetadata.knobs["graph"]`` and survives
+persists in ``ChannelMetadata.knobs["graph"]`` and survives
 ``Hub.hydrate()``. Custom targets / conditions plug in by registering
 under a unique ``name``.
 
@@ -69,9 +69,9 @@ class WorkflowGraphError(NetworkError):
 class TransitionDecision:
     """What a target wants the workflow to do next.
 
-    ``next_speaker=None`` terminates the session; ``close_reason``
-    populates ``SessionMetadata.close_reason`` on the resulting
-    ``EV_SESSION_CLOSED``.
+    ``next_speaker=None`` terminates the channel; ``close_reason``
+    populates ``ChannelMetadata.close_reason`` on the resulting
+    ``EV_CHANNEL_CLOSED``.
     """
 
     next_speaker: str | None
@@ -159,7 +159,7 @@ class StayTarget:
 
 @dataclass(slots=True)
 class RevertToInitiatorTarget:
-    """Back to the session creator."""
+    """Back to the channel creator."""
 
     name: ClassVar[str] = "revert_to_initiator"
 
@@ -169,7 +169,7 @@ class RevertToInitiatorTarget:
 
 @dataclass(slots=True)
 class TerminateTarget:
-    """End the session with ``reason``."""
+    """End the channel with ``reason``."""
 
     reason: str = "after_work"
     name: ClassVar[str] = "terminate"
@@ -226,7 +226,7 @@ class ToolCalled:
 class ContextEquals:
     """Fires when ``state.context_vars[key]`` equals ``value``.
 
-    The session-scoped context dict is mutated by ``ag2.context.set``
+    The channel-scoped context dict is mutated by ``ag2.context.set``
     envelopes; this condition is the read side. Missing keys compare
     as ``None`` so ``ContextEquals(key="foo", value=None)`` fires
     when ``foo`` has never been set or was deleted.
@@ -347,7 +347,7 @@ class TransitionGraph:
     # ── Serialization ──────────────────────────────────────────────
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise to a JSON-friendly dict for ``SessionMetadata.knobs``."""
+        """Serialise to a JSON-friendly dict for ``ChannelMetadata.knobs``."""
         return {
             "initial_speaker": self.initial_speaker,
             "transitions": [_transition_to_dict(t) for t in self.transitions],

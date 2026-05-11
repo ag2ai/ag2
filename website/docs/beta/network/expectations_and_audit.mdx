@@ -5,8 +5,8 @@ sidebarTitle: Expectations & Audit
 
 The hub enforces governance through three layered concepts:
 
-1. **Evaluators** — pure functions over session state that return zero or more `#!python Violation` records when their thresholds are breached.
-2. **Violation handlers** — what to do when a violation fires: log to the audit trail, notify the session, or auto-close.
+1. **Evaluators** — pure functions over channel state that return zero or more `#!python Violation` records when their thresholds are breached.
+2. **Violation handlers** — what to do when a violation fires: log to the audit trail, notify the channel, or auto-close.
 3. **The audit log** — append-only record of every governance-relevant event the hub processes.
 
 ## Evaluators
@@ -15,7 +15,7 @@ Three evaluators ship today, addressed by name in adapter manifests:
 
 | Name | Class | Threshold |
 |---|---|---|
-| `#!python "acks_within"` | `#!python AcksWithinEvaluator` | All invitees must ack within `params["seconds"]` of session creation. |
+| `#!python "acks_within"` | `#!python AcksWithinEvaluator` | All invitees must ack within `params["seconds"]` of channel creation. |
 | `#!python "reply_within"` | `#!python ReplyWithinEvaluator` | The respondent must reply within `params["seconds"]` of the initiator's first send (consulting only). |
 | `#!python "max_silence"` | `#!python MaxSilenceEvaluator` | No participant may go silent for longer than `params["seconds"]`. |
 | `#!python "turn_within"` | (composes from the above) | The next speaker must speak within `params["seconds"]` of being scheduled. |
@@ -53,16 +53,16 @@ expectations = [
 
 | `on_violation` | Handler | Effect |
 |---|---|---|
-| `#!python "audit"` | `#!python AuditHandler` | Write to the audit log only. Session continues. |
-| `#!python "warn"` | `#!python NotifySessionHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the session WAL. |
-| `#!python "auto_close"` | `#!python AutoCloseHandler` | Close the session with `reason="expectation_violated:<name>"`; record to audit. |
+| `#!python "audit"` | `#!python AuditHandler` | Write to the audit log only. Channel continues. |
+| `#!python "warn"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `#!python "auto_close"` | `#!python AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `#!python "hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
 The default registry exposes them as `#!python default_handlers()`.
 
 ## The Sweeper Loop
 
-When the hub is open, an expectation sweeper task wakes every `expectation_sweep_interval` (default 10 s), walks every active session, runs each expectation's evaluator, and dispatches any violations to the configured handler.
+When the hub is open, an expectation sweeper task wakes every `expectation_sweep_interval` (default 10 s), walks every active channel, runs each expectation's evaluator, and dispatches any violations to the configured handler.
 
 For deterministic tests / examples:
 
@@ -105,11 +105,11 @@ Re-exported as constants from `#!python autogen.beta.network`:
 | `#!python AUDIT_KIND_RESUME_SET` | Records the source: `RESUME_SOURCE_TENANT` or `RESUME_SOURCE_OBSERVED`. |
 | `#!python AUDIT_KIND_SKILL_SET` | Records updated skill markdown. |
 | `#!python AUDIT_KIND_RULE_SET` | Records the new rule. |
-| `#!python AUDIT_KIND_SESSION_CREATED` | Records `creator_id`, manifest type/version, participants. |
-| `#!python AUDIT_KIND_SESSION_CLOSED` | Records `reason`. |
-| `#!python AUDIT_KIND_SESSION_EXPIRED` | Records the TTL details. |
+| `#!python AUDIT_KIND_CHANNEL_CREATED` | Records `creator_id`, manifest type/version, participants. |
+| `#!python AUDIT_KIND_CHANNEL_CLOSED` | Records `reason`. |
+| `#!python AUDIT_KIND_CHANNEL_EXPIRED` | Records the TTL details. |
 | `#!python AUDIT_KIND_TASK_TERMINATED` | Records `owner_id`, `capability`, `outcome`, `latency_ms`. |
-| `#!python AUDIT_KIND_EXPECTATION_VIOLATED` | Records `expectation`, `session_id`, evaluator details. |
+| `#!python AUDIT_KIND_EXPECTATION_VIOLATED` | Records `expectation`, `channel_id`, evaluator details. |
 
 ### Inspection patterns
 
@@ -120,10 +120,10 @@ violations = [
     if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED
 ]
 
-# Filter to one session.
-session_records = [
+# Filter to one channel.
+channel_records = [
     r for r in await hub._audit_log.read_all()
-    if r.get("session_id") == session_id
+    if r.get("channel_id") == channel_id
 ]
 ```
 
@@ -150,7 +150,7 @@ class TooManyMessagesEvaluator:
         if text_count > threshold:
             return [Violation(
                 expectation=self.name,
-                session_id=ctx.session.session_id,
+                channel_id=ctx.channel.channel_id,
                 detail=f"text count {text_count} exceeds {threshold}",
             )]
         return []

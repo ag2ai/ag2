@@ -3,7 +3,7 @@ title: Discussion Adapter
 sidebarTitle: Discussion
 ---
 
-`#!python discussion` is an N-party round-robin session. Participants speak in a fixed order, cycling indefinitely until you close it. The adapter enforces "wait your turn" via `#!python validate_send`; the hub's `#!python can_send` probe lets the default handler skip wasted LLM calls when it isn't this agent's turn.
+`#!python discussion` is an N-party round-robin channel. Participants speak in a fixed order, cycling indefinitely until you close it. The adapter enforces "wait your turn" via `#!python validate_send`; the hub's `#!python can_send` probe lets the default handler skip wasted LLM calls when it isn't this agent's turn.
 
 ## Shape
 
@@ -12,7 +12,7 @@ sidebarTitle: Discussion
 | Participants | 2+ |
 | Turn order | Round-robin (creator first, then participants in order) |
 | Auto-close | No |
-| Termination | Explicit `#!python session.close()` or TTL |
+| Termination | Explicit `#!python channel.close()` or TTL |
 | Default view | `#!python WindowedSummary(recent_n=N*2)` (where `N` = participant count) |
 | Default expectations | `#!python turn_within(120s, warn)`, `#!python turn_within(600s, hide)` |
 | Knob | `#!python {"ordering": "round_robin"}` (only ordering shipped today) |
@@ -27,11 +27,11 @@ sequenceDiagram
     participant C as carol
 
     A->>H: open(type="discussion", target=[bob, carol], knobs=round_robin)
-    H->>B: EV_SESSION_INVITE
-    H->>C: EV_SESSION_INVITE
-    B->>H: EV_SESSION_INVITE_ACK
-    C->>H: EV_SESSION_INVITE_ACK
-    H->>A: EV_SESSION_OPENED
+    H->>B: EV_CHANNEL_INVITE
+    H->>C: EV_CHANNEL_INVITE
+    B->>H: EV_CHANNEL_INVITE_ACK
+    C->>H: EV_CHANNEL_INVITE_ACK
+    H->>A: EV_CHANNEL_OPENED
     Note over A,C: expected_next_speaker = alice
 
     A->>H: EV_TEXT (alice 1)
@@ -44,10 +44,10 @@ sequenceDiagram
     Note over H: state.expected_next_speaker ← alice (cycle)
 
     Note over A,C: ...continues until close() or TTL
-    A->>H: session.close()
-    H-->>A: EV_SESSION_CLOSED
-    H-->>B: EV_SESSION_CLOSED
-    H-->>C: EV_SESSION_CLOSED
+    A->>H: channel.close()
+    H-->>A: EV_CHANNEL_CLOSED
+    H-->>B: EV_CHANNEL_CLOSED
+    H-->>C: EV_CHANNEL_CLOSED
 ```
 
 The `#!python can_send` probe lets each default handler skip its LLM call when it's not that participant's turn — see "How Turn Skipping Works" below.
@@ -87,30 +87,30 @@ carol = await carol_hc.register(
     Passport(name="carol"), Resume(),
 )
 
-session = await alice.open(
+channel = await alice.open(
     type="discussion",
     target=[bob.agent_id, carol.agent_id],
     knobs={"ordering": ORDERING_ROUND_ROBIN},
 )
 
-await session.send("Topic: should every developer learn Rust?")
+await channel.send("Topic: should every developer learn Rust?")
 # After the kickoff, each agent's default handler responds when can_send
 # returns true for them — bob, then carol, then alice again, and so on.
 ```
 
-To halt, cap on text count and call `#!python session.close()`:
+To halt, cap on text count and call `#!python channel.close()`:
 
 ```python linenums="1"
-await wait_for_text_count(hub, session.session_id, expected=6)
-await session.close()
+await wait_for_text_count(hub, channel.channel_id, expected=6)
+await channel.close()
 ```
 
 ## How Turn Skipping Works
 
 When alice sends "alice 1", the hub fans out an `#!python EV_TEXT` to bob and carol. Both default handlers fire in parallel:
 
-- **bob's handler** — calls `#!python hc.can_send(session_id, bob.agent_id)`. The adapter says "yes, bob is `expected_next_speaker`." Handler runs `#!python Agent.ask`, sends bob's reply.
-- **carol's handler** — calls `#!python hc.can_send(session_id, carol.agent_id)`. The adapter says "no, expected_next_speaker is bob, not carol." Handler returns without engaging the LLM.
+- **bob's handler** — calls `#!python hc.can_send(channel_id, bob.agent_id)`. The adapter says "yes, bob is `expected_next_speaker`." Handler runs `#!python Agent.ask`, sends bob's reply.
+- **carol's handler** — calls `#!python hc.can_send(channel_id, carol.agent_id)`. The adapter says "no, expected_next_speaker is bob, not carol." Handler returns without engaging the LLM.
 
 When bob's reply lands, the same fan-out happens. Now `expected_next_speaker = carol`, so carol's handler engages and bob's skips. No wasted LLM calls.
 
@@ -132,9 +132,9 @@ When bob's reply lands, the same fan-out happens. Now `expected_next_speaker = c
 
 - `#!python EV_TEXT` from anyone other than `#!python state.expected_next_speaker`.
 - Sends from non-participants.
-- Sends to a closed session.
+- Sends to a closed channel.
 
-Protocol envelopes (`#!python EV_SESSION_*`, `#!python ag2.task.*`) bypass the turn check.
+Protocol envelopes (`#!python EV_CHANNEL_*`, `#!python ag2.task.*`) bypass the turn check.
 
 ## State Object
 
@@ -146,7 +146,7 @@ class DiscussionState:
     turn_count: int = 0
 ```
 
-Read via `#!python hub._adapter_states[session_id]`. The order is fixed at create time by sorting participants on `#!python Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
+Read via `#!python hub._adapter_states[channel_id]`. The order is fixed at create time by sorting participants on `#!python Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
 
 ## Customising the Ordering
 
@@ -154,11 +154,11 @@ Today only `#!python ORDERING_ROUND_ROBIN` ships. The knob is `#!python knobs={"
 
 ## Closing
 
-`#!python discussion` never auto-closes. The example below caps at 6 turns and calls `#!python session.close()`, but four other patterns work for `#!python discussion` too:
+`#!python discussion` never auto-closes. The example below caps at 6 turns and calls `#!python channel.close()`, but four other patterns work for `#!python discussion` too:
 
-* **App-side cap** — count turns and call `#!python session.close()` (canonical, simplest).
-* **Agent-side tool** — any participant calls a tool that closes the session. See [Closing Sessions → Agent-side tool](/docs/beta/network/termination#pattern-2--agent-side-tool).
+* **App-side cap** — count turns and call `#!python channel.close()` (canonical, simplest).
+* **Agent-side tool** — any participant calls a tool that closes the channel. See [Closing Channels → Agent-side tool](/docs/beta/network/termination#pattern-2--agent-side-tool).
 * **Custom adapter** — subclass `#!python DiscussionAdapter` to fold `#!python turn_count` and emit `#!python CLOSING` at a cap (or switch to `#!python workflow` with `#!python TransitionGraph.round_robin(max_turns=N)`).
 * **TTL / expectations** — safety nets only.
 
-See [Closing Sessions](/docs/beta/network/termination) for the full picture.
+See [Closing Channels](/docs/beta/network/termination) for the full picture.

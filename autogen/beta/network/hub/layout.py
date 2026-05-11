@@ -15,6 +15,9 @@ __all__ = (
     "audit_path",
     "by_capability_path",
     "by_name_path",
+    "channel_metadata_path",
+    "channel_tasks_index_path",
+    "channels_root",
     "inbox_cursor_path",
     "inbox_nacks_path",
     "inbox_overflow_path",
@@ -23,9 +26,6 @@ __all__ = (
     "resume_path",
     "rule_path",
     "runtime_path",
-    "session_metadata_path",
-    "session_tasks_index_path",
-    "sessions_root",
     "skill_path",
     "task_events_path",
     "task_metadata_path",
@@ -88,23 +88,23 @@ def by_capability_path() -> str:
     return "/registry/by_capability.json"
 
 
-# ── Sessions ─────────────────────────────────────────────────────────────────
+# ── Channels ─────────────────────────────────────────────────────────────────
 
 
-def sessions_root() -> str:
-    return "/sessions"
+def channels_root() -> str:
+    return "/channels"
 
 
-def session_metadata_path(session_id: str) -> str:
-    return f"/sessions/{session_id}/metadata.json"
+def channel_metadata_path(channel_id: str) -> str:
+    return f"/channels/{channel_id}/metadata.json"
 
 
-def wal_path(session_id: str) -> str:
-    return f"/sessions/{session_id}/wal.jsonl"
+def wal_path(channel_id: str) -> str:
+    return f"/channels/{channel_id}/wal.jsonl"
 
 
-def session_tasks_index_path(session_id: str) -> str:
-    return f"/sessions/{session_id}/tasks.json"
+def channel_tasks_index_path(channel_id: str) -> str:
+    return f"/channels/{channel_id}/tasks.json"
 
 
 # ── Tasks ────────────────────────────────────────────────────────────────────

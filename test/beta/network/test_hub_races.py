@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Hub-mechanic edge cases — registration races, endpoint binding,
-session-id state, concurrent dispatch.
+channel-id state, concurrent dispatch.
 
 These tests target hub-level invariants exercised through the public
 ``HubClient`` / ``AgentClient`` surface and through ``Hub`` directly
@@ -30,7 +30,7 @@ from autogen.beta.network import (
     ProtocolError,
     Resume,
 )
-from autogen.beta.network.session import SessionState
+from autogen.beta.network.channel import ChannelState
 
 from ._helpers import ScriptedConfig
 
@@ -41,7 +41,7 @@ def _agent(name: str) -> Agent:
     # cascades. The default handler still auto-acks invites, which is
     # what these tests need (the alternative — overriding on_envelope
     # to silence the agent — would break invite acks and hang
-    # session creation at invite_ack_timeout).
+    # channel creation at invite_ack_timeout).
     return Agent(name=name, config=ScriptedConfig())
 
 
@@ -125,9 +125,9 @@ async def test_register_collision_does_not_orphan_files() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unregister_mid_session_preserves_wal() -> None:
-    """Unregistering a participant after session activation does NOT erase
-    the session's WAL — the hub keeps session/task state for audit even
+async def test_unregister_mid_channel_preserves_wal() -> None:
+    """Unregistering a participant after channel activation does NOT erase
+    the channel's WAL — the hub keeps channel/task state for audit even
     when an agent leaves."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -138,17 +138,17 @@ async def test_unregister_mid_session_preserves_wal() -> None:
     bob = await hc_bob.register(_agent("bob"), Passport(name="bob"), Resume())
     bob_id = bob.agent_id
 
-    session = await alice.open(type="conversation", target="bob")
-    await session.send("hello", audience=[bob_id])
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("hello", audience=[bob_id])
 
-    pre_wal = await hub.read_wal(session.session_id)
+    pre_wal = await hub.read_wal(channel.channel_id)
     assert any(e.event_type == EV_TEXT for e in pre_wal)
 
     await bob.unregister()
 
     # WAL still intact — an unregistered agent doesn't garbage-collect
-    # session history.
-    post_wal = await hub.read_wal(session.session_id)
+    # channel history.
+    post_wal = await hub.read_wal(channel.channel_id)
     assert post_wal == pre_wal
 
     # Bob is gone from registry.
@@ -156,8 +156,8 @@ async def test_unregister_mid_session_preserves_wal() -> None:
         await hub.get_agent(bob_id)
 
     # Alice can still send (no-one to deliver to, but the WAL appends).
-    await session.send("anyone there?", audience=[bob_id])
-    final_wal = await hub.read_wal(session.session_id)
+    await channel.send("anyone there?", audience=[bob_id])
+    final_wal = await hub.read_wal(channel.channel_id)
     assert sum(1 for e in final_wal if e.event_type == EV_TEXT) == 2
 
     await hc_alice.close()
@@ -179,7 +179,7 @@ async def test_post_from_unregistered_agent_id_raises() -> None:
     # Construct an envelope with the dead agent_id and post via the hub
     # directly (bypassing the AgentClient's local "disconnected" guard).
     envelope = Envelope(
-        session_id="any",
+        channel_id="any",
         sender_id=alice_id,
         audience=None,
         event_type=EV_TEXT,
@@ -231,8 +231,8 @@ async def test_bind_endpoint_to_unregistered_agent_raises() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_posts_same_session_serialize() -> None:
-    """Per-session WAL lock serialises append + fold + on_accepted.
+async def test_concurrent_posts_same_channel_serialize() -> None:
+    """Per-channel WAL lock serialises append + fold + on_accepted.
 
     Conversation adapter accepts unbounded sends from either side, so
     five parallel posts from alice all land in WAL with no corruption,
@@ -245,15 +245,15 @@ async def test_concurrent_posts_same_session_serialize() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
+    channel = await alice.open(type="conversation", target="bob")
 
     async def post(i: int) -> str:
-        return await session.send(f"msg-{i}", audience=[bob.agent_id])
+        return await channel.send(f"msg-{i}", audience=[bob.agent_id])
 
     ids = await asyncio.gather(*[post(i) for i in range(5)])
     assert len(set(ids)) == 5, "envelope_ids must be unique"
 
-    wal = await hub.read_wal(session.session_id)
+    wal = await hub.read_wal(channel.channel_id)
     text_envelopes = [e for e in wal if e.event_type == EV_TEXT]
     assert len(text_envelopes) == 5
     bodies = sorted(e.event_data["text"] for e in text_envelopes)
@@ -264,8 +264,8 @@ async def test_concurrent_posts_same_session_serialize() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_posts_different_sessions_independent() -> None:
-    """Different sessions hold different locks — no cross-contamination."""
+async def test_concurrent_posts_different_channels_independent() -> None:
+    """Different channels hold different locks — no cross-contamination."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -284,8 +284,8 @@ async def test_concurrent_posts_different_sessions_independent() -> None:
         s2.send("to carol 2", audience=[carol.agent_id]),
     )
 
-    wal1 = [e for e in await hub.read_wal(s1.session_id) if e.event_type == EV_TEXT]
-    wal2 = [e for e in await hub.read_wal(s2.session_id) if e.event_type == EV_TEXT]
+    wal1 = [e for e in await hub.read_wal(s1.channel_id) if e.event_type == EV_TEXT]
+    wal2 = [e for e in await hub.read_wal(s2.channel_id) if e.event_type == EV_TEXT]
     assert len(wal1) == 2 and len(wal2) == 2
     assert {e.event_data["text"] for e in wal1} == {"to bob 1", "to bob 2"}
     assert {e.event_data["text"] for e in wal2} == {"to carol 1", "to carol 2"}
@@ -294,11 +294,11 @@ async def test_concurrent_posts_different_sessions_independent() -> None:
     await hub.close()
 
 
-# ── Session-state edges ─────────────────────────────────────────────────────
+# ── Channel-state edges ─────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_post_to_terminal_session_raises() -> None:
+async def test_post_to_terminal_channel_raises() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -306,20 +306,20 @@ async def test_post_to_terminal_session_raises() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    session = await alice.open(type="conversation", target="bob")
-    await session.close(reason="test-close")
-    refreshed = await session.info()
-    assert refreshed.state == SessionState.CLOSED
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.close(reason="test-close")
+    refreshed = await channel.info()
+    assert refreshed.state == ChannelState.CLOSED
 
     with pytest.raises(ProtocolError, match="closed|expired"):
-        await session.send("after close", audience=[bob.agent_id])
+        await channel.send("after close", audience=[bob.agent_id])
 
     await hc.close()
     await hub.close()
 
 
 @pytest.mark.asyncio
-async def test_post_to_unknown_session_raises() -> None:
+async def test_post_to_unknown_channel_raises() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -327,13 +327,13 @@ async def test_post_to_unknown_session_raises() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
 
     envelope = Envelope(
-        session_id="no-such-session",
+        channel_id="no-such-channel",
         sender_id=alice.agent_id,
         audience=None,
         event_type=EV_TEXT,
         event_data={"text": "hi"},
     )
-    with pytest.raises(NotFoundError, match="session not found"):
+    with pytest.raises(NotFoundError, match="channel not found"):
         await alice.send_envelope(envelope)
 
     await hc.close()
@@ -341,7 +341,7 @@ async def test_post_to_unknown_session_raises() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_session_with_unknown_participant_raises() -> None:
+async def test_create_channel_with_unknown_participant_raises() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -349,7 +349,7 @@ async def test_create_session_with_unknown_participant_raises() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
 
     with pytest.raises(NotFoundError):
-        await hub.create_session(
+        await hub.create_channel(
             creator_id=alice.agent_id,
             manifest_type="conversation",
             participants=["nonexistent-uuid"],
@@ -360,7 +360,7 @@ async def test_create_session_with_unknown_participant_raises() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_session_duplicate_participant_raises() -> None:
+async def test_create_channel_duplicate_participant_raises() -> None:
     """Listing the same participant twice trips a ProtocolError before
     any persistence."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -371,21 +371,21 @@ async def test_create_session_duplicate_participant_raises() -> None:
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     with pytest.raises(ProtocolError, match="listed twice"):
-        await hub.create_session(
+        await hub.create_channel(
             creator_id=alice.agent_id,
             manifest_type="discussion",
             participants=[bob.agent_id, bob.agent_id],
         )
 
-    # No session leaked into the registry.
-    assert await hub.list_sessions() == []
+    # No channel leaked into the registry.
+    assert await hub.list_channels() == []
 
     await hc.close()
     await hub.close()
 
 
 @pytest.mark.asyncio
-async def test_create_session_empty_participants_raises() -> None:
+async def test_create_channel_empty_participants_raises() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -393,7 +393,7 @@ async def test_create_session_empty_participants_raises() -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
 
     with pytest.raises(ProtocolError, match="at least one"):
-        await hub.create_session(
+        await hub.create_channel(
             creator_id=alice.agent_id,
             manifest_type="conversation",
             participants=[],
@@ -404,7 +404,7 @@ async def test_create_session_empty_participants_raises() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_session_unknown_manifest_raises() -> None:
+async def test_create_channel_unknown_manifest_raises() -> None:
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -413,7 +413,7 @@ async def test_create_session_unknown_manifest_raises() -> None:
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     with pytest.raises(NotFoundError, match="no adapter"):
-        await hub.create_session(
+        await hub.create_channel(
             creator_id=alice.agent_id,
             manifest_type="nonexistent_protocol",
             participants=[bob.agent_id],
@@ -434,8 +434,8 @@ async def test_hub_close_idempotent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hub_close_with_active_sessions_clean_shutdown() -> None:
-    """Closing a hub while sessions are open should not leak endpoint tasks."""
+async def test_hub_close_with_active_channels_clean_shutdown() -> None:
+    """Closing a hub while channels are open should not leak endpoint tasks."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -457,9 +457,9 @@ async def test_hub_close_with_active_sessions_clean_shutdown() -> None:
 
 
 @pytest.mark.asyncio
-async def test_outbound_access_check_runs_before_session_check() -> None:
+async def test_outbound_access_check_runs_before_channel_check() -> None:
     """If a sender has no permission to reach a recipient, hub raises
-    AccessDeniedError before checking session existence — confirms the
+    AccessDeniedError before checking channel existence — confirms the
     check ordering at the top of post_envelope."""
     from autogen.beta.network import AccessBlock, Rule
 
@@ -476,7 +476,7 @@ async def test_outbound_access_check_runs_before_session_check() -> None:
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     envelope = Envelope(
-        session_id="totally-fake-session",  # would normally raise NotFoundError
+        channel_id="totally-fake-channel",  # would normally raise NotFoundError
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,

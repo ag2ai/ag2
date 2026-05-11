@@ -6,7 +6,7 @@
 unregistered adapters, idempotency.
 
 The hub's persistence root is a ``KnowledgeStore``. Hydrate must
-reconstruct authoritative state (passports, resumes, rules, sessions,
+reconstruct authoritative state (passports, resumes, rules, channels,
 tasks, capability index) from disk even when:
 
 * The store is empty (cold start)
@@ -15,7 +15,7 @@ tasks, capability index) from disk even when:
 * The derived ``by_capability.json`` is missing or stale (must be
   rebuilt from authoritative resumes)
 * The audit log has a partial trailing line from a crash mid-write
-* A session's manifest was created by an adapter that's no longer
+* A channel's manifest was created by an adapter that's no longer
   registered (hydrate keeps the metadata but skips the adapter-state
   fold — sends raise ``ProtocolError`` rather than ``KeyError``)
 * Hydrate is called twice (idempotent)
@@ -56,11 +56,11 @@ def _agent(name: str) -> Agent:
 
 @pytest.mark.asyncio
 async def test_hydrate_empty_store_returns_empty() -> None:
-    """Cold start against a fresh store: no agents, no sessions, no tasks."""
+    """Cold start against a fresh store: no agents, no channels, no tasks."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
 
     assert await hub.list_agents() == []
-    assert await hub.list_sessions() == []
+    assert await hub.list_channels() == []
     assert await hub.list_tasks() == []
 
     await hub.close()
@@ -101,7 +101,7 @@ async def test_hydrate_missing_rule_falls_back_to_default(tmp_path) -> None:
         _agent("alice"),
         Passport(name="alice"),
         Resume(),
-        rule=Rule(limits=LimitsBlock(session_ttl_default="6h")),
+        rule=Rule(limits=LimitsBlock(channel_ttl_default="6h")),
     )
     alice_id = alice.agent_id
     await hc.close()
@@ -114,7 +114,7 @@ async def test_hydrate_missing_rule_falls_back_to_default(tmp_path) -> None:
     hub2 = await Hub.open(deleted_store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     rule = hub2._rules[alice_id]
     # _load_agent inserts the default Rule() when rule.json is absent.
-    assert rule.limits.session_ttl_default == "2h"  # Rule() default
+    assert rule.limits.channel_ttl_default == "2h"  # Rule() default
     assert rule.version == 1
 
     await hub2.close()
@@ -233,8 +233,8 @@ async def test_hydrate_handles_partial_trailing_line_in_audit_log(tmp_path) -> N
 
 
 @pytest.mark.asyncio
-async def test_hydrate_session_with_unregistered_adapter_keeps_metadata(tmp_path) -> None:
-    """A session whose manifest type isn't registered on hydrate keeps
+async def test_hydrate_channel_with_unregistered_adapter_keeps_metadata(tmp_path) -> None:
+    """A channel whose manifest type isn't registered on hydrate keeps
     its metadata for read access but ``post_envelope`` raises
     ``ProtocolError`` rather than crashing with ``KeyError``."""
     store = DiskKnowledgeStore(str(tmp_path))
@@ -243,8 +243,8 @@ async def test_hydrate_session_with_unregistered_adapter_keeps_metadata(tmp_path
     hc = HubClient(link, hub=hub1)
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    session = await alice.open(type="conversation", target="bob")
-    session_id = session.session_id
+    channel = await alice.open(type="conversation", target="bob")
+    channel_id = channel.channel_id
     alice_id = alice.agent_id
     await hc.close()
     await hub1.close()
@@ -253,11 +253,11 @@ async def test_hydrate_session_with_unregistered_adapter_keeps_metadata(tmp_path
     hub2 = Hub(DiskKnowledgeStore(str(tmp_path)))
     await hub2.hydrate()
     # Metadata loaded.
-    sessions = await hub2.list_sessions()
-    assert any(s.session_id == session_id for s in sessions)
+    channels = await hub2.list_channels()
+    assert any(s.channel_id == channel_id for s in channels)
     # No adapter state — substantive sends raise.
     envelope = Envelope(
-        session_id=session_id,
+        channel_id=channel_id,
         sender_id=alice_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -268,26 +268,26 @@ async def test_hydrate_session_with_unregistered_adapter_keeps_metadata(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_hydrate_session_metadata_with_no_adapter_state_not_active(tmp_path) -> None:
-    """A loaded session with no adapter state is NOT placed in
-    ``_active_sessions``, even if the persisted state was ACTIVE."""
+async def test_hydrate_channel_metadata_with_no_adapter_state_not_active(tmp_path) -> None:
+    """A loaded channel with no adapter state is NOT placed in
+    ``_active_channels``, even if the persisted state was ACTIVE."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub1)
     hc = HubClient(link, hub=hub1)
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
-    session = await alice.open(type="conversation", target="bob")
-    session_id = session.session_id
+    channel = await alice.open(type="conversation", target="bob")
+    channel_id = channel.channel_id
     await hc.close()
     await hub1.close()
 
     hub2 = Hub(DiskKnowledgeStore(str(tmp_path)))
     await hub2.hydrate()
-    assert session_id not in hub2._adapter_states
-    # Active cache should not include the session — without adapter
-    # state, the session is unusable.
-    assert session_id not in hub2._active_sessions
+    assert channel_id not in hub2._adapter_states
+    # Active cache should not include the channel — without adapter
+    # state, the channel is unusable.
+    assert channel_id not in hub2._active_channels
 
 
 @pytest.mark.asyncio
@@ -339,8 +339,8 @@ async def test_hydrate_resume_observed_stats_survive(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_hydrate_terminal_session_not_in_active_cache(tmp_path) -> None:
-    """Closed sessions load into _sessions but not _active_sessions."""
+async def test_hydrate_terminal_channel_not_in_active_cache(tmp_path) -> None:
+    """Closed channels load into _channels but not _active_channels."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub1)
@@ -348,20 +348,20 @@ async def test_hydrate_terminal_session_not_in_active_cache(tmp_path) -> None:
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
     await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-    closed_session = await alice.open(type="conversation", target="bob")
-    closed_id = closed_session.session_id
-    await closed_session.close(reason="test")
+    closed_channel = await alice.open(type="conversation", target="bob")
+    closed_id = closed_channel.channel_id
+    await closed_channel.close(reason="test")
 
-    open_session = await alice.open(type="conversation", target="bob")
-    open_id = open_session.session_id
+    open_channel = await alice.open(type="conversation", target="bob")
+    open_id = open_channel.channel_id
 
     await hc.close()
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    assert closed_id in hub2._sessions
-    assert closed_id not in hub2._active_sessions
-    assert open_id in hub2._sessions
-    assert open_id in hub2._active_sessions
+    assert closed_id in hub2._channels
+    assert closed_id not in hub2._active_channels
+    assert open_id in hub2._channels
+    assert open_id in hub2._active_channels
 
     await hub2.close()

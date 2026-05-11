@@ -22,14 +22,16 @@ from typing import TYPE_CHECKING
 from autogen.beta.agent import Agent
 from autogen.beta.task import TaskMetadata, TaskState
 
+from ..adapters.base import ChannelAdapter
+from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..identity import Passport, Resume
 from ..rule import Rule
-from ..session import SessionMetadata, SessionState
 from ..transport.frames import NotifyFrame
 from ..transport.local import LocalLink, LocalLinkClient
 from ..views.base import ViewPolicy
 from .agent_client import AgentClient
+from .plugin import NetworkPlugin
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -83,10 +85,10 @@ class HubClient:
                         # Per-frame dispatch failure (handler/observer/middleware
                         # bug). Log with traceback so the failure is diagnosable
                         # instead of silently hanging the awaiter, then keep the
-                        # loop alive so other sessions still flow.
+                        # loop alive so other channels still flow.
                         logger.exception(
-                            "receive loop dispatch failed: session=%s event=%s recipient=%s",
-                            frame.envelope.session_id,
+                            "receive loop dispatch failed: channel=%s event=%s recipient=%s",
+                            frame.envelope.channel_id,
                             frame.envelope.event_type,
                             frame.recipient_id,
                         )
@@ -106,7 +108,7 @@ class HubClient:
 
         The hub sets ``recipient_id`` per delivery so broadcasts
         (``audience=None``) reach the right ``AgentClient`` without
-        the demuxer re-walking session participants. Frames missing a
+        the demuxer re-walking channel participants. Frames missing a
         ``recipient_id`` fall back to ``audience``-based routing.
         """
         if frame.recipient_id:
@@ -140,9 +142,10 @@ class HubClient:
         dispatched ``NotifyFrame``s reach the right ``AgentClient``. A
         cross-process transport binds via ``HelloFrame`` instead.
 
-        ``attach_plugin`` is accepted for forward compatibility but
-        does nothing here — the LLM-facing tool surface that it
-        attaches lives in a layer that is not part of this module.
+        ``attach_plugin=True`` (default) attaches the ``NetworkPlugin``
+        which adds ``say`` and ``delegate`` to ``agent.tools`` and
+        appends ``NetworkContextPolicy`` to the assembly chain. Pass
+        ``False`` for tests that need a bare agent without LLM tools.
         """
         if self._closed:
             raise RuntimeError("HubClient is closed")
@@ -163,6 +166,10 @@ class HubClient:
             hub_client=self,
         )
         self._clients[passport.agent_id] = client
+
+        if attach_plugin:
+            plugin = NetworkPlugin(client)
+            plugin.register(agent)
 
         return client
 
@@ -212,9 +219,9 @@ class HubClient:
     async def unregister_agent(self, agent_id: str) -> None:
         await self._hub.unregister(agent_id)
 
-    # — Session control —
+    # — Channel control —
 
-    async def create_session(
+    async def create_channel(
         self,
         *,
         creator_id: str,
@@ -226,8 +233,8 @@ class HubClient:
         knobs: dict[str, object] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
-    ) -> SessionMetadata:
-        return await self._hub.create_session(
+    ) -> ChannelMetadata:
+        return await self._hub.create_channel(
             creator_id=creator_id,
             manifest_type=manifest_type,
             manifest_version=manifest_version,
@@ -239,41 +246,58 @@ class HubClient:
             labels=labels,
         )
 
-    async def get_session(self, session_id: str) -> SessionMetadata:
-        return await self._hub.get_session(session_id)
+    async def get_channel(self, channel_id: str) -> ChannelMetadata:
+        return await self._hub.get_channel(channel_id)
 
-    async def list_sessions(
+    async def list_channels(
         self,
         *,
         agent_id: str | None = None,
         include_terminal: bool = False,
         limit: int = 50,
-    ) -> list[SessionMetadata]:
-        results = await self._hub.list_sessions(agent_id=agent_id, limit=limit * 4)
+    ) -> list[ChannelMetadata]:
+        results = await self._hub.list_channels(agent_id=agent_id, limit=limit * 4)
         if not include_terminal:
-            results = [m for m in results if m.state not in (SessionState.CLOSED, SessionState.EXPIRED)]
+            results = [m for m in results if m.state not in (ChannelState.CLOSED, ChannelState.EXPIRED)]
         return results[:limit]
 
-    async def close_session(self, session_id: str, *, reason: str = "") -> SessionMetadata:
-        return await self._hub.close_session(session_id, reason=reason)
+    async def close_channel(self, channel_id: str, *, reason: str = "") -> ChannelMetadata:
+        return await self._hub.close_channel(channel_id, reason=reason)
 
     async def post_envelope(self, envelope: Envelope) -> str:
         return await self._hub.post_envelope(envelope)
 
-    async def read_wal(self, session_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
-        return await self._hub.read_wal(session_id, since=since, until=until)
+    async def read_wal(self, channel_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
+        return await self._hub.read_wal(channel_id, since=since, until=until)
 
     def can_send(
         self,
-        session_id: str,
+        channel_id: str,
         sender_id: str,
         *,
         event_type: str | None = None,
     ) -> bool:
-        return self._hub.can_send(session_id, sender_id, event_type=event_type)
+        return self._hub.can_send(channel_id, sender_id, event_type=event_type)
 
-    def default_view_policy(self, session_id: str, participant_id: str) -> ViewPolicy:
-        return self._hub.default_view_policy(session_id, participant_id)
+    def default_view_policy(self, channel_id: str, participant_id: str) -> ViewPolicy:
+        return self._hub.default_view_policy(channel_id, participant_id)
+
+    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+        """Resolve the adapter for ``channel_id``.
+
+        Delegates to ``Hub.adapter_for`` so the default notify handler
+        and other client-side code can fetch the adapter without
+        reaching into ``_hub`` privates.
+        """
+        return self._hub.adapter_for(channel_id)
+
+    def adapter_state(self, channel_id: str) -> object | None:
+        """Return the cached folded ``AdapterState`` for ``channel_id``.
+
+        Delegates to ``Hub.adapter_state``. Returns ``None`` when the
+        channel has no state yet (e.g. not opened).
+        """
+        return self._hub.adapter_state(channel_id)
 
     # — Task observation (network is one observer) —
 
@@ -284,13 +308,13 @@ class HubClient:
         self,
         *,
         agent_id: str | None = None,
-        session_id: str | None = None,
+        channel_id: str | None = None,
         state: TaskState | None = None,
         limit: int = 50,
     ) -> list[TaskMetadata]:
         return await self._hub.list_tasks(
             agent_id=agent_id,
-            session_id=session_id,
+            channel_id=channel_id,
             state=state,
             limit=limit,
         )

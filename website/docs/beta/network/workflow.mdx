@@ -3,7 +3,7 @@ title: Workflow Adapter
 sidebarTitle: Workflow
 ---
 
-`#!python workflow` is the orchestrated multi-party adapter. A declarative `#!python TransitionGraph` describes who speaks first, what conditions fire, and when the session terminates. It's the modern replacement for the classic `GroupChat + handoffs` pattern — see [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat) for the side-by-side translation.
+`#!python workflow` is the orchestrated multi-party adapter. A declarative `#!python TransitionGraph` describes who speaks first, what conditions fire, and when the channel terminates. It's the modern replacement for the classic `GroupChat + handoffs` pattern — see [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat) for the side-by-side translation.
 
 ## Shape
 
@@ -29,10 +29,10 @@ flowchart LR
     Then --> Decision[TransitionDecision:<br/>next_speaker / close_reason]
     Default --> Decision
     Decision -->|next_speaker is a participant| Continue[expected_next_speaker ← agent_id]
-    Decision -->|next_speaker is None| Terminate[on_accepted returns CLOSING<br/>EV_SESSION_CLOSED with close_reason]
+    Decision -->|next_speaker is None| Terminate[on_accepted returns CLOSING<br/>EV_CHANNEL_CLOSED with close_reason]
 ```
 
-Each accepted substantive envelope walks the transitions list, finds the first matching condition, and resolves a target. `#!python TerminateTarget` (with `#!python next_speaker=None`) ends the session.
+Each accepted substantive envelope walks the transitions list, finds the first matching condition, and resolves a target. `#!python TerminateTarget` (with `#!python next_speaker=None`) ends the channel.
 
 ## Lifecycle: Sequence (Pipeline) Example
 
@@ -44,11 +44,11 @@ sequenceDiagram
     participant C as carol
 
     A->>H: open(type="workflow", target=[bob, carol],<br/>knobs.graph = sequence([alice, bob, carol]))
-    H->>B: EV_SESSION_INVITE
-    H->>C: EV_SESSION_INVITE
-    B->>H: EV_SESSION_INVITE_ACK
-    C->>H: EV_SESSION_INVITE_ACK
-    H->>A: EV_SESSION_OPENED
+    H->>B: EV_CHANNEL_INVITE
+    H->>C: EV_CHANNEL_INVITE
+    B->>H: EV_CHANNEL_INVITE_ACK
+    C->>H: EV_CHANNEL_INVITE_ACK
+    H->>A: EV_CHANNEL_OPENED
     Note over H: graph.initial_speaker = alice
 
     A->>H: EV_TEXT (turn 1)
@@ -59,9 +59,9 @@ sequenceDiagram
     H->>C: deliver
     C->>H: EV_TEXT (turn 3)
     Note over H: no transition matches → default_target<br/>= TerminateTarget("sequence_complete")
-    H-->>A: EV_SESSION_CLOSED (sequence_complete)
-    H-->>B: EV_SESSION_CLOSED
-    H-->>C: EV_SESSION_CLOSED
+    H-->>A: EV_CHANNEL_CLOSED (sequence_complete)
+    H-->>B: EV_CHANNEL_CLOSED
+    H-->>C: EV_CHANNEL_CLOSED
 ```
 
 ## Building the Graph
@@ -94,8 +94,8 @@ class Transition:
 | `#!python AgentTarget(agent_id)` | Hand off to a specific named agent. |
 | `#!python RoundRobinTarget()` | Advance through the participant order. |
 | `#!python StayTarget()` | Same speaker continues (rare; for "let me elaborate" patterns). |
-| `#!python RevertToInitiatorTarget()` | Hand back to whoever opened the session. |
-| `#!python TerminateTarget(reason="…")` | End the session; reason flows on `#!python EV_SESSION_CLOSED`. |
+| `#!python RevertToInitiatorTarget()` | Hand back to whoever opened the channel. |
+| `#!python TerminateTarget(reason="…")` | End the channel; reason flows on `#!python EV_CHANNEL_CLOSED`. |
 
 ## Built-in Conditions
 
@@ -104,7 +104,7 @@ class Transition:
 | `#!python Always()` | Every accepted envelope. |
 | `#!python FromSpeaker(agent_id)` | The just-accepted envelope was sent by this agent. |
 | `#!python ToolCalled(tool_name)` | The previous turn called this tool by name (matched via the packet's `routing.tool` field). |
-| `#!python ContextEquals(key, value)` | Session-scoped `#!python context_vars[key]` equals `#!python value`. |
+| `#!python ContextEquals(key, value)` | Channel-scoped `#!python context_vars[key]` equals `#!python value`. |
 
 `#!python ContextEquals` is the read side of the [Context Variables](/docs/beta/network/context_variables) primitive — most non-trivial routing in classic AG2 went through `#!python OnContextCondition` and friends, and `#!python ContextEquals` is its modern equivalent. The "[Context-Driven Transitions](#context-driven-transitions)" section below covers routing patterns, multi-branch dispatch, and the order-of-rules traps in detail.
 
@@ -153,6 +153,19 @@ graph = TransitionGraph(
 
 For dynamic routing (target depends on runtime state), a tool can return a typed `#!python Handoff(target="<name>", reason="...")` value instead — the framework reads it from the tool's result, resolves the participant name, and stamps `routing.target` on the packet. The matching `#!python ToolCalled` rule is shadowed when a `#!python Handoff` is returned from the same tool: the dynamic target wins.
 
+### Writing a handoff tool
+
+For each `#!python ToolCalled(name) → AgentTarget(agent)` transition, attach an `#!python @tool`-decorated function with that exact name and have it return a typed `#!python Handoff(target=agent.agent_id)`:
+
+```python linenums="1" hl_lines="1 2 3"
+@triage.tool
+async def transfer_to_eng(reason: str = "") -> Handoff:
+    """Transfer the conversation to the engineering specialist."""
+    return Handoff(target=eng.agent_id, reason=reason)
+```
+
+The workflow adapter consumes the `#!python Handoff` from the agent's local-stream `#!python ToolResultEvent` at round-end and routes the next speaker — no separate `#!python ToolCalled` evaluation is needed because the typed return supersedes the graph match. The matching `#!python ToolCalled` rule in the graph remains useful as documentation and as a fallback if you ever want to re-route the same tool name to a different target.
+
 ## Context-Driven Transitions
 
 Most non-trivial group-chat orchestrations in classic AG2 routed on context variables — `#!python OnContextCondition`, `#!python StringContextCondition`, `#!python ExpressionContextCondition`. The beta equivalent is a tool that emits `#!python EV_CONTEXT_SET` and a transition whose `#!python when` is `#!python ContextEquals(key, value)`. The mutation primitive lives on the [Context Variables](/docs/beta/network/context_variables) page; this section is about *using* context to decide who speaks next.
@@ -189,7 +202,7 @@ graph = TransitionGraph(
 )
 ```
 
-Triage's tool flips `#!python urgent=True` when the ticket warrants paging. The condition fires on triage's reply fold and reroutes the next turn to `#!python oncall` — whose `#!python FromSpeaker` rule then terminates the session. Without the flag, triage hands off to the reviewer instead.
+Triage's tool flips `#!python urgent=True` when the ticket warrants paging. The condition fires on triage's reply fold and reroutes the next turn to `#!python oncall` — whose `#!python FromSpeaker` rule then terminates the channel. Without the flag, triage hands off to the reviewer instead.
 
 ### Multi-branch dispatch
 
@@ -250,7 +263,7 @@ Two fixes:
 The first fix is the more common pattern — terminate transitions are cheap, the speaker-rule check is just an `#!python ==` against the envelope's sender_id.
 
 !!! tip "Order check"
-    When a graph-driven session loops unexpectedly, the first thing to check is the transition list order. The shipped `#!python sequence` and `#!python round_robin` factories handle this for you; custom graphs need explicit attention.
+    When a graph-driven channel loops unexpectedly, the first thing to check is the transition list order. The shipped `#!python sequence` and `#!python round_robin` factories handle this for you; custom graphs need explicit attention.
 
 ### Beyond `#!python ContextEquals`
 
@@ -280,7 +293,7 @@ register_condition(ContextThreshold)
 
 `#!python register_condition` plugs the class into `#!python TransitionGraph.to_dict()` round-tripping, so the graph still serialises cleanly through `#!python Hub.hydrate()`. The `#!python AllOf` / `#!python AnyOf` / `#!python ContextIn` / `#!python ContextThreshold` recipes follow the same pattern. See [Context Variables → Custom Conditions](/docs/beta/network/context_variables#custom-conditions) for the full set of recipes.
 
-## Opening a Workflow Session
+## Opening a Workflow Channel
 
 ```python linenums="1" hl_lines="6 7 8 9 10"
 graph = TransitionGraph.round_robin(
@@ -288,30 +301,30 @@ graph = TransitionGraph.round_robin(
     max_turns=6,
 )
 
-session = await alice.open(
+channel = await alice.open(
     type="workflow",
     target=[bob.agent_id, carol.agent_id],
     knobs={"graph": graph.to_dict()},
 )
 ```
 
-`#!python initial_speaker` must match a participant. The creator (alice) is automatically a participant; targets fill the rest. The graph's dict form is what gets stored on `#!python SessionMetadata.knobs["graph"]`, so it round-trips through `#!python Hub.hydrate()` deterministically.
+`#!python initial_speaker` must match a participant. The creator (alice) is automatically a participant; targets fill the rest. The graph's dict form is what gets stored on `#!python ChannelMetadata.knobs["graph"]`, so it round-trips through `#!python Hub.hydrate()` deterministically.
 
 After opening, the creator's first send is treated as turn 1 by the adapter. The default handler then drives subsequent turns by probing `#!python can_send`.
 
 ## Termination
 
-The graph terminates the session when:
+The graph terminates the channel when:
 
 1. A transition fires whose target is `#!python TerminateTarget(reason="…")`, or
 2. `#!python max_turns` is reached and no other transition fires (the `default_target` is consulted), or
-3. An agent explicitly calls `#!python session.close(reason="…")`, or
+3. An agent explicitly calls `#!python channel.close(reason="…")`, or
 4. An expectation violation triggers `#!python AutoCloseHandler`, or
-5. The session's TTL expires.
+5. The channel's TTL expires.
 
-`#!python EV_SESSION_CLOSED` carries the close reason on its `event_data`.
+`#!python EV_CHANNEL_CLOSED` carries the close reason on its `event_data`.
 
-For the cross-adapter view (when to use the workflow graph vs. an app-side cap, an agent tool, or a sentinel adapter), see [Closing Sessions](/docs/beta/network/termination).
+For the cross-adapter view (when to use the workflow graph vs. an app-side cap, an agent tool, or a sentinel adapter), see [Closing Channels](/docs/beta/network/termination).
 
 ## State Object
 
@@ -328,7 +341,7 @@ class WorkflowState:
     graph_data: dict = field(default_factory=dict)
 ```
 
-`#!python expected_next_speaker = None` signals "session should terminate." The adapter's `#!python on_accepted` reads this and returns `#!python AdapterResult(next_state=CLOSING, ...)`.
+`#!python expected_next_speaker = None` signals "channel should terminate." The adapter's `#!python on_accepted` reads this and returns `#!python AdapterResult(next_state=CLOSING, ...)`.
 
 `#!python graph_data` is the serialised graph — the adapter rebuilds `#!python TransitionGraph` on every fold so it doesn't keep mutable graph state in memory between turns.
 
@@ -368,23 +381,23 @@ Custom targets and conditions persist via `#!python TransitionGraph.to_dict()` �
 
 ## Packet execution model
 
-Each `#!python Agent.ask` round on a workflow session commits to the WAL atomically as a single `#!python EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `#!python ToolCalled` rules, or a pre-resolved `routing.target` from a typed `#!python Handoff` return), the round's body text, and a reserved `context_updates` slot. State mutations from tool calls (via `#!python set_context(session, ...)`) land as separate `#!python EV_CONTEXT_SET` envelopes during tool execution — they're folded before the packet, so a `#!python ContextEquals` rule on the same fold sees the just-set value.
+Each `#!python Agent.ask` round on a workflow channel commits to the WAL atomically as a single `#!python EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `#!python ToolCalled` rules, or a pre-resolved `routing.target` from a typed `#!python Handoff` return), the round's body text, and a reserved `context_updates` slot. State mutations from tool calls (via `#!python set_context(channel, ...)`) land as separate `#!python EV_CONTEXT_SET` envelopes during tool execution — they're folded before the packet, so a `#!python ContextEquals` rule on the same fold sees the just-set value.
 
 ### External side-effects and packet retry
 
-The packet model commits a round's effects atomically: if the agent crashes mid-packet, the session reverts to its pre-packet state and the original input is re-dispatched. **Tool calls within that packet will execute again on retry.**
+The packet model commits a round's effects atomically: if the agent crashes mid-packet, the channel reverts to its pre-packet state and the original input is re-dispatched. **Tool calls within that packet will execute again on retry.**
 
 If your tool calls an external system (HTTP API, database, payment gateway, queue), **it must be idempotent under retry** — calling it twice with the same arguments must produce the same outcome as calling it once.
 
 Recommended patterns:
 
-- Use the external service's idempotency-key feature where available (Stripe, S3, well-designed REST APIs). Derive a stable key from `#!python (session_id, round_counter, tool_name)` so retries within a packet reuse the same key.
+- Use the external service's idempotency-key feature where available (Stripe, S3, well-designed REST APIs). Derive a stable key from `#!python (channel_id, round_counter, tool_name)` so retries within a packet reuse the same key.
 - For database writes, use upsert (`INSERT ... ON CONFLICT`) rather than blind insert.
 - For tools that genuinely cannot be made idempotent (rare), gate them behind a HITL confirmation step or run them in a single-tool round so the packet-rollback boundary is tighter.
 
 ### HITL packet-boundary semantics
 
-Non-speaker substantive sends (e.g. a supervisor injecting a correction via `#!python session.send(EV_TEXT, ...)`) are accepted at packet boundaries, not arbitrary instants. While an agent's packet is in flight (including any slow tool execution), `#!python validate_send` keeps that agent as the expected speaker until the packet commits. A supervisor's mid-packet inject waits for the active packet to commit (≈ slow-tool latency) before being accepted.
+Non-speaker substantive sends (e.g. a supervisor injecting a correction via `#!python channel.send(EV_TEXT, ...)`) are accepted at packet boundaries, not arbitrary instants. While an agent's packet is in flight (including any slow tool execution), `#!python validate_send` keeps that agent as the expected speaker until the packet commits. A supervisor's mid-packet inject waits for the active packet to commit (≈ slow-tool latency) before being accepted.
 
 !!! tip "Loose-semantics writes are unaffected"
     `#!python EV_CONTEXT_SET` envelopes (emitted by `#!python set_context` / `#!python delete_context` from any participant) are non-substantive and land immediately, regardless of who's speaking — observer writes during another agent's packet are visible to the next packet's `#!python ContextEquals` evaluation.

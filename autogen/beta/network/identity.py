@@ -92,7 +92,7 @@ class ResumeExample:
     title: str
     outcome: str = ""  # "completed" | "failed" | free-form
     task_id: str | None = None
-    session_id: str | None = None
+    channel_id: str | None = None
     when: str | None = None
     note: str = ""
 

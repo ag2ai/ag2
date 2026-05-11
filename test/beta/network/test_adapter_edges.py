@@ -6,7 +6,7 @@
 
 Each adapter (consulting, conversation, discussion, workflow) declares
 its own protocol shape. The hub gates substantive sends through
-``adapter.validate_send`` under a per-session lock; rejection raises
+``adapter.validate_send`` under a per-channel lock; rejection raises
 ``ProtocolError`` and the WAL must remain untouched. Hydrate re-folds
 the WAL through ``adapter.fold`` so determinism is required (replaying
 the same envelope sequence must produce the same state).
@@ -32,11 +32,11 @@ from autogen.beta.network import (
 from autogen.beta.network.adapters.consulting import ConsultingAdapter, ConsultingState
 from autogen.beta.network.adapters.conversation import ConversationAdapter
 from autogen.beta.network.adapters.discussion import DiscussionAdapter, DiscussionState
-from autogen.beta.network.session import (
+from autogen.beta.network.channel import (
+    ChannelMetadata,
+    ChannelState,
     Participant,
     ParticipantRole,
-    SessionMetadata,
-    SessionState,
 )
 
 from ._helpers import ScriptedConfig
@@ -52,17 +52,17 @@ def _make_metadata(
     creator: str,
     participants: list[tuple[str, ParticipantRole]],
     knobs: dict | None = None,
-) -> SessionMetadata:
+) -> ChannelMetadata:
     parts = [
         Participant(agent_id=aid, role=role, order=i, joined_at="2026-01-01T00:00:00+00:00")
         for i, (aid, role) in enumerate(participants)
     ]
-    return SessionMetadata(
-        session_id="s1",
+    return ChannelMetadata(
+        channel_id="s1",
         manifest=manifest,
         creator_id=creator,
         participants=parts,
-        state=SessionState.ACTIVE,
+        state=ChannelState.ACTIVE,
         created_at="2026-01-01T00:00:00+00:00",
         knobs=knobs or {},
     )
@@ -111,7 +111,7 @@ class TestConsultingAdapter:
         )
         state = adapter.initial_state(meta)
         envelope = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="bob",
             audience=["alice"],
             event_type=EV_TEXT,
@@ -132,7 +132,7 @@ class TestConsultingAdapter:
         )
         state = ConsultingState(initiator_sent=True, respondent_replied=True)
         envelope = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="alice",
             audience=["bob"],
             event_type=EV_TEXT,
@@ -154,14 +154,14 @@ class TestConsultingAdapter:
         )
         envelopes = [
             Envelope(
-                session_id="s1",
+                channel_id="s1",
                 sender_id="alice",
                 audience=["bob"],
                 event_type=EV_TEXT,
                 event_data={"text": "q"},
             ),
             Envelope(
-                session_id="s1",
+                channel_id="s1",
                 sender_id="bob",
                 audience=["alice"],
                 event_type=EV_TEXT,
@@ -194,14 +194,14 @@ class TestConsultingAdapter:
         )
         state = ConsultingState(initiator_sent=True, respondent_replied=True)
         envelope = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="bob",
             audience=["alice"],
             event_type=EV_TEXT,
             event_data={"text": "reply"},
         )
         result = adapter.on_accepted(meta, envelope, state)
-        assert result.next_state == SessionState.CLOSED
+        assert result.next_state == ChannelState.CLOSED
         assert result.auto_close_reason == "consulting_complete"
 
 
@@ -217,7 +217,7 @@ class TestConversationAdapter:
             ],
         )
         envelope = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="eve",
             audience=["alice"],
             event_type=EV_TEXT,
@@ -239,13 +239,13 @@ class TestConversationAdapter:
         state = adapter.initial_state(meta)
         envelopes = [
             Envelope(
-                session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "1"}
+                channel_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "1"}
             ),
             Envelope(
-                session_id="s1", sender_id="bob", audience=["alice"], event_type=EV_TEXT, event_data={"text": "2"}
+                channel_id="s1", sender_id="bob", audience=["alice"], event_type=EV_TEXT, event_data={"text": "2"}
             ),
             Envelope(
-                session_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "3"}
+                channel_id="s1", sender_id="alice", audience=["bob"], event_type=EV_TEXT, event_data={"text": "3"}
             ),
         ]
         for i, env in enumerate(envelopes, 1):
@@ -257,7 +257,7 @@ class TestConversationAdapter:
         assert state.last_envelope_id == "e3"
 
     def test_fold_ignores_protocol_envelopes(self) -> None:
-        from autogen.beta.network.envelope import EV_SESSION_OPENED
+        from autogen.beta.network.envelope import EV_CHANNEL_OPENED
 
         adapter = ConversationAdapter()
         meta = _make_metadata(
@@ -270,11 +270,11 @@ class TestConversationAdapter:
         )
         state = adapter.initial_state(meta)
         opened = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="alice",
             audience=["alice", "bob"],
-            event_type=EV_SESSION_OPENED,
-            event_data={"session_id": "s1"},
+            event_type=EV_CHANNEL_OPENED,
+            event_data={"channel_id": "s1"},
         )
         opened.envelope_id = "p1"
         new = adapter.fold(opened, state)
@@ -320,7 +320,7 @@ class TestDiscussionAdapter:
         state = adapter.initial_state(meta)
         # alice is expected_next_speaker; bob trying to speak is out-of-turn
         envelope = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="bob",
             audience=None,
             event_type=EV_TEXT,
@@ -347,7 +347,7 @@ class TestDiscussionAdapter:
         for i, speaker in enumerate(speakers, 1):
             assert state.expected_next_speaker == speaker
             env = Envelope(
-                session_id="s1",
+                channel_id="s1",
                 sender_id=speaker,
                 audience=None,
                 event_type=EV_TEXT,
@@ -378,7 +378,7 @@ class TestDiscussionAdapter:
         )
         state = adapter.initial_state(meta)
         ghost_env = Envelope(
-            session_id="s1",
+            channel_id="s1",
             sender_id="ghost",
             audience=None,
             event_type=EV_TEXT,
@@ -404,13 +404,13 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
     await hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
-    session = await alice.open(type="discussion", target=["bob", "carol"])
-    pre_wal = await hub.read_wal(session.session_id)
+    channel = await alice.open(type="discussion", target=["bob", "carol"])
+    pre_wal = await hub.read_wal(channel.channel_id)
     pre_count = len(pre_wal)
 
     # Bob tries to speak out-of-turn (alice is initiator, alice goes first).
     envelope = Envelope(
-        session_id=session.session_id,
+        channel_id=channel.channel_id,
         sender_id=bob.agent_id,
         audience=None,
         event_type=EV_TEXT,
@@ -419,7 +419,7 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
     with pytest.raises(ProtocolError):
         await bob.send_envelope(envelope)
 
-    post_wal = await hub.read_wal(session.session_id)
+    post_wal = await hub.read_wal(channel.channel_id)
     assert len(post_wal) == pre_count
     # And no envelope from bob with the rejected text.
     assert all(e.event_data.get("text") != "out of turn" for e in post_wal)
@@ -445,15 +445,15 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
         bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
         carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
-        session = await alice.open(type="discussion", target=["bob", "carol"])
-        sid = session.session_id
+        channel = await alice.open(type="discussion", target=["bob", "carol"])
+        sid = channel.channel_id
 
-        await session.send("a-1", audience=None)
+        await channel.send("a-1", audience=None)
         # bob's default handler does NOT auto-respond (ScriptedConfig
         # returns ""), so we send manually for each speaker in turn.
         await bob._hub_client.post_envelope(
             Envelope(
-                session_id=sid,
+                channel_id=sid,
                 sender_id=bob.agent_id,
                 audience=None,
                 event_type=EV_TEXT,
@@ -462,7 +462,7 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
         )
         await carol._hub_client.post_envelope(
             Envelope(
-                session_id=sid,
+                channel_id=sid,
                 sender_id=carol.agent_id,
                 audience=None,
                 event_type=EV_TEXT,

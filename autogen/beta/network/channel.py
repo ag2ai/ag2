@@ -2,18 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Session data layer — manifests, metadata, expectations.
+"""Channel data layer — manifests, metadata, expectations.
 
-The session description splits in two:
+The channel description splits in two:
 
-* :class:`SessionManifest` — *data*. Persisted with metadata. Describes
-  what the session is.
-* :class:`SessionAdapter` (in ``adapters/base.py``) — *code*. Registered
+* :class:`ChannelManifest` — *data*. Persisted with metadata. Describes
+  what the channel is.
+* :class:`ChannelAdapter` (in ``adapters/base.py``) — *code*. Registered
   in the hub process; looked up by ``(manifest.type, manifest.version)``.
 
-Manifests are snapshotted into ``SessionMetadata.manifest`` at create
+Manifests are snapshotted into ``ChannelMetadata.manifest`` at create
 time. Re-registering an adapter at a new version does **not** mutate
-in-flight sessions.
+in-flight channels.
 
 Adapters control which event types they accept via ``validate_send``;
 there is no hub-level allow-list.
@@ -24,21 +24,21 @@ from enum import Enum
 from typing import Any
 
 __all__ = (
+    "ChannelManifest",
+    "ChannelMetadata",
+    "ChannelState",
     "Expectation",
     "Participant",
     "ParticipantRole",
     "ParticipantSchema",
-    "SessionManifest",
-    "SessionMetadata",
-    "SessionState",
 )
 
 
-class SessionState(str, Enum):
-    """Lifecycle state of a session.
+class ChannelState(str, Enum):
+    """Lifecycle state of a channel.
 
     The state machine is hub-enforced. Transitions are paired with the
-    envelope that drove them under the per-session lock.
+    envelope that drove them under the per-channel lock.
     """
 
     PENDING = "pending"  # invite sent, waiting on acks
@@ -48,19 +48,19 @@ class SessionState(str, Enum):
     EXPIRED = "expired"
 
 
-_TERMINAL_SESSION_STATES: frozenset[SessionState] = frozenset({
-    SessionState.CLOSED,
-    SessionState.EXPIRED,
+_TERMINAL_CHANNEL_STATES: frozenset[ChannelState] = frozenset({
+    ChannelState.CLOSED,
+    ChannelState.EXPIRED,
 })
 
 
-def is_terminal_session_state(state: SessionState) -> bool:
-    """True when the session can no longer accept envelopes."""
-    return state in _TERMINAL_SESSION_STATES
+def is_terminal_channel_state(state: ChannelState) -> bool:
+    """True when the channel can no longer accept envelopes."""
+    return state in _TERMINAL_CHANNEL_STATES
 
 
 class ParticipantRole(str, Enum):
-    """Role of a participant within a session.
+    """Role of a participant within a channel.
 
     Consulting uses ``INITIATOR`` + ``RESPONDENT`` (2-party). Discussion
     and conversation use ``INITIATOR`` + ``PARTICIPANT`` (multi-party).
@@ -86,24 +86,24 @@ class Expectation:
 
     ``name`` selects a built-in evaluator (``acks_within``,
     ``reply_within``, ``max_silence``). Violations are dispatched to one
-    of the built-in handlers (``audit``, ``notify_session``,
+    of the built-in handlers (``audit``, ``notify_channel``,
     ``auto_close``).
     """
 
     name: str
-    on_violation: str  # "audit" | "warn" | "notify_session" | "hide" | "remove" | "auto_close"
+    on_violation: str  # "audit" | "warn" | "notify_channel" | "hide" | "remove" | "auto_close"
     params: dict[str, Any] = field(default_factory=dict)
     applies_to: list[str] | None = None  # role names or agent ids; None = all participants
 
 
 @dataclass(slots=True)
-class SessionManifest:
+class ChannelManifest:
     """Adapter dispatch key + protocol-shape declaration.
 
     The manifest is data only — adapters live in code (see
     ``adapters/base.py``). The hub looks up the adapter by
-    ``(type, version)`` at session create time and snapshots the
-    manifest into ``SessionMetadata.manifest``.
+    ``(type, version)`` at channel create time and snapshots the
+    manifest into ``ChannelMetadata.manifest``.
     """
 
     type: str  # adapter dispatch key, e.g. "consulting"
@@ -117,7 +117,7 @@ class SessionManifest:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SessionManifest":
+    def from_dict(cls, data: dict[str, Any]) -> "ChannelManifest":
         payload = dict(data)
         if isinstance(payload.get("participants"), dict):
             payload["participants"] = ParticipantSchema(**payload["participants"])
@@ -151,8 +151,8 @@ class Participant:
 
 
 @dataclass(slots=True)
-class SessionMetadata:
-    """Mutable lifecycle record for a session.
+class ChannelMetadata:
+    """Mutable lifecycle record for a channel.
 
     ``manifest`` is the snapshot taken at create time — re-registering
     an adapter at a new version does not retroactively change this.
@@ -160,23 +160,23 @@ class SessionMetadata:
     ``labels`` is the catch-all for tenant annotations and includes
     ``"intent"`` if the creator passed one.
 
-    ``pending_acks`` and ``rejected_by`` are populated at session
-    creation and frozen once the session transitions to ``ACTIVE``
+    ``pending_acks`` and ``rejected_by`` are populated at channel
+    creation and frozen once the channel transitions to ``ACTIVE``
     (quorum reached) or fails creation. The handshake is all-or-nothing
     for both 2-party (consulting) and multi-party (discussion,
-    conversation, workflow) sessions: any reject fails creation.
+    conversation, workflow) channels: any reject fails creation.
     """
 
-    session_id: str
-    manifest: SessionManifest
+    channel_id: str
+    manifest: ChannelManifest
     creator_id: str
     participants: list[Participant]
-    state: SessionState
+    state: ChannelState
     created_at: str
     expires_at: str | None = None
     closed_at: str | None = None
     close_reason: str = ""
-    parent_session_id: str | None = None  # nested sessions
+    parent_channel_id: str | None = None  # nested channels
     knobs: dict[str, Any] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
 
@@ -187,7 +187,7 @@ class SessionMetadata:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "session_id": self.session_id,
+            "channel_id": self.channel_id,
             "manifest": self.manifest.to_dict(),
             "creator_id": self.creator_id,
             "participants": [p.to_dict() for p in self.participants],
@@ -196,7 +196,7 @@ class SessionMetadata:
             "expires_at": self.expires_at,
             "closed_at": self.closed_at,
             "close_reason": self.close_reason,
-            "parent_session_id": self.parent_session_id,
+            "parent_channel_id": self.parent_channel_id,
             "knobs": dict(self.knobs),
             "labels": dict(self.labels),
             "required_acks": self.required_acks,
@@ -205,22 +205,22 @@ class SessionMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SessionMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> "ChannelMetadata":
         payload = dict(data)
         manifest = payload.get("manifest")
         if isinstance(manifest, dict):
-            payload["manifest"] = SessionManifest.from_dict(manifest)
+            payload["manifest"] = ChannelManifest.from_dict(manifest)
         if "participants" in payload:
             payload["participants"] = [
                 Participant.from_dict(p) if isinstance(p, dict) else p for p in payload["participants"]
             ]
         state = payload.get("state")
         if isinstance(state, str):
-            payload["state"] = SessionState(state)
+            payload["state"] = ChannelState(state)
         return cls(**payload)
 
     def participant_ids(self) -> list[str]:
         return [p.agent_id for p in self.participants]
 
     def is_terminal(self) -> bool:
-        return is_terminal_session_state(self.state)
+        return is_terminal_channel_state(self.state)

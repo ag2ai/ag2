@@ -5,7 +5,9 @@
 """TokenBudgetPolicy — keep events within a token budget."""
 
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import BaseEvent, ToolResultsEvent
+from autogen.beta.events import BaseEvent
+
+from ._pairing import ensure_tool_pairing
 
 
 class TokenBudgetPolicy:
@@ -40,9 +42,7 @@ class TokenBudgetPolicy:
             retained.append(event)
             budget -= cost
         retained.reverse()
-        # Skip leading ToolResultsEvents whose matching tool_use was trimmed away.
-        while retained and isinstance(retained[0], ToolResultsEvent):
-            retained = retained[1:]
+        retained = ensure_tool_pairing(retained)
 
         if self._transparent:
             prompts = prompts + [f"[{self.name}] Showing {len(retained)} of {len(events)} events (token budget)."]

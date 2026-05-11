@@ -24,7 +24,7 @@ For the classic (non-beta) versions and their conceptual background, see the
 | # | Pattern | Status | Beta primitives | Notable gap |
 |---|---|---|---|---|
 | 1 | [Pipeline](/docs/beta/network/pattern_cookbook/pipeline) | Clean | `#!python TransitionGraph.sequence` or `#!python FromSpeaker → AgentTarget` chain | — |
-| 2 | [Hierarchical](/docs/beta/network/pattern_cookbook/hierarchical) | Partial | `#!python Handoff` returns from delegate tools + `#!python ContextEquals` for terminate | No `#!python NestedChatTarget`; sub-flows via separate sessions |
+| 2 | [Hierarchical](/docs/beta/network/pattern_cookbook/hierarchical) | Partial | `#!python Handoff` returns from delegate tools + `#!python ContextEquals` for terminate | No `#!python NestedChatTarget`; sub-flows via separate channels |
 | 3 | [Star](/docs/beta/network/pattern_cookbook/star) | Clean | `#!python ToolCalled` graph rule for spoke selection + WAL-reading synthesis tool | — |
 | 4 | [Escalation](/docs/beta/network/pattern_cookbook/escalation) | Clean | `#!python Handoff` returns from escalate tools + `#!python ToolCalled("resolve")` for terminate | — |
 | 5 | [Redundant](/docs/beta/network/pattern_cookbook/redundant) | Partial | Sequential fan-out via `#!python TransitionGraph.sequence` | No parallel dispatch; one specialist at a time |
@@ -76,7 +76,7 @@ rule. Used by `02_hierarchical.py` and `04_escalation.py`.
 the typed return shape.
 
 ```python linenums="1"
-async def smart_route(query: str, state: SessionStateInject) -> Handoff:
+async def smart_route(query: str, state: ChannelStateInject) -> Handoff:
     target = pick_best_specialist(query, state.context_vars)
     return Handoff(target=target, reason="routed by load")
 ```
@@ -87,21 +87,21 @@ condition the graph can't express declaratively.
 ## State updates
 
 State mutations are independent of routing and use the workflow-scoped
-helpers `#!python set_context(session, key, value)` and
-`#!python delete_context(session, key)`. They live in
+helpers `#!python set_context(channel, key, value)` and
+`#!python delete_context(channel, key)`. They live in
 `#!python autogen.beta.network.workflow_helpers` rather than the
 top-level `#!python autogen.beta.network` namespace — they only operate
 on `#!python WorkflowState.context_vars` and raise `#!python RuntimeError`
-on a non-workflow session, so the import path itself signals the
+on a non-workflow channel, so the import path itself signals the
 adapter scope.
 
 ```python linenums="1" hl_lines="1"
 from autogen.beta.network.workflow_helpers import set_context
 
 
-async def classify_as_billing(reason: str, session: SessionInject) -> str:
+async def classify_as_billing(reason: str, channel: ChannelInject) -> str:
     """Classify the request as billing. Sets context_vars['category']."""
-    await set_context(session, "category", "billing")
+    await set_context(channel, "category", "billing")
     return f"classified as billing: {reason}"
 ```
 
@@ -111,17 +111,17 @@ Every cookbook page below uses the same close-detection primitive in
 its demo `#!python main`:
 
 ```python linenums="1"
-close_env = await intake_hc.wait_for_session_event(
-    session_id=session.session_id,
-    predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+close_env = await intake_hc.wait_for_channel_event(
+    channel_id=channel.channel_id,
+    predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
     timeout=180.0,
 )
 print(f"closed: reason={close_env.event_data.get('reason')!r}")
 ```
 
-`#!python HubClient.wait_for_session_event` blocks on the per-session
+`#!python HubClient.wait_for_channel_event` blocks on the per-channel
 inbox until an envelope matching the predicate arrives — here, the
-`#!python EV_SESSION_CLOSED` envelope every termination route emits.
+`#!python EV_CHANNEL_CLOSED` envelope every termination route emits.
 The reason string distinguishes the close (e.g. `'sequence_complete'`,
 `'approved'`, `'resolved'`, `'fall_through'`, `'max_iterations'`,
 `'ttl_expired'`).
@@ -132,7 +132,7 @@ helper needed (this is the pattern used in each cookbook page below).
 For the full picture of the five close routes (application close,
 agent-side tool, adapter sentinel, workflow `#!python TerminateTarget`,
 TTL / expectations), see
-[Closing Sessions → Watching for Close](/docs/beta/network/termination#watching-for-close).
+[Closing Channels → Watching for Close](/docs/beta/network/termination#watching-for-close).
 
 ## Roadmap
 
@@ -153,5 +153,5 @@ yet ship versus classic, see [Migrating from Group Chat](/docs/beta/network/migr
 
 - [Workflow Adapter](/docs/beta/network/workflow) — the underlying graph machinery and built-in conditions.
 - [Context Variables](/docs/beta/network/context_variables) — `#!python set_context` / `#!python delete_context`, `#!python ContextEquals`, custom conditions.
-- [Closing Sessions](/docs/beta/network/termination) — termination patterns; many cookbook entries lean on `#!python TerminateTarget` with informative reasons.
+- [Closing Channels](/docs/beta/network/termination) — termination patterns; many cookbook entries lean on `#!python TerminateTarget` with informative reasons.
 - [Migrating from Group Chat](/docs/beta/network/migration_from_group_chat) — concept-level translation table.

@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``ConsultingAdapter`` — strict 1Q1R session.
+"""``ConsultingAdapter`` — strict 1Q1R channel.
 
 Two participants: an initiator and a respondent. The initiator sends
 exactly one substantive envelope, the respondent sends exactly one
-reply, and the session auto-closes on the reply.
+reply, and the channel auto-closes on the reply.
 
 Default expectations:
 * ``acks_within(30s, auto_close)`` — invitee must ack within 30s
@@ -21,25 +21,25 @@ non-respondent send.
 
 from dataclasses import dataclass
 
+from ..channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
+    Expectation,
+    ParticipantRole,
+    ParticipantSchema,
+)
 from ..envelope import (
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     Envelope,
 )
 from ..errors import ProtocolError
-from ..session import (
-    Expectation,
-    ParticipantRole,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
-)
 from ..views.base import ViewPolicy
 from ..views.builtin import FullTranscript
 from .base import (
@@ -55,18 +55,18 @@ __all__ = ("CONSULTING_TYPE", "ConsultingAdapter", "ConsultingState")
 CONSULTING_TYPE = "consulting"
 
 
-_SESSION_PROTOCOL_EVENTS: frozenset[str] = frozenset({
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
+_CHANNEL_PROTOCOL_EVENTS: frozenset[str] = frozenset({
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
 })
 
 
-def _is_session_protocol_event(envelope: Envelope) -> bool:
-    return envelope.event_type in _SESSION_PROTOCOL_EVENTS
+def _is_channel_protocol_event(envelope: Envelope) -> bool:
+    return envelope.event_type in _CHANNEL_PROTOCOL_EVENTS
 
 
 def _is_task_event(envelope: Envelope) -> bool:
@@ -75,12 +75,12 @@ def _is_task_event(envelope: Envelope) -> bool:
 
 @dataclass(slots=True)
 class ConsultingState:
-    """Folded state for a consulting session.
+    """Folded state for a consulting channel.
 
     ``initiator_sent`` flips True on the first ``EV_TEXT`` from the
     initiator. ``respondent_replied`` flips True on the first
     ``EV_TEXT`` from the respondent following the initiator's send.
-    Both flags True means the session is complete and should
+    Both flags True means the channel is complete and should
     auto-close.
     """
 
@@ -100,7 +100,7 @@ class ConsultingAdapter:
     def __init__(self) -> None:
         # __init__ stores params; manifest is a class-level constant
         # constructed once.
-        self.manifest = SessionManifest(
+        self.manifest = ChannelManifest(
             type=CONSULTING_TYPE,
             version=1,
             participants=ParticipantSchema(
@@ -127,23 +127,23 @@ class ConsultingAdapter:
     # ── Static helpers ──────────────────────────────────────────────────────
 
     @staticmethod
-    def _initiator_id(metadata: SessionMetadata) -> str:
+    def _initiator_id(metadata: ChannelMetadata) -> str:
         return metadata.creator_id
 
     @staticmethod
-    def _respondent_id(metadata: SessionMetadata) -> str:
+    def _respondent_id(metadata: ChannelMetadata) -> str:
         for participant in metadata.participants:
             if participant.role is ParticipantRole.RESPONDENT:
                 return participant.agent_id
-        raise ProtocolError(f"consulting session {metadata.session_id!r} has no respondent")
+        raise ProtocolError(f"consulting channel {metadata.channel_id!r} has no respondent")
 
     # ── Adapter Protocol ────────────────────────────────────────────────────
 
-    def initial_state(self, metadata: SessionMetadata) -> ConsultingState:
+    def initial_state(self, metadata: ChannelMetadata) -> ConsultingState:
         return ConsultingState()
 
     def fold(self, envelope: Envelope, state: ConsultingState) -> ConsultingState:
-        if _is_session_protocol_event(envelope) or _is_task_event(envelope):
+        if _is_channel_protocol_event(envelope) or _is_task_event(envelope):
             return state
         if envelope.event_type != EV_TEXT:
             return state
@@ -161,7 +161,7 @@ class ConsultingAdapter:
             )
         return state
 
-    def validate_create(self, metadata: SessionMetadata) -> None:
+    def validate_create(self, metadata: ChannelMetadata) -> None:
         roles = {p.role for p in metadata.participants}
         if ParticipantRole.INITIATOR not in roles:
             raise ProtocolError("consulting requires exactly one initiator")
@@ -172,37 +172,37 @@ class ConsultingAdapter:
 
     def validate_send(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: ConsultingState,
     ) -> None:
         # Hub-emitted protocol events and task envelopes bypass the 1Q1R rule.
-        if _is_session_protocol_event(envelope) or _is_task_event(envelope):
+        if _is_channel_protocol_event(envelope) or _is_task_event(envelope):
             return
         if envelope.event_type != EV_TEXT:
             # Unknown event types are accepted as informational data on the
-            # session.
+            # channel.
             return
         if state.initiator_sent and state.respondent_replied:
-            raise ProtocolError(f"consulting session {metadata.session_id!r} already complete")
+            raise ProtocolError(f"consulting channel {metadata.channel_id!r} already complete")
         if not state.initiator_sent:
             initiator_id = self._initiator_id(metadata)
             if envelope.sender_id != initiator_id:
                 raise ProtocolError(
-                    f"consulting session {metadata.session_id!r} expects first send "
+                    f"consulting channel {metadata.channel_id!r} expects first send "
                     f"from initiator {initiator_id!r}, got {envelope.sender_id!r}"
                 )
         else:
             respondent_id = self._respondent_id(metadata)
             if envelope.sender_id != respondent_id:
                 raise ProtocolError(
-                    f"consulting session {metadata.session_id!r} expects reply "
+                    f"consulting channel {metadata.channel_id!r} expects reply "
                     f"from respondent {respondent_id!r}, got {envelope.sender_id!r}"
                 )
 
     def on_accepted(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: ConsultingState,
     ) -> AdapterResult:
@@ -214,14 +214,14 @@ class ConsultingAdapter:
             # that need a quiescence window (e.g., draining streamed
             # chunks before close).
             return AdapterResult(
-                next_state=SessionState.CLOSED,
+                next_state=ChannelState.CLOSED,
                 auto_close_reason="consulting_complete",
             )
         return AdapterResult()
 
     def default_view_policy(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
         return FullTranscript()

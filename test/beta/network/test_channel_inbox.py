@@ -2,19 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-session inbox availability invariant.
+"""Per-channel inbox availability invariant.
 
-Covers the rule that any ``AgentClient`` involved in a session must
-have a per-session inbox for it. The two creation paths under test:
+Covers the rule that any ``AgentClient`` involved in a channel must
+have a per-channel inbox for it. The two creation paths under test:
 
 * ``AgentClient.open(...)`` pre-creates the inbox for the creator
-  immediately after the hub returns the session metadata.
+  immediately after the hub returns the channel metadata.
 * ``AgentClient.receive(...)`` ensures the inbox exists before queuing
   the inbound envelope, so any joiner gets one on first envelope
   regardless of handler shape (default, custom, or no handler at all).
 
-The race-fix end-to-end check confirms a sleep between ``session.send``
-and ``wait_for_session_event`` no longer drops envelopes — replies and
+The race-fix end-to-end check confirms a sleep between ``channel.send``
+and ``wait_for_channel_event`` no longer drops envelopes — replies and
 the close envelope are queued during the sleep and consumed by the
 later wait.
 """
@@ -27,7 +27,7 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     Envelope,
     Hub,
     HubClient,
@@ -44,8 +44,8 @@ def _agent(name: str, *events: object) -> Agent:
 
 
 @pytest.mark.asyncio
-class TestSessionInboxInvariant:
-    """Every AgentClient involved in a session always has an inbox for it."""
+class TestChannelInboxInvariant:
+    """Every AgentClient involved in a channel always has an inbox for it."""
 
     async def test_creator_has_inbox_after_open(self) -> None:
         store = MemoryKnowledgeStore()
@@ -56,9 +56,9 @@ class TestSessionInboxInvariant:
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
         await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-        session = await alice.open(type=CONSULTING_TYPE, target="bob")
+        channel = await alice.open(type=CONSULTING_TYPE, target="bob")
 
-        assert session.session_id in alice._session_inboxes
+        assert channel.channel_id in alice._channel_inboxes
 
         await alice_hc.close()
         await bob_hc.close()
@@ -75,9 +75,9 @@ class TestSessionInboxInvariant:
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
         bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
-        session = await alice.open(type=CONSULTING_TYPE, target="bob")
+        channel = await alice.open(type=CONSULTING_TYPE, target="bob")
 
-        assert session.session_id in bob._session_inboxes
+        assert channel.channel_id in bob._channel_inboxes
 
         await alice_hc.close()
         await bob_hc.close()
@@ -109,17 +109,17 @@ class TestSessionInboxInvariant:
         )
         bob.on_envelope(silent)
 
-        # Without an ack the session won't go ACTIVE; open() blocks until the
+        # Without an ack the channel won't go ACTIVE; open() blocks until the
         # invite-ack timeout fires (or we cancel). The invite envelope
         # itself reaches bob.receive() before that, which is the point.
         open_task = asyncio.create_task(alice.open(type=CONSULTING_TYPE, target=bob.agent_id))
         await asyncio.sleep(0.1)
 
-        sessions = list(hub._sessions.values())
-        assert len(sessions) == 1
-        session_id = sessions[0].session_id
+        channels = list(hub._channels.values())
+        assert len(channels) == 1
+        channel_id = channels[0].channel_id
 
-        assert session_id in bob._session_inboxes
+        assert channel_id in bob._channel_inboxes
 
         open_task.cancel()
         with contextlib.suppress(BaseException):
@@ -129,16 +129,16 @@ class TestSessionInboxInvariant:
         await bob_hc.close()
         await hub.close()
 
-    async def test_ensure_session_inbox_is_idempotent(self) -> None:
+    async def test_ensure_channel_inbox_is_idempotent(self) -> None:
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0)
         link = LocalLink(hub)
         hc = HubClient(link, hub=hub)
         ac = await hc.register(_agent("solo"), Passport(name="solo"), Resume())
 
-        sid = "fake-session"
-        q1 = ac.ensure_session_inbox(sid)
-        q2 = ac.ensure_session_inbox(sid)
+        sid = "fake-channel"
+        q1 = ac.ensure_channel_inbox(sid)
+        q2 = ac.ensure_channel_inbox(sid)
         assert q1 is q2
 
         await hc.close()
@@ -161,17 +161,17 @@ class TestSessionInboxInvariant:
             Resume(),
         )
 
-        session = await alice.open(type=CONSULTING_TYPE, target=bob.agent_id)
-        await session.send("hi", audience=[bob.agent_id])
+        channel = await alice.open(type=CONSULTING_TYPE, target=bob.agent_id)
+        await channel.send("hi", audience=[bob.agent_id])
 
         # During this sleep: bob's handler runs, replies, ConsultingAdapter
-        # auto-closes, hub posts EV_SESSION_CLOSED. All envelopes must
+        # auto-closes, hub posts EV_CHANNEL_CLOSED. All envelopes must
         # land in alice's pre-existing inbox.
         await asyncio.sleep(0.2)
 
-        close_env = await alice.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=2.0,
         )
         assert close_env.event_data.get("reason") == "consulting_complete"

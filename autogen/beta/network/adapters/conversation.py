@@ -2,42 +2,42 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""``ConversationAdapter`` — bidirectional multi-turn 1+1 session.
+"""``ConversationAdapter`` — bidirectional multi-turn 1+1 channel.
 
 Two participants: initiator and respondent. Either side may send at
-any turn. The session runs until an explicit ``close()`` call or TTL
+any turn. The channel runs until an explicit ``close()`` call or TTL
 expiry — there is no auto-close based on message content.
 
 Default expectations:
 * ``max_silence(3600s, audit)`` — light enforcement; conversations may
   legitimately span hours of idle time.
 
-Task envelopes (``ag2.task.*``) and session-protocol envelopes
-(``ag2.session.*``) bypass conversation's send rule the same way
+Task envelopes (``ag2.task.*``) and channel-protocol envelopes
+(``ag2.channel.*``) bypass conversation's send rule the same way
 consulting does — they're hub bookkeeping or task lifecycle observed
-on the session.
+on the channel.
 """
 
 from dataclasses import dataclass
 
+from ..channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    Expectation,
+    ParticipantRole,
+    ParticipantSchema,
+)
 from ..envelope import (
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     Envelope,
 )
 from ..errors import ProtocolError
-from ..session import (
-    Expectation,
-    ParticipantRole,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-)
 from ..views.base import ViewPolicy
 from ..views.builtin import WindowedSummary
 from .base import (
@@ -54,18 +54,18 @@ CONVERSATION_TYPE = "conversation"
 _DEFAULT_RECENT_N = 10
 
 
-_SESSION_PROTOCOL_EVENTS: frozenset[str] = frozenset({
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
+_CHANNEL_PROTOCOL_EVENTS: frozenset[str] = frozenset({
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
 })
 
 
-def _is_session_protocol_event(envelope: Envelope) -> bool:
-    return envelope.event_type in _SESSION_PROTOCOL_EVENTS
+def _is_channel_protocol_event(envelope: Envelope) -> bool:
+    return envelope.event_type in _CHANNEL_PROTOCOL_EVENTS
 
 
 def _is_task_event(envelope: Envelope) -> bool:
@@ -74,7 +74,7 @@ def _is_task_event(envelope: Envelope) -> bool:
 
 @dataclass(slots=True)
 class ConversationState:
-    """Folded state for a conversation session.
+    """Folded state for a conversation channel.
 
     Conversations have no per-turn ordering constraint, so the state
     only tracks bookkeeping for views and observability — the adapter
@@ -87,7 +87,7 @@ class ConversationState:
 
 
 class ConversationAdapter:
-    """Bidirectional multi-turn 1+1 session.
+    """Bidirectional multi-turn 1+1 channel.
 
     Knobs: none. Participants: exactly 2 (initiator + respondent).
     Default view: :class:`WindowedSummary(recent_n=10)` — bounded
@@ -95,7 +95,7 @@ class ConversationAdapter:
     """
 
     def __init__(self) -> None:
-        self.manifest = SessionManifest(
+        self.manifest = ChannelManifest(
             type=CONVERSATION_TYPE,
             version=1,
             participants=ParticipantSchema(
@@ -116,11 +116,11 @@ class ConversationAdapter:
 
     # ── Adapter Protocol ────────────────────────────────────────────────────
 
-    def initial_state(self, metadata: SessionMetadata) -> ConversationState:
+    def initial_state(self, metadata: ChannelMetadata) -> ConversationState:
         return ConversationState()
 
     def fold(self, envelope: Envelope, state: ConversationState) -> ConversationState:
-        if _is_session_protocol_event(envelope) or _is_task_event(envelope):
+        if _is_channel_protocol_event(envelope) or _is_task_event(envelope):
             return state
         if envelope.event_type != EV_TEXT:
             return state
@@ -130,7 +130,7 @@ class ConversationAdapter:
             last_envelope_id=envelope.envelope_id,
         )
 
-    def validate_create(self, metadata: SessionMetadata) -> None:
+    def validate_create(self, metadata: ChannelMetadata) -> None:
         roles = {p.role for p in metadata.participants}
         if ParticipantRole.INITIATOR not in roles:
             raise ProtocolError("conversation requires exactly one initiator")
@@ -141,11 +141,11 @@ class ConversationAdapter:
 
     def validate_send(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: ConversationState,
     ) -> None:
-        if _is_session_protocol_event(envelope) or _is_task_event(envelope):
+        if _is_channel_protocol_event(envelope) or _is_task_event(envelope):
             return
         if envelope.event_type != EV_TEXT:
             # Unknown event types accepted as informational data — same
@@ -154,23 +154,23 @@ class ConversationAdapter:
         participant_ids = {p.agent_id for p in metadata.participants}
         if envelope.sender_id not in participant_ids:
             raise ProtocolError(
-                f"conversation session {metadata.session_id!r} only accepts "
+                f"conversation channel {metadata.channel_id!r} only accepts "
                 f"sends from participants, got {envelope.sender_id!r}"
             )
 
     def on_accepted(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         envelope: Envelope,
         state: ConversationState,
     ) -> AdapterResult:
-        # Conversations end via explicit ``Hub.close_session`` or TTL
+        # Conversations end via explicit ``Hub.close_channel`` or TTL
         # — never via adapter-initiated transitions on accepted content.
         return AdapterResult()
 
     def default_view_policy(
         self,
-        metadata: SessionMetadata,
+        metadata: ChannelMetadata,
         participant_id: str,
     ) -> ViewPolicy:
         return WindowedSummary(recent_n=_DEFAULT_RECENT_N)

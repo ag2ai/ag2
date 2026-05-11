@@ -132,3 +132,24 @@ class TestOrphanedToolResults:
 
         # The prompt count should reflect that the orphan was removed
         assert str(len(result)) in prompts[-1]
+
+    @pytest.mark.asyncio
+    async def test_mid_window_orphaned_tool_result_is_dropped(self, context: Context) -> None:
+        """An orphaned ToolResultsEvent must be dropped even when not at the head of the window."""
+        tr = _tool_results("tc_1")
+        req_a = ModelRequest([TextInput("a")])
+        req_b = ModelRequest([TextInput("b")])
+        events = [
+            ModelRequest([TextInput("a" * 5000)]),
+            _tool_response("tc_1"),
+            req_a,
+            tr,
+            req_b,
+        ]
+        budget_chars = len(str(req_a)) + len(str(tr)) + len(str(req_b)) + 10
+        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+
+        _, result = await policy.apply([], events, context)
+
+        assert all(not isinstance(e, ToolResultsEvent) for e in result)
+        assert [e.parts[0].content for e in result if isinstance(e, ModelRequest)] == ["a", "b"]
