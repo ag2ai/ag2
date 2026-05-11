@@ -361,7 +361,7 @@ docs = [
 ]
 
 types = [
-    "mypy==1.17.1",
+    "mypy==2.0.0",
     "types-PyYAML",
     "types-decorator",
     "types-pycurl",
@@ -404,6 +404,7 @@ optionals = [
 testing = [
     "ag2[test-core]",
     "starlette",             # AG-UI tests require starlette
+    "respx>=0.23.0,<0.24.0", # search tests
 ]
 
 lint = ["ag2[lint]"]
