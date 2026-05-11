@@ -14,7 +14,7 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.agent import KnowledgeConfig, TaskConfig
 from autogen.beta.compact import CompactTrigger, TailWindowCompact
-from autogen.beta.events.lifecycle import CompactionCompleted
+from autogen.beta.events import CompactionCompleted
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.middleware.builtin import HistoryLimiter, RetryMiddleware

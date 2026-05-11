@@ -39,7 +39,7 @@ from autogen.beta.config import ModelConfig
 from autogen.beta.events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
-from autogen.beta.observer import Observer
+from autogen.beta.observers import Observer
 from autogen.beta.tools.final import ClientTool
 from autogen.beta.tools.tool import Tool
 

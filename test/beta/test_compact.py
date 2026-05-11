@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,12 +6,10 @@
 
 import pytest
 
-from autogen.beta import Agent
+from autogen.beta import Agent, Context
 from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
-from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.lifecycle import CompactionCompleted
+from autogen.beta.events import CompactionCompleted, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig

@@ -14,6 +14,7 @@ from autogen.beta.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
+    DataInput,
     DocumentInput,
     FileIdInput,
     ImageInput,
@@ -22,7 +23,6 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.beta.events.input_events import DataInput
 from autogen.beta.exceptions import UnsupportedInputError
 from autogen.beta.files.types import FileProvider, UploadedFile
 

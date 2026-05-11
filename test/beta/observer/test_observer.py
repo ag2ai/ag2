@@ -10,7 +10,7 @@ import pytest
 
 from autogen.beta import Context
 from autogen.beta.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
-from autogen.beta.observer import BaseObserver
+from autogen.beta.observers import BaseObserver
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch
 
