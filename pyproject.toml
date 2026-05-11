@@ -361,7 +361,7 @@ docs = [
 ]
 
 types = [
-    "mypy==2.0.0",
+    "mypy==1.17.1",
     "types-PyYAML",
     "types-decorator",
     "types-pycurl",
