@@ -27,6 +27,7 @@ from ..channel import (
     ParticipantRole,
     ParticipantSchema,
 )
+from ..client.tools.say import make_say_tool
 from ..envelope import (
     EV_CHANNEL_CLOSED,
     EV_CHANNEL_EXPIRED,
@@ -97,6 +98,7 @@ class ConversationAdapter:
     """
 
     def __init__(self) -> None:
+        self._say_tool_cache: dict[str, object] = {}
         self.manifest = ChannelManifest(
             type=CONVERSATION_TYPE,
             version=1,
@@ -188,10 +190,18 @@ class ConversationAdapter:
 
     def tools_for(self, client, metadata, state, participant_id):
         """Conversation has no turn order — both participants always
-        see ``say``."""
-        from ..client.tools.say import make_say_tool  # noqa: PLC0415
+        see ``say``. Tool resolution is memoized per-client.
+        """
+        return [self._cached_say_tool(client)]
 
-        return [make_say_tool(client)]
+    def _cached_say_tool(self, client):
+        """Memoize ``make_say_tool`` per ``client.agent_id``."""
+        cached = self._say_tool_cache.get(client.agent_id)
+        if cached is not None:
+            return cached
+        tool = make_say_tool(client)
+        self._say_tool_cache[client.agent_id] = tool
+        return tool
 
     def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
         return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)

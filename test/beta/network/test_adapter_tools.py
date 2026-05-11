@@ -12,9 +12,12 @@
 * ``channels(action="open", message=...)`` seeds the first envelope.
 """
 
+import json
+
 import pytest
 
 from autogen.beta import Agent
+from autogen.beta.events import ToolCallEvent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
@@ -213,10 +216,6 @@ async def test_channels_open_with_seed_message() -> None:
     real fast_depends injection path; the agent's scripted reply
     returns a tool call to ``channels(open, message=...)``.
     """
-    import json as _json
-
-    from autogen.beta.events import ToolCallEvent
-
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     link = LocalLink(hub)
@@ -230,7 +229,7 @@ async def test_channels_open_with_seed_message() -> None:
             [
                 ToolCallEvent(
                     name="channels",
-                    arguments=_json.dumps({
+                    arguments=json.dumps({
                         "action": "open",
                         "type": "conversation",
                         "target": "bob",

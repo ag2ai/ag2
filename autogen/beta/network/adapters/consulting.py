@@ -29,6 +29,7 @@ from ..channel import (
     ParticipantRole,
     ParticipantSchema,
 )
+from ..client.tools.say import make_say_tool
 from ..envelope import (
     EV_CHANNEL_CLOSED,
     EV_CHANNEL_EXPIRED,
@@ -102,6 +103,13 @@ class ConsultingAdapter:
     def __init__(self) -> None:
         # __init__ stores params; manifest is a class-level constant
         # constructed once.
+        # Per-client say-tool cache: avoids paying the ``fast_depends``
+        # JSON-schema build cost on every notify-handler turn. Keyed by
+        # ``client.agent_id`` (stable across the client's lifetime). An
+        # unregister + re-register yields a new agent_id, so the dead
+        # entry from the prior generation is leaked memory bounded by
+        # the total registration count — acceptable for V1.
+        self._say_tool_cache: dict[str, object] = {}
         self.manifest = ChannelManifest(
             type=CONSULTING_TYPE,
             version=1,
@@ -244,22 +252,35 @@ class ConsultingAdapter:
         prompt; the respondent has the floor after the prompt lands and
         before they reply. Once the respondent replies the channel
         auto-closes — no further turns.
-        """
-        # Late import to avoid a client→adapters→client cycle at module
-        # import time. Tools live in client/ because they bind to
-        # ``AgentClient``; adapters live one layer lower in the import
-        # graph.
-        from ..client.tools.say import make_say_tool  # noqa: PLC0415
 
+        The resolved tool is memoized per-client on the adapter (see
+        :meth:`_cached_say_tool`) so the per-turn ``fast_depends`` schema
+        build cost is paid once.
+        """
         initiator_id = next(
             (p.agent_id for p in metadata.participants if p.role == ParticipantRole.INITIATOR),
             None,
         )
         if participant_id == initiator_id and not state.initiator_sent:
-            return [make_say_tool(client)]
+            return [self._cached_say_tool(client)]
         if participant_id != initiator_id and state.initiator_sent and not state.respondent_replied:
-            return [make_say_tool(client)]
+            return [self._cached_say_tool(client)]
         return []
+
+    def _cached_say_tool(self, client):
+        """Memoize the per-client ``say`` tool.
+
+        The ``fast_depends`` schema build inside the ``@tool`` decorator
+        is not free; building the tool fresh on every notify-handler
+        turn would dominate per-turn latency at scale. Cache by
+        ``client.agent_id`` (stable for the client's lifetime).
+        """
+        cached = self._say_tool_cache.get(client.agent_id)
+        if cached is not None:
+            return cached
+        tool = make_say_tool(client)
+        self._say_tool_cache[client.agent_id] = tool
+        return tool
 
     def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
         return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)

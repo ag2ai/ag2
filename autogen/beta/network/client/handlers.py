@@ -189,9 +189,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         state = client._hub_client.adapter_state(metadata.channel_id)
         adapter_tools: list = []
         try:
-            adapter_tools = list(
-                adapter.tools_for(client, metadata, state, client.agent_id)
-            )
+            adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
         except Exception:
             logger.exception(
                 "adapter.tools_for raised: channel=%s adapter=%s",

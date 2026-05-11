@@ -9,6 +9,10 @@ notify-handler context). ``channel_id`` overrides for the rare case
 the LLM wants to post into a different channel it's also a participant
 of. ``audience`` is a list of agent **names**; the tool resolves them
 to ids via the hub. ``audience=None`` broadcasts within the channel.
+
+Envelope construction goes through ``adapter.build_text_envelope`` so
+the produced envelope is shaped for the channel's adapter — the same
+helper a non-AG2 bridge would call to drive a turn manually.
 """
 
 from typing import TYPE_CHECKING
@@ -49,10 +53,14 @@ def make_say_tool(agent_client: "AgentClient") -> object:
         ``audience``: list of peer **names**. ``None`` broadcasts within
         the channel. The tool resolves names to agent ids via the hub.
 
+        Envelope shape comes from ``adapter.build_text_envelope`` so
+        per-adapter customization (e.g. an adapter that wraps text in
+        a richer event shape) is honored automatically.
+
         Returns the hub-stamped envelope_id, or an error string if the
         send fails.
         """
-        # Resolve the channel handle.
+        # Resolve the channel handle + metadata.
         target_channel = channel
         actual_client = client if client is not None else agent_client
 
@@ -78,8 +86,23 @@ def make_say_tool(agent_client: "AgentClient") -> object:
                     return f"Error: peer {name!r} has no agent_id"
                 audience_ids.append(passport.agent_id)
 
+        # Build the envelope through the adapter's Layer-2 helper so the
+        # tool produces the same shape a hand-written bridge would. The
+        # adapter is fetched from the public HubClient surface — the
+        # tool never reaches into hub internals.
         try:
-            envelope_id = await target_channel.send(content, audience=audience_ids)
+            adapter = actual_client._hub_client.adapter_for(target_channel.channel_id)
+        except Exception as exc:
+            return f"Error: adapter unavailable for channel {target_channel.channel_id!r}: {exc}"
+        envelope = adapter.build_text_envelope(
+            channel_id=target_channel.channel_id,
+            sender_id=actual_client.agent_id,
+            text=content,
+            audience=audience_ids,
+        )
+
+        try:
+            envelope_id = await actual_client.send_envelope(envelope)
         except Exception as exc:
             return f"Error: send failed: {exc}"
         return f"posted envelope {envelope_id}"

@@ -15,7 +15,17 @@ bidirectional), ``DiscussionAdapter`` (multi-party round-robin), and
 ``WorkflowAdapter`` (transition-graph orchestration).
 """
 
-from .base import AdapterResult, AdapterState, ChannelAdapter
+from .base import (
+    AdapterResult,
+    AdapterState,
+    ChannelAdapter,
+    default_build_packet_envelope,
+    default_build_round_envelope,
+    default_build_text_envelope,
+    default_extract_turn_input,
+    default_render_envelope,
+    default_tools_for,
+)
 from .consulting import CONSULTING_TYPE, ConsultingAdapter, ConsultingState
 from .conversation import CONVERSATION_TYPE, ConversationAdapter, ConversationState
 from .discussion import (
@@ -43,4 +53,10 @@ __all__ = (
     "DiscussionState",
     "WorkflowAdapter",
     "WorkflowState",
+    "default_build_packet_envelope",
+    "default_build_round_envelope",
+    "default_build_text_envelope",
+    "default_extract_turn_input",
+    "default_render_envelope",
+    "default_tools_for",
 )

@@ -154,7 +154,10 @@ class TaskMirror:
 
         Logs at ``ERROR`` and fires ``on_task_event(task_id,
         "mirror_failed", payload)`` through the hub's listeners so the
-        failure surfaces to operators / dashboards.
+        failure surfaces to operators / dashboards. Routing goes
+        through :meth:`HubClient.fire_task_event` (preferred) or
+        :meth:`Hub.fire_task_event` (direct construction in tests) —
+        both are public surfaces.
         """
         logger.error(
             "task mirror failed: op=%s task_id=%s exc=%r",
@@ -162,21 +165,18 @@ class TaskMirror:
             task_id,
             exc,
         )
-        fan_out = getattr(self._hub, "_fan_out", None) if self._hub is not None else None
-        if fan_out is not None:
-            with contextlib.suppress(Exception):
-                await fan_out(
-                    "on_task_event",
-                    task_id,
-                    "mirror_failed",
-                    {
-                        "op": op,
-                        "owner_id": self._owner_id,
-                        "channel_id": self._channel_id,
-                        "exc_type": type(exc).__name__,
-                        "exc_message": str(exc),
-                    },
-                )
+        payload = {
+            "op": op,
+            "owner_id": self._owner_id,
+            "channel_id": self._channel_id,
+            "exc_type": type(exc).__name__,
+            "exc_message": str(exc),
+        }
+        with contextlib.suppress(Exception):
+            if self._hub_client is not None:
+                await self._hub_client.fire_task_event(task_id, "mirror_failed", payload)
+            elif self._hub is not None:
+                await self._hub.fire_task_event(task_id, "mirror_failed", payload)
 
     async def _on_started(self, event: TaskStarted) -> None:
         spec = event.spec if event.spec is not None else TaskSpec(title=event.objective or "")

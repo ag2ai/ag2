@@ -426,6 +426,12 @@ class Hub:
 
         Re-registering at the same ``name`` raises ``ValueError`` — use
         :meth:`unregister_sweeper` first if you mean to replace.
+
+        Sync vs. async: ``register_sweeper`` is synchronous because it
+        only updates internal bookkeeping (and may call the underlying
+        ``_IntervalSweeper.start`` which schedules a fire-and-forget
+        task). :meth:`unregister_sweeper` is async because it awaits the
+        sweeper's task cancellation to ensure clean shutdown.
         """
         if name in self._custom_sweepers:
             raise ValueError(f"sweeper already registered: {name!r}")
@@ -438,7 +444,14 @@ class Hub:
             sweeper.start()
 
     async def unregister_sweeper(self, name: str) -> None:
-        """Stop and remove a custom sweeper. No-op if absent."""
+        """Stop and remove a custom sweeper. No-op if absent.
+
+        Async to mirror :meth:`_IntervalSweeper.stop`, which awaits
+        cancellation of the running task. Custom sweepers registered
+        before :meth:`start` still go through this path on
+        :meth:`close`, so subclasses don't need to track them
+        themselves.
+        """
         sweeper = self._custom_sweepers.pop(name, None)
         if sweeper is not None:
             await sweeper.stop()
@@ -507,6 +520,24 @@ class Hub:
             envelope_id,
             exc,
         )
+
+    async def fire_task_event(
+        self,
+        task_id: str,
+        kind: str,
+        payload: dict,
+    ) -> None:
+        """Fan out an ``on_task_event`` to every listener.
+
+        Public entry point so :class:`TaskMirror` (and other tenant
+        observers) can route task-side notifications through the hub's
+        listener surface without touching ``_fan_out``. ``kind`` is
+        free-form — the built-in listener Protocol documents
+        ``"started"`` / ``"progress"`` / ``"completed"`` / ``"failed"`` /
+        ``"expired"`` / ``"cancelled"`` / ``"mirror_failed"`` as the
+        recognised values, but tenants may emit additional kinds.
+        """
+        await self._fan_out("on_task_event", task_id, kind, payload)
 
     @property
     def audit_log(self) -> AuditLog:
@@ -1876,9 +1907,11 @@ class Hub:
             # don't hang until invite_ack_timeout when the sweeper /
             # auto_close handler closes a PENDING channel out-of-band.
             if was_pending:
-                waiter = self._channel_open_waiters.get(channel_id)
+                waiter = self._channel_open_waiters.pop(channel_id, None)
                 if waiter is not None and not waiter.done():
                     waiter.set_exception(ProtocolError(f"channel {channel_id!r} closed during handshake: {reason}"))
+            else:
+                self._channel_open_waiters.pop(channel_id, None)
 
         await self._persist_channel_metadata(metadata)
 
@@ -1904,6 +1937,16 @@ class Hub:
                 kind_label,
                 {"reason": reason, "metadata": metadata, "at": metadata.closed_at},
             )
+
+            # Bound long-lived hub memory: drop per-channel synchronization
+            # primitives that are meaningless once the channel is terminal.
+            # ``_adapter_states`` is intentionally retained — fold state has
+            # analytical value (tests, debug tools, future re-fold checks)
+            # and is a single dataclass per channel; only the heavier
+            # ``asyncio.Lock`` is released. Done AFTER the close-envelope
+            # WAL append + dispatch so we don't accidentally re-create
+            # the lock we are trying to clean up.
+            self._channel_locks.pop(channel_id, None)
         # ACTIVE state transitions originate from ``_activate_channel``
         # which fires the ``opened`` event directly — no need to fan
         # out again here.

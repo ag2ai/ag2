@@ -17,6 +17,7 @@ import asyncio
 import pytest
 
 from autogen.beta import Agent
+from autogen.beta.events import TaskStarted
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     BaseHubListener,
@@ -27,7 +28,10 @@ from autogen.beta.network import (
     Resume,
     Rule,
 )
+from autogen.beta.network.adapters.consulting import ConsultingAdapter
+from autogen.beta.network.adapters.conversation import ConversationAdapter
 from autogen.beta.network.rule import InboxBlock, LimitsBlock
+from autogen.beta.network.task_mirror import TaskMirror
 from autogen.beta.testing import TestConfig
 
 
@@ -54,9 +58,6 @@ async def test_subclass_on_envelope_posted_fires_without_listener_registration()
     store = MemoryKnowledgeStore()
     hub = _RecordingHub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     # Register adapters manually since we used __init__ directly.
-    from autogen.beta.network.adapters.consulting import ConsultingAdapter
-    from autogen.beta.network.adapters.conversation import ConversationAdapter
-
     hub.register_adapter(ConsultingAdapter())
     hub.register_adapter(ConversationAdapter())
     await hub.hydrate()
@@ -98,8 +99,6 @@ async def test_subclass_hook_runs_alongside_external_listener() -> None:
 
     store = MemoryKnowledgeStore()
     hub = _SubHub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-    from autogen.beta.network.adapters.consulting import ConsultingAdapter
-
     hub.register_adapter(ConsultingAdapter())
     await hub.hydrate()
     await hub.start()
@@ -251,9 +250,6 @@ async def test_inbox_pressure_fires_on_crossing_high_water() -> None:
 @pytest.mark.asyncio
 async def test_task_mirror_failure_fires_mirror_failed_event() -> None:
     """When the mirror cannot reach the hub, fire ``on_task_event(mirror_failed)``."""
-    from autogen.beta.events import TaskStarted
-    from autogen.beta.network.task_mirror import TaskMirror
-
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 

@@ -15,6 +15,7 @@ The grouped surface keeps the LLM's tool list short — discovery,
 state, and lifecycle live behind one tool.
 """
 
+import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
 from autogen.beta.tools import tool
@@ -117,6 +118,11 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
                 try:
                     seeded_envelope_id = await channel.send(message)
                 except Exception as exc:
+                    # Rollback so we deliver atomic-ish semantics: a
+                    # failed seed should not leave a dangling-open
+                    # channel that no one ever sends into.
+                    with contextlib.suppress(Exception):
+                        await hub.close_channel(channel.channel_id, reason="seed_failed")
                     return f"Error: seed send failed: {exc}"
             result: dict = {
                 "channel_id": channel.channel_id,
