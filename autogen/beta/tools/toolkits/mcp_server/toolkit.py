@@ -16,7 +16,7 @@ from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
 from autogen.beta.annotations import Context, Variable
-from autogen.beta.events.tool_events import (
+from autogen.beta.events import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -27,7 +27,7 @@ from autogen.beta.middleware import (
     ToolMiddleware,
     ToolResultType,
 )
-from autogen.beta.tools.final import Toolkit
+from autogen.beta.tools import ToolResult, Toolkit
 from autogen.beta.tools.final.function_tool import (
     FunctionDefinition,
     FunctionToolSchema,
@@ -127,11 +127,12 @@ class _MCPProxyTool(Tool):
             resolved = _resolve_config(self._config, context)
             async with _mcp_session(resolved) as session:
                 result = await session.call_tool(self.name, event.serialized_arguments)
+
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
 
         if result.isError:
-            return ToolErrorEvent.from_call(event, error=RuntimeError(_extract_content(result)))
+            return ToolErrorEvent.from_call(event, error=RuntimeError(str(result)))
 
         return ToolResultEvent.from_call(event, result=_extract_content(result))
 
@@ -214,11 +215,10 @@ def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExe
     return call
 
 
-def _extract_content(result: CallToolResult) -> str:
-    """Flatten an MCP ``tools/call`` result into a string for the model."""
+def _extract_content(result: CallToolResult) -> ToolResult:
     parts = result.content
     if not parts:
-        return result.model_dump_json(exclude_none=True)
+        return ToolResult(result.model_dump_json(exclude_none=True))
 
     chunks: list[str] = []
     for p in parts:
@@ -226,7 +226,7 @@ def _extract_content(result: CallToolResult) -> str:
             chunks.append(p.text)
         else:
             chunks.append(p.model_dump_json(exclude_none=True))
-    return "\n".join(chunks)
+    return ToolResult(parts=chunks)
 
 
 def _resolve_value(value: Any, context: "Context") -> Any:

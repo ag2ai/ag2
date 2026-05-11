@@ -4,7 +4,9 @@
 
 import json
 import traceback
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Any
 from uuid import uuid4
 
@@ -22,15 +24,12 @@ class ToolResult:
 
     def __init__(
         self,
-        *args: SendableMessage | Input,
-        parts: list[SendableMessage | Input] | None = None,
+        *inputs: SendableMessage | Input,
+        parts: Iterable[SendableMessage | Input] = (),
         final: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        inputs: list[SendableMessage | Input] = list(args)
-        if parts:
-            inputs.extend(parts)
-        self.parts = [Input.ensure_input(p) for p in inputs]
+        self.parts = [Input.ensure_input(p) for p in chain(inputs, parts)]
         self.final = final
         self.metadata = metadata or {}
 
