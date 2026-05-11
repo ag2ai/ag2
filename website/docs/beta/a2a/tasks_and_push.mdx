@@ -16,21 +16,29 @@ config = A2AConfig(card_url="http://127.0.0.1:8000")
 
 ### Listing
 
-`#!python list_tasks` returns a page of tasks. Pagination is handled by the caller — pass `#!python page_token` from a prior response back in to advance.
+`#!python list_tasks` returns a `#!python ListedTasks` dataclass — the page's `#!python tasks` plus the server-reported pagination metadata (`#!python next_page_token`, `#!python page_size`, `#!python total_size`). Pagination is handled by the caller — pass `#!python page_token` from a prior response back in to advance.
 
 ```python linenums="1"
-tasks = await list_tasks(config, page_size=10)
-running = await list_tasks(config, status="TASK_STATE_WORKING")
+from a2a.types import TaskState
+
+page = await list_tasks(config, page_size=10)
+for task in page.tasks:
+    print(task.id, task.status.state)
+if page.next_page_token:
+    next_page = await list_tasks(config, page_size=10, page_token=page.next_page_token)
+
+running = await list_tasks(config, status=TaskState.TASK_STATE_WORKING)
 ```
 
 | Argument | Purpose |
 |---|---|
 | `#!python tenant` | Scope the call to a specific tenant on a shared backend |
 | `#!python context_id` | Filter to a single conversation context |
-| `#!python status` | Filter by `#!python TaskState` name (e.g. `#!python "TASK_STATE_WORKING"`) |
+| `#!python status` | Filter by `#!python TaskState` enum value (e.g. `#!python TaskState.TASK_STATE_WORKING`) |
 | `#!python page_size` / `#!python page_token` | Caller-driven pagination |
 | `#!python history_length` | Server-side hint to truncate echoed `#!python Task.history` |
 | `#!python include_artifacts` | Include task artifacts in the response (default: `#!python False`) |
+| `#!python status_timestamp_after` | Filter to tasks whose status timestamp is after this `#!python datetime` |
 
 ### Fetching a Single Task
 

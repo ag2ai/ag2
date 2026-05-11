@@ -42,7 +42,7 @@ config = A2AConfig(
 
 ## Multi-turn — `reply.ask`
 
-A2A servers are stateless from AG2's perspective: every call ships the full conversation history through the AG2-defined `#!python ag2.history+json` extension declared in the card. The continuation API is the regular `#!python reply.ask(...)`:
+A2A servers are stateless from AG2's perspective: every call ships the full conversation history as a `#!python application/vnd.ag2.history+json` `#!python DataPart` attached to the outgoing message. The continuation API is the regular `#!python reply.ask(...)`:
 
 ```python linenums="1"
 remote = Agent("remote", config=A2AConfig(card_url="http://127.0.0.1:8000"))

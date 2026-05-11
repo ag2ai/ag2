@@ -35,7 +35,7 @@ See [Human in the Loop](/docs/beta/context/human_in_the_loop) for the underlying
 
 Streaming connections drop. Network blips, load balancer recycles, idle timeouts — the SSE channel breaks, and the client needs to recover without losing partially-streamed artifacts.
 
-The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id`, deduplicates artifacts already seen by `#!python (artifact_id, last_chunk)`, and continues from where it failed. Application code sees a single uninterrupted reply.
+The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id`, deduplicates artifacts already seen by `#!python artifact_id` (and messages by `#!python message_id`), and continues from where it failed. Application code sees a single uninterrupted reply.
 
 ```python linenums="1" hl_lines="6-8"
 remote = Agent(
@@ -90,15 +90,33 @@ All A2A errors live in `#!python autogen.beta.a2a.errors` and inherit from `#!py
 | `#!python A2AInvalidCardError` | The card is missing data required to connect (no `#!python supported_interfaces`, no usable URL) |
 | `#!python A2AClientToolsNotSupportedError` | Client passed `#!python tools=` but the server card doesn't advertise the `#!python urn:ag2:client-tools:v1` extension |
 | `#!python A2AReconnectError` | Streaming reconnect attempts exhausted — `#!python err.attempts` holds the count |
-| `#!python A2ATaskFailedError` | Task ended in `#!python TASK_STATE_FAILED` — `#!python err.task` holds the final `#!python Task` |
+| `#!python A2ATaskTerminalError` | Base for the three terminal-state errors below; carries `#!python err.task` with the final `#!python Task` (status, history, artifacts) |
+| `#!python A2ATaskFailedError` | Task ended in `#!python TASK_STATE_FAILED` |
 | `#!python A2ATaskRejectedError` | Task ended in `#!python TASK_STATE_REJECTED` |
 | `#!python A2ATaskAuthRequiredError` | Task ended in `#!python TASK_STATE_AUTH_REQUIRED`. Per A2A spec §7.6 the agent expects credentials out-of-band — apply them and retry |
 
-The terminal `#!python A2ATaskTerminalError` subclasses (`#!python Failed`, `#!python Rejected`, `#!python AuthRequired`) all expose `#!python err.task` so you can inspect the final state, history and artifacts before deciding what to do.
+Catch `#!python A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `#!python AuthRequired`, surface the error to the operator on `#!python Failed` / `#!python Rejected`).
 
 ## Testing Helpers
 
-`#!python autogen.beta.a2a.testing` provides utilities used by the integration tests — most usefully `#!python pick_free_port()` for binding gRPC servers to an ephemeral port:
+`#!python autogen.beta.a2a.testing` provides utilities for in-process A2A tests — no real socket, no port binding.
+
+```python linenums="1" hl_lines="4 7"
+from autogen.beta import Agent
+from autogen.beta.a2a import A2AConfig, A2AServer
+from autogen.beta.a2a.testing import make_test_client_factory
+
+server = A2AServer(agent)
+factory = make_test_client_factory(server, url="http://test")
+remote = Agent("remote", config=A2AConfig(card_url="http://test", httpx_client_factory=factory))
+await remote.ask("ping")
+```
+
+| Helper | Purpose |
+|---|---|
+| `#!python make_test_client_factory(server, url=..., timeout=...)` | `#!python httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `#!python httpx.ASGITransport` |
+| `#!python make_test_rest_client_factory(server, url=..., timeout=...)` | Same idea for REST — builds the REST app and a card declaring only the REST interface |
+| `#!python pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
 
 ```python linenums="1"
 from autogen.beta.a2a.testing import pick_free_port

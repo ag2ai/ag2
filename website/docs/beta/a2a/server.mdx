@@ -154,6 +154,109 @@ await asyncio.gather(
 )
 ```
 
+## Customising the `AgentCard`
+
+`#!python build_card(agent, url=...)` accepts a handful of optional kwargs to enrich the published card with discovery metadata and auth declarations.
+
+| Argument | Purpose |
+|---|---|
+| `#!python version` | Card version (defaults to `#!python "1.0.0"`) |
+| `#!python description` | Free-form description. Defaults to the first entry of the agent's system prompt |
+| `#!python skills` | Explicit `#!python Sequence[AgentSkill]`. When `#!python None`, `#!python build_card` walks `#!python agent.tools` for any `#!python SkillsToolkit` and publishes its local skills automatically; falls back to a single agent-derived skill if none are found |
+| `#!python push_notifications` | Toggles `#!python capabilities.push_notifications` on the card |
+| `#!python provider` | `#!python AgentProvider` block (organization, URL) |
+| `#!python documentation_url` / `#!python icon_url` | Discovery metadata |
+| `#!python security_schemes` / `#!python security_requirements` | Auth declarations — see below |
+| `#!python tenants` | `#!python Mapping[TransportName, str]` — surface a per-transport tenant on the corresponding `#!python AgentInterface.tenant` |
+| `#!python rest_url` / `#!python rest_path_prefix` / `#!python grpc_url` | Per-transport URL overrides for multi-transport cards |
+
+### Declaring Authentication
+
+`#!python autogen.beta.a2a.security` ships factories for every A2A-recognised scheme. Combine them with `#!python require()` to publish auth declarations on the card.
+
+```python linenums="1" hl_lines="3 7-13 15-16"
+from autogen.beta.a2a import A2AServer, build_card
+from autogen.beta.a2a.security import (
+    bearer_scheme,
+    api_key_scheme,
+    require,
+)
+
+schemes = {
+    "bearer": bearer_scheme(bearer_format="JWT"),
+    "x_api_key": api_key_scheme(name="X-API-Key", location="header"),
+}
+
+card = build_card(
+    agent,
+    url="http://127.0.0.1:8000",
+    security_schemes=schemes,
+    security_requirements=[require("bearer"), require("x_api_key")],
+)
+```
+
+| Helper | Scheme |
+|---|---|
+| `#!python bearer_scheme(bearer_format=..., description=...)` | HTTP Bearer (e.g. JWT) |
+| `#!python http_auth_scheme(scheme=..., ...)` | Any other HTTP auth scheme (basic, digest, custom bearer formats) |
+| `#!python api_key_scheme(name=..., location=...)` | API key in header / query / cookie |
+| `#!python oauth2_scheme(flows=..., oauth2_metadata_url=...)` | OAuth2 wrapping a pre-built `#!python OAuthFlows` |
+| `#!python open_id_connect_scheme(url=...)` | OpenID Connect discovery URL |
+| `#!python mtls_scheme()` | Mutual TLS client-cert auth |
+
+#### Combining requirements: AND vs OR
+
+The `#!python security_requirements` list holds independent rules — clients only need to satisfy **one** of them (rules are OR-ed). Inside a single `#!python require(...)` call, **all** named schemes must be presented together (arguments are AND-ed).
+
+Schemes that don't need scopes (Bearer, API-key, mTLS) go as positional `#!python str` args; schemes with scopes (OAuth2 / OIDC) go as kwargs.
+
+**Example A — accept Bearer OR API-key** (two separate `#!python require()` calls):
+
+```python linenums="1"
+security_requirements=[
+    require("bearer"),
+    require("x_api_key"),
+]
+```
+
+| Request headers | Accepted? |
+|---|---|
+| `#!python Authorization: Bearer <jwt>` | ✅ matches first rule |
+| `#!python X-API-Key: <key>` | ✅ matches second rule |
+| both headers present | ✅ either rule alone is enough |
+| neither | ❌ no rule satisfied |
+
+**Example B — require Bearer AND API-key together** (one `#!python require()` with two args):
+
+```python linenums="1"
+security_requirements=[
+    require("bearer", "x_api_key"),
+]
+```
+
+| Request headers | Accepted? |
+|---|---|
+| only `#!python Authorization: Bearer <jwt>` | ❌ missing API key |
+| only `#!python X-API-Key: <key>` | ❌ missing Bearer |
+| both headers present | ✅ both args inside the same `#!python require()` satisfied |
+
+**Example C — mixing scopes** (OAuth2 needs scopes, Bearer doesn't):
+
+```python linenums="1"
+security_requirements=[
+    require("bearer", oauth2=["read", "write"]),
+]
+```
+
+Scheme names that aren't valid Python identifiers (e.g. `#!python "X-My-Scheme"`) work as positional args too:
+
+```python linenums="1"
+require("X-My-Scheme")
+```
+
+!!! note
+    `#!python build_card` only **declares** auth on the card — it does not enforce it. Wire the actual check into the ASGI app (Starlette middleware, gateway, reverse proxy) or the gRPC server's interceptors.
+
 ## Adding Cross-cutting Middleware
 
 A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:
