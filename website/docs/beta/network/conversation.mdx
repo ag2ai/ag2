@@ -3,7 +3,7 @@ title: Conversation Adapter
 sidebarTitle: Conversation
 ---
 
-`#!python conversation` is a free-form 2-party session. Either side can send at any time; there's no turn order to enforce, and the adapter never auto-closes. Use it when you want a peer-to-peer back-and-forth and the application logic decides when to stop.
+`#!python conversation` is a free-form 2-party channel. Either side can send at any time; there's no turn order to enforce, and the adapter never auto-closes. Use it when you want a peer-to-peer back-and-forth and the application logic decides when to stop.
 
 ## Shape
 
@@ -12,7 +12,7 @@ sidebarTitle: Conversation
 | Participants | Exactly 2 (`INITIATOR` + `RESPONDENT`) |
 | Turn order | None — either side, any time |
 | Auto-close | Never |
-| Termination | Explicit `#!python session.close()` or TTL |
+| Termination | Explicit `#!python channel.close()` or TTL |
 | Default view | `#!python WindowedSummary(recent_n=10)` |
 | Default expectation | `#!python max_silence(3600s, audit)` |
 
@@ -25,9 +25,9 @@ sequenceDiagram
     participant B as bob (respondent)
 
     A->>H: open(type="conversation", target="bob")
-    H->>B: EV_SESSION_INVITE
-    B->>H: EV_SESSION_INVITE_ACK
-    H->>A: EV_SESSION_OPENED
+    H->>B: EV_CHANNEL_INVITE
+    B->>H: EV_CHANNEL_INVITE_ACK
+    H->>A: EV_CHANNEL_OPENED
     Note over A,B: state = ACTIVE — no turn order
 
     A->>H: EV_TEXT
@@ -38,9 +38,9 @@ sequenceDiagram
     H->>B: deliver
     Note over A,B: ...continues until empty reply<br/>or close() is called
 
-    A->>H: session.close()
-    H-->>A: EV_SESSION_CLOSED
-    H-->>B: EV_SESSION_CLOSED
+    A->>H: channel.close()
+    H-->>A: EV_CHANNEL_CLOSED
+    H-->>B: EV_CHANNEL_CLOSED
 ```
 
 `#!python validate_send` only checks "is the sender a participant?" — it accepts sends from either side at any time, in any order.
@@ -71,26 +71,26 @@ bob = await bob_hc.register(
     Resume(),
 )
 
-session = await alice.open(type="conversation", target="bob")
-await session.send("Hi bob, what's a good first ML concept to learn?")
+channel = await alice.open(type="conversation", target="bob")
+await channel.send("Hi bob, what's a good first ML concept to learn?")
 ```
 
 Both default handlers run `#!python Agent.ask` on every inbound `#!python EV_TEXT`, so the conversation auto-drives. Two ways to halt:
 
 ```python linenums="1" hl_lines="6 8"
 # Cap by message count, then explicit close.
-async def wait_for_text_count(hub, session_id, expected, *, timeout=120.0):
+async def wait_for_text_count(hub, channel_id, expected, *, timeout=120.0):
     import asyncio
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session_id)
+        wal = await hub.read_wal(channel_id)
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return
         await asyncio.sleep(0.05)
     raise asyncio.TimeoutError("did not reach expected count")
 
-await wait_for_text_count(hub, session.session_id, expected=6)
-await session.close()
+await wait_for_text_count(hub, channel.channel_id, expected=6)
+await channel.close()
 ```
 
 Or rely on the LLM returning empty: the default handler treats an empty body as "don't send", which halts the chain naturally.
@@ -125,25 +125,25 @@ class ConversationState:
     last_speaker_id: str | None = None
 ```
 
-Minimal — just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `#!python hub._adapter_states[session_id]` (the underscore is intentional — operator API).
+Minimal — just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `#!python hub._adapter_states[channel_id]` (the underscore is intentional — operator API).
 
 ## Closing
 
-The adapter never closes itself. To end the session, do one of:
+The adapter never closes itself. To end the channel, do one of:
 
 ```python linenums="1"
 # Explicit close from any participant.
-await session.close()
+await channel.close()
 
 # Or rely on the TTL — set via Rule.limits or the adapter's manifest.
 ```
 
-When closed, the hub posts `#!python EV_SESSION_CLOSED` with whatever reason you supply (or the default `"explicit_close"`).
+When closed, the hub posts `#!python EV_CHANNEL_CLOSED` with whatever reason you supply (or the default `"explicit_close"`).
 
 Three more termination patterns work cleanly with `#!python conversation`:
 
-* **Agent-side tool** — any participant calls a tool that closes the session. Modern analogue of `#!python is_termination_msg`.
+* **Agent-side tool** — any participant calls a tool that closes the channel. Modern analogue of `#!python is_termination_msg`.
 * **Adapter sentinel** — subclass `#!python ConversationAdapter` and watch for a keyword in accepted envelopes.
 * **TTL / expectations** — safety nets only; not the primary stop signal.
 
-See [Closing Sessions](/docs/beta/network/termination) for the worked examples.
+See [Closing Channels](/docs/beta/network/termination) for the worked examples.

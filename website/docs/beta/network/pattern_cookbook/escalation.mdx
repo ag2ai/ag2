@@ -63,7 +63,7 @@ sequenceDiagram
 | Classic | Beta |
 |---|---|
 | `#!python ReplyResult(target=AgentTarget(tier2), context_variables={...})` | `#!python return Handoff(target="tier2", reason=...)` |
-| `#!python ContextVariables[...] = answer` to record the answer | `#!python await set_context(session, "resolution", answer)` |
+| `#!python ContextVariables[...] = answer` to record the answer | `#!python await set_context(channel, "resolution", answer)` |
 | Confidence threshold via `#!python ExpressionContextCondition("confidence < 7")` | Custom `#!python ContextThreshold` condition (recipe in [Context Variables → Custom Conditions](/docs/beta/network/context_variables#custom-conditions)) |
 
 ### Gaps & Workarounds
@@ -108,7 +108,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
@@ -119,7 +119,7 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
-    SessionInject,
+    ChannelInject,
     TerminateTarget,
     ToolCalled,
     Transition,
@@ -145,14 +145,14 @@ async def escalate_to_senior(reason: str) -> Handoff:
     return Handoff(target="senior", reason=reason)
 
 
-async def resolve(answer: str, session: SessionInject) -> str:
+async def resolve(answer: str, channel: ChannelInject) -> str:
     """Resolve the request. Stores the answer in
     context_vars['resolution'] and the graph's
     ToolCalled('resolve') rule terminates the workflow."""
-    if session is None:
-        return "no session"
+    if channel is None:
+        return "no channel"
     print(f"  [tool] resolve({answer[:60]!r}…)")
-    await set_context(session, "resolution", answer)
+    await set_context(channel, "resolution", answer)
     return "resolved"
 
 
@@ -241,12 +241,12 @@ async def main() -> None:
         max_turns=10,
     )
 
-    session = await user.open(
+    channel = await user.open(
         type=WORKFLOW_TYPE,
         target=[tier1.agent_id, tier2.agent_id, senior.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         user.agent_id: "user",
@@ -255,7 +255,7 @@ async def main() -> None:
         senior.agent_id: "senior",
     }
 
-    await session.send(
+    await channel.send(
         "My refrigerator's compressor is humming louder than usual and "
         "occasionally clicks. What's wrong and how do I fix it?"
     )
@@ -263,14 +263,14 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # ToolCalled("resolve") → TerminateTarget("resolved")).
-    close_env = await user_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await user_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=180.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub_obj.read_wal(session.session_id):
+    for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -286,7 +286,7 @@ async def main() -> None:
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
     print("\n--- final resolution ---")
-    state = hub_obj._adapter_states[session.session_id]
+    state = hub_obj._adapter_states[channel.channel_id]
     print(state.context_vars.get("resolution", "(no resolution)"))
 
     await user_hc.close()
@@ -303,7 +303,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
-session: c047...
+channel: c047...
 
            user: My refrigerator's compressor is humming louder than usual and occasionally clicks. What's wrong and how do I fix it?
   [tool] escalate_to_tier2('Customer is reporting a technical issue with a refrigerator compressor that requires technical diagnosis, which is outside tier-1 scope.')

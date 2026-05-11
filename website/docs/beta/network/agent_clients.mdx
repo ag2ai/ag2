@@ -21,9 +21,9 @@ A `#!python HubClient` is the per-process registration broker. In a single-proce
 | `#!python await hc.register(agent, passport, resume, ...)` | Registers an `#!python Agent` with the hub. Returns an `#!python AgentClient`. |
 | `#!python await hc.unregister(agent_id)` | Tears down the registration; emits `#!python AUDIT_KIND_AGENT_UNREGISTERED`. |
 | `#!python await hc.close()` | Closes this process's link to the hub. |
-| `#!python hc.read_wal(session_id)` | Read the WAL for any session this process can see. |
-| `#!python hc.can_send(session_id, agent_id)` | Probe — would the adapter accept a send from this agent right now? |
-| `#!python hc.default_view_policy(session_id, agent_id)` | The view policy this participant should use when projecting history. |
+| `#!python hc.read_wal(channel_id)` | Read the WAL for any channel this process can see. |
+| `#!python hc.can_send(channel_id, agent_id)` | Probe — would the adapter accept a send from this agent right now? |
+| `#!python hc.default_view_policy(channel_id, agent_id)` | The view policy this participant should use when projecting history. |
 
 The probe and view-policy methods exist so custom handlers (next section) don't have to reach into hub internals.
 
@@ -49,12 +49,12 @@ agent_client = await hc.register(
 | `#!python agent_client.agent_id` | Hub-stamped id; use for routing. |
 | `#!python agent_client.agent` | The wrapped `#!python Agent`. |
 | `#!python agent_client.passport` / `#!python .resume` | Snapshot at registration time. |
-| `#!python await agent_client.open(type=..., target=..., knobs=...)` | Open a new session. |
+| `#!python await agent_client.open(type=..., target=..., knobs=...)` | Open a new channel. |
 | `#!python await agent_client.send_envelope(envelope)` | Direct envelope send (for custom event types). |
-| `#!python await agent_client.wait_for_session_event(session_id, predicate, timeout=...)` | Block until a matching envelope lands in this client's inbox. |
+| `#!python await agent_client.wait_for_channel_event(channel_id, predicate, timeout=...)` | Block until a matching envelope lands in this client's inbox. |
 | `#!python agent_client.on_envelope(callback)` | Replace the handler. |
 
-`#!python session = await agent_client.open(...)` returns a `#!python Session` handle scoped to one session id. Use `#!python session.send(text, audience=...)` for ordinary text sends, `#!python session.close()` for explicit termination, `#!python session.info()` for the latest metadata.
+`#!python channel = await agent_client.open(...)` returns a `#!python Channel` handle scoped to one channel id. Use `#!python channel.send(text, audience=...)` for ordinary text sends, `#!python channel.close()` for explicit termination, `#!python channel.info()` for the latest metadata.
 
 ## The Default Handler
 
@@ -62,9 +62,9 @@ When you register with `#!python attach_plugin=True`, the client installs `#!pyt
 
 | Inbound event | Behaviour |
 |---|---|
-| `#!python EV_SESSION_INVITE` | Auto-ack with `#!python EV_SESSION_INVITE_ACK`. |
-| `#!python EV_TEXT` / `#!python EV_HANDOFF` | If `#!python hc.can_send(...)` says it's our turn: read the WAL up to this envelope, project it through this participant's view policy, pre-populate a fresh `#!python MemoryStream`, attach a `#!python TaskMirror`, run `#!python agent.ask(text, stream=stream, dependencies=...)`, and send any non-empty reply via `#!python session.send(...)`. |
-| `#!python EV_SESSION_*` (other) | No-op — bookkeeping is reflected in the next `#!python session.info()`. |
+| `#!python EV_CHANNEL_INVITE` | Auto-ack with `#!python EV_CHANNEL_INVITE_ACK`. |
+| `#!python EV_TEXT` / `#!python EV_HANDOFF` | If `#!python hc.can_send(...)` says it's our turn: read the WAL up to this envelope, project it through this participant's view policy, pre-populate a fresh `#!python MemoryStream`, attach a `#!python TaskMirror`, run `#!python agent.ask(text, stream=stream, dependencies=...)`, and send any non-empty reply via `#!python channel.send(...)`. |
+| `#!python EV_CHANNEL_*` (other) | No-op — bookkeeping is reflected in the next `#!python channel.info()`. |
 | `#!python ag2.task.*` | No-op at the handler level — `#!python TaskMirror` handles these separately when attached. |
 
 The handler is decomposed into public hooks so you can override only the parts you care about:
@@ -81,7 +81,7 @@ from autogen.beta.network import (
 |---|---|
 | `#!python read_wal_until(client, envelope)` | Slice the WAL up to but excluding the given envelope. |
 | `#!python resolve_view_policy(client, metadata)` | The `#!python ViewPolicy` this participant should use. |
-| `#!python stamp_dependencies(client, session)` | The `#!python context.dependencies` dict the LLM turn will see (`#!python SESSION_DEP`, `#!python AGENT_CLIENT_DEP`, `#!python HUB_DEP`). |
+| `#!python stamp_dependencies(client, channel)` | The `#!python context.dependencies` dict the LLM turn will see (`#!python CHANNEL_DEP`, `#!python AGENT_CLIENT_DEP`, `#!python HUB_DEP`). |
 
 ## Custom Handlers
 
@@ -134,7 +134,7 @@ Cross-process or cross-host transports plug in here. `#!python LocalLink` is the
 
 ## Inbox & Backpressure
 
-Every `#!python AgentClient` has an inbox bounded by its `#!python Rule.inbox.max_pending` (default unbounded). When the inbox fills, sends to that agent fail with `#!python InboxFull`. The `#!python wait_for_session_event` and the default handler drain the inbox in order; custom handlers should do the same — never block forever in a callback.
+Every `#!python AgentClient` has an inbox bounded by its `#!python Rule.inbox.max_pending` (default unbounded). When the inbox fills, sends to that agent fail with `#!python InboxFull`. The `#!python wait_for_channel_event` and the default handler drain the inbox in order; custom handlers should do the same — never block forever in a callback.
 
 ## Closing Down
 

@@ -92,7 +92,7 @@ class TaskMetadata:
     result: Any = None
     error: str = ""
     # Optional network association — set when an AgentClient mirrors this task.
-    session_id: str | None = None
+    channel_id: str | None = None
 
 
 def _now_iso() -> str:

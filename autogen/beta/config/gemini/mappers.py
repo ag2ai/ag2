@@ -55,17 +55,36 @@ def build_system_instruction(
     return joined or None
 
 
+def _strip_additional_properties(node: Any) -> Any:
+    """Recursively remove ``additionalProperties`` from a JSON Schema.
+
+    Gemini's API rejects ``additionalProperties`` when it appears
+    inside ``anyOf`` / ``oneOf`` branches (the proto field is named
+    ``additional_properties`` and only allowed in specific positions).
+    Gemini doesn't enforce additional-properties anyway, so dropping
+    everywhere is safe.
+    """
+    if isinstance(node, dict):
+        return {k: _strip_additional_properties(v) for k, v in node.items() if k != "additionalProperties"}
+    if isinstance(node, list):
+        return [_strip_additional_properties(v) for v in node]
+    return node
+
+
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     """Gemini requires every function's parameters schema to be type=object.
 
     Parameterless functions produce ``{"type": "null"}`` (from pydantic/fast_depends)
     or ``{}`` — both rejected by Gemini with ``INVALID_ARGUMENT``.
     Normalise to ``{"type": "object", "properties": {}}``.
+
+    Strips ``additionalProperties`` recursively because Gemini
+    rejects it inside ``anyOf`` branches.
     """
     raw_type = str(params.get("type", "")).lower()
     if not params or raw_type in ("null", "none", ""):
         return {"type": "object", "properties": {}}
-    return params
+    return _strip_additional_properties(params)
 
 
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:

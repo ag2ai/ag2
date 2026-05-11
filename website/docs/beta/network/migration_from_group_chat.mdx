@@ -13,13 +13,13 @@ For per-pattern translations of the canonical orchestrations (Pipeline, Star, Fe
 
 | Classic (non-beta) concept | Beta network equivalent | Notes |
 |---|---|---|
-| `GroupChat(agents=[...])` | A `#!python workflow` session with the agents as participants | The hub plays the role of `GroupChatManager`. |
+| `GroupChat(agents=[...])` | A `#!python workflow` channel with the agents as participants | The hub plays the role of `GroupChatManager`. |
 | `GroupChatManager` | The `#!python WorkflowAdapter` + `#!python Hub` | Turn-taking enforcement moves into the hub; the adapter validates each send against the graph. |
-| `Agent.handoffs` | A `#!python TransitionGraph` (per-session, not per-agent) | Handoffs are described once at the session level — easier to reason about and serialisable. |
+| `Agent.handoffs` | A `#!python TransitionGraph` (per-channel, not per-agent) | Handoffs are described once at the channel level — easier to reason about and serialisable. |
 | `AgentTarget(agent)` | `#!python AgentTarget(agent_id)` | Same name; takes an `agent_id` instead of an agent reference. |
 | `RevertToInitiator()` | `#!python RevertToInitiatorTarget()` | Identical semantics. |
 | `Stay()` | `#!python StayTarget()` | Identical. |
-| `Terminate()` | `#!python TerminateTarget(reason="…")` | Now carries an explicit reason that lands on `#!python EV_SESSION_CLOSED`. |
+| `Terminate()` | `#!python TerminateTarget(reason="…")` | Now carries an explicit reason that lands on `#!python EV_CHANNEL_CLOSED`. |
 | `OnContextCondition(...)` | A custom `#!python TransitionCondition` | Implement the Protocol; register via `#!python register_condition(...)`. |
 | `OnCondition(...)` | A custom `#!python TransitionCondition` | Same. |
 | `ReplyResult(target=...)` from a tool | `#!python EV_HANDOFF` envelope, paired with `#!python ToolCalled("...")` | The default handler emits `#!python EV_HANDOFF` automatically when a tool's result implies a handoff. |
@@ -55,18 +55,18 @@ graph = TransitionGraph.round_robin(
     max_turns=6,
 )
 
-session = await alice.open(
+channel = await alice.open(
     type="workflow",
     target=[bob.agent_id, carol.agent_id],
     knobs={"graph": graph.to_dict()},
 )
-await session.send("Topic: should every dev learn Rust?")
+await channel.send("Topic: should every dev learn Rust?")
 ```
 
-The auto-termination on `max_turns` lands on `#!python EV_SESSION_CLOSED` with `reason="round_robin_complete"`.
+The auto-termination on `max_turns` lands on `#!python EV_CHANNEL_CLOSED` with `reason="round_robin_complete"`.
 
 !!! note
-    `#!python discussion` is also a round-robin session — but it never auto-terminates and has no turn cap. Use it when the application decides when to stop. Use `#!python workflow + TransitionGraph.round_robin` when you want a hard cap and an `#!python EV_SESSION_CLOSED` to wait on.
+    `#!python discussion` is also a round-robin channel — but it never auto-terminates and has no turn cap. Use it when the application decides when to stop. Use `#!python workflow + TransitionGraph.round_robin` when you want a hard cap and an `#!python EV_CHANNEL_CLOSED` to wait on.
 
 ## Side-by-Side: Pipeline / Sequential
 
@@ -93,12 +93,12 @@ graph = TransitionGraph.sequence([
     researcher.agent_id, writer.agent_id, editor.agent_id,
 ])
 
-session = await researcher.open(
+channel = await researcher.open(
     type="workflow",
     target=[writer.agent_id, editor.agent_id],
     knobs={"graph": graph.to_dict()},
 )
-await session.send("Topic: how does HTTPS work?")
+await channel.send("Topic: how does HTTPS work?")
 ```
 
 Auto-terminates with `reason="sequence_complete"`.
@@ -217,10 +217,10 @@ The custom target dataclass is JSON-serialisable, so it round-trips through `#!p
 A few changes that will affect how you architect the migration:
 
 - **The hub is authoritative.** Turn-taking, state, audit, and expectation enforcement all live in the hub. Your agent code becomes thinner.
-- **Sessions have ids.** Every `#!python alice.open(...)` returns a session id. Audit, replay, and inspection are scoped to it.
+- **Channels have ids.** Every `#!python alice.open(...)` returns a channel id. Audit, replay, and inspection are scoped to it.
 - **Default handlers do most of the heavy lifting.** When agents have `#!python attach_plugin=True`, you don't write any "agent receives message → run LLM → send reply" glue. The framework handles it.
 - **Sub-task observation comes for free.** Calls to `#!python agent.task(..., capability="X")` inside a network turn auto-update `#!python Resume.observed["X"]`. There was no equivalent in the classic world. See [Task Observation](/docs/beta/network/task_observation).
-- **Expectations replace `max_round` exhaustively.** You can declare `#!python reply_within(60s, auto_close)` per session type, get a violation logged to the audit log, and have the session auto-close — see [Expectations & Audit](/docs/beta/network/expectations_and_audit).
+- **Expectations replace `max_round` exhaustively.** You can declare `#!python reply_within(60s, auto_close)` per channel type, get a violation logged to the audit log, and have the channel auto-close — see [Expectations & Audit](/docs/beta/network/expectations_and_audit).
 - **Views replace ad-hoc context windowing.** Each adapter has a default view (`#!python FullTranscript`, `#!python WindowedSummary`); custom views plug in via the `#!python ViewPolicy` Protocol — see [Views & Skills](/docs/beta/network/views_and_skills).
 - **The transport is pluggable.** `#!python LocalLink` is the in-process default, but the link-layer is a Protocol — cross-process and cross-host transports are drop-in replacements.
 
@@ -229,8 +229,8 @@ A few changes that will affect how you architect the migration:
 1. Stand up a hub: `#!python hub = await Hub.open(MemoryKnowledgeStore())`. (Pick a `KnowledgeStore` based on whether you need persistence.)
 2. Wrap each existing `Agent` in an `#!python AgentClient` via `#!python hc.register(...)`. Provide a `#!python Passport` (name) and a `#!python Resume` (claimed capabilities).
 3. Translate your `Handoffs` configuration into a `#!python TransitionGraph`. Use `#!python round_robin` / `#!python sequence` factories where they fit; build the graph manually for conditional logic.
-4. Replace `initiate_chat(...)` with `#!python alice.open(type="workflow", target=[...], knobs={"graph": graph.to_dict()})` followed by `#!python session.send(text)`.
-5. Wait for termination with `#!python alice.wait_for_session_event(session_id=..., predicate=lambda e: e.event_type == EV_SESSION_CLOSED)`.
-6. Inspect the WAL via `#!python hub.read_wal(session_id)` for replay and the audit log via `#!python hub._audit_log.read_all()` for governance.
+4. Replace `initiate_chat(...)` with `#!python alice.open(type="workflow", target=[...], knobs={"graph": graph.to_dict()})` followed by `#!python channel.send(text)`.
+5. Wait for termination with `#!python alice.wait_for_channel_event(channel_id=..., predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED)`.
+6. Inspect the WAL via `#!python hub.read_wal(channel_id)` for replay and the audit log via `#!python hub._audit_log.read_all()` for governance.
 
 For a runnable end-to-end translation of the "researcher → writer → editor" handoff pattern, see the [Pipeline](/docs/beta/network/pattern_cookbook/pipeline) entry in the Pattern Cookbook.

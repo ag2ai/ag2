@@ -26,7 +26,7 @@ specialist whose domain matches.
 ### Routing Mechanics
 
 Each `#!python classify_as_<category>` tool is a plain `#!python @tool`
-that calls `#!python set_context(session, "category", <category>)`. The
+that calls `#!python set_context(channel, "category", <category>)`. The
 helper emits a non-substantive `#!python EV_CONTEXT_SET` envelope that
 lands in the WAL *before* the round's `#!python EV_PACKET` commits, so
 when the router's packet folds, `#!python ContextEquals("category", X)`
@@ -73,7 +73,7 @@ sequenceDiagram
 | Classic | Beta |
 |---|---|
 | `#!python StringLLMCondition` (framework asks LLM at the transition) | Router agent's LLM turn calls `#!python classify_as_<category>` tool; declarative graph reads the resulting state |
-| `#!python ReplyResult(context_variables={"category": "billing"}, target=AgentTarget(billing_specialist))` | `#!python await set_context(session, "category", "billing")` from inside a plain `#!python @tool`; `#!python ContextEquals("category", "billing") → AgentTarget(billing)` graph rule |
+| `#!python ReplyResult(context_variables={"category": "billing"}, target=AgentTarget(billing_specialist))` | `#!python await set_context(channel, "category", "billing")` from inside a plain `#!python @tool`; `#!python ContextEquals("category", "billing") → AgentTarget(billing)` graph rule |
 | `#!python ExpressionContextCondition(...)` per category | `#!python ContextEquals("category", X)` per category |
 
 ### Gaps & Workarounds
@@ -112,7 +112,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
@@ -123,7 +123,7 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
-    SessionInject,
+    ChannelInject,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -134,33 +134,33 @@ from autogen.beta.testing import TestConfig
 load_dotenv()
 
 
-async def classify_as_billing(reason: str, session: SessionInject) -> str:
+async def classify_as_billing(reason: str, channel: ChannelInject) -> str:
     """Classify the request as billing. Sets
     context_vars['category'] = 'billing' so the graph's
     ContextEquals('category', 'billing') rule routes to the
     billing specialist."""
-    if session is None:
-        return "no session"
+    if channel is None:
+        return "no channel"
     print(f"  [tool] classify_as_billing({reason!r})")
-    await set_context(session, "category", "billing")
+    await set_context(channel, "category", "billing")
     return f"classified as billing: {reason}"
 
 
-async def classify_as_technical(reason: str, session: SessionInject) -> str:
+async def classify_as_technical(reason: str, channel: ChannelInject) -> str:
     """Classify as technical."""
-    if session is None:
-        return "no session"
+    if channel is None:
+        return "no channel"
     print(f"  [tool] classify_as_technical({reason!r})")
-    await set_context(session, "category", "technical")
+    await set_context(channel, "category", "technical")
     return f"classified as technical: {reason}"
 
 
-async def classify_as_general(reason: str, session: SessionInject) -> str:
+async def classify_as_general(reason: str, channel: ChannelInject) -> str:
     """Classify as general support."""
-    if session is None:
-        return "no session"
+    if channel is None:
+        return "no channel"
     print(f"  [tool] classify_as_general({reason!r})")
-    await set_context(session, "category", "general")
+    await set_context(channel, "category", "general")
     return f"classified as general: {reason}"
 
 
@@ -255,12 +255,12 @@ async def main() -> None:
         max_turns=10,
     )
 
-    session = await user.open(
+    channel = await user.open(
         type=WORKFLOW_TYPE,
         target=[router.agent_id, billing.agent_id, technical.agent_id, general.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         user.agent_id: "user",
@@ -270,7 +270,7 @@ async def main() -> None:
         general.agent_id: "general",
     }
 
-    await session.send(
+    await channel.send(
         "I tried to upgrade my subscription but the API is returning a "
         "500 error. The status page says everything is green. Help?"
     )
@@ -278,14 +278,14 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # FromSpeaker(<specialist>) → TerminateTarget("<category>_resolved")).
-    close_env = await user_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await user_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=120.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub_obj.read_wal(session.session_id):
+    for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -300,7 +300,7 @@ async def main() -> None:
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
 
-    state = hub_obj._adapter_states[session.session_id]
+    state = hub_obj._adapter_states[channel.channel_id]
     print(f"final context_vars: {state.context_vars!r}")
 
     await user_hc.close()
@@ -318,7 +318,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
-session: 8b4d...
+channel: 8b4d...
 
            user: I tried to upgrade my subscription but the API is returning a 500 error. The status page says everything is green. Help?
   [tool] classify_as_technical('User is reporting a 500 error from the API during a subscription upgrade — this is a technical/integration issue, not a billing dispute or general policy question.')

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Cross-cutting session smoke tests against real Gemini.
+"""Cross-cutting channel smoke tests against real Gemini.
 
 These complement the per-adapter smoke tests by exercising scenarios
 mocked tests can't reproduce reliably:
@@ -10,10 +10,10 @@ mocked tests can't reproduce reliably:
 * A real-LLM exchange persisted to ``DiskKnowledgeStore`` survives a
   hub restart — passports, WAL, audit log, and capability index all
   rebuild cleanly via ``Hub.hydrate()``.
-* Two consulting sessions in flight from the same initiator stay
+* Two consulting channels in flight from the same initiator stay
   isolated — replies from each respondent land in their own WAL with
   no cross-contamination.
-* A session closed by one party while the other party's LLM is
+* A channel closed by one party while the other party's LLM is
   mid-turn does not corrupt state — the late reply attempt fails
   cleanly and the WAL stays consistent.
 
@@ -30,7 +30,7 @@ from autogen.beta import Agent
 from autogen.beta.config import GeminiConfig
 from autogen.beta.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     Hub,
     HubClient,
@@ -39,13 +39,13 @@ from autogen.beta.network import (
     Resume,
 )
 from autogen.beta.network.adapters.consulting import CONSULTING_TYPE
+from autogen.beta.network.channel import ChannelState
 from autogen.beta.network.hub import (
     AUDIT_KIND_AGENT_REGISTERED,
-    AUDIT_KIND_SESSION_CLOSED,
-    AUDIT_KIND_SESSION_CREATED,
+    AUDIT_KIND_CHANNEL_CLOSED,
+    AUDIT_KIND_CHANNEL_CREATED,
     AuditLog,
 )
-from autogen.beta.network.session import SessionState
 
 
 @pytest.fixture()
@@ -60,24 +60,24 @@ def _agent(name: str, prompt: str, config: GeminiConfig) -> Agent:
     return Agent(name=name, prompt=prompt, config=config)
 
 
-async def _wait_text_count(hub: Hub, session_id: str, expected: int, *, timeout: float = 30.0) -> list:
+async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout: float = 30.0) -> list:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session_id)
+        wal = await hub.read_wal(channel_id)
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.1)
-    raise asyncio.TimeoutError(f"session {session_id!r} did not reach {expected} EV_TEXT envelopes")
+    raise asyncio.TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
 
 
-async def _wait_for_terminal(session, *, timeout: float = 10.0) -> None:
+async def _wait_for_terminal(channel, *, timeout: float = 10.0) -> None:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        info = await session.info()
+        info = await channel.info()
         if info.is_terminal():
             return
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError("session did not reach terminal state in time")
+    raise asyncio.TimeoutError("channel did not reach terminal state in time")
 
 
 @pytest.mark.gemini
@@ -107,15 +107,15 @@ async def test_persisted_consulting_survives_hub_restart(gemini_config: GeminiCo
             Resume(claimed_capabilities=["math"]),
         )
 
-        session = await alice.open(type=CONSULTING_TYPE, target="bob")
-        session_id = session.session_id
-        await session.send("What is 7 * 8?", audience=[bob.agent_id])
+        channel = await alice.open(type=CONSULTING_TYPE, target="bob")
+        channel_id = channel.channel_id
+        await channel.send("What is 7 * 8?", audience=[bob.agent_id])
 
-        await _wait_text_count(hub1, session_id, expected=2)
-        await _wait_for_terminal(session)
+        await _wait_text_count(hub1, channel_id, expected=2)
+        await _wait_for_terminal(channel)
 
         # Snapshot live state for comparison after rehydrate.
-        live_wal = await hub1.read_wal(session_id)
+        live_wal = await hub1.read_wal(channel_id)
         live_text = [e.event_data["text"] for e in live_wal if e.event_type == EV_TEXT]
         assert any("56" in t for t in live_text), f"expected '56' in bob's reply, got: {live_text!r}"
 
@@ -136,23 +136,23 @@ async def test_persisted_consulting_survives_hub_restart(gemini_config: GeminiCo
         assert {p.name for p in math_agents} == {"bob"}
 
         # WAL bytes survive verbatim.
-        rehydrated_wal = await hub2.read_wal(session_id)
+        rehydrated_wal = await hub2.read_wal(channel_id)
         assert len(rehydrated_wal) == len(live_wal)
         rehydrated_text = [e.event_data["text"] for e in rehydrated_wal if e.event_type == EV_TEXT]
         assert rehydrated_text == live_text
 
-        # Closed session is in _sessions but NOT _active_sessions.
-        assert session_id in hub2._sessions
-        assert session_id not in hub2._active_sessions
-        assert hub2._sessions[session_id].state == SessionState.CLOSED
+        # Closed channel is in _channels but NOT _active_channels.
+        assert channel_id in hub2._channels
+        assert channel_id not in hub2._active_channels
+        assert hub2._channels[channel_id].state == ChannelState.CLOSED
 
         # Audit log reconstructed.
         audit = AuditLog(hub2._store)
         records = await audit.read_all()
         kinds = {r["kind"] for r in records}
         assert AUDIT_KIND_AGENT_REGISTERED in kinds
-        assert AUDIT_KIND_SESSION_CREATED in kinds
-        assert AUDIT_KIND_SESSION_CLOSED in kinds
+        assert AUDIT_KIND_CHANNEL_CREATED in kinds
+        assert AUDIT_KIND_CHANNEL_CLOSED in kinds
 
         await hub2.close()
 
@@ -160,9 +160,9 @@ async def test_persisted_consulting_survives_hub_restart(gemini_config: GeminiCo
 @pytest.mark.gemini
 @pytest.mark.asyncio
 async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> None:
-    """Two consulting sessions opened concurrently from one initiator
+    """Two consulting channels opened concurrently from one initiator
     stay isolated — each respondent's reply lands in its own WAL, no
-    envelope leak across sessions."""
+    envelope leak across channels."""
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
     hc = HubClient(link, hub=hub)
@@ -193,7 +193,7 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
 
     s_bob = await alice.open(type=CONSULTING_TYPE, target="bob")
     s_carol = await alice.open(type=CONSULTING_TYPE, target="carol")
-    assert s_bob.session_id != s_carol.session_id
+    assert s_bob.channel_id != s_carol.channel_id
 
     # Fire both prompts simultaneously.
     await asyncio.gather(
@@ -201,11 +201,11 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
         s_carol.send("What is 6 * 6?", audience=[carol.agent_id]),
     )
 
-    await _wait_text_count(hub, s_bob.session_id, expected=2)
-    await _wait_text_count(hub, s_carol.session_id, expected=2)
+    await _wait_text_count(hub, s_bob.channel_id, expected=2)
+    await _wait_text_count(hub, s_carol.channel_id, expected=2)
 
-    bob_wal = await hub.read_wal(s_bob.session_id)
-    carol_wal = await hub.read_wal(s_carol.session_id)
+    bob_wal = await hub.read_wal(s_bob.channel_id)
+    carol_wal = await hub.read_wal(s_carol.channel_id)
 
     bob_texts = [e.event_data["text"] for e in bob_wal if e.event_type == EV_TEXT]
     carol_texts = [e.event_data["text"] for e in carol_wal if e.event_type == EV_TEXT]
@@ -222,7 +222,7 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
     assert "What is 5 * 5?" not in carol_texts
     assert all("25" not in t for t in carol_texts[1:])
 
-    # Each consulting session auto-closes independently.
+    # Each consulting channel auto-closes independently.
     await _wait_for_terminal(s_bob)
     await _wait_for_terminal(s_carol)
 
@@ -233,7 +233,7 @@ async def test_concurrent_consultings_isolated(gemini_config: GeminiConfig) -> N
 @pytest.mark.gemini
 @pytest.mark.asyncio
 async def test_close_during_llm_turn_rejects_late_reply(gemini_config: GeminiConfig) -> None:
-    """Closing a session while the respondent's LLM is mid-turn must
+    """Closing a channel while the respondent's LLM is mid-turn must
     NOT corrupt the WAL — the late reply attempt fails cleanly inside
     bob's notify handler (caught by the per-frame error path) and only
     alice's prompt + the close envelope remain."""
@@ -252,21 +252,21 @@ async def test_close_during_llm_turn_rejects_late_reply(gemini_config: GeminiCon
         Resume(),
     )
 
-    session = await alice.open(type=CONSULTING_TYPE, target="bob")
-    sid = session.session_id
+    channel = await alice.open(type=CONSULTING_TYPE, target="bob")
+    sid = channel.channel_id
 
-    await session.send("Tell me a story about a clever fox.", audience=[bob.agent_id])
+    await channel.send("Tell me a story about a clever fox.", audience=[bob.agent_id])
 
     # Bob's notify handler has begun engaging his LLM (real call takes
-    # >100ms). Close the session out from under him.
+    # >100ms). Close the channel out from under him.
     await asyncio.sleep(0.05)
-    await session.close(reason="abort_during_turn")
+    await channel.close(reason="abort_during_turn")
 
     # Wait long enough for bob's LLM to complete and his late reply
     # attempt to fail through post_envelope.
     await asyncio.sleep(8.0)
 
-    info = await session.info()
+    info = await channel.info()
     assert info.is_terminal()
     assert info.close_reason == "abort_during_turn"
 
@@ -278,7 +278,7 @@ async def test_close_during_llm_turn_rejects_late_reply(gemini_config: GeminiCon
     )
     assert text_envelopes[0].sender_id == alice.agent_id
 
-    closed_envelopes = [e for e in wal if e.event_type == EV_SESSION_CLOSED]
+    closed_envelopes = [e for e in wal if e.event_type == EV_CHANNEL_CLOSED]
     assert len(closed_envelopes) == 1
     assert closed_envelopes[0].event_data.get("reason") == "abort_during_turn"
 

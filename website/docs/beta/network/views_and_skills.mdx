@@ -5,7 +5,7 @@ sidebarTitle: Views & Skills
 
 Two LLM-facing concerns:
 
-- **Views** decide what each participant *sees* of a session — the projection of the WAL that becomes the LLM's history when its handler runs `#!python Agent.ask(...)`.
+- **Views** decide what each participant *sees* of a channel — the projection of the WAL that becomes the LLM's history when its handler runs `#!python Agent.ask(...)`.
 - **Skills** decide what each agent *advertises about itself* — the markdown describing its capabilities, surfaced to other agents during peer lookup.
 
 ## ViewPolicy
@@ -20,11 +20,11 @@ class ViewPolicy(Protocol):
         history: list[Envelope],
         *,
         participant_id: str,
-        session: SessionMetadata,
+        channel: ChannelMetadata,
     ) -> list[BaseEvent]: ...
 ```
 
-It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-session.
+It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-channel.
 
 ## Built-in Views
 
@@ -42,7 +42,7 @@ view = WindowedSummary(recent_n=12)
 projected = await view.project(
     history=wal_slice,
     participant_id=carol.agent_id,
-    session=metadata,
+    channel=metadata,
 )
 ```
 
@@ -63,7 +63,7 @@ Implement the protocol, give it a unique `name`, and pass to the policy resolver
 ```python linenums="1"
 from typing import ClassVar
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest
-from autogen.beta.network import Envelope, EV_TEXT, SessionMetadata, ViewPolicy
+from autogen.beta.network import Envelope, EV_TEXT, ChannelMetadata, ViewPolicy
 
 
 class FromOneOnly(ViewPolicy):
@@ -73,7 +73,7 @@ class FromOneOnly(ViewPolicy):
     def __init__(self, sender_id: str) -> None:
         self.sender_id = sender_id
 
-    async def project(self, history, *, participant_id, session):
+    async def project(self, history, *, participant_id, channel):
         out: list[BaseEvent] = []
         for env in history:
             if env.event_type != EV_TEXT or env.sender_id != self.sender_id:

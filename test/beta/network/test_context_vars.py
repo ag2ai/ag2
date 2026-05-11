@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Session-scoped context variables on ``WorkflowState``.
+"""Channel-scoped context variables on ``WorkflowState``.
 
 Pins the contract that ``EV_CONTEXT_SET`` envelopes:
 
@@ -18,8 +18,8 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
+    EV_CHANNEL_CLOSED,
     EV_CONTEXT_SET,
-    EV_SESSION_CLOSED,
     WORKFLOW_TYPE,
     AgentTarget,
     ContextEquals,
@@ -41,10 +41,10 @@ def _agent(name: str, *replies: str) -> Agent:
     return Agent(name=name, config=TestConfig(*replies))
 
 
-async def _post_context_set(hub: Hub, *, sender: str, session_id: str, **event_data) -> None:
+async def _post_context_set(hub: Hub, *, sender: str, channel_id: str, **event_data) -> None:
     """Helper: post an EV_CONTEXT_SET envelope through the hub."""
     envelope = Envelope(
-        session_id=session_id,
+        channel_id=channel_id,
         sender_id=sender,
         audience=None,
         event_type=EV_CONTEXT_SET,
@@ -77,7 +77,7 @@ class TestContextVars:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
@@ -86,11 +86,11 @@ class TestContextVars:
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             set={"priority": "high", "ticket_id": "T-481"},
         )
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"priority": "high", "ticket_id": "T-481"}
 
         await alice_hc.close()
@@ -116,7 +116,7 @@ class TestContextVars:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
@@ -125,18 +125,18 @@ class TestContextVars:
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             set={"priority": "high", "temporary": "1"},
         )
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             delete=["temporary"],
             set={"resolved": True},
         )
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"priority": "high", "resolved": True}
 
         await alice_hc.close()
@@ -163,7 +163,7 @@ class TestContextVars:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
@@ -173,11 +173,11 @@ class TestContextVars:
         await _post_context_set(
             hub,
             sender=bob.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             set={"observer_flag": True},
         )
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {"observer_flag": True}
 
         await alice_hc.close()
@@ -227,7 +227,7 @@ class TestContextVars:
             max_turns=10,
         )
 
-        session = await triage.open(
+        channel = await triage.open(
             type=WORKFLOW_TYPE,
             target=[security.agent_id, legal.agent_id],
             knobs={"graph": graph.to_dict()},
@@ -238,14 +238,14 @@ class TestContextVars:
         await _post_context_set(
             hub,
             sender=triage.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             set={"route": "security"},
         )
-        await session.send("kickoff")
+        await channel.send("kickoff")
 
-        close_env = await triage.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await triage.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=5.0,
         )
         # Routed to security, not legal.
@@ -275,29 +275,29 @@ class TestContextVars:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
         )
-        session_id = session.session_id
+        channel_id = channel.channel_id
 
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session_id,
+            channel_id=channel_id,
             set={"k1": "v1", "k2": "v2"},
         )
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session_id,
+            channel_id=channel_id,
             delete=["k1"],
             set={"k3": "v3"},
         )
 
         # Snapshot before close.
-        before = dict(hub._adapter_states[session_id].context_vars)
+        before = dict(hub._adapter_states[channel_id].context_vars)
 
         await alice_hc.close()
         await bob_hc.close()
@@ -306,7 +306,7 @@ class TestContextVars:
         # Re-open against the same store and re-fold the WAL.
         hub2 = await Hub.open(store, ttl_sweep_interval=0)
         try:
-            after = dict(hub2._adapter_states[session_id].context_vars)
+            after = dict(hub2._adapter_states[channel_id].context_vars)
             assert after == before
             assert after == {"k2": "v2", "k3": "v3"}
         finally:
@@ -330,23 +330,23 @@ class TestContextVars:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
         )
 
-        before_turn = hub._adapter_states[session.session_id].turn_count
-        before_speaker = hub._adapter_states[session.session_id].expected_next_speaker
+        before_turn = hub._adapter_states[channel.channel_id].turn_count
+        before_speaker = hub._adapter_states[channel.channel_id].expected_next_speaker
 
         await _post_context_set(
             hub,
             sender=alice.agent_id,
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             set={"k": "v"},
         )
 
-        after = hub._adapter_states[session.session_id]
+        after = hub._adapter_states[channel.channel_id]
         assert after.turn_count == before_turn
         assert after.expected_next_speaker == before_speaker
 

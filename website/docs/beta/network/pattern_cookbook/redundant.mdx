@@ -63,12 +63,12 @@ sequenceDiagram
   the sequential version above is functionally equivalent for
   synthesis, just slower (3× LLM latency instead of 1×). For genuine
   parallelism, run the specialists in separate `#!python consulting`
-  sessions opened by the asker's tool, gather replies via
-  `#!python wait_for_session_event`, then write the results back into
+  channels opened by the asker's tool, gather replies via
+  `#!python wait_for_channel_event`, then write the results back into
   the main workflow's `#!python context_vars` via `#!python set_context`.
   Heavier but parallel.
 * **No `#!python NestedChatTarget`.** Same as Hierarchical — child
-  sessions are the workaround when you genuinely want isolated
+  channels are the workaround when you genuinely want isolated
   specialist runs.
 
 ## Code
@@ -96,7 +96,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
@@ -185,12 +185,12 @@ async def main() -> None:
         evaluator.agent_id,
     ])
 
-    session = await intake.open(
+    channel = await intake.open(
         type=WORKFLOW_TYPE,
         target=[safe.agent_id, clever.agent_id, nerdy.agent_id, evaluator.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         intake.agent_id: "intake",
@@ -200,7 +200,7 @@ async def main() -> None:
         evaluator.agent_id: "evaluator",
     }
 
-    await session.send(
+    await channel.send(
         "Suggest a name for our new code-review SaaS. It runs as a "
         "GitHub bot and gives senior-engineer-style feedback on PRs."
     )
@@ -208,14 +208,14 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # TerminateTarget("sequence_complete") after the evaluator's reply).
-    close_env = await intake_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await intake_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=240.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub_obj.read_wal(session.session_id):
+    for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -245,7 +245,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
-session: 7e91...
+channel: 7e91...
 
          intake: Suggest a name for our new code-review SaaS. It runs as a GitHub bot and gives senior-engineer-style feedback on PRs.
            safe: [safe]: ReviewPro — a clear, professional name signalling thorough code review with senior-level expertise.

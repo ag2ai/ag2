@@ -22,9 +22,9 @@ class NetworkClient(Protocol):
     """A participant in a network.
 
     The Protocol surface covers identity, inbound delivery, and
-    disconnect. Session-opening lives on ``AgentClient`` rather than
+    disconnect. Channel-opening lives on ``AgentClient`` rather than
     the Protocol so non-agent participants (UI bridges, admin tools)
-    can refuse to initiate sessions if that doesn't make sense for
+    can refuse to initiate channels if that doesn't make sense for
     them.
     """
 

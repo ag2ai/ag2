@@ -5,7 +5,7 @@
 """Built-in expectation evaluators + violation handlers.
 
 Expectations are protocol-shape contracts declared on
-``SessionManifest.expectations``. The hub evaluates them on a periodic
+``ChannelManifest.expectations``. The hub evaluates them on a periodic
 sweeper tick — independently of the per-envelope ``validate_send`` /
 ``on_accepted`` path. ``validate_send`` rejects bad **sends**;
 expectations react to bad **silence** (or bad pacing).
@@ -13,18 +13,18 @@ expectations react to bad **silence** (or bad pacing).
 Evaluators
 ----------
 * ``acks_within(seconds)`` — invitee hasn't ack'd or rejected within T
-  after ``EV_SESSION_INVITE``. Fires only while the session is PENDING.
+  after ``EV_CHANNEL_INVITE``. Fires only while the channel is PENDING.
 * ``reply_within(seconds)`` — a participant with envelopes addressed
   to them hasn't sent a response within T.
-* ``max_silence(seconds)`` — session has had no content envelopes from
+* ``max_silence(seconds)`` — channel has had no content envelopes from
   anyone for T.
 
 Handlers
 --------
 * ``audit`` — record an entry in ``audit.jsonl``; no envelope sent.
-* ``notify_session`` — audit + post ``EV_EXPECTATION_VIOLATED`` to
+* ``notify_channel`` — audit + post ``EV_EXPECTATION_VIOLATED`` to
   every participant.
-* ``auto_close`` — audit + transition the session to ``CLOSED`` with
+* ``auto_close`` — audit + transition the channel to ``CLOSED`` with
   ``close_reason="expectation_violated:{name}"``.
 
 All handlers are passive: the hub records, signals, or closes; it
@@ -37,8 +37,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from ..channel import ChannelMetadata, ChannelState, Expectation
 from ..envelope import EV_EXPECTATION_VIOLATED, EV_TEXT, Envelope
-from ..session import Expectation, SessionMetadata, SessionState
 from .audit import AUDIT_KIND_EXPECTATION_VIOLATED
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ __all__ = (
     "ExpectationContext",
     "ExpectationEvaluator",
     "MaxSilenceEvaluator",
-    "NotifySessionHandler",
+    "NotifyChannelHandler",
     "ReplyWithinEvaluator",
     "Violation",
     "ViolationHandler",
@@ -65,8 +65,8 @@ class Violation:
     """Result of an evaluator firing.
 
     ``violator_ids`` is the list of participants the violation applies
-    to; an empty list represents a session-wide violation (e.g.
-    ``max_silence`` — nobody specifically is silent, the session is).
+    to; an empty list represents a channel-wide violation (e.g.
+    ``max_silence`` — nobody specifically is silent, the channel is).
     """
 
     expectation: Expectation
@@ -78,7 +78,7 @@ class Violation:
 class ExpectationContext:
     """Inputs handed to every evaluator on each sweeper tick."""
 
-    metadata: SessionMetadata
+    metadata: ChannelMetadata
     state: object  # opaque AdapterState
     wal: list[Envelope]
     now_iso: str
@@ -106,8 +106,8 @@ class ViolationHandler(Protocol):
     """What the hub does when an evaluator fires.
 
     Handlers are async because they may post envelopes or transition
-    sessions. They must be tolerant of duplicate calls — the sweeper
-    deduplicates per (session, expectation, violator) before invoking,
+    channels. They must be tolerant of duplicate calls — the sweeper
+    deduplicates per (channel, expectation, violator) before invoking,
     but transient re-fires across hub restarts are possible since the
     fired-violation cache is in-memory only.
     """
@@ -117,7 +117,7 @@ class ViolationHandler(Protocol):
     async def handle(
         self,
         hub: "Hub",
-        session_id: str,
+        channel_id: str,
         violation: Violation,
     ) -> None: ...
 
@@ -131,7 +131,7 @@ def _parse_iso_seconds(iso: str) -> float:
 
 def _is_content_event(event_type: str) -> bool:
     """Substantive (non-protocol, non-task) envelope."""
-    if event_type.startswith("ag2.session."):
+    if event_type.startswith("ag2.channel."):
         return False
     if event_type.startswith("ag2.task."):
         return False
@@ -141,7 +141,7 @@ def _is_content_event(event_type: str) -> bool:
 class AcksWithinEvaluator:
     """Fire when invitees haven't acked within ``params.seconds``.
 
-    Only meaningful while the session is in ``PENDING`` state. Returns
+    Only meaningful while the channel is in ``PENDING`` state. Returns
     one violation listing every still-pending invitee.
     """
 
@@ -152,7 +152,7 @@ class AcksWithinEvaluator:
         expectation: Expectation,
         context: ExpectationContext,
     ) -> Violation | None:
-        if context.metadata.state != SessionState.PENDING:
+        if context.metadata.state != ChannelState.PENDING:
             return None
         seconds = float(expectation.params.get("seconds", 30))
         elapsed = context.now_seconds - _parse_iso_seconds(context.metadata.created_at)
@@ -186,7 +186,7 @@ class ReplyWithinEvaluator:
         expectation: Expectation,
         context: ExpectationContext,
     ) -> Violation | None:
-        if context.metadata.state != SessionState.ACTIVE:
+        if context.metadata.state != ChannelState.ACTIVE:
             return None
         seconds = float(expectation.params.get("seconds", 600))
 
@@ -232,10 +232,10 @@ class ReplyWithinEvaluator:
 
 
 class MaxSilenceEvaluator:
-    """Fire when the session has had no content envelope for T.
+    """Fire when the channel has had no content envelope for T.
 
-    Session-wide — ``violator_ids`` is empty. Anchors on the latest
-    content envelope's timestamp, falling back to session creation
+    Channel-wide — ``violator_ids`` is empty. Anchors on the latest
+    content envelope's timestamp, falling back to channel creation
     when no content has been posted.
     """
 
@@ -246,7 +246,7 @@ class MaxSilenceEvaluator:
         expectation: Expectation,
         context: ExpectationContext,
     ) -> Violation | None:
-        if context.metadata.state != SessionState.ACTIVE:
+        if context.metadata.state != ChannelState.ACTIVE:
             return None
         seconds = float(expectation.params.get("seconds", 3600))
         anchor_iso = context.metadata.created_at
@@ -272,13 +272,13 @@ class MaxSilenceEvaluator:
 
 async def _audit_violation(
     hub: "Hub",
-    session_id: str,
+    channel_id: str,
     violation: Violation,
 ) -> None:
     await hub._audit_log.append({
         "at": hub._clock(),
         "kind": AUDIT_KIND_EXPECTATION_VIOLATED,
-        "session_id": session_id,
+        "channel_id": channel_id,
         "expectation": violation.expectation.name,
         "on_violation": violation.expectation.on_violation,
         "params": dict(violation.expectation.params),
@@ -295,29 +295,29 @@ class AuditHandler:
     async def handle(
         self,
         hub: "Hub",
-        session_id: str,
+        channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, session_id, violation)
+        await _audit_violation(hub, channel_id, violation)
 
 
-class NotifySessionHandler:
+class NotifyChannelHandler:
     """Audit + broadcast ``EV_EXPECTATION_VIOLATED`` to every participant."""
 
-    name = "notify_session"
+    name = "notify_channel"
 
     async def handle(
         self,
         hub: "Hub",
-        session_id: str,
+        channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, session_id, violation)
-        metadata = hub._sessions.get(session_id)
+        await _audit_violation(hub, channel_id, violation)
+        metadata = hub._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return
         envelope = Envelope(
-            session_id=session_id,
+            channel_id=channel_id,
             sender_id=metadata.creator_id,
             audience=None,
             event_type=EV_EXPECTATION_VIOLATED,
@@ -328,29 +328,29 @@ class NotifySessionHandler:
             },
         )
         # Posting violations is best-effort — a closed/closing
-        # session shouldn't crash the sweeper.
+        # channel shouldn't crash the sweeper.
         with contextlib.suppress(Exception):
             await hub.post_envelope(envelope)
 
 
 class AutoCloseHandler:
-    """Audit + transition the session to ``CLOSED``."""
+    """Audit + transition the channel to ``CLOSED``."""
 
     name = "auto_close"
 
     async def handle(
         self,
         hub: "Hub",
-        session_id: str,
+        channel_id: str,
         violation: Violation,
     ) -> None:
-        await _audit_violation(hub, session_id, violation)
-        metadata = hub._sessions.get(session_id)
+        await _audit_violation(hub, channel_id, violation)
+        metadata = hub._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return
         with contextlib.suppress(Exception):
-            await hub.close_session(
-                session_id,
+            await hub.close_channel(
+                channel_id,
                 reason=f"expectation_violated:{violation.expectation.name}",
             )
 
@@ -363,4 +363,4 @@ def default_evaluators() -> list[ExpectationEvaluator]:
 
 
 def default_handlers() -> list[ViolationHandler]:
-    return [AuditHandler(), NotifySessionHandler(), AutoCloseHandler()]
+    return [AuditHandler(), NotifyChannelHandler(), AutoCloseHandler()]

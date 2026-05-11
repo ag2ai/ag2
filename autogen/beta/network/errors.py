@@ -23,7 +23,7 @@ class NetworkError(Exception):
 
 
 class NotFoundError(NetworkError):
-    """Lookup of a registered identity, session, or task failed."""
+    """Lookup of a registered identity, channel, or task failed."""
 
 
 class AccessDeniedError(NetworkError):
@@ -35,9 +35,9 @@ class AuthError(NetworkError):
 
 
 class ProtocolError(NetworkError):
-    """Envelope violated a session adapter's protocol contract.
+    """Envelope violated a channel adapter's protocol contract.
 
-    Raised by ``SessionAdapter.validate_send``. The hub returns this as a
+    Raised by ``ChannelAdapter.validate_send``. The hub returns this as a
     structured ``error`` frame (``code="protocol_error"``) and does not
     append the offending envelope to the WAL.
     """

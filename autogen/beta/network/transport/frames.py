@@ -78,7 +78,7 @@ class PongFrame:
 
 @dataclass(slots=True)
 class SendFrame:
-    """client → hub: post an envelope into a session.
+    """client → hub: post an envelope into a channel.
 
     Hub stamps ``envelope_id`` and ``created_at`` at accept and replies
     with ``AcceptFrame`` (or ``ErrorFrame`` on rejection).
@@ -118,7 +118,7 @@ class NotifyFrame:
     ``recipient_id`` is the agent id this delivery is for — the hub
     already iterates per-recipient when dispatching, so stamping the
     target on the frame lets the ``HubClient`` demux directly without
-    re-walking the session participants. Required so broadcasts
+    re-walking the channel participants. Required so broadcasts
     (``audience=None``) route correctly when one connection hosts
     multiple identities.
     """
@@ -146,17 +146,17 @@ class ReceiptFrame:
 
 @dataclass(slots=True)
 class SubscribeFrame:
-    """client → hub: open a push subscription on a session or task.
+    """client → hub: open a push subscription on a channel or task.
 
-    At least one of ``session_id`` / ``task_id`` must be set.
+    At least one of ``channel_id`` / ``task_id`` must be set.
     ``since_envelope_id`` is the cursor for at-least-once replay over
     a reconnecting transport; in-process delivery is exactly-once by
-    per-session lock.
+    per-channel lock.
     """
 
     kind: ClassVar[str] = "subscribe"
     subscription_id: str
-    session_id: str | None = None
+    channel_id: str | None = None
     task_id: str | None = None
     event_types: list[str] | None = None
     since_envelope_id: str | None = None

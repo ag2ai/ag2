@@ -18,8 +18,8 @@ adapter-neutral.
 from autogen.beta.compact import CompactionSummary
 from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 
+from ..channel import ChannelMetadata
 from ..envelope import Envelope, visible_to
-from ..session import SessionMetadata
 from .base import EnvelopeRenderer
 
 __all__ = ("FullTranscript", "WindowedSummary")
@@ -29,10 +29,10 @@ class FullTranscript:
     """Translate every envelope visible to ``participant_id``.
 
     Projects whichever envelope types ``render_envelope`` returns a
-    string for; other protocol-level events (``EV_SESSION_*``,
+    string for; other protocol-level events (``EV_CHANNEL_*``,
     ``EV_TASK_*``, expectation violations) are hub bookkeeping that
     the LLM doesn't need to reason about. The
-    ``NetworkContextPolicy`` renders session expectations / active task
+    ``NetworkContextPolicy`` renders channel expectations / active task
     metadata into the prompt prefix instead.
 
     Inbound envelopes (sender != participant) become ``ModelRequest``
@@ -46,7 +46,7 @@ class FullTranscript:
         wal: list[Envelope],
         *,
         participant_id: str,
-        session: SessionMetadata,
+        channel: ChannelMetadata,
         render_envelope: EnvelopeRenderer,
     ) -> list[BaseEvent]:
         events: list[BaseEvent] = []
@@ -74,7 +74,7 @@ class WindowedSummary:
     renders correctly in the LLM-facing message stream.
 
     The summary is a static stat-style line
-    (``"Earlier in this session: N messages from a, b."``) — no LLM
+    (``"Earlier in this channel: N messages from a, b."``) — no LLM
     call.
     """
 
@@ -94,7 +94,7 @@ class WindowedSummary:
         wal: list[Envelope],
         *,
         participant_id: str,
-        session: SessionMetadata,
+        channel: ChannelMetadata,
         render_envelope: EnvelopeRenderer,
     ) -> list[BaseEvent]:
         visible: list[tuple[Envelope, str]] = []
@@ -126,4 +126,4 @@ def _to_event(envelope: Envelope, text: str, participant_id: str) -> BaseEvent:
 def _summarize_older(older: list[Envelope]) -> str:
     speakers = sorted({e.sender_id for e in older})
     plural = "s" if len(older) != 1 else ""
-    return f"Earlier in this session: {len(older)} message{plural} from {', '.join(speakers)}."
+    return f"Earlier in this channel: {len(older)} message{plural} from {', '.join(speakers)}."

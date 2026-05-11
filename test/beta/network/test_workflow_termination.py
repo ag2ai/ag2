@@ -21,7 +21,7 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     WORKFLOW_TYPE,
     AgentTarget,
     FromSpeaker,
@@ -58,7 +58,7 @@ class TestWorkflowTerminationReason:
         bob_hc = HubClient(link, hub=hub)
         carol_hc = HubClient(link, hub=hub)
 
-        # alice's first turn is the kickoff via session.send (no Agent.ask).
+        # alice's first turn is the kickoff via channel.send (no Agent.ask).
         # bob and carol each speak exactly once via the default handler.
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
         bob = await bob_hc.register(_agent("bob", "bob-reply"), Passport(name="bob"), Resume())
@@ -66,21 +66,21 @@ class TestWorkflowTerminationReason:
 
         graph = TransitionGraph.sequence([alice.agent_id, bob.agent_id, carol.agent_id])
 
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id, carol.agent_id],
             knobs={"graph": graph.to_dict()},
         )
-        await session.send("kickoff")
+        await channel.send("kickoff")
 
-        close_env = await alice.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=5.0,
         )
         assert close_env.event_data.get("reason") == "sequence_complete"
 
-        metadata = await hub.get_session(session.session_id)
+        metadata = await hub.get_channel(channel.channel_id)
         assert metadata.close_reason == "sequence_complete"
 
         await alice_hc.close()
@@ -111,16 +111,16 @@ class TestWorkflowTerminationReason:
             max_turns=6,
         )
 
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id, carol.agent_id],
             knobs={"graph": graph.to_dict()},
         )
-        await session.send("kickoff")
+        await channel.send("kickoff")
 
-        close_env = await alice.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=5.0,
         )
         assert close_env.event_data.get("reason") == "max_turns"
@@ -163,16 +163,16 @@ class TestWorkflowTerminationReason:
             max_turns=3,
         )
 
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id, carol.agent_id],
             knobs={"graph": graph.to_dict()},
         )
-        await session.send("kickoff")
+        await channel.send("kickoff")
 
-        close_env = await alice.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=5.0,
         )
         assert close_env.event_data.get("reason") == "custom_done"
@@ -209,16 +209,16 @@ class TestWorkflowTerminationReason:
             max_turns=4,
         )
 
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={"graph": graph.to_dict()},
         )
-        await session.send("kickoff")
+        await channel.send("kickoff")
 
-        close_env = await alice.wait_for_session_event(
-            session_id=session.session_id,
-            predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+        close_env = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
             timeout=5.0,
         )
         assert close_env.event_data.get("reason") == "max_turns"

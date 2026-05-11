@@ -48,7 +48,7 @@ def _agent(name: str, *replies: str) -> Agent:
 
 def _packet(
     *,
-    session_id: str,
+    channel_id: str,
     sender_id: str,
     tool: str | None = None,
     reason: str = "",
@@ -67,7 +67,7 @@ def _packet(
     if target is not None:
         routing["target"] = target
     return Envelope(
-        session_id=session_id,
+        channel_id=channel_id,
         sender_id=sender_id,
         audience=None,
         event_type=EV_PACKET,
@@ -111,7 +111,7 @@ class TestPacketWithContextUpdate:
             default_target=TerminateTarget(reason="unrouted"),
             max_turns=10,
         )
-        session = await router.open(
+        channel = await router.open(
             type=WORKFLOW_TYPE,
             target=[billing.agent_id, technical.agent_id],
             knobs={"graph": graph.to_dict()},
@@ -120,7 +120,7 @@ class TestPacketWithContextUpdate:
         # Single EV_PACKET carrying routing + context_updates. Fold
         # applies context_updates BEFORE running select_next.
         envelope = _packet(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=router.agent_id,
             tool="classify_as_technical",
             reason="API error",
@@ -128,7 +128,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         # Context vars carry the new key.
         assert state.context_vars == {"category": "technical"}
         # ContextEquals matched on post-update state — speaker is the
@@ -161,7 +161,7 @@ class TestPacketWithContextUpdate:
             default_target=TerminateTarget(reason="default"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={
@@ -171,13 +171,13 @@ class TestPacketWithContextUpdate:
         )
 
         # Verify the seeded value is in place.
-        assert hub._adapter_states[session.session_id].context_vars == {"route": "stale"}
+        assert hub._adapter_states[channel.channel_id].context_vars == {"route": "stale"}
 
         # Packet that clears the route via context_updates.delete.
         # Fold applies it before select_next, so ContextEquals(route, None)
         # terminate rule fires.
         envelope = _packet(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=alice.agent_id,
             tool="clear_route",
             reason="done routing",
@@ -185,7 +185,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.context_vars == {}
         # Terminate rule fired — no next speaker, close reason set.
         assert state.expected_next_speaker is None
@@ -216,7 +216,7 @@ class TestPacketWithContextUpdate:
             default_target=TerminateTarget(reason="done"),
             max_turns=10,
         )
-        session = await alice.open(
+        channel = await alice.open(
             type=WORKFLOW_TYPE,
             target=[bob.agent_id],
             knobs={
@@ -226,14 +226,14 @@ class TestPacketWithContextUpdate:
         )
 
         envelope = _packet(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=alice.agent_id,
             tool="advance",
             reason="go",
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         # Existing context untouched; routing follows FromSpeaker rule.
         assert state.context_vars == {"existing": "kept"}
         assert state.expected_next_speaker == bob.agent_id
@@ -267,14 +267,14 @@ class TestPacketWithContextUpdate:
             default_target=TerminateTarget(reason="unrouted"),
             max_turns=10,
         )
-        session = await router.open(
+        channel = await router.open(
             type=WORKFLOW_TYPE,
             target=[a.agent_id, b.agent_id],
             knobs={"graph": graph.to_dict()},
         )
 
         envelope = _packet(
-            session_id=session.session_id,
+            channel_id=channel.channel_id,
             sender_id=router.agent_id,
             tool="smart_route",
             reason="dynamic",
@@ -282,7 +282,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[session.session_id]
+        state = hub._adapter_states[channel.channel_id]
         assert state.expected_next_speaker == b.agent_id
 
         await router_hc.close()

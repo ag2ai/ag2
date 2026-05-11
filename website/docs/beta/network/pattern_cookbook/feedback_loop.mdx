@@ -31,7 +31,7 @@ Under the packet execution model, `#!python approve` uses `#!python set_context`
 to flip `done=True`. The reviewer's reply body (containing the
 "APPROVED" note) flows naturally through the packet's `body` field
 on the same turn — when the packet folds, `#!python ContextEquals(done, True)`
-matches the just-set value and the session terminates with reason
+matches the just-set value and the channel terminates with reason
 `'approved'`.
 
 If the reviewer instead just writes feedback as text (no `#!python approve`
@@ -63,7 +63,7 @@ sequenceDiagram
 
 | Classic | Beta |
 |---|---|
-| `#!python ReplyResult(context_variables={"iteration_needed": False})` | `#!python await set_context(session, "done", True)` |
+| `#!python ReplyResult(context_variables={"iteration_needed": False})` | `#!python await set_context(channel, "done", True)` |
 | `#!python ExpressionContextCondition("not iteration_needed")` | `#!python ContextEquals("done", True)` |
 | `#!python max_round=12` on the pattern | `#!python max_turns=12` on the graph |
 
@@ -95,7 +95,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     AgentTarget,
@@ -106,7 +106,7 @@ from autogen.beta.network import (
     LocalLink,
     Passport,
     Resume,
-    SessionInject,
+    ChannelInject,
     TerminateTarget,
     Transition,
     TransitionGraph,
@@ -117,16 +117,16 @@ from autogen.beta.testing import TestConfig
 load_dotenv()
 
 
-async def approve(reason: str, session: SessionInject) -> str:
+async def approve(reason: str, channel: ChannelInject) -> str:
     """Mark the draft approved by setting done=True in context.
     The graph's ContextEquals(done, True) rule terminates the
     workflow; the reviewer can also write a short approval note in
     its reply body on the same turn — when the packet folds, the
     just-set done flag triggers terminate."""
-    if session is None:
-        return "no session"
+    if channel is None:
+        return "no channel"
     print(f"  [tool] approve({reason!r})")
-    await set_context(session, "done", True)
+    await set_context(channel, "done", True)
     return f"approved: {reason}"
 
 
@@ -206,12 +206,12 @@ async def main() -> None:
         max_turns=10,
     )
 
-    session = await intake.open(
+    channel = await intake.open(
         type=WORKFLOW_TYPE,
         target=[drafter.agent_id, reviewer.agent_id],
         knobs={"graph": graph.to_dict()},
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         intake.agent_id: "intake",
@@ -219,7 +219,7 @@ async def main() -> None:
         reviewer.agent_id: "reviewer",
     }
 
-    await session.send(
+    await channel.send(
         "Topic: write the opening paragraph of a blog post explaining "
         "why distributed systems are hard."
     )
@@ -227,14 +227,14 @@ async def main() -> None:
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # ContextEquals("done", True) → TerminateTarget("approved")).
-    close_env = await intake_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await intake_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=360.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub.read_wal(session.session_id):
+    for env in await hub.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -266,7 +266,7 @@ rules (especially the last-token-must-be-a-number rule) reliably
 catch first-draft paragraphs and force a revision:
 
 ```console
-session: 5d3a...
+channel: 5d3a...
 
          intake: Topic: write the opening paragraph of a blog post explaining why distributed systems are hard.
         drafter: Distributed systems are hard because they break the comfortable assumptions you can lean on. Networks fail in subtle ways, clocks drift, machines crash mid-operation, and there is no single source of truth. The result is a class of problems that look easy on a whiteboard but become surprisingly difficult in production.
