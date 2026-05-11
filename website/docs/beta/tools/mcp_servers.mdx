@@ -68,7 +68,7 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerConfig` also accepts `headers`, `connection_timeout`, `allowed_tools`, `blocked_tools`, and a `server_label` for logging. Any of these fields can be a `Variable` if the value is only known at runtime.
+`MCPServerConfig` also accepts `headers`, `allowed_tools`, `blocked_tools`, `description`, and a `server_label` for logging, plus transport-level knobs `connection_timeout` (default `30.0`), `proxy`, and `verify` (TLS verification, default `True`). The first group — `server_url`, `server_label`, `authorization_token`, `description`, `allowed_tools`, `blocked_tools`, `headers` — can also be a `Variable` if the value is only known at runtime; `connection_timeout`, `proxy`, and `verify` take plain values only.
 
 ### Local servers (stdin/stdout)
 
@@ -114,7 +114,7 @@ agent_with_local_mcp = Agent(
 )
 ```
 
-`MCPStdioServerConfig` accepts `command`, `args`, `env`, `cwd`, `encoding`, `server_label`, `description`, `allowed_tools`, and `blocked_tools`. Any of these can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
+`MCPStdioServerConfig` accepts `command`, `args`, `env`, `cwd`, `server_label`, `description`, `allowed_tools`, `blocked_tools`, and `encoding` (default `"utf-8"`). All of these except `encoding` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
 
 !!! note
     The subprocess is launched lazily, on the first tool-discovery / tool-call. A short-lived MCP session is opened for each operation, so there's no persistent process to manage from your code.
@@ -161,6 +161,8 @@ agent_with_mcp = Agent(
     ],
 )
 ```
+
+`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
 
 !!! warning
     With provider-side connections, your MCP credentials are sent to the LLM provider on every request. Only use this path with providers and servers you trust with those credentials.
