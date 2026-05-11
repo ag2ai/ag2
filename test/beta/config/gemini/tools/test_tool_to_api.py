@@ -108,7 +108,7 @@ def test_additional_properties_stripped_from_anyof_branches() -> None:
                 types.FunctionDeclaration(
                     name="emit",
                     description="Emit some payload.",
-                    parameters={
+                    parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "payload": {
