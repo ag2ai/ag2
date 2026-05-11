@@ -413,6 +413,142 @@ async def test_post_envelope_after_disconnect_raises() -> None:
     await hub.close()
 
 
+@pytest.mark.asyncio
+async def test_disconnect_wakes_blocked_next_envelope() -> None:
+    """A consumer parked on next_envelope must wake when disconnect fires.
+
+    Regression for the HumanClient hang where disconnect() flipped the flag
+    but did not unblock pending Queue.get() calls.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+
+    human = await hc.register_human(Passport(name="x"))
+
+    async def disconnect_soon() -> None:
+        await asyncio.sleep(0.05)
+        await human.disconnect()
+
+    asyncio.create_task(disconnect_soon())
+
+    with pytest.raises(RuntimeError, match="disconnected"):
+        await asyncio.wait_for(human.next_envelope(timeout=5.0), timeout=2.0)
+
+    await hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_wakes_blocked_envelopes_iterator() -> None:
+    """An async-for over envelopes() must terminate when disconnect fires."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+
+    human = await hc.register_human(Passport(name="x"))
+
+    seen: list[object] = []
+
+    async def consume() -> None:
+        async for envelope in human.envelopes():
+            seen.append(envelope)
+
+    consumer = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)  # let consumer park on get()
+    await human.disconnect()
+    await asyncio.wait_for(consumer, timeout=2.0)
+    # Iterator exited cleanly; no envelopes ever arrived.
+    assert seen == []
+
+    await hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_wakes_concurrent_pull_consumers() -> None:
+    """Multiple consumers parked on the pull queue all wake on disconnect.
+
+    The sentinel-resender pattern means the first awaiter that observes
+    the disconnect re-enqueues the sentinel for siblings.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+
+    human = await hc.register_human(Passport(name="x"))
+
+    waiters = [
+        asyncio.create_task(human.next_envelope(timeout=5.0)) for _ in range(3)
+    ]
+    await asyncio.sleep(0.05)
+    await human.disconnect()
+
+    results = await asyncio.gather(*waiters, return_exceptions=True)
+    for result in results:
+        assert isinstance(result, RuntimeError)
+        assert "disconnected" in str(result)
+
+    await hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_wait_for_channel_event_wakes_on_disconnect() -> None:
+    """Per-channel waiters also wake when disconnect fires."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+
+    human = await hc.register_human(Passport(name="x"))
+    # Pre-create a per-channel inbox so the waiter parks on it.
+    human.ensure_channel_inbox("ch-pending")
+
+    async def disconnect_soon() -> None:
+        await asyncio.sleep(0.05)
+        await human.disconnect()
+
+    asyncio.create_task(disconnect_soon())
+
+    with pytest.raises(RuntimeError, match="disconnected"):
+        await human.wait_for_channel_event(
+            channel_id="ch-pending",
+            predicate=lambda _e: True,
+            timeout=5.0,
+        )
+
+    await hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_idempotent() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+
+    human = await hc.register_human(Passport(name="x"))
+    await human.disconnect()
+    await human.disconnect()  # second call must not enqueue another sentinel
+    # The single sentinel is consumed and re-enqueued by next_envelope; if
+    # a second was inserted, two waiters would consume two sentinels
+    # without re-enqueue contention. We assert that the inbox has exactly
+    # one item (the sentinel) by reading it once and confirming a second
+    # read still finds one (the re-enqueue).
+    with pytest.raises(RuntimeError):
+        await human.next_envelope(timeout=1.0)
+    with pytest.raises(RuntimeError):
+        await human.next_envelope(timeout=1.0)
+
+    await hc.close()
+    await hub.close()
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 

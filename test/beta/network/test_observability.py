@@ -14,13 +14,18 @@ import pytest
 from autogen.beta import Agent
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
+    EV_TEXT,
     AccessDeniedError,
     Allow,
+    AuditLog,
+    BaseHubArbiter,
     BaseHubListener,
     Deny,
     Hub,
     HubClient,
+    HumanClient,
     LocalLink,
+    NetworkError,
     Passport,
     Resume,
     Rule,
@@ -116,8 +121,6 @@ async def test_listener_receives_envelope_posted() -> None:
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi there")
 
-    from autogen.beta.network import EV_TEXT
-
     text_posts = [t for t, _ in listener.envelope_posted if t == EV_TEXT]
     assert len(text_posts) >= 1
 
@@ -138,13 +141,12 @@ async def test_listener_receives_envelope_rejected_on_access_denied() -> None:
     bob_hc = HubClient(link, hub=hub)
 
     # bob blocks alice inbound — channel.open will fail at create_channel.
-    await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
     bob_rule = Rule(access=AccessBlock(inbound_from=["carol"], outbound_to=["*"]))
     await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), rule=bob_rule)
 
-    alice_client = next(iter(alice_hc._clients.values()))
     with pytest.raises(AccessDeniedError):
-        await alice_client.open(type="consulting", target="bob")
+        await alice.open(type="consulting", target="bob")
 
     await alice_hc.close()
     await bob_hc.close()
@@ -297,7 +299,7 @@ async def test_audit_subscribe_taps_live_stream() -> None:
     async def tap(record: dict) -> None:
         captured.append(record)
 
-    hub._audit_log.subscribe(tap)
+    hub.audit_log.subscribe(tap)
 
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
@@ -327,34 +329,21 @@ async def test_handler_exception_does_not_crash_channel() -> None:
 
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
 
-    # Bob's agent will raise inside agent.ask.
+    # Bob's agent will raise inside agent.ask. The default handler's
+    # trap must observe + report the failure without re-raising and
+    # the channel must keep accepting envelopes.
     bob_agent = Agent(name="bob", config=TestConfig(RuntimeError("intentional")))
-    bob = await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
+    await bob_hc.register(bob_agent, Passport(name="bob"), Resume())
 
-    # Replace bob's notify handler to also be the default; raise happens
-    # inside _process_substantive when agent.ask is called.
     channel = await alice.open(type="conversation", target="bob")
-    # Suppress the receive-side re-raise so the test can observe the
-    # listener-side audit + on_turn_failed without the test framework
-    # surfacing the raise as a test failure.
-    bob._on_envelope = None
-    from autogen.beta.network.client.handlers import _process_substantive
-
-    import contextlib as _ctx
-
-    async def safe_handler(env):
-        with _ctx.suppress(Exception):
-            await _process_substantive(env, bob)
-
-    bob.on_envelope(safe_handler)
-
     await channel.send("hello bob")
 
-    # Yield so receive-loop dispatches and handler runs.
+    # Yield so receive-loop dispatches the inbound and the default
+    # handler runs through agent.ask (which raises).
     await asyncio.sleep(0.1)
 
     assert listener.turn_failed, "expected on_turn_failed to fire"
-    # Subsequent send still works — channel survived.
+    # Subsequent send still works — channel survived the crash.
     envelope_id = await channel.send("still alive?")
     assert envelope_id
 
@@ -377,9 +366,11 @@ async def test_health_snapshot_shape() -> None:
         "active_channels": 0,
         "registered_agents": 0,
         "pending_inbox_total": 0,
-        "oldest_pending_count": None,
-        "registered_listeners": 0,
+        "max_pending_inbox_depth": None,
+        # AuditLog auto-installs as the first listener.
+        "registered_listeners": 1,
         "adapters_loaded": 4,
+        "audit_log_bytes": 0,
     }
 
     alice_hc = HubClient(link, hub=hub)
@@ -392,6 +383,8 @@ async def test_health_snapshot_shape() -> None:
     assert snapshot["registered_agents"] == 2
     assert snapshot["active_channels"] == 1
     assert snapshot["adapters_loaded"] == 4
+    # Registering 2 agents + opening 1 channel emits >0 audit bytes.
+    assert snapshot["audit_log_bytes"] > 0
 
     await alice_hc.close()
     await bob_hc.close()
@@ -442,6 +435,217 @@ async def test_hub_logs_warning_on_rejection(caplog) -> None:
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert any("post_envelope rejected" in r.getMessage() for r in warnings)
 
+
+# ── Coverage gap tests ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_multiple_bad_listeners_do_not_break_dispatch() -> None:
+    """Three buggy listeners in a chain — the good one in the middle still fires."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+
+    class _Bad(BaseHubListener):
+        async def on_envelope_posted(self, envelope, metadata) -> None:
+            raise RuntimeError("bad")
+
+    good = _RecordingListener()
+    hub.register_listener(_Bad())
+    hub.register_listener(_Bad())
+    hub.register_listener(good)
+    hub.register_listener(_Bad())
+
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("hi")
+
+    assert good.envelope_posted, "good listener should have fired despite bad siblings"
+
     await alice_hc.close()
     await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_base_hub_arbiter_allows_everything_by_default() -> None:
+    """``BaseHubArbiter`` returns Allow() from every gate — minimal opt-in shape."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    hub.register_arbiter(BaseHubArbiter())
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+
+    # Even with an inbound-block rule, the BaseHubArbiter (which allows
+    # everything) lets the channel open and the envelope land.
+    blocking_rule = Rule(access=AccessBlock(inbound_from=["nobody"], outbound_to=["*"]))
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume(), rule=blocking_rule)
+    channel = await alice.open(type="conversation", target="bob")
+    bob_id = next(p.agent_id for p in channel.metadata.participants if p.agent_id != alice.agent_id)
+    envelope_id = await channel.send("through", audience=[bob_id])
+    assert envelope_id
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+class _DenyAtDelegationDepth(BaseHubArbiter):
+    """Custom arbiter that denies sends when envelope.depth exceeds a cap."""
+
+    def __init__(self, cap: int) -> None:
+        self._cap = cap
+
+    async def authorize_send(self, envelope, sender, sender_rule, recipients):
+        if envelope.depth > self._cap:
+            return Deny(reason=f"depth {envelope.depth} > cap {self._cap}")
+        return Allow()
+
+
+@pytest.mark.asyncio
+async def test_custom_arbiter_authorize_send_overrides_rule_based() -> None:
+    """A subclass of ``BaseHubArbiter`` can deny based on envelope depth."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    channel = await alice.open(type="conversation", target="bob")
+
+    # Install the deny-everything arbiter after the channel is open so
+    # the invite envelope doesn't get denied. Substantive sends now fail.
+    hub.register_arbiter(_DenyAtDelegationDepth(cap=-1))
+
+    with pytest.raises(AccessDeniedError, match="cap"):
+        await channel.send("blocked")
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_hub_health_on_populated_hub() -> None:
+    """3 channels × 5 agents — counters reflect realistic operational load."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    clients = []
+    agents = []
+    for name in ("a", "b", "c", "d", "e"):
+        hc = HubClient(link, hub=hub)
+        ac = await hc.register(_agent(name), Passport(name=name), Resume())
+        clients.append(hc)
+        agents.append(ac)
+
+    # 3 channels: a→b, a→c, b→d.
+    await agents[0].open(type="conversation", target="b")
+    await agents[0].open(type="conversation", target="c")
+    await agents[1].open(type="conversation", target="d")
+
+    snapshot = hub.health()
+    assert snapshot["registered_agents"] == 5
+    assert snapshot["active_channels"] == 3
+    # AuditLog has written register + channel-create records.
+    assert snapshot["audit_log_bytes"] > 0
+
+    for hc in clients:
+        await hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_widened_trap_catches_pre_ask_failures() -> None:
+    """A monkey-patched ``default_view_policy`` that raises lands in ``on_turn_failed``.
+
+    Regression for the widened ``_process_substantive`` trap — the
+    original trap started after view projection, so a buggy view
+    would escape the receive loop instead of routing through the
+    observability surface.
+    """
+
+    class _BadView:
+        async def project(self, history, *, participant_id, channel, render_envelope):
+            raise RuntimeError("view broke")
+
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    listener = _RecordingListener()
+    hub.register_listener(listener)
+
+    # Force every view resolution to return the bad view.
+    hub.default_view_policy = lambda channel_id, participant_id: _BadView()  # type: ignore[method-assign]
+
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob", "ok"), Passport(name="bob"), Resume())
+
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("hi bob")
+    await asyncio.sleep(0.1)
+
+    assert listener.turn_failed, "view.project crash should fire on_turn_failed"
+    # Channel survives — subsequent send still works.
+    assert await channel.send("still alive?")
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_register_human_duplicate_name_raises() -> None:
+    """Re-registering the same human name through register_human raises."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    hc = HubClient(LocalLink(hub), hub=hub)
+    first = await hc.register_human(Passport(name="reviewer"))
+    assert isinstance(first, HumanClient)
+    with pytest.raises(NetworkError):
+        await hc.register_human(Passport(name="reviewer"))
+    await hc.close()
+    await hub.close()
+
+
+def test_passport_kind_rejects_typo_at_construction() -> None:
+    """Tightened ``Passport.kind`` raises ValueError for unknown literals."""
+    with pytest.raises(ValueError, match="kind must be one of"):
+        Passport(name="x", kind="huMAn")  # typo
+
+
+@pytest.mark.asyncio
+async def test_replace_audit_log_swaps_listener_chain() -> None:
+    """Tenant-supplied AuditLog replaces the built-in one in the listener chain.
+
+    Covers the subclass-friendly hub story: a custom audit format can
+    be plugged in without monkey-patching, and the listener order
+    keeps audit-first semantics.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+
+    replacement = AuditLog(store)
+    hub.replace_audit_log(replacement)
+    assert hub.audit_log is replacement
+
+    link = LocalLink(hub)
+    hc = HubClient(link, hub=hub)
+    await hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+    # The replacement listener saw the register event.
+    records = await replacement.read_all()
+    kinds = [r.get("kind") for r in records]
+    assert "agent_registered" in kinds
+
+    await hc.close()
     await hub.close()

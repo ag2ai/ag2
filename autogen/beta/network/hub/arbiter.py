@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "Allow",
+    "BaseHubArbiter",
     "Decision",
     "Deny",
     "HubArbiter",
@@ -166,6 +167,73 @@ def _match_any(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, p) for p in patterns)
 
 
+class BaseHubArbiter:
+    """No-op base implementation. Override only the gates you care about.
+
+    Mirrors :class:`BaseHubListener`: every method returns
+    :class:`Allow` so subclasses opting in to a single gate (e.g.
+    ``authorize_register`` for tenant-quota checks) don't have to
+    implement the rest of the surface.
+
+    For the rule-based behavior the hub had inline before this seam
+    existed, use :class:`RuleBasedArbiter` (the default) and compose /
+    chain via subclassing.
+    """
+
+    async def authorize_send(
+        self,
+        envelope: "Envelope",  # noqa: ARG002
+        sender: "Passport",  # noqa: ARG002
+        sender_rule: "Rule",  # noqa: ARG002
+        recipients: list["Passport"],  # noqa: ARG002
+    ) -> Decision:
+        return Allow()
+
+    async def authorize_inbox(
+        self,
+        envelope: "Envelope",  # noqa: ARG002
+        recipient: "Passport",  # noqa: ARG002
+        recipient_rule: "Rule",  # noqa: ARG002
+        current_pending: int,  # noqa: ARG002
+    ) -> Decision:
+        return Allow()
+
+    async def authorize_dispatch(
+        self,
+        envelope: "Envelope",  # noqa: ARG002
+        sender: "Passport",  # noqa: ARG002
+        recipient: "Passport",  # noqa: ARG002
+        recipient_rule: "Rule",  # noqa: ARG002
+    ) -> Decision:
+        return Allow()
+
+    async def authorize_channel_open(
+        self,
+        manifest: "ChannelManifest",  # noqa: ARG002
+        creator: "Passport",  # noqa: ARG002
+        creator_rule: "Rule",  # noqa: ARG002
+        invitees: list["Passport"],  # noqa: ARG002
+        invitee_rules: list["Rule"],  # noqa: ARG002
+        active_creator_channels: int,  # noqa: ARG002
+    ) -> Decision:
+        return Allow()
+
+    async def authorize_register(
+        self,
+        passport: "Passport",  # noqa: ARG002
+        resume: "Resume",  # noqa: ARG002
+        rule: "Rule",  # noqa: ARG002
+    ) -> Decision:
+        return Allow()
+
+    async def resolve_unknown_audience(
+        self,
+        envelope: "Envelope",  # noqa: ARG002
+        unknown_ids: list[str],  # noqa: ARG002
+    ) -> list[str] | None:
+        return None
+
+
 class RuleBasedArbiter:
     """Default arbiter — enforces per-agent :class:`Rule` exactly as the
     hub did before this seam existed.
@@ -240,7 +308,7 @@ class RuleBasedArbiter:
         # recipient's whitelist; without this pre-check, an invite to
         # a recipient who blocks the creator would be dropped and the
         # creator would hang on the ack-timeout.
-        for invitee, invitee_rule in zip(invitees, invitee_rules, strict=False):
+        for invitee, invitee_rule in zip(invitees, invitee_rules, strict=True):
             if invitee.agent_id == creator.agent_id:
                 continue
             if not _match_any(creator.name, invitee_rule.access.inbound_from):

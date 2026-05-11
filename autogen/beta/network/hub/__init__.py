@@ -12,7 +12,7 @@ modules — the trust boundary runs through ``HubClient`` /
 ``AgentClient`` (see ``client/``).
 """
 
-from .arbiter import Allow, Decision, Deny, HubArbiter, RuleBasedArbiter
+from .arbiter import Allow, BaseHubArbiter, Decision, Deny, HubArbiter, RuleBasedArbiter
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -24,6 +24,7 @@ from .audit import (
     AUDIT_KIND_RULE_SET,
     AUDIT_KIND_SKILL_SET,
     AUDIT_KIND_TASK_TERMINATED,
+    AUDIT_KIND_TURN_FAILED,
     RESUME_SOURCE_OBSERVED,
     RESUME_SOURCE_TENANT,
     AuditLog,
@@ -79,6 +80,7 @@ __all__ = (
     "AUDIT_KIND_RULE_SET",
     "AUDIT_KIND_SKILL_SET",
     "AUDIT_KIND_TASK_TERMINATED",
+    "AUDIT_KIND_TURN_FAILED",
     "RESUME_SOURCE_OBSERVED",
     "RESUME_SOURCE_TENANT",
     "AcksWithinEvaluator",
@@ -87,6 +89,7 @@ __all__ = (
     "AuditLog",
     "AuditSubscriber",
     "AutoCloseHandler",
+    "BaseHubArbiter",
     "BaseHubListener",
     "Decision",
     "Deny",

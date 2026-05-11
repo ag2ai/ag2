@@ -334,6 +334,29 @@ class HubClient:
     async def post_envelope(self, envelope: Envelope) -> str:
         return await self._hub.post_envelope(envelope)
 
+    async def report_turn_failure(
+        self,
+        *,
+        channel_id: str,
+        agent_id: str,
+        envelope_id: str,
+        exc: BaseException,
+    ) -> None:
+        """Report a notify-handler crash through the hub's observability surface.
+
+        The default notify handler calls this when ``agent.ask`` (or any
+        other step in the substantive path) raises. The hub fans the
+        failure out to every registered :class:`HubListener` (including
+        the built-in ``AuditLog``) — handler code never reaches into
+        hub privates.
+        """
+        await self._hub.report_turn_failure(
+            channel_id=channel_id,
+            agent_id=agent_id,
+            envelope_id=envelope_id,
+            exc=exc,
+        )
+
     async def read_wal(self, channel_id: str, *, since: int = 0, until: int | None = None) -> list[Envelope]:
         return await self._hub.read_wal(channel_id, since=since, until=until)
 

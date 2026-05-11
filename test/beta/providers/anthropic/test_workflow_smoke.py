@@ -73,7 +73,7 @@ async def _wait_for_state(
 ) -> bool:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        if pred(hub._adapter_states.get(channel_id)):
+        if pred(hub.adapter_state(channel_id)):
             return True
         await asyncio.sleep(0.2)
     return False
@@ -193,7 +193,7 @@ async def test_workflow_swarm_handoff_revert_close(
     )
     assert settled, "eng never replied within 60s"
 
-    state = hub._adapter_states[channel.channel_id]
+    state = hub.adapter_state(channel.channel_id)
     # FromSpeaker(eng) → RevertToInitiator → next is triage (channel creator).
     assert state.expected_next_speaker == triage.agent_id
 

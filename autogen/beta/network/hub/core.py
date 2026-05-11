@@ -83,20 +83,7 @@ from ..transport.frames import (
 from ..transport.link import LinkEndpoint
 from ..views.base import ViewPolicy
 from .arbiter import Deny, HubArbiter, RuleBasedArbiter
-from .audit import (
-    AUDIT_KIND_AGENT_REGISTERED,
-    AUDIT_KIND_AGENT_UNREGISTERED,
-    AUDIT_KIND_CHANNEL_CLOSED,
-    AUDIT_KIND_CHANNEL_CREATED,
-    AUDIT_KIND_CHANNEL_EXPIRED,
-    AUDIT_KIND_RESUME_SET,
-    AUDIT_KIND_RULE_SET,
-    AUDIT_KIND_SKILL_SET,
-    AUDIT_KIND_TASK_TERMINATED,
-    RESUME_SOURCE_OBSERVED,
-    RESUME_SOURCE_TENANT,
-    AuditLog,
-)
+from .audit import AuditLog
 from .expectations import (
     ExpectationContext,
     ExpectationEvaluator,
@@ -195,8 +182,11 @@ class Hub:
         self._expectation_sweep_interval = expectation_sweep_interval
         self._invite_ack_timeout = invite_ack_timeout
 
-        # Audit log + expectation registries.
-        self._audit_log = AuditLog(store)
+        # Audit log + expectation registries. AuditLog is a HubListener;
+        # see _install_default_listeners() — it installs as the first
+        # listener so audit records are written before any tenant
+        # listener observes the same event.
+        self._audit_log = AuditLog(store, clock=self._clock)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
         # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
@@ -257,8 +247,10 @@ class Hub:
         self._expectation_sweeper: _IntervalSweeper | None = None
         self._closed = False
 
-        # Observability + decision-making seams.
-        self._listeners: list[HubListener] = []
+        # Observability + decision-making seams. Audit log is registered
+        # as the first listener so it sees every event a tenant
+        # listener does, in the same order.
+        self._listeners: list[HubListener] = [self._audit_log]
         self._arbiter: HubArbiter = RuleBasedArbiter()
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
@@ -440,6 +432,55 @@ class Hub:
         with contextlib.suppress(ValueError):
             self._listeners.remove(listener)
 
+    async def report_turn_failure(
+        self,
+        *,
+        channel_id: str,
+        agent_id: str,
+        envelope_id: str,
+        exc: BaseException,
+    ) -> None:
+        """Fan out an ``on_turn_failed`` event to every listener.
+
+        Public entry point so client-side notify handlers can route
+        substantive-turn crashes through the observability surface
+        without touching hub privates. ``AuditLog`` (the built-in
+        listener) records the failure; tenant listeners react however
+        they choose.
+        """
+        await self._fan_out(
+            "on_turn_failed",
+            channel_id,
+            agent_id,
+            envelope_id,
+            exc,
+        )
+
+    @property
+    def audit_log(self) -> AuditLog:
+        """Public access to the built-in audit log (a :class:`HubListener`).
+
+        Use this to call :meth:`AuditLog.read_all` from tooling or to
+        attach a live subscriber via :meth:`AuditLog.subscribe`. Custom
+        hub subclasses that want a different audit format can replace
+        the instance via :meth:`replace_audit_log`.
+        """
+        return self._audit_log
+
+    def replace_audit_log(self, audit_log: AuditLog) -> None:
+        """Swap the built-in :class:`AuditLog` for a tenant-provided one.
+
+        Unregisters the prior audit log from the listener chain,
+        registers the replacement as the first listener (preserving
+        the convention that audit writes complete before tenant
+        listeners observe the same event), and updates
+        :attr:`audit_log` to point at it.
+        """
+        with contextlib.suppress(ValueError):
+            self._listeners.remove(self._audit_log)
+        self._audit_log = audit_log
+        self._listeners.insert(0, audit_log)
+
     def register_arbiter(self, arbiter: HubArbiter) -> None:
         """Replace the active :class:`HubArbiter` instance.
 
@@ -467,20 +508,34 @@ class Hub:
         endpoint or operational dashboard. The shape is intentionally
         small — operators want a handful of indicative numbers, not
         the full state.
+
+        Fields:
+
+        * ``active_channels``: number of channels in OPENED/PENDING state.
+        * ``registered_agents``: total registered identities (agents +
+          humans).
+        * ``pending_inbox_total``: sum of per-recipient outstanding
+          envelope counters (best-effort approximation).
+        * ``max_pending_inbox_depth``: maximum per-recipient queue depth,
+          or ``None`` when nothing is queued. Indicative of the
+          "stuck agent" case.
+        * ``registered_listeners``: number of attached
+          :class:`HubListener` instances (the built-in
+          :class:`AuditLog` counts).
+        * ``adapters_loaded``: number of registered
+          :class:`ChannelAdapter` instances.
         """
-        oldest_age: float | None = None
+        max_depth: int | None = None
         if self._inbox_pending:
-            # Cheap approximation — actual queue ages would require
-            # per-envelope timestamps. The pending counter is the
-            # canonical "agents are stuck" signal anyway.
-            oldest_age = float(max(self._inbox_pending.values()))
+            max_depth = max(self._inbox_pending.values())
         return {
             "active_channels": len(self._active_channels),
             "registered_agents": len(self._passports),
             "pending_inbox_total": sum(self._inbox_pending.values()),
-            "oldest_pending_count": oldest_age,
+            "max_pending_inbox_depth": max_depth,
             "registered_listeners": len(self._listeners),
             "adapters_loaded": len(self._adapters),
+            "audit_log_bytes": self._audit_log.bytes_written,
         }
 
     async def _fan_out(self, method_name: str, *args: object) -> None:
@@ -559,6 +614,15 @@ class Hub:
                     if key in fired:
                         continue
                     fired.add(key)
+                    # Fan out before handler so listeners (including
+                    # AuditLog) see every violation regardless of which
+                    # handler is configured.
+                    await self._fan_out(
+                        "on_expectation_fired",
+                        channel_id,
+                        expectation,
+                        violation,
+                    )
                     # Sweeper must survive handler exceptions — they
                     # leave the violation marked as fired so we don't
                     # spin on a bad handler.
@@ -622,14 +686,13 @@ class Hub:
                 self._capability_index.setdefault(cap, set()).add(agent_id)
 
         await self._persist_capability_index()
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_AGENT_REGISTERED,
-            "agent_id": agent_id,
-            "name": passport.name,
-        })
         logger.info("agent registered: name=%s agent_id=%s", passport.name, agent_id)
-        await self._fan_out("on_agent_event", agent_id, "registered", {"passport": passport})
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "registered",
+            {"passport": passport, "at": self._clock()},
+        )
         return passport
 
     async def unregister(self, agent_id: str) -> None:
@@ -677,18 +740,12 @@ class Hub:
             self._inbox_pending.pop(agent_id, None)
 
         await self._persist_capability_index()
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_AGENT_UNREGISTERED,
-            "agent_id": agent_id,
-            "name": passport.name if passport is not None else None,
-        })
         logger.info("agent unregistered: agent_id=%s", agent_id)
         await self._fan_out(
             "on_agent_event",
             agent_id,
             "unregistered",
-            {"name": passport.name if passport is not None else None},
+            {"name": passport.name if passport is not None else None, "at": self._clock()},
         )
 
     # ── Discovery (read-side) ────────────────────────────────────────────────
@@ -795,13 +852,12 @@ class Hub:
         if added or removed:
             await self._persist_capability_index()
 
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RESUME_SET,
-            "source": RESUME_SOURCE_TENANT,
-            "agent_id": agent_id,
-            "version": resume.version,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "resume_set",
+            {"resume": resume, "version": resume.version, "at": self._clock()},
+        )
 
     async def set_skill(self, agent_id: str, skill_md: str | None) -> None:
         if agent_id not in self._passports:
@@ -812,12 +868,12 @@ class Hub:
         else:
             await self._persist_skill(agent_id, skill_md)
             self._skills[agent_id] = skill_md
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_SKILL_SET,
-            "agent_id": agent_id,
-            "removed": skill_md is None,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "skill_set",
+            {"removed": skill_md is None, "at": self._clock()},
+        )
 
     async def set_rule(self, agent_id: str, rule: Rule) -> None:
         if agent_id not in self._passports:
@@ -825,12 +881,12 @@ class Hub:
         rule.version = (self._rules[agent_id].version + 1) if agent_id in self._rules else rule.version
         await self._persist_rule(agent_id, rule)
         self._rules[agent_id] = rule
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RULE_SET,
-            "agent_id": agent_id,
-            "version": rule.version,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "rule_set",
+            {"rule": rule, "version": rule.version, "at": self._clock()},
+        )
 
     async def record_observation(
         self,
@@ -888,15 +944,18 @@ class Hub:
         if task_id is not None:
             self._observed_task_ids.add(task_id)
 
-        await self._audit_log.append({
-            "at": self._clock(),
-            "kind": AUDIT_KIND_RESUME_SET,
-            "source": RESUME_SOURCE_OBSERVED,
-            "agent_id": owner_id,
-            "version": resume.version,
-            "capability": capability,
-            "outcome": outcome.value,
-        })
+        await self._fan_out(
+            "on_agent_event",
+            owner_id,
+            "observation_recorded",
+            {
+                "resume": resume,
+                "version": resume.version,
+                "capability": capability,
+                "outcome": outcome.value,
+                "at": self._clock(),
+            },
+        )
 
     def agents_with_capability(self, capability: str) -> list[str]:
         """Return agent_ids matching ``capability`` (claimed or observed)."""
@@ -1015,15 +1074,6 @@ class Hub:
         self._adapter_states[channel_id] = adapter.initial_state(metadata)
 
         await self._persist_channel_metadata(metadata)
-        await self._audit_log.append({
-            "at": now,
-            "kind": AUDIT_KIND_CHANNEL_CREATED,
-            "channel_id": channel_id,
-            "manifest_type": manifest_type,
-            "manifest_version": manifest_version,
-            "creator_id": creator_id,
-            "participants": [p.agent_id for p in metadata_participants],
-        })
         logger.info(
             "channel created: id=%s type=%s creator=%s participants=%d",
             channel_id,
@@ -1031,7 +1081,16 @@ class Hub:
             creator_id,
             len(metadata_participants),
         )
-        await self._fan_out("on_channel_event", channel_id, "created", {"metadata": metadata})
+        await self._fan_out(
+            "on_channel_event",
+            channel_id,
+            "created",
+            {
+                "metadata": metadata,
+                "participants": [p.agent_id for p in metadata_participants],
+                "at": now,
+            },
+        )
 
         if not invitees:
             # Self-only channel — already complete; transition to ACTIVE.
@@ -1699,21 +1758,13 @@ class Hub:
             async with self._wal_lock(channel_id):
                 await self._wal_append(close_envelope)
             await self._dispatch(close_envelope, metadata)
-            await self._audit_log.append({
-                "at": metadata.closed_at,
-                "kind": (
-                    AUDIT_KIND_CHANNEL_EXPIRED if new_state == ChannelState.EXPIRED else AUDIT_KIND_CHANNEL_CLOSED
-                ),
-                "channel_id": channel_id,
-                "reason": reason,
-            })
             kind_label = "expired" if new_state == ChannelState.EXPIRED else "closed"
             logger.info("channel %s: id=%s reason=%s", kind_label, channel_id, reason)
             await self._fan_out(
                 "on_channel_event",
                 channel_id,
                 kind_label,
-                {"reason": reason, "metadata": metadata},
+                {"reason": reason, "metadata": metadata, "at": metadata.closed_at},
             )
         # ACTIVE state transitions originate from ``_activate_channel``
         # which fires the ``opened`` event directly — no need to fan
@@ -1735,16 +1786,6 @@ class Hub:
                 metadata.error = reason or metadata.error or "expired"
         await self._persist_task_metadata(metadata)
         if new_state in TERMINAL_TASK_STATES:
-            await self._audit_log.append({
-                "at": metadata.completed_at,
-                "kind": AUDIT_KIND_TASK_TERMINATED,
-                "task_id": task_id,
-                "owner_id": metadata.owner_id,
-                "channel_id": metadata.channel_id,
-                "outcome": new_state.value,
-                "capability": metadata.spec.capability,
-                "reason": reason,
-            })
             await self._fan_out(
                 "on_task_event",
                 task_id,
@@ -1754,6 +1795,8 @@ class Hub:
                     "channel_id": metadata.channel_id,
                     "reason": reason,
                     "capability": metadata.spec.capability,
+                    "outcome": new_state.value,
+                    "at": metadata.completed_at,
                 },
             )
 

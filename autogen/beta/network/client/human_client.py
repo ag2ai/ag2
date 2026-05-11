@@ -87,12 +87,16 @@ class HumanClient:
         # ``next_envelope`` / ``envelopes()`` consumers. Unbounded by
         # design — the embedder controls drain rate via its UI. If the
         # queue grows pathologically the application has a UI bug to fix.
-        self._inbox: asyncio.Queue[Envelope] = asyncio.Queue()
+        # ``None`` is the disconnect sentinel: ``disconnect()`` enqueues it
+        # so blocked consumers wake up immediately. Each consumer that
+        # observes the sentinel re-enqueues it so concurrent waiters all
+        # see end-of-stream.
+        self._inbox: asyncio.Queue[Envelope | None] = asyncio.Queue()
 
         # Per-channel queues for ``wait_for_channel_event``-style waits.
         # Symmetric with ``AgentClient`` so ``Channel`` helpers that need
         # to await a specific reply also work for humans.
-        self._channel_inboxes: dict[str, asyncio.Queue[Envelope]] = {}
+        self._channel_inboxes: dict[str, asyncio.Queue[Envelope | None]] = {}
 
     # ── Properties (NetworkClient surface) ───────────────────────────────────
 
@@ -169,8 +173,24 @@ class HumanClient:
                 )
 
     async def disconnect(self) -> None:
-        """Stop accepting deliveries. Idempotent."""
+        """Stop accepting deliveries and wake any blocked consumers. Idempotent.
+
+        Pull-mode consumers (``next_envelope`` / ``envelopes`` /
+        ``wait_for_channel_event``) park on ``Queue.get()``. Without a
+        wakeup they would block forever after disconnect — this method
+        broadcasts an end-of-stream sentinel into every queue so each
+        waiter unblocks and either raises (``next_envelope``) or breaks
+        (``envelopes``).
+        """
+        if self._disconnected:
+            return
         self._disconnected = True
+        # Sentinel into the global pull queue and every per-channel queue.
+        # Each consumer that observes ``None`` re-enqueues it so multiple
+        # concurrent waiters all see the disconnect.
+        self._inbox.put_nowait(None)
+        for inbox in self._channel_inboxes.values():
+            inbox.put_nowait(None)
 
     async def receive_chunk(
         self,
@@ -220,7 +240,11 @@ class HumanClient:
         in seconds; raises ``asyncio.TimeoutError`` if exceeded.
         Envelopes that don't match the predicate are discarded — pass
         them via ``on_envelope`` if you want both behaviors at once.
+
+        Raises ``RuntimeError`` if the client is (or becomes) disconnected.
         """
+        if self._disconnected:
+            raise RuntimeError("HumanClient is disconnected")
         loop = asyncio.get_event_loop()
         deadline = loop.time() + timeout if timeout is not None else None
         while True:
@@ -231,6 +255,11 @@ class HumanClient:
                 envelope = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
             else:
                 envelope = await self._inbox.get()
+            if envelope is None:
+                # Disconnect sentinel — re-enqueue so concurrent waiters
+                # also wake up, then surface the disconnect.
+                self._inbox.put_nowait(None)
+                raise RuntimeError("HumanClient is disconnected")
             if predicate is None or predicate(envelope):
                 return envelope
 
@@ -238,10 +267,16 @@ class HumanClient:
         """Stream every inbound envelope until disconnect.
 
         Yields envelopes in arrival order. The iterator terminates when
-        ``disconnect()`` is called.
+        ``disconnect()`` is called (consumers blocked on ``get()`` are
+        woken via the disconnect sentinel).
         """
-        while not self._disconnected:
+        while True:
             envelope = await self._inbox.get()
+            if envelope is None:
+                # Disconnect — re-enqueue sentinel for concurrent iterators
+                # and exit cleanly.
+                self._inbox.put_nowait(None)
+                return
             yield envelope
 
     # ── Outbound surface ─────────────────────────────────────────────────────
@@ -337,7 +372,7 @@ class HumanClient:
         """Channel-compatible alias for ``post_envelope``."""
         return await self.post_envelope(envelope)
 
-    def ensure_channel_inbox(self, channel_id: str) -> "asyncio.Queue[Envelope]":
+    def ensure_channel_inbox(self, channel_id: str) -> "asyncio.Queue[Envelope | None]":
         """Public alias for the per-channel inbox helper.
 
         ``Channel`` doesn't currently call this on humans, but the
@@ -359,6 +394,8 @@ class HumanClient:
         for UIs that want to await a specific reply (e.g. "did the
         consulted agent finish?") without setting up a callback.
         """
+        if self._disconnected:
+            raise RuntimeError("HumanClient is disconnected")
         inbox = self._ensure_channel_inbox(channel_id)
         loop = asyncio.get_event_loop()
         deadline = loop.time() + timeout
@@ -367,16 +404,24 @@ class HumanClient:
             if remaining <= 0:
                 raise asyncio.TimeoutError()
             envelope = await asyncio.wait_for(inbox.get(), timeout=remaining)
+            if envelope is None:
+                inbox.put_nowait(None)
+                raise RuntimeError("HumanClient is disconnected")
             if predicate(envelope):
                 return envelope
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
-    def _ensure_channel_inbox(self, channel_id: str) -> "asyncio.Queue[Envelope]":
+    def _ensure_channel_inbox(self, channel_id: str) -> "asyncio.Queue[Envelope | None]":
         inbox = self._channel_inboxes.get(channel_id)
         if inbox is None:
             inbox = asyncio.Queue()
             self._channel_inboxes[channel_id] = inbox
+            # If we're already disconnected, immediately seed the sentinel
+            # so any new wait_for_channel_event call fails cleanly instead
+            # of blocking forever on a fresh queue.
+            if self._disconnected:
+                inbox.put_nowait(None)
         return inbox
 
     # Read-only access to the hub_client back-reference for advanced

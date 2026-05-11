@@ -20,17 +20,23 @@ files but readers should treat it as cache-only.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Literal, get_args
 
 __all__ = (
     "AgentRuntime",
     "AuthBlock",
     "CostProfile",
     "ObservedStat",
+    "PASSPORT_KINDS",
     "Passport",
+    "PassportKind",
     "Resume",
     "ResumeExample",
 )
+
+
+PassportKind = Literal["agent", "human", "remote_agent"]
+PASSPORT_KINDS: tuple[str, ...] = get_args(PassportKind)
 
 
 @dataclass(slots=True)
@@ -75,12 +81,20 @@ class Passport:
     cost: CostProfile | None = None
     region: str | None = None
     auth: AuthBlock = field(default_factory=AuthBlock)
-    kind: str | None = None  # "agent" | "human" | "remote_agent"; None ≡ "agent"
+    kind: PassportKind | None = None  # None ≡ "agent" for back-compat
     version: int = 1
 
     # Hub-stamped at registration. None on construction.
     agent_id: str | None = None
     created_at: str = ""  # ISO-Z, hub-stamped
+
+    def __post_init__(self) -> None:
+        # Validate kind at construction so a typo (e.g. ``kind="huMAn"``)
+        # fails loudly instead of being silently coerced downstream.
+        if self.kind is not None and self.kind not in PASSPORT_KINDS:
+            raise ValueError(
+                f"Passport.kind must be one of {PASSPORT_KINDS} or None; got {self.kind!r}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -95,7 +109,7 @@ class Passport:
         return cls(**payload)
 
     @property
-    def effective_kind(self) -> str:
+    def effective_kind(self) -> PassportKind:
         """Resolved ``kind`` — ``None`` falls through to ``"agent"``."""
         return self.kind or "agent"
 
