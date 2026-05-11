@@ -97,16 +97,6 @@ a2a = [
     "a2a-sdk>=1.0.0,<2",
 ]
 
-a2a-http = [
-    "ag2[a2a]",
-    "a2a-sdk[http-server]>=1.0.0,<2",
-]
-
-a2a-grpc = [
-    "ag2[a2a]",
-    "a2a-sdk[grpc]>=1.0.0,<2",
-]
-
 ag-ui = [
     "ag-ui-protocol>=0.1.10,<0.2",
 ]

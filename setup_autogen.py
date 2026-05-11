@@ -30,8 +30,6 @@ setuptools.setup(
     extras_require={
         "a2ui": ["ag2[a2ui]==" + __version__],
         "a2a": ["ag2[a2a]==" + __version__],
-        "a2a-http": ["ag2[a2a-http]==" + __version__],
-        "a2a-grpc": ["ag2[a2a-grpc]==" + __version__],
         "ag-ui": ["ag2[ag-ui]==" + __version__],
         "diskcache": ["ag2[diskcache]==" + __version__],
         "openai": ["ag2[openai]==" + __version__],
