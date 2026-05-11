@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import fnmatch
 import json
+import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
@@ -61,7 +62,6 @@ from ..envelope import (
 )
 from ..errors import (
     AccessDeniedError,
-    InboxFull,
     NetworkError,
     NotFoundError,
     ProtocolError,
@@ -82,6 +82,7 @@ from ..transport.frames import (
 )
 from ..transport.link import LinkEndpoint
 from ..views.base import ViewPolicy
+from .arbiter import Deny, HubArbiter, RuleBasedArbiter
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
@@ -116,9 +117,13 @@ from .layout import (
     tasks_root,
     wal_path,
 )
+from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
 __all__ = ("Hub",)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -251,6 +256,10 @@ class Hub:
         self._ttl_sweeper: _IntervalSweeper | None = None
         self._expectation_sweeper: _IntervalSweeper | None = None
         self._closed = False
+
+        # Observability + decision-making seams.
+        self._listeners: list[HubListener] = []
+        self._arbiter: HubArbiter = RuleBasedArbiter()
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -414,6 +423,86 @@ class Hub:
             raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
         return adapter
 
+    # ── Observability + decision-making ─────────────────────────────────────
+
+    def register_listener(self, listener: HubListener) -> None:
+        """Attach a :class:`HubListener` to receive state-transition events.
+
+        Listeners receive events in registration order. Each is wrapped
+        in try/except so one buggy listener cannot stall dispatch — its
+        exception is logged at ``ERROR`` and the next listener still
+        runs.
+        """
+        self._listeners.append(listener)
+
+    def unregister_listener(self, listener: HubListener) -> None:
+        """Detach a previously-registered listener. No-op if absent."""
+        with contextlib.suppress(ValueError):
+            self._listeners.remove(listener)
+
+    def register_arbiter(self, arbiter: HubArbiter) -> None:
+        """Replace the active :class:`HubArbiter` instance.
+
+        The default :class:`RuleBasedArbiter` is installed automatically
+        and enforces per-agent :class:`Rule` (access + limits) — the
+        same behavior the hub had inline before this seam existed.
+        Tenants replace it to layer custom permission protocols
+        (JWT scope, federation routing, etc.) on top of (or in place
+        of) the rule-based defaults.
+
+        Only one arbiter is active at a time; calling this with a new
+        instance replaces the prior arbiter outright.
+        """
+        self._arbiter = arbiter
+
+    @property
+    def arbiter(self) -> HubArbiter:
+        """The currently active arbiter (read-only access for testing)."""
+        return self._arbiter
+
+    def health(self) -> dict:
+        """Return an operational snapshot of hub state.
+
+        Cheap to compute (in-memory only). Wire to a ``/health``
+        endpoint or operational dashboard. The shape is intentionally
+        small — operators want a handful of indicative numbers, not
+        the full state.
+        """
+        oldest_age: float | None = None
+        if self._inbox_pending:
+            # Cheap approximation — actual queue ages would require
+            # per-envelope timestamps. The pending counter is the
+            # canonical "agents are stuck" signal anyway.
+            oldest_age = float(max(self._inbox_pending.values()))
+        return {
+            "active_channels": len(self._active_channels),
+            "registered_agents": len(self._passports),
+            "pending_inbox_total": sum(self._inbox_pending.values()),
+            "oldest_pending_count": oldest_age,
+            "registered_listeners": len(self._listeners),
+            "adapters_loaded": len(self._adapters),
+        }
+
+    async def _fan_out(self, method_name: str, *args: object) -> None:
+        """Call ``method_name(*args)`` on every registered listener.
+
+        Per-listener try/except — a single bad listener cannot stall
+        the hub. Exceptions log at ``ERROR`` with the listener's
+        class name so the offending hook is identifiable.
+        """
+        for listener in self._listeners:
+            method = getattr(listener, method_name, None)
+            if method is None:
+                continue
+            try:
+                await method(*args)
+            except Exception:
+                logger.exception(
+                    "listener %s.%s raised",
+                    type(listener).__name__,
+                    method_name,
+                )
+
     # ── Expectation registry ────────────────────────────────────────────────
 
     def register_expectation_evaluator(self, evaluator: ExpectationEvaluator) -> None:
@@ -539,6 +628,8 @@ class Hub:
             "agent_id": agent_id,
             "name": passport.name,
         })
+        logger.info("agent registered: name=%s agent_id=%s", passport.name, agent_id)
+        await self._fan_out("on_agent_event", agent_id, "registered", {"passport": passport})
         return passport
 
     async def unregister(self, agent_id: str) -> None:
@@ -592,6 +683,13 @@ class Hub:
             "agent_id": agent_id,
             "name": passport.name if passport is not None else None,
         })
+        logger.info("agent unregistered: agent_id=%s", agent_id)
+        await self._fan_out(
+            "on_agent_event",
+            agent_id,
+            "unregistered",
+            {"name": passport.name if passport is not None else None},
+        )
 
     # ── Discovery (read-side) ────────────────────────────────────────────────
 
@@ -843,37 +941,33 @@ class Hub:
 
         adapter = self._adapter_for(manifest_type, manifest_version)
 
+        creator_passport = self._passports[creator_id]
         creator_rule = self._rules.get(creator_id, Rule())
-        creator_name = self._passports[creator_id].name
 
-        # Pre-flight invitee inbound-access check. The dispatch path
-        # silently filters envelopes whose sender is not in the
-        # recipient's ``inbound_from`` whitelist; without this
-        # pre-check, an invite to a recipient who blocks the creator
-        # would be dropped on the floor and the creator would hang on
-        # the ack waiter until ``invite_ack_timeout``. Surface the
-        # access denial synchronously instead.
+        # ── Authorize channel open (arbiter) ────────────────────────────
+        # Pre-flight invitee inbound-access check + creator concurrency
+        # cap. The dispatch path silently filters envelopes whose
+        # sender is not in the recipient's whitelist; without a
+        # pre-check, an invite to a blocking recipient would be
+        # dropped and the creator would hang on the ack waiter.
+        invitee_passports: list[Passport] = []
+        invitee_rules: list[Rule] = []
         for p_id in participants:
             if p_id == creator_id:
                 continue
-            invitee_rule = self._rules.get(p_id)
-            if invitee_rule is None:
-                continue
-            if not _match_any(creator_name, invitee_rule.access.inbound_from):
-                invitee_name = self._passports[p_id].name
-                raise AccessDeniedError(f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}")
-
-        # Concurrency cap: count active channels where this agent is
-        # the creator. ``0`` disables the cap. Hub rejects before any
-        # WAL or persistence work so the caller sees the limit
-        # synchronously and on-disk state stays clean.
-        max_channels = creator_rule.limits.max_concurrent_channels
-        if max_channels > 0:
-            active = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
-            if active >= max_channels:
-                raise AccessDeniedError(
-                    f"creator {creator_id!r} exceeded max_concurrent_channels ({active} >= {max_channels})"
-                )
+            invitee_passports.append(self._passports[p_id])
+            invitee_rules.append(self._rules.get(p_id, Rule()))
+        active_creator_channels = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
+        decision = await self._arbiter.authorize_channel_open(
+            adapter.manifest,
+            creator_passport,
+            creator_rule,
+            invitee_passports,
+            invitee_rules,
+            active_creator_channels,
+        )
+        if isinstance(decision, Deny):
+            raise decision.error(decision.reason)
 
         channel_id = make_id()
         now = self._clock()
@@ -930,6 +1024,14 @@ class Hub:
             "creator_id": creator_id,
             "participants": [p.agent_id for p in metadata_participants],
         })
+        logger.info(
+            "channel created: id=%s type=%s creator=%s participants=%d",
+            channel_id,
+            manifest_type,
+            creator_id,
+            len(metadata_participants),
+        )
+        await self._fan_out("on_channel_event", channel_id, "created", {"metadata": metadata})
 
         if not invitees:
             # Self-only channel — already complete; transition to ACTIVE.
@@ -1219,37 +1321,50 @@ class Hub:
         ``on_accepted`` see a consistent state. Dispatch and post-accept
         transitions happen outside the lock so the broadcast of
         ``EV_CHANNEL_CLOSED`` does not deadlock on the same lock.
+
+        Access / limits decisions go through :attr:`arbiter` so
+        federation / custom permission protocols can replace the default
+        rule-based behavior without forking the hub. Hub fires
+        :meth:`HubListener.on_envelope_posted` (success) or
+        :meth:`on_envelope_rejected` (any pre-WAL failure) for every
+        attempt.
         """
+        try:
+            envelope_id = await self._post_envelope_impl(envelope)
+        except NetworkError as exc:
+            await self._fan_out("on_envelope_rejected", envelope, exc)
+            logger.warning(
+                "post_envelope rejected: channel=%s sender=%s event=%s reason=%s",
+                envelope.channel_id,
+                envelope.sender_id,
+                envelope.event_type,
+                exc,
+            )
+            raise
+        return envelope_id
+
+    async def _post_envelope_impl(self, envelope: Envelope) -> str:
         sender = self._passports.get(envelope.sender_id)
         if sender is None:
             raise NotFoundError(f"sender not registered: {envelope.sender_id}")
 
         sender_rule = self._rules.get(envelope.sender_id, Rule())
 
-        # Outbound access check. Self-routing is always allowed —
-        # protocol broadcasts (``EV_CHANNEL_OPENED`` / ``EV_CHANNEL_CLOSED``)
-        # include the creator in their own audience so the creator's
-        # ``Channel`` handle receives the lifecycle notification, and the
-        # sender's ``outbound_to`` should never block their own
-        # state-sync envelopes.
+        # ── Outbound access + delegation depth (arbiter) ────────────────
+        # Only explicit-audience sends go through the outbound gate.
+        # Broadcasts (audience=None) skip — protocol broadcasts like
+        # ``EV_CHANNEL_OPENED`` include the creator in their own audience.
+        explicit_recipients: list[Passport] = []
         if envelope.audience is not None:
             for recipient_id in envelope.audience:
                 if recipient_id == envelope.sender_id:
                     continue
                 recipient = self._passports.get(recipient_id)
-                if recipient is None:
-                    continue
-                if not _match_any(recipient.name, sender_rule.access.outbound_to):
-                    raise AccessDeniedError(f"sender {sender.name!r} not permitted to send to {recipient.name!r}")
-
-        # Delegation-depth check. ``0`` disables the cap. Hub rejects
-        # before the WAL append so the outer caller sees the limit
-        # synchronously and the WAL stays clean.
-        depth_cap = sender_rule.limits.delegation_depth
-        if depth_cap > 0 and envelope.depth > depth_cap:
-            raise AccessDeniedError(
-                f"sender {sender.name!r} exceeded delegation_depth ({envelope.depth} > {depth_cap})"
-            )
+                if recipient is not None:
+                    explicit_recipients.append(recipient)
+        decision = await self._arbiter.authorize_send(envelope, sender, sender_rule, explicit_recipients)
+        if isinstance(decision, Deny):
+            raise decision.error(decision.reason)
 
         metadata = self._channels.get(envelope.channel_id)
         if metadata is None:
@@ -1273,9 +1388,9 @@ class Hub:
                 f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version})"
             )
 
-        # Inbox capacity check (substantive events only — protocol
-        # invites / acks / opens / closes must always reach
-        # participants for the channel machine to advance).
+        # ── Inbox capacity (arbiter, substantive events only) ───────────
+        # Protocol invites / acks / opens / closes must always reach
+        # participants for the channel machine to advance.
         if not _is_protocol_event(envelope.event_type):
             if envelope.audience is not None:
                 inbox_audience: list[str] = list(envelope.audience)
@@ -1284,14 +1399,14 @@ class Hub:
             for recipient_id in inbox_audience:
                 if recipient_id == envelope.sender_id:
                     continue
+                recipient = self._passports.get(recipient_id)
                 recipient_rule = self._rules.get(recipient_id)
-                if recipient_rule is None:
+                if recipient is None or recipient_rule is None:
                     continue
-                max_pending = recipient_rule.limits.inbox.max_pending
-                if max_pending > 0:
-                    current = self._inbox_pending.get(recipient_id, 0)
-                    if current >= max_pending:
-                        raise InboxFull(f"recipient {recipient_id!r} inbox at capacity ({current} >= {max_pending})")
+                current = self._inbox_pending.get(recipient_id, 0)
+                inbox_decision = await self._arbiter.authorize_inbox(envelope, recipient, recipient_rule, current)
+                if isinstance(inbox_decision, Deny):
+                    raise inbox_decision.error(inbox_decision.reason)
 
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
@@ -1337,6 +1452,18 @@ class Hub:
 
         await self._dispatch(envelope, metadata)
 
+        # Listener fan-out — read-only state-transition notification.
+        # Fires for every successfully posted envelope (including
+        # protocol events like invites / acks / opens / closes) so
+        # observers see the full event stream.
+        await self._fan_out("on_envelope_posted", envelope, metadata)
+        logger.debug(
+            "post_envelope ok: channel=%s sender=%s event=%s",
+            envelope.channel_id,
+            envelope.sender_id,
+            envelope.event_type,
+        )
+
         if result.next_state is not None:
             await self._transition_channel(
                 envelope.channel_id,
@@ -1378,26 +1505,64 @@ class Hub:
         await self._store.append(wal_path(envelope.channel_id), envelope.to_json() + "\n")
 
     async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
-        """Send NotifyFrames to the audience (or all participants if broadcast)."""
+        """Send NotifyFrames to the audience (or all participants if broadcast).
+
+        Inbound access is consulted via :meth:`HubArbiter.authorize_dispatch`
+        per recipient. ``Deny`` causes the hub to silently skip that
+        recipient — the rest of the audience still receives. Unknown
+        audience ids are routed through
+        :meth:`HubArbiter.resolve_unknown_audience` so federation hooks
+        can replace them with locally-deliverable proxies.
+        """
         if envelope.audience is None:
             recipients = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
         else:
             recipients = list(envelope.audience)
 
         sender_passport = self._passports.get(envelope.sender_id)
-        sender_name = sender_passport.name if sender_passport is not None else envelope.sender_id
         substantive = not _is_protocol_event(envelope.event_type)
 
+        # Federation hook for unknown audience ids. Default arbiter
+        # returns None (drop silently). A federated arbiter can redirect
+        # to a local proxy id that forwards to the remote hub.
+        unknown = [rid for rid in recipients if rid not in self._passports and rid != envelope.sender_id]
+        if unknown:
+            replacement = await self._arbiter.resolve_unknown_audience(envelope, unknown)
+            if replacement is not None:
+                recipients = [rid for rid in recipients if rid not in unknown] + list(replacement)
+
         for recipient_id in recipients:
-            recipient_rule = self._rules.get(recipient_id)
-            if recipient_rule is not None and not _match_any(sender_name, recipient_rule.access.inbound_from):
-                continue
+            if recipient_id == envelope.sender_id:
+                # Self-routing always delivers (protocol broadcasts
+                # include the sender so the sender's Channel handle
+                # sees the lifecycle event).
+                pass
+            elif sender_passport is not None:
+                recipient_passport = self._passports.get(recipient_id)
+                recipient_rule = self._rules.get(recipient_id)
+                if recipient_passport is not None and recipient_rule is not None:
+                    decision = await self._arbiter.authorize_dispatch(
+                        envelope, sender_passport, recipient_passport, recipient_rule
+                    )
+                    if isinstance(decision, Deny):
+                        continue
             endpoint = self._endpoint_for(recipient_id)
             if endpoint is None:
                 continue
             if substantive:
-                self._inbox_pending[recipient_id] = self._inbox_pending.get(recipient_id, 0) + 1
-            await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
+                new_count = self._inbox_pending.get(recipient_id, 0) + 1
+                self._inbox_pending[recipient_id] = new_count
+            try:
+                await endpoint.send_frame(NotifyFrame(envelope=envelope, recipient_id=recipient_id))
+            except Exception as exc:
+                await self._fan_out("on_dispatch_failed", envelope, recipient_id, exc)
+                logger.warning(
+                    "dispatch failed: channel=%s recipient=%s event=%s reason=%s",
+                    envelope.channel_id,
+                    recipient_id,
+                    envelope.event_type,
+                    exc,
+                )
 
     def _endpoint_for(self, agent_id: str) -> LinkEndpoint | None:
         endpoint_id = self._agent_to_endpoint.get(agent_id)
@@ -1466,6 +1631,13 @@ class Hub:
             return
         metadata.state = ChannelState.ACTIVE
         await self._persist_channel_metadata(metadata)
+        logger.info("channel opened: id=%s", channel_id)
+        await self._fan_out(
+            "on_channel_event",
+            channel_id,
+            "opened",
+            {"metadata": metadata},
+        )
         opened_envelope = Envelope(
             channel_id=channel_id,
             sender_id=metadata.creator_id,
@@ -1535,6 +1707,17 @@ class Hub:
                 "channel_id": channel_id,
                 "reason": reason,
             })
+            kind_label = "expired" if new_state == ChannelState.EXPIRED else "closed"
+            logger.info("channel %s: id=%s reason=%s", kind_label, channel_id, reason)
+            await self._fan_out(
+                "on_channel_event",
+                channel_id,
+                kind_label,
+                {"reason": reason, "metadata": metadata},
+            )
+        # ACTIVE state transitions originate from ``_activate_channel``
+        # which fires the ``opened`` event directly — no need to fan
+        # out again here.
 
     async def _transition_task(
         self,
@@ -1562,6 +1745,17 @@ class Hub:
                 "capability": metadata.spec.capability,
                 "reason": reason,
             })
+            await self._fan_out(
+                "on_task_event",
+                task_id,
+                new_state.value,
+                {
+                    "owner_id": metadata.owner_id,
+                    "channel_id": metadata.channel_id,
+                    "reason": reason,
+                    "capability": metadata.spec.capability,
+                },
+            )
 
     # ── Persistence helpers ──────────────────────────────────────────────────
 

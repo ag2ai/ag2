@@ -22,13 +22,25 @@ on per-channel WALs:
 
 Each record is a JSON object on its own line with at least
 ``{"at": ISO-Z, "kind": "<event>"}`` plus event-specific fields.
+
+The audit kind set is **open** — subclasses and tenants may append
+records with their own ``kind`` values; the built-in constants below
+are conveniences for the hub's own emissions, not a closed enum.
 """
 
+import contextlib
 import json
+import logging
+from collections.abc import Awaitable, Callable
 
 from autogen.beta.knowledge import KnowledgeStore
 
 from .layout import audit_path
+
+logger = logging.getLogger(__name__)
+
+
+AuditSubscriber = Callable[[dict], Awaitable[None]]
 
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
@@ -44,6 +56,7 @@ __all__ = (
     "RESUME_SOURCE_OBSERVED",
     "RESUME_SOURCE_TENANT",
     "AuditLog",
+    "AuditSubscriber",
 )
 
 
@@ -68,16 +81,27 @@ class AuditLog:
 
     Stateless — every ``append`` is one JSON line. Reads are O(file
     size) and intended for tests / admin tooling, not hot paths.
+
+    Subscribers attached via :meth:`subscribe` receive every appended
+    record live (in addition to the on-disk append). Subscriber
+    exceptions are logged and swallowed — a buggy live tail cannot
+    break the persistent log.
     """
 
     def __init__(self, store: KnowledgeStore) -> None:
         # __init__ stores params; no side effects.
         self._store = store
+        self._subscribers: list[AuditSubscriber] = []
 
     async def append(self, record: dict) -> None:
-        """Serialise and append one record."""
+        """Serialise and append one record. Notifies subscribers afterwards."""
         line = json.dumps(record, default=str, sort_keys=True) + "\n"
         await self._store.append(audit_path(), line)
+        for subscriber in self._subscribers:
+            try:
+                await subscriber(record)
+            except Exception:
+                logger.exception("audit subscriber raised: kind=%s", record.get("kind"))
 
     async def read_all(self) -> list[dict]:
         """Read and parse the entire audit log. Returns ``[]`` if absent."""
@@ -90,3 +114,18 @@ class AuditLog:
                 continue
             records.append(json.loads(line))
         return records
+
+    def subscribe(self, callback: AuditSubscriber) -> None:
+        """Attach a live callback fired per appended record.
+
+        Useful for tailing the audit stream without polling the file —
+        e.g. for an operational dashboard or live alert pipeline.
+        Callbacks run sequentially in registration order. An exception
+        in one callback is logged and does not abort subsequent ones.
+        """
+        self._subscribers.append(callback)
+
+    def unsubscribe(self, callback: AuditSubscriber) -> None:
+        """Detach a previously-registered subscriber. No-op if absent."""
+        with contextlib.suppress(ValueError):
+            self._subscribers.remove(callback)

@@ -20,6 +20,7 @@ so user-supplied overrides can replace only the parts they care about.
 """
 
 import contextlib
+import logging
 from typing import TYPE_CHECKING
 
 from autogen.beta.events import BaseEvent
@@ -45,6 +46,9 @@ __all__ = (
     "resolve_view_policy",
     "stamp_dependencies",
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_task_event(event_type: str) -> bool:
@@ -124,6 +128,13 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
     through ``adapter.extract_turn_input`` /
     ``adapter.build_round_envelope`` so this handler stays free of
     adapter-specific knowledge.
+
+    ``agent.ask`` and ``build_round_envelope`` are wrapped in a single
+    try/except. On exception the handler audits the failure, fires the
+    hub's ``on_turn_failed`` listeners, and returns cleanly — the
+    channel stays alive and subsequent envelopes flow normally. No
+    reply envelope is posted on failure (the framework does not invent
+    content on the agent's behalf).
     """
     metadata = await client._hub_client.get_channel(envelope.channel_id)
     if metadata.is_terminal() or metadata.state != ChannelState.ACTIVE:
@@ -176,26 +187,67 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             stream=stream,
             dependencies=dependencies,
         )
+
+        # Adapter encodes the round-end envelope.
+        # For example, Workflow returns EV_PACKET.
+        # Default implementations returns EV_TEXT(body) or None.
+        state = client._hub_client.adapter_state(metadata.channel_id)
+        events = list(await stream.history.get_events())
+        out_envelope = adapter.build_round_envelope(
+            metadata=metadata,
+            sender_id=client.agent_id,
+            reply=reply,
+            events=events,
+            state=state,
+            hub=client._hub,
+        )
+    except Exception as exc:
+        logger.exception(
+            "notify handler raised: channel=%s agent=%s envelope=%s",
+            envelope.channel_id,
+            client.agent_id,
+            envelope.envelope_id,
+        )
+        await _report_turn_failure(client, envelope, exc)
+        return
     finally:
         mirror.detach(stream, sub_ids)
 
-    # Adapter encodes the round-end envelope.
-    # For example, Workflow returns EV_PACKET.
-    # Default implementations returns EV_TEXT(body) or None.
-    state = client._hub_client.adapter_state(metadata.channel_id)
-    events = list(await stream.history.get_events())
-    out_envelope = adapter.build_round_envelope(
-        metadata=metadata,
-        sender_id=client.agent_id,
-        reply=reply,
-        events=events,
-        state=state,
-        hub=client._hub,
-    )
     if out_envelope is None:
         return
     out_envelope.causation_id = envelope.envelope_id
     await client.send_envelope(out_envelope)
+
+
+async def _report_turn_failure(
+    client: "AgentClient",
+    envelope: Envelope,
+    exc: BaseException,
+) -> None:
+    """Audit + fan out an exception raised inside the notify handler.
+
+    The hub stays the single owner of audit and listener fan-out — the
+    handler routes the failure through the public ``HubClient`` surface
+    rather than touching hub internals.
+    """
+    hub = getattr(client, "_hub", None)
+    if hub is None:
+        return
+    fan_out = getattr(hub, "_fan_out", None)
+    if fan_out is not None:
+        with contextlib.suppress(Exception):
+            await fan_out("on_turn_failed", envelope.channel_id, client.agent_id, envelope.envelope_id, exc)
+    audit_log = getattr(hub, "_audit_log", None)
+    if audit_log is not None:
+        with contextlib.suppress(Exception):
+            await audit_log.append({
+                "kind": "turn_failed",
+                "channel_id": envelope.channel_id,
+                "agent_id": client.agent_id,
+                "envelope_id": envelope.envelope_id,
+                "exc_type": type(exc).__name__,
+                "exc_message": str(exc),
+            })
 
 
 async def default_handler(envelope: Envelope, client: "AgentClient") -> None:
