@@ -148,3 +148,56 @@ class TestOrphanedToolResults:
         assert len(result) == 2
         # Prompt should reflect actual count after orphan removal
         assert "2" in prompts[-1] and "4" in prompts[-1]
+
+    @pytest.mark.asyncio
+    async def test_mid_window_orphaned_tool_result_is_dropped(self, context: Context) -> None:
+        """An orphaned ToolResultsEvent at any position must be dropped, not only at the head."""
+        events = [
+            _tool_response("tc_1"),  # trimmed
+            ModelRequest([TextInput("a")]),
+            _tool_results("tc_1"),  # orphan inside window (parent trimmed)
+            ModelRequest([TextInput("b")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert len(result) == 2
+        assert all(not isinstance(e, ToolResultsEvent) for e in result)
+        assert [e.parts[0].content for e in result] == ["a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_paired_tool_call_and_result_within_window_are_kept(self, context: Context) -> None:
+        """When the matching ToolCallsEvent survives the window, its results stay."""
+        events = [
+            ModelRequest([TextInput("old")]),  # trimmed
+            _tool_response("tc_1"),
+            _tool_results("tc_1"),
+            ModelRequest([TextInput("done")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert len(result) == 3
+        assert isinstance(result[1], ToolResultsEvent)
+
+    @pytest.mark.asyncio
+    async def test_orphan_results_at_multiple_positions_are_dropped(self, context: Context) -> None:
+        """Orphans at head, middle, and elsewhere must all be removed in one pass."""
+        events = [
+            _tool_response("tc_1"),  # trimmed
+            _tool_response("tc_2"),  # trimmed
+            _tool_response("tc_3"),  # trimmed
+            _tool_results("tc_1"),  # orphan
+            ModelRequest([TextInput("a")]),
+            _tool_results("tc_2"),  # orphan
+            ModelRequest([TextInput("b")]),
+            _tool_results("tc_3"),  # orphan
+        ]
+        policy = SlidingWindowPolicy(max_events=5)
+
+        _, result = await policy.apply([], events, context)
+
+        assert all(not isinstance(e, ToolResultsEvent) for e in result)
+        assert [e.parts[0].content for e in result] == ["a", "b"]
