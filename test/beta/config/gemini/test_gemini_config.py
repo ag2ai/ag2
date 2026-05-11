@@ -4,6 +4,7 @@
 
 from unittest.mock import MagicMock, patch
 
+from google.genai import types
 from google.oauth2 import service_account
 
 from autogen.beta.config import GeminiConfig, VertexAIConfig
@@ -143,3 +144,76 @@ def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
     mock_from_file.assert_not_called()
     _, kwargs = mock_client.call_args
     assert kwargs["credentials"] is None
+
+
+class TestThinkingConfig:
+    def test_default_omits_thinking_config(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-pro-preview")
+        assert "thinking_config" not in config._build_create_config()
+
+    def test_explicit_thinking_config_passes_through(self) -> None:
+        thinking = types.ThinkingConfig(thinking_level="low")
+        config = GeminiConfig(model="gemini-3.1-pro-preview", thinking_config=thinking)
+        assert config._build_create_config()["thinking_config"] is thinking
+
+    def test_thinking_level_shorthand_builds_config(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-pro-preview", thinking_level="low")
+        built = config._build_create_config()["thinking_config"]
+        assert isinstance(built, types.ThinkingConfig)
+        assert built.thinking_level == types.ThinkingLevel.LOW
+        assert built.thinking_budget is None
+
+    def test_thinking_budget_shorthand_builds_config(self) -> None:
+        config = GeminiConfig(model="gemini-2.5-pro", thinking_budget=1024)
+        built = config._build_create_config()["thinking_config"]
+        assert isinstance(built, types.ThinkingConfig)
+        assert built.thinking_budget == 1024
+        assert built.thinking_level is None
+
+    def test_thinking_level_and_budget_combined(self) -> None:
+        config = GeminiConfig(
+            model="gemini-2.5-pro",
+            thinking_level="medium",
+            thinking_budget=2048,
+        )
+        built = config._build_create_config()["thinking_config"]
+        assert isinstance(built, types.ThinkingConfig)
+        assert built.thinking_level == types.ThinkingLevel.MEDIUM
+        assert built.thinking_budget == 2048
+
+    def test_explicit_thinking_config_wins_over_shorthand(self) -> None:
+        explicit = types.ThinkingConfig(thinking_level="high")
+        config = GeminiConfig(
+            model="gemini-3.1-pro-preview",
+            thinking_config=explicit,
+            thinking_level="low",
+        )
+        assert config._build_create_config()["thinking_config"] is explicit
+
+    def test_vertex_ai_thinking_level_shorthand_builds_config(self) -> None:
+        config = VertexAIConfig(
+            model="gemini-3.1-pro-preview",
+            project="proj",
+            location="us-central1",
+            thinking_level="low",
+        )
+        built = config._build_create_config()["thinking_config"]
+        assert isinstance(built, types.ThinkingConfig)
+        assert built.thinking_level == types.ThinkingLevel.LOW
+
+    def test_vertex_ai_explicit_thinking_config_passes_through(self) -> None:
+        thinking = types.ThinkingConfig(thinking_budget=512)
+        config = VertexAIConfig(
+            model="gemini-2.5-pro",
+            project="proj",
+            location="us-central1",
+            thinking_config=thinking,
+        )
+        assert config._build_create_config()["thinking_config"] is thinking
+
+    def test_copy_overrides_thinking_level(self) -> None:
+        config = GeminiConfig(model="gemini-3.1-pro-preview", thinking_level="low")
+        copied = config.copy(thinking_level="high")
+
+        assert copied.thinking_level == "high"
+        assert config.thinking_level == "low"

@@ -215,6 +215,34 @@ from autogen.beta.config import VertexAIConfig
 config = VertexAIConfig(model="gemini-3-flash-preview")
 ```
 
+### Controlling Gemini Thinking
+
+Gemini 3 Pro models default to **dynamic / unbounded** thinking, which can cause individual calls to spend a large internal token budget before responding. Both `GeminiConfig` and `VertexAIConfig` accept thinking controls that map directly to [Google's Thinking API](https://ai.google.dev/gemini-api/docs/thinking){.external-link target="_blank"}.
+
+Use `thinking_level` for **Gemini 3** models, or `thinking_budget` for **Gemini 2.5** models:
+
+```python linenums="1" hl_lines="6 13"
+from autogen.beta.config import GeminiConfig, VertexAIConfig
+
+# Gemini 3 — bound thinking with a level
+gemini3 = GeminiConfig(
+    model="gemini-3-flash-preview",
+    thinking_level="low",  # "low" | "medium" | "high"
+)
+
+# Gemini 2.5 — bound thinking with an explicit token budget
+gemini25 = VertexAIConfig(
+    model="gemini-2.5-pro",
+    project="my-gcp-project",
+    location="us-central1",
+    thinking_budget=512,  # 0 disables thinking entirely
+)
+```
+
+For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.ThinkingConfig` directly via `thinking_config`. When set, it takes precedence over the shorthand fields.
+
+The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
+
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
 If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
