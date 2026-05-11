@@ -59,6 +59,13 @@ class Passport:
 
     ``agent_id`` is hub-stamped at registration. Mutating any field
     requires unregister + re-register, which yields a fresh ``agent_id``.
+
+    ``kind`` discriminates participant types — ``"agent"`` (default LLM
+    participant), ``"human"`` (out-of-band non-LLM participant driven by
+    an external UI), or ``"remote_agent"`` (reserved for a future
+    federation / A2A bridge; not yet activated). ``None`` is treated as
+    ``"agent"`` for back-compat with passports persisted before this
+    field existed.
     """
 
     name: str  # human/LLM-facing address; unique per hub
@@ -68,6 +75,7 @@ class Passport:
     cost: CostProfile | None = None
     region: str | None = None
     auth: AuthBlock = field(default_factory=AuthBlock)
+    kind: str | None = None  # "agent" | "human" | "remote_agent"; None ≡ "agent"
     version: int = 1
 
     # Hub-stamped at registration. None on construction.
@@ -85,6 +93,11 @@ class Passport:
         if isinstance(payload.get("cost"), dict):
             payload["cost"] = CostProfile(**payload["cost"])
         return cls(**payload)
+
+    @property
+    def effective_kind(self) -> str:
+        """Resolved ``kind`` — ``None`` falls through to ``"agent"``."""
+        return self.kind or "agent"
 
 
 @dataclass(slots=True)

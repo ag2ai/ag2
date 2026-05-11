@@ -623,12 +623,24 @@ class Hub:
         *,
         capability: str | None = None,
         query: str | None = None,
+        kind: str | None = None,
         sort_by: str | None = None,
         limit: int = 50,
     ) -> list[Passport]:
+        """Enumerate registered participants, optionally filtered.
+
+        ``kind`` filters by ``Passport.kind`` (``"agent"`` / ``"human"`` /
+        ``"remote_agent"``). ``None`` returns all kinds (current default
+        behavior); passing ``"agent"`` also matches passports with
+        ``kind=None`` since ``None`` is the back-compat alias.
+        """
         results: list[Passport] = []
         query_lower = query.lower() if query else None
         for agent_id, passport in self._passports.items():
+            if kind is not None:
+                resolved = passport.kind or "agent"
+                if resolved != kind:
+                    continue
             if capability is not None:
                 resume = self._resumes.get(agent_id)
                 if resume is None:

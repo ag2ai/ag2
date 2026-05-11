@@ -4,11 +4,13 @@
 
 """Workflow smoke test against a real LLM.
 
-A 3-agent swarm runs end-to-end via tool-driven handoffs. Triage
-agent calls ``transfer_to_eng(reason)`` → eng agent replies →
-``RevertToInitiatorTarget`` brings control back to triage → triage
-closes via ``TerminateTarget``. Workflow state survives
-``Hub.hydrate()`` mid-flow.
+A swarm runs end-to-end via tool-driven handoffs. A human participant
+seeds the workflow by sending the initial question; the workflow graph
+routes the human's turn to the triage agent. Triage calls
+``transfer_to_eng(reason)`` → eng agent replies →
+``RevertToInitiatorTarget`` brings control back to triage (the channel
+creator) → the test closes the channel deterministically. Workflow
+state survives ``Hub.hydrate()`` mid-flow.
 
 Uses ``claude-haiku-4-5`` for cost; loads ``.env`` from the repo
 root; skips if ``ANTHROPIC_API_KEY`` is unset; marked
@@ -83,9 +85,9 @@ async def test_workflow_swarm_handoff_revert_close(
     anthropic_config: AnthropicConfig,
     tmp_path,
 ) -> None:
-    """3-agent swarm: triage hands off to eng via the transfer_to_eng
-    tool; FromSpeaker(eng) reverts control to triage; triage closes
-    the workflow. Workflow state survives a mid-flow Hub.hydrate()."""
+    """Human seeds → triage routes to eng via transfer_to_eng tool →
+    FromSpeaker(eng) reverts to triage (channel creator) → test closes
+    the workflow. State survives a mid-flow Hub.hydrate()."""
     store = DiskKnowledgeStore(str(tmp_path))
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
@@ -109,12 +111,18 @@ async def test_workflow_swarm_handoff_revert_close(
 
     triage_hc = HubClient(link, hub=hub)
     eng_hc = HubClient(link, hub=hub)
+    user_hc = HubClient(link, hub=hub)
     triage = await triage_hc.register(triage_agent, Passport(name="triage"), Resume(claimed_capabilities=["triage"]))
     eng = await eng_hc.register(eng_agent, Passport(name="eng"), Resume(claimed_capabilities=["engineering"]))
+    user = await user_hc.register_human(Passport(name="user"))
 
     graph = TransitionGraph(
-        initial_speaker=triage.agent_id,
+        initial_speaker=user.agent_id,
         transitions=[
+            Transition(
+                when=FromSpeaker(user.agent_id),
+                then=AgentTarget(triage.agent_id),
+            ),
             Transition(
                 when=ToolCalled("transfer_to_eng"),
                 then=AgentTarget(eng.agent_id),
@@ -125,12 +133,9 @@ async def test_workflow_swarm_handoff_revert_close(
             ),
         ],
         default_target=TerminateTarget(reason="triage_done"),
-        max_turns=6,
+        max_turns=8,
     )
 
-    # Attach a hand-written handoff tool on triage. Returns a typed
-    # ``Handoff(target=eng.agent_id)`` so the workflow adapter folds
-    # the next speaker to eng without needing a matching graph rule.
     eng_agent_id = eng.agent_id
 
     @triage.agent.tool
@@ -138,43 +143,48 @@ async def test_workflow_swarm_handoff_revert_close(
         """Transfer the conversation to the engineering specialist."""
         return Handoff(target=eng_agent_id, reason=reason)
 
+    # Triage opens the workflow (so triage is the channel creator —
+    # RevertToInitiatorTarget routes back to triage). The user is a
+    # participant + initial_speaker; eng is the handoff target.
     channel = await triage.open(
         type=WORKFLOW_TYPE,
-        target=[eng.agent_id],
+        target=[user.agent_id, eng.agent_id],
         knobs={"graph": graph.to_dict()},
         intent="triage routes deep questions to engineering",
     )
 
-    # Drive the first turn directly via triage.agent.ask so we can
-    # observe the handoff tool call. The channel is in the LLM's
-    # context via the plugin's NetworkContextPolicy.
-    from autogen.beta.network.client.channel import Channel
-    from autogen.beta.network.policies import (
-        AGENT_CLIENT_DEP,
-        CHANNEL_DEP,
-        HUB_DEP,
+    # User seeds the workflow with the prompt. The graph's
+    # FromSpeaker(user)→AgentTarget(triage) advances expected_next_speaker
+    # to triage; triage's notify handler then engages triage's LLM with
+    # the user's text as input — no direct agent.ask hack.
+    await user.send(
+        channel.channel_id,
+        "Why is async file I/O typically slower than sync for small reads?",
     )
 
-    channel_handle = Channel(metadata=channel.metadata, client=triage)
-    triage_dependencies = {
-        CHANNEL_DEP: channel_handle,
-        AGENT_CLIENT_DEP: triage,
-        HUB_DEP: hub,
-    }
-    reply = await triage.agent.ask(
-        "Why is async file I/O typically slower than sync for small reads?",
-        dependencies=triage_dependencies,
-    )
-    # Triage either calls transfer_to_eng (preferred) or answers directly;
-    # either way the channel should have at least one substantive event.
-    wal = await hub.read_wal(channel.channel_id)
-    handoff_envelopes = [
-        e for e in wal if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
-    ]
-    assert handoff_envelopes, f"triage did not call transfer_to_eng; reply={reply.body!r}"
+    # Wait for triage's handoff tool to land as an EV_PACKET in the WAL.
+    handoff_envelopes: list = []
+
+    async def _wait_for_handoff(timeout: float) -> None:
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            wal = await hub.read_wal(channel.channel_id)
+            handoff_envelopes.clear()
+            handoff_envelopes.extend(
+                e
+                for e in wal
+                if e.event_type == EV_PACKET
+                and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+            )
+            if handoff_envelopes:
+                return
+            await asyncio.sleep(0.5)
+
+    await _wait_for_handoff(timeout=60.0)
+    assert handoff_envelopes, "triage did not call transfer_to_eng within 60s"
 
     # After the handoff, expected_next_speaker is eng. Wait for eng's
-    # notify handler (auto-attached default) to engage and reply.
+    # notify handler (default) to engage and reply.
     settled = await _wait_for_state(
         hub,
         channel.channel_id,
@@ -184,12 +194,13 @@ async def test_workflow_swarm_handoff_revert_close(
     assert settled, "eng never replied within 60s"
 
     state = hub._adapter_states[channel.channel_id]
-    # FromSpeaker(eng) → RevertToInitiator → next is triage.
+    # FromSpeaker(eng) → RevertToInitiator → next is triage (channel creator).
     assert state.expected_next_speaker == triage.agent_id
 
     # ── Hub.hydrate() mid-flow: tear down + re-open against the same store.
     await triage_hc.close()
     await eng_hc.close()
+    await user_hc.close()
     await hub.close()
 
     store2 = DiskKnowledgeStore(str(tmp_path))
