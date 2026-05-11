@@ -21,8 +21,14 @@ except ImportError as e:
     OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)  # type: ignore[misc]
     OpenAITTSConfig = missing_optional_dependency("TTSConfig", "openai", e)  # type: ignore[misc]
 
+try:
+    from .gemini import RealTimeConfig as GeminiRealTimeConfig
+except ImportError as e:
+    GeminiRealTimeConfig = missing_optional_dependency("RealTimeConfig", "gemini", e)  # type: ignore[misc]
+
 
 __all__ = (
+    "GeminiRealTimeConfig",
     "LiveAgent",
     "OpenAIRealTimeConfig",
     "OpenAITTSConfig",

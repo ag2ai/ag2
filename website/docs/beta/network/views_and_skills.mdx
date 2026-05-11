@@ -1,0 +1,158 @@
+---
+title: Views and Skills
+sidebarTitle: Views & Skills
+---
+
+Two LLM-facing concerns:
+
+- **Views** decide what each participant *sees* of a session — the projection of the WAL that becomes the LLM's history when its handler runs `#!python Agent.ask(...)`.
+- **Skills** decide what each agent *advertises about itself* — the markdown describing its capabilities, surfaced to other agents during peer lookup.
+
+## ViewPolicy
+
+`#!python ViewPolicy` is a `#!python Protocol`:
+
+```python
+class ViewPolicy(Protocol):
+    name: ClassVar[str]
+    async def project(
+        self,
+        history: list[Envelope],
+        *,
+        participant_id: str,
+        session: SessionMetadata,
+    ) -> list[BaseEvent]: ...
+```
+
+It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-session.
+
+## Built-in Views
+
+| View | Behaviour |
+|---|---|
+| `#!python FullTranscript()` | Every `#!python EV_TEXT` / `#!python EV_HANDOFF` envelope, in order, no filtering beyond audience. Used by `#!python consulting`. |
+| `#!python WindowedSummary(recent_n=N)` | The last `N` text envelopes. If the WAL is longer, prepends a `#!python CompactionSummary` placeholder with a count of the elided turns. Used by `#!python conversation`, `#!python discussion`, `#!python workflow`. |
+
+Both honour audience: an envelope addressed only to `[bob]` doesn't appear in `carol`'s projection.
+
+```python linenums="1"
+from autogen.beta.network import FullTranscript, WindowedSummary
+
+view = WindowedSummary(recent_n=12)
+projected = await view.project(
+    history=wal_slice,
+    participant_id=carol.agent_id,
+    session=metadata,
+)
+```
+
+## Resolving the Default
+
+```python linenums="1"
+from autogen.beta.network import resolve_view_policy
+
+policy = resolve_view_policy(client, metadata)
+```
+
+`#!python resolve_view_policy` reads the adapter manifest's `default_view_policy` and instantiates the matching view from the registry. The default handler calls this once per turn — custom handlers should too, unless they're deliberately bypassing the standard projection model.
+
+## Custom Views
+
+Implement the protocol, give it a unique `name`, and pass to the policy resolver. Common shapes:
+
+```python linenums="1"
+from typing import ClassVar
+from autogen.beta.events import BaseEvent, ModelMessage, ModelRequest
+from autogen.beta.network import Envelope, EV_TEXT, SessionMetadata, ViewPolicy
+
+
+class FromOneOnly(ViewPolicy):
+    """Show only envelopes from a single named sender."""
+    name: ClassVar[str] = "from_one_only"
+
+    def __init__(self, sender_id: str) -> None:
+        self.sender_id = sender_id
+
+    async def project(self, history, *, participant_id, session):
+        out: list[BaseEvent] = []
+        for env in history:
+            if env.event_type != EV_TEXT or env.sender_id != self.sender_id:
+                continue
+            text = env.event_data.get("text", "")
+            out.append(ModelMessage(text) if env.sender_id == participant_id else ModelRequest(text))
+        return out
+```
+
+The `#!python BaseEvent` types you emit determine how the LLM sees the history: `#!python ModelRequest` for messages "from the user," `#!python ModelMessage` for messages "from the assistant," and so on. Look at `#!python autogen.beta.events` for the full taxonomy.
+
+## CompactionSummary
+
+When `#!python WindowedSummary` elides envelopes outside its window, it prepends a `#!python CompactionSummary(text="...elided N turns")` event. This is from `autogen.beta.compact` — the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
+
+## Skills (Markdown Frontmatter)
+
+Skills are how an agent describes itself to other agents — markdown-with-frontmatter that's parsed by the hub and surfaced to LLM tools during peer lookup. Pass at registration:
+
+```python linenums="1"
+agent_client = await hc.register(
+    agent,
+    Passport(name="researcher"),
+    Resume(claimed_capabilities=["research"]),
+    skill_md="""\
+---
+title: Research Assistant
+expertise: [policy, finance]
+---
+
+# Researcher
+
+A senior policy analyst. Best at:
+
+- Scenario synthesis from multi-source briefs.
+- Rebuttal review with confidence scores.
+
+Limitations: not for code review or numerical analysis.
+""",
+)
+```
+
+The hub stores the markdown verbatim and parses the frontmatter via `#!python parse_skill_frontmatter`:
+
+```python linenums="1"
+from autogen.beta.network import parse_skill_frontmatter, ParsedSkill
+
+parsed: ParsedSkill = parse_skill_frontmatter(skill_md)
+print(parsed.frontmatter)  # {"title": "Research Assistant", "expertise": [...]}
+print(parsed.body)         # the markdown body
+```
+
+## Fallback Skills
+
+When no `skill_md` is provided, the hub generates one from the resume so peer lookup doesn't return empty handles:
+
+```python linenums="1"
+from autogen.beta.network import render_fallback_skill
+
+skill_md = render_fallback_skill(passport, resume)
+```
+
+Use this if you're constructing skills programmatically — for example, when a tenant uploads a resume but no markdown.
+
+## Updating a Skill After Registration
+
+```python linenums="1"
+await hub.set_skill(agent_id, new_skill_md)
+```
+
+Emits `#!python AUDIT_KIND_SKILL_SET`. Same audit shape as `#!python set_resume`; tenant code can replace skills at any time.
+
+## Picking a View
+
+Some heuristics for choosing or building a view:
+
+- **Short, focused exchanges** — `#!python FullTranscript()`. Token budget isn't the bottleneck; coherence is.
+- **Long-running discussions** — `#!python WindowedSummary(recent_n=N)` with `N` tuned to your participant count and turn density.
+- **Specialist agents that should ignore unrelated chatter** — a custom view that filters by audience or tags.
+- **Privacy-sensitive workflows** — a custom view that strips fields or redacts before projection.
+
+Switching the view doesn't affect the WAL — every envelope is still there, every operator can still inspect it. Only the LLM's perception of history is shaped by the view.
