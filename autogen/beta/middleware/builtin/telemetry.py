@@ -191,6 +191,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
             if usage.cache_read_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
+            if usage.thinking_tokens:
+                span.set_attribute("gen_ai.usage.thinking_tokens", int(usage.thinking_tokens))
 
             if self._capture_content and response.message:
                 span.set_attribute("gen_ai.output.messages", json.dumps([response.to_api()]))
