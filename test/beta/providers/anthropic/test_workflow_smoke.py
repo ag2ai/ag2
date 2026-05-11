@@ -173,8 +173,7 @@ async def test_workflow_swarm_handoff_revert_close(
             handoff_envelopes.extend(
                 e
                 for e in wal
-                if e.event_type == EV_PACKET
-                and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
+                if e.event_type == EV_PACKET and (e.event_data.get("routing", {}) or {}).get("kind") == "handoff"
             )
             if handoff_envelopes:
                 return

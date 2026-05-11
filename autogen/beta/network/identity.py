@@ -23,11 +23,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, get_args
 
 __all__ = (
+    "PASSPORT_KINDS",
     "AgentRuntime",
     "AuthBlock",
     "CostProfile",
     "ObservedStat",
-    "PASSPORT_KINDS",
     "Passport",
     "PassportKind",
     "Resume",
@@ -92,9 +92,7 @@ class Passport:
         # Validate kind at construction so a typo (e.g. ``kind="huMAn"``)
         # fails loudly instead of being silently coerced downstream.
         if self.kind is not None and self.kind not in PASSPORT_KINDS:
-            raise ValueError(
-                f"Passport.kind must be one of {PASSPORT_KINDS} or None; got {self.kind!r}"
-            )
+            raise ValueError(f"Passport.kind must be one of {PASSPORT_KINDS} or None; got {self.kind!r}")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

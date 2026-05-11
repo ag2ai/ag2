@@ -481,9 +481,7 @@ async def test_disconnect_wakes_concurrent_pull_consumers() -> None:
 
     human = await hc.register_human(Passport(name="x"))
 
-    waiters = [
-        asyncio.create_task(human.next_envelope(timeout=5.0)) for _ in range(3)
-    ]
+    waiters = [asyncio.create_task(human.next_envelope(timeout=5.0)) for _ in range(3)]
     await asyncio.sleep(0.05)
     await human.disconnect()
 

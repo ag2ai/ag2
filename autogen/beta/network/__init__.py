@@ -123,11 +123,11 @@ from .hub import (
     default_handlers,
 )
 from .identity import (
+    PASSPORT_KINDS,
     AgentRuntime,
     AuthBlock,
     CostProfile,
     ObservedStat,
-    PASSPORT_KINDS,
     Passport,
     PassportKind,
     Resume,
@@ -219,6 +219,7 @@ __all__ = (
     "EV_TEXT",
     "HUB_DEP",
     "ORDERING_ROUND_ROBIN",
+    "PASSPORT_KINDS",
     "RESUME_SOURCE_OBSERVED",
     "RESUME_SOURCE_TENANT",
     "TASK_DEP",
@@ -302,7 +303,6 @@ __all__ = (
     "ParsedSkill",
     "Participant",
     "ParticipantRole",
-    "PASSPORT_KINDS",
     "ParticipantSchema",
     "Passport",
     "PassportKind",
