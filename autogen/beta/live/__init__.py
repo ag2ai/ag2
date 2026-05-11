@@ -4,6 +4,7 @@
 
 from autogen.beta.exceptions import missing_additional_dependency, missing_optional_dependency
 
+from .observer import TTSObserver
 from .realtime import LiveAgent
 
 try:
@@ -15,13 +16,17 @@ except ImportError as e:
 
 try:
     from .openai import RealTimeConfig as OpenAIRealTimeConfig
+    from .openai import TTSConfig as OpenAITTSConfig
 except ImportError as e:
     OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)  # type: ignore[misc]
+    OpenAITTSConfig = missing_optional_dependency("TTSConfig", "openai", e)  # type: ignore[misc]
 
 
 __all__ = (
     "LiveAgent",
     "OpenAIRealTimeConfig",
+    "OpenAITTSConfig",
     "SoundDevicePlayer",
     "SoundDeviceRecorder",
+    "TTSObserver",
 )

@@ -6,35 +6,12 @@ import re
 
 from autogen.beta import events
 from autogen.beta.annotations import Context
-from autogen.beta.observers import CompositeObserver, Observer, observer
+from autogen.beta.observers import CompositeObserver, observer
 
-from .protocols import AudioPlayer, TTSConfig
-
-_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?\n]")
+from .protocols import TTSConfig
 
 
-def TTSObserver(  # noqa: N802
-    player: AudioPlayer[bytes],
-    *,
-    config: TTSConfig[bytes],
-) -> CompositeObserver:
-    return CompositeObserver(
-        _synthesizer_observer(config),
-        AudioPlayerObserver(player),
-    )
-
-
-def AudioPlayerObserver(  # noqa: N802
-    player: AudioPlayer[bytes],
-) -> Observer:
-    @observer(events.SynthesizedAudioEvent)
-    async def on_synthesized_audio(event: events.SynthesizedAudioEvent) -> None:
-        await player.play(event.content)
-
-    return on_synthesized_audio
-
-
-def _synthesizer_observer(config: TTSConfig[bytes]) -> CompositeObserver:
+def TTSObserver(config: TTSConfig[bytes]) -> CompositeObserver:  # noqa: N802
     tts = _ChunkToSpeech(config=config)
 
     @observer(events.ModelMessageChunk)
@@ -96,3 +73,6 @@ class _ChunkToSpeech:
 
         if pcm:
             await context.send(events.SynthesizedAudioEvent(pcm))
+
+
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?\n]")
