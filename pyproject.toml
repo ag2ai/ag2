@@ -337,7 +337,6 @@ docs = [
     "ag2[watchdog]",                   # Watchdog is exposed in the public API by the optional `autogen.beta.knowledge` module
     "ag2[tavily,exa,ddgs,perplexity]", # Search tools are exposed in the public API by the optional `autogen.beta.tools.search` module
     "ag2[docker,daytona]",             # Code execution tools are exposed in the public API by the optional `autogen.beta.tools` module
-    "sounddevice[numpy]",              # SoundDevice is exposed in the public API by the optional `autogen.beta.live` module
     "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
