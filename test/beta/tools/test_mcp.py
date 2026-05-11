@@ -24,8 +24,7 @@ from mcp.types import (
 from mcp.types import Tool as MCPTool
 
 from autogen.beta import Agent, Context
-from autogen.beta.events import ToolCallEvent, ToolResultEvent
-from autogen.beta.events.input_events import BinaryInput, BinaryType, TextInput, UrlInput
+from autogen.beta.events import BinaryInput, BinaryType, TextInput, ToolCallEvent, ToolResultEvent, UrlInput
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import MCPServer, MCPStdioServerConfig
 from autogen.beta.tools.toolkits.mcp_server import toolkit as _toolkit_module

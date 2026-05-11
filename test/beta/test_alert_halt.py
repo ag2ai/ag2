@@ -21,8 +21,16 @@ from typing_extensions import Self
 from autogen.beta import Agent
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.context import ConversationContext as ContextType
-from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
-from autogen.beta.events.alert import HaltEvent, ObserverAlert, Severity
+from autogen.beta.events import (
+    BaseEvent,
+    HaltEvent,
+    ModelMessage,
+    ModelResponse,
+    ObserverAlert,
+    Severity,
+    ToolCallEvent,
+    ToolCallsEvent,
+)
 from autogen.beta.observer import BaseObserver
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream

@@ -10,8 +10,7 @@ from autogen.beta import Agent
 from autogen.beta.agent import KnowledgeConfig
 from autogen.beta.compact import CompactTrigger, CompactionSummary, TailWindowCompact
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.lifecycle import CompactionCompleted
+from autogen.beta.events import CompactionCompleted, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig

@@ -26,15 +26,13 @@ from mcp.types import Tool as MCPTool
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.events import (
-    ToolCallEvent,
-    ToolErrorEvent,
-    ToolResultEvent,
-)
-from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
     Input,
     TextInput,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
     UrlInput,
 )
 from autogen.beta.middleware import (

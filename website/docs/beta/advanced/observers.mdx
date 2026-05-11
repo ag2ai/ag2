@@ -211,7 +211,7 @@ Both built-ins (and any `BaseObserver` you write) emit `ObserverAlert` events on
 
 ```python linenums="1"
 from autogen.beta import MemoryStream
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events import ObserverAlert
 
 stream = MemoryStream()
 
@@ -223,7 +223,7 @@ def surface_alerts(event: ObserverAlert) -> None:
 !!! note
     `ObserverAlert` is emitted to the stream and persisted in history, but **is not rendered back to the LLM** by the default provider mappers. If you want the agent itself to react to alerts, write a [Middleware](/docs/beta/middleware) that converts alerts into follow-up messages.
 
-Severity levels live in `autogen.beta.events.alert.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
+Severity levels live in `autogen.beta.events.Severity`: `INFO`, `WARNING`, `CRITICAL`, `FATAL`.
 
 ### Building a custom observer
 
@@ -233,8 +233,7 @@ Subclass `BaseObserver`, pick a [Watch](/docs/beta/advanced/watches), implement 
 from autogen.beta import Context
 from autogen.beta.observer import BaseObserver
 from autogen.beta.watch import CadenceWatch
-from autogen.beta.events import BaseEvent, ModelResponse
-from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 
 
 class AvgCompletionObserver(BaseObserver):

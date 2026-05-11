@@ -31,8 +31,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from autogen.beta.events import BaseEvent, ToolCallEvent, ToolResultEvent
-from autogen.beta.events.input_events import DataInput
+from autogen.beta.events import BaseEvent, DataInput, ToolCallEvent, ToolResultEvent
 
 from ..channel import (
     ChannelManifest,

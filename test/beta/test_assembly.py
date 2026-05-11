@@ -9,9 +9,16 @@ import pytest
 from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.compact import CompactionSummary
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.alert import ObserverAlert, Severity
-from autogen.beta.events.tool_events import ToolCallEvent, ToolResultEvent
+from autogen.beta.events import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    ObserverAlert,
+    Severity,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from autogen.beta.knowledge import KnowledgeStore, MemoryKnowledgeStore
 from autogen.beta.policies import (
     ConversationPolicy,

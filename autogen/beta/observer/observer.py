@@ -13,7 +13,7 @@ inside a caller-owned ``ExitStack``.  Two canonical shapes ship out of the box:
    is optional; when omitted the observer fires for every event.
 2. ``BaseObserver`` — trigger-driven monitoring primitive backed by a
    :class:`~autogen.beta.watch.Watch`.  Subclasses implement ``process`` and
-   optionally return an :class:`~autogen.beta.events.alert.ObserverAlert`
+   optionally return an :class:`~autogen.beta.events.ObserverAlert`
    which is emitted on the stream.  Ideal for long-running health checks
    (``TokenMonitor``, ``LoopDetector``, …).
 

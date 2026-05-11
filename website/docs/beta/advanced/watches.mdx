@@ -174,7 +174,7 @@ Fires on **any** sub-watch, every time.
 
 ```python linenums="1"
 from autogen.beta.watch import AnyOf, EventWatch
-from autogen.beta.events.alert import ObserverAlert
+from autogen.beta.events import ObserverAlert
 
 watch = AnyOf(
     EventWatch(ObserverAlert.severity == "critical"),
@@ -209,7 +209,7 @@ A Watch callback can send events back onto the stream — this is how [trigger-d
 ```python linenums="1"
 from autogen.beta import MemoryStream
 from autogen.beta.watch import DelayWatch
-from autogen.beta.events.alert import ObserverAlert, Severity
+from autogen.beta.events import ObserverAlert, Severity
 
 watch = DelayWatch(30.0)
 

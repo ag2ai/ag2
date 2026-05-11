@@ -16,8 +16,7 @@ from autogen.beta.aggregate import (
     WorkingMemoryAggregate,
 )
 from autogen.beta.context import ConversationContext as Context
-from autogen.beta.events import ModelMessage, ModelRequest, ModelResponse, TextInput
-from autogen.beta.events.lifecycle import AggregationCompleted
+from autogen.beta.events import AggregationCompleted, ModelMessage, ModelRequest, ModelResponse, TextInput
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig

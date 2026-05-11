@@ -37,10 +37,9 @@ from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecut
 from anthropic.types.code_execution_output_block import CodeExecutionOutputBlock
 from anthropic.types.document_block import DocumentBlock
 
-from autogen.beta import MemoryStream
+from autogen.beta import Context, MemoryStream
 from autogen.beta.config.anthropic import AnthropicClient
 from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
-from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -51,9 +50,9 @@ from autogen.beta.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     UrlInput,
 )
-from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
 from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
@@ -71,7 +70,7 @@ async def _process(content: Iterable[Any]) -> tuple[ModelResponse, list[BaseEven
         stop_reason="end_turn",
     )
     stream = MemoryStream()
-    context = ConversationContext(stream=stream)
+    context = Context(stream=stream)
     response = await client._process_response(message, context)
     return response, list(await stream.history.get_events())
 
