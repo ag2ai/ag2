@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,9 +6,9 @@
 
 import pytest
 
+from autogen.beta import Context
 from autogen.beta.assembly import AssemblerMiddleware
 from autogen.beta.compact import CompactionSummary
-from autogen.beta.context import ConversationContext as Context
 from autogen.beta.events import (
     ModelMessage,
     ModelRequest,

@@ -6,8 +6,7 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen.beta import Agent
-from autogen.beta.context import ConversationContext as Context
+from autogen.beta import Agent, Context
 from autogen.beta.events import (
     ModelMessage,
     ModelResponse,
@@ -19,7 +18,7 @@ from autogen.beta.events import (
     ToolCallEvent,
     Usage,
 )
-from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
+from autogen.beta.observers import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.stream import MemoryStream
 from autogen.beta.testing import TestConfig
 from autogen.beta.watch import EventWatch

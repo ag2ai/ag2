@@ -21,7 +21,7 @@ from autogen.beta.events import (
     ObserverStarted,
     Severity,
 )
-from autogen.beta.observer import BaseObserver, LoopDetector, TokenMonitor
+from autogen.beta.observers import BaseObserver, LoopDetector, TokenMonitor
 from autogen.beta.policies import AlertPolicy
 from autogen.beta.stream import MemoryStream
 from autogen.beta.watch import EventWatch

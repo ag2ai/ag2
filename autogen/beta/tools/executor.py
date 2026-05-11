@@ -4,7 +4,7 @@
 
 import asyncio
 from collections.abc import Callable, Iterable
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
@@ -35,7 +35,7 @@ class ToolExecutor:
 
     def register(
         self,
-        stack: "ExitStack",
+        stack: "ExitStack | AsyncExitStack",
         context: "Context",
         *,
         tools: Iterable["Tool"] = (),

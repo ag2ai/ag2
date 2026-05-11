@@ -49,6 +49,12 @@ from .types import (
     ModelResponse,
     Usage,
 )
+from .voice import (
+    RecordedAudioEvent,
+    SynthesizedAudioEvent,
+    TranscriptionChunkEvent,
+    TranscriptionCompletedEvent,
+)
 
 __all__ = (
     "AggregationCompleted",
@@ -79,7 +85,9 @@ __all__ = (
     "ObserverAlert",
     "ObserverCompleted",
     "ObserverStarted",
+    "RecordedAudioEvent",
     "Severity",
+    "SynthesizedAudioEvent",
     "TaskCompleted",
     "TaskExpired",
     "TaskFailed",
@@ -93,6 +101,8 @@ __all__ = (
     "ToolResult",
     "ToolResultEvent",
     "ToolResultsEvent",
+    "TranscriptionChunkEvent",
+    "TranscriptionCompletedEvent",
     "UnknownEvent",
     "UrlInput",
     "Usage",

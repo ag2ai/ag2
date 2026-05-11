@@ -19,6 +19,25 @@ except ImportError:
     _annotationlib = None  # type: ignore[assignment]
 
 
+_REPR_MAX_LEN = 80
+
+
+def truncate_repr(value: Any, max_len: int = _REPR_MAX_LEN) -> str:
+    """Repr a value, truncating long ``str``/``bytes`` payloads with a length tag.
+
+    Audio buffers, transcripts, and tool argument JSON can be megabytes; the
+    default ``repr`` would dump them in full and make logs unreadable. The cap
+    is on the repr output (not raw length) since each non-printable byte
+    expands to four characters when reprd.
+    """
+    if isinstance(value, (str, bytes)):
+        full = repr(value)
+        if len(full) > max_len:
+            quote = full[-1]
+            return f"{full[:max_len]}...{quote} (len={len(value)})"
+    return repr(value)
+
+
 class Field:
     def __init__(
         self,
@@ -198,7 +217,9 @@ class BaseEvent(metaclass=_ConditionMeta):
                 if not f.repr:
                     hidden.add(name)
 
-        fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden)
+        fields = ", ".join(
+            f"{k}={truncate_repr(v)}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden
+        )
         return f"{self.__class__.__name__}({fields})"
 
     def to_dict(self) -> dict[str, Any]:
@@ -215,7 +236,7 @@ class BaseEvent(metaclass=_ConditionMeta):
         # Collect known field names across the MRO
         known_fields: set[str] = set()
         for klass in cls.__mro__:
-            for name, f in getattr(klass, "_event_fields_", {}).items():
+            for name in getattr(klass, "_event_fields_", {}):
                 known_fields.add(name)
 
         # Deserialize nested events/special types, then filter to known fields
