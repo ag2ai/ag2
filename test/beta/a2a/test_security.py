@@ -22,7 +22,6 @@ from autogen.beta.a2a.security import (
     oauth2_scheme,
     open_id_connect_scheme,
     require,
-    require_scopes,
 )
 
 
@@ -99,23 +98,37 @@ def test_mtls_scheme() -> None:
 
 
 class TestRequire:
-    def test_single_scheme_no_scopes(self) -> None:
-        req = require(bearer=[])
+    def test_single_scheme_positional(self) -> None:
+        req = require("bearer")
 
         assert list(req.schemes.keys()) == ["bearer"]
         assert list(req.schemes["bearer"].list) == []
 
-    def test_multiple_schemes(self) -> None:
-        req = require(bearer=[], api_key=[])
+    def test_multiple_schemes_positional(self) -> None:
+        req = require("bearer", "api_key")
 
         assert set(req.schemes.keys()) == {"bearer", "api_key"}
+        assert list(req.schemes["bearer"].list) == []
+        assert list(req.schemes["api_key"].list) == []
 
     def test_oauth_with_scopes(self) -> None:
         req = require(oauth=["read", "write"])
 
         assert list(req.schemes["oauth"].list) == ["read", "write"]
 
-    def test_require_scopes_for_non_identifier(self) -> None:
-        req = require_scopes("X-My-Scheme", ["s1", "s2"])
+    def test_mix_positional_and_kwargs(self) -> None:
+        req = require("bearer", oauth=["read"])
 
-        assert list(req.schemes["X-My-Scheme"].list) == ["s1", "s2"]
+        assert set(req.schemes.keys()) == {"bearer", "oauth"}
+        assert list(req.schemes["bearer"].list) == []
+        assert list(req.schemes["oauth"].list) == ["read"]
+
+    def test_non_identifier_scheme_name(self) -> None:
+        req = require("X-My-Scheme")
+
+        assert list(req.schemes["X-My-Scheme"].list) == []
+
+    def test_kwargs_only_remains_supported(self) -> None:
+        req = require(bearer=[], api_key=[])
+
+        assert set(req.schemes.keys()) == {"bearer", "api_key"}

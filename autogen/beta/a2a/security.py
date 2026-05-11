@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 
 from a2a.types import (
     APIKeySecurityScheme,
@@ -83,33 +83,32 @@ def mtls_scheme(*, description: str = "") -> SecurityScheme:
     )
 
 
-def require(**schemes: Iterable[str]) -> SecurityRequirement:
-    """Build a ``SecurityRequirement`` mapping scheme names to required scopes.
+def require(*schemes_no_scopes: str, **schemes_with_scopes: Iterable[str]) -> SecurityRequirement:
+    """Build a ``SecurityRequirement`` from named schemes.
 
-    Each kwarg's key is a scheme name registered in ``security_schemes``;
-    the value is an iterable of scopes (empty for schemes without scopes,
-    e.g. bearer / api-key). All schemes in a single requirement must be
-    satisfied together; multiple ``SecurityRequirement`` entries on the
-    card are OR-ed (any one suffices).
+    Positional ``str`` arguments list schemes that don't need scopes
+    (Bearer, API-key, mTLS, etc.). Keyword arguments carry scopes for
+    schemes that do (OAuth2 / OIDC). Scheme names that aren't valid
+    Python identifiers (e.g. ``"X-My-Scheme"``) can be passed
+    positionally.
+
+    All schemes in a single ``require()`` call must be satisfied
+    together (AND); multiple ``SecurityRequirement`` entries on the card
+    are OR-ed (any one suffices).
 
     Example::
 
-        require(bearer=[])  # bearer scheme, no scopes
+        require("bearer")  # bearer alone, no scopes
+        require("bearer", "x_api_key")  # AND of bearer + x_api_key
         require(oauth2=["read", "write"])  # oauth2 with two scopes
-        require(bearer=[], api_key=[])  # AND of bearer + api_key
+        require("bearer", oauth2=["read"])  # AND: bearer (no scopes) + oauth2 (with scopes)
+        require("X-My-Scheme")  # non-identifier name
     """
+    combined: dict[str, list[str]] = {name: [] for name in schemes_no_scopes}
+    combined.update({name: list(scopes) for name, scopes in schemes_with_scopes.items()})
     return SecurityRequirement(
-        schemes={name: StringList(list=list(scopes)) for name, scopes in schemes.items()},
+        schemes={name: StringList(list=v) for name, v in combined.items()},
     )
-
-
-def require_scopes(name: str, scopes: Mapping[str, Iterable[str]] | Iterable[str] | None = None) -> SecurityRequirement:
-    """Build a single-scheme ``SecurityRequirement`` with the given scopes.
-
-    Convenience for cases where the scheme name isn't a valid Python
-    identifier (e.g. ``"My-Scheme"``) and can't be used as a kwarg.
-    """
-    return SecurityRequirement(schemes={name: StringList(list=list(scopes or []))})
 
 
 __all__ = (
@@ -120,5 +119,4 @@ __all__ = (
     "oauth2_scheme",
     "open_id_connect_scheme",
     "require",
-    "require_scopes",
 )
