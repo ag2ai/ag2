@@ -440,3 +440,61 @@ async def test_cache_read_tokens_when_nonzero(otel_setup):
     llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
     assert llm_span.attributes["gen_ai.usage.cache_read_input_tokens"] == 75
     assert "gen_ai.usage.cache_creation_input_tokens" not in llm_span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_thinking_tokens_when_nonzero(otel_setup):
+    """thinking_tokens appears as gen_ai.usage.thinking_tokens when non-zero."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage("Hi!"),
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    thinking_tokens=296,
+                ),
+                model="gemini-3.1-pro-preview",
+                provider="google",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert llm_span.attributes["gen_ai.usage.thinking_tokens"] == 296
+
+
+@pytest.mark.asyncio()
+async def test_thinking_tokens_omitted_when_zero(otel_setup):
+    """thinking_tokens=0 is treated as absent and not exported."""
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                message=ModelMessage("Hi!"),
+                usage=Usage(
+                    prompt_tokens=100,
+                    completion_tokens=20,
+                    thinking_tokens=0,
+                ),
+                model="gemini-3.1-pro-preview",
+                provider="google",
+            ),
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Hello")
+
+    spans = exporter.get_finished_spans()
+    llm_span = next(s for s in spans if s.attributes.get("ag2.span.type") == "llm")
+    assert "gen_ai.usage.thinking_tokens" not in llm_span.attributes
