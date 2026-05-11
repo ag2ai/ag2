@@ -78,7 +78,7 @@ class TestTrimming:
 
 
 class TestOrphanedToolResults:
-    """After trimming, leading ToolResultsEvents without a matching tool_use should be dropped."""
+    """ToolResultsEvents whose matching ToolCallsEvent is not in the window must be dropped."""
 
     @pytest.mark.asyncio
     async def test_leading_orphaned_tool_result_is_skipped(self, context: Context) -> None:
@@ -132,6 +132,71 @@ class TestOrphanedToolResults:
         assert isinstance(result[0], ModelResponse)
         assert isinstance(result[1], ToolResultsEvent)
         assert isinstance(result[2], ModelRequest)
+
+    @pytest.mark.asyncio
+    async def test_mid_window_orphaned_tool_result_is_dropped(self, context: Context) -> None:
+        """An orphan ToolResultsEvent past the head of the window must also be dropped.
+
+        Reproduces the second case in #2793: a complete tool round-trip
+        survives at the front of the window, then a ToolResultsEvent whose
+        matching ToolCallsEvent was trimmed appears in the middle.
+        """
+        events = [
+            _tool_response("tc_old"),  # trimmed away
+            _tool_response("tc_kept"),  # survives
+            _tool_results("tc_kept"),  # paired
+            _tool_results("tc_old"),  # orphan in the MIDDLE of the window
+            ModelRequest([TextInput("after")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=4)
+
+        _, result = await policy.apply([], events, context)
+
+        # Window is the last 4 events; the mid-window orphan must be dropped.
+        assert len(result) == 3
+        assert isinstance(result[0], ModelResponse)
+        assert isinstance(result[1], ToolResultsEvent)
+        assert result[1].results[0].parent_id == "tc_kept"
+        assert isinstance(result[2], ModelRequest)
+
+    @pytest.mark.asyncio
+    async def test_partially_orphaned_tool_results_keeps_paired_results(self, context: Context) -> None:
+        """A ToolResultsEvent containing a mix of paired and orphaned results
+        must keep only the paired ones."""
+        events = [
+            _tool_response("tc_1"),  # only tc_1 is in the window
+            ToolResultsEvent(
+                results=[
+                    ToolResultEvent(parent_id="tc_1", name="get", result=ToolResult("ok")),
+                    ToolResultEvent(parent_id="tc_lost", name="get", result=ToolResult("ok")),
+                ],
+            ),
+            ModelRequest([TextInput("after")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert len(result) == 3
+        assert isinstance(result[1], ToolResultsEvent)
+        assert [r.parent_id for r in result[1].results] == ["tc_1"]
+
+    @pytest.mark.asyncio
+    async def test_carryover_tool_result_from_separate_stream_is_dropped(self, context: Context) -> None:
+        """When events from another stream are carried over (per #2793 case 2),
+        results without a matching call in the assembled history must be dropped
+        even when they appear before any local tool call."""
+        events = [
+            ModelRequest([TextInput("from another agent")]),
+            _tool_results("tc_other_stream"),  # call lives on a different stream
+            ModelRequest([TextInput("local turn")]),
+        ]
+        policy = SlidingWindowPolicy(max_events=3)
+
+        _, result = await policy.apply([], events, context)
+
+        assert len(result) == 2
+        assert all(not isinstance(e, ToolResultsEvent) for e in result)
 
     @pytest.mark.asyncio
     async def test_transparent_count_reflects_skipped_orphans(self, context: Context) -> None:
