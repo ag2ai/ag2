@@ -3,16 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Iterable
 from contextlib import ExitStack, asynccontextmanager
 from dataclasses import replace
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import CallToolResult, TextContent
+from mcp.types import (
+    AudioContent,
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
+    ResourceLink,
+    TextContent,
+    TextResourceContents,
+)
 from mcp.types import Tool as MCPTool
 
 from autogen.beta.annotations import Context, Variable
@@ -20,6 +29,13 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
+)
+from autogen.beta.events.input_events import (
+    BinaryInput,
+    BinaryType,
+    Input,
+    TextInput,
+    UrlInput,
 )
 from autogen.beta.middleware import (
     BaseMiddleware,
@@ -33,6 +49,12 @@ from autogen.beta.tools.final.function_tool import (
     FunctionToolSchema,
 )
 from autogen.beta.tools.tool import Tool
+from autogen.beta.types import (
+    AudioMediaType,
+    DocumentMediaType,
+    ImageMediaType,
+    VideoMediaType,
+)
 
 from .types import MCPServerConfig, MCPStdioServerConfig
 
@@ -216,17 +238,68 @@ def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExe
 
 
 def _extract_content(result: CallToolResult) -> ToolResult:
+    """Convert MCP ``tools/call`` content blocks into a typed ``ToolResult``.
+
+    Each MCP ``ContentBlock`` variant is mapped to the closest AG2 ``Input``
+    type so non-text content (images, audio, blobs, resource links) reaches
+    the agent / LLM without further unpacking.
+    """
     parts = result.content
     if not parts:
         return ToolResult(result.model_dump_json(exclude_none=True))
 
-    chunks: list[str] = []
+    inputs: list[Input] = []
     for p in parts:
         if isinstance(p, TextContent):
-            chunks.append(p.text)
+            inputs.append(TextInput(content=p.text))
+        elif isinstance(p, ImageContent):
+            inputs.append(
+                BinaryInput(
+                    data=base64.b64decode(p.data),
+                    media_type=p.mimeType,
+                    kind=BinaryType.IMAGE,
+                )
+            )
+        elif isinstance(p, AudioContent):
+            inputs.append(
+                BinaryInput(
+                    data=base64.b64decode(p.data),
+                    media_type=p.mimeType,
+                    kind=BinaryType.AUDIO,
+                )
+            )
+        elif isinstance(p, ResourceLink):
+            inputs.append(UrlInput(url=str(p.uri), kind=_kind_from_mime(p.mimeType)))
+        elif isinstance(p, EmbeddedResource):
+            resource = p.resource
+            if isinstance(resource, TextResourceContents):
+                inputs.append(TextInput(content=resource.text))
+            else:
+                inputs.append(
+                    BinaryInput(
+                        data=base64.b64decode(resource.blob),
+                        media_type=resource.mimeType or "application/octet-stream",
+                        kind=_kind_from_mime(resource.mimeType),
+                    )
+                )
         else:
-            chunks.append(p.model_dump_json(exclude_none=True))
-    return ToolResult(parts=chunks)
+            # Future ContentBlock variant — preserve as JSON text rather than drop.
+            inputs.append(TextInput(content=p.model_dump_json(exclude_none=True)))
+    return ToolResult(parts=inputs)
+
+
+_KIND_BY_MIME: dict[str, BinaryType] = {
+    **dict.fromkeys(get_args(ImageMediaType), BinaryType.IMAGE),
+    **dict.fromkeys(get_args(AudioMediaType), BinaryType.AUDIO),
+    **dict.fromkeys(get_args(VideoMediaType), BinaryType.VIDEO),
+    **dict.fromkeys(get_args(DocumentMediaType), BinaryType.DOCUMENT),
+}
+
+
+def _kind_from_mime(mime: str | None) -> BinaryType:
+    if not mime:
+        return BinaryType.BINARY
+    return _KIND_BY_MIME.get(mime, BinaryType.BINARY)
 
 
 def _resolve_value(value: Any, context: "Context") -> Any:
