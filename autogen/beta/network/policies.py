@@ -15,15 +15,15 @@ The ``ag2.network.*`` namespace is reserved for network-only injects;
 
 __all__ = (
     "AGENT_CLIENT_DEP",
+    "CHANNEL_DEP",
+    "CHANNEL_STATE_DEP",
     "HUB_DEP",
-    "SESSION_DEP",
-    "SESSION_STATE_DEP",
     "TASK_DEP",
 )
 
 
-SESSION_DEP = "ag2.network.session"
-SESSION_STATE_DEP = "ag2.network.session_state"
+CHANNEL_DEP = "ag2.network.channel"
+CHANNEL_STATE_DEP = "ag2.network.channel_state"
 AGENT_CLIENT_DEP = "ag2.network.agent_client"
 HUB_DEP = "ag2.network.hub"
 TASK_DEP = "ag2.task"  # framework-core key; re-exported for symmetry

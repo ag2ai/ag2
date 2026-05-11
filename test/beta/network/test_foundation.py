@@ -6,7 +6,7 @@
 
 Two ``AgentClient``s register through ``LocalLink`` and exchange raw
 envelopes; ``Hub.hydrate()`` rebuilds passport/resume/rule caches from
-disk. No sessions, no LLM, no expectation sweeper — those are
+disk. No channels, no LLM, no expectation sweeper — those are
 exercised in the higher-level adapter tests.
 """
 
@@ -35,8 +35,8 @@ def _agent(name: str) -> Agent:
     return Agent(name=name, config=AnthropicConfig(model="claude-sonnet-4-6"))
 
 
-# Session-based envelope round-trip lives in test_consulting.py — once
-# adapters are wired all envelope dispatch goes through a real session.
+# Channel-based envelope round-trip lives in test_consulting.py — once
+# adapters are wired all envelope dispatch goes through a real channel.
 
 
 @pytest.mark.asyncio
@@ -46,7 +46,7 @@ async def test_unknown_sender_raises_not_found() -> None:
     hub = await Hub.open(store)
 
     envelope = Envelope(
-        session_id="s1",
+        channel_id="s1",
         sender_id="ghost",
         audience=["someone"],
         event_type=EV_TEXT,
@@ -76,7 +76,7 @@ async def test_hydrate_reloads_identities_from_disk(tmp_path) -> None:
         _agent("bob"),
         Passport(name="bob"),
         Resume(claimed_capabilities=["debate"]),
-        rule=Rule(limits=LimitsBlock(session_ttl_default="4h")),
+        rule=Rule(limits=LimitsBlock(channel_ttl_default="4h")),
     )
 
     alice_id = alice.agent_id
@@ -131,7 +131,7 @@ async def test_outbound_access_denied() -> None:
     bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
 
     envelope = Envelope(
-        session_id="s1",
+        channel_id="s1",
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,
@@ -164,7 +164,7 @@ async def test_unregister_makes_send_fail() -> None:
     await alice.unregister()
 
     envelope = Envelope(
-        session_id="s1",
+        channel_id="s1",
         sender_id=alice.agent_id,
         audience=[bob.agent_id],
         event_type=EV_TEXT,

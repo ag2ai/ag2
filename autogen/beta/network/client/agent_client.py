@@ -8,14 +8,14 @@ Surface:
 
 * Properties (agent, passport, resume, agent_id).
 * ``receive`` (NetworkClient impl) — routes envelopes to the optional
-  per-session inbox queue (used by ``delegate``) AND to the registered
+  per-channel inbox queue (used by ``delegate``) AND to the registered
   notify-handler callback (default = ``handlers.default_handler``,
   which auto-acks invites and runs ``Agent.ask`` on text envelopes).
 * ``send_envelope`` — direct ``Hub.post_envelope`` call.
-* ``open(type=..., target=..., ...)`` — create a session via the hub;
-  returns a :class:`Session` handle.
-* ``wait_for_session_event`` — block until an inbound envelope on a
-  session matches a predicate; used by ``delegate`` to await replies.
+* ``open(type=..., target=..., ...)`` — create a channel via the hub;
+  returns a :class:`Channel` handle.
+* ``wait_for_channel_event`` — block until an inbound envelope on a
+  channel matches a predicate; used by ``delegate`` to await replies.
 * Tenant-driven mutation (``set_resume`` / ``set_skill`` / ``set_rule``).
 * ``on_envelope(callback)`` — override the default notify handler
   (testing seam).
@@ -34,8 +34,8 @@ from autogen.beta.agent import Agent
 from ..envelope import Envelope
 from ..identity import Passport, Resume, ResumeExample
 from ..rule import Rule
+from .channel import Channel
 from .handlers import default_handler
-from .session import Session
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -72,13 +72,13 @@ class AgentClient:
         self._on_envelope: EnvelopeHandler | None = self._run_default_handler if attach_default_handler else None
         self._disconnected = False
 
-        # Per-session inbox queues for ``wait_for_session_event``
+        # Per-channel inbox queues for ``wait_for_channel_event``
         # (used by the ``delegate`` tool to await consulting replies).
-        self._session_inboxes: dict[str, asyncio.Queue[Envelope]] = {}
+        self._channel_inboxes: dict[str, asyncio.Queue[Envelope]] = {}
 
-        # Sessions where the default notify handler should NOT run —
-        # used by ``delegate`` while it owns the session lifecycle.
-        self._handler_suppressed_sessions: set[str] = set()
+        # Channels where the default notify handler should NOT run —
+        # used by ``delegate`` while it owns the channel lifecycle.
+        self._handler_suppressed_channels: set[str] = set()
 
         # Stack of envelopes currently being handled. The top of the
         # stack is the envelope this agent is processing right now;
@@ -114,9 +114,9 @@ class AgentClient:
 
     async def receive(self, envelope: Envelope) -> None:
         """Hub delivery → fan out to inbox + (suppressible) handler."""
-        inbox = self.ensure_session_inbox(envelope.session_id)
+        inbox = self.ensure_channel_inbox(envelope.channel_id)
         await inbox.put(envelope)
-        if envelope.session_id in self._handler_suppressed_sessions:
+        if envelope.channel_id in self._handler_suppressed_channels:
             return
         if self._on_envelope is not None:
             await self._on_envelope(envelope)
@@ -138,7 +138,7 @@ class AgentClient:
         """Bound-method wrapper around :func:`handlers.default_handler`.
 
         Pushes the inbound envelope onto the handling stack so any
-        ``delegate``/``sessions.open`` invoked from inside the LLM turn
+        ``delegate``/``channels.open`` invoked from inside the LLM turn
         can stamp ``Envelope.depth = outer.depth + 1`` and the hub can
         enforce ``Rule.limits.delegation_depth``.
         """
@@ -160,7 +160,7 @@ class AgentClient:
             return 0
         return self._handling_envelope_stack[-1].depth
 
-    # ── Session lifecycle ────────────────────────────────────────────────────
+    # ── Channel lifecycle ────────────────────────────────────────────────────
 
     async def open(
         self,
@@ -171,8 +171,8 @@ class AgentClient:
         knobs: dict[str, object] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
-    ) -> Session:
-        """Open a session via the hub and return its :class:`Session` handle.
+    ) -> Channel:
+        """Open a channel via the hub and return its :class:`Channel` handle.
 
         ``target`` accepts peer **names** or agent_ids; resolution goes
         through the bound :class:`HubClient` so in-process and any
@@ -189,7 +189,7 @@ class AgentClient:
                 raise RuntimeError(f"target {t!r} has no agent_id")
             target_ids.append(passport.agent_id)
 
-        metadata = await self._hub_client.create_session(
+        metadata = await self._hub_client.create_channel(
             creator_id=self.agent_id,
             manifest_type=type,
             participants=target_ids,
@@ -198,13 +198,13 @@ class AgentClient:
             intent=intent,
             labels=labels,
         )
-        self.ensure_session_inbox(metadata.session_id)
-        return Session(metadata=metadata, client=self)
+        self.ensure_channel_inbox(metadata.channel_id)
+        return Channel(metadata=metadata, client=self)
 
-    def ensure_session_inbox(self, session_id: str) -> "asyncio.Queue[Envelope]":
-        """Create (or fetch) the per-session inbox queue.
+    def ensure_channel_inbox(self, channel_id: str) -> "asyncio.Queue[Envelope]":
+        """Create (or fetch) the per-channel inbox queue.
 
-        Callers that send first and then ``wait_for_session_event`` MUST
+        Callers that send first and then ``wait_for_channel_event`` MUST
         call this BEFORE the send. Otherwise a fast reply (e.g. via
         ``LocalLink`` where dispatch happens on the same event-loop tick)
         can be delivered to ``receive`` before the wait creates the
@@ -212,38 +212,38 @@ class AgentClient:
 
         Idempotent: returns the existing queue if one is already bound.
         """
-        inbox = self._session_inboxes.get(session_id)
+        inbox = self._channel_inboxes.get(channel_id)
         if inbox is None:
             inbox = asyncio.Queue()
-            self._session_inboxes[session_id] = inbox
+            self._channel_inboxes[channel_id] = inbox
         return inbox
 
-    def discard_session_inbox(self, session_id: str) -> None:
-        """Drop the per-session inbox queue.
+    def discard_channel_inbox(self, channel_id: str) -> None:
+        """Drop the per-channel inbox queue.
 
         Callers should invoke this after they've finished waiting on a
-        session so the per-client memory footprint doesn't grow with
-        every consulted session.
+        channel so the per-client memory footprint doesn't grow with
+        every consulted channel.
         """
-        self._session_inboxes.pop(session_id, None)
+        self._channel_inboxes.pop(channel_id, None)
 
-    async def wait_for_session_event(
+    async def wait_for_channel_event(
         self,
         *,
-        session_id: str,
+        channel_id: str,
         predicate: EnvelopePredicate,
         timeout: float = 300.0,
     ) -> Envelope:
-        """Block until an inbound envelope on ``session_id`` matches.
+        """Block until an inbound envelope on ``channel_id`` matches.
 
         Used by ``delegate`` to await the consulting respondent's
         reply. The inbox is created on demand and shared across waits;
         callers should not hold multiple concurrent waits on the same
-        session.
+        channel.
 
         Raises ``asyncio.TimeoutError`` on timeout.
         """
-        inbox = self.ensure_session_inbox(session_id)
+        inbox = self.ensure_channel_inbox(channel_id)
 
         loop = asyncio.get_event_loop()
         deadline = loop.time() + timeout
@@ -255,17 +255,17 @@ class AgentClient:
             if predicate(envelope):
                 return envelope
 
-    def _suppress_handler(self, session_id: str) -> None:
-        """Internal: stop running the default notify handler for ``session_id``.
+    def _suppress_handler(self, channel_id: str) -> None:
+        """Internal: stop running the default notify handler for ``channel_id``.
 
-        Used by ``delegate`` to own the session lifecycle while waiting
+        Used by ``delegate`` to own the channel lifecycle while waiting
         for the respondent's reply — the default handler would
         otherwise try to ``Agent.ask`` on every inbound EV_TEXT.
         """
-        self._handler_suppressed_sessions.add(session_id)
+        self._handler_suppressed_channels.add(channel_id)
 
-    def _unsuppress_handler(self, session_id: str) -> None:
-        self._handler_suppressed_sessions.discard(session_id)
+    def _unsuppress_handler(self, channel_id: str) -> None:
+        self._handler_suppressed_channels.discard(channel_id)
 
     # ── Envelope send ────────────────────────────────────────────────────────
 

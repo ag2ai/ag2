@@ -36,6 +36,15 @@ from autogen.beta.network import (
 )
 from autogen.beta.network.adapters.base import AdapterResult
 from autogen.beta.network.adapters.conversation import ConversationAdapter
+from autogen.beta.network.channel import (
+    ChannelManifest,
+    ChannelMetadata,
+    ChannelState,
+    Expectation,
+    Participant,
+    ParticipantRole,
+    ParticipantSchema,
+)
 from autogen.beta.network.hub import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
     AcksWithinEvaluator,
@@ -43,15 +52,6 @@ from autogen.beta.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
-)
-from autogen.beta.network.session import (
-    Expectation,
-    Participant,
-    ParticipantRole,
-    ParticipantSchema,
-    SessionManifest,
-    SessionMetadata,
-    SessionState,
 )
 from autogen.beta.network.views.builtin import FullTranscript
 
@@ -62,42 +62,42 @@ class _NoOpAdapter:
     """Drives expectation tests with custom manifests.
 
     The expectation sweeper only reads ``manifest.expectations`` and
-    walks ``_active_sessions`` — it never calls ``validate_send`` /
+    walks ``_active_channels`` — it never calls ``validate_send`` /
     ``fold`` / ``on_accepted``. This stand-in covers the adapter
     surface without exercising any choreography.
     """
 
-    def __init__(self, manifest: SessionManifest) -> None:
+    def __init__(self, manifest: ChannelManifest) -> None:
         self.manifest = manifest
 
-    def initial_state(self, _meta: SessionMetadata) -> dict:
+    def initial_state(self, _meta: ChannelMetadata) -> dict:
         return {}
 
     def fold(self, _envelope: Envelope, state: dict) -> dict:
         return state
 
-    def validate_create(self, _meta: SessionMetadata) -> None:
+    def validate_create(self, _meta: ChannelMetadata) -> None:
         return
 
-    def validate_send(self, _meta: SessionMetadata, _envelope: Envelope, _state: dict) -> None:
+    def validate_send(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> None:
         return
 
-    def on_accepted(self, _meta: SessionMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
+    def on_accepted(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
         return AdapterResult()
 
-    def default_view_policy(self, _meta: SessionMetadata, _participant_id: str) -> FullTranscript:
+    def default_view_policy(self, _meta: ChannelMetadata, _participant_id: str) -> FullTranscript:
         return FullTranscript()
 
 
 def _conv_meta(
     *,
-    state: SessionState = SessionState.PENDING,
+    state: ChannelState = ChannelState.PENDING,
     created_at: str = "2026-01-01T00:00:00+00:00",
     pending_acks: list[str] | None = None,
-) -> SessionMetadata:
+) -> ChannelMetadata:
     manifest = ConversationAdapter().manifest
-    return SessionMetadata(
-        session_id="s1",
+    return ChannelMetadata(
+        channel_id="s1",
         manifest=manifest,
         creator_id="alice",
         participants=[
@@ -110,7 +110,7 @@ def _conv_meta(
     )
 
 
-def _ctx(meta: SessionMetadata, *, now: str, wal: list[Envelope] | None = None) -> ExpectationContext:
+def _ctx(meta: ChannelMetadata, *, now: str, wal: list[Envelope] | None = None) -> ExpectationContext:
     now_dt = datetime.fromisoformat(now)
     return ExpectationContext(
         metadata=meta,
@@ -121,35 +121,35 @@ def _ctx(meta: SessionMetadata, *, now: str, wal: list[Envelope] | None = None) 
     )
 
 
-def _inject_pending_session(
+def _inject_pending_channel(
     hub: Hub,
     *,
-    session_id: str,
+    channel_id: str,
     adapter_key: tuple[str, int],
     clock: _MockClock,
     pending_acks: tuple[str, ...] = ("bob",),
-) -> SessionMetadata:
-    """Inject a PENDING session metadata directly into the hub caches.
+) -> ChannelMetadata:
+    """Inject a PENDING channel metadata directly into the hub caches.
 
-    ``create_session`` would block on ``invite_ack_timeout`` waiting
-    for acks that never arrive; these tests need the session to stay
+    ``create_channel`` would block on ``invite_ack_timeout`` waiting
+    for acks that never arrive; these tests need the channel to stay
     PENDING long enough for the sweeper to evaluate.
     """
-    meta = SessionMetadata(
-        session_id=session_id,
+    meta = ChannelMetadata(
+        channel_id=channel_id,
         manifest=hub._adapters[adapter_key].manifest,
         creator_id="alice",
         participants=[
             Participant(agent_id="alice", role=ParticipantRole.INITIATOR, order=0, joined_at=clock()),
             Participant(agent_id="bob", role=ParticipantRole.PARTICIPANT, order=1, joined_at=clock()),
         ],
-        state=SessionState.PENDING,
+        state=ChannelState.PENDING,
         created_at=clock(),
         pending_acks=list(pending_acks),
     )
-    hub._sessions[session_id] = meta
-    hub._active_sessions[session_id] = meta
-    hub._adapter_states[session_id] = {}
+    hub._channels[channel_id] = meta
+    hub._active_channels[channel_id] = meta
+    hub._adapter_states[channel_id] = {}
     return meta
 
 
@@ -157,7 +157,7 @@ class TestEvaluatorExactBoundary:
     """At ``elapsed == seconds``, the evaluator should fire (not be silent)."""
 
     def test_acks_within_fires_at_exact_threshold(self) -> None:
-        meta = _conv_meta(state=SessionState.PENDING, pending_acks=["bob"])
+        meta = _conv_meta(state=ChannelState.PENDING, pending_acks=["bob"])
         evaluator = AcksWithinEvaluator()
         expectation = Expectation(name="acks_within", on_violation="audit", params={"seconds": 30})
         # 30s elapsed — equals threshold.
@@ -166,7 +166,7 @@ class TestEvaluatorExactBoundary:
         assert violation.violator_ids == ["bob"]
 
     def test_acks_within_silent_just_under_threshold(self) -> None:
-        meta = _conv_meta(state=SessionState.PENDING, pending_acks=["bob"])
+        meta = _conv_meta(state=ChannelState.PENDING, pending_acks=["bob"])
         evaluator = AcksWithinEvaluator()
         expectation = Expectation(name="acks_within", on_violation="audit", params={"seconds": 30})
         # 29.999s — under threshold by a hair.
@@ -174,18 +174,18 @@ class TestEvaluatorExactBoundary:
         assert violation is None
 
     def test_max_silence_fires_at_exact_threshold(self) -> None:
-        meta = _conv_meta(state=SessionState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
+        meta = _conv_meta(state=ChannelState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
         evaluator = MaxSilenceEvaluator()
         expectation = Expectation(name="max_silence", on_violation="audit", params={"seconds": 60})
         violation = evaluator.evaluate(expectation, _ctx(meta, now="2026-01-01T00:01:00+00:00"))
         assert violation is not None
 
     def test_reply_within_fires_at_exact_threshold(self) -> None:
-        meta = _conv_meta(state=SessionState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
+        meta = _conv_meta(state=ChannelState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
         wal = [
             Envelope(
                 envelope_id="e1",
-                session_id="s1",
+                channel_id="s1",
                 sender_id="alice",
                 audience=["bob"],
                 event_type=EV_TEXT,
@@ -205,7 +205,7 @@ class TestEvaluatorZeroTimeout:
     """``seconds=0`` is degenerate but should fire deterministically."""
 
     def test_acks_within_zero_fires_immediately(self) -> None:
-        meta = _conv_meta(state=SessionState.PENDING, pending_acks=["bob"])
+        meta = _conv_meta(state=ChannelState.PENDING, pending_acks=["bob"])
         evaluator = AcksWithinEvaluator()
         expectation = Expectation(name="acks_within", on_violation="audit", params={"seconds": 0})
         # Same instant as creation — `elapsed=0`, `0 < 0` is False → fires.
@@ -213,7 +213,7 @@ class TestEvaluatorZeroTimeout:
         assert violation is not None
 
     def test_max_silence_zero_fires_immediately(self) -> None:
-        meta = _conv_meta(state=SessionState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
+        meta = _conv_meta(state=ChannelState.ACTIVE, created_at="2026-01-01T00:00:00+00:00")
         evaluator = MaxSilenceEvaluator()
         expectation = Expectation(name="max_silence", on_violation="audit", params={"seconds": 0})
         violation = evaluator.evaluate(expectation, _ctx(meta, now="2026-01-01T00:00:00+00:00"))
@@ -242,14 +242,14 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
     class CrashHandler:
         name = "crash"
 
-        async def handle(self, _hub: Hub, session_id: str, _violation: object) -> None:
-            handler_calls.append(("crash", session_id))
+        async def handle(self, _hub: Hub, channel_id: str, _violation: object) -> None:
+            handler_calls.append(("crash", channel_id))
             raise RuntimeError("boom")
 
     hub.register_violation_handler(CrashHandler())
     hub.register_adapter(
         _NoOpAdapter(
-            SessionManifest(
+            ChannelManifest(
                 type="crash_test",
                 version=1,
                 participants=ParticipantSchema(min=2),
@@ -260,7 +260,7 @@ async def test_handler_exception_does_not_stop_sweeper() -> None:
         )
     )
 
-    _inject_pending_session(hub, session_id="s-crash", adapter_key=("crash_test", 1), clock=clock)
+    _inject_pending_channel(hub, channel_id="s-crash", adapter_key=("crash_test", 1), clock=clock)
 
     # First tick: handler raises but sweeper survives.
     clock.advance(1)  # 1s elapsed > 0s threshold
@@ -295,20 +295,20 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
     class WarnHandler:
         name = "warn"
 
-        async def handle(self, _hub: Hub, _session_id: str, _violation: object) -> None:
+        async def handle(self, _hub: Hub, _channel_id: str, _violation: object) -> None:
             fired.append((0, "warn"))
 
     class AuditHandler2:
         name = "audit2"
 
-        async def handle(self, _hub: Hub, _session_id: str, _violation: object) -> None:
+        async def handle(self, _hub: Hub, _channel_id: str, _violation: object) -> None:
             fired.append((1, "audit2"))
 
     hub.register_violation_handler(WarnHandler())
     hub.register_violation_handler(AuditHandler2())
     hub.register_adapter(
         _NoOpAdapter(
-            SessionManifest(
+            ChannelManifest(
                 type="dual_test",
                 version=1,
                 participants=ParticipantSchema(min=2),
@@ -320,7 +320,7 @@ async def test_two_same_name_expectations_with_different_handlers_both_fire() ->
         )
     )
 
-    _inject_pending_session(hub, session_id="s-dual", adapter_key=("dual_test", 1), clock=clock)
+    _inject_pending_channel(hub, channel_id="s-dual", adapter_key=("dual_test", 1), clock=clock)
 
     # 35s in: only the 30s expectation fires.
     clock.advance(35)
@@ -353,7 +353,7 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
     )
     hub.register_adapter(
         _NoOpAdapter(
-            SessionManifest(
+            ChannelManifest(
                 type="bogus",
                 version=1,
                 participants=ParticipantSchema(min=2),
@@ -364,7 +364,7 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
         )
     )
 
-    _inject_pending_session(hub, session_id="s-bogus", adapter_key=("bogus", 1), clock=clock)
+    _inject_pending_channel(hub, channel_id="s-bogus", adapter_key=("bogus", 1), clock=clock)
 
     clock.advance(60)
     # Must not raise.
@@ -386,7 +386,7 @@ async def test_unknown_handler_name_silently_ignored() -> None:
     )
     hub.register_adapter(
         _NoOpAdapter(
-            SessionManifest(
+            ChannelManifest(
                 type="ghost",
                 version=1,
                 participants=ParticipantSchema(min=2),
@@ -397,7 +397,7 @@ async def test_unknown_handler_name_silently_ignored() -> None:
         )
     )
 
-    _inject_pending_session(hub, session_id="s-ghost", adapter_key=("ghost", 1), clock=clock)
+    _inject_pending_channel(hub, channel_id="s-ghost", adapter_key=("ghost", 1), clock=clock)
 
     clock.advance(1)
     # Must not raise. Audit log should also stay empty since no

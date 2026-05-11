@@ -7,7 +7,7 @@
 * :class:`ScriptedConfig` — ``ModelConfig`` whose script persists across
   multiple ``create()`` calls, unlike ``autogen.beta.testing.TestConfig``
   which resets its iterator each turn (breaks multi-turn LLM tests).
-* :func:`wait_for_text_count` — poll a session's WAL until ``EV_TEXT``
+* :func:`wait_for_text_count` — poll a channel's WAL until ``EV_TEXT``
   count reaches a threshold; conversation/discussion adapters have no
   terminal event to await on.
 """
@@ -94,7 +94,7 @@ class _ScriptedClient(LLMClient):
 
 async def wait_for_text_count(
     hub: Hub,
-    session_id: str,
+    channel_id: str,
     expected: int,
     *,
     timeout: float = 5.0,
@@ -108,8 +108,8 @@ async def wait_for_text_count(
     """
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        wal = await hub.read_wal(session_id)
+        wal = await hub.read_wal(channel_id)
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(f"session {session_id!r} never reached {expected} EV_TEXT envelopes")
+    raise asyncio.TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")

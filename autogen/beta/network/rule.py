@@ -5,7 +5,7 @@
 """Per-(hub, agent) rules — access + limits.
 
 Defaults are permissive: a freshly registered Agent with no rule
-changes can talk to anyone, accept any session type, and has no rate
+changes can talk to anyone, accept any channel type, and has no rate
 limit. Apps tighten by passing a non-default ``Rule`` to
 ``hub_client.register(...)``.
 
@@ -17,11 +17,11 @@ from typing import Any
 
 __all__ = (
     "AccessBlock",
+    "ChannelTypeAccess",
     "InboxBlock",
     "LimitsBlock",
     "RateBlock",
     "Rule",
-    "SessionTypeAccess",
     "parse_duration",
 )
 
@@ -53,7 +53,7 @@ def parse_duration(s: str | int) -> int:
 
 
 @dataclass(slots=True)
-class SessionTypeAccess:
+class ChannelTypeAccess:
     initiate: list[str] = field(default_factory=lambda: ["*"])
     accept: list[str] = field(default_factory=lambda: ["*"])
 
@@ -62,7 +62,7 @@ class SessionTypeAccess:
 class AccessBlock:
     inbound_from: list[str] = field(default_factory=lambda: ["*"])  # globs over `name`
     outbound_to: list[str] = field(default_factory=lambda: ["*"])
-    session_types: SessionTypeAccess = field(default_factory=SessionTypeAccess)
+    channel_types: ChannelTypeAccess = field(default_factory=ChannelTypeAccess)
 
 
 @dataclass(slots=True)
@@ -98,13 +98,13 @@ class LimitsBlock:
     :func:`parse_duration`; values may be passed pre-parsed as ``int``
     seconds.
 
-    Idle-session detection rides on ``max_silence`` declared on a
+    Idle-channel detection rides on ``max_silence`` declared on a
     manifest's ``expectations`` rather than a per-tenant timer here.
     """
 
-    max_concurrent_sessions: int = 0
+    max_concurrent_channels: int = 0
     max_concurrent_tasks: int = 0
-    session_ttl_default: str = "2h"
+    channel_ttl_default: str = "2h"
     task_ttl_default: str = "15m"
     rate: RateBlock = field(default_factory=RateBlock)
     delegation_depth: int = 5
@@ -126,9 +126,9 @@ class Rule:
         access = payload.get("access")
         if isinstance(access, dict):
             access_payload = dict(access)
-            session_types = access_payload.get("session_types")
-            if isinstance(session_types, dict):
-                access_payload["session_types"] = SessionTypeAccess(**session_types)
+            channel_types = access_payload.get("channel_types")
+            if isinstance(channel_types, dict):
+                access_payload["channel_types"] = ChannelTypeAccess(**channel_types)
             payload["access"] = AccessBlock(**access_payload)
         limits = payload.get("limits")
         if isinstance(limits, dict):

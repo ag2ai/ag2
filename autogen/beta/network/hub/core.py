@@ -5,21 +5,21 @@
 """``Hub`` — registry, dispatcher, persistence root.
 
 The hub owns the registry (passports / resumes / rules / skills + name
-and capability indexes), the session and task state machines, the WAL,
+and capability indexes), the channel and task state machines, the WAL,
 the dispatch path, the adapter state cache, the audit log, and the
 internal sweepers (TTL + expectations).
 
-Session machinery:
+Channel machinery:
 * Adapter registry by ``(manifest.type, manifest.version)``.
-* Per-session ``AdapterState`` cache, folded under the per-session
+* Per-channel ``AdapterState`` cache, folded under the per-channel
   WAL lock so ``validate_send`` and ``on_accepted`` are O(1).
-* Invite handshake: ``create_session`` posts ``EV_SESSION_INVITE``,
-  awaits ``EV_SESSION_INVITE_ACK`` from every invitee (timeout
-  ``invite_ack_timeout``), broadcasts ``EV_SESSION_OPENED`` on quorum.
-* TTL: parsed from ``Rule.limits.session_ttl_default`` /
-  ``task_ttl_default`` (or per-session override). The ``_TtlSweeper``
-  walks active sessions and tasks every ``ttl_sweep_interval``;
-  cascades non-terminal tasks under closing sessions to ``EXPIRED``.
+* Invite handshake: ``create_channel`` posts ``EV_CHANNEL_INVITE``,
+  awaits ``EV_CHANNEL_INVITE_ACK`` from every invitee (timeout
+  ``invite_ack_timeout``), broadcasts ``EV_CHANNEL_OPENED`` on quorum.
+* TTL: parsed from ``Rule.limits.channel_ttl_default`` /
+  ``task_ttl_default`` (or per-channel override). The ``_TtlSweeper``
+  walks active channels and tasks every ``ttl_sweep_interval``;
+  cascades non-terminal tasks under closing channels to ``EXPIRED``.
 
 The hub never calls ``Agent.ask``, executes tenant transforms, or
 imports tenant modules — the trust boundary runs through ``HubClient``
@@ -36,19 +36,26 @@ from datetime import datetime, timedelta, timezone
 from autogen.beta.knowledge import KnowledgeStore
 from autogen.beta.task import TERMINAL_TASK_STATES, TaskMetadata, TaskSpec, TaskState
 
-from ..adapters.base import SessionAdapter
+from ..adapters.base import ChannelAdapter
 from ..adapters.consulting import ConsultingAdapter
 from ..adapters.conversation import ConversationAdapter
 from ..adapters.discussion import DiscussionAdapter
 from ..adapters.workflow import WorkflowAdapter
 from ..auth import AuthRegistry
+from ..channel import (
+    ChannelMetadata,
+    ChannelState,
+    Participant,
+    ParticipantRole,
+    is_terminal_channel_state,
+)
 from ..envelope import (
-    EV_SESSION_CLOSED,
-    EV_SESSION_EXPIRED,
-    EV_SESSION_INVITE,
-    EV_SESSION_INVITE_ACK,
-    EV_SESSION_INVITE_REJECT,
-    EV_SESSION_OPENED,
+    EV_CHANNEL_CLOSED,
+    EV_CHANNEL_EXPIRED,
+    EV_CHANNEL_INVITE,
+    EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_INVITE_REJECT,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     Envelope,
 )
@@ -62,13 +69,6 @@ from ..errors import (
 from ..identity import ObservedStat, Passport, Resume
 from ..ids import make_id
 from ..rule import Rule, parse_duration
-from ..session import (
-    Participant,
-    ParticipantRole,
-    SessionMetadata,
-    SessionState,
-    is_terminal_session_state,
-)
 from ..transport.frames import (
     AcceptFrame,
     ErrorFrame,
@@ -85,11 +85,11 @@ from ..views.base import ViewPolicy
 from .audit import (
     AUDIT_KIND_AGENT_REGISTERED,
     AUDIT_KIND_AGENT_UNREGISTERED,
+    AUDIT_KIND_CHANNEL_CLOSED,
+    AUDIT_KIND_CHANNEL_CREATED,
+    AUDIT_KIND_CHANNEL_EXPIRED,
     AUDIT_KIND_RESUME_SET,
     AUDIT_KIND_RULE_SET,
-    AUDIT_KIND_SESSION_CLOSED,
-    AUDIT_KIND_SESSION_CREATED,
-    AUDIT_KIND_SESSION_EXPIRED,
     AUDIT_KIND_SKILL_SET,
     AUDIT_KIND_TASK_TERMINATED,
     RESUME_SOURCE_OBSERVED,
@@ -106,11 +106,11 @@ from .expectations import (
 from .layout import (
     agents_root,
     by_capability_path,
+    channel_metadata_path,
+    channels_root,
     passport_path,
     resume_path,
     rule_path,
-    session_metadata_path,
-    sessions_root,
     skill_path,
     task_metadata_path,
     tasks_root,
@@ -144,8 +144,8 @@ def _match_any(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, p) for p in patterns)
 
 
-def _is_session_protocol_event(event_type: str) -> bool:
-    return event_type.startswith("ag2.session.")
+def _is_channel_protocol_event(event_type: str) -> bool:
+    return event_type.startswith("ag2.channel.")
 
 
 def _is_task_event(event_type: str) -> bool:
@@ -153,7 +153,7 @@ def _is_task_event(event_type: str) -> bool:
 
 
 def _is_protocol_event(event_type: str) -> bool:
-    return _is_session_protocol_event(event_type) or _is_task_event(event_type)
+    return _is_channel_protocol_event(event_type) or _is_task_event(event_type)
 
 
 def _expires_at(now_iso: str, ttl_seconds: int) -> str:
@@ -165,7 +165,7 @@ def _expires_at(now_iso: str, ttl_seconds: int) -> str:
 
 
 class Hub:
-    """In-process registry, dispatcher, session state-machine, persistence root.
+    """In-process registry, dispatcher, channel state-machine, persistence root.
 
     Construct with :meth:`open` for production (hydrates from disk and
     spawns sweepers); the sync ``__init__`` is for tests that need
@@ -194,11 +194,11 @@ class Hub:
         self._audit_log = AuditLog(store)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
-        # session_id → set of (expectation_index, expectation_name, violator_id) fired.
+        # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
         # The position-based index disambiguates same-name expectations
         # (e.g. two ``turn_within`` entries with different ``on_violation``
         # handlers — without the index the first to fire would suppress
-        # the second). Empty violator_id ("") = session-wide violations.
+        # the second). Empty violator_id ("") = channel-wide violations.
         self._fired_violations: dict[str, set[tuple[int, str, str]]] = {}
 
         # Identity caches.
@@ -213,28 +213,28 @@ class Hub:
         self._capability_index: dict[str, set[str]] = {}
 
         # Adapter registry.
-        self._adapters: dict[tuple[str, int], SessionAdapter] = {}
+        self._adapters: dict[tuple[str, int], ChannelAdapter] = {}
 
-        # Session caches.
-        self._sessions: dict[str, SessionMetadata] = {}
-        self._active_sessions: dict[str, SessionMetadata] = {}
+        # Channel caches.
+        self._channels: dict[str, ChannelMetadata] = {}
+        self._active_channels: dict[str, ChannelMetadata] = {}
         self._adapter_states: dict[str, object] = {}
-        self._session_open_waiters: dict[str, asyncio.Future[SessionMetadata]] = {}
+        self._channel_open_waiters: dict[str, asyncio.Future[ChannelMetadata]] = {}
 
         # Task caches (observed; not owned).
         self._tasks: dict[str, TaskMetadata] = {}
-        self._session_tasks: dict[str, set[str]] = {}
+        self._channel_tasks: dict[str, set[str]] = {}
         # task_ids whose terminal observation has been recorded into
         # the owner's ``Resume.observed`` already. Prevents double-counting
         # when the same task receives multiple terminal events (e.g. a
-        # session-cascade EXPIRED followed by an owner-emitted COMPLETED).
+        # channel-cascade EXPIRED followed by an owner-emitted COMPLETED).
         self._observed_task_ids: set[str] = set()
 
         # Per-recipient outstanding-envelope counter for ``InboxBlock.max_pending``
         # enforcement. Incremented on dispatch to that recipient,
         # decremented when the recipient posts any envelope (treating
         # any outbound activity as "I'm processing my inbox"). A
-        # best-effort approximation; per-session ack semantics require
+        # best-effort approximation; per-channel ack semantics require
         # a transport with ack frames.
         self._inbox_pending: dict[str, int] = {}
 
@@ -244,8 +244,8 @@ class Hub:
         self._endpoint_to_agents: dict[str, set[str]] = {}
         self._endpoint_tasks: set[asyncio.Task[None]] = set()
 
-        # Per-session locks for WAL append + dispatch ordering.
-        self._session_locks: dict[str, asyncio.Lock] = {}
+        # Per-channel locks for WAL append + dispatch ordering.
+        self._channel_locks: dict[str, asyncio.Lock] = {}
         self._registration_lock = asyncio.Lock()
 
         self._ttl_sweeper: _IntervalSweeper | None = None
@@ -272,7 +272,7 @@ class Hub:
         built-in adapters (``consulting@v1``, ``conversation@v1``,
         ``discussion@v1``) and the built-in expectation evaluators /
         violation handlers (``acks_within`` / ``reply_within`` /
-        ``max_silence``, ``audit`` / ``notify_session`` /
+        ``max_silence``, ``audit`` / ``notify_channel`` /
         ``auto_close``) so simple test setups don't need explicit
         registration calls.
 
@@ -304,7 +304,7 @@ class Hub:
     async def hydrate(self) -> None:
         """Walk the store; rebuild caches. Idempotent.
 
-        Loads identities, sessions, and tasks from disk. Active session
+        Loads identities, channels, and tasks from disk. Active channel
         WALs are re-folded through their adapter so the
         ``_adapter_states`` cache is rebuilt deterministically.
         """
@@ -314,11 +314,11 @@ class Hub:
         self._skills.clear()
         self._name_to_id.clear()
         self._capability_index.clear()
-        self._sessions.clear()
-        self._active_sessions.clear()
+        self._channels.clear()
+        self._active_channels.clear()
         self._adapter_states.clear()
         self._tasks.clear()
-        self._session_tasks.clear()
+        self._channel_tasks.clear()
 
         # Identities.
         agent_children = await self._store.list(agents_root())
@@ -336,13 +336,13 @@ class Hub:
             for cap in resume.observed:
                 self._capability_index.setdefault(cap, set()).add(agent_id)
 
-        # Sessions — load metadata first, then re-fold WALs.
-        session_children = await self._store.list(sessions_root())
-        for child in session_children:
+        # Channels — load metadata first, then re-fold WALs.
+        channel_children = await self._store.list(channels_root())
+        for child in channel_children:
             if not child.endswith("/"):
                 continue
-            session_id = child.rstrip("/")
-            await self._load_session(session_id)
+            channel_id = child.rstrip("/")
+            await self._load_channel(channel_id)
 
         # Tasks.
         task_children = await self._store.list(tasks_root())
@@ -398,17 +398,17 @@ class Hub:
 
     # ── Adapter registry ────────────────────────────────────────────────────
 
-    def register_adapter(self, adapter: SessionAdapter) -> None:
-        """Register a ``SessionAdapter`` keyed by ``(type, version)``.
+    def register_adapter(self, adapter: ChannelAdapter) -> None:
+        """Register a ``ChannelAdapter`` keyed by ``(type, version)``.
 
         Re-registering at the same key replaces the prior adapter; the
-        old key's existing in-flight sessions keep their snapshotted
+        old key's existing in-flight channels keep their snapshotted
         manifest for life.
         """
         key = (adapter.manifest.type, adapter.manifest.version)
         self._adapters[key] = adapter
 
-    def _adapter_for(self, manifest_type: str, manifest_version: int) -> SessionAdapter:
+    def _adapter_for(self, manifest_type: str, manifest_version: int) -> ChannelAdapter:
         adapter = self._adapters.get((manifest_type, manifest_version))
         if adapter is None:
             raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
@@ -432,19 +432,19 @@ class Hub:
 
     async def _expectation_tick(self) -> None:
         """One sweeper tick: evaluate every expectation on every active
-        session; fire registered handlers on new violations.
+        channel; fire registered handlers on new violations.
 
-        Per-(session, expectation, violator) dedup lives in
+        Per-(channel, expectation, violator) dedup lives in
         ``_fired_violations`` so handlers don't re-fire on every tick.
-        Cleared on terminal session transitions.
+        Cleared on terminal channel transitions.
         """
         if not self._expectation_evaluators or not self._violation_handlers:
             return
         now_iso = self._clock()
         now_seconds = datetime.fromisoformat(now_iso).timestamp()
-        for session_id, metadata in list(self._active_sessions.items()):
-            adapter_state = self._adapter_states.get(session_id)
-            wal = await self.read_wal(session_id)
+        for channel_id, metadata in list(self._active_channels.items()):
+            adapter_state = self._adapter_states.get(channel_id)
+            wal = await self.read_wal(channel_id)
             context = ExpectationContext(
                 metadata=metadata,
                 state=adapter_state,
@@ -463,7 +463,7 @@ class Hub:
                 handler = self._violation_handlers.get(expectation.on_violation)
                 if handler is None:
                     continue
-                fired = self._fired_violations.setdefault(session_id, set())
+                fired = self._fired_violations.setdefault(channel_id, set())
                 violator_keys = violation.violator_ids or [""]
                 for vid in violator_keys:
                     key = (idx, expectation.name, vid)
@@ -474,11 +474,11 @@ class Hub:
                     # leave the violation marked as fired so we don't
                     # spin on a bad handler.
                     with contextlib.suppress(Exception):
-                        await handler.handle(self, session_id, violation)
+                        await handler.handle(self, channel_id, violation)
                     if expectation.on_violation == "auto_close":
-                        # Session is terminal — no further violations on
-                        # this session are meaningful this tick. Other
-                        # sessions still get evaluated.
+                        # Channel is terminal — no further violations on
+                        # this channel are meaningful this tick. Other
+                        # channels still get evaluated.
                         terminal = True
                         break
                 if terminal:
@@ -573,7 +573,7 @@ class Hub:
 
             # Delete on-disk identity files. Without this the next
             # ``hydrate()`` would re-load the unregistered agent from
-            # disk. Sessions and tasks the agent participated in are
+            # disk. Channels and tasks the agent participated in are
             # kept for audit / read; only the per-agent identity files
             # are removed.
             await self._store.delete(passport_path(agent_id))
@@ -792,9 +792,9 @@ class Hub:
         """Return agent_ids matching ``capability`` (claimed or observed)."""
         return sorted(self._capability_index.get(capability, set()))
 
-    # ── Sessions ────────────────────────────────────────────────────────────
+    # ── Channels ────────────────────────────────────────────────────────────
 
-    async def create_session(
+    async def create_channel(
         self,
         *,
         creator_id: str,
@@ -806,19 +806,19 @@ class Hub:
         knobs: dict[str, object] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
-    ) -> SessionMetadata:
-        """Allocate ``session_id``, post invites, await acks, return metadata.
+    ) -> ChannelMetadata:
+        """Allocate ``channel_id``, post invites, await acks, return metadata.
 
-        Posts ``EV_SESSION_INVITE`` to every invitee, awaits an
-        ``EV_SESSION_INVITE_ACK`` from each (the handshake is
+        Posts ``EV_CHANNEL_INVITE`` to every invitee, awaits an
+        ``EV_CHANNEL_INVITE_ACK`` from each (the handshake is
         all-or-nothing — any reject fails creation), transitions to
-        ``ACTIVE``, and broadcasts ``EV_SESSION_OPENED``. Times out
+        ``ACTIVE``, and broadcasts ``EV_CHANNEL_OPENED``. Times out
         after ``invite_ack_timeout`` if the acks do not arrive.
         """
         if creator_id not in self._passports:
             raise NotFoundError(f"creator not registered: {creator_id}")
         if not participants:
-            raise ProtocolError("session requires at least one participant")
+            raise ProtocolError("channel requires at least one participant")
         seen: set[str] = set()
         for p_id in participants:
             if p_id in seen:
@@ -851,22 +851,22 @@ class Hub:
                 invitee_name = self._passports[p_id].name
                 raise AccessDeniedError(f"invitee {invitee_name!r} does not accept inbound from {creator_name!r}")
 
-        # Concurrency cap: count active sessions where this agent is
+        # Concurrency cap: count active channels where this agent is
         # the creator. ``0`` disables the cap. Hub rejects before any
         # WAL or persistence work so the caller sees the limit
         # synchronously and on-disk state stays clean.
-        max_sessions = creator_rule.limits.max_concurrent_sessions
-        if max_sessions > 0:
-            active = sum(1 for m in self._active_sessions.values() if m.creator_id == creator_id)
-            if active >= max_sessions:
+        max_channels = creator_rule.limits.max_concurrent_channels
+        if max_channels > 0:
+            active = sum(1 for m in self._active_channels.values() if m.creator_id == creator_id)
+            if active >= max_channels:
                 raise AccessDeniedError(
-                    f"creator {creator_id!r} exceeded max_concurrent_sessions ({active} >= {max_sessions})"
+                    f"creator {creator_id!r} exceeded max_concurrent_channels ({active} >= {max_channels})"
                 )
 
-        session_id = make_id()
+        channel_id = make_id()
         now = self._clock()
 
-        ttl_value: str | int = ttl if ttl is not None else creator_rule.limits.session_ttl_default
+        ttl_value: str | int = ttl if ttl is not None else creator_rule.limits.channel_ttl_default
         ttl_seconds = parse_duration(ttl_value)
         expires_at = _expires_at(now, ttl_seconds) or None
 
@@ -886,12 +886,12 @@ class Hub:
 
         invitees = [p_id for p_id in participants if p_id != creator_id]
 
-        metadata = SessionMetadata(
-            session_id=session_id,
+        metadata = ChannelMetadata(
+            channel_id=channel_id,
             manifest=adapter.manifest,
             creator_id=creator_id,
             participants=metadata_participants,
-            state=SessionState.PENDING,
+            state=ChannelState.PENDING,
             created_at=now,
             expires_at=expires_at,
             knobs=dict(knobs) if knobs else {},
@@ -904,15 +904,15 @@ class Hub:
 
         # Activate caches before persistence so the post_envelope path
         # finds the metadata when the invite is dispatched.
-        self._sessions[session_id] = metadata
-        self._active_sessions[session_id] = metadata
-        self._adapter_states[session_id] = adapter.initial_state(metadata)
+        self._channels[channel_id] = metadata
+        self._active_channels[channel_id] = metadata
+        self._adapter_states[channel_id] = adapter.initial_state(metadata)
 
-        await self._persist_session_metadata(metadata)
+        await self._persist_channel_metadata(metadata)
         await self._audit_log.append({
             "at": now,
-            "kind": AUDIT_KIND_SESSION_CREATED,
-            "session_id": session_id,
+            "kind": AUDIT_KIND_CHANNEL_CREATED,
+            "channel_id": channel_id,
             "manifest_type": manifest_type,
             "manifest_version": manifest_version,
             "creator_id": creator_id,
@@ -920,16 +920,16 @@ class Hub:
         })
 
         if not invitees:
-            # Self-only session — already complete; transition to ACTIVE.
-            await self._activate_session(session_id)
+            # Self-only channel — already complete; transition to ACTIVE.
+            await self._activate_channel(channel_id)
             return metadata
 
-        waiter: asyncio.Future[SessionMetadata] = asyncio.get_event_loop().create_future()
-        self._session_open_waiters[session_id] = waiter
+        waiter: asyncio.Future[ChannelMetadata] = asyncio.get_event_loop().create_future()
+        self._channel_open_waiters[channel_id] = waiter
 
         # Post invites — each goes to one invitee via post_envelope.
         invite_data: dict[str, object] = {
-            "session_id": session_id,
+            "channel_id": channel_id,
             "manifest_type": manifest_type,
             "manifest_version": manifest_version,
             "creator_id": creator_id,
@@ -939,39 +939,39 @@ class Hub:
         try:
             for invitee_id in invitees:
                 envelope = Envelope(
-                    session_id=session_id,
+                    channel_id=channel_id,
                     sender_id=creator_id,
                     audience=[invitee_id],
-                    event_type=EV_SESSION_INVITE,
+                    event_type=EV_CHANNEL_INVITE,
                     event_data=invite_data,
                 )
                 await self.post_envelope(envelope)
         except Exception:
-            self._session_open_waiters.pop(session_id, None)
-            await self._transition_session(session_id, SessionState.CLOSED, "invite_failed")
+            self._channel_open_waiters.pop(channel_id, None)
+            await self._transition_channel(channel_id, ChannelState.CLOSED, "invite_failed")
             raise
 
         try:
             return await asyncio.wait_for(waiter, timeout=self._invite_ack_timeout)
         except asyncio.TimeoutError as exc:
-            await self._transition_session(session_id, SessionState.CLOSED, "invite_timeout")
-            raise ProtocolError(f"session {session_id!r} ack timeout") from exc
+            await self._transition_channel(channel_id, ChannelState.CLOSED, "invite_timeout")
+            raise ProtocolError(f"channel {channel_id!r} ack timeout") from exc
         finally:
-            self._session_open_waiters.pop(session_id, None)
+            self._channel_open_waiters.pop(channel_id, None)
 
-    async def close_session(self, session_id: str, *, reason: str = "") -> SessionMetadata:
-        await self._transition_session(session_id, SessionState.CLOSED, reason or "explicit_close")
-        return self._sessions[session_id]
+    async def close_channel(self, channel_id: str, *, reason: str = "") -> ChannelMetadata:
+        await self._transition_channel(channel_id, ChannelState.CLOSED, reason or "explicit_close")
+        return self._channels[channel_id]
 
-    async def get_session(self, session_id: str) -> SessionMetadata:
-        metadata = self._sessions.get(session_id)
+    async def get_channel(self, channel_id: str) -> ChannelMetadata:
+        metadata = self._channels.get(channel_id)
         if metadata is None:
-            raise NotFoundError(f"session not found: {session_id}")
+            raise NotFoundError(f"channel not found: {channel_id}")
         return metadata
 
     def can_send(
         self,
-        session_id: str,
+        channel_id: str,
         sender_id: str,
         *,
         event_type: str | None = None,
@@ -983,15 +983,15 @@ class Hub:
         default notify handler doesn't need to reach into private hub
         state to figure out whether it's the agent's turn.
         """
-        metadata = self._sessions.get(session_id)
+        metadata = self._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return False
-        state = self._adapter_states.get(session_id)
+        state = self._adapter_states.get(channel_id)
         if state is None:
             return False
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
         probe = Envelope(
-            session_id=session_id,
+            channel_id=channel_id,
             sender_id=sender_id,
             audience=None,
             event_type=event_type or EV_TEXT,
@@ -1005,28 +1005,49 @@ class Hub:
 
     def default_view_policy(
         self,
-        session_id: str,
+        channel_id: str,
         participant_id: str,
     ) -> "ViewPolicy":
         """Return the adapter-declared default view policy for this
-        participant on this session. Wraps
+        participant on this channel. Wraps
         ``adapter.default_view_policy`` so callers don't need adapter
         registry access."""
-        metadata = self._sessions.get(session_id)
+        metadata = self._channels.get(channel_id)
         if metadata is None:
-            raise NotFoundError(f"session not found: {session_id}")
+            raise NotFoundError(f"channel not found: {channel_id}")
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
         return adapter.default_view_policy(metadata, participant_id)
 
-    async def list_sessions(
+    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+        """Return the adapter resolved from ``channel_id``'s manifest.
+
+        Public surface so callers (notably the default notify handler)
+        don't need to reach into ``_adapter_for(type, version)`` or the
+        ``_channels`` map directly.
+        """
+        metadata = self._channels.get(channel_id)
+        if metadata is None:
+            raise NotFoundError(f"channel not found: {channel_id}")
+        return self._adapter_for(metadata.manifest.type, metadata.manifest.version)
+
+    def adapter_state(self, channel_id: str) -> object | None:
+        """Return ``channel_id``'s current folded adapter state, or
+        ``None`` if the channel has none cached.
+
+        Public surface so callers don't need to reach into
+        ``_adapter_states``.
+        """
+        return self._adapter_states.get(channel_id)
+
+    async def list_channels(
         self,
         *,
         agent_id: str | None = None,
-        state: SessionState | None = None,
+        state: ChannelState | None = None,
         limit: int = 50,
-    ) -> list[SessionMetadata]:
-        results: list[SessionMetadata] = []
-        for metadata in self._sessions.values():
+    ) -> list[ChannelMetadata]:
+        results: list[ChannelMetadata] = []
+        for metadata in self._channels.values():
             if state is not None and metadata.state != state:
                 continue
             if agent_id is not None and agent_id not in metadata.participant_ids():
@@ -1036,12 +1057,12 @@ class Hub:
 
     async def read_wal(
         self,
-        session_id: str,
+        channel_id: str,
         *,
         since: int = 0,
         until: int | None = None,
     ) -> list[Envelope]:
-        body = await self._store.read(wal_path(session_id))
+        body = await self._store.read(wal_path(channel_id))
         if not body:
             return []
         envelopes: list[Envelope] = []
@@ -1070,7 +1091,7 @@ class Hub:
             existing.state = metadata.state
             existing.started_at = metadata.started_at or existing.started_at
             existing.expires_at = metadata.expires_at or existing.expires_at
-            existing.session_id = metadata.session_id or existing.session_id
+            existing.channel_id = metadata.channel_id or existing.channel_id
             existing.progress.update(metadata.progress)
             await self._persist_task_metadata(existing)
             return
@@ -1089,8 +1110,8 @@ class Hub:
                 )
 
         self._tasks[metadata.task_id] = metadata
-        if metadata.session_id:
-            self._session_tasks.setdefault(metadata.session_id, set()).add(metadata.task_id)
+        if metadata.channel_id:
+            self._channel_tasks.setdefault(metadata.channel_id, set()).add(metadata.task_id)
         await self._persist_task_metadata(metadata)
 
     async def get_task(self, task_id: str) -> TaskMetadata:
@@ -1135,7 +1156,7 @@ class Hub:
         self,
         *,
         agent_id: str | None = None,
-        session_id: str | None = None,
+        channel_id: str | None = None,
         state: TaskState | None = None,
         limit: int = 50,
     ) -> list[TaskMetadata]:
@@ -1143,7 +1164,7 @@ class Hub:
         for metadata in self._tasks.values():
             if agent_id is not None and metadata.owner_id != agent_id:
                 continue
-            if session_id is not None and metadata.session_id != session_id:
+            if channel_id is not None and metadata.channel_id != channel_id:
                 continue
             if state is not None and metadata.state != state:
                 continue
@@ -1153,21 +1174,21 @@ class Hub:
     # ── Sweeper hook ────────────────────────────────────────────────────────
 
     async def expire_due(self) -> None:
-        """Walk active sessions and tasks; expire ones past their TTL.
+        """Walk active channels and tasks; expire ones past their TTL.
 
-        Cascades non-terminal tasks under closing sessions (via
-        :meth:`_transition_session`).
+        Cascades non-terminal tasks under closing channels (via
+        :meth:`_transition_channel`).
         """
         now = self._clock()
 
-        expired_sessions: list[str] = []
-        for session_id, metadata in list(self._active_sessions.items()):
+        expired_channels: list[str] = []
+        for channel_id, metadata in list(self._active_channels.items()):
             if metadata.expires_at and metadata.expires_at <= now:
-                expired_sessions.append(session_id)
-        for session_id in expired_sessions:
-            await self._transition_session(session_id, SessionState.EXPIRED, "ttl_expired")
+                expired_channels.append(channel_id)
+        for channel_id in expired_channels:
+            await self._transition_channel(channel_id, ChannelState.EXPIRED, "ttl_expired")
 
-        # Expire standalone tasks (those not under an expiring session).
+        # Expire standalone tasks (those not under an expiring channel).
         expired_tasks: list[str] = []
         for task_id, metadata in list(self._tasks.items()):
             if metadata.state in TERMINAL_TASK_STATES:
@@ -1182,10 +1203,10 @@ class Hub:
     async def post_envelope(self, envelope: Envelope) -> str:
         """Validate sender + adapter + WAL append + dispatch.
 
-        Per-session lock makes ``validate_send`` / ``fold`` /
+        Per-channel lock makes ``validate_send`` / ``fold`` /
         ``on_accepted`` see a consistent state. Dispatch and post-accept
         transitions happen outside the lock so the broadcast of
-        ``EV_SESSION_CLOSED`` does not deadlock on the same lock.
+        ``EV_CHANNEL_CLOSED`` does not deadlock on the same lock.
         """
         sender = self._passports.get(envelope.sender_id)
         if sender is None:
@@ -1194,9 +1215,9 @@ class Hub:
         sender_rule = self._rules.get(envelope.sender_id, Rule())
 
         # Outbound access check. Self-routing is always allowed —
-        # protocol broadcasts (``EV_SESSION_OPENED`` / ``EV_SESSION_CLOSED``)
+        # protocol broadcasts (``EV_CHANNEL_OPENED`` / ``EV_CHANNEL_CLOSED``)
         # include the creator in their own audience so the creator's
-        # ``Session`` handle receives the lifecycle notification, and the
+        # ``Channel`` handle receives the lifecycle notification, and the
         # sender's ``outbound_to`` should never block their own
         # state-sync envelopes.
         if envelope.audience is not None:
@@ -1218,31 +1239,31 @@ class Hub:
                 f"sender {sender.name!r} exceeded delegation_depth ({envelope.depth} > {depth_cap})"
             )
 
-        metadata = self._sessions.get(envelope.session_id)
+        metadata = self._channels.get(envelope.channel_id)
         if metadata is None:
-            raise NotFoundError(f"session not found: {envelope.session_id}")
+            raise NotFoundError(f"channel not found: {envelope.channel_id}")
         if metadata.is_terminal():
-            raise ProtocolError(f"session {envelope.session_id!r} is {metadata.state.value}")
-        if not _is_protocol_event(envelope.event_type) and metadata.state != SessionState.ACTIVE:
-            raise ProtocolError(f"session {envelope.session_id!r} not active (state={metadata.state.value})")
+            raise ProtocolError(f"channel {envelope.channel_id!r} is {metadata.state.value}")
+        if not _is_protocol_event(envelope.event_type) and metadata.state != ChannelState.ACTIVE:
+            raise ProtocolError(f"channel {envelope.channel_id!r} not active (state={metadata.state.value})")
 
-        # Adapter must be registered to dispatch on this session.
-        # Distinct from create_session's NotFoundError (where the user
-        # is asking for an unknown manifest at session-creation time):
-        # here the session exists but its manifest's adapter is no
+        # Adapter must be registered to dispatch on this channel.
+        # Distinct from create_channel's NotFoundError (where the user
+        # is asking for an unknown manifest at channel-creation time):
+        # here the channel exists but its manifest's adapter is no
         # longer loaded — typically a hydrate where the manifest type
         # wasn't re-registered before ``hub.start()``. Surface as a
-        # ProtocolError so callers can distinguish "session is down"
-        # from "session never existed."
+        # ProtocolError so callers can distinguish "channel is down"
+        # from "channel never existed."
         if (metadata.manifest.type, metadata.manifest.version) not in self._adapters:
             raise ProtocolError(
-                f"session {envelope.session_id!r} has no registered adapter "
+                f"channel {envelope.channel_id!r} has no registered adapter "
                 f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version})"
             )
 
         # Inbox capacity check (substantive events only — protocol
         # invites / acks / opens / closes must always reach
-        # participants for the session machine to advance).
+        # participants for the channel machine to advance).
         if not _is_protocol_event(envelope.event_type):
             if envelope.audience is not None:
                 inbox_audience: list[str] = list(envelope.audience)
@@ -1263,15 +1284,15 @@ class Hub:
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
         # Critical section: validate, append, fold, on_accepted under lock.
-        async with self._wal_lock(envelope.session_id):
-            state = self._adapter_states.get(envelope.session_id)
+        async with self._wal_lock(envelope.channel_id):
+            state = self._adapter_states.get(envelope.channel_id)
             if state is None:
-                # Session metadata exists but its adapter state was
+                # Channel metadata exists but its adapter state was
                 # never folded — typically a hydrate where the manifest's
                 # adapter was not registered. Surface as a protocol
                 # error rather than a bare KeyError.
                 raise ProtocolError(
-                    f"session {envelope.session_id!r} has no adapter state "
+                    f"channel {envelope.channel_id!r} has no adapter state "
                     f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version} "
                     "may not be registered)"
                 )
@@ -1282,7 +1303,7 @@ class Hub:
 
             await self._wal_append(envelope)
             new_state = adapter.fold(envelope, state)
-            self._adapter_states[envelope.session_id] = new_state
+            self._adapter_states[envelope.channel_id] = new_state
             result = adapter.on_accepted(metadata, envelope, new_state)
 
         # Sender showed they're processing their inbox — decrement
@@ -1295,18 +1316,18 @@ class Hub:
 
         # Outside lock: dispatch + post-accept handling.
         # Acks/rejects are absorbed by the hub — they aren't dispatched.
-        if envelope.event_type == EV_SESSION_INVITE_ACK:
+        if envelope.event_type == EV_CHANNEL_INVITE_ACK:
             await self._handle_invite_ack(envelope, metadata)
             return envelope.envelope_id
-        if envelope.event_type == EV_SESSION_INVITE_REJECT:
+        if envelope.event_type == EV_CHANNEL_INVITE_REJECT:
             await self._handle_invite_reject(envelope, metadata)
             return envelope.envelope_id
 
         await self._dispatch(envelope, metadata)
 
         if result.next_state is not None:
-            await self._transition_session(
-                envelope.session_id,
+            await self._transition_channel(
+                envelope.channel_id,
                 result.next_state,
                 result.auto_close_reason,
             )
@@ -1334,17 +1355,17 @@ class Hub:
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
-    def _wal_lock(self, session_id: str) -> asyncio.Lock:
-        lock = self._session_locks.get(session_id)
+    def _wal_lock(self, channel_id: str) -> asyncio.Lock:
+        lock = self._channel_locks.get(channel_id)
         if lock is None:
             lock = asyncio.Lock()
-            self._session_locks[session_id] = lock
+            self._channel_locks[channel_id] = lock
         return lock
 
     async def _wal_append(self, envelope: Envelope) -> None:
-        await self._store.append(wal_path(envelope.session_id), envelope.to_json() + "\n")
+        await self._store.append(wal_path(envelope.channel_id), envelope.to_json() + "\n")
 
-    async def _dispatch(self, envelope: Envelope, metadata: SessionMetadata) -> None:
+    async def _dispatch(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
         """Send NotifyFrames to the audience (or all participants if broadcast)."""
         if envelope.audience is None:
             recipients = [p.agent_id for p in metadata.participants if p.agent_id != envelope.sender_id]
@@ -1402,104 +1423,104 @@ class Hub:
         elif isinstance(frame, PingFrame):
             await endpoint.send_frame(PongFrame())
 
-    # ── Session transition helpers ──────────────────────────────────────────
+    # ── Channel transition helpers ──────────────────────────────────────────
 
-    async def _handle_invite_ack(self, envelope: Envelope, metadata: SessionMetadata) -> None:
-        if metadata.state != SessionState.PENDING:
+    async def _handle_invite_ack(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
+        if metadata.state != ChannelState.PENDING:
             return
         if envelope.sender_id in metadata.pending_acks:
             metadata.pending_acks.remove(envelope.sender_id)
-            await self._persist_session_metadata(metadata)
+            await self._persist_channel_metadata(metadata)
         if not metadata.pending_acks and not metadata.rejected_by:
-            await self._activate_session(metadata.session_id)
+            await self._activate_channel(metadata.channel_id)
 
-    async def _handle_invite_reject(self, envelope: Envelope, metadata: SessionMetadata) -> None:
-        if metadata.state != SessionState.PENDING:
+    async def _handle_invite_reject(self, envelope: Envelope, metadata: ChannelMetadata) -> None:
+        if metadata.state != ChannelState.PENDING:
             return
         if envelope.sender_id in metadata.pending_acks:
             metadata.pending_acks.remove(envelope.sender_id)
         if envelope.sender_id not in metadata.rejected_by:
             metadata.rejected_by.append(envelope.sender_id)
-        await self._persist_session_metadata(metadata)
-        # All-or-nothing handshake: any reject fails the session.
-        await self._transition_session(metadata.session_id, SessionState.CLOSED, "invite_rejected")
-        waiter = self._session_open_waiters.get(metadata.session_id)
+        await self._persist_channel_metadata(metadata)
+        # All-or-nothing handshake: any reject fails the channel.
+        await self._transition_channel(metadata.channel_id, ChannelState.CLOSED, "invite_rejected")
+        waiter = self._channel_open_waiters.get(metadata.channel_id)
         if waiter is not None and not waiter.done():
-            waiter.set_exception(ProtocolError(f"session rejected by {envelope.sender_id}"))
+            waiter.set_exception(ProtocolError(f"channel rejected by {envelope.sender_id}"))
 
-    async def _activate_session(self, session_id: str) -> None:
-        metadata = self._sessions.get(session_id)
-        if metadata is None or metadata.state != SessionState.PENDING:
+    async def _activate_channel(self, channel_id: str) -> None:
+        metadata = self._channels.get(channel_id)
+        if metadata is None or metadata.state != ChannelState.PENDING:
             return
-        metadata.state = SessionState.ACTIVE
-        await self._persist_session_metadata(metadata)
+        metadata.state = ChannelState.ACTIVE
+        await self._persist_channel_metadata(metadata)
         opened_envelope = Envelope(
-            session_id=session_id,
+            channel_id=channel_id,
             sender_id=metadata.creator_id,
             audience=[p.agent_id for p in metadata.participants],
-            event_type=EV_SESSION_OPENED,
-            event_data={"session_id": session_id},
+            event_type=EV_CHANNEL_OPENED,
+            event_data={"channel_id": channel_id},
         )
         await self.post_envelope(opened_envelope)
-        waiter = self._session_open_waiters.get(session_id)
+        waiter = self._channel_open_waiters.get(channel_id)
         if waiter is not None and not waiter.done():
             waiter.set_result(metadata)
 
-    async def _transition_session(
+    async def _transition_channel(
         self,
-        session_id: str,
-        new_state: SessionState,
+        channel_id: str,
+        new_state: ChannelState,
         reason: str,
     ) -> None:
-        metadata = self._sessions.get(session_id)
+        metadata = self._channels.get(channel_id)
         if metadata is None or metadata.is_terminal():
             return
 
-        # Cascade non-terminal tasks before flipping session state so
-        # observers see ``ag2.task.expired`` before ``ag2.session.closed``.
-        if is_terminal_session_state(new_state):
-            for task_id in list(self._session_tasks.get(session_id, set())):
+        # Cascade non-terminal tasks before flipping channel state so
+        # observers see ``ag2.task.expired`` before ``ag2.channel.closed``.
+        if is_terminal_channel_state(new_state):
+            for task_id in list(self._channel_tasks.get(channel_id, set())):
                 task_meta = self._tasks.get(task_id)
                 if task_meta is not None and task_meta.state not in TERMINAL_TASK_STATES:
-                    await self._transition_task(task_id, TaskState.EXPIRED, "session_closed")
+                    await self._transition_task(task_id, TaskState.EXPIRED, "channel_closed")
 
-        was_pending = metadata.state == SessionState.PENDING
+        was_pending = metadata.state == ChannelState.PENDING
         metadata.state = new_state
         metadata.close_reason = reason
-        if is_terminal_session_state(new_state):
+        if is_terminal_channel_state(new_state):
             metadata.closed_at = self._clock()
-            self._active_sessions.pop(session_id, None)
-            self._fired_violations.pop(session_id, None)
-            # Release any pending create_session waiter so callers
+            self._active_channels.pop(channel_id, None)
+            self._fired_violations.pop(channel_id, None)
+            # Release any pending create_channel waiter so callers
             # don't hang until invite_ack_timeout when the sweeper /
-            # auto_close handler closes a PENDING session out-of-band.
+            # auto_close handler closes a PENDING channel out-of-band.
             if was_pending:
-                waiter = self._session_open_waiters.get(session_id)
+                waiter = self._channel_open_waiters.get(channel_id)
                 if waiter is not None and not waiter.done():
-                    waiter.set_exception(ProtocolError(f"session {session_id!r} closed during handshake: {reason}"))
+                    waiter.set_exception(ProtocolError(f"channel {channel_id!r} closed during handshake: {reason}"))
 
-        await self._persist_session_metadata(metadata)
+        await self._persist_channel_metadata(metadata)
 
-        if is_terminal_session_state(new_state):
-            event_type = EV_SESSION_EXPIRED if new_state == SessionState.EXPIRED else EV_SESSION_CLOSED
+        if is_terminal_channel_state(new_state):
+            event_type = EV_CHANNEL_EXPIRED if new_state == ChannelState.EXPIRED else EV_CHANNEL_CLOSED
             close_envelope = Envelope(
-                session_id=session_id,
+                channel_id=channel_id,
                 sender_id=metadata.creator_id,
                 audience=[p.agent_id for p in metadata.participants],
                 event_type=event_type,
-                event_data={"reason": reason, "session_id": session_id},
+                event_data={"reason": reason, "channel_id": channel_id},
             )
             close_envelope.envelope_id = make_id()
             close_envelope.created_at = self._clock()
-            async with self._wal_lock(session_id):
+            async with self._wal_lock(channel_id):
                 await self._wal_append(close_envelope)
             await self._dispatch(close_envelope, metadata)
             await self._audit_log.append({
                 "at": metadata.closed_at,
                 "kind": (
-                    AUDIT_KIND_SESSION_EXPIRED if new_state == SessionState.EXPIRED else AUDIT_KIND_SESSION_CLOSED
+                    AUDIT_KIND_CHANNEL_EXPIRED if new_state == ChannelState.EXPIRED else AUDIT_KIND_CHANNEL_CLOSED
                 ),
-                "session_id": session_id,
+                "channel_id": channel_id,
                 "reason": reason,
             })
 
@@ -1524,7 +1545,7 @@ class Hub:
                 "kind": AUDIT_KIND_TASK_TERMINATED,
                 "task_id": task_id,
                 "owner_id": metadata.owner_id,
-                "session_id": metadata.session_id,
+                "channel_id": metadata.channel_id,
                 "outcome": new_state.value,
                 "capability": metadata.spec.capability,
                 "reason": reason,
@@ -1550,9 +1571,9 @@ class Hub:
         snapshot = {cap: sorted(ids) for cap, ids in self._capability_index.items()}
         await self._store.write(by_capability_path(), json.dumps(snapshot, sort_keys=True))
 
-    async def _persist_session_metadata(self, metadata: SessionMetadata) -> None:
+    async def _persist_channel_metadata(self, metadata: ChannelMetadata) -> None:
         await self._store.write(
-            session_metadata_path(metadata.session_id),
+            channel_metadata_path(metadata.channel_id),
             json.dumps(metadata.to_dict()),
         )
 
@@ -1580,17 +1601,17 @@ class Hub:
         else:
             self._rules[agent_id] = Rule()
 
-    async def _load_session(self, session_id: str) -> None:
-        metadata_data = await self._store.read(session_metadata_path(session_id))
+    async def _load_channel(self, channel_id: str) -> None:
+        metadata_data = await self._store.read(channel_metadata_path(channel_id))
         if metadata_data is None:
             return
-        metadata = SessionMetadata.from_dict(json.loads(metadata_data))
-        self._sessions[session_id] = metadata
+        metadata = ChannelMetadata.from_dict(json.loads(metadata_data))
+        self._channels[channel_id] = metadata
 
         adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
         if adapter is None:
-            # No adapter for this session's manifest. We keep the
-            # metadata in ``_sessions`` (so observers can read its
+            # No adapter for this channel's manifest. We keep the
+            # metadata in ``_channels`` (so observers can read its
             # final-or-current shape) but do **not** mark it active —
             # ``post_envelope`` would otherwise hit a missing
             # ``_adapter_states`` entry. Re-register the adapter and
@@ -1598,13 +1619,13 @@ class Hub:
             return
 
         if not metadata.is_terminal():
-            self._active_sessions[session_id] = metadata
+            self._active_channels[channel_id] = metadata
 
         state = adapter.initial_state(metadata)
-        wal = await self.read_wal(session_id)
+        wal = await self.read_wal(channel_id)
         for envelope in wal:
             state = adapter.fold(envelope, state)
-        self._adapter_states[session_id] = state
+        self._adapter_states[channel_id] = state
 
     async def _load_task(self, task_id: str) -> None:
         metadata_data = await self._store.read(task_metadata_path(task_id))
@@ -1612,8 +1633,8 @@ class Hub:
             return
         metadata = _task_metadata_from_dict(json.loads(metadata_data))
         self._tasks[task_id] = metadata
-        if metadata.session_id:
-            self._session_tasks.setdefault(metadata.session_id, set()).add(task_id)
+        if metadata.channel_id:
+            self._channel_tasks.setdefault(metadata.channel_id, set()).add(task_id)
 
 
 def _task_metadata_to_dict(metadata: TaskMetadata) -> dict[str, object]:
@@ -1640,7 +1661,7 @@ def _task_metadata_to_dict(metadata: TaskMetadata) -> dict[str, object]:
         "progress": dict(metadata.progress),
         "result": metadata.result,
         "error": metadata.error,
-        "session_id": metadata.session_id,
+        "channel_id": metadata.channel_id,
     }
 
 
@@ -1671,5 +1692,5 @@ def _task_metadata_from_dict(data: dict[str, object]) -> TaskMetadata:
         progress=dict(data.get("progress") or {}),  # type: ignore[arg-type]
         result=data.get("result"),
         error=str(data.get("error", "")),
-        session_id=data.get("session_id"),  # type: ignore[arg-type]
+        channel_id=data.get("channel_id"),  # type: ignore[arg-type]
     )

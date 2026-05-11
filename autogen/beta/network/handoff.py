@@ -13,7 +13,7 @@ intent.
 ``target`` is the participant's ``Passport.name`` — *not* a raw
 ``agent_id``. The framework resolves name → id at packet-finalize
 using the hub's name directory, so tool code stays decoupled from
-runtime IDs and portable across sessions.
+runtime IDs and portable across channels.
 """
 
 from dataclasses import dataclass

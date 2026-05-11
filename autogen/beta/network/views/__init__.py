@@ -11,7 +11,7 @@ is what view policies produce.
 Built-ins: ``FullTranscript`` (verbatim) and ``WindowedSummary``
 (bounded tail + head summary, composes with framework-core
 ``compact.py``). Envelope rendering is supplied per-call by the
-session's adapter via ``SessionAdapter.render_envelope``.
+channel's adapter via ``ChannelAdapter.render_envelope``.
 """
 
 from .base import EnvelopeRenderer, ViewPolicy

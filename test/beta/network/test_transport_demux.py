@@ -8,7 +8,7 @@ cleanup.
 
 The hub stamps ``recipient_id`` on every dispatched ``NotifyFrame``
 so the receiving HubClient can demux directly to the right
-AgentClient without re-walking session participants. Tests here
+AgentClient without re-walking channel participants. Tests here
 validate that demux against the real frame path (LocalLink) for the
 scenarios that are otherwise easy to get subtly wrong.
 """
@@ -100,10 +100,10 @@ async def test_targeted_envelope_delivered_to_only_named_recipient() -> None:
     carol.on_envelope(cap_carol)
 
     # Alice opens a 3-way discussion with bob+carol.
-    session = await alice.open(type="discussion", target=["bob", "carol"])
+    channel = await alice.open(type="discussion", target=["bob", "carol"])
 
     # Targeted to bob only.
-    await session.send("private to bob", audience=[bob.agent_id])
+    await channel.send("private to bob", audience=[bob.agent_id])
     await asyncio.sleep(0.05)
 
     bob_text = [e for e in received_bob if e.event_type == EV_TEXT and e.event_data.get("text") == "private to bob"]
@@ -154,9 +154,9 @@ async def test_broadcast_envelope_delivered_to_all_non_sender() -> None:
     carol.on_envelope(cap_c)
     alice.on_envelope(cap_a)
 
-    session = await alice.open(type="discussion", target=["bob", "carol"])
+    channel = await alice.open(type="discussion", target=["bob", "carol"])
 
-    await session.send("hello everyone", audience=None)
+    await channel.send("hello everyone", audience=None)
     await asyncio.sleep(0.05)
 
     # Both non-sender participants see it; alice (sender) does not.
@@ -222,8 +222,8 @@ async def test_two_hub_clients_share_one_hub_isolated_endpoints() -> None:
 
     bob.on_envelope(cap_b)
 
-    session = await alice.open(type="conversation", target="bob")
-    await session.send("cross-tenant", audience=[bob.agent_id])
+    channel = await alice.open(type="conversation", target="bob")
+    await channel.send("cross-tenant", audience=[bob.agent_id])
     await asyncio.sleep(0.05)
 
     assert any(e.event_data.get("text") == "cross-tenant" for e in received_bob)

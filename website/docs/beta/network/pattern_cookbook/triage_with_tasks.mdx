@@ -23,11 +23,11 @@ index.
   `#!python TransitionGraph.sequence` — a fixed pipeline of triage →
   researcher → writer → reviewer. Each specialist sees the full
   prior conversation via the windowed view.
-* **`#!python knobs["context_vars"]` seeds state at session creation.**
-  Any tool / middleware can read it via `#!python SessionStateInject`;
+* **`#!python knobs["context_vars"]` seeds state at channel creation.**
+  Any tool / middleware can read it via `#!python ChannelStateInject`;
   transitions can route on it via `#!python ContextEquals`. The fixed
   sequence here doesn't need to read it for routing — it's there to
-  demonstrate that session-scoped state survives the entire run.
+  demonstrate that channel-scoped state survives the entire run.
 
 ### Routing Mechanics
 
@@ -77,9 +77,9 @@ sequenceDiagram
 
 | Classic | Beta |
 |---|---|
-| `#!python ReplyResult(context_variables={"current_task_type": ..., "pending_tasks": [...]})` | `#!python set_context(session, key, value)` per field (dynamic variant) |
+| `#!python ReplyResult(context_variables={"current_task_type": ..., "pending_tasks": [...]})` | `#!python set_context(channel, key, value)` per field (dynamic variant) |
 | `#!python OnContextCondition` per task type | `#!python ContextEquals("current_task_type", <type>)` per branch (dynamic variant) |
-| Initial `#!python ContextVariables(data=...)` passed to the pattern | `#!python knobs["context_vars"]` on `#!python session.open(...)` |
+| Initial `#!python ContextVariables(data=...)` passed to the pattern | `#!python knobs["context_vars"]` on `#!python channel.open(...)` |
 
 ### Dynamic queue variant (production pattern)
 
@@ -89,14 +89,14 @@ tasks in context. Its tool either pops the next task type into
 is empty — both via `#!python set_context`:
 
 ```python linenums="1"
-async def advance_task(session: SessionInject, state: SessionStateInject) -> str:
+async def advance_task(channel: ChannelInject, state: ChannelStateInject) -> str:
     pending = list(state.context_vars.get("pending_tasks", []))
     if not pending:
-        await set_context(session, "all_done", True)
+        await set_context(channel, "all_done", True)
         return "all tasks complete"
     next_type = pending.pop(0)
-    await set_context(session, "current_task_type", next_type)
-    await set_context(session, "pending_tasks", pending)
+    await set_context(channel, "current_task_type", next_type)
+    await set_context(channel, "pending_tasks", pending)
     return f"now working on: {next_type}"
 ```
 
@@ -135,7 +135,7 @@ A triage agent receives the user's request and produces a typed
 task plan (research → writing → review). The graph then executes
 the plan as a fixed sequence, each specialist seeing the prior
 conversation. The plan is also stamped into ``context_vars`` at
-session creation so it's readable across the run.
+channel creation so it's readable across the run.
 """
 
 import asyncio
@@ -147,7 +147,7 @@ from autogen.beta.config import AnthropicConfig
 from autogen.beta.knowledge import MemoryKnowledgeStore
 from autogen.beta.network import (
     EV_PACKET,
-    EV_SESSION_CLOSED,
+    EV_CHANNEL_CLOSED,
     EV_TEXT,
     WORKFLOW_TYPE,
     Hub,
@@ -235,12 +235,12 @@ async def main() -> None:
         reviewer.agent_id,
     ])
 
-    # context_vars seeds the task plan into session state at creation.
-    # Any tool / middleware can read it via SessionStateInject;
+    # context_vars seeds the task plan into channel state at creation.
+    # Any tool / middleware can read it via ChannelStateInject;
     # transitions can route on it via ContextEquals. The fixed
     # sequence here doesn't need to read it for routing — it's there
-    # to demonstrate that session-scoped state survives the run.
-    session = await intake.open(
+    # to demonstrate that channel-scoped state survives the run.
+    channel = await intake.open(
         type=WORKFLOW_TYPE,
         target=[triage.agent_id, researcher.agent_id, writer.agent_id, reviewer.agent_id],
         knobs={
@@ -252,7 +252,7 @@ async def main() -> None:
             },
         },
     )
-    print(f"session: {session.session_id}\n")
+    print(f"channel: {channel.channel_id}\n")
 
     name_by_id = {
         intake.agent_id: "intake",
@@ -262,22 +262,22 @@ async def main() -> None:
         reviewer.agent_id: "reviewer",
     }
 
-    initial_state = hub_obj._adapter_states[session.session_id]
+    initial_state = hub_obj._adapter_states[channel.channel_id]
     print(f"initial context_vars: {initial_state.context_vars!r}\n")
 
-    await session.send("Write a 3-sentence brief on distributed consensus.")
+    await channel.send("Write a 3-sentence brief on distributed consensus.")
 
     # Wait for the workflow to terminate (any of the five close routes
     # documented in /docs/beta/network/termination — this demo uses
     # TerminateTarget("sequence_complete") after the reviewer's reply).
-    close_env = await intake_hc.wait_for_session_event(
-        session_id=session.session_id,
-        predicate=lambda e: e.event_type == EV_SESSION_CLOSED,
+    close_env = await intake_hc.wait_for_channel_event(
+        channel_id=channel.channel_id,
+        predicate=lambda e: e.event_type == EV_CHANNEL_CLOSED,
         timeout=240.0,
     )
 
     # Print the transcript from the WAL after close.
-    for env in await hub_obj.read_wal(session.session_id):
+    for env in await hub_obj.read_wal(channel.channel_id):
         speaker = name_by_id.get(env.sender_id, env.sender_id[:8])
         if env.event_type == EV_TEXT:
             print(f"{speaker:>14}: {env.event_data['text']}")
@@ -291,7 +291,7 @@ async def main() -> None:
                 print(f"{speaker:>14}: {body}")
 
     print(f"\nclosed: reason={close_env.event_data.get('reason')!r}")
-    final_state = hub_obj._adapter_states[session.session_id]
+    final_state = hub_obj._adapter_states[channel.channel_id]
     print(f"final context_vars: {final_state.context_vars!r}")
 
     await intake_hc.close()
@@ -309,7 +309,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
-session: 6b1a...
+channel: 6b1a...
 initial context_vars: {'pending_tasks': ['research', 'writing', 'review'], 'completed_tasks': [], 'request_kind': 'brief'}
 
          intake: Write a 3-sentence brief on distributed consensus.
